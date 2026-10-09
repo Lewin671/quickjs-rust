@@ -96,9 +96,6 @@ pub(in crate::bytecode) fn lower(bytecode: &Bytecode) -> VirtualObjectProgram {
     let numeric_loop_plans = bytecode
         .numeric_loop_plans
         .get_or_init(|| super::super::vm_numeric_loop::NumericLoopPlan::compile_all(bytecode));
-    let control_loop_plans = bytecode
-        .control_loop_plans
-        .get_or_init(|| super::super::vm_control_loop::ControlLoopPlan::compile_all(bytecode));
     let numeric_mutation_loop_plans = bytecode.numeric_mutation_loop_plans.get_or_init(|| {
         super::super::vm_numeric_mutation_loop::NumericMutationLoopPlan::compile_all(bytecode)
     });
@@ -107,7 +104,6 @@ pub(in crate::bytecode) fn lower(bytecode: &Bytecode) -> VirtualObjectProgram {
         bytecode,
         &analysis,
         numeric_loop_plans,
-        control_loop_plans,
         numeric_mutation_loop_plans,
         true,
     );
@@ -117,7 +113,6 @@ pub(in crate::bytecode) fn lower(bytecode: &Bytecode) -> VirtualObjectProgram {
             && !candidate_intersects_specialized_loop(
                 candidate,
                 numeric_loop_plans,
-                control_loop_plans,
                 numeric_mutation_loop_plans,
             )
     });
@@ -126,7 +121,6 @@ pub(in crate::bytecode) fn lower(bytecode: &Bytecode) -> VirtualObjectProgram {
             bytecode,
             &analysis,
             numeric_loop_plans,
-            control_loop_plans,
             numeric_mutation_loop_plans,
             false,
         )
@@ -140,7 +134,6 @@ fn lower_variant(
     bytecode: &Bytecode,
     analysis: &super::VirtualObjectAnalysis,
     numeric_loop_plans: &[super::super::vm_numeric_loop::NumericLoopPlan],
-    control_loop_plans: &[super::super::vm_control_loop::ControlLoopPlan],
     numeric_mutation_loop_plans: &[
         super::super::vm_numeric_mutation_loop::NumericMutationLoopPlan
     ],
@@ -155,7 +148,6 @@ fn lower_variant(
             && !candidate_intersects_specialized_loop(
                 candidate,
                 numeric_loop_plans,
-                control_loop_plans,
                 numeric_mutation_loop_plans,
             )
     }) {
@@ -225,12 +217,10 @@ fn lower_variant(
 fn candidate_intersects_specialized_loop(
     candidate: &VirtualCandidate,
     numeric: &[super::super::vm_numeric_loop::NumericLoopPlan],
-    control: &[super::super::vm_control_loop::ControlLoopPlan],
     mutation: &[super::super::vm_numeric_mutation_loop::NumericMutationLoopPlan],
 ) -> bool {
     let in_plan = |ip| {
         numeric.iter().any(|plan| plan.contains_instruction(ip))
-            || control.iter().any(|plan| plan.contains_instruction(ip))
             || mutation.iter().any(|plan| plan.contains_instruction(ip))
     };
     in_plan(candidate.allocation_ip) || candidate.uses.iter().map(virtual_use_ip).any(in_plan)

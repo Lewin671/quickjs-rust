@@ -1170,7 +1170,6 @@ fn global_store_stays_interpreted(
     if plans.typed.iter().any(|program| {
         covers((program.header(), program.backedge())) && !program.calls_user_functions()
     }) || plans.numeric.iter().any(|plan| covers(plan.region()))
-        || plans.control.iter().any(|plan| covers(plan.region()))
         || plans
             .shared_numeric_mutation
             .iter()
@@ -1607,16 +1606,13 @@ fn body_has_loop_accelerator(bytecode: &Bytecode) -> bool {
     let typed = bytecode
         .typed_loop_programs
         .get_or_init(|| crate::bytecode::typed_loop::compile_all(bytecode));
-    let control = bytecode
-        .control_loop_plans
-        .get_or_init(|| crate::bytecode::vm_control_loop::ControlLoopPlan::compile_all(bytecode));
     let numeric = bytecode
         .numeric_loop_plans
         .get_or_init(|| crate::bytecode::vm_numeric_loop::NumericLoopPlan::compile_all(bytecode));
     let mutation = bytecode.numeric_mutation_loop_plans.get_or_init(|| {
         crate::bytecode::vm_numeric_mutation_loop::NumericMutationLoopPlan::compile_all(bytecode)
     });
-    !typed.is_empty() || !control.is_empty() || !numeric.is_empty() || !mutation.is_empty()
+    !typed.is_empty() || !numeric.is_empty() || !mutation.is_empty()
 }
 
 /// Emits the copies operand forwarding deferred (see `aliases` in

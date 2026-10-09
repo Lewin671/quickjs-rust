@@ -732,7 +732,6 @@ pub struct Bytecode {
     /// Shape-independent register programs for this body's numeric loop
     /// regions, compiled on first entry to any loop.
     pub(super) typed_loop_programs: OnceCell<Vec<super::typed_loop::TypedLoopProgram>>,
-    pub(super) control_loop_plans: OnceCell<Vec<super::vm_control_loop::ControlLoopPlan>>,
     pub(super) numeric_mutation_loop_plans:
         OnceCell<Vec<super::vm_numeric_mutation_loop::NumericMutationLoopPlan>>,
     pub(super) virtual_object_program: OnceCell<super::virtual_object::VirtualObjectProgram>,
@@ -924,7 +923,6 @@ impl Bytecode {
             compact_wide_program: OnceCell::new(),
             numeric_loop_plans: OnceCell::new(),
             typed_loop_programs: OnceCell::new(),
-            control_loop_plans: OnceCell::new(),
             numeric_mutation_loop_plans: OnceCell::new(),
             virtual_object_program: OnceCell::new(),
             template_objects: RefCell::new(HashMap::new()),

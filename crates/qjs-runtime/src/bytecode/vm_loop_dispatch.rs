@@ -1,7 +1,7 @@
 //! Loop-plan dispatch at ordinary backward edges.
 //!
-//! Four independent accelerators can claim a loop region: the numeric mutation
-//! loop, the numeric loop, the control loop, and the typed loop. Each is free
+//! Three independent accelerators can claim a loop region: the numeric
+//! mutation loop, the numeric loop, and the typed loop. Each is free
 //! to decline at run time -- a higher-priority plan that matched an
 //! instruction range may still refuse once the loop's values are known -- so
 //! the edge consults them in priority order and falls through to a plain jump
@@ -13,7 +13,6 @@
 
 use super::typed_loop::TypedLoopProgram;
 use super::vm::Vm;
-use super::vm_control_loop::ControlLoopPlan;
 use super::vm_numeric_loop::NumericLoopPlan;
 use super::vm_numeric_mutation_loop::NumericMutationLoopPlan;
 
@@ -26,7 +25,6 @@ use super::vm_numeric_mutation_loop::NumericMutationLoopPlan;
 /// owner the frame owns rather than borrows.
 #[derive(Clone, Copy)]
 pub(super) struct LoopPlanView<'a> {
-    pub(super) control: &'a [ControlLoopPlan],
     pub(super) numeric: &'a [NumericLoopPlan],
     pub(super) typed: &'a [TypedLoopProgram],
     /// The body's shared plans. A frame that has diverged holds its own
@@ -38,9 +36,6 @@ impl<'a> LoopPlanView<'a> {
     /// The accelerators for `bytecode`, compiling each family on first use.
     pub(super) fn for_bytecode(bytecode: &'a super::ir::Bytecode) -> Self {
         Self {
-            control: bytecode
-                .control_loop_plans
-                .get_or_init(|| ControlLoopPlan::compile_all(bytecode)),
             numeric: bytecode
                 .numeric_loop_plans
                 .get_or_init(|| NumericLoopPlan::compile_all(bytecode)),
@@ -89,8 +84,6 @@ impl Vm<'_> {
             Some("numeric-mutation")
         } else if super::vm_numeric_loop::try_run_numeric_loop(self, plans, target, backedge) {
             Some("numeric")
-        } else if super::vm_control_loop::try_run_control_loop(self, plans, target, backedge) {
-            Some("control")
         } else if super::typed_loop::try_run_typed_loop(self, plans, target, backedge) {
             Some("typed")
         } else {
@@ -108,7 +101,7 @@ impl Vm<'_> {
             crate::diagnostics::count!(loop_plan_entries);
             return true;
         }
-        // Reaching here means all four engines were consulted and all four
+        // Reaching here means all three engines were consulted and all three
         // declined, so the whole probe chain was overhead on this edge.
         crate::diagnostics::count!(declined_loop_plan_edges);
         // With the typed-loop trace on, name the edge: a histogram of these

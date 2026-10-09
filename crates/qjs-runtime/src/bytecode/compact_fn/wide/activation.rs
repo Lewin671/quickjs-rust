@@ -1757,8 +1757,7 @@ pub(super) fn run_typed_loop_here(
         || plans
             .shared_numeric_mutation
             .iter()
-            .any(|plan| overlaps(plan.region()))
-        || plans.control.iter().any(|plan| overlaps(plan.region()));
+            .any(|plan| overlaps(plan.region()));
     if consulted_first
         || !plans
             .typed

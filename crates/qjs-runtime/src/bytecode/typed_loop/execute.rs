@@ -93,10 +93,6 @@ pub(crate) fn try_run_typed_loop<F: LoopFrame>(
             }
             claimed_by_enclosing_region(plan.region()) || encloses_special_region(plan)
         })
-        || plans
-            .control
-            .iter()
-            .any(|plan| claimed_by_enclosing_region(plan.region()))
     {
         return decline(vm);
     }
