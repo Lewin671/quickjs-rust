@@ -70,9 +70,10 @@
       "tools/benchmark/profile.py",
       "tools/benchmark/preview.py",
       "tools/benchmark/preview_admission.py",
-      "tools/benchmark/preview_sentinel.py"
+      "tools/benchmark/preview_sentinel.py",
+      "tools/benchmark/preview_summary.py"
     ],
-    "aggregate_sha256": "5ee2b49fca49546a460cb62037eb5943713d8473f902af265eecdfe1ab86a27a"
+    "aggregate_sha256": "83ea8dbc34c9059054259298208809a0f07c31f2462e41e055c1548e6895739b"
   },
   "hosted_pr": {
     "tier": "informational_preview",

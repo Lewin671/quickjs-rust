@@ -74,4 +74,5 @@ PREVIEW_IMPLEMENTATION_FILES = (
     "tools/benchmark/preview.py",
     "tools/benchmark/preview_admission.py",
     "tools/benchmark/preview_sentinel.py",
+    "tools/benchmark/preview_summary.py",
 )

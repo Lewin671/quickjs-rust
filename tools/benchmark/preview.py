@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import html
 import json
 import math
 import os
@@ -22,6 +21,7 @@ from .hosted_preview import (
     PUSH_INTEGRITY_SCOPE,
     PUSH_MODE,
 )
+from .preview_summary import escape_markdown, render_preview
 from .schema import ManifestError, load_manifest, sha256_file
 
 
@@ -363,14 +363,6 @@ def verify_source(args: argparse.Namespace) -> None:
         )
 
 
-def escape_markdown(value: str) -> str:
-    """Escape dynamic text for a GitHub Markdown table cell."""
-    escaped = html.escape(value, quote=False).replace("\\", "\\\\")
-    for character in "`*_{}[]()#+-.!|>":
-        escaped = escaped.replace(character, f"\\{character}")
-    return escaped.replace("\r", " ").replace("\n", "<br>")
-
-
 def _comparison(report: dict[str, Any], key: str, label: str) -> dict[str, Any]:
     comparisons = report.get("comparisons")
     if not isinstance(comparisons, dict) or not isinstance(comparisons.get(key), dict):
@@ -544,106 +536,31 @@ def summarize(
         "engines": engines,
     }
     if status == "invalid":
-        lines = [
-            "## Performance Preview Inconclusive",
-            "",
-            "> **No performance direction is reported.**",
-            "> The complete hosted measurement failed its linearity diagnostic; raw evidence is preserved for audit.",
-            "",
-            "- Classification: informational measurement inconclusive; not a fixed-hardware claim",
-            "- Health: invalid; block health: non_claim; linearity: fail",
-            f"- Valid blocks: `{valid_blocks}/3`",
-            f"- Harness ownership mode: `{harness_mode}` at `{harness_revision}`",
-            f"- Integrity scope: `{_integrity_scope(harness_mode)}`",
-            "- Security boundary: candidate build/execution is not sandboxed; artifacts do not resist a malicious candidate",
-            f"- Profile: `{profile_id}`",
-            f"- Portfolio: `{len(HOSTED_CASES)}/{len(HOSTED_CASES)} cases`, roles: `candidate/base/quickjs-ng`",
-            f"- Candidate: `{engines['candidate']['source_revision']}` / `{engines['candidate']['binary_sha256']}`",
-            f"- Base: `{engines['base']['source_revision']}` / `{engines['base']['binary_sha256']}`",
-            f"- QuickJS-NG: `{engines['quickjs-ng']['source_revision']}` / `{engines['quickjs-ng']['binary_sha256']}`",
-            "",
-        ]
         machine = {
             **common_machine,
             "classification": "informational_measurement_inconclusive_not_fixed_hardware_claim",
             "comparisons": {},
         }
-        return "\n".join(lines), machine
+        return render_preview(machine), machine
     results = [
         _comparison(report, "candidate_vs_base", "candidate vs base"),
         _comparison(report, "candidate_vs_quickjs_ng", "candidate vs QuickJS-NG"),
     ]
-    lines = [
-        "## Performance Preview",
-        "",
-        "> **Informational only — non-gating — not a fixed-hardware claim.**",
-        "> GitHub-hosted runners are variable. Missing or malformed evidence fails; a completed noisy measurement is inconclusive.",
-        "",
-        "Ratio = candidate wall ns/op ÷ comparator wall ns/op. Above 1.0 is higher ns/op; below 1.0 is lower ns/op.",
-        "",
-        "> **What this portfolio measures.** Every broad case names its callee "
-        "statically and holds its receiver fixed, so the specializing tiers can "
-        "fold the measured operation away rather than accelerate it. At 100,000 "
-        "nominal iterations `plain_function_call` performs 5 real calls and "
-        "`property_read` 11 real property operations. Read these ratios as "
-        "**specializer coverage**, not as ordinary-interpreter throughput, and "
-        "see the generic-path sentinels below for the latter.",
-        "",
-        "| Comparison | Overall ratio | 95% CI | Direction |",
-        "| --- | ---: | ---: | --- |",
-    ]
-    for result in results:
-        lines.append(
-            f"| {result['label']} | {result['ratio']:.4f}× | "
-            f"[{result['ci_lower']:.4f}×, {result['ci_upper']:.4f}×] | "
-            f"{result['percent']:.2f}% {result['direction']} |"
-        )
     base_cases = {case["id"]: case for case in results[0]["cases"]}
     quickjs_cases = {case["id"]: case for case in results[1]["cases"]}
-    lines.extend([
-        "",
-        "### Per-case performance",
-        "",
-        "Medians are wall ns/op. Ratios are qjs-rust ÷ comparator, so lower is better for qjs-rust.",
-        "",
-        "| Case | qjs-rust ns/op | Base ns/op | vs base | QuickJS-NG ns/op | vs QuickJS-NG |",
-        "| --- | ---: | ---: | ---: | ---: | ---: |",
-    ])
     for case_id in HOSTED_CASES:
-        base_case = base_cases[case_id]
-        quickjs_case = quickjs_cases[case_id]
         if not math.isclose(
-            base_case["candidate_median_ns_per_op"],
-            quickjs_case["candidate_median_ns_per_op"],
+            base_cases[case_id]["candidate_median_ns_per_op"],
+            quickjs_cases[case_id]["candidate_median_ns_per_op"],
             rel_tol=1e-12,
         ):
             raise PreviewError(f"candidate median disagrees across comparisons for {case_id}")
-        lines.append(
-            f"| `{case_id}` | {base_case['candidate_median_ns_per_op']:,.2f} | "
-            f"{base_case['comparator_median_ns_per_op']:,.2f} | {base_case['ratio']:.4f}× | "
-            f"{quickjs_case['comparator_median_ns_per_op']:,.2f} | "
-            f"{quickjs_case['ratio']:.4f}× |"
-        )
-    lines.extend([
-        "",
-        f"- Health: {status}; block health: non_claim; linearity: pass",
-        f"- Valid blocks: `{valid_blocks}/3`",
-        f"- Harness ownership mode: `{harness_mode}` at `{harness_revision}`",
-        f"- Integrity scope: `{_integrity_scope(harness_mode)}`",
-        "- Security boundary: candidate build/execution is not sandboxed; artifacts do not resist a malicious candidate",
-        f"- Profile: `{profile_id}`",
-        f"- Portfolio: `{len(HOSTED_CASES)}/{len(HOSTED_CASES)} cases`, roles: `candidate/base/quickjs-ng`",
-        f"- Candidate: `{engines['candidate']['source_revision']}` / `{engines['candidate']['binary_sha256']}`",
-        f"- Base: `{engines['base']['source_revision']}` / `{engines['base']['binary_sha256']}`",
-        f"- QuickJS-NG: `{engines['quickjs-ng']['source_revision']}` / `{engines['quickjs-ng']['binary_sha256']}`",
-        "",
-    ])
     machine = {
         **common_machine,
         "classification": "informational_non_gating_not_fixed_hardware_claim",
         "comparisons": {result["label"]: result for result in results},
     }
-    return "\n".join(lines), machine
+    return render_preview(machine), machine
 
 
 def summary(args: argparse.Namespace) -> None:
@@ -655,6 +572,32 @@ def summary(args: argparse.Namespace) -> None:
     _write_replace(args.markdown, markdown.encode("utf-8"))
     _write_replace(args.json_output, _json_bytes(machine))
     _write_replace(args.status_output, _json_bytes(machine))
+
+
+def _optional_object(path: Path, where: str) -> dict[str, Any] | None:
+    return _read_object(path, where) if path.is_file() else None
+
+
+def compose(args: argparse.Namespace) -> None:
+    """Rewrite the published summary from the evidence a run has so far.
+
+    The broad lane's machine summary is the anchor; the external report and
+    the sentinel machine summary join it when they exist, and a lane that has
+    not produced evidence is named with the reason the orchestrator gives.
+    """
+    output = args.output_dir.expanduser().resolve()
+    notes = {
+        lane: note for lane, note in (
+            ("external", args.external_note), ("sentinel", args.sentinel_note),
+        ) if note
+    }
+    markdown = render_preview(
+        _read_object(output / "summary.json", "broad machine summary"),
+        _optional_object(output / "external-report.json", "external report"),
+        _optional_object(output / "sentinel-summary.json", "sentinel machine summary"),
+        notes,
+    )
+    _write_replace(output / "summary.md", markdown.encode("utf-8"))
 
 
 def status(args: argparse.Namespace) -> None:
@@ -745,8 +688,14 @@ def _parser() -> argparse.ArgumentParser:
 
     sentinel = commands.add_parser("sentinel-summary")
     sentinel.add_argument("--report", type=Path, required=True)
-    sentinel.add_argument("--markdown", type=Path, required=True)
+    sentinel.add_argument("--json-output", type=Path, required=True)
     sentinel.set_defaults(function=sentinel_summary)
+
+    combine = commands.add_parser("compose")
+    combine.add_argument("--output-dir", type=Path, required=True)
+    combine.add_argument("--external-note")
+    combine.add_argument("--sentinel-note")
+    combine.set_defaults(function=compose)
     return parser
 
 

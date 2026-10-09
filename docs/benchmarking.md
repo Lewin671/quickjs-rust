@@ -328,6 +328,15 @@ for 14 days. Three-block hosted results can show a direction. They cannot
 retain or reject a unit, and durations from separate hosted runs are not
 comparable.
 
+The published summary is one document rendered by
+`tools/benchmark/preview_summary.py` from the lanes' validated machine
+summaries: an overview row per workload group (sentinels, each external
+suite, then the broad lane), the five largest observed changes against the
+base across all lanes, any case without a complete comparison, and then the
+per-case tables and provenance folded away. A lane that produced no evidence
+is named with its reason. The largest-changes list is selected by magnitude,
+so it is never empty and never a finding by itself.
+
 `benchmarks/performance-policy.json` is the fail-closed policy for that
 path: protocol hashes, the reference pin, the hash of the hosted
 implementation files, and the `nightly`, `release` and `pr_sentinel`

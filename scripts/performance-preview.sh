@@ -423,8 +423,14 @@ EXTERNAL_WORK_ROOT="$(dirname "$OUTPUT")/external-work"
 verify_source "$CANDIDATE_SOURCE" "$CANDIDATE_REVISION"
 verify_source "$BASE_SOURCE" "$BASE_REVISION"
 verify_source "$QUICKJS_SOURCE" "$REFERENCE_REVISION"
-printf '\n' >> "$OUTPUT/summary.md"
-cat "$OUTPUT/external-summary.md" >> "$OUTPUT/summary.md"
+# The published summary is one document composed from every lane's evidence.
+# Recomposing after each lane keeps it current with what is durable so far.
+SENTINEL_NOTE="the sentinel lane had not run when this summary was written."
+compose_summary() {
+  (cd "$HARNESS_ROOT" && python3 -m tools.benchmark.preview compose \
+    --output-dir "$OUTPUT" --sentinel-note "$SENTINEL_NOTE")
+}
+compose_summary
 
 # The generic-path sentinel lane, deliberately last.
 #
@@ -466,14 +472,10 @@ SENTINEL_ADMISSION="$(cd "$HARNESS_ROOT" && python3 -m tools.benchmark.preview_a
   --job-started-at "$PREVIEW_JOB_STARTED_AT" \
   --job-budget-seconds "$PREVIEW_JOB_BUDGET_SECONDS")" && SENTINEL_ADMITTED=1 || SENTINEL_ADMITTED=0
 if [ "$SENTINEL_ADMITTED" -ne 1 ]; then
-  printf '%s\n' "" "### Generic-path sentinels" "" \
-    "> The sentinel lane was not started: ${SENTINEL_ADMISSION#refuse }." \
-    "> The broad summary above stands, but reports specializer coverage only;" \
-    "> no ordinary-interpreter reading was produced for this run." "" \
-    > "$OUTPUT/sentinel-summary.md"
+  SENTINEL_NOTE="the sentinel lane was not started (${SENTINEL_ADMISSION#refuse }), so this run has no ordinary-interpreter reading."
 else
   # One deadline for the whole pipeline. Wrapping only the measurement would
-  # leave preparation, reporting, and rendering unbounded, so a slow report
+  # leave preparation, reporting, and validation unbounded, so a slow report
   # could still exhaust the step after a measurement that finished in time.
   CURRENT_PHASE="sentinel_measurement"
   SENTINEL_DEADLINE=$(( $(date +%s) + SENTINEL_TIMEOUT_SECONDS ))
@@ -484,7 +486,7 @@ else
   }
   # `preview prepare` writes its receipts with a refuse-to-overwrite guard, so
   # this lane needs its own receipt paths; reusing the broad lane's would fail
-  # every run and silently reduce this section to "did not complete".
+  # every run and silently reduce this lane to "did not complete".
   SENTINEL_MANIFEST="$HARNESS_ROOT/benchmarks/.hosted-sentinel-${CANDIDATE_REVISION:0:12}-${BASE_REVISION:0:12}-$$.json"
   if sentinel_phase python3 -m tools.benchmark.preview prepare \
         --template benchmarks/generic-sentinels-manifest.json \
@@ -512,18 +514,16 @@ else
         --input "$OUTPUT/sentinel-raw.jsonl" --output "$OUTPUT/sentinel-report.json" \
      && sentinel_phase python3 -m tools.benchmark.preview sentinel-summary \
         --report "$OUTPUT/sentinel-report.json" \
-        --markdown "$OUTPUT/sentinel-summary.md"; then
+        --json-output "$OUTPUT/sentinel-summary.json"; then
     cp "$SENTINEL_MANIFEST" "$OUTPUT/sentinel-manifest.json"
   else
-    printf '%s\n' "" "### Generic-path sentinels" "" \
-      "> The sentinel lane did not complete within its deadline. The broad" \
-      "> summary above stands, but reports specializer coverage only; no" \
-      "> ordinary-interpreter reading was produced for this run." "" \
-      > "$OUTPUT/sentinel-summary.md"
+    # A machine summary from a run that then failed must not be published.
+    rm -f "$OUTPUT/sentinel-summary.json"
+    SENTINEL_NOTE="the sentinel lane did not complete within its deadline, so this run has no ordinary-interpreter reading."
   fi
   rm -f "$SENTINEL_MANIFEST"
 fi
-cat "$OUTPUT/sentinel-summary.md" >> "$OUTPUT/summary.md"
+compose_summary
 
 CURRENT_PHASE="seal_evidence"
 (cd "$HARNESS_ROOT" && python3 -m tools.benchmark.bundle --output-dir "$OUTPUT")

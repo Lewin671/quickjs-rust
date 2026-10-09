@@ -100,15 +100,17 @@ def summarize_report(value: dict[str, object]) -> tuple[str, dict[str, object]]:
 class PreviewSummaryTests(unittest.TestCase):
     def test_ratio_uses_precise_ns_per_operation_language(self) -> None:
         markdown, machine = summarize_report(report())
-        self.assertIn("Informational only — non-gating — not a fixed-hardware claim", markdown)
+        self.assertIn("informational only — non-gating — not a fixed-hardware claim", markdown)
         self.assertIn("candidate vs base | 1.2500×", markdown)
-        self.assertIn("25.00% higher ns/op", markdown)
         self.assertIn("candidate vs QuickJS-NG | 0.8000×", markdown)
-        self.assertIn("20.00% lower ns/op", markdown)
+        self.assertIn(
+            "| Broad microbenchmarks (specializer coverage) | 25/25 | +25.0% | 0.800× |",
+            markdown,
+        )
         self.assertNotIn("faster", markdown.lower())
         self.assertNotIn("slower", markdown.lower())
         self.assertIn("Valid blocks: `3/3`", markdown)
-        self.assertIn("### Per-case performance", markdown)
+        self.assertIn("<summary>Broad microbenchmarks — all 25 cases</summary>", markdown)
         self.assertIn("| `plain_function_call` |", markdown)
         self.assertIn("| `closure_allocation_call` |", markdown)
         self.assertEqual(len(machine["comparisons"]["candidate vs base"]["cases"]), 25)
@@ -192,8 +194,11 @@ class PreviewSummaryTests(unittest.TestCase):
         self.assertEqual(machine["linearity"], "fail")
         self.assertEqual(machine["comparisons"], {})
         self.assertIn("No performance direction is reported", markdown)
+        self.assertIn("the linearity diagnostic failed", markdown)
+        self.assertIn("linearity: fail", markdown)
         self.assertNotIn("Overall ratio", markdown)
         self.assertNotIn("candidate vs", markdown)
+        self.assertNotRegex(markdown, r"\d\.\d+×|[+-]\d+\.\d%")
 
     def test_profile_and_markdown_payloads_fail_or_escape(self) -> None:
         unsafe = report()
@@ -226,7 +231,9 @@ class PreviewPreparationTests(unittest.TestCase):
             'CURRENT_PHASE="post_measure_validation"', "GITHUB_ENV GITHUB_PATH",
             "ACTIONS_ID_TOKEN_REQUEST_TOKEN", "./scripts/performance-policy-audit.sh",
             "./scripts/external-corpus-audit.sh", "./scripts/external-performance-preview.sh",
-            'cat "$OUTPUT/external-summary.md" >> "$OUTPUT/summary.md"',
+            "tools.benchmark.preview compose", '--sentinel-note "$SENTINEL_NOTE"',
+            '--json-output "$OUTPUT/sentinel-summary.json"',
+            'rm -f "$OUTPUT/sentinel-summary.json"',
         ):
             self.assertIn(value, script)
         self.assertNotIn("candidate and base revisions must match", script)
@@ -648,9 +655,9 @@ class SentinelLaneTests(unittest.TestCase):
     def test_the_broad_section_says_what_it_actually_measures(self) -> None:
         import inspect
 
-        from tools.benchmark import preview
+        from tools.benchmark import preview_summary
 
-        source = inspect.getsource(preview.summarize)
+        source = inspect.getsource(preview_summary)
         self.assertIn("specializer coverage", source)
         self.assertIn("5 real calls", source)
 
@@ -735,16 +742,21 @@ class SentinelLaneTests(unittest.TestCase):
             },
         }
 
-    def _render(self, report: dict) -> str:
+    def _machine(self, report: dict) -> dict:
         from tools.benchmark.preview_sentinel import sentinel_summary
 
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "report.json").write_text(json.dumps(report), encoding="utf-8")
             sentinel_summary(argparse.Namespace(
-                report=root / "report.json", markdown=root / "summary.md"
+                report=root / "report.json", json_output=root / "sentinel-summary.json"
             ))
-            return (root / "summary.md").read_text(encoding="utf-8")
+            return json.loads((root / "sentinel-summary.json").read_text(encoding="utf-8"))
+
+    def _render(self, report: dict) -> str:
+        from tools.benchmark.preview_summary import render_preview
+
+        return render_preview(None, None, self._machine(report))
 
     def test_a_healthy_sentinel_report_publishes_its_geometric_mean(self) -> None:
         cases = dict.fromkeys(self.ALL_SENTINELS, 1.0)
@@ -755,7 +767,7 @@ class SentinelLaneTests(unittest.TestCase):
         ]
         rendered = self._render(report)
         # 64 ** (1/6) == 2
-        self.assertIn("2.0000×", rendered)
+        self.assertIn("| Interpreter sentinels | 6/6 | +100.0% | 2.000× |", rendered)
 
     def test_a_partial_comparison_map_publishes_nothing(self) -> None:
         from tools.benchmark.preview import PreviewError
@@ -808,5 +820,9 @@ class SentinelLaneTests(unittest.TestCase):
         degraded["health"]["status"] = "invalid"
         degraded["health"]["linearity"]["status"] = "fail"
         rendered = self._render(degraded)
-        self.assertIn("No ordinary-interpreter reading is reported", rendered)
-        self.assertNotIn("×", rendered.split("Valid blocks")[0].split("Health")[0])
+        self.assertIn("No performance direction is reported", rendered)
+        self.assertIn(
+            "**Interpreter sentinels:** measured, but the linearity diagnostic failed",
+            rendered,
+        )
+        self.assertNotRegex(rendered, r"\d\.\d+×|[+-]\d+\.\d%")
