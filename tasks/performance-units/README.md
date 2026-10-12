@@ -117,4 +117,28 @@ nothing about whether the code exists.
 | `wide-compact-tier` | not recorded | `adb77520` 2026-08-14 | not recorded |
 | `wide-tier-interpreter-exits` | T033 | `93f98a4a` 2026-09-22 | screen pass; rejected at batched promotion |
 | `wide-tier-math-calls-and-field-thunks` | T033 | `93f98a4a` 2026-09-22 | screen attempt 1 failed; nothing later recorded |
-| `class-field-batch-install` | Brief 03 (lead-owned integration) | `e54e33eb` 2026-10-11 | blocked at layout scope: plan `e0027e5e`; micro cutoff passed (installation 15.68% of whole-case samples); implementation present, 41 focused tests pass; 0/2 screens used; lead must authorize or own `crates/qjs-cli/hot-functions.order` re-pin before screen |
+| `class-field-batch-install` | Brief 03 (lead-owned integration) | `e54e33eb` 2026-10-11 | blocked at layout scope: plan `e0027e5e`, draft implementation `9ed0aea0`; micro cutoff passed; checks pass; 0/2 screens used; see handoff below |
+
+## Brief 03 handoff: class-field-batch-install
+
+- Status: blocked at the owner boundary, not rejected or retained. The frozen
+  leaf plan passed `validate-unit` before runtime changes; its priority override
+  is the lead's rank-9 parallel-work selection. Baseline micro/profile results
+  and commands are recorded in the plan, not inferred candidate gains.
+- Implementation: present at `9ed0aea0`, built and pushed as a draft. Only
+  compact ordinary storage admitting the whole constant segment is batched.
+- Verified at `9ed0aea0`: 41 focused class-field/storage tests, staged fast gate,
+  `check-touched.sh --base e54e33eb --explain` (2234 runtime tests and 52 Test262
+  cases), branch-scope validation, and the pre-push `check.sh` full gate
+  (5170 Test262 subset cases). No screen or formal comparison ran; the two
+  implementation screen attempts remain unused.
+- Unresolved: `layout_pin --binary target/release/qjs --order <target-copy>`
+  generated an order different from the tracked CLI order (head 56 -> 51).
+  Executor offsets remain 0x200/0xc40, but the workflow requires re-pinning and
+  `crates/qjs-cli/hot-functions.order` is outside this owner's allowed paths.
+  That file was not edited. Also, a long declined constant segment is rescanned
+  from each sequential field, which can add quadratic admission work.
+- Next action: the lead owns or authorizes the CLI order update; on resumption,
+  bound the declined-segment scan, re-pin, then run the first serialized screen.
+  Do not integrate or claim a performance result from this draft. Promotion and
+  complete Test262 parity remain unverified.
