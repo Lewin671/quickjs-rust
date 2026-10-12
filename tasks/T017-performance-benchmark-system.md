@@ -1,20 +1,28 @@
 # T017: Performance Benchmark System
 
-- Status: blocked. M6 and M7 need qualified fixed hardware, and T022 records
-  (2026-09-22) that there is no separate measurement machine.
+- Status: active. M6 can start: a dedicated x86_64 measurement host has been
+  characterized (see "x86_64 host record"); it is not qualified as fixed
+  hardware, and T022's 2026-09-22 note that no such machine exists is stale.
 - Implementation: partial. M0-M5 and the hosted preview infrastructure are
   present (`benchmarks/`, `tools/benchmark/`, `scripts/benchmark*.sh`,
-  `scripts/performance-*.sh`). M6 and M7 are not started.
-- Verified at: not recorded per milestone. The hosted preview's staged,
-  sharded workflow and its report were verified at `d9fb83f3`, 2026-10-09
-  (see "Hosted preview record"). At `d1313d52`, `benchmarks/performance-policy.json`
-  still has `fixed_hardware.configured` false, an empty `evidence_entries`
-  list and every gate disabled.
-- Evidence: `benchmarks/performance-policy.json`; `docs/benchmarking.md`.
+  `scripts/performance-*.sh`). Formal comparisons and screens run on a
+  platform other than the frozen arm64 profile
+  (`tools/benchmark/host_manifest.py`, `tools/benchmark/cycle_trust.py`).
+  M6 and M7 are not started.
+- Verified at: 2026-10-12 on the x86_64 host: at `07897ce4` a three-block
+  `perf-compare.sh` bundle (state success, 76 cases, wall time) and a queue
+  built from it; at `195b4341` a `perf-loop.sh` screen. The hosted preview's staged,
+  sharded workflow was verified at `d9fb83f3`, 2026-10-09. At `d1313d52`,
+  `benchmarks/performance-policy.json` still has `fixed_hardware.configured`
+  false, an empty `evidence_entries` list and every gate disabled.
+- Evidence: the records below; `benchmarks/performance-policy.json`;
+  `docs/benchmarking.md`. Raw bundles are local artifacts, not retained.
 - Unresolved: no fixed-hardware fingerprint, no A/A shadow reports, no noise
-  envelope, no false-positive budget.
-- Next action: none until fixed hardware exists. Then follow the activation
-  order in `docs/benchmarking.md`, "Gate activation".
+  envelope, no false-positive budget. Whether formal lanes may be measured
+  concurrently on one host is undecided (the probe below is not a
+  qualification).
+- Next action: a 30-block A/A bundle on the x86_64 host, then follow the
+  activation order in `docs/benchmarking.md`, "Gate activation".
 
 Record of the landed milestones, the original assignment and the notes:
 `tasks/archive/T017-performance-benchmark-system-log.md`.
@@ -67,6 +75,40 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools/benchmark/tests 
 ```
 
 Running the benchmark lanes and reports: `docs/benchmarking.md`, "Running".
+
+## x86_64 host record
+
+Intel Core i7-10700 (8 cores, 16 threads), 32 GB, macOS 12.6, otherwise idle;
+2026-10-12. Candidate `8d24e554` (runtime; harness `07897ce4`), base
+`e54e33eb`, QuickJS-NG `f7830186`.
+
+**Cycles are not a clock there.** `proc_pid_rusage` returned about 0.02
+cycles per CPU nanosecond, spread 14% (p10 to p90) over 25 identical runs
+whose instructions agreed to 0.004% and whose wall time agreed to 0.7%
+(QuickJS-NG) and 5.9% (qjs-rust, same loop). `/usr/bin/time -l` prints no
+cycle line for a short process. Hence `cycle_trust.py`: that host records
+no counters and is judged on wall time.
+
+**A three-block formal run takes 24 minutes** (1453 s; an earlier one at
+`8d24e554` took 1577 s): broad 941 s, of which linearity 537 s,
+calibration 222 s and the three blocks 134 s; sentinel 129 s; external
+about 430 s. Extrapolated to 30 blocks: about 97 minutes, of which the
+external lane about 57. Candidate/base half-widths at three blocks: broad
+median 1.0% (largest 13.6%), sentinel median 1.1% (largest 1.9%), external
+median 2.0% with 33 of 45 cases within 3%; `kraken-1.1/audio-dft` 1.3%,
+against 9.9% at 30 blocks on the arm64 host (T038). Ten broad blocks,
+candidate against QuickJS-NG: paired log-ratio standard deviation 0.77%
+median, 4.1% largest.
+
+**Concurrent measurement probe.** 16 broad cases, base and candidate
+alternating, 10 rounds per worker, 1, 4 and 8 workers at once. Per-process
+time rose 9% at 4 workers and 32% at 8. Median candidate/base ratios moved
+by at most 0.42% (4 workers) and 0.47% (8) from the serial ones, which is
+inside the serial estimate's own error. Pair standard deviation: 0.73%,
+1.05%, 1.64%. Four workers therefore give four times the samples per
+minute at 1.4 times the pair spread. Not covered: the external lane's
+memory-heavy cases, and more than one run. Nothing measures concurrently
+today.
 
 ## Hosted preview record
 
