@@ -121,6 +121,16 @@ class ScreenCaseTests(unittest.TestCase):
             screen.screen_case(self.case, Path("/cand"), Path("/base"), 1, self.tool, 10,
                                iterations=10, runner=failing)
 
+    def test_untrusted_cycles_leave_no_cycle_ratios(self):
+        tool = screen.counter_tool("Darwin", trust_cycles=False)
+        engine = FakeEngine({"/cand": 90, "/base": 100})
+        result = screen.screen_case(self.case, Path("/cand"), Path("/base"), 2, tool, 10,
+                                    iterations=1000, runner=engine)
+        self.assertEqual(result.ratios["cycles"], [])
+        self.assertEqual(result.ratios["instructions"], [0.9, 0.9])
+        self.assertEqual(len(result.ratios["wall_ns"]), 2)
+        self.assertEqual((screen.gate_metric(tool), screen.gate_metric(self.tool)), ("wall_ns", "cycles"))
+
     def test_whole_process_case_checks_external_sentinel(self):
         case = screen.CaseSpec("external/s/c", "whole", Path("b.js"), expected_stdout="OK\n")
 
@@ -178,6 +188,20 @@ class CliTests(unittest.TestCase):
             self.assertEqual([c.kind for c in cases], ["internal", "whole"])
             with self.assertRaises(screen.ScreenError):
                 screen.resolve_cases(["sentinel/no_such_case"], Path(work), Path(work))
+
+    def test_gate_judges_wall_time_when_asked(self):
+        gate = screen.PlanGate("u", "0" * 40, ("broad/t",), (), 0.97, 1.02)
+        results = [screen.CaseResult("broad/t", "internal", 10,
+                                     {"instructions": [0.9], "cycles": [], "wall_ns": [0.99]})]
+        results += [screen.CaseResult(spec, "internal", 10,
+                                      {"instructions": [1.0], "cycles": [], "wall_ns": [1.0]})
+                    for spec in gate.case_specs()[1:]]
+        passed, failures = screen.gate_verdict(results, gate, "wall_ns")
+        self.assertFalse(passed)
+        self.assertEqual(failures, ["target broad/t: median wall 0.9900 > 0.97"])
+        text = screen.render(results, 1, aa=False, metric="wall_ns")
+        self.assertIn("wall time decides", text)
+        self.assertIn("| n/a |", text)
 
     def test_render_marks_output_as_not_decision_evidence(self):
         result = screen.CaseResult("x", "internal", 10,

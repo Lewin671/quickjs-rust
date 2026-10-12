@@ -34,9 +34,15 @@ unit. External times include startup, parsing and shutdown.
 
 ## Prerequisites
 
-- macOS arm64 with the toolchain pinned in `rust-toolchain.toml`. The
-  checked-in recipes in `benchmarks/manifest.json` describe that host, and
-  `perf-compare.sh` refuses a `rustc`/`cargo` that differs from them.
+- macOS with the toolchain pinned in `rust-toolchain.toml`;
+  `perf-compare.sh` refuses a `rustc`/`cargo` that differs from the recipe.
+  The checked-in recipes in `benchmarks/manifest.json` describe an arm64
+  host. On another platform `perf-compare.sh` measures with copies that
+  name the live host's profile, targets and reference compiler
+  (`tools/benchmark/host_manifest.py`); cases, policy and protocol are
+  unchanged. Bundles from different hosts are never compared: a queue, its
+  plans and their decisions all come from one host.
+- Python 3.10 or newer as `python3`.
 - A built reference engine at `third_party/quickjs-ng/build/qjs`, with the
   submodule clean at the pinned revision:
 
@@ -131,7 +137,9 @@ histograms from a `perf-counters` build, `--case <spec>` adds cases, and
 ### Screen gate
 
 Cases and thresholds come from the frozen plan's `fast_gate`, never from
-screen results. The screen judges cycles. It passes when every target's
+screen results. The screen judges cycles, or wall time on a host whose
+cycle counter is not a clock (it says which); wall time needs a host with
+nothing else running. It passes when every target's
 median ratio is at most `target_max_candidate_over_base` with every pair
 below 1.0, and every control's and sentinel's median is at most
 `control_max_candidate_over_base`. Anything else fails.

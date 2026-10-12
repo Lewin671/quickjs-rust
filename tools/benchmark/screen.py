@@ -3,8 +3,11 @@
 A screen answers "is this change worth a formal measurement?" on a shared
 machine. Hardware counters (instructions retired, cycles) barely move under
 background load, while wall time does, so the screen reports counter ratios
-first and wall time only as context. Its output is diagnostic: it is not
-decision evidence and `performance-decision.sh decide` never reads it.
+first and wall time only as context. On a host whose cycle counter does not
+follow its clock (`cycle_trust.py`) there is no cycles column and
+the plan gate judges wall time, which then needs a quiet host. Its output is
+diagnostic: it is not decision evidence and `performance-decision.sh decide`
+never reads it.
 
 Internal workloads are measured by increment: each pair runs N and 2N
 iterations and keeps the difference, which removes process startup and
@@ -33,7 +36,7 @@ from .external_preview import (
     fetch_corpora,
     load_manifest,
 )
-from . import symbols
+from . import cycle_trust, symbols
 from .measure_lock import measurement_lock, wait_for_builds
 from .process import ProcessResult, run_process
 
@@ -153,12 +156,18 @@ def parse_perf_stat(stderr: str) -> dict[str, int]:
 class CounterTool:
     prefix: tuple[str, ...]
     parse: Callable[[str], dict[str, int]]
+    # False when the host's cycle counts are not a clock; see cycle_trust.py.
+    cycles: bool = True
 
 
-def counter_tool(system: str | None = None) -> CounterTool:
-    system = system or platform.system()
+def counter_tool(system: str | None = None, trust_cycles: bool | None = None) -> CounterTool:
+    """The live host's tool, or `system`'s with `trust_cycles` (default True)."""
+    if system is None:
+        system = platform.system()
+        if trust_cycles is None and system == "Darwin":
+            trust_cycles = cycle_trust.cycles_trusted()
     if system == "Darwin":
-        return CounterTool(("/usr/bin/time", "-l"), parse_macos_time)
+        return CounterTool(("/usr/bin/time", "-l"), parse_macos_time, trust_cycles is not False)
     if system == "Linux":
         return CounterTool(
             ("perf", "stat", "-x,", "-e", "instructions:u,cycles:u,task-clock", "--"),
@@ -317,6 +326,8 @@ def screen_case(case: CaseSpec, candidate: Path, base: Path, pairs: int, tool: C
                 print(f"warning: {case.id}: the N-to-2N increment is {span / 1e6:.1f} ms; "
                       "ratios below ~50 ms are dominated by startup jitter", file=sys.stderr)
         for metric in METRICS:
+            if metric == "cycles" and not tool.cycles:
+                continue
             if case.kind == "internal":
                 base_cost = increment(taken["base"]["small"], taken["base"]["large"], metric)
                 candidate_cost = increment(taken["candidate"]["small"], taken["candidate"]["large"], metric)
@@ -325,10 +336,15 @@ def screen_case(case: CaseSpec, candidate: Path, base: Path, pairs: int, tool: C
                 candidate_cost = taken["candidate"]["whole"].metric(metric)
             if base_cost > 0 and candidate_cost > 0:
                 result.ratios[metric].append(candidate_cost / base_cost)
-    for metric in ("instructions", "cycles"):
+    for metric in ("instructions", gate_metric(tool)):
         if not result.ratios[metric]:
             raise ScreenError(f"{case.id}: no positive {metric} increment; raise iterations")
     return result
+
+
+def gate_metric(tool: CounterTool) -> str:
+    """What the plan gate judges: cycles, or wall time where cycles are not a clock."""
+    return "cycles" if tool.cycles else "wall_ns"
 
 
 def geomean(values: Sequence[float]) -> float:
@@ -394,35 +410,39 @@ def load_plan_gate(path: Path) -> PlanGate:
         raise ScreenError(f"{path}: not a performance unit plan with a fast_gate ({error})") from error
 
 
-def gate_verdict(results: Sequence[CaseResult], gate: PlanGate) -> tuple[bool, list[str]]:
-    """Apply the screen gate from docs/performance-workflow.md to cycles."""
+def gate_verdict(results: Sequence[CaseResult], gate: PlanGate,
+                 metric: str = "cycles") -> tuple[bool, list[str]]:
+    """Apply the screen gate from docs/performance-workflow.md to `metric`."""
     by_id = {result.id: result for result in results}
+    name = metric.removesuffix("_ns")
     failures: list[str] = []
     for case_id in gate.target_ids:
         result = by_id[case_id]
-        median = result.median("cycles")
+        median = result.median(metric)
         if median > gate.target_max:
-            failures.append(f"target {case_id}: median cycles {median:.4f} > {gate.target_max}")
-        if result.spread("cycles")[1] >= 1.0:
-            failures.append(f"target {case_id}: a pair did not improve (max {result.spread('cycles')[1]:.4f})")
+            failures.append(f"target {case_id}: median {name} {median:.4f} > {gate.target_max}")
+        if result.spread(metric)[1] >= 1.0:
+            failures.append(f"target {case_id}: a pair did not improve (max {result.spread(metric)[1]:.4f})")
     for case_id in gate.case_specs():
         if case_id in gate.target_ids:
             continue
-        median = by_id[case_id].median("cycles")
+        median = by_id[case_id].median(metric)
         if median > gate.control_max:
-            failures.append(f"control {case_id}: median cycles {median:.4f} > {gate.control_max}")
+            failures.append(f"control {case_id}: median {name} {median:.4f} > {gate.control_max}")
     return not failures, failures
 
 
 # Report and CLI ----------------------------------------------------------
 
-def render(results: Sequence[CaseResult], pairs: int, aa: bool) -> str:
+def render(results: Sequence[CaseResult], pairs: int, aa: bool, metric: str = "cycles") -> str:
     title = "A/A control (same binary as both roles)" if aa else "candidate / base"
+    judged = ("Counters decide" if metric == "cycles" else
+              "This host's cycle counter is not a clock, so wall time decides")
     lines = [
         f"Screen: {title}, {pairs} pair(s); medians with [min, max] across pairs.",
-        "Counters decide whether to run a formal measurement; this is not decision evidence.",
+        f"{judged} whether to run a formal measurement; this is not decision evidence.",
         "",
-        "| case | iterations | instructions | cycles | wall (context) |",
+        f"| case | iterations | instructions | cycles | wall ({'context' if metric == 'cycles' else 'judged'}) |",
         "| --- | ---: | ---: | ---: | ---: |",
     ]
 
@@ -513,17 +533,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     except (ScreenError, ExternalPreviewError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
-    print(render(results, args.pairs, args.aa))
+    metric = gate_metric(tool)
+    print(render(results, args.pairs, args.aa, metric))
     print(f"load average: {load_before:.2f} before, {load_after:.2f} after")
     if competing:
         print(f"warning: competing processes were running: {', '.join(competing[:8])}")
     if max(load_before, load_after) > args.max_load:
-        print(f"warning: load exceeded {args.max_load:.2f}; the wall column is unreliable, "
-              "counter ratios are still usable")
+        print(f"warning: load exceeded {args.max_load:.2f}; the wall column is unreliable"
+              + (", counter ratios are still usable" if metric == "cycles" else
+                 " and it is what this host judges: screen again on a quiet host"))
     verdict = None
     if gate is not None:
-        passed, failures = gate_verdict(results, gate)
-        verdict = {"unit_id": gate.unit_id, "passed": passed, "failures": failures}
+        passed, failures = gate_verdict(results, gate, metric)
+        verdict = {"unit_id": gate.unit_id, "metric": metric, "passed": passed, "failures": failures}
         print(f"\nscreen gate for {gate.unit_id}: {'PASS' if passed else 'FAIL'}")
         for failure in failures:
             print(f"  - {failure}")

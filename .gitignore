@@ -1,5 +1,6 @@
 /target/
 /benchmarks/.hosted-preview-*.json
+/benchmarks/.host-*.json
 .DS_Store
 *.swp
 *.swo

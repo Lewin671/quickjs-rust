@@ -96,7 +96,9 @@ Internal lanes (broad, sentinels):
   deletion and no dynamic intersection of cases.
 - Each process also records `instructions` and `cycles` where the host
   exposes them per process. On macOS they are read from the exited child
-  (`tools/benchmark/counters.py`).
+  (`tools/benchmark/counters.py`). A host whose cycle count does not follow
+  its clock records neither: `perf-compare.sh` and the screen probe for
+  that first (`tools/benchmark/cycle_trust.py`).
 - Engines and workloads run from hash-checked private copies under
   `target/benchmarks/snapshots/`. Each stream is capped at 64 KiB. On
   POSIX a timeout kills the engine's process group.
@@ -209,7 +211,7 @@ queue candidate's executable hash.
 
 **Decision metric.** `decide` judges cycles when every comparable case in
 every lane has cycle evidence, and wall time otherwise, as on hosted Linux
-runners. Cycles exclude scheduling and frequency noise but also exclude
+runners and on hosts whose cycle counter fails the probe. Cycles exclude scheduling and frequency noise but also exclude
 time off-CPU. A precise wall-time regression beyond the control ceiling
 that cycles do not show therefore makes the decision `inconclusive` and is
 listed in `wall_time_divergence`.

@@ -4,6 +4,9 @@
 # pinned QuickJS-NG build, write truthful build receipts, and run
 # `python3 -m tools.benchmark.compare`. The output bundle feeds
 # `performance-decision.sh queue` and `decide` (docs/performance-workflow.md).
+# On a platform other than the frozen manifests' the receipts name the live
+# host (tools/benchmark/host_manifest.py), and on a host whose cycle counter
+# is not a clock no counters are recorded (tools/benchmark/cycle_trust.py).
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -67,18 +70,23 @@ base_bin="$(qjs_build_revision "$ROOT_DIR" "$cargo_bin" "$base_sha")"
 candidate_bin="$(qjs_build_revision "$ROOT_DIR" "$cargo_bin" "$candidate_sha")"
 ng_sha="$(python3 -c 'import json; print(json.load(open("benchmarks/manifest.json"))["reference_engine"]["revision"])')"
 
+manifests=()
+while IFS= read -r manifest; do manifests+=("$manifest"); done < <(python3 -m tools.benchmark.host_manifest)
+[ "${#manifests[@]}" -eq 2 ] || { echo "error: no measurement manifests for this host" >&2; exit 1; }
+
 receipts="$(mktemp -d "${TMPDIR:-/tmp}/qjs-perf-compare-receipts.XXXXXX")"
 trap 'rm -rf "$receipts"' EXIT
 python3 -m tools.benchmark.local_receipt --identity qjs-rust --revision "$candidate_sha" \
-  --binary "$candidate_bin" --output "$receipts/candidate.json" >/dev/null
+  --binary "$candidate_bin" --manifest "${manifests[0]}" --output "$receipts/candidate.json" >/dev/null
 python3 -m tools.benchmark.local_receipt --identity qjs-rust --revision "$base_sha" \
-  --binary "$base_bin" --output "$receipts/base.json" >/dev/null
+  --binary "$base_bin" --manifest "${manifests[0]}" --output "$receipts/base.json" >/dev/null
 python3 -m tools.benchmark.local_receipt --identity quickjs-ng --revision "$ng_sha" \
-  --binary "$ng_bin" --output "$receipts/quickjs-ng.json" >/dev/null
+  --binary "$ng_bin" --manifest "${manifests[0]}" --output "$receipts/quickjs-ng.json" >/dev/null
 
 echo "perf-compare: candidate $candidate_sha vs base $base_sha, $blocks blocks" >&2
-python3 -m tools.benchmark.compare \
+python3 -m tools.benchmark.cycle_trust compare \
   --candidate "$candidate_bin" --candidate-receipt "$receipts/candidate.json" \
   --base "$base_bin" --base-receipt "$receipts/base.json" \
   --quickjs-ng "$ng_bin" --quickjs-ng-receipt "$receipts/quickjs-ng.json" \
+  --manifest "${manifests[0]}" --sentinel-manifest "${manifests[1]}" \
   --blocks "$blocks" --output-dir "$output_dir"
