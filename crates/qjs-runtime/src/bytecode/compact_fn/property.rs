@@ -17,6 +17,9 @@ use crate::function::CallEnv;
 use crate::value::{OwnDataPropertyRead, OwnDataPropertyWrite};
 use crate::{PropertyKey, RuntimeError, Value};
 
+#[cfg(test)]
+mod tests;
+
 /// The hit path of `get_prop_named`, inlined into the driver's arms: an
 /// ordinary object the site's hot cache entry answers (`probe_hot`). Paying
 /// `get_prop_named`'s whole frame for that was a third of a read's cost.
@@ -44,12 +47,36 @@ pub(super) fn get_prop_named(
     cache: &NamedPropertyCache,
     env: &CallEnv,
 ) -> Result<Value, RuntimeError> {
+    get_prop_named_with_hot_probe::<true>(object, key, cache, env)
+}
+
+/// The wide executor has just tried `get_prop_named_hot`, without running user
+/// code or changing the receiver. Retain cold eligibility and resolution, but
+/// do not repeat that failed cache probe. Other callers use `get_prop_named`.
+#[cold]
+#[inline(never)]
+pub(super) fn get_prop_named_after_hot_miss(
+    object: &Value,
+    key: &Rc<str>,
+    cache: &NamedPropertyCache,
+    env: &CallEnv,
+) -> Result<Value, RuntimeError> {
+    get_prop_named_with_hot_probe::<false>(object, key, cache, env)
+}
+
+#[inline(always)]
+fn get_prop_named_with_hot_probe<const PROBE_HOT: bool>(
+    object: &Value,
+    key: &Rc<str>,
+    cache: &NamedPropertyCache,
+    env: &CallEnv,
+) -> Result<Value, RuntimeError> {
     if let Value::Object(object_ref) = object
         && !crate::symbol::is_symbol_primitive(object_ref)
         && !crate::typed_array::is_typed_array_object(object_ref)
         && !object_ref.is_module_namespace_exotic()
     {
-        if let Some(value) = cache.probe_hot(object_ref) {
+        if PROBE_HOT && let Some(value) = cache.probe_hot(object_ref) {
             return Ok(value);
         }
         let probe = cache.probe(object_ref);

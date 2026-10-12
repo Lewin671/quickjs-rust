@@ -1903,3 +1903,36 @@ fn callbacks_assign_captured_variables_through_their_cells() {
         Value::String("10,ReferenceError5,TypeError1,4,true,true,7,b2,3:4".into())
     );
 }
+
+#[test]
+fn hot_miss_method_resolution_preserves_receiver_hooks_and_changes() {
+    let call = "function invoke(o) { return o.f(); }";
+    let program =
+        compile::compile(&nested_function(call, "invoke")).expect("method caller admitted");
+    assert!(
+        program
+            .ops
+            .iter()
+            .any(|op| matches!(op, WideOp::CallResolved { .. }))
+    );
+    assert_eq!(
+        value_of(&format!(
+            "{call}
+        function C(v) {{ this.v=v; }} C.prototype.f=function() {{ return this.v; }};
+        var a=new C(1),b=new C(2),out=[];
+        out.push(invoke(a),invoke(b),invoke(a),invoke(b));
+        a.f=function() {{ return this.v+10; }};out.push(invoke(a));
+        delete a.f;out.push(invoke(a));
+        var hits=0;Object.defineProperty(b,'f',{{configurable:true,get:function() {{
+            hits++; Object.setPrototypeOf(a,{{f:function() {{return this.v+20;}}}});
+            return function() {{ return this.v+30; }};
+        }}}});
+        out.push(invoke(b),invoke(a));delete b.f;out.push(invoke(b),hits);
+        var trapHits=0,p=new Proxy({{v:9}},{{get:function(t,k,r) {{
+            trapHits++; return k==='f'?function() {{return this.v+40;}}:t[k];
+        }}}});
+        out.push(invoke(p),trapHits);out.join(',');"
+        )),
+        Value::String("1,2,1,2,11,1,32,21,2,1,49,2".into())
+    );
+}

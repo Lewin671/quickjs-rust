@@ -822,7 +822,12 @@ fn run_frames(
                             execute::store(&mut window[dst as usize], value);
                             continue;
                         }
-                        match property::get_prop_named(receiver, &site.key, &site.cache, env) {
+                        match property::get_prop_named_after_hot_miss(
+                            receiver,
+                            &site.key,
+                            &site.cache,
+                            env,
+                        ) {
                             Ok(value) => execute::store(&mut window[dst as usize], value),
                             Err(error) => break Err(error),
                         }
@@ -839,7 +844,7 @@ fn run_frames(
                             execute::store(&mut window[dst as usize], value);
                             continue;
                         }
-                        match property::get_prop_named(
+                        match property::get_prop_named_after_hot_miss(
                             &window[obj as usize],
                             &site.key,
                             &site.cache,
