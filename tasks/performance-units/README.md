@@ -121,32 +121,22 @@ nothing about whether the code exists.
 
 ## Brief 03 handoff: class-field-batch-install
 
-- Status: screened, ready for lead's formal batch; not formally retained. The
-  frozen plan (`e0027e5e`) is unchanged, including its rank-9 priority override.
-- Implementation: present (`9ed0aea0`); `cd32549b` removes rescanning after a
-  decline until the constant segment's boundary. The 512-field class inspection
-  test fails with 131328 visits if the skip guard is disabled, and passes with
-  512 after restoration; an execution test checks all sequential definitions.
-  The lead-authorized re-pin is isolated in `ac6f830d` (only CLI order file),
-  stable on iteration 2; executor offsets are 0x200/0xc40.
-- Verified at `ac6f830d`: staged gates for both continuation commits, the full
-  `check.sh` pre-push gate (2236 runtime tests, 5170 Test262 subset), and
-  `check-touched.sh --base e54e33eb --explain` with 52 selected Test262 cases.
-  CI run 38218871886 passed at that exact revision. All prior semantic tests
-  remain present; no dependency, wide dispatch, or typed-loop changes were made.
-- Screen attempt 1, `ac6f830d` vs `e54e33eb`: **PASS**, five pairs; target cycles
-  median 0.933631 [0.924223, 0.944993], instructions 0.9294; all controls below
-  the frozen 1.03 median ceiling. Attempt 2 was not used because attempt 1 passed.
-- Screen command: `lockf /tmp/qjs-lead/host-timing.lock python3 -m
-  tools.benchmark.screen --candidate target/release/qjs --base
-  target/perf-loop/rev-e54e33eb9371c5cb4627bd8e590a648085a7fa26/qjs --plan
-  tasks/performance-units/class-field-batch-install.json --pairs 5 --settle 300
-  --json target/class-field-batch-install/screen-attempt1.json --symbols 15`.
-  The local JSON is diagnostic, not formal decision evidence.
-- Screen load was 43.22 before / 29.25 after. No build-process warning occurred.
-  Exact warning: `warning: load exceeded 5.00; the wall column is unreliable,
-  counter ratios are still usable`. Wall times are not used as payoff evidence;
-  recursive sentinel's cycle spread is broad and needs the formal gate.
+- Status: screen passed, recommended for lead's formal batch; not retained.
+  Plan `e0027e5e` remains byte-identical, including the rank-9 priority override.
+- Implementation `9ed0aea0`; fix `cd32549b` skips declined segments until their boundary.
+  The 512-field class test fails with 131328 inspections without the skip guard,
+  and passes with 512 after restoration. Re-pin `ac6f830d` changes only CLI order;
+  stable at iteration 2, executor offsets 0x200/0xc40.
+- Verified at `ac6f830d`: staged gates, pre-push `check.sh` (2236 runtime tests, 5170 Test262 subset),
+  and `check-touched.sh --base e54e33eb --explain` (52 Test262 slice cases).
+  CI run 38218871886 passed. No dependencies, wide dispatch arms, or typed-loop changes.
+- Attempt 1 at `ac6f830d` vs `e54e33eb`: **PASS**, five pairs; target instructions
+  0.9294. All target cycle pairs below 1 and all control medians below 1.03.
+  Attempt 2 unused because attempt 1 passed. Diagnostic, not formal evidence.
+- Screen command (JSON/log under `target/class-field-batch-install/`): `lockf /tmp/qjs-lead/host-timing.lock python3 -m tools.benchmark.screen --candidate target/release/qjs --base target/perf-loop/rev-e54e33eb9371c5cb4627bd8e590a648085a7fa26/qjs --plan tasks/performance-units/class-field-batch-install.json --pairs 5 --settle 300 --json target/class-field-batch-install/screen-attempt1.json --symbols 15`.
+- Load 43.22 before / 29.25 after; no build-process warning. Exact warning:
+  `warning: load exceeded 5.00; the wall column is unreliable, counter ratios are still usable`.
+  Wall is not payoff evidence; recursive-sentinel spread needs formal checking.
 
 Screen candidate/base cycles, median [min, max]:
 
@@ -164,11 +154,9 @@ Screen candidate/base cycles, median [min, max]:
 | `sentinel/heterogeneous_property_read` | 1.013363 [1.006291, 1.026097] |
 | `sentinel/string_key_map_churn` | 1.004825 [0.993897, 1.099161] |
 
-After micro command: `lockf /tmp/qjs-lead/host-timing.lock env PYTHONPATH=.
-python3 target/class-field-batch-install/micro-after.py`. Same class bodies and
-paths as the preimplementation micro; N=1m/2m, five samples per engine/size,
-plain release builds. Base was remeasured beside candidate and pinned NG
-`f7830186`. Values are (median 2N - median N)/N cycles per instance:
+Micro command: `lockf /tmp/qjs-lead/host-timing.lock env PYTHONPATH=. python3 target/class-field-batch-install/micro-after.py`.
+Same class bodies/paths; N=1m/2m, five samples per engine/size, plain release builds.
+Base remeasured beside candidate and pinned NG `f7830186`; (median 2N - median N)/N cycles/instance:
 
 | Fields | Constructor stores | Base | Candidate | NG | Candidate/base | Candidate/NG |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
@@ -179,18 +167,12 @@ plain release builds. Base was remeasured beside candidate and pinned NG
 | 8 | no | 2500.77 | 1418.84 | 2362.48 | 0.567363 | 0.600575 |
 | 8 | yes | 2844.30 | 1767.54 | 2564.69 | 0.621433 | 0.689186 |
 
-- Binary identities: candidate SHA-256
-  `0e48236253f8baa1aa24915e9ccab4f7dc5406a153618c86ea081a65b67393c8`;
+- Binary SHA-256: candidate `0e48236253f8baa1aa24915e9ccab4f7dc5406a153618c86ea081a65b67393c8`;
   base `6b40aa1944af1096657641cab5b2f80319cc35c3765a79da169cb5c698af09c4`.
-  Local artifacts are under `target/class-field-batch-install/`; numbers and
-  revisions above remain available without those artifacts.
-- Unresolved: only Small storage fitting the whole run with configurable
-  existing descriptors is batched. Other storage/receivers keep sequential
-  installation. Full portfolio performance, complete Test262 parity, and
-  formal promotion have not been verified. Broad object_allocation remains the
-  frozen portfolio control; its source permits virtual/folded object work and
-  does not establish neutrality of all physical allocation paths.
-- Next action: lead may include this unit in the formal batch from `e54e33eb`;
-  re-pin on integration and enforce the plan's formal/promotion gates. High
-  screen load and the recursive-sentinel spread must not be treated as formal
-  proof of absence of regressions.
+  Numbers/revisions above remain available without the local artifacts.
+- Limits: only whole runs fitting Small storage with configurable descriptors are batched;
+  other receivers/storage use sequential installation. Full portfolio performance,
+  complete Test262 parity, and promotion are unverified. Frozen broad object_allocation
+  permits virtual/folded objects; it does not guard every physical allocation path.
+- Next: lead may include this unit in the formal batch from `e54e33eb`; re-pin on integration
+  and enforce formal/promotion gates. High load and recursive-sentinel spread are not formal proof.
