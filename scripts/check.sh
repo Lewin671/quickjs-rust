@@ -62,9 +62,10 @@ qjs_check_typed_array_tests() {
 
 qjs_check_performance_units() {
   local unit
-  while IFS= read -r unit; do
-    "$ROOT_DIR/scripts/performance-decision.sh" check-unit --unit "$unit"
-  done < <(rg --files "$ROOT_DIR/tasks/performance-units" -g '*.json' | sort)
+  for unit in "$ROOT_DIR"/tasks/performance-units/*.json; do
+    [ -f "$unit" ] || continue
+    "$ROOT_DIR/scripts/performance-decision.sh" check-unit --unit "$unit" || return "$?"
+  done
 }
 
 qjs_check_stage "format" "$CARGO_BIN" fmt --all -- --check

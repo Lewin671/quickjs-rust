@@ -38,10 +38,12 @@ matched, it says so; run `check.sh`.
 `agents` feature and with the `perf-counters` feature, each followed by that
 feature's tests; the workspace tests; the benchmark-tool Python tests
 (`tools/benchmark/tests`); `performance-decision.sh check-unit` over every
-`tasks/performance-units/*.json` (listed with `rg`); `check-context.py`;
+`tasks/performance-units/*.json` (enumerated with a Bash glob); `check-context.py`;
 the script tests (`scripts/tests`); `test-git-hooks.sh`; `bash -n` over the
 benchmark, hook and check scripts; `check-file-size.sh`; and the Test262
-subset. It prints per-stage timings. Two switches change it:
+subset. Plan validation stops at the first invalid plan and fails the stage,
+including when a later plan would pass. It prints per-stage timings. Two
+switches change it:
 
 - `QJS_CHECK_SKIP_TEST262=1` skips the subset stage.
 - `QJS_CHECK_SPLIT_RUNTIME_TESTS=1` runs the `qjs-runtime` tests in several
