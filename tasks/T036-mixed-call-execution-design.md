@@ -1,19 +1,22 @@
 # T036: Mixed scalar/boxed execution across ordinary calls
 
-- Status: active. Unit 2 design, awaiting the lead's experiment decision.
+- Status: active. Four-stage migration NOT approved; corpus pricing and
+  instruction attribution approved, followed only conditionally by standalone ABI replay.
 - Implementation: none. Documents and a not-yet-frozen schema-2 draft only;
-  no runtime edits, dependency changes, builds or performance candidate.
-- Verified at: `e54e33eb` runtime baseline; design branch based on it,
-  2026-10-12. Standing commit `86ae3603` passed check-context and staged
-  check-touched. Draft check-unit and validate-unit passed against brief 01.
+  no production runtime edits or performance candidate. Temporary feature-gated
+  diagnostic instrumentation/builds are authorized and will not be committed.
+- Verified at: production `e54e33eb`, diagnostic follow-up 2026-10-12:
+  five SHA-matched corpus outputs/counters, nonempty instruction pricing,
+  disassembly/timer profiling and conditional standalone storage replay.
+  Earlier design commits `86ae3603`/`d3662651` passed branch CI.
 - Evidence: [measurements](archive/T036-mixed-call-execution-measurements.md)
   retain component costs, formulas, commands and limits. Brief 01 hashes
   and full standing are in [T018](T018-broad-performance.md#standing-at-e54e33eb).
-- Unresolved: corpus-wide eligible scalar-transport coverage is unpriced;
-  the draft is not a frozen performance unit. No migration payoff verified.
-- Next action: lead approves or declines the bounded pre-build experiments;
-  an implementation owner first finishes coverage/kill gates and freezes a
-  plan, serializing execution-path work after the other owners' integrations.
+- Unresolved: exclusive per-function instruction attribution and a closed
+  cycle partition; no production savings or parity combination verified.
+- Next action: lead selects a narrow leaf pricing/implementation unit from
+  the ranked list in the measurement record. The replay is not approval
+  to integrate or freeze the four-stage migration.
 
 ## Goal
 
@@ -29,7 +32,9 @@ state; it does not change which optimizations execute at HEAD.
 - Allowed paths: `docs/`, `tasks/`, excluding other owners' performance-unit
   plans and index rows. Measurement artifacts under this worktree's `target/`
   are untracked and have their reproducer retained in the evidence record.
-- Forbidden paths: runtime, AST/parser, tooling, benchmark source, CI,
+- Temporary diagnostic scope: feature-gated counters/profiling edits in this
+  worktree only, restored before commit; builds and measurements use timing lock.
+- Forbidden committed paths: runtime, AST/parser, tooling, benchmark source, CI,
   third_party, main working tree, and the other owners' worktrees.
 - Owner boundary: design only. Future mixed-call work shares executors with
   global-sink work; no simultaneous implementation on those paths.
@@ -44,7 +49,8 @@ is schema 2, unit_kind migration, four stages, common cumulative regression
 ceiling 1.03, four final targets <=0.95 cycles/base, controls <=1.03, max_attempts 1.
 The draft proposes validate-input as a mandatory control (all five remain
 cumulative stage targets): its measured 2-4% saving scenario cannot justify
-a uniform five-target 5% payoff gate. This requires the lead's scope decision.
+a uniform five-target 5% payoff gate. The lead accepted validate as a mandatory control but did NOT approve the
+four-stage program. The linked draft is historical, not authorization to build.
 It is **NOT FROZEN**, intentionally not in `tasks/performance-units/` and not
 listed in that index. No rule/schema modification is required: the design's
 stricter first-stage 1.02 budget is an extra screen precondition; the schema
@@ -69,7 +75,10 @@ changes this base before implementation; never treat old receipts as current.
   shared-cell authority, exact exits and independent staged kill gates.
 - [x] Price representative nonempty 4/8 kernels vs NG, record uncertainty,
   removed-component budgets and per-target payoff/parity limits.
-- [ ] Freeze a plan only after the lead's decision and corpus coverage probe.
+- [x] Complete ordered corpus pricing and source/disassembly attribution;
+  record the nonexclusive cycle model and unresolved instruction residuals.
+- [x] Conditional standalone storage replay; no runtime integration.
+- [ ] Freeze any unit only after the lead selects it from the revised ranking.
 - [ ] Implement, screen and formally decide any stage (future owner).
 
 ## Verification
@@ -85,10 +94,13 @@ changes this base before implementation; never treat old receipts as current.
   --profile-root <main>/target/profiles/brief01-e54e33eb
 ```
 
-Docs-only staged gate explicitly skips Rust and Test262. The user prohibited
-builds beyond measurement needs, so `check.sh`, cargo, focused Test262 and
-compare-qjs were not run; this handoff establishes no new runtime correctness
-claim. The two timing binaries and diagnostic binary were reused, not built.
+Follow-up builds were diagnostic-only, with all measurements serialized by
+`lockf /tmp/qjs-lead/host-timing.lock`. No formal perf-compare, runtime candidate,
+full gate, new Test262 or NG correctness gate was run. Temporary runtime
+instrumentation was restored byte-for-byte to e54e33eb before handoff;
+`git diff --exit-code e54e33eb -- crates` proves no runtime changes remain.
+Docs-only staged gate skips Rust/Test262; the record preserves experiment
+limits and reproducible sources. No plan was frozen or stage integrated.
 T033's resume still cites d1313d52 as its latest whole-tree standing; its
 historical unit rejection remains valid, but that standing pointer is stale.
 It was left outside this unit's standing update to avoid mixing task ownership.

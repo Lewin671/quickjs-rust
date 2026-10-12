@@ -16,7 +16,7 @@ it to `archive/` with `git mv` and move its row below.
 | [T018](T018-broad-performance.md) broad performance | active | The performance campaign contract and its targets against QuickJS-NG. Start performance work here, then follow [the workflow](../docs/performance-workflow.md). |
 | [T022](T022-performance-priority-controller.md) priority controller | active | The rules that select and stop performance units. |
 | [T033](T033-wide-tier-interpreter-exits.md) wide-tier interpreter exits | active | Code is present; the frozen unit was formally rejected; candidates for the next unit are listed there. |
-| [T036](T036-mixed-call-execution-design.md) mixed-call migration | active | Design only; component costs, exact-exit ABI and staged pre-build kill gates; plan not yet frozen. |
+| [T036](T036-mixed-call-execution-design.md) mixed-call migration | active | Pricing/attribution and standalone replay; four-stage migration not approved, leaf units re-ranked. |
 | [T017](T017-performance-benchmark-system.md) benchmark system | blocked | The measurement platform; the remaining milestones need fixed hardware. |
 | [T013](T013-temporal-campaign.md) Temporal | blocked | Not started. Temporal is outside ES2025 and the reference engine's Test262 configuration skips it. |
 

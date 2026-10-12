@@ -3,21 +3,27 @@
 **Design only; no runtime implementation or frozen plan.** Queue/base is
 `e54e33eb`; [T036](../../tasks/T036-mixed-call-execution-design.md) owns
 measurements and readiness. The [schema-2 draft](mixed-call-execution-plan-draft.json)
-is outside the frozen-plan directory deliberately. The lead must approve the
-proposed four payoff targets (validate remains a mandatory control) and
-bounded experiment sequence before a new owner freezes it.
+is an unapproved prior alternative outside the frozen-plan directory. Do not
+freeze or implement it. Current authority is the lead's ordered pricing,
+attribution and conditional standalone-replay instruction in T036.
 
 ## Thesis and decision boundary
 
-Keep numeric operations, arguments and results scalar across ordinary calls,
-while object/string operands remain owned boxed handles and captured bindings
-remain canonical cells. Use an activation-local mixed register bank and an
-explicit continuation ABI; materialize only at an exact semantic boundary.
-This is a replacement for the wide tier's value transport, not an extra arm
-in the numeric or typed hot loops. Preserve their existing good paths.
-Parity on all five targets is **not** the expected outcome: pointer traversal,
-allocation and string/native work survive. The cost model and prerequisites
-for parity are in [the measurement record](../../tasks/archive/T036-mixed-call-execution-measurements.md).
+**The lead did not approve the four-stage migration.** The component prices
+show larger instruction excess in reference transport/property paths and fixed
+calls than in scalar arithmetic. First price the actual corpus mix, then
+attribute those paths to removable leaf work, activation ABI, or value
+representation. Existing scalar wins are not a reason to build a new tier.
+Only a measured call-boundary share >=10% of the NG gap in at least two targets
+authorizes the standalone stage-1 replay; it does not authorize integration.
+Validate-input remains a mandatory control; conversion/length pricing beyond
+the matched micro is separate work. Results and revised priority belong in
+[the measurement record](../../tasks/archive/T036-mixed-call-execution-measurements.md).
+The ABI and stages below are an unapproved design alternative, not a program
+or next action. Measurements favor bounded cache/lookup/equality leaves;
+the current WideFrame is already 64 bytes and the replay only bounds storage
+cost, not production payoff. Slot-indexed locals/shared cells and exact exits remain hard
+constraints on any alternative eventually selected.
 
 ## History read before design
 
