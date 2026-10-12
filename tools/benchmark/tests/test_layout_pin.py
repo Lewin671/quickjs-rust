@@ -73,12 +73,20 @@ class LayoutPinTests(unittest.TestCase):
             if name == CALL_LEAF:
                 break
             position += sizes[name]
-        self.assertEqual(position, 0x3100)
+        # The callee has an independent baseline alignment, even if the
+        # executor slot grows or the selected executor window changes.
+        self.assertEqual(position, 0x3580)
+        self.assertEqual(position % layout_pin.PAGE, 0x580)
         # A smaller call_leaf keeps its slot, so whatever follows stays put.
         smaller = dict(sizes, **{CALL_LEAF: 0x180})
         layout_pin.pin_head([VM, CALL_LEAF, EXECUTOR], 0x100000000, smaller, counts,
                             0x0, None, budgets)
         self.assertEqual(budgets[CALL_LEAF], 0x300)
+        smaller_head = layout_pin.pin_head([VM, CALL_LEAF, EXECUTOR], 0x100000000,
+                                          smaller, counts, 0x0, None, budgets)
+        new_position = sum(smaller[name] for name in
+                           smaller_head[:smaller_head.index(CALL_LEAF)])
+        self.assertEqual(new_position, position)
         # One that outgrows it gets a new slot with headroom.
         self.assertEqual(layout_pin.slot_budget(0x310, 0x300), 0x500)
 
