@@ -458,3 +458,12 @@ fn typed_array_superclass_result_keeps_integer_index_definitions() {
         Ok(Value::String("1:2:1:2".into()))
     );
 }
+
+#[test]
+fn declined_long_constant_run_defines_every_field_sequentially() {
+    let fields = (0..512).map(|i| format!("p{i}={i};")).collect::<String>();
+    let script = format!(
+        "let target={{}};Object.defineProperty(target,'fixed',{{value:null}});function Base(){{return target;}}class C extends Base {{{fields}}}new C();Object.keys(target).length===512 && target.p0===0 && target.p511===511;"
+    );
+    assert_eq!(eval(&script), Ok(Value::Boolean(true)));
+}

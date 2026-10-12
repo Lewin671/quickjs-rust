@@ -569,8 +569,9 @@ pub(crate) fn initialize_direct_instance_fields(
     #[cfg(feature = "agents")] agent_context: Option<&crate::agent::AgentContextRef>,
 ) -> Result<(), RuntimeError> {
     let mut next = 0;
+    let mut segments = ConstantFieldSegments::default();
     while next < elements.len() {
-        let installed = install_constant_field_segment(&elements[next..], receiver);
+        let installed = segments.install(elements, next, receiver);
         if installed != 0 {
             next += installed;
             continue;
@@ -705,9 +706,10 @@ pub(crate) fn initialize_instance_fields(
 ) -> Result<(), RuntimeError> {
     let elements = function.instance_elements();
     let mut next = 0;
+    let mut segments = ConstantFieldSegments::default();
     while next < elements.len() {
         if let Value::Object(object) = this_value {
-            let installed = install_constant_field_segment(&elements[next..], object);
+            let installed = segments.install(&elements, next, object);
             if installed != 0 {
                 for element in &elements[next..next + installed] {
                     let (key, _) =
@@ -781,26 +783,49 @@ fn constant_public_field(element: &InstanceElementInitializer) -> Option<(&Rc<st
     Some((field.shared_string_key()?, value))
 }
 
-/// Batches only a contiguous observer-free segment; declined segments have no
-/// effects and are installed by the original sequential path, one field at a time.
-fn install_constant_field_segment(
-    elements: &[InstanceElementInitializer],
-    receiver: &ObjectRef,
-) -> usize {
-    let count = elements
-        .iter()
-        .take_while(|element| constant_public_field(element).is_some())
-        .count();
-    if count < 2 {
-        return 0;
-    }
-    let fields = elements[..count]
-        .iter()
-        .map(|element| constant_public_field(element).expect("constant segment"));
-    if receiver.install_constant_class_fields(fields) {
-        count
-    } else {
-        0
+/// Scans each observer-free segment once, including segments that decline.
+/// Sequential definitions cannot make a declined segment worth re-probing:
+/// they execute no code. Retry only at its boundary, after which an initializer
+/// or private/symbol element may change the receiver's state.
+#[derive(Default)]
+struct ConstantFieldSegments {
+    retry_at: usize,
+    #[cfg(test)]
+    inspected: usize,
+}
+
+impl ConstantFieldSegments {
+    fn install(
+        &mut self,
+        elements: &[InstanceElementInitializer],
+        next: usize,
+        receiver: &ObjectRef,
+    ) -> usize {
+        if next < self.retry_at {
+            return 0;
+        }
+        let count = elements[next..]
+            .iter()
+            .take_while(|element| {
+                #[cfg(test)]
+                {
+                    self.inspected += 1;
+                }
+                constant_public_field(element).is_some()
+            })
+            .count();
+        self.retry_at = next + count.max(1);
+        if count < 2 {
+            return 0;
+        }
+        let fields = elements[next..next + count]
+            .iter()
+            .map(|element| constant_public_field(element).expect("constant segment"));
+        if receiver.install_constant_class_fields(fields) {
+            count
+        } else {
+            0
+        }
     }
 }
 
@@ -1623,8 +1648,36 @@ fn function_private_environment(function: &Function) -> Option<PrivateEnvironmen
 
 #[cfg(test)]
 mod tests {
-    use super::{can_seed_base_class_constructor_slots, can_seed_direct_leaf_call};
-    use crate::{Value, eval};
+    use super::{
+        ConstantFieldSegments, can_seed_base_class_constructor_slots, can_seed_direct_leaf_call,
+        constant_public_field,
+    };
+    use crate::{ObjectRef, Property, Value, eval};
+
+    #[test]
+    fn declined_long_constant_segment_is_scanned_once() {
+        let count = 512;
+        let fields = (0..count).map(|i| format!("p{i}={i};")).collect::<String>();
+        let Value::Function(class) = eval(&format!("(class {{ {fields} }})")).unwrap() else {
+            panic!("expected class constructor");
+        };
+        let elements = class.instance_elements();
+        let receiver = ObjectRef::new(std::collections::HashMap::new());
+        // An unrelated non-configurable descriptor declines before the batch
+        // consumes any field. All sequential field definitions still succeed.
+        receiver.define_property(
+            "fixed".into(),
+            Property::data(Value::Null, false, false, false),
+        );
+        let mut segments = ConstantFieldSegments::default();
+        for next in 0..elements.len() {
+            assert_eq!(segments.install(&elements, next, &receiver), 0);
+            let (key, value) = constant_public_field(&elements[next]).unwrap();
+            receiver.set_shared_key(key.clone(), value.clone());
+        }
+        assert_eq!(segments.inspected, count);
+        assert_eq!(receiver.get("p511"), Some(Value::Number(511.0)));
+    }
 
     #[test]
     fn base_class_constructor_slot_eligibility_is_construct_only() {
