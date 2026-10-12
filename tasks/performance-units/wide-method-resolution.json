@@ -1,0 +1,83 @@
+{
+  "schema_version": 2,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_kind": "leaf",
+  "unit_id": "wide-method-resolution",
+  "base_sha": "e54e33eb9371c5cb4627bd8e590a648085a7fa26",
+  "queue": {
+    "candidate_sha": "e54e33eb9371c5cb4627bd8e590a648085a7fa26",
+    "sha256": "d064c7e9a06d2e7d2d998a26bc1d0febb0dc7e8177ccb7508d0d0f7108442e8c"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/jetstream3-js-subset/hash-map",
+      "external/jetstream3-js-subset/cdjs",
+      "external/sunspider-1.0/access-binary-trees"
+    ],
+    "rank_ceiling": 1,
+    "override_reason": "Lead orders B after A is recorded rejected in 86e1a462. Pricing selects method resolution; B is independent of rejected A, starts at e54e33eb, and leaves native-backedge work unbuilt."
+  },
+  "mechanism": {
+    "summary": "Split the cold named-property reader into the existing entry and a hot-miss entry. Both share identical ordinary/exotic guards and own/prototype/general resolution, but the wide caller that just tried get_prop_named_hot skips repeating probe_hot inside the cold reader. Keep the original unchecked entry for other callers; no new hot executor state, no new prototype proof, no value/activation ABI change.",
+    "generality": "Any wide named-property read whose hot cache probe has just missed; the miss token is control flow, with no user code or mutation between the probes. Type/layout/key-independent admission; no corpus shape recognition. Estimated removable repeated-probe chunk 15-40 instructions / 3-10 cycles per cold read, not the entire 338.5-instruction or 38.8-cycle lookup gap. Tree reach is small, hence near-neutral target ceiling; every target pair must still improve.",
+    "semantic_risks": [
+      "Hot miss may mean primitive or exotic receiver: retain full cold eligibility guards and general Get fallback",
+      "Accessor and Proxy hooks may change properties or prototypes; lookup order and receiver binding must remain identical",
+      "Own property shadows, different receiver identities and epoch changes must still take existing guarded resolution",
+      "Other callers must still perform their first hot probe; class-field initializer code is outside scope",
+      "Do not alter native loop readiness, exit bookkeeping, cells or exact resumption"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "jetstream3-js-subset--hash-map/amplified-receipt/receipt.json",
+      "sha256": "e2831f871c68aba0811ccd87885a4b23d9d69cd6da80452e4e0048fbc763de6c",
+      "base_sha": "e54e33eb9371c5cb4627bd8e590a648085a7fa26",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/hash-map"
+      ],
+      "shared_cost": "Exact e54 candidate amplified sampler receipt: inclusive property-read samples. Matched alternating-receiver cold method lookup minus function-reference move prices 399.533 instructions / 51.578 cycles in R versus 60.997 / 12.774 in NG. Native probes cancel exactly in the prior call increment. Corpus-weighted method-lookup proxies exceed native-loop proxies for all selected targets; see the retained unit pricing record. Wide hot miss followed by get_prop_named repeats the same cache hot probe with no intervening effect.",
+      "inclusive_fraction": 0.11461908030199039
+    },
+    {
+      "source": "jetstream3-js-subset--cdjs/amplified-receipt/receipt.json",
+      "sha256": "85882160e6e6e869be2123b39c1111b10cb8b01382a5fdb46fab1c17428e8558",
+      "base_sha": "e54e33eb9371c5cb4627bd8e590a648085a7fa26",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/cdjs"
+      ],
+      "shared_cost": "Exact e54 candidate amplified sampler receipt: inclusive property-read samples. Matched alternating-receiver cold method lookup minus function-reference move prices 399.533 instructions / 51.578 cycles in R versus 60.997 / 12.774 in NG. Native probes cancel exactly in the prior call increment. Corpus-weighted method-lookup proxies exceed native-loop proxies for all selected targets; see the retained unit pricing record. Wide hot miss followed by get_prop_named repeats the same cache hot probe with no intervening effect.",
+      "inclusive_fraction": 0.05997001499250375
+    },
+    {
+      "source": "sunspider-1.0--access-binary-trees/amplified-receipt/receipt.json",
+      "sha256": "4ae81bba0656b04ab9e1c141d9846bc2a41c7c9d92f674ff35d353e7ea672fdd",
+      "base_sha": "e54e33eb9371c5cb4627bd8e590a648085a7fa26",
+      "opportunity_ids": [
+        "external/sunspider-1.0/access-binary-trees"
+      ],
+      "shared_cost": "Exact e54 candidate amplified sampler receipt: inclusive property-read samples. Matched alternating-receiver cold method lookup minus function-reference move prices 399.533 instructions / 51.578 cycles in R versus 60.997 / 12.774 in NG. Native probes cancel exactly in the prior call increment. Corpus-weighted method-lookup proxies exceed native-loop proxies for all selected targets; see the retained unit pricing record. Wide hot miss followed by get_prop_named repeats the same cache hot probe with no intervening effect.",
+      "inclusive_fraction": 0.05527638190954774
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/jetstream3-js-subset/hash-map",
+      "external/jetstream3-js-subset/cdjs",
+      "external/sunspider-1.0/access-binary-trees"
+    ],
+    "control_ids": [
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/kraken-1.1/ai-astar"
+    ],
+    "target_max_candidate_over_base": 0.9999,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 2
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
