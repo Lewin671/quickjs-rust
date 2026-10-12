@@ -94,6 +94,21 @@ precise wall-time regression that cycles do not show keeps the decision
 `inconclusive` until explained. Measurements hold a host-wide lock and wait
 for concurrent builds. Mechanics: `docs/benchmarking.md`, "Decision metric".
 
+## Unstable frozen-base cases: lead amendment, 2026-10-12
+
+This is a rule change made by the lead on **2026-10-12**, for owner review.
+A frozen base can itself be imprecise; requiring every candidate to repair its
+ratio would hold unrelated decisions hostage. A case can be unstable_on_base
+only with same-protocol base/base A/A evidence at least as long as the bundle,
+an A/A interval wider than the precision limit, and candidate/base instructions
+inside that case's measured A/A instruction floor. Evidence is hashed into the
+decision. Such a control uses the instruction gate; instruction growth fails.
+It is excluded from timing precision readiness, never counted as a passed
+target; a declared target remains inconclusive. Every other gate is unchanged.
+The lead authorizes re-deciding the sealed batch-1 bundle with this evidence
+before applying the split/re-measure rule. Mechanics and floor definition:
+[benchmarking](../docs/benchmarking.md#unstable-frozen-base-evidence).
+
 ## Why staged migrations exist
 
 The one-attempt leaf rule is correct for a recognizer and fatal for an

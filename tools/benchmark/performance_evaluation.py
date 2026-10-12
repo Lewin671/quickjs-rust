@@ -53,7 +53,7 @@ def _test262_zero_gap(report: dict[str, Any], candidate_sha: str) -> bool:
 
 def decide(unit, unit_sha, queue, queue_sha, summary, summary_sha, broad, broad_sha,
            external, external_sha, mode, test262, *, sentinel=None, sentinel_sha=None,
-           profile_root=None) -> dict[str, Any]:
+           profile_root=None, unstable_base_checks=None) -> dict[str, Any]:
     from .performance_decision import validate_unit_against_queue, _summary_revisions, unit_kind
     validation = validate_unit_against_queue(unit, unit_sha, queue, queue_sha)
     candidate_sha, base_sha = _summary_revisions(summary)
@@ -67,6 +67,7 @@ def decide(unit, unit_sha, queue, queue_sha, summary, summary_sha, broad, broad_
     if kind == "migration" and mode != "stage" and unit["migration"]["current_stage"] != unit["migration"]["stages"]:
         raise PerformanceDecisionError("a migration reaches fast or promotion mode only at its final stage")
     reasons = validate_bundle(summary, broad, external, sentinel)
+    bundle_complete = not reasons
     if summary["engines"]["base"] != queue.get("engines", {}).get("candidate"):
         raise PerformanceDecisionError("decision base executable differs from the profiled queue candidate")
     profiles = verify_profiles(unit, queue, profile_root)
@@ -94,12 +95,15 @@ def decide(unit, unit_sha, queue, queue_sha, summary, summary_sha, broad, broad_
                             else f"external/{lane}/{case}" for case in cases)
     limits = {case: control_limit for case in controls}
     limits.update({case: target_limit for case in targets})
-    failed = []
+    from .base_aa_evidence import classify
+    base_rows, excluded, base_reasons, failed = classify(
+        unstable_base_checks or {}, limits, targets, metrics)
+    reasons.extend(base_reasons)
     missing = sorted(set(limits) - set(metrics))
     if missing:
         reasons.append(f"missing candidate/base evidence for {missing}")
     for case, limit in sorted(limits.items()):
-        if case not in metrics:
+        if case not in metrics or case in excluded:
             continue
         lower, upper, precise = interval(metrics[case], case)
         if not precise:
@@ -139,19 +143,32 @@ def decide(unit, unit_sha, queue, queue_sha, summary, summary_sha, broad, broad_
             state = "rejected"
             reasons.append("Test262 parity gate is not zero")
     result = {
-        # Version 3 records the judged metric and any wall-time divergence.
-        "schema_version": 3,
+        # Version 4 also binds and reports lead-approved unstable-base evidence.
+        "schema_version": 4,
         "artifact_type": "quickjs-performance-decision",
         "claim_eligible": False,
         "unit_id": unit["unit_id"], "unit_sha256": unit_sha, "unit_kind": kind,
         "base_sha": base_sha, "candidate_sha": candidate_sha, "mode": mode,
         "decision": state, "reasons": reasons,
         "metric": metric, "wall_time_divergence": wall_divergence,
+        "unstable_on_base": {case: row for case, row in base_rows.items()
+                             if row["classification"] == "unstable_on_base"},
+        "unstable_base_checks": base_rows,
+        "precision_exclusions": sorted(excluded),
+        "decision_readiness": {
+            "status": "ready_for_unit_gates" if bundle_complete
+            and not any(case in base_rows for case in targets)
+            and all(case in metrics and interval(metrics[case], case)[2]
+                    for case in limits if case not in excluded) else "inconclusive",
+            "precision_excluded_controls": sorted(excluded - targets),
+            "blocked_targets": sorted(targets & base_rows.keys()),
+        },
         "metrics": {key: metrics[key] for key in sorted(limits) if key in metrics},
         "evidence": {"queue_sha256": queue_sha, "preview_summary_sha256": summary_sha,
                      "broad_report_sha256": broad_sha, "external_report_sha256": external_sha,
                      "sentinel_report_sha256": sentinel_sha, "profiles": profiles,
-                     "test262_burndown_sha256": None if test262 is None else test262[1]},
+                     "test262_burndown_sha256": None if test262 is None else test262[1],
+                     "base_aa_evidence": {case: row["sha256"] for case, row in base_rows.items()}},
         "unit_validation": validation,
     }
     if mode == "stage":

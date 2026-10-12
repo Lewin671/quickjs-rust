@@ -54,6 +54,8 @@ PREVIEW_IMPLEMENTATION_FILES = (
     "scripts/external-performance-preview.sh",
     "scripts/performance-policy-audit.sh",
     "scripts/performance-preview.sh",
+    "tools/benchmark/base_aa.py",
+    "tools/benchmark/base_aa_evidence.py",
     "tools/benchmark/build_cache.py",
     "tools/benchmark/build_cache_identity.py",
     "tools/benchmark/bundle.py",
