@@ -1,0 +1,82 @@
+{
+  "schema_version": 2,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_kind": "leaf",
+  "unit_id": "own-slot-cache-hot-answers",
+  "base_sha": "e54e33eb9371c5cb4627bd8e590a648085a7fa26",
+  "queue": {
+    "candidate_sha": "e54e33eb9371c5cb4627bd8e590a648085a7fa26",
+    "sha256": "d064c7e9a06d2e7d2d998a26bc1d0febb0dc7e8177ccb7508d0d0f7108442e8c"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/jetstream3-js-subset/hash-map",
+      "external/jetstream3-js-subset/cdjs",
+      "external/sunspider-1.0/3d-raytrace"
+    ],
+    "rank_ceiling": 1,
+    "override_reason": "Lead selects this bounded OwnSlot leaf before method-resolution pricing from T036; global sinks and class-field units belong to other owners."
+  },
+  "mechanism": {
+    "summary": "Answer an already installed OwnSlot hot entry without entering get_prop_named and scanning all four cache entries. Use an out-of-line helper borrowing the entry; retain weak receiver identity, layout revision, live slot read, and caller exotic guards.",
+    "generality": "All ordinary named reads on stable own-slot storage; selection depends on cache representation and guarded receiver state, never source, key spelling or corpus shape. Expected net 20-60 instructions / 3-10 cycles per reached hit; cdjs reach is small and near-neutral target threshold is deliberate.",
+    "semantic_risks": [
+      "A different receiver with the same epoch must decline",
+      "Writes must return the live slot value; deleting or replacing a descriptor must invalidate the entry",
+      "Accessor, typed-array, symbol and module-namespace semantics must keep the existing general path",
+      "Prototype hot entries and alternating receivers must retain existing proofs"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "jetstream3-js-subset--hash-map/amplified-receipt/receipt.json",
+      "sha256": "e2831f871c68aba0811ccd87885a4b23d9d69cd6da80452e4e0048fbc763de6c",
+      "base_sha": "e54e33eb9371c5cb4627bd8e590a648085a7fa26",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/hash-map"
+      ],
+      "shared_cost": "Exact e54 candidate amplified sampler receipt: compact named-property reads in the wide executor. Subsequent operation counters at e54 found 3510015 successful OwnSlot reads; probe_hot rejects OwnSlot, repeating ordinary guards and a four-entry scan in get_prop_named. Counters and pricing retained on design branch 6a7bf946, T036 measurement record. Preserve identity and layout guards; no prototype-miss shortcut. Fraction is inclusive property-read samples, not exclusive OwnSlot ownership.",
+      "inclusive_fraction": 0.11461908030199039
+    },
+    {
+      "source": "jetstream3-js-subset--cdjs/amplified-receipt/receipt.json",
+      "sha256": "85882160e6e6e869be2123b39c1111b10cb8b01382a5fdb46fab1c17428e8558",
+      "base_sha": "e54e33eb9371c5cb4627bd8e590a648085a7fa26",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/cdjs"
+      ],
+      "shared_cost": "Exact e54 candidate amplified sampler receipt: compact named-property reads in the wide executor. Subsequent operation counters at e54 found 28022 successful OwnSlot reads; probe_hot rejects OwnSlot, repeating ordinary guards and a four-entry scan in get_prop_named. Counters and pricing retained on design branch 6a7bf946, T036 measurement record. Preserve identity and layout guards; no prototype-miss shortcut. Fraction is inclusive property-read samples, not exclusive OwnSlot ownership.",
+      "inclusive_fraction": 0.05997001499250375
+    },
+    {
+      "source": "sunspider-1.0--3d-raytrace/amplified-receipt/receipt.json",
+      "sha256": "299390356a3b154635d4911d8ccf8cb154dab19999e76dbc9c2f477ba66323b1",
+      "base_sha": "e54e33eb9371c5cb4627bd8e590a648085a7fa26",
+      "opportunity_ids": [
+        "external/sunspider-1.0/3d-raytrace"
+      ],
+      "shared_cost": "Exact e54 candidate amplified sampler receipt: compact named-property reads in the wide executor. Subsequent operation counters at e54 found 78441 successful OwnSlot reads; probe_hot rejects OwnSlot, repeating ordinary guards and a four-entry scan in get_prop_named. Counters and pricing retained on design branch 6a7bf946, T036 measurement record. Preserve identity and layout guards; no prototype-miss shortcut. Fraction is inclusive property-read samples, not exclusive OwnSlot ownership.",
+      "inclusive_fraction": 0.10966257668711657
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/jetstream3-js-subset/hash-map",
+      "external/jetstream3-js-subset/cdjs",
+      "external/sunspider-1.0/3d-raytrace"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/access-binary-trees",
+      "external/kraken-1.1/ai-astar"
+    ],
+    "target_max_candidate_over_base": 0.9999,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 2
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
