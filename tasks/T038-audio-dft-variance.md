@@ -2,16 +2,16 @@
 
 - Status: active. Top performance infrastructure item; diagnostic only.
 - Implementation: none. Batch 1 remains present on `integration/batch-1`,
-  with targets/controls passing and promotion inconclusive; main stays e54e33eb.
+  with both promotions retained under the new rule; main stays e54e33eb.
 - Verified at: `8e208b8a`, 2026-10-12, isolated-case process measurements of
   the exact e54e33eb queue executable and the integration runtime executable.
 - Evidence: distributions and exclusions below. Raw diagnostic artifacts in
   `target/audio-dft-diagnostic/` are local, not retained.
 - Unresolved: the hardware cause and residual within-band cycle variance; no engine or
   benchmark-protocol fix is approved or implemented.
-- Next action: use the controlled measurements below to choose the next
-  numeric scratch-placement unit; do not spend another formal run while
-  audio-dft is imprecise.
+- Next action: after retained results are pushed, freeze/validate the approved
+  numeric-scratch-placement plan, then sweep a full page before choosing a fix.
+
 
 ## Scope and identities
 
@@ -170,30 +170,15 @@ or scratch-bank placement policy was changed in these diagnostics.
 Diagnostic paired intervals are recorded in the frozen data; every sample
 is retained. No selective extension, outlier removal or pooling was performed.
 
-## Re-decision contract and cost
+## Re-decision follow-up
 
-[T022](T022-performance-priority-controller.md) and the workflow's
-[batched promotion](../docs/performance-workflow.md#batched-promotion) require
-splitting an inconclusive batch and remeasuring each remaining unit alone.
-Keep both frozen plans, e54e33eb base, original queue, profiles and the exact
-queue-candidate base executable. Build committed isolated class/global
-candidates, then run perf-compare --blocks 30 and promotion decide separately,
-with a complete burndown naming each exact candidate. Reuse exact-commit CI
-artifacts when available; do not attach the merged candidate's burndown to a
-split candidate. Timing/build preflight and lock requirements still apply.
-
-An audio-only diagnostic is allowed; an audio-only replacement in the sealed
-formal bundle is not. The producer offers 3/30/60 whole-bundle blocks, replay
-checks the frozen corpus and raw evidence, and the workflow forbids pooling
-runs or retrying for a favorable interval. Frozen plans need no edits for a
-fresh complete 30/60-block comparison with the same contract. Changing the
-workload/environment protocol needs provenance review, not silent splicing.
-
-The prior run's raw timestamps span 34.17 min broad, 5.74 sentinel and 33.09
-external, 73.62 min combined; elapsed with build/calibration was about 83 min.
-Once precision is established, the cheapest currently allowed route is two
-30-block isolated bundles: about 147 min of measured execution, roughly
-160–170 min elapsed, excluding lock waits and conformance/build work not
-already covered. Two 60-block bundles approximately double that. A fresh
-shared bundle needs an explicit change to the split rule; it is not the
-current procedure. No formal comparison or new decision was run here.
+The lead changed the rule on 2026-10-12; the earlier split/re-measure estimate
+is superseded. [T022](T022-performance-priority-controller.md#unstable-frozen-base-cases-lead-amendment-2026-10-12)
+owns that policy; [T037](T037-integration-batch-1.md#re-decision-of-the-af4d0d3c-bundle)
+owns the qualifying 30-block base A/A and both retained promotion decisions.
+No new formal bundle was measured. The engine-placement recommendation now
+has lead approval as numeric-scratch-placement, two attempts, af4d0d3c queue.
+After the retained-result update is pushed, freeze/validate its plan before
+implementation; first use a full-page diagnostic offset sweep to distinguish
+relative backing-store hazards from bank alignment/page splits. Do not ship
+an observed page offset or re-pin without screen evidence.

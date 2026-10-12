@@ -2,17 +2,17 @@
 
 - Status: active. This is the performance campaign contract.
 - Implementation: partial; B1-B2 complete, B3-B6 open. Both batch-1 leaves
-  are present on `integration/batch-1`, but promotion is inconclusive.
+  are present on `integration/batch-1` and retained under the lead amendment.
 - Verified at: `af4d0d3c`, 2026-10-12, locked 30-block comparison against
   exact queue candidate `e54e33eb` and NG `f7830186`; all lanes complete;
   exact-candidate CI burndown passes all 42672 configured cases with zero gaps.
 - Evidence: standing and hashes below; unit decisions in [T037](T037-integration-batch-1.md).
   Raw target/ artifacts are local, not retained.
-- Unresolved: only audio-dft is imprecise; it is a declared global-sink control.
-  All three target gates pass; neither unit has retained promotion evidence.
-- Next action: [T038](T038-audio-dft-variance.md) owns the top infrastructure
-  diagnosis. Main stays e54e33eb; new units base on the integration tip and
-  matching queue/profile provenance. Existing plans and standing stay frozen.
+- Unresolved: audio-dft engine placement/variance; its unstable-base control
+  uses the instruction floor. Both original target gates pass.
+- Next action: numeric-scratch-placement is approved on the af4d0d3c queue
+  after this result is pushed. Main stays e54e33eb; frozen evidence stays true.
+
 
 
 ## Standing at af4d0d3c
@@ -51,12 +51,15 @@ second target) and untargeted 3d-morph improved.
 | `external/sunspider-1.0/3d-morph` | 0.776775 | 0.756201 |
 | `external/sunspider-1.0/bitops-bitwise-and` | 0.130456 | 0.116990 |
 
-Readiness is **inconclusive**, not failed measurement: audio-dft cycles/base
-0.996205, CI [0.906182, 1.040874], relative half-width 9.9344% >3%, all 30 blocks
-valid; wall/base 0.978284, CI [0.892233, 1.042806], half-width 9.6445%.
-Every other case passes precision and its applicable gate. Audio-dft is a
-declared global control and a class promotion portfolio control; unrelated
-noise does not explain this batch's status. The new queue is usable for selection.
+The sealed summary's original readiness remains inconclusive: audio-dft
+cycles/base .996205, CI [.906182,1.040874], half-width 9.9344%; wall/base
+.978284, CI [.892233,1.042806], half-width 9.6445%. All 30 blocks remain.
+Current promotion decisions are **retained** under the lead's 2026-10-12
+rule: 75 cases keep their timing gates, audio-dft passes its separate
+unstable_on_base instruction gate. [T037](T037-integration-batch-1.md#re-decision-of-the-af4d0d3c-bundle)
+owns the A/A numbers, hashes and exact outputs. Standing/queue numbers were
+not recomputed or re-labelled; the measured af4d0d3c queue remains the input
+explicitly authorized for the next numeric-scratch-placement unit.
 
 ## Standing at e54e33eb
 

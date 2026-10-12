@@ -4,18 +4,17 @@
 - Implementation: present (`scripts/performance-decision.sh`,
   `tools/benchmark/performance_decision.py`,
   `tools/benchmark/performance_evaluation.py`). One acceptance box is open.
-- Verified at: `af4d0d3c`, 2026-10-12, fresh 30-block formal bundle,
-  both promotion decisions, complete candidate burndown and new queue.
+- Verified at: candidate af4d0d3c; rule merge dbf98c55, 2026-10-12,
+  30-block base A/A, both retained re-decisions, full gate and rule-branch CI.
 - Evidence: [T018 standing](T018-broad-performance.md#standing-at-af4d0d3c)
-  owns bundle/queue paths and hashes; [T037](T037-integration-batch-1.md)
-  owns unit results and exact reason strings. Raw artifacts are local.
-- Unresolved: both decisions are inconclusive solely on audio-dft precision;
-  it is a declared global-unit control. No ruleset requires the Performance
-  decision check (last box). No unit is retained by this run.
-- Next action: [T038](T038-audio-dft-variance.md) is the top infrastructure
-  item; it owns diagnosis and the allowed split/re-decision cost. New units
-  base on the integration tip with matching queue/profile provenance. Existing
-  plans keep their frozen e54e33eb base and old queue; main stays e54e33eb.
+  owns unchanged bundle/queue identities; [T037](T037-integration-batch-1.md)
+  owns A/A evidence, instruction floor, hashes and both exact decision outputs.
+- Unresolved: no ruleset requires the Performance decision check (last box).
+  Audio-dft's engine property remains open independently of retained controls.
+- Next action: push integration results, then freeze numeric-scratch-placement
+  from the integration tip with the lead-authorized af4d0d3c queue. Main stays
+  e54e33eb; existing plans retain their old base/queue bindings.
+
 
 
 

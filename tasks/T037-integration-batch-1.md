@@ -1,20 +1,17 @@
 # T037: Integration batch 1
 
-- Status: active. Placement accepted; formal batch measured; both promotion
-  decisions are inconclusive solely because audio-dft precision is insufficient.
-- Implementation: present on `integration/batch-1`; neither unit is retained.
-  No code was reverted and no frozen plan/threshold was edited.
-- Verified at: `af4d0d3c`, 2026-10-12, locked 30-block comparison, both
-  promotion decides, fresh queue and complete exact-candidate CI burndown.
+- Status: active. Both batch-1 promotion decisions retained after the
+  lead's 2026-10-12 unstable-base amendment; original measurements unchanged.
+- Implementation: present on integration/batch-1; both units retained.
+  No runtime code was reverted and no frozen plan/threshold was edited.
+- Verified at: candidate af4d0d3c; rule merge dbf98c55, 2026-10-12,
+  30-block base A/A, both promotion re-decides and the full integration gate.
 - Evidence: [T018 standing](T018-broad-performance.md#standing-at-af4d0d3c),
-  formal results below, and [leaf screens](archive/T018-batch-1-leaf-screens.md);
-  raw target/ artifacts are local, not retained.
-- Unresolved: audio-dft is the global unit's declared control, not unrelated
-  noise; cycles CI is too wide. There is no measured >3% regression elsewhere.
-- Next action: [T038](T038-audio-dft-variance.md) owns the audio-dft
-  infrastructure diagnosis and re-decision procedure. Lead keeps main at
-  e54e33eb; batch implementation/targets/controls pass, promotion inconclusive.
-  New units base on the integration tip; frozen plans remain unchanged.
+  re-decision below and [leaf screens](archive/T018-batch-1-leaf-screens.md).
+- Unresolved: audio-dft placement/variance still needs an engine unit;
+  retained control uses instructions, not a claim of precise audio cycles.
+- Next action: push this integration update, then freeze/validate the lead's
+  numeric-scratch-placement unit on the af4d0d3c queue. Main stays e54e33eb.
 
 
 ## Scope and integration
@@ -139,49 +136,55 @@ No frozen plans were changed. core.bare remains false; user identity unchanged.
 Remaining conditional-stage helper error propagation is a separate audit;
 no claim is made that this one fix audits every function in check.sh.
 
-## Formal results at af4d0d3c
+## Re-decision of the af4d0d3c bundle
 
-The 30-block perf-compare completed successfully under the host timing lock;
-then both original promotion commands ran under that same lock. Its shell
-returned 1 only because --require-retained rejects an inconclusive decision,
-not because measurement failed. All target cases and all other case gates passed;
-no wall-time divergence exists. Audio-dft alone is imprecise: cycles/base
-0.996205, CI [0.906182, 1.040874], relative half-width 9.9344%, 30 valid blocks.
-It is declared by the global plan; class promotion includes it as a portfolio
-control. Both exact decide outputs have the same decision and reason:
+The original [first decision](archive/T037-first-formal-decision.md) remains
+recorded as inconclusive. The lead's 2026-10-12 amendment is owned by
+[T022](T022-performance-priority-controller.md#unstable-frozen-base-cases-lead-amendment-2026-10-12).
+Rule commit e3df4072, scope 11 approved files, CI 38268268435 success; merge
+dbf98c55. Full gate after merge passes: 385 tool tests, 35 script tests,
+2246 runtime tests and 5170 Test262 subset cases. No runtime diff was merged.
+
+The 30-block audio-dft base/base A/A uses the exact archived launch protocol,
+under the host lock after compiler/engine waits. Cleaned temporary paths were
+restored from the unchanged queue executable and hash-verified corpus:
+binary 6b40aa1944af1096657641cab5b2f80319cc35c3765a79da169cb5c698af09c4,
+workload 57fcc07e83044e5552d83e4bf13a1e10af6e71357dddf28ea3c64de8dbd0bbda.
+No sample was taken before restoration, and no sealed artifact was modified.
+
+A/A evidence: target/unstable-base/audio-dft-aa-30.json;
+SHA-256 5f7cfa9d0b87d096b66d45e7ba80f73f60fd8e986458e088ed3a6f273697a559.
+Cycles ratio .999669835, CI [.959332829,1.034034315], half-width 4.20469%.
+A/A instruction median .999961472, CI [.999896838,1.000146081]; full paired
+instruction floor [.999355445,1.000644971]. Candidate/base instructions
+.999663133, CI [.999532817,.999728652], wholly inside that floor.
+
+Both promotion decides replayed the EXISTING bundle (SHA-256
+90fe2a3ad29ef7d035195f8f36c3dc3e12d9706f0ae9f5b9a91ef3c174af9bf7),
+original e54e33eb queue/profiles and exact af4d0d3c complete CI burndown.
+No new formal run or queue was generated. Schema 4 classifies audio-dft as
+unstable_on_base, with its instruction gate passing. Precision readiness is
+ready_for_unit_gates: 75 timing cases plus that separately reported control;
+no declared target is excluded or substituted. All original target gates pass.
+Both --require-retained calls exit 0, with exact outcome fields:
 
 ```json
-{"decision":"inconclusive","metric":"cycles","reasons":["external/kraken-1.1/audio-dft: insufficient blocks or wide confidence interval"],"wall_time_divergence":[]}
+{"decision":"retained","metric":"cycles","reasons":[],"wall_time_divergence":[]}
 ```
 
-| Unit | Target cycles/base | 95% CI | Formal decision |
-| --- | ---: | --- | --- |
-| global repin: bitops-bitwise-and | 0.116990 | [0.115555, 0.117865] | inconclusive |
-| global repin: top_level_function_call | 0.309658 | [0.309318, 0.310071] | same decision |
-| class-field-batch-install: raytrace | 0.947281 | [0.943053, 0.948468] | inconclusive |
+| Frozen unit | Promotion outcome | Decision JSON SHA-256 |
+| --- | --- | --- |
+| global-numeric-binding-sinks-repin | retained | 827f6520ac92e39599d879378c8dfe7ab4c0bcc9535f795bab35ac14f07c4d2a |
+| class-field-batch-install | retained | 3aaf17e1e36f2982a3da9e073ab761666307560d41446cb94d714d976caa5161 |
 
-Original stdout files: target/batch1-global-numeric-binding-sinks-repin-decide-output.txt
-(SHA-256 19e6c93ebdf7bf8eb4c88adae99b266c447de9a2552b19b30f8ad726057a7c6a),
-and target/batch1-class-field-batch-install-decide-output.txt
-(SHA-256 4af24f1df97b3a67c701f6d50d8d7fba76b6da5014507dd4c8f1de2796e695bb).
-The full decision JSON files sit next to the comparison directory, named
-batch1-formal-af4d0d3c81aad98721661689cf7224d2c17b9781-<unit>-decision.json.
-Bundle/queue paths, hashes, all standing and >3% changes live in T018.
-
-Burndown from CI coverage run 38242164403 names exact candidate af4d0d3c:
-53572 total, 10900 NG-skipped, 42672 configured Rust passes, zero fails,
-timeouts/not-run/parity gaps; NG passes 42602, fails 70. It was recorded once
-in docs/conformance/burndown.jsonl after completeness verification. Artifact
-file SHA-256 cf78d4178d426c4bcf9362b293e5dbc786702223f81e1e9123cd850e3c152789.
-
-The original queue candidate executable remains linked from the main cache;
-formal base SHA-256 is 6b40aa1944af1096657641cab5b2f80319cc35c3765a79da169cb5c698af09c4;
-formal candidate SHA-256 is 6878520ff5fc8fc480e9fd8086c2b5caeb4ba609236ea423cd5a6d573a6fc54b,
-byte-identical to placement. All samples remain in the sealed bundle, with
-no outlier removal or rerun. A five-second monitor observed zero compiler
-processes during timing. No full formal run was spent after this outcome.
-
-The new queue binds af4d0d3c (measured engine tip), not the later doc/ledger
-recording commit. Profile/freeze the next unit against that exact candidate;
-its cached executable and queue identity are preserved. No main update was
-made; both implementations remain present but formally unretained.
+Files are target/unstable-base/<unit>-decision.json and <unit>-stdout.txt;
+commands are preserved in <unit>-command.json. Exact stdout hashes, in row
+order: 018e1d61608c3b289e891b60c19ea876ab7cef530b447b02e666da281667fc54,
+fa5c0391da3d71c93ccf57ec2eeb1201911f54d514a27c32b571c5bb0fbadc5e.
+The runtime candidate remains af4d0d3c; dbf98c55 identifies the rule evaluator,
+not a re-labelled measurement. Original standing, bundle, queue, archived
+outputs and frozen plans stay byte-identical. Retained is a unit-gate result,
+not fixed-hardware qualification or a claim that every case beats NG.
+Main stays e54e33eb with its typed_loop diff untouched. The next authorized
+unit is numeric-scratch-placement, using the af4d0d3c queue after this update
+is pushed; T038 owns its mechanism and remaining variance work.
