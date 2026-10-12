@@ -1,0 +1,71 @@
+{
+  "schema_version": 2,
+  "unit_kind": "leaf",
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "global-numeric-binding-sinks",
+  "base_sha": "e54e33eb9371c5cb4627bd8e590a648085a7fa26",
+  "queue": {
+    "candidate_sha": "e54e33eb9371c5cb4627bd8e590a648085a7fa26",
+    "sha256": "d064c7e9a06d2e7d2d998a26bc1d0febb0dc7e8177ccb7508d0d0f7108442e8c"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/sunspider-1.0/bitops-bitwise-and",
+      "broad/top_level_function_call"
+    ],
+    "rank_ceiling": 1,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Admit realm-backed hoisted global numeric stores using existing writable own-data-property and canonical-cell identity proofs. Same-name reads use the sink register. Pure scalar regions defer publication to an out-of-line exit wrapper; all completed stores publish before resuming any interpreter instruction, including guard failure and residency exits. Regions with calls or property operations retain per-write publication.",
+    "generality": "Operation, binding identity and data-flow admission for ordinary top-level numeric loops, independent of source, loop shape, iteration count or benchmark identity. No change to slot-indexed locals or shared-cell ownership.",
+    "semantic_risks": [
+      "Accessor, non-writable, deleted and shadowed bindings must decline before entry",
+      "Deferred regions must have no observer; same-name reads must use the current sink register",
+      "Guard failure must publish completed stores and replay the failing instruction exactly",
+      "Direct eval and dynamic environments must decline; try-containing loops need hang guards",
+      "Keep publication out of hot dispatch arms to avoid executor codegen regressions"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "bitwise-receipt/receipt.json",
+      "sha256": "27f8a4476992d6ed0c3dfcc28663a727bc424fe303958a4970d55a01abcf75ac",
+      "base_sha": "e54e33eb9371c5cb4627bd8e590a648085a7fa26",
+      "opportunity_ids": [
+        "external/sunspider-1.0/bitops-bitwise-and"
+      ],
+      "shared_cost": "600,000 backward edges declined at StoreGlobalSloppy(i); global stores occupy 38.5 percent inclusive in the amplified exact-candidate sample.",
+      "inclusive_fraction": 0.385
+    },
+    {
+      "source": "broad-receipt/receipt.json",
+      "sha256": "363f49f375292965b82cb5f4c69ad69e9dee9d034fa29f004b9163d9f97db3f5",
+      "base_sha": "e54e33eb9371c5cb4627bd8e590a648085a7fa26",
+      "opportunity_ids": [
+        "broad/top_level_function_call"
+      ],
+      "shared_cost": "Counter trace at N=1000 has 1000 interpreted edges declined at StoreGlobalSloppy(topLevelChecksum); exact-candidate sample covers the same realm-backed stores and call loop.",
+      "inclusive_fraction": 0.2
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/bitops-bitwise-and",
+      "broad/top_level_function_call"
+    ],
+    "control_ids": [
+      "external/kraken-1.1/ai-astar",
+      "external/kraken-1.1/audio-dft"
+    ],
+    "target_max_candidate_over_base": 0.95,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 2
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

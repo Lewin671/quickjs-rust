@@ -28,9 +28,9 @@
 //! user code: every operation it contains either cannot call out at all or is a
 //! prepared helper, and a prepared helper body contains no store of any kind.
 //! [`Preparation::region_may_mutate_bindings`] additionally refuses the whole
-//! preparation when the region writes a global or a named property, which are
-//! the two operations that could otherwise reach a captured binding or replace
-//! an intrinsic between entry and the call.
+//! preparation when the region can reach a captured binding or replace an
+//! intrinsic. A region with global sinks may instead use capture-free numeric
+//! leaves evaluated per call, without folding any bindings at entry.
 
 use qjs_ast::{BinaryOp, UnaryOp};
 
@@ -334,7 +334,34 @@ impl Preparation {
         program: &super::TypedLoopProgram,
     ) -> Option<HelperGraph> {
         if Self::region_may_mutate_bindings(program) {
-            return None;
+            // Binding sinks cannot affect a parameter-only numeric leaf. No
+            // captured/global reads or writes are allowed, and we keep the
+            // graph empty so no entry-folded value can go stale after a store.
+            if program.ops.iter().any(|op| {
+                matches!(
+                    op,
+                    super::TypedOp::SetNamed { .. }
+                        | super::TypedOp::SetNamedTyped { .. }
+                        | super::TypedOp::ComputedWrite { .. }
+                )
+            }) {
+                return None;
+            }
+            for site in &program.helper_sites {
+                let callee = vm.local_slot_value(site.callee_slot as usize)?;
+                if !crate::function::is_direct_leaf_function(&callee) {
+                    return None;
+                }
+                let Value::Function(function) = callee else {
+                    return None;
+                };
+                if !function.upvalues.is_empty()
+                    || !closed_form_already_answers(&Value::Function(function), site.arity)
+                {
+                    return None;
+                }
+            }
+            return Some(HelperGraph::default());
         }
         let mut preparation = Self {
             graph: HelperGraph::default(),

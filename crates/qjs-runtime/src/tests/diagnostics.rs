@@ -399,14 +399,15 @@ fn supplying_loop_plans_externally_does_not_change_which_plan_claims_a_site() {
             1,
             0,
         ),
-        // The same loop at global scope, where the counters are realm
-        // bindings: no engine claims it, and every edge consults them all.
+        // A writable canonical realm binding now enters the typed loop.
+        // This intentionally changes the old global-store decline; the
+        // externally supplied plans must preserve that one-entry route.
         (
             "var total = 0;
              for (var i = 0; i < 200; i++) { total += i; }
              total;",
+            1,
             0,
-            200,
         ),
         // A loop whose body allocates: also unclaimed, one declined chain per
         // iteration.
