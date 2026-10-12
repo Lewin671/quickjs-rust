@@ -24,6 +24,8 @@ usage: scripts/perf-compare.sh --base <git-ref> --output-dir <dir> [options]
   --output-dir <dir>      new directory for the evidence bundle
   --quickjs-ng <path>     pinned QuickJS-NG executable
                           (default third_party/quickjs-ng/build/qjs)
+  --concurrent-lanes      measure the three lanes side by side; only on a
+                          host qualified for it (docs/performance-workflow.md)
 
 Build the reference once with:
   cmake -S third_party/quickjs-ng -B third_party/quickjs-ng/build \
@@ -36,6 +38,7 @@ base_ref=""
 candidate_ref="HEAD"
 blocks=30
 output_dir=""
+lanes=()
 ng_bin="$ROOT_DIR/third_party/quickjs-ng/build/qjs"
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -44,6 +47,7 @@ while [ $# -gt 0 ]; do
     --blocks) blocks="${2:?}"; shift 2 ;;
     --output-dir) output_dir="${2:?}"; shift 2 ;;
     --quickjs-ng) ng_bin="${2:?}"; shift 2 ;;
+    --concurrent-lanes) lanes=(--concurrent-lanes); shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "error: unknown argument $1" >&2; usage >&2; exit 2 ;;
   esac
@@ -89,4 +93,4 @@ python3 -m tools.benchmark.cycle_trust compare \
   --base "$base_bin" --base-receipt "$receipts/base.json" \
   --quickjs-ng "$ng_bin" --quickjs-ng-receipt "$receipts/quickjs-ng.json" \
   --manifest "${manifests[0]}" --sentinel-manifest "${manifests[1]}" \
-  --blocks "$blocks" --output-dir "$output_dir"
+  --blocks "$blocks" --output-dir "$output_dir" ${lanes[@]+"${lanes[@]}"}

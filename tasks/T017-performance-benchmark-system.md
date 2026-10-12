@@ -110,6 +110,15 @@ minute at 1.4 times the pair spread. Not covered: the external lane's
 memory-heavy cases, and more than one run. Nothing measures concurrently
 today.
 
+**Concurrent-lane qualification, criteria written before measuring.** One
+30-block sequential bundle and one 30-block `--concurrent-lanes` bundle of
+the same three executables on the idle host. Concurrent lanes qualify for
+that host when all hold: every lane completes with linearity passing; at
+least 73 of the 76 candidate/base case ratios are within 3% of the
+sequential ones; each lane's geometric-mean shift of those ratios is within
+0.5%, and of the candidate/QuickJS-NG ratios within 1%; the concurrent
+bundle has at most two more imprecise cases than the sequential one.
+
 ## Hosted preview record
 
 What was measured about the hosted preview itself, so it is not re-derived.

@@ -38,6 +38,40 @@ class CompareTests(unittest.TestCase):
         for name in ("Specializer coverage", "Generic-path sentinels", "External Benchmark Preview"):
             self.assertIn(name, text)
 
+    def _measure(self, concurrent, fail=None):
+        """Run `_measure` with lanes that only write the fixture reports."""
+        from argparse import Namespace
+        from tools.benchmark import compare
+        reports = {"broad": self.broad, "sentinel": self.sentinel, "external": self.external}
+        names = {"broad": "report.json", "sentinel": "sentinel-report.json", "external": "external-report.json"}
+
+        def lane(name, args, manifests, engines):
+            if name == fail:
+                raise ValueError("no samples")
+            (args.output_dir / names[name]).write_text(json.dumps(reports[name]))
+            return reports[name]
+
+        work = tempfile.TemporaryDirectory()
+        self.addCleanup(work.cleanup)
+        args = Namespace(output_dir=Path(work.name), concurrent_lanes=concurrent)
+        with patch.object(compare, "_measure_lane", lane):
+            return compare._measure(args, None, None, None, None), args.output_dir
+
+    def test_both_lane_schedules_seal_the_same_conclusion(self):
+        sequential, _ = self._measure(False)
+        concurrent, directory = self._measure(True)
+        self.assertEqual((sequential["lane_schedule"], concurrent["lane_schedule"]),
+                         ("sequential", "concurrent"))
+        drop = lambda data: {key: value for key, value in data.items() if key not in {"bundle", "lane_schedule"}}
+        self.assertEqual(drop(sequential), drop(concurrent))
+        self.assertEqual(set(concurrent["bundle"]["artifacts"]),
+                         {"report.json", "sentinel-report.json", "external-report.json"})
+        self.assertEqual(json.loads((directory / "status.json").read_text())["state"], "success")
+
+    def test_a_failed_concurrent_lane_fails_the_comparison(self):
+        with self.assertRaisesRegex(ValueError, "sentinel lane failed"):
+            self._measure(True, fail="sentinel")
+
     def test_complete_inventory_with_failed_reference_is_not_ready(self):
         self.external["suites"][0]["complete_comparison"] = False
         result = summary_for(self.broad, self.external, self.sentinel)

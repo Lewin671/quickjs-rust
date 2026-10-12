@@ -1,13 +1,20 @@
-"""Run one complete, sequential three-engine comparison from prebuilt receipts.
+"""Run one complete three-engine comparison from prebuilt receipts.
 
 This local entry point measures broad specializer coverage, generic sentinels,
 and external process-wall workloads on the same host. It never builds engines
 or silently replaces a failed sample. Hosted previews keep their existing path.
+
+The lanes run one after another, or with `--concurrent-lanes` side by side:
+one forked process per lane, each measuring its own lane in its usual order.
+The files and the analysis are the same; only wall-clock overlap differs, and
+the summary records it as `lane_schedule`. Use it on a host with an idle
+core per lane whose ratios were shown not to move (docs/performance-workflow.md).
 """
 from __future__ import annotations
 
 import argparse
 import json
+import multiprocessing
 import sys
 from dataclasses import replace
 from pathlib import Path
@@ -114,8 +121,62 @@ def run(args):
         return _measure(args, broad_manifest, sentinel_manifest, broad_engines, sentinel_engines)
 
 
+LANES = ("broad", "sentinel", "external")
+_PREFIX = {"broad": "", "sentinel": "sentinel-"}
+
+
+def _measure_lane(lane, args, manifests, engines):
+    """Measure one lane into `args.output_dir` and return its report."""
+    if lane == "external":
+        return run_preview(load_external(ROOT / "benchmarks/external-preview.json"),
+                           args.external_cache, args.output_dir / "external-work",
+                           args.output_dir, args.candidate, args.base, args.quickjs_ng,
+                           blocks=args.blocks)
+    prefix, manifest = _PREFIX[lane], manifests[lane]
+    print(f"compare: {prefix}measurement ({args.blocks} blocks)", file=sys.stderr, flush=True)
+    raw = args.output_dir / f"{prefix}raw.jsonl"
+    (args.output_dir / f"{prefix}manifest.json").write_bytes(manifest.path.read_bytes())
+    with raw.open("x") as stream:
+        success = BenchmarkRun(manifest, engines[lane], list(manifest.cases), args.blocks,
+                               args.seed, JsonlWriter(stream), ROOT).execute()
+    if not success:
+        raise ValueError(f"{prefix}measurement failed; raw evidence preserved, no conclusion")
+    analysis = load_analysis_manifest(ROOT / "benchmarks/analysis.json", manifest)
+    report = build_report(raw, manifest, analysis)
+    write_report(args.output_dir / f"{prefix}report.json", report)
+    return report
+
+
+def _lane_process(lane, args, manifests, engines):
+    try:
+        _measure_lane(lane, args, manifests, engines)
+    except Exception as error:  # the parent reports the lane; keep its reason visible
+        print(f"compare: {lane} lane failed: {error}", file=sys.stderr, flush=True)
+        raise SystemExit(1)
+
+
+def _measure_concurrently(args, manifests, engines):
+    """One forked process per lane, so no lane's timer waits on another's
+    interpreter; a fork also inherits withheld counters (cycle_trust.py)."""
+    context = multiprocessing.get_context("fork")
+    processes = {lane: context.Process(target=_lane_process, args=(lane, args, manifests, engines))
+                 for lane in LANES}
+    for process in processes.values():
+        process.start()
+    for process in processes.values():
+        process.join()
+    failed = [lane for lane, process in processes.items() if process.exitcode != 0]
+    if failed:
+        raise ValueError(f"{', '.join(failed)} lane failed; raw evidence preserved, no conclusion")
+    names = {"broad": "report.json", "sentinel": "sentinel-report.json", "external": "external-report.json"}
+    return {lane: json.loads((args.output_dir / names[lane]).read_text(encoding="utf-8")) for lane in LANES}
+
+
 def _measure(args, broad_manifest, sentinel_manifest, broad_engines, sentinel_engines):
     phase = "initialization"
+    manifests = {"broad": broad_manifest, "sentinel": sentinel_manifest}
+    engines = {"broad": broad_engines, "sentinel": sentinel_engines}
+    concurrent = getattr(args, "concurrent_lanes", False)
 
     def status(state, error=None):
         payload = {"state": state, "phase": phase, "claim_eligible": False, "error": error}
@@ -123,34 +184,22 @@ def _measure(args, broad_manifest, sentinel_manifest, broad_engines, sentinel_en
 
     try:
         status("running")
-        reports = []
-        for prefix, manifest, engines in (("", broad_manifest, broad_engines),
-                                          ("sentinel-", sentinel_manifest, sentinel_engines)):
-            phase = prefix + "measurement"
-            print(f"compare: {phase} ({args.blocks} blocks)", file=sys.stderr, flush=True)
+        if concurrent:
+            phase = "concurrent measurement"
             status("running")
-            raw = args.output_dir / f"{prefix}raw.jsonl"
-            (args.output_dir / f"{prefix}manifest.json").write_bytes(manifest.path.read_bytes())
-            with raw.open("x") as stream:
-                success = BenchmarkRun(manifest, engines, list(manifest.cases), args.blocks,
-                                       args.seed, JsonlWriter(stream), ROOT).execute()
-            if not success:
-                raise ValueError(f"{phase} failed; raw evidence preserved, no conclusion")
-            phase = prefix + "analysis"
-            analysis = load_analysis_manifest(ROOT / "benchmarks/analysis.json", manifest)
-            report = build_report(raw, manifest, analysis)
-            write_report(args.output_dir / f"{prefix}report.json", report)
-            reports.append(report)
-        phase = "external measurement"
-        status("running")
-        external = run_preview(load_external(ROOT / "benchmarks/external-preview.json"),
-                               args.external_cache, args.output_dir / "external-work",
-                               args.output_dir, args.candidate, args.base, args.quickjs_ng,
-                               blocks=args.blocks)
+            reports = _measure_concurrently(args, manifests, engines)
+        else:
+            reports = {}
+            for lane in LANES:
+                phase = f"{lane} measurement"
+                status("running")
+                reports[lane] = _measure_lane(lane, args, manifests, engines)
         phase = "summary"
-        summary = summary_for(reports[0], external, reports[1])
+        summary = summary_for(reports["broad"], reports["external"], reports["sentinel"])
+        summary["lane_schedule"] = "concurrent" if concurrent else "sequential"
         write_report(args.output_dir / "summary.json", summary)
-        (args.output_dir / "summary.md").write_text(markdown_for(summary, reports[0], external, reports[1]))
+        (args.output_dir / "summary.md").write_text(
+            markdown_for(summary, reports["broad"], reports["external"], reports["sentinel"]))
         from .bundle import seal
         summary = seal(args.output_dir)
         status("success")
@@ -171,6 +220,8 @@ def main():
     parser.add_argument("--blocks", type=int, choices=(3, 30, 60), default=30)
     parser.add_argument("--seed", type=int, default=20250713)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--concurrent-lanes", action="store_true",
+                        help="measure the three lanes side by side, one process each")
     parser.add_argument("--settle", type=float, default=300.0,
                         help="seconds to wait for running builds or engines to finish before measuring")
     try:
