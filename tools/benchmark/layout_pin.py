@@ -12,8 +12,9 @@ narrow window of its start address modulo 4 KiB, with its callees in the
 order `CALLEES` lists right after it; the slow ones are everywhere else. The
 window moves when the executor's own code changes, so `DEFAULT_OFFSET` is
 re-scanned with it. Some versions of the executor are sensitive at 16-byte
-granularity (one in eight offsets fast); others -- the one pinned now -- are
-within 2% at every offset. Scan with several typed-loop cases, not two: a
+granularity (one in eight offsets fast); others are
+within 2% at every offset; the current executor must be measured again after
+its own code changes. Scan with several typed-loop cases, not two: a
 position fast for the call sentinels and ai-astar was 5% slow for
 imaging-desaturate.
 
@@ -39,7 +40,7 @@ from typing import Sequence
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_ORDER = ROOT / "crates/qjs-cli/hot-functions.order"
-DEFAULT_OFFSET = 0x200
+DEFAULT_OFFSET = 0x400
 # The same executor instantiated for the interpreter's own loops -- a
 # script's top-level `for` -- is pinned too, ahead of its wide twin:
 # it is most of access-fannkuch and math-partial-sums, and floating in the
@@ -79,7 +80,11 @@ CALLEES = (
     # recursive_call_tree, which ran 10% more cycles when an unrelated
     # change moved it (2026-09-26).
     "helper_graph7numericNtB2_10NumProgram3run",
+    "named_property_cacheNtB2_18NamedPropertyCache5probe",
 )
+# A callee's own alignment is independent of the executor's current window.
+CALLEE_OFFSETS = {"typed_loop7execute9call_leaf": 0x580}
+
 # After the budgeted callees: defined once per codegen unit, in a number of
 # copies that changes with unrelated code, so nothing pinned may follow them.
 TAIL_CALLEES = (
@@ -198,13 +203,23 @@ def pin_head(lines: list[str], start: int, sizes: dict[str, int], counts: dict[s
         position += (vm_offset - position) % PAGE
         head.append(vm_executor)
         position += sizes.get(vm_executor, 0)
-    head += filler(sizes, counts, (offset - position) % PAGE, listed | set(head))
+    gap = (offset - position) % PAGE
+    head += filler(sizes, counts, gap, listed | set(head))
+    position += gap
     for name in [executor] + callees:
+        desired = next((value for suffix, value in CALLEE_OFFSETS.items()
+                        if name.endswith(suffix)), None)
+        if desired is not None and budgets is not None:
+            gap = (desired - position) % PAGE
+            head += filler(sizes, counts, gap, listed | set(head))
+            position += gap
         head.append(name)
+        position += sizes.get(name, 0)
         if budgets is None or name not in sizes:
             continue
         budgets[name] = slot_budget(sizes[name], budgets.get(name))
         head += filler(sizes, counts, budgets[name] - sizes[name], listed | set(head))
+        position += budgets[name] - sizes[name]
     return head + tail
 
 
