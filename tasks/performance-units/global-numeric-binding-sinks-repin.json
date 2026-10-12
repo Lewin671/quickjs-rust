@@ -18,7 +18,7 @@
     "override_reason": null
   },
   "mechanism": {
-    "summary": "Admit realm-backed hoisted global numeric stores using existing writable own-data-property and canonical-cell identity proofs. Same-name reads use the sink register. Pure scalar regions defer publication to an out-of-line exit wrapper; all completed stores publish before resuming any interpreter instruction, including guard failure and residency exits. Regions with calls or property operations retain per-write publication. Reopens rejected global-numeric-binding-sinks (record d7a7762b) using new control evidence at target/profiles/global-numeric-binding-sinks-repin/evidence-index.json, SHA-256 c212315b732d98feffb6343fd6ea688f7ee8f01dd45823e1066ddab7b33accc8. Re-pin the executors and budgeted callees before screening; preserve the complete callee/cell and computed-alias guards from rejected patch e914c6c36301c4454288453eaa53e3c6fae926e1fd4918c310a53c38b682d7f7.",
+    "summary": "Admit realm-backed hoisted global numeric stores using existing writable own-data-property and canonical-cell identity proofs. Same-name reads use the sink register. Pure scalar regions defer publication to an out-of-line exit wrapper; all completed stores publish before resuming any interpreter instruction, including guard failure and residency exits. Regions with calls or property operations retain per-write publication. Reopens rejected global-numeric-binding-sinks (record d7a7762b) using new control evidence at target/profiles/global-numeric-binding-sinks-repin/evidence-index.json, SHA-256 c212315b732d98feffb6343fd6ea688f7ee8f01dd45823e1066ddab7b33accc8. Re-pin the executors and budgeted callees before screening; preserve the complete callee/cell and computed-alias guards from rejected patch e914c6c36301c4454288453eaa53e3c6fae926e1fd4918c310a53c38b682d7f7. The fresh exact-queue control receipt is target/profiles/global-numeric-binding-sinks-repin/fresh-control-receipt/receipt.json, SHA-256 313ada5f902a84102bbc8659384033c3a8ef2c3c0f696afd668b853a169d2a5c; it is supplemental control evidence, not a claimed removable global-store fraction.",
     "generality": "Operation, binding identity and data-flow admission for ordinary top-level numeric loops, independent of source, loop shape, iteration count or benchmark identity. No change to slot-indexed locals or shared-cell ownership. Re-pinning restores the repository-wide hot-code layout invariant; no workload-specific runtime recognition is added.",
     "semantic_risks": [
       "Accessor, non-writable, deleted and shadowed bindings must decline before entry",
@@ -50,16 +50,6 @@
       ],
       "shared_cost": "Counter trace at N=1000 has 1000 interpreted edges declined at StoreGlobalSloppy(topLevelChecksum); exact-candidate sample covers the same realm-backed stores and call loop. The earlier exact-binary sample has 501 of 1474 disjoint op_store_global_sloppy inclusive samples (0.33989); the previous plan declared a conservative 0.20.",
       "inclusive_fraction": 0.33989145183175035
-    },
-    {
-      "source": "fresh-control-receipt/receipt.json",
-      "sha256": "313ada5f902a84102bbc8659384033c3a8ef2c3c0f696afd668b853a169d2a5c",
-      "base_sha": "e54e33eb9371c5cb4627bd8e590a648085a7fa26",
-      "opportunity_ids": [
-        "sentinel/prototype_method_call"
-      ],
-      "shared_cost": "Fresh sample of the exact queue candidate on the failed control, corroborated by new counter A/B and nm evidence indexed above. This control does not execute global sink stores; zero removable global-store share is claimed.",
-      "inclusive_fraction": 0.0
     }
   ],
   "fast_gate": {
