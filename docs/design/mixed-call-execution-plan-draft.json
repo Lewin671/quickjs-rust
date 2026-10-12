@@ -1,0 +1,128 @@
+{
+  "schema_version": 2,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "mixed-call-execution-draft",
+  "unit_kind": "migration",
+  "base_sha": "e54e33eb9371c5cb4627bd8e590a648085a7fa26",
+  "queue": {
+    "candidate_sha": "e54e33eb9371c5cb4627bd8e590a648085a7fa26",
+    "sha256": "d064c7e9a06d2e7d2d998a26bc1d0febb0dc7e8177ccb7508d0d0f7108442e8c"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/jetstream3-js-subset/hash-map",
+      "external/jetstream3-js-subset/cdjs",
+      "external/sunspider-1.0/3d-raytrace",
+      "external/sunspider-1.0/access-binary-trees"
+    ],
+    "rank_ceiling": 7,
+    "override_reason": "Lead selected Unit 2 migration for five ordinary mixed-call targets. Rank 1 global-numeric-binding-sinks and class-field-batch-install are separate owners; tofte is a separate capture/dynamic-scope mechanism. Proposed for lead approval: validate-input stays in cumulative stage coverage and is a mandatory final control; its measured 2-4% scenario cannot support the uniform 5% payoff threshold. Price a separate conversion unit before claiming parity."
+  },
+  "mechanism": {
+    "summary": "DRAFT NOT FROZEN: activation-local mixed scalar/boxed transport across ordinary calls with exact pre-op exits and post-call continuations.",
+    "generality": "Admission by bytecode operations, slot/cell authority, input types and region data flow. No source, function, benchmark, count or checksum recognition; preserve existing numeric and typed executors.",
+    "semantic_risks": [
+      "captured and mapped-arguments cell identity",
+      "TDZ and const errors",
+      "getter Proxy and native reentry invalidation",
+      "type changes and numeric NaN signed zero",
+      "exception ordering and exactly once stores calls",
+      "constructor return and missing excess parameters",
+      "zero-based bank rebinding and rooted boxed lifetimes"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "jetstream3-js-subset--hash-map/amplified-receipt/receipt.json",
+      "sha256": "e2831f871c68aba0811ccd87885a4b23d9d69cd6da80452e4e0048fbc763de6c",
+      "base_sha": "e54e33eb9371c5cb4627bd8e590a648085a7fa26",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/hash-map"
+      ],
+      "shared_cost": "Exact e54e33eb binary, amplified official source sample: wide executor flat fraction 0.5003. Flat samples bound reachable transport/operations; not independently priced dispatcher overhead.",
+      "inclusive_fraction": 0.9862731640356898
+    },
+    {
+      "source": "jetstream3-js-subset--cdjs/amplified-receipt/receipt.json",
+      "sha256": "85882160e6e6e869be2123b39c1111b10cb8b01382a5fdb46fab1c17428e8558",
+      "base_sha": "e54e33eb9371c5cb4627bd8e590a648085a7fa26",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/cdjs"
+      ],
+      "shared_cost": "Exact e54e33eb binary, amplified official source sample: wide executor flat fraction 0.4258. Flat samples bound reachable transport/operations; not independently priced dispatcher overhead.",
+      "inclusive_fraction": 0.9992503748125937
+    },
+    {
+      "source": "sunspider-1.0--3d-raytrace/amplified-receipt/receipt.json",
+      "sha256": "299390356a3b154635d4911d8ccf8cb154dab19999e76dbc9c2f477ba66323b1",
+      "base_sha": "e54e33eb9371c5cb4627bd8e590a648085a7fa26",
+      "opportunity_ids": [
+        "external/sunspider-1.0/3d-raytrace"
+      ],
+      "shared_cost": "Exact e54e33eb binary, amplified official source sample: wide executor flat fraction 0.6104. Flat samples bound reachable transport/operations; not independently priced dispatcher overhead.",
+      "inclusive_fraction": 0.9578220858895705
+    },
+    {
+      "source": "sunspider-1.0--access-binary-trees/amplified-receipt/receipt.json",
+      "sha256": "4ae81bba0656b04ab9e1c141d9846bc2a41c7c9d92f674ff35d353e7ea672fdd",
+      "base_sha": "e54e33eb9371c5cb4627bd8e590a648085a7fa26",
+      "opportunity_ids": [
+        "external/sunspider-1.0/access-binary-trees"
+      ],
+      "shared_cost": "Exact e54e33eb binary, amplified official source sample: wide executor flat fraction 0.4402. Flat samples bound reachable transport/operations; not independently priced dispatcher overhead.",
+      "inclusive_fraction": 0.9668341708542714
+    },
+    {
+      "source": "sunspider-1.0--string-validate-input/amplified-receipt/receipt.json",
+      "sha256": "cb29b2b851dae6f273cd3cbe38e8ecaf0a629da70ccd8fa8d96acc23a9e71a46",
+      "base_sha": "e54e33eb9371c5cb4627bd8e590a648085a7fa26",
+      "opportunity_ids": [
+        "external/sunspider-1.0/string-validate-input"
+      ],
+      "shared_cost": "Exact e54e33eb binary, amplified official source sample: wide executor flat fraction 0.2404. Flat samples bound reachable transport/operations; not independently priced dispatcher overhead.",
+      "inclusive_fraction": 0.9766734279918864
+    }
+  ],
+  "migration": {
+    "stages": 4,
+    "current_stage": 1,
+    "cumulative_target_ids": [
+      "external/jetstream3-js-subset/hash-map",
+      "external/jetstream3-js-subset/cdjs",
+      "external/sunspider-1.0/3d-raytrace",
+      "external/sunspider-1.0/access-binary-trees",
+      "external/sunspider-1.0/string-validate-input"
+    ],
+    "stage_max_candidate_over_base": 1.03
+  },
+  "fast_gate": {
+    "target_ids": [
+      "external/jetstream3-js-subset/hash-map",
+      "external/jetstream3-js-subset/cdjs",
+      "external/sunspider-1.0/3d-raytrace",
+      "external/sunspider-1.0/access-binary-trees"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/string-validate-input",
+      "external/sunspider-1.0/crypto-md5",
+      "external/sunspider-1.0/crypto-aes",
+      "external/sunspider-1.0/bitops-bits-in-byte",
+      "external/kraken-1.1/ai-astar",
+      "external/kraken-1.1/imaging-desaturate",
+      "external/kraken-1.1/audio-dft",
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "broad/plain_function_call",
+      "broad/property_read",
+      "broad/many_locals_call"
+    ],
+    "target_max_candidate_over_base": 0.95,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

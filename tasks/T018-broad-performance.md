@@ -2,56 +2,64 @@
 
 - Status: active. This is the performance campaign contract.
 - Implementation: partial. Milestones B1-B2 are complete; B3-B6 are open.
-- Verified at: `d1313d52`, 2026-10-09, one formal 30-block three-engine
-  comparison against base `7a83b568` and the pinned QuickJS-NG
-  (`scripts/perf-compare.sh`, same-host diagnostic, not a fixed-hardware
-  claim). Results are under "Standing at d1313d52".
-- Evidence: the numbers below. The bundle
-  (`target/comparison/template-removal-d1313d52/`, `summary.json` SHA-256
-  `6b2c98f4...c71b6cf`) is a local artifact, not retained. Earlier results
-  are in `tasks/archive/` and apply only to their own revisions.
-- Unresolved: none of the completion thresholds below is recorded as met.
-  The broad lane produced no ratios at `d1313d52`: `many_locals_call` and
-  `property_read` failed the linearity check on the candidate, so the run's
-  decision readiness is "inconclusive".
-- Next action: generate a queue for the current revision
-  (`docs/performance-workflow.md`, step 1) and select a unit through
-  `tasks/T022-performance-priority-controller.md`. Explain the two
-  non-linear broad cases first; no broad result can be read until they pass.
+- Verified at: `e54e33eb`, 2026-10-11, fresh 30-block three-engine
+  comparison against `d1313d52` and NG `f7830186`; all lanes complete.
+- Evidence: standing below; brief 01 bundle/queue/profile index are local
+  artifacts, not retained. SHA-256 values bind the recorded conclusions.
+- Unresolved: decision readiness is `inconclusive` (audio-dft precision);
+  SunSpider geomean and ten external cases miss the near-term <=1.0 goal.
+  No campaign completion threshold below is recorded as met.
+- Next action: selected units `global-numeric-binding-sinks` and
+  `class-field-batch-install` are in progress in isolated implementation
+  sessions; `mixed-call-execution-design` is in design. Screen first,
+  then let the lead batch formal comparisons; do not regenerate this queue.
 
 This file holds the contract and the last formal standing. It does not
 record units or select work.
 
-## Standing at d1313d52
+## Standing at e54e33eb
 
-Candidate `d1313d52` is the first revision without the loop-template plans;
-base `7a83b568` is the last with them. Ratios are paired medians over 30
-blocks, lower is faster.
+Candidate `e54e33eb9371c5cb4627bd8e590a648085a7fa26`, base `d1313d52`,
+NG `f7830186`. Same-host diagnostic, not fixed-hardware qualification.
+Command: `./scripts/perf-compare.sh --base d1313d52 --candidate e54e33eb
+--blocks 30 --output-dir target/comparison/brief01-e54e33eb-20261011`.
+Bundle `summary.json` SHA-256:
+`febc1b2f4904f113eca4ca4850630012e4e08ded0f85829ace3c91c9f48b6955`.
+Queue `target/comparison/brief01-e54e33eb-20261011-queue.json` SHA-256:
+`d064c7e9a06d2e7d2d998a26bc1d0febb0dc7e8177ccb7508d0d0f7108442e8c`.
+Profile index: `target/profiles/brief01-e54e33eb/evidence-index.json`.
 
-| Lane | Candidate / QuickJS-NG | Candidate / base |
+| Lane | Wall candidate / NG | Cycles candidate / NG |
 | --- | --- | --- |
-| Broad (25 cases) | no ratios (linearity failed, see above) | no ratios |
-| Sentinel `recursive_call_tree` | 0.742 | 0.994 |
-| Sentinel `prototype_method_call` | 1.002 | 1.004 |
-| Sentinel `polymorphic_call_site` | 0.820 | 1.007 |
-| Sentinel `capturing_closure_call` | 0.741 | 1.000 |
-| Sentinel `heterogeneous_property_read` | 1.022 | 1.022 |
-| Sentinel `string_key_map_churn` | 0.919 | 1.015 |
-| External, JetStream 3 subset (5) | 0.981 | 1.015 |
-| External, Kraken 1.1 (14) | 0.606 | 1.126 |
-| External, SunSpider 1.0 (26) | 1.024 | 1.161 |
+| Broad (25) | 0.9701 | 0.9690 |
+| Sentinel (6) | 0.8583 | 0.8588 |
+| JetStream JS subset (5) | 0.9864 | 0.9852 |
+| Kraken (14) | 0.6047 | 0.6013 |
+| SunSpider (26) | 1.0224 | 1.0206 |
 
-External cases slower than QuickJS-NG by more than 10%:
-`bitops-bitwise-and` 4.357, `date-format-tofte` 1.415, `hash-map` 1.351,
-`cdjs` 1.344, `3d-raytrace` 1.328, `access-binary-trees` 1.291,
-`string-validate-input` 1.238, `crypto-md5` 1.235,
-`raytrace-public-class-fields` 1.177, `date-format-xparb` 1.146.
+External >1.10 wall/NG, in queue order: `bitops-bitwise-and` 4.2509,
+`date-format-tofte` 1.3974, `hash-map` 1.3581, `cdjs` 1.3488,
+`3d-raytrace` 1.3340, `access-binary-trees` 1.3058,
+`string-validate-input` 1.2447, `crypto-md5` 1.2326,
+`raytrace-public-class-fields` 1.1877, `crypto-aes` 1.1091.
+Sentinel wall/NG: recursive 0.7455, prototype 0.9930, polymorphic 0.8188,
+capturing 0.7179, heterogeneous 0.999928, churn 0.9190. None >1.0;
+heterogeneous CI [0.99697, 1.00241] does not establish stable <=1.0.
 
-External cases that moved against the base by more than 3%:
-`bitops-bitwise-and` 22.069, `audio-dft` 5.258, `bitops-nsieve-bits` 2.055,
-`crypto-md5` 1.049, `hash-map` 1.032. The first three ran on removed
-template plans; `audio-dft` (0.786) and `bitops-nsieve-bits` (0.854) are
-still faster than QuickJS-NG.
+Decision readiness: **inconclusive**, not promotion evidence. The only
+imprecise case is audio-dft: candidate/base cycles CI [0.96136, 1.02474],
+relative half-width 4.25% >3%. The complete queue is usable for selection.
+
+Linearity diagnosis: old d1313d52 normalized wall probes 1.168/1.245 had
+instructions 0.9985/0.9995 and cycles 1.0168/1.0038. Fresh probes of that
+same base executable give 0.9894/0.9950, HEAD 0.9972/0.9988; all 75 probe
+groups pass. Host timing interference is supported, its specific source
+unproven. Neither whole-work elimination nor N/2N tier switching explains
+it: many_locals_call has 1003/2003 call attempts at N=1000/2000;
+property_read has 1000/2000 backedges and 12290/24290 interpreter ops.
+The latter uses virtual object slots and declines typed entry; it is not
+an ordinary property-cache control. A complete quiet-host remeasurement
+resolved the failure; no case or threshold change is warranted.
 
 ## Goal
 
