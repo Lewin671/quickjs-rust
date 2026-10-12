@@ -121,3 +121,5 @@ nothing about whether the code exists.
 | `class-field-batch-install` | T037 | `e54e33eb` 2026-10-09 | retained (promotion re-decision): candidate `af4d0d3c`, lead rule `dbf98c55`, hashed audio-dft base A/A; implementation on `integration/batch-1`; [integration record](../T037-integration-batch-1.md) |
 | `global-numeric-binding-sinks` | T018 | `e54e33eb` 2026-10-09 | original plan rejected; [leaf history](../archive/T018-batch-1-leaf-screens.md); reopened under the separate repin plan below |
 | `global-numeric-binding-sinks-repin` | T037 | `e54e33eb` 2026-10-09 | live plan; retained (promotion re-decision): candidate `af4d0d3c`, lead rule `dbf98c55`, hashed audio-dft base A/A; implementation on `integration/batch-1`; [integration record](../T037-integration-batch-1.md) |
+
+| `numeric-scratch-placement` | T038 | `af4d0d3c` 2026-10-12 | frozen/validated; implementation absent; two attempts; lead priority override; [unit record](../T038-audio-dft-variance.md) |

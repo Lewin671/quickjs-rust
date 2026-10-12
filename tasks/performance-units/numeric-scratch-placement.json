@@ -1,0 +1,82 @@
+{
+  "schema_version": 2,
+  "unit_kind": "leaf",
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "numeric-scratch-placement",
+  "base_sha": "af4d0d3c81aad98721661689cf7224d2c17b9781",
+  "queue": {
+    "candidate_sha": "af4d0d3c81aad98721661689cf7224d2c17b9781",
+    "sha256": "2882db837308dca8db304e3d0de0b32efcb4326332fe218393020c2f9e275f26"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/kraken-1.1/audio-dft"
+    ],
+    "rank_ceiling": 1,
+    "override_reason": "Lead authorization 2026-10-12: numeric scratch placement is the top infrastructure item; use the af4d0d3c queue (audio-dft rank 31) and exact executable. Worktree starts at integration 8d24e554, whose runtime is unchanged from af4d0d3c; newer tool/docs commits are not substituted into the frozen queue identity."
+  },
+  "mechanism": {
+    "summary": "Make dense Number scratch placement independent of incidental entry-stack position. Before choosing a fix, sweep a complete 4 KiB page at 16-byte spacing in a throwaway ASLR-off diagnostic, recording bank/backing/locals/op-stream addresses and used spans. Distinguish relative load/store aliasing from cache-line/page splits. Attempt 1 prefers safe, aligned, plan-owned banks reused across activations; if indirection/per-entry work outweighs the benefit, attempt 2 uses over-aligned stack placement. A relative placement policy must derive from storage/access geometry, not an observed absolute offset. Measure per-entry N/2N cost and verify hot executor/callee offsets by nm. Do not re-pin unless the screen proves it necessary, then isolate that commit.",
+    "generality": "Applies to bounded dense Number register programs admitted by operations, numeric types and storage/authority guards. No workload name, iteration count, source or bytecode template recognition; no hard-coded 0xdb0 policy. Slot locals/shared upvalue cells and guarded deoptimization/publication remain unchanged.",
+    "semantic_risks": [
+      "Reusable banks must not expose stale registers or locals, or leak across plans/activations",
+      "Every entry, decline, guard failure, replay and completion must return any bank lease; reentry must be safe",
+      "Preserve Number IEEE behavior including NaN, signed zero and rounding, array holes, receiver aliases and exotic bailouts",
+      "Keep register and local-bank effects distinct; log actual used spans and opcode-stream geometry",
+      "The diagnostic logger changes layout; timings from it do not promote production code",
+      "Success requires a 40-run varied-padding production distribution whose range/median is at least halved versus the matched base, with median moving toward the observed fast band; report all runs and fixed-work instructions",
+      "Both cycles and instructions are controls: no cycle median above 1.03, and instruction growth must be bounded by a same-binary observed A/A floor, never assumed equal",
+      "A full-page sweep is diagnostic and not an implementation attempt; each implementation gets one screen, two attempts total",
+      "The target cannot be retained through an unstable_on_base exception; formal promotion remains separate from a screen"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "audio-dft/receipt.json",
+      "sha256": "ce65a83672afae6659fb61e7141dda5bd7aaea92521e92729a93c033bd5c239c",
+      "base_sha": "af4d0d3c81aad98721661689cf7224d2c17b9781",
+      "opportunity_ids": [
+        "external/kraken-1.1/audio-dft"
+      ],
+      "shared_cost": "Exact queue binary sample: local read-only dense Number run_program is the top frame in 1775 of 2238 samples (79.3 percent inclusive of startup); this is path reach, not a claim that all its work is removable. Independent placement diagnostics show a 31 percent cycle swing at nearly fixed instructions.",
+      "inclusive_fraction": 0.7931188561215371
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/kraken-1.1/audio-dft"
+    ],
+    "control_ids": [
+      "external/kraken-1.1/audio-beat-detection",
+      "external/kraken-1.1/audio-fft",
+      "external/kraken-1.1/audio-oscillator",
+      "external/kraken-1.1/imaging-gaussian-blur",
+      "external/kraken-1.1/imaging-darkroom",
+      "external/kraken-1.1/imaging-desaturate",
+      "external/sunspider-1.0/3d-morph",
+      "external/sunspider-1.0/access-nsieve",
+      "external/sunspider-1.0/bitops-nsieve-bits",
+      "external/sunspider-1.0/crypto-aes",
+      "external/sunspider-1.0/crypto-md5",
+      "external/sunspider-1.0/math-cordic",
+      "external/sunspider-1.0/math-partial-sums",
+      "external/sunspider-1.0/math-spectral-norm",
+      "external/kraken-1.1/ai-astar",
+      "sentinel/recursive_call_tree",
+      "sentinel/prototype_method_call",
+      "sentinel/polymorphic_call_site",
+      "sentinel/capturing_closure_call",
+      "sentinel/heterogeneous_property_read",
+      "sentinel/string_key_map_churn"
+    ],
+    "target_max_candidate_over_base": 0.95,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 2
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
