@@ -51,6 +51,8 @@
       "scripts/external-performance-preview.sh",
       "scripts/performance-policy-audit.sh",
       "scripts/performance-preview.sh",
+      "tools/benchmark/base_aa.py",
+      "tools/benchmark/base_aa_evidence.py",
       "tools/benchmark/build_cache.py",
       "tools/benchmark/build_cache_identity.py",
       "tools/benchmark/bundle.py",
@@ -73,7 +75,7 @@
       "tools/benchmark/preview_sentinel.py",
       "tools/benchmark/preview_summary.py"
     ],
-    "aggregate_sha256": "ebdadd87bfd09dfd4eec7aa805732732868fb94830580ed5b841555c98615b24"
+    "aggregate_sha256": "679dd4208d3777d25f508bbb2748125478d5c0e6710ee86ccfc1e1638f48ca1c"
   },
   "hosted_pr": {
     "tier": "informational_preview",

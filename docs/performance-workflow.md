@@ -183,7 +183,7 @@ Units that passed their screens and share one `base_sha` may share one
 formal run: stack them on one candidate, measure once, and run `decide` per
 plan against the same bundle. Every unit must pass its own gates; if any is
 `rejected` or `inconclusive`, split the batch and remeasure each remaining
-unit alone. Units whose targets overlap go in separate batches.
+unit alone, after any explicitly authorized [unstable-base re-decision](../tasks/T022-performance-priority-controller.md#unstable-frozen-base-cases-lead-amendment-2026-10-12). Units whose targets overlap go in separate batches.
 
 ### Migration stages
 

@@ -219,6 +219,46 @@ relative half-width of at most 3%. `decide` requires the bundle's base
 revision to equal the plan's `base_sha` and its base executable to equal
 the queue's candidate executable.
 
+### Unstable frozen-base evidence
+
+Decision schema 4 adds `unstable_on_base`, `unstable_base_checks`,
+`precision_exclusions`, and hashes under `evidence.base_aa_evidence`.
+The policy and lead authorization live in [T022](../tasks/T022-performance-priority-controller.md#unstable-frozen-base-cases-lead-amendment-2026-10-12).
+The sealed bundle and its original readiness are never rewritten. The new
+`decision_readiness` reports timing precision after eligible control exclusions
+and keeps any affected declared target blocked.
+
+Collect A/A against the archived base launch, then pass its file to decide:
+
+```sh
+lockf -k /tmp/qjs-lead/host-timing.lock python3 -m tools.benchmark.base_aa \
+  --summary <sealed-bundle>/summary.json --case external/<suite>/<case> \
+  --blocks 30 --cwd <original-runner-checkout> --output <aa-evidence.json>
+./scripts/performance-decision.sh decide <ordinary-arguments> \
+  --unstable-base-evidence <aa-evidence.json>
+```
+
+The flag is repeatable, one schema-1 `quickjs-base-case-aa-evidence` per case.
+The packet contains both logical roles' raw samples, the exact base engine,
+summary hash, case, and archived workload/host/argv/timer/timeout/source
+context. Both roles execute the same frozen base; the collector uses the
+existing runner, warmup policy and seeded balanced ordering. It refuses
+partial samples and overwrites. Replay refuses missing, short, duplicate,
+precise A/A or mismatched evidence; no caller-supplied intervals are trusted.
+The collector currently audits external whole-process cases; unsupported
+internal increment evidence cannot obtain an exception.
+
+For every paired A/A instruction ratio r, define F = max(r, 1/r) over all
+pairs. The symmetric instruction floor is [1/F,F] (full observed paired
+spread, not the median-ratio CI). Derive the candidate/base instruction CI
+from authenticated bundle raw samples. Its entire precise CI must lie inside
+that floor to qualify; a control with its lower bound above F is rejected,
+and uncertain/changed work is not waived. Targets never pass via this rule.
+All cycle, wall and instruction numbers remain visible in the decision's
+separate base checks, including checks that do not qualify. Wall divergence,
+complete inventories, engine/profile identities, thresholds and conformance
+still use their existing gates.
+
 | Mode | Watches | States |
 | --- | --- | --- |
 | `fast` | the plan's targets and controls plus the six sentinels | `retained`, `rejected`, `inconclusive` |

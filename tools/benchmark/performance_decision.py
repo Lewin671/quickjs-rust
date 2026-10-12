@@ -517,6 +517,7 @@ def _parser() -> argparse.ArgumentParser:
     decision.add_argument("--sentinel-report", type=Path, required=True)
     decision.add_argument("--profile-root", type=Path, required=True)
     decision.add_argument("--test262-burndown", type=Path)
+    decision.add_argument("--unstable-base-evidence", type=Path, action="append", default=[])
     decision.add_argument("--mode", choices=("stage", "fast", "promotion"), required=True)
     decision.add_argument("--require-retained", action="store_true")
     decision.add_argument("--output", type=Path, required=True)
@@ -558,10 +559,12 @@ def main() -> int:
         test262 = None
         if args.test262_burndown is not None:
             test262 = _read_json(args.test262_burndown, "Test262 burndown")
+        from .base_aa_evidence import load_checks
+        base_checks = load_checks(args.unstable_base_evidence, args.summary, args.external_report, summary)
         payload = decide(
             unit, unit_sha, queue, queue_sha, summary, summary_sha, broad, broad_sha,
             external, external_sha, args.mode, test262, sentinel=sentinel, sentinel_sha=sentinel_sha,
-            profile_root=args.profile_root,
+            profile_root=args.profile_root, unstable_base_checks=base_checks,
         )
         _atomic_write(args.output, payload)
         print(json.dumps(payload, sort_keys=True))
