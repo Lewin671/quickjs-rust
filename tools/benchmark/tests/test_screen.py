@@ -121,6 +121,13 @@ class ScreenCaseTests(unittest.TestCase):
             screen.screen_case(self.case, Path("/cand"), Path("/base"), 1, self.tool, 10,
                                iterations=10, runner=failing)
 
+    def test_an_untrusted_host_may_omit_the_cycle_line(self):
+        stderr = "        0.00 real         0.00 user         0.00 sys\n            72997415  instructions retired\n"
+        with self.assertRaises(screen.CountersUnavailable):
+            screen.counter_tool("Darwin").parse(stderr)
+        values = screen.counter_tool("Darwin", trust_cycles=False).parse(stderr)
+        self.assertEqual((values["instructions"], values["cycles"]), (72997415, 0))
+
     def test_untrusted_cycles_leave_no_cycle_ratios(self):
         tool = screen.counter_tool("Darwin", trust_cycles=False)
         engine = FakeEngine({"/cand": 90, "/base": 100})

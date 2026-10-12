@@ -17,6 +17,7 @@ parsing. External bundles and plain scripts are whole-process measurements.
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import math
 import os
@@ -111,8 +112,11 @@ _MAC_LINE = re.compile(r"^\s*(\d+)\s+(instructions retired|cycles elapsed)\s*$")
 _MAC_TIMES = re.compile(r"^\s*([\d.]+) real\s+([\d.]+) user\s+([\d.]+) sys\s*$")
 
 
-def parse_macos_time(stderr: str) -> dict[str, int]:
-    """Parse `/usr/bin/time -l` output appended to a process's stderr."""
+def parse_macos_time(stderr: str, cycles: bool = True) -> dict[str, int]:
+    """Parse `/usr/bin/time -l` output appended to a process's stderr.
+
+    With `cycles` false the cycle line is not required: a host whose counter
+    is not a clock omits it for a short process."""
     values: dict[str, int] = {}
     for line in stderr.splitlines():
         counter = _MAC_LINE.match(line)
@@ -123,9 +127,11 @@ def parse_macos_time(stderr: str) -> dict[str, int]:
         times = _MAC_TIMES.match(line)
         if times:
             values["user_ns"] = round(float(times.group(2)) * 1e9)
+    if not cycles:
+        values["cycles"] = 0
     if "instructions" not in values or "cycles" not in values:
         raise CountersUnavailable("/usr/bin/time -l reported no instruction or cycle counters")
-    if values["instructions"] == 0 or values["cycles"] == 0:
+    if values["instructions"] == 0 or (cycles and values["cycles"] == 0):
         raise CountersUnavailable("/usr/bin/time -l reported zero hardware counters")
     return values
 
@@ -167,7 +173,10 @@ def counter_tool(system: str | None = None, trust_cycles: bool | None = None) ->
         if trust_cycles is None and system == "Darwin":
             trust_cycles = cycle_trust.cycles_trusted()
     if system == "Darwin":
-        return CounterTool(("/usr/bin/time", "-l"), parse_macos_time, trust_cycles is not False)
+        trusted = trust_cycles is not False
+        return CounterTool(("/usr/bin/time", "-l"),
+                           parse_macos_time if trusted else functools.partial(parse_macos_time, cycles=False),
+                           trusted)
     if system == "Linux":
         return CounterTool(
             ("perf", "stat", "-x,", "-e", "instructions:u,cycles:u,task-clock", "--"),
