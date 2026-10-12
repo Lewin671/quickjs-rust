@@ -568,7 +568,15 @@ pub(crate) fn initialize_direct_instance_fields(
     module_host: Option<&crate::module::ModuleHostRef>,
     #[cfg(feature = "agents")] agent_context: Option<&crate::agent::AgentContextRef>,
 ) -> Result<(), RuntimeError> {
-    for element in elements {
+    let mut next = 0;
+    while next < elements.len() {
+        let installed = install_constant_field_segment(&elements[next..], receiver);
+        if installed != 0 {
+            next += installed;
+            continue;
+        }
+        let element = &elements[next];
+        next += 1;
         let InstanceElementInitializer::PublicField(field) = element else {
             unreachable!("direct construct admission accepts public fields only");
         };
@@ -696,7 +704,22 @@ pub(crate) fn initialize_instance_fields(
     env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
     let elements = function.instance_elements();
-    for element in elements.iter() {
+    let mut next = 0;
+    while next < elements.len() {
+        if let Value::Object(object) = this_value {
+            let installed = install_constant_field_segment(&elements[next..], object);
+            if installed != 0 {
+                for element in &elements[next..next + installed] {
+                    let (key, _) =
+                        constant_public_field(element).expect("installed constant field");
+                    env.sync_realm_global_object_property(object, key);
+                }
+                next += installed;
+                continue;
+            }
+        }
+        let element = &elements[next];
+        next += 1;
         match element {
             InstanceElementInitializer::PublicField(field) => {
                 let value = match &field.initializer {
@@ -732,6 +755,53 @@ pub(crate) fn initialize_instance_fields(
         }
     }
     Ok(())
+}
+
+/// Returns only a resolved public string key and a proven primitive constant.
+/// The existing bytecode proof excludes code execution and per-instance identity.
+fn constant_public_field(element: &InstanceElementInitializer) -> Option<(&Rc<str>, &Value)> {
+    let InstanceElementInitializer::PublicField(field) = element else {
+        return None;
+    };
+    let value = match &field.initializer {
+        None => &Value::Undefined,
+        Some(thunk) => thunk.bytecode.as_ref()?.constant_return()?,
+    };
+    if !matches!(
+        value,
+        Value::Undefined
+            | Value::Null
+            | Value::Boolean(_)
+            | Value::Number(_)
+            | Value::String(_)
+            | Value::BigInt(_)
+    ) {
+        return None;
+    }
+    Some((field.shared_string_key()?, value))
+}
+
+/// Batches only a contiguous observer-free segment; declined segments have no
+/// effects and are installed by the original sequential path, one field at a time.
+fn install_constant_field_segment(
+    elements: &[InstanceElementInitializer],
+    receiver: &ObjectRef,
+) -> usize {
+    let count = elements
+        .iter()
+        .take_while(|element| constant_public_field(element).is_some())
+        .count();
+    if count < 2 {
+        return 0;
+    }
+    let fields = elements[..count]
+        .iter()
+        .map(|element| constant_public_field(element).expect("constant segment"));
+    if receiver.install_constant_class_fields(fields) {
+        count
+    } else {
+        0
+    }
 }
 
 /// Whether a string-keyed class field can reuse the existing ordinary-object

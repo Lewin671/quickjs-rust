@@ -316,3 +316,145 @@ fn a_field_reading_a_captured_binding_s_property_sees_its_current_value() {
         Ok(Value::String("red,blue,undefined,computed,Early".into()))
     );
 }
+
+#[test]
+fn constant_definitions_keep_duplicate_order_and_default_descriptors() {
+    assert_eq!(
+        eval(
+            "class C { b=1; a=2; b=3; [2]=4; [1]=5; } let c=new C(); let d=Object.getOwnPropertyDescriptor(c,'b'); [Object.keys(c), c.b, d.writable, d.enumerable, d.configurable].join(':');"
+        ),
+        Ok(Value::String("1,2,b,a:3:true:true:true".into()))
+    );
+}
+
+#[test]
+fn constant_definitions_replace_configurable_properties_without_setters() {
+    assert_eq!(
+        eval(
+            "let calls=0; let target={}; Object.defineProperty(target,'a',{set(v){calls++;},configurable:true}); function Base(){return target;} class C extends Base { a=1; b=2; } new C(); let d=Object.getOwnPropertyDescriptor(target,'a'); [calls,target.a,target.b,d.writable,d.enumerable,d.configurable].join(':');"
+        ),
+        Ok(Value::String("0:1:2:true:true:true".into()))
+    );
+}
+
+#[test]
+fn initializer_observes_completed_segment_and_no_future_fields() {
+    assert_eq!(
+        eval(
+            "let seen; class C { a=1; b=2; observer=(seen=[Object.keys(this).join(','),this.a,this.b,'c' in this].join(':')); c=3; d=4; } let c=new C(); seen+':'+Object.keys(c).join(',');"
+        ),
+        Ok(Value::String("a,b:1:2:false:a,b,observer,c,d".into()))
+    );
+}
+
+#[test]
+fn later_initializer_exception_preserves_only_completed_fields() {
+    assert_eq!(
+        eval(
+            "let saved; function fail(x){saved=x;throw 'boom';} class C { a=1; b=2; c=fail(this); d=3; e=4; } let error; try{new C();}catch(e){error=e;} [error,Object.keys(saved).join(','),saved.a,saved.b,'c' in saved,'d' in saved].join(':');"
+        ),
+        Ok(Value::String("boom:a,b:1:2:false:false".into()))
+    );
+}
+
+#[test]
+fn rejected_descriptor_in_constant_run_keeps_prior_definitions() {
+    assert_eq!(
+        eval(
+            "let target={}; Object.defineProperty(target,'b',{value:9,configurable:false}); function Base(){return target;} class C extends Base { a=1;b=2;c=3; } let error;try{new C();}catch(e){error=e instanceof TypeError;} [error,target.a,target.b,'c' in target].join(':');"
+        ),
+        Ok(Value::String("true:1:9:false".into()))
+    );
+}
+
+#[test]
+fn frozen_or_nonextensible_receiver_rejects_before_new_fields() {
+    assert_eq!(
+        eval(
+            "let targets=[Object.freeze({}),Object.preventExtensions({})]; let out=[]; for(let i=0;i<2;i++){let target=targets[i];function Base(){return target;}class C extends Base {a=1;b=2;}try{new C();}catch(e){out.push(e instanceof TypeError,Object.keys(target).length);}}out.join(':');"
+        ),
+        Ok(Value::String("true:0:true:0".into()))
+    );
+}
+
+#[test]
+fn freezing_initializer_terminates_constant_installation_before_failure() {
+    assert_eq!(
+        eval(
+            "let saved; class C { a=1;b=2;stop=(saved=this,Object.freeze(this),0);c=3;d=4;}let error;try{new C();}catch(e){error=e instanceof TypeError;}[error,Object.keys(saved).join(','),'stop' in saved,'c' in saved].join(':');"
+        ),
+        Ok(Value::String("true:a,b:false:false".into()))
+    );
+}
+
+#[test]
+fn proxy_traps_observe_each_constant_definition_and_rejection() {
+    assert_eq!(
+        eval(
+            "let target={},log=[];function Base(){return new Proxy(target,{defineProperty(t,k,d){log.push(k+':'+Object.keys(t).join(',')+':'+d.value+':'+d.writable+':'+d.enumerable+':'+d.configurable);if(k==='b')return false;return Reflect.defineProperty(t,k,d);}});}class C extends Base {a=1;b=2;c=3;}let error;try{new C();}catch(e){error=e instanceof TypeError;}[error,log.join('|'),Object.keys(target).join(',')].join('/');"
+        ),
+        Ok(Value::String(
+            "true/a::1:true:true:true|b:a:2:true:true:true/a".into()
+        ))
+    );
+}
+
+#[test]
+fn computed_keys_resolve_once_and_symbol_definitions_keep_order() {
+    assert_eq!(
+        eval(
+            "let log=[],s=Symbol('s');function key(x){log.push(x);return x;} class C { [key('a')]=1;[key('b')]=2;[s]=3;c=4;d=5; }let first=new C();let second=new C();[log.join(','),Reflect.ownKeys(first).map(k=>typeof k==='symbol'?'symbol':k).join(','),first[s],second[s]].join(':');"
+        ),
+        Ok(Value::String("a,b:a,b,c,d,symbol:3:3".into()))
+    );
+}
+
+#[test]
+fn private_field_terminates_segment_and_observes_prior_definitions() {
+    assert_eq!(
+        eval(
+            "class C {a=1;b=2;#x=this.a+this.b;c=4;d=5;read(){return this.#x;}}let c=new C();[c.read(),Object.keys(c).join(',')].join(':');"
+        ),
+        Ok(Value::String("3:a,b,c,d".into()))
+    );
+}
+
+#[test]
+fn exotic_array_superclass_result_keeps_length_definition_semantics() {
+    assert_eq!(
+        eval(
+            "let saved=[];function Base(){return saved;}class C extends Base {0=1;1=2;length=3;after=4;}let error;try{new C();}catch(e){error=e instanceof TypeError;}[error,saved.length,saved[0],saved[1],'after' in saved].join(':');"
+        ),
+        Ok(Value::String("true:2:1:2:false".into()))
+    );
+}
+
+#[test]
+fn constant_global_receiver_definitions_sync_var_bindings() {
+    assert_eq!(
+        eval(
+            "globalThis.mirroredA=0;globalThis.mirroredB=0;function Base(){return globalThis;}class C extends Base {mirroredA=1;mirroredB=2;}new C();[mirroredA,mirroredB,globalThis.mirroredA,globalThis.mirroredB].join(':');"
+        ),
+        Ok(Value::String("1:2:1:2".into()))
+    );
+}
+
+#[test]
+fn lazy_string_indices_cannot_be_replaced_by_constant_fields() {
+    assert_eq!(
+        eval(
+            "let saved=new String('hi');function Base(){return saved;}class C extends Base {a=1;b=2;0=3;c=4;}let error;try{new C();}catch(e){error=e instanceof TypeError;}[error,saved.a,saved.b,saved[0],'c' in saved].join(':');"
+        ),
+        Ok(Value::String("true:1:2:h:false".into()))
+    );
+}
+
+#[test]
+fn typed_array_superclass_result_keeps_integer_index_definitions() {
+    assert_eq!(
+        eval(
+            "let saved=new Uint8Array(2);function Base(){return saved;}class C extends Base {a=1;b=2;0=257;1=258;}new C();[saved.a,saved.b,saved[0],saved[1]].join(':');"
+        ),
+        Ok(Value::String("1:2:1:2".into()))
+    );
+}

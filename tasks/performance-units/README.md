@@ -117,5 +117,4 @@ nothing about whether the code exists.
 | `wide-compact-tier` | not recorded | `adb77520` 2026-08-14 | not recorded |
 | `wide-tier-interpreter-exits` | T033 | `93f98a4a` 2026-09-22 | screen pass; rejected at batched promotion |
 | `wide-tier-math-calls-and-field-thunks` | T033 | `93f98a4a` 2026-09-22 | screen attempt 1 failed; nothing later recorded |
-
-| `class-field-batch-install` | Brief 03 (lead-owned integration) | `e54e33eb` 2026-10-11 | plan frozen; micro cutoff passed; implementation not yet present |
+| `class-field-batch-install` | Brief 03 (lead-owned integration) | `e54e33eb` 2026-10-11 | blocked at layout scope: plan `e0027e5e`; micro cutoff passed (installation 15.68% of whole-case samples); implementation present, 41 focused tests pass; 0/2 screens used; lead must authorize or own `crates/qjs-cli/hot-functions.order` re-pin before screen |
