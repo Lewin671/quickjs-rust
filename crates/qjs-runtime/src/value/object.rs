@@ -25,6 +25,7 @@ use crate::{ArrayRef, Function, RuntimeError, function::DynamicBindings, proxy::
 use super::{Property, Value};
 
 mod array_buffer_methods;
+mod class_fields;
 mod dynamic_storage;
 mod key_order;
 mod ordered_data_builder;

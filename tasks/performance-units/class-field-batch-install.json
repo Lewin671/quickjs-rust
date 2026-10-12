@@ -1,0 +1,61 @@
+{
+  "schema_version": 2,
+  "unit_kind": "leaf",
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "class-field-batch-install",
+  "base_sha": "e54e33eb9371c5cb4627bd8e590a648085a7fa26",
+  "queue": {
+    "candidate_sha": "e54e33eb9371c5cb4627bd8e590a648085a7fa26",
+    "sha256": "d064c7e9a06d2e7d2d998a26bc1d0febb0dc7e8177ccb7508d0d0f7108442e8c"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/jetstream3-js-subset/raytrace-public-class-fields"
+    ],
+    "rank_ceiling": 1,
+    "override_reason": "Lead-selected external rank 9: this unit is independent of the rank-1 unit's files, so isolated worktrees can proceed in parallel; ranks 2-6 share a mixed scalar/boxed migration still in design. Shared-host timing remains serialized."
+  },
+  "mechanism": {
+    "summary": "Batch contiguous constant public string-keyed instance fields. Check receiver extensibility/exotic state and storage/descriptor eligibility once before mutation, reserve storage once, then install default data properties in source order under one borrow. End before any initializer that can execute code, private element, or symbol field. Runtime scope: crates/qjs-runtime/src/function/call.rs, value/object.rs (module registration only), value/object/class_fields.rs (new installation helper), tests/class_fields.rs. No wide-tier dispatch changes.",
+    "generality": "Admission uses only initializer bytecode's existing constant-return proof (or absent initializer), resolved string keys and live ordinary receiver/storage state. Compact Small storage that can hold the entire run and has only configurable existing descriptors is supported; all other storage/receivers decline before mutation. Duplicate keys overwrite in their original position. Literal-thunk elimination and shared keys already exist and count as zero new payoff.",
+    "semantic_risks": [
+      "Definition order and duplicate keys, including numeric enumeration order and descriptors",
+      "Nonextensible and frozen receivers, existing nonconfigurable descriptors, Proxy and exotic superclass results must fall back before mutation",
+      "Computed keys are resolved once at class definition; symbols and private elements terminate runs",
+      "Observable initializers terminate runs; later exceptions expose exactly the completed earlier fields",
+      "All property/index counts, revisions, and realm-global synchronization must remain correct"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "whole-receipt/receipt.json",
+      "sha256": "021513cf0fa1ec018e27cae3c9d1193a939fe7359280d625b979ee5bdf2316fa",
+      "base_sha": "e54e33eb9371c5cb4627bd8e590a648085a7fa26",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/raytrace-public-class-fields"
+      ],
+      "shared_cost": "Preimplementation remeasurement: lockf /tmp/qjs-lead/host-timing.lock env PYTHONPATH=. python3 target/class-field-batch-install/micro.py (N=1m/2m, five samples, exact queue binary vs pinned NG). Increment cycles/instance Rust/NG: constant-only k2 882.49/755.93, k3 1016.37/987.42, k8 2516.52/2438.54; same fields plus constructor stores k2 971.70/823.34, k3 1143.83/1074.16, k8 2884.57/2671.22. Instructions for k3+stores 5908.50/5866.12. Both sizes retain the same construction body. Serialized 2s sample remeasurement (profile.py): whole-case instance fields 298/1467=20.31%, installation descendants 230/1467=15.68%, has_own_property alone 52/1467=3.54%; k3+stores micro fields 411/1463=28.09%, installation descendants 327/1463=22.35%. Inclusive groups overlap and are not added. Micro total 1143.83 cycles implies about 256 installation cycles/instance, including irreducible value/storage work. Installable share exceeds 3% cutoff. Removing duplicate scans and repeated reserve/borrow checks is estimated to save 5-9% of whole case (expected candidate/NG about 1.081-1.128); frozen screen requires at least 5%. Timing/reconstruction scripts and raw samples are local artifacts; numbers and revision retained here.",
+      "inclusive_fraction": 0.15678254942058623
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/jetstream3-js-subset/raytrace-public-class-fields"
+    ],
+    "control_ids": [
+      "broad/object_allocation",
+      "external/sunspider-1.0/access-binary-trees",
+      "external/jetstream3-js-subset/cdjs",
+      "external/jetstream3-js-subset/hash-map"
+    ],
+    "target_max_candidate_over_base": 0.95,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 2
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
