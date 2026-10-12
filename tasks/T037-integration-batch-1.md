@@ -1,22 +1,19 @@
 # T037: Integration batch 1
 
-- Status: active. Integration complete; strict placement neutrality and formal
-  decisions remain pending. No unit is retained by this integration.
-- Implementation: present on `integration/batch-1`, from `e54e33eb`.
-  Two screened runtime leaves and docs-only mixed-call evidence are integrated.
-  The separate check-plan fix is not merged here.
-- Verified at: `7095a4aa`, 2026-10-12, complete check.sh and compare-qjs after
-  each merge; `20c3cd22`, staged gate, fixed-point pin and 15-pair checks below.
-- Evidence: conclusions, hashes and counts below; raw target/ and /tmp logs
-  are local artifacts, not retained. Historical leaf screens are in
-  [the archive](archive/T018-batch-1-leaf-screens.md).
-- Unresolved: prototype instructions are 0.997522 of the queue base,
-  significantly below 1.0; the requested strict equality is not established.
-  Prefix/tail isolation did not remove it. No formal bundle or complete
-  candidate Test262 parity exists yet.
-- Next action: explain the prototype instruction difference, then run the
-  ready commands below on a quiet host with the exact candidate burndown.
-  Do not treat the passing cycle ceiling as a strict placement acceptance.
+- Status: active. Placement accepted; formal batch measured; both promotion
+  decisions are inconclusive solely because audio-dft precision is insufficient.
+- Implementation: present on `integration/batch-1`; neither unit is retained.
+  No code was reverted and no frozen plan/threshold was edited.
+- Verified at: `af4d0d3c`, 2026-10-12, locked 30-block comparison, both
+  promotion decides, fresh queue and complete exact-candidate CI burndown.
+- Evidence: [T018 standing](T018-broad-performance.md#standing-at-af4d0d3c),
+  formal results below, and [leaf screens](archive/T018-batch-1-leaf-screens.md);
+  raw target/ artifacts are local, not retained.
+- Unresolved: audio-dft is the global unit's declared control, not unrelated
+  noise; cycles CI is too wide. There is no measured >3% regression elsewhere.
+- Next action: diagnose audio-dft variability, then split/re-measure remaining
+  units as the batch workflow requires; no threshold changes or favorable-run
+  retries. Lead decides main update; recommend no fast-forward yet.
 
 ## Scope and integration
 
@@ -54,8 +51,7 @@ observer. The conservative Small-storage/all-configurable boundary can miss
 opportunities but does not weaken semantics. The quadratic declined-segment
 scan was fixed in `cd32549b`; the 512-field regression proves 512 inspections.
 I would not approve the pre-fix scan or interpreting either leaf screen as
-promotion. Current runtime code has no identified blocker; strict placement
-neutrality below remains unapproved. No dependency or public API was added.
+promotion. Current runtime code has no identified blocker; placement was accepted by the lead (instructions must not grow). No dependency or public API was added.
 
 ## Placement check
 
@@ -83,7 +79,8 @@ P-core user-time shares were >=99.999% on the primary run. Medians below:
 
 All four cycle medians and their 95% upper bounds are below 1.03. The three
 non-prototype instruction intervals include 1.0. Prototype's instruction
-CI is [0.997487, 0.997567], so literal instruction equality fails. The target
+CI is [0.997487, 0.997567]; the lead clarified that instructions must not
+grow and accepted this cheaper control within the 1.03 cycle ceiling. The target
 raytrace cycle CI [0.940251, 0.952860] also does not prove the formal 0.95 ceiling;
 this check is diagnostic, not a decision.
 
@@ -102,6 +99,8 @@ The wide executor and call_leaf sizes differ from base (12144->12656 and
 2784->2880 bytes); the other measured pinned callees have equal sizes. This
 bounds the investigation; it does not attribute the instruction delta to a
 specific operation or claim the codegen band is the whole cause.
+Follow-up attribution at `af4d0d3c`: all execution counters at N=1000/2000 and final typed-op traces match base and class-only (at N=2000: 1999 closed-form calls, 1 typed entry, 192 interpreter ops, 1167 compact ops), class-only hot executor/call_leaf instructions match base modulo relocation, and release N=1m/2m increments (five samples) are base 1196.350, class-only 1196.201, merged 1193.253 instructions/iteration, locating the ~3-instruction shortening to global-sink shared executor/call_leaf codegen without a tier/path switch; individual ARM64 instruction attribution remains incomplete.
+
 The durable rule lives in [performance knowledge](../docs/performance-knowledge.md#codegen).
 
 Primary binary SHA-256: base
@@ -138,37 +137,49 @@ No frozen plans were changed. core.bare remains false; user identity unchanged.
 Remaining conditional-stage helper error propagation is a separate audit;
 no claim is made that this one fix audits every function in check.sh.
 
-## Ready formal commands
+## Formal results at af4d0d3c
 
-Not executed: 30-block perf-compare, promotion decisions, full portfolio gates
-and complete candidate Test262 parity. Concurrent host work excludes a formal
-run now. Resolve strict neutrality above first. Fetch the complete, zero-gap
-burndown for the exact candidate to target/batch1-burndown/burndown.json.
-The worktree's target/perf-loop/rev-e54e33eb9371c5cb4627bd8e590a648085a7fa26
-is a symlink to the same directory in the untouched main checkout; its qjs
-hash was verified against the original queue bundle's candidate hash.
-Both live plans passed validate-unit with the queue and profile roots below.
+The 30-block perf-compare completed successfully under the host timing lock;
+then both original promotion commands ran under that same lock. Its shell
+returned 1 only because --require-retained rejects an inconclusive decision,
+not because measurement failed. All target cases and all other case gates passed;
+no wall-time divergence exists. Audio-dft alone is imprecise: cycles/base
+0.996205, CI [0.906182, 1.040874], relative half-width 9.9344%, 30 valid blocks.
+It is declared by the global plan; class promotion includes it as a portfolio
+control. Both exact decide outputs have the same decision and reason:
 
-```sh
-cd /Users/qingyingliu/Code/js-engine/quickjs-rust-worktrees/wt-quickjs-rust-integration-batch-1
-task_main=/Users/qingyingliu/Code/js-engine/quickjs-rust
-task_candidate=$(git rev-parse HEAD)
-task_run=target/comparison/batch1-formal-$task_candidate
-task_queue=$task_main/target/comparison/brief01-e54e33eb-20261011-queue.json
-lockf /tmp/qjs-lead/host-timing.lock ./scripts/perf-compare.sh \
-  --base e54e33eb9371c5cb4627bd8e590a648085a7fa26 --candidate "$task_candidate" \
-  --blocks 30 --output-dir "$task_run"
-for task_unit in global-numeric-binding-sinks-repin class-field-batch-install; do
-  case "$task_unit" in
-    global-*) task_profile=/Users/qingyingliu/Code/js-engine/quickjs-rust-worktrees/wt-quickjs-rust-global-numeric-binding-sinks-codex/target/profiles/global-numeric-binding-sinks-repin ;;
-    class-*) task_profile=/Users/qingyingliu/Code/js-engine/quickjs-rust-worktrees/wt-quickjs-rust-class-field-batch-install-codex/target/class-field-batch-install ;;
-  esac
-  ./scripts/performance-decision.sh decide --mode promotion \
-    --unit "tasks/performance-units/$task_unit.json" --queue "$task_queue" \
-    --profile-root "$task_profile" --summary "$task_run/summary.json" \
-    --broad-report "$task_run/report.json" --sentinel-report "$task_run/sentinel-report.json" \
-    --external-report "$task_run/external-report.json" \
-    --test262-burndown target/batch1-burndown/burndown.json \
-    --require-retained --output "$task_run-$task_unit-decision.json"
-done
+```json
+{"decision":"inconclusive","metric":"cycles","reasons":["external/kraken-1.1/audio-dft: insufficient blocks or wide confidence interval"],"wall_time_divergence":[]}
 ```
+
+| Unit | Target cycles/base | 95% CI | Formal decision |
+| --- | ---: | --- | --- |
+| global repin: bitops-bitwise-and | 0.116990 | [0.115555, 0.117865] | inconclusive |
+| global repin: top_level_function_call | 0.309658 | [0.309318, 0.310071] | same decision |
+| class-field-batch-install: raytrace | 0.947281 | [0.943053, 0.948468] | inconclusive |
+
+Original stdout files: target/batch1-global-numeric-binding-sinks-repin-decide-output.txt
+(SHA-256 19e6c93ebdf7bf8eb4c88adae99b266c447de9a2552b19b30f8ad726057a7c6a),
+and target/batch1-class-field-batch-install-decide-output.txt
+(SHA-256 4af24f1df97b3a67c701f6d50d8d7fba76b6da5014507dd4c8f1de2796e695bb).
+The full decision JSON files sit next to the comparison directory, named
+batch1-formal-af4d0d3c81aad98721661689cf7224d2c17b9781-<unit>-decision.json.
+Bundle/queue paths, hashes, all standing and >3% changes live in T018.
+
+Burndown from CI coverage run 38242164403 names exact candidate af4d0d3c:
+53572 total, 10900 NG-skipped, 42672 configured Rust passes, zero fails,
+timeouts/not-run/parity gaps; NG passes 42602, fails 70. It was recorded once
+in docs/conformance/burndown.jsonl after completeness verification. Artifact
+file SHA-256 cf78d4178d426c4bcf9362b293e5dbc786702223f81e1e9123cd850e3c152789.
+
+The original queue candidate executable remains linked from the main cache;
+formal base SHA-256 is 6b40aa1944af1096657641cab5b2f80319cc35c3765a79da169cb5c698af09c4;
+formal candidate SHA-256 is 6878520ff5fc8fc480e9fd8086c2b5caeb4ba609236ea423cd5a6d573a6fc54b,
+byte-identical to placement. All samples remain in the sealed bundle, with
+no outlier removal or rerun. A five-second monitor observed zero compiler
+processes during timing. No full formal run was spent after this outcome.
+
+The new queue binds af4d0d3c (measured engine tip), not the later doc/ledger
+recording commit. Profile/freeze the next unit against that exact candidate;
+its cached executable and queue identity are preserved. No main update was
+made; both implementations remain present but formally unretained.

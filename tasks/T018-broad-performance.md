@@ -1,69 +1,64 @@
 # T018: Broad Performance Campaign
 
 - Status: active. This is the performance campaign contract.
-- Implementation: partial. Milestones B1-B2 are complete; B3-B6 are open.
-  Both screened leaves are integrated on `integration/batch-1`; formal
-  decisions are pending in [T037](T037-integration-batch-1.md).
-- Verified at: `e54e33eb`, 2026-10-11, fresh 30-block three-engine
-  comparison against `d1313d52` and NG `f7830186`; all lanes complete.
-  Integration correctness gates at `7095a4aa` and placement at `20c3cd22`
-  are recorded in [T037](T037-integration-batch-1.md); formal decisions pending.
-- Evidence: standing below; brief 01 bundle/queue/profile index are local
-  artifacts, not retained. SHA-256 values bind the recorded conclusions.
-- Unresolved: decision readiness is `inconclusive` (audio-dft precision);
-  SunSpider geomean and ten external cases miss the near-term <=1.0 goal.
-  No campaign completion threshold below is recorded as met.
-- Next action: complete T037's placement review, then run one quiet-host
-  formal batch against the original queue candidate executable. Use the live
-  `global-numeric-binding-sinks-repin` and `class-field-batch-install` plans;
-  their leaf screens passed. T036 remains design only.
+- Implementation: partial; B1-B2 complete, B3-B6 open. Both batch-1 leaves
+  are present on `integration/batch-1`, but promotion is inconclusive.
+- Verified at: `af4d0d3c`, 2026-10-12, locked 30-block comparison against
+  exact queue candidate `e54e33eb` and NG `f7830186`; all lanes complete;
+  exact-candidate CI burndown passes all 42672 configured cases with zero gaps.
+- Evidence: standing and hashes below; unit decisions in [T037](T037-integration-batch-1.md).
+  Raw target/ artifacts are local, not retained.
+- Unresolved: only audio-dft is imprecise; it is a declared global-sink control.
+  All three target gates pass; neither unit has retained promotion evidence.
+- Next action: follow T037's precision/split follow-up; future profiling uses
+  the fresh measured-candidate queue below, preserving existing frozen plans.
 
-This file holds the contract and the last formal standing. It does not
-record units or select work.
+## Standing at af4d0d3c
+
+Candidate `af4d0d3c81aad98721661689cf7224d2c17b9781`, base
+`e54e33eb9371c5cb4627bd8e590a648085a7fa26`, NG `f7830186`.
+Same-host diagnostic, not fixed-hardware qualification; promotion metric cycles.
+30 valid internal blocks, complete external comparisons, no wall-time divergence.
+Preflight was quiet; a five-second monitor observed zero compiler processes.
+Bundle: `target/comparison/batch1-formal-af4d0d3c81aad98721661689cf7224d2c17b9781/summary.json`;
+SHA-256 `90fe2a3ad29ef7d035195f8f36c3dc3e12d9706f0ae9f5b9a91ef3c174af9bf7` seals all nine artifact hashes.
+Queue: `target/comparison/batch1-af4d0d3c-queue.json`;
+SHA-256 `2882db837308dca8db304e3d0de0b32efcb4326332fe218393020c2f9e275f26`.
+The queue binds measured af4d0d3c; later documentation/ledger commits must not
+be substituted into its source identity, even with unchanged runtime bytes.
+
+| Lane | Cases | Wall / NG | Cycles / NG |
+| --- | ---: | ---: | ---: |
+| Broad | 25 | 0.925548 | 0.923025 |
+| Sentinel | 6 | 0.867605 | 0.865307 |
+| jetstream3-js-subset | 5 | 0.978939 | 0.974527 |
+| kraken-1.1 | 14 | 0.604874 | 0.599738 |
+| sunspider-1.0 | 26 | 0.938011 | 0.932327 |
+
+[Full case standing](archive/T018-af4d0d3c-case-standing.md) lists every external
+case over 1.10, sentinel over 1.0 and broad case over 1.5 in wall or cycles.
+
+All >3% changes use this run's paired candidate/base comparison; no regression
+exceeds 3%. Beyond the two external targets, top-level call (the global plan's
+second target) and untargeted 3d-morph improved.
+
+| Case | Wall / base | Cycles / base |
+| --- | ---: | ---: |
+| `broad/top_level_function_call` | 0.309404 | 0.309658 |
+| `external/jetstream3-js-subset/raytrace-public-class-fields` | 0.947675 | 0.947281 |
+| `external/sunspider-1.0/3d-morph` | 0.776775 | 0.756201 |
+| `external/sunspider-1.0/bitops-bitwise-and` | 0.130456 | 0.116990 |
+
+Readiness is **inconclusive**, not failed measurement: audio-dft cycles/base
+0.996205, CI [0.906182, 1.040874], relative half-width 9.9344% >3%, all 30 blocks
+valid; wall/base 0.978284, CI [0.892233, 1.042806], half-width 9.6445%.
+Every other case passes precision and its applicable gate. Audio-dft is a
+declared global control and a class promotion portfolio control; unrelated
+noise does not explain this batch's status. The new queue is usable for selection.
 
 ## Standing at e54e33eb
 
-Candidate `e54e33eb9371c5cb4627bd8e590a648085a7fa26`, base `d1313d52`,
-NG `f7830186`. Same-host diagnostic, not fixed-hardware qualification.
-Command: `./scripts/perf-compare.sh --base d1313d52 --candidate e54e33eb
---blocks 30 --output-dir target/comparison/brief01-e54e33eb-20261011`.
-Bundle `summary.json` SHA-256:
-`febc1b2f4904f113eca4ca4850630012e4e08ded0f85829ace3c91c9f48b6955`.
-Queue `target/comparison/brief01-e54e33eb-20261011-queue.json` SHA-256:
-`d064c7e9a06d2e7d2d998a26bc1d0febb0dc7e8177ccb7508d0d0f7108442e8c`.
-Profile index: `target/profiles/brief01-e54e33eb/evidence-index.json`.
-
-| Lane | Wall candidate / NG | Cycles candidate / NG |
-| --- | --- | --- |
-| Broad (25) | 0.9701 | 0.9690 |
-| Sentinel (6) | 0.8583 | 0.8588 |
-| JetStream JS subset (5) | 0.9864 | 0.9852 |
-| Kraken (14) | 0.6047 | 0.6013 |
-| SunSpider (26) | 1.0224 | 1.0206 |
-
-External >1.10 wall/NG, in queue order: `bitops-bitwise-and` 4.2509,
-`date-format-tofte` 1.3974, `hash-map` 1.3581, `cdjs` 1.3488,
-`3d-raytrace` 1.3340, `access-binary-trees` 1.3058,
-`string-validate-input` 1.2447, `crypto-md5` 1.2326,
-`raytrace-public-class-fields` 1.1877, `crypto-aes` 1.1091.
-Sentinel wall/NG: recursive 0.7455, prototype 0.9930, polymorphic 0.8188,
-capturing 0.7179, heterogeneous 0.999928, churn 0.9190. None >1.0;
-heterogeneous CI [0.99697, 1.00241] does not establish stable <=1.0.
-
-Decision readiness: **inconclusive**, not promotion evidence. The only
-imprecise case is audio-dft: candidate/base cycles CI [0.96136, 1.02474],
-relative half-width 4.25% >3%. The complete queue is usable for selection.
-
-Linearity diagnosis: old d1313d52 normalized wall probes 1.168/1.245 had
-instructions 0.9985/0.9995 and cycles 1.0168/1.0038. Fresh probes of that
-same base executable give 0.9894/0.9950, HEAD 0.9972/0.9988; all 75 probe
-groups pass. Host timing interference is supported, its specific source
-unproven. Neither whole-work elimination nor N/2N tier switching explains
-it: many_locals_call has 1003/2003 call attempts at N=1000/2000;
-property_read has 1000/2000 backedges and 12290/24290 interpreter ops.
-The latter uses virtual object slots and declines typed entry; it is not
-an ordinary property-cache control. A complete quiet-host remeasurement
-resolved the failure; no case or threshold change is warranted.
+[Historical baseline](archive/T018-e54e33eb-standing.md), preserving immutable log links.
 
 ## Goal
 

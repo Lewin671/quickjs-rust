@@ -4,20 +4,18 @@
 - Implementation: present (`scripts/performance-decision.sh`,
   `tools/benchmark/performance_decision.py`,
   `tools/benchmark/performance_evaluation.py`). One acceptance box is open.
-- Verified at: selection evidence at `e54e33eb`, 2026-10-11, brief 01
-  fresh 30-block comparison and queue replay; no new controller code check.
-  Integration correctness gates at `7095a4aa` and placement at `20c3cd22`
-  are recorded in [T037](T037-integration-batch-1.md); formal decisions pending.
-- Evidence: [T018 standing](T018-broad-performance.md#standing-at-e54e33eb)
-  records the full bundle/queue SHA-256, lane ratios, >1.10 list and
-  linearity diagnosis; raw artifacts are local, not retained.
-- Unresolved: readiness is `inconclusive`: audio-dft cycles relative
-  half-width 4.25% exceeds 3%. Selection is usable; promotion is not.
-  No ruleset requires the `Performance decision` check (last box).
-- Next action: follow [T037](T037-integration-batch-1.md). The two leaf
-  screens passed and their implementations are integrated on
-  `integration/batch-1`; formal decisions remain pending. Preserve the
-  e54e33eb queue and its exact candidate binary; do not regenerate it.
+- Verified at: `af4d0d3c`, 2026-10-12, fresh 30-block formal bundle,
+  both promotion decisions, complete candidate burndown and new queue.
+- Evidence: [T018 standing](T018-broad-performance.md#standing-at-af4d0d3c)
+  owns bundle/queue paths and hashes; [T037](T037-integration-batch-1.md)
+  owns unit results and exact reason strings. Raw artifacts are local.
+- Unresolved: both decisions are inconclusive solely on audio-dft precision;
+  it is a declared global-unit control. No ruleset requires the Performance
+  decision check (last box). No unit is retained by this run.
+- Next action: resolve/split the batch as T037 states; future unit selection
+  uses the new af4d0d3c queue and exact binary. Plans keep their frozen e54e33eb
+  base and old queue bindings; never rewrite them to the new queue.
+
 
 Commands and their interpretation are in
 [the performance workflow](../docs/performance-workflow.md); schemas and

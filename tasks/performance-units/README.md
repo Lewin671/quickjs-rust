@@ -118,6 +118,6 @@ nothing about whether the code exists.
 | `wide-tier-interpreter-exits` | T033 | `93f98a4a` 2026-09-22 | screen pass; rejected at batched promotion |
 | `wide-tier-math-calls-and-field-thunks` | T033 | `93f98a4a` 2026-09-22 | screen attempt 1 failed; nothing later recorded |
 
-| `class-field-batch-install` | T037 | `e54e33eb` 2026-10-09 | leaf screen PASS; integrated on `integration/batch-1`; formal decision pending; [integration record](../T037-integration-batch-1.md) |
+| `class-field-batch-install` | T037 | `e54e33eb` 2026-10-09 | promotion inconclusive at `af4d0d3c`: audio-dft precision only; targets pass; implementation present on `integration/batch-1`; [integration record](../T037-integration-batch-1.md) |
 | `global-numeric-binding-sinks` | T018 | `e54e33eb` 2026-10-09 | original plan rejected; [leaf history](../archive/T018-batch-1-leaf-screens.md); reopened under the separate repin plan below |
-| `global-numeric-binding-sinks-repin` | T037 | `e54e33eb` 2026-10-09 | live plan; leaf screen PASS; integrated on `integration/batch-1`; formal decision pending; [integration record](../T037-integration-batch-1.md) |
+| `global-numeric-binding-sinks-repin` | T037 | `e54e33eb` 2026-10-09 | live plan; promotion inconclusive at `af4d0d3c`: audio-dft precision only; targets pass; implementation present on `integration/batch-1`; [integration record](../T037-integration-batch-1.md) |
