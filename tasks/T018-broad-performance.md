@@ -10,8 +10,10 @@
   Raw target/ artifacts are local, not retained.
 - Unresolved: only audio-dft is imprecise; it is a declared global-sink control.
   All three target gates pass; neither unit has retained promotion evidence.
-- Next action: follow T037's precision/split follow-up; future profiling uses
-  the fresh measured-candidate queue below, preserving existing frozen plans.
+- Next action: [T038](T038-audio-dft-variance.md) owns the top infrastructure
+  diagnosis. Main stays e54e33eb; new units base on the integration tip and
+  matching queue/profile provenance. Existing plans and standing stay frozen.
+
 
 ## Standing at af4d0d3c
 

@@ -12,9 +12,11 @@
 - Unresolved: both decisions are inconclusive solely on audio-dft precision;
   it is a declared global-unit control. No ruleset requires the Performance
   decision check (last box). No unit is retained by this run.
-- Next action: resolve/split the batch as T037 states; future unit selection
-  uses the new af4d0d3c queue and exact binary. Plans keep their frozen e54e33eb
-  base and old queue bindings; never rewrite them to the new queue.
+- Next action: [T038](T038-audio-dft-variance.md) is the top infrastructure
+  item; it owns diagnosis and the allowed split/re-decision cost. New units
+  base on the integration tip with matching queue/profile provenance. Existing
+  plans keep their frozen e54e33eb base and old queue; main stays e54e33eb.
+
 
 
 Commands and their interpretation are in

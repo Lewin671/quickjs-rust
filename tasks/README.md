@@ -15,7 +15,8 @@ it to `archive/` with `git mv` and move its row below.
 | --- | --- | --- |
 | [T018](T018-broad-performance.md) broad performance | active | The performance campaign contract and its targets against QuickJS-NG. Start performance work here, then follow [the workflow](../docs/performance-workflow.md). |
 | [T022](T022-performance-priority-controller.md) priority controller | active | The rules that select and stop performance units. |
-| [T037](T037-integration-batch-1.md) integration batch 1 | active | Both promotions inconclusive on audio-dft precision; implementations present; follow-up pending. |
+| [T038](T038-audio-dft-variance.md) audio-dft variance | active | Top infrastructure item: isolated-case cycle variance and allocation/ASLR diagnosis. |
+| [T037](T037-integration-batch-1.md) integration batch 1 | active | Implementation present; targets/controls pass; promotion inconclusive; main stays e54e33eb. |
 | [T033](T033-wide-tier-interpreter-exits.md) wide-tier interpreter exits | active | Code is present; the frozen unit was formally rejected; candidates for the next unit are listed there. |
 | [T036](T036-mixed-call-execution-design.md) mixed-call migration | active | Pricing/attribution and standalone replay; four-stage migration not approved, leaf units re-ranked. |
 | [T017](T017-performance-benchmark-system.md) benchmark system | blocked | The measurement platform; the remaining milestones need fixed hardware. |
@@ -67,6 +68,8 @@ outcome column says what happened, not what to do next.
 | `T032-shaped-prototype-slot-reads.md` | Retained. |
 
 ## Other Records In `archive/`
+
+- Audio DFT one-factor diagnostics: `T038-audio-dft-diagnostic-data.md`.
 
 - Design measurement record: [T036-mixed-call-execution-measurements.md](archive/T036-mixed-call-execution-measurements.md).
 - Case-level formal standing: `T018-af4d0d3c-case-standing.md`.

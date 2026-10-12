@@ -11,9 +11,11 @@
   raw target/ artifacts are local, not retained.
 - Unresolved: audio-dft is the global unit's declared control, not unrelated
   noise; cycles CI is too wide. There is no measured >3% regression elsewhere.
-- Next action: diagnose audio-dft variability, then split/re-measure remaining
-  units as the batch workflow requires; no threshold changes or favorable-run
-  retries. Lead decides main update; recommend no fast-forward yet.
+- Next action: [T038](T038-audio-dft-variance.md) owns the audio-dft
+  infrastructure diagnosis and re-decision procedure. Lead keeps main at
+  e54e33eb; batch implementation/targets/controls pass, promotion inconclusive.
+  New units base on the integration tip; frozen plans remain unchanged.
+
 
 ## Scope and integration
 

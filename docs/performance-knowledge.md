@@ -44,6 +44,14 @@ tool and artifact meanings are in [benchmarking.md](benchmarking.md).
 - **Serialize timing.** Concurrent builds, tests or agents on the host
   corrupt timings and turn slow cases into spurious timeouts. Code may be
   written in parallel; measurements run one at a time.
+- **Separate process layout from execution drift.** Nearly equal retired
+  instructions do not imply stable latency or a startup-selected mode. Check
+  per-process distributions and execution segments, then correlate backing
+  stores and scratch/stack addresses with the slow samples. Fixed argv/env
+  and disabled ASLR need not fix the actual entry stack. A diagnostic
+  logger can itself change layout; confirm the uninstrumented spread and
+  keep diagnostic timings out of promotion evidence. Revision-bound evidence
+  belongs in [the owning task](../tasks/T038-audio-dft-variance.md).
 - **Diagnostic builds never time.** A `perf-counters` build adds work to the
   paths it observes. Use it to count and trace.
 
