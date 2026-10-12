@@ -18,6 +18,7 @@ it to `archive/` with `git mv` and move its row below.
 | [T037](T037-integration-batch-1.md) integration batch 1 | active | Both promotions inconclusive on audio-dft precision; implementations present; follow-up pending. |
 | [T033](T033-wide-tier-interpreter-exits.md) wide-tier interpreter exits | active | Code is present; the frozen unit was formally rejected; candidates for the next unit are listed there. |
 | [T036](T036-mixed-call-execution-design.md) mixed-call migration | active | Pricing/attribution and standalone replay; four-stage migration not approved, leaf units re-ranked. |
+| [T038](T038-tofte-operation-pricing.md) tofte pricing | active | Brief 06 step 2 stop: priced fixed/character gaps; no independent leaf clearly reaches 10% of case. |
 | [T017](T017-performance-benchmark-system.md) benchmark system | blocked | The measurement platform; the remaining milestones need fixed hardware. |
 | [T013](T013-temporal-campaign.md) Temporal | blocked | Not started. Temporal is outside ES2025 and the reference engine's Test262 configuration skips it. |
 
