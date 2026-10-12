@@ -20,7 +20,9 @@
 //! compile time the region's opcodes must all be in the whitelist and its stack
 //! behaviour must be statically consistent. At entry every slot the program
 //! reads must hold a representable value, every slot it writes must be an
-//! authoritative frame slot, and every receiver must be a dense array. Mid-run,
+//! authoritative frame slot or a proved writable global sink, and every receiver
+//! must be a dense array. Scalar regions without observers may defer sink stores
+//! until the run wrapper publishes them before interpreter continuation. Mid-run,
 //! each operation that cannot be completed without observable behaviour hands
 //! the loop back.
 //!
@@ -42,11 +44,31 @@ use crate::Value;
 #[cfg(test)]
 mod branchy_nested_tests;
 mod compile;
+#[cfg(test)]
+mod test_residency;
+
+// Production expands to the original constant. Only the explicit residency
+// test overrides the bound; unrelated diagnostics keep production admission.
+macro_rules! residency_limit {
+    () => {{
+        #[cfg(test)]
+        {
+            super::test_residency::limit_or(MAX_NATIVE_ITERATIONS)
+        }
+        #[cfg(not(test))]
+        {
+            MAX_NATIVE_ITERATIONS
+        }
+    }};
+}
+
 mod execute;
 mod forward;
 #[cfg(test)]
 mod forward_tests;
 mod frame;
+#[cfg(test)]
+mod global_binding_tests;
 pub(in crate::bytecode) mod helper_graph;
 mod hoist;
 mod register_packing;
@@ -634,10 +656,14 @@ pub(super) struct TypedLoopProgram {
     /// not write any of these names and cannot run observable code, so reading
     /// each one once on entry is equivalent to reading it per iteration.
     global_reads: Vec<(u16, String)>,
-    /// Existing sloppy fallback globals written by the region. Their matching
-    /// reads use the frame-slot register rather than a hoisted global read, and
-    /// each write is synchronized immediately by the executor.
+    /// Existing sloppy fallback or hoisted realm globals written by the region.
+    /// Matching reads use the frame-slot register. Stores publish immediately
+    /// unless the region proves deferred publication unobservable.
     sloppy_global_writes: Vec<(u32, String)>,
+    /// Only scalar bytecode with no call or property access may defer stores.
+    /// The entry proof fixes property/cell identity; the run wrapper publishes
+    /// every binding register before any interpreter continuation.
+    deferred_global_publication: bool,
     /// Number of boxed registers, which hold objects and any value a property
     /// read produces.
     boxed_count: usize,

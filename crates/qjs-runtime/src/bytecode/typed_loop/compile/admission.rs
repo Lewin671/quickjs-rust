@@ -82,3 +82,33 @@ pub(in crate::bytecode::typed_loop) fn admitted_unary(op: UnaryOp) -> bool {
         UnaryOp::Minus | UnaryOp::Plus | UnaryOp::BitwiseNot | UnaryOp::Not
     )
 }
+
+/// A deferred region cannot run an observer or mutate binding identity. Scalar
+/// conversions decline before user coercion; branch/return exits merely hand
+/// control back to the interpreter, after the run wrapper publishes stores.
+/// Unknown operations deliberately disable deferral.
+pub(super) fn cannot_observe_a_binding(op: &Op) -> bool {
+    matches!(
+        op,
+        Op::LoadConst(_)
+            | Op::LoadLocal(_)
+            | Op::LoadGlobal(_)
+            | Op::StoreLocal(_)
+            | Op::AssignLocal(_)
+            | Op::StoreGlobalSloppy { .. }
+            | Op::StoreLocalOrGlobalSloppy { .. }
+            | Op::Dup
+            | Op::Pop
+            | Op::ToNumeric
+            | Op::Update(_)
+            | Op::Binary(_)
+            | Op::Unary(_)
+            | Op::Jump(_)
+            | Op::JumpIfFalse(_)
+            | Op::Return
+            | Op::IncrementLocal { .. }
+            | Op::CopyLocal { .. }
+            | Op::BinaryAssignLocals { .. }
+            | Op::CompareLocalsJumpFalse { .. }
+    )
+}

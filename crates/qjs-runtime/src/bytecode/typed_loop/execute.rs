@@ -145,8 +145,42 @@ fn run<F: LoopFrame>(vm: &mut F, program: &TypedLoopProgram) -> Outcome {
         })
         .map(|()| execute(vm, program, &mut scratch))
         .unwrap_or(Outcome::Declined);
+    if program.deferred_global_publication && !matches!(outcome, Outcome::Declined) {
+        publish_deferred_globals(vm, program, &scratch);
+    }
     program.recycle_scratch(scratch);
     outcome
+}
+
+/// Every execute exit has restored the stack but has run no continuation yet.
+/// No operation in a deferred region can change these property/cell identities;
+/// publication therefore cannot fail or invoke user code. Even an unwritten
+/// path republishes only the original scalar value to an ordinary data property.
+#[inline(never)]
+fn publish_deferred_globals<F: LoopFrame>(
+    vm: &mut F,
+    program: &TypedLoopProgram,
+    scratch: &TypedLoopScratch,
+) {
+    for ((slot, _), target) in program
+        .sloppy_global_writes
+        .iter()
+        .zip(&scratch.sloppy_global_writes)
+    {
+        let register = program
+            .local_slots
+            .iter()
+            .find(|(_, s)| s == slot)
+            .expect("a sink always owns a scalar register")
+            .0;
+        assert!(
+            vm.write_typed_loop_sloppy_global(
+                target,
+                scratch.registers[register as usize].to_value()
+            ),
+            "a deferred region cannot invalidate a prepared sink"
+        );
+    }
 }
 
 /// A register operand as an index into the fixed register file: masked into
@@ -204,7 +238,7 @@ fn execute<F: LoopFrame>(
             // Fell off the end of the program: that is the backedge.
             pc = 0;
             iterations += 1;
-            if iterations >= MAX_NATIVE_ITERATIONS {
+            if iterations >= residency_limit!() {
                 let site = program.sites[0];
                 return deopt(vm, program, &registers[..], boxed, site);
             }
@@ -577,7 +611,7 @@ fn execute<F: LoopFrame>(
                 // toward the same residency bound as the outer one.
                 if (target as usize) < pc {
                     iterations += 1;
-                    if iterations >= MAX_NATIVE_ITERATIONS {
+                    if iterations >= residency_limit!() {
                         let site = program.sites[target as usize];
                         return deopt(vm, program, &registers[..], boxed, site);
                     }
@@ -801,6 +835,17 @@ fn call_leaf(
     else {
         return None;
     };
+    // A resolved or reassigned callee was not necessarily the one prepared
+    // at entry. In a sink region it must not touch captured cells: numeric
+    // evaluation can commit upvalue writes, which would invalidate the sink
+    // register. Non-numeric bodies still decline in the existing evaluators.
+    if !program.sloppy_global_writes.is_empty()
+        && !matches!(&boxed[callee as usize], Value::Function(function)
+            if function.upvalues.is_empty()
+                && crate::function::is_direct_leaf_function(&boxed[callee as usize]))
+    {
+        return None;
+    }
     if arity & super::BOXED_ARGUMENTS != 0 {
         return call_native_boxed(env, boxed, callee, &args, arity & !super::BOXED_ARGUMENTS);
     }

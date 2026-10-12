@@ -122,6 +122,7 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
         helper_sites,
         mut global_reads,
         sloppy_global_writes,
+        deferred_global_publication,
         next_boxed,
         mut boxed_locals,
         mut numeric_native_callee_registers,
@@ -136,6 +137,15 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
     // A region that never leaves through its header test cannot be entered
     // safely, and one with no operations is not worth a program.
     if ops.is_empty() || !ops.iter().any(|op| matches!(op, TypedOp::Exit { .. })) {
+        return None;
+    }
+    // A boxed computed receiver could alias the global object, changing a
+    // sink behind its scalar register. Proven dense writes cannot do that.
+    if !sloppy_global_writes.is_empty()
+        && ops
+            .iter()
+            .any(|op| matches!(op, TypedOp::ComputedWrite { .. }))
+    {
         return None;
     }
     // There is deliberately no limit on the share of boxed operations. Such a
@@ -263,6 +273,7 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
         receiver_slots,
         global_reads,
         sloppy_global_writes,
+        deferred_global_publication,
         boxed_count,
         boxed_locals,
         written_boxed_locals,
@@ -281,6 +292,9 @@ fn writes_slot(op: &Op, slot: usize) -> bool {
         Op::StoreLocal(candidate)
         | Op::AssignLocal(candidate)
         | Op::ClearLocal(candidate)
+        | Op::StoreGlobalSloppy {
+            slot: candidate, ..
+        }
         | Op::StoreLocalOrGlobalSloppy {
             slot: candidate, ..
         }
@@ -322,6 +336,7 @@ struct Builder<'a> {
     helper_sites: Vec<super::HelperSite>,
     global_reads: Vec<(u16, String)>,
     sloppy_global_writes: Vec<(u32, String)>,
+    deferred_global_publication: bool,
     next_boxed: usize,
     boxed_locals: Vec<(u16, u32)>,
     numeric_native_callee_registers: Vec<u16>,
@@ -416,6 +431,10 @@ impl<'a> Builder<'a> {
             helper_sites: Vec::new(),
             global_reads: Vec::new(),
             sloppy_global_writes: Vec::new(),
+            deferred_global_publication: bytecode.code
+                [header..=backedge.min(bytecode.code.len() - 1)]
+                .iter()
+                .all(admission::cannot_observe_a_binding),
             next_boxed: MAX_STACK_DEPTH,
             boxed_locals: Vec::new(),
             numeric_native_callee_registers: Vec::new(),
@@ -1281,16 +1300,22 @@ impl<'a> Builder<'a> {
                     self.note_write(dst, *slot)?;
                 }
             }
-            Op::StoreLocalOrGlobalSloppy { slot, name } => {
-                if self.slot_is_boxed(*slot)
-                    || self.sloppy_global_fallback_slot(name) != Some(*slot)
-                {
+            Op::StoreGlobalSloppy { slot, name } | Op::StoreLocalOrGlobalSloppy { slot, name } => {
+                if self.slot_is_boxed(*slot) || self.global_sink_slot(name) != Some(*slot) {
                     return None;
                 }
                 let target = self.sloppy_global_write_index(*slot, name)?;
                 let (src, _) = self.pop()?;
                 let dst = self.local_register(*slot)?;
                 self.spill(dst, Class::Scalar)?;
+                if self.deferred_global_publication {
+                    // Keep the binding register at its last completed store,
+                    // including when a later operation fails its guard.
+                    if src != dst {
+                        self.emit(TypedOp::Move { dst, src });
+                    }
+                    return Some(());
+                }
                 // The store can still decline at run time. Keep `src` intact
                 // until after it publishes so its bytecode site's operand
                 // stack can be rebuilt and the generic store replayed exactly.
@@ -1433,7 +1458,10 @@ impl<'a> Builder<'a> {
                 // A matching sloppy fallback read is the register that its
                 // per-iteration sink updates. Every other global read may be
                 // hoisted only when the region does not write that binding.
-                if let Some(slot) = self.sloppy_global_fallback_slot(name) {
+                if let Some(slot) = self.global_sink_slot(name).filter(|_| {
+                    self.sloppy_global_fallback_slot(name).is_some()
+                        || self.region_writes_global_named(name)
+                }) {
                     if self.slot_is_boxed(slot) {
                         return None;
                     }

@@ -1,5 +1,5 @@
 //! The region's global bindings: hoisted reads, and the sloppy fallback
-//! globals it writes.
+//! and hoisted realm globals it writes. Sink reads always use the same register.
 
 use super::{Builder, Op};
 
@@ -48,7 +48,12 @@ impl Builder<'_> {
     pub(super) fn region_writes_a_sloppy_global(&self) -> bool {
         self.bytecode.code[self.header..=self.backedge]
             .iter()
-            .any(|op| matches!(op, Op::StoreLocalOrGlobalSloppy { .. }))
+            .any(|op| {
+                matches!(
+                    op,
+                    Op::StoreLocalOrGlobalSloppy { .. } | Op::StoreGlobalSloppy { .. }
+                )
+            })
     }
 
     /// Returns the frame slot for an unresolved sloppy binding only when this
@@ -60,11 +65,28 @@ impl Builder<'_> {
             .then_some(slot)
     }
 
+    /// A hoisted global has the same register identity as its frame slot. The
+    /// runtime additionally proves the realm cell and writable property agree.
+    pub(super) fn global_sink_slot(&self, name: &str) -> Option<usize> {
+        if let Some(slot) = self.sloppy_global_fallback_slot(name) {
+            return Some(slot);
+        }
+        let slot = self.bytecode.local_slot(name)?;
+        let local = self.bytecode.locals.get(slot)?;
+        (self.bytecode.global_scope
+            && local.hoisted
+            && local.mutable
+            && !local.parameter
+            && !local.compiler_temporary
+            && local.name == name)
+            .then_some(slot)
+    }
+
     /// Index of the prepared sink for a sloppy fallback write, adding it once
     /// per slot/name pair. The runtime validates the dynamic binding and
     /// property identities before entering the program.
     pub(super) fn sloppy_global_write_index(&mut self, slot: usize, name: &str) -> Option<u16> {
-        if self.sloppy_global_fallback_slot(name) != Some(slot) {
+        if self.global_sink_slot(name) != Some(slot) {
             return None;
         }
         let slot = u32::try_from(slot).ok()?;

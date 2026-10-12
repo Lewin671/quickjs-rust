@@ -24,9 +24,9 @@ use super::{
     vm::{Slot, Vm},
 };
 
-/// A sloppy fallback binding that a typed loop proved is an existing writable
-/// ordinary realm global. The executor publishes every write immediately, so
-/// it retains the interpreter's observable per-iteration ordering.
+/// A fallback or hoisted binding proved to be a writable ordinary realm
+/// global. Publication uses its canonical cell and guarded property slot;
+/// scalar regions with no observers may publish once before continuation.
 #[derive(Clone, Debug)]
 pub(super) struct TypedLoopSloppyGlobalWrite {
     slot: usize,
@@ -797,7 +797,7 @@ impl Vm<'_> {
                 .is_some_and(|local| local.mutable && !local.sloppy_global_fallback)
     }
 
-    /// Prepares one sloppy fallback slot for a typed-loop store. This is
+    /// Prepares a fallback or hoisted realm slot for a typed-loop store. This is
     /// deliberately stricter than the ordinary store: the typed program can
     /// only enter after the fallback already names the same writable own data
     /// property, realm cell, and local value. Missing globals and every dynamic
@@ -826,17 +826,23 @@ impl Vm<'_> {
         let local = self.bytecode.locals.get(slot)?;
         if local.name != name
             || !local.mutable
-            || !local.sloppy_global_fallback
+            || !(local.sloppy_global_fallback
+                || self.bytecode.global_scope && local.hoisted && !local.parameter)
             || local.compiler_temporary
             || self.bytecode.local_slot(name) != Some(slot)
         {
             return None;
         }
         // The generic store's fast branch only applies once the frame holds a
-        // value and the global property already exists. Keeping that same
+        // value (a global hoist reads its canonical realm cell instead) and
+        // the global property already exists. Keeping that same
         // boundary means the first creation and every unusual reconfiguration
         // retain the ordinary interpreter path.
-        let value = self.locals.get(slot)?.as_ref()?;
+        let value = if self.bytecode.global_scope && local.hoisted {
+            self.env.get_realm(name)?
+        } else {
+            self.locals.get(slot)?.as_ref()?.clone()
+        };
         if !matches!(
             value,
             Value::Number(_) | Value::Boolean(_) | Value::Undefined
@@ -845,13 +851,13 @@ impl Vm<'_> {
         }
         let global_this = self.cached_global_this()?;
         let property = global_this.own_property(name)?;
-        if property.is_accessor() || !property.writable || !property.value.same_value(value) {
+        if property.is_accessor() || !property.writable || !property.value.same_value(&value) {
             return None;
         }
         let cell = self.env.realm_binding_cell(name)?;
         if !self.env.is_realm_binding_cell(name, &cell)
-            || !cell.get().same_value(value)
-            || !self.env.get_realm(name)?.same_value(value)
+            || !cell.get().same_value(&value)
+            || !self.env.get_realm(name)?.same_value(&value)
         {
             return None;
         }
