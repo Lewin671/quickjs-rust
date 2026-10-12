@@ -118,3 +118,4 @@ nothing about whether the code exists.
 | `wide-tier-interpreter-exits` | T033 | `93f98a4a` 2026-09-22 | screen pass; rejected at batched promotion |
 | `wide-tier-math-calls-and-field-thunks` | T033 | `93f98a4a` 2026-09-22 | screen attempt 1 failed; nothing later recorded |
 | `own-slot-cache-hot-answers-hash-map` | own-slot-cache-hot-answers-hash-map | `e54e33eb` 2026-10-11 | replacement for rejected own-slot-cache-hot-answers; screen 2 PASS; lead formal batch pending |
+| `shared-layout-absence-proof` | [Brief 07](../shared-layout-absence-proof.md) | e54 queue; coding base `95c3af21` | frozen; not implemented |

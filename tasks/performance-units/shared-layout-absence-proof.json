@@ -1,0 +1,72 @@
+{
+  "schema_version": 2,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_kind": "leaf",
+  "unit_id": "shared-layout-absence-proof",
+  "base_sha": "e54e33eb9371c5cb4627bd8e590a648085a7fa26",
+  "queue": {
+    "candidate_sha": "e54e33eb9371c5cb4627bd8e590a648085a7fa26",
+    "sha256": "d064c7e9a06d2e7d2d998a26bc1d0febb0dc7e8177ccb7508d0d0f7108442e8c"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/sunspider-1.0/access-binary-trees",
+      "external/jetstream3-js-subset/cdjs"
+    ],
+    "rank_ceiling": 1,
+    "override_reason": "Brief 07 selects a descriptor-complete shared receiver-layout absence proof for trees and cdjs. Coding base is 95c3af21, containing the preceding OwnSlot leaf. Explicit queue fallback preserves the e54 sealed evidence; supplemental isolated screens compare exactly against 95c3af21."
+  },
+  "mechanism": {
+    "summary": "Cache the complete ordered own string-key layout with each data descriptor flag, retaining interned key identities. Guard absence across ordinary receivers by complete live layout equality rather than receiver identity, plus current prototype, middle-chain revision/identity and holder revision/live data slot. Use the existing hinted bounds-miss dispatch to an out-of-line prototype reader only after sharing is established; preserve original hot routes for single receivers. No per-object name map or global interning table. Lookup boundary: bytecode/named_property_cache.rs and new child proof module; compact_fn/property.rs; bytecode/vm_props.rs; value/object/slot_reads.rs plus new layout child and value/object.rs deletion-history metadata in existing cold storage; focused tests. No executor, closure/capture, class-field, typed_loop, vm_bindings, Date, concat, activation ABI or linker-order edits.",
+    "generality": "Every site whose name is absent in a complete eligible ordinary compact layout may reuse that absence for receivers with the same shared names and descriptor bits. Every added/shadowing key or descriptor change breaks complete equality. Dictionary storage, deleted-property receivers, accessors and exotic receivers decline sharing. This is a layout value proof, checked structurally; constructor objects currently have shared names, not canonical descriptor-complete shape ids. No source/benchmark matching. Snapshot comparison remains O(field count), bounded by existing compact storage admission; no assumed 320-instruction removal. Frozen target ceiling 0.99 requires at least 1% whole-case cycles improvement, all pairs improving: the supplied ideal lookup budget is about 4.8% whole-tree and 1.8% whole-CDjs instructions before complete-layout checking, so 0.95 would exceed CDjs reach. Controls must stay below 1.03 on both instructions and cycles.",
+    "semantic_risks": [
+      "Every receiver key and descriptor must be checked; count-only, epoch-only and one-key proofs are unsound",
+      "Adding an instance method or middle prototype accessor/data property must decline before reading the holder",
+      "Holder value writes must remain visible; structural mutation and setPrototypeOf invalidate by live guards",
+      "Proxy, module namespace, typed-array, String-wrapper and array exotic receivers never share; dynamic/deleted objects decline",
+      "Keep probe and executors from growing. Cycle-only control failures with unchanged instructions are placement; report offsets/sizes without spending an attempt or re-pinning"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "sunspider-1.0--access-binary-trees/amplified-receipt/receipt.json",
+      "sha256": "4ae81bba0656b04ab9e1c141d9846bc2a41c7c9d92f674ff35d353e7ea672fdd",
+      "base_sha": "e54e33eb9371c5cb4627bd8e590a648085a7fa26",
+      "opportunity_ids": [
+        "external/sunspider-1.0/access-binary-trees"
+      ],
+      "shared_cost": "Exact e54 sampler receipt and archived per-site descriptor/name-layout census: stable ordinary constructor receiver layouts miss solely on receiver identity. A cache-only base diff leaves call admissions unchanged. No inclusive sampler fraction is treated as removable work. Fraction is the reported flat wide executor sampler fraction, a lower bound on inclusive reach, not the cache fraction or removable work.",
+      "inclusive_fraction": 0.4402010050251256
+    },
+    {
+      "source": "jetstream3-js-subset--cdjs/amplified-receipt/receipt.json",
+      "sha256": "85882160e6e6e869be2123b39c1111b10cb8b01382a5fdb46fab1c17428e8558",
+      "base_sha": "e54e33eb9371c5cb4627bd8e590a648085a7fa26",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/cdjs"
+      ],
+      "shared_cost": "Exact e54 sampler receipt and archived per-site descriptor/name-layout census: stable ordinary constructor receiver layouts miss solely on receiver identity. A cache-only base diff leaves call admissions unchanged. No inclusive sampler fraction is treated as removable work. Fraction is the reported flat wide executor sampler fraction, a lower bound on inclusive reach, not the cache fraction or removable work.",
+      "inclusive_fraction": 0.4257871064467766
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/access-binary-trees",
+      "external/jetstream3-js-subset/cdjs"
+    ],
+    "control_ids": [
+      "external/jetstream3-js-subset/hash-map",
+      "external/sunspider-1.0/3d-raytrace",
+      "external/kraken-1.1/ai-astar"
+    ],
+    "target_max_candidate_over_base": 0.99,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 2
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
