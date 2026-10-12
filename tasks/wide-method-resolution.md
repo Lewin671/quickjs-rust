@@ -2,7 +2,7 @@
 
 - Status: blocked.
 - Implementation: present; correctness verified, diagnostic cycle gate failed.
-- Verified at: e54e33eb plus the recorded runtime diff after frozen plan f86b59bc, 2026-10-12; full check, 5170 Test262 subset cases, 220 NG fixtures; screen 1 failed.
+- Verified at: e22f8942, 2026-10-12; its unchanged runtime tree passed the full check, 5170 Test262 subset cases, 220 NG fixtures and staged fast gate (65 focused Test262 cases); screen 1 failed. Frozen plan f86b59bc validated before runtime edits.
 - Evidence: [pricing record](archive/wide-method-resolution-pricing.md); local raw counters/screens not retained.
 - Unresolved: unchanged-instruction control cycle failure (placement); no formal promotion evidence.
 - Next action: lead reviews the layout-owner result before authorizing the unused second attempt; exclude this candidate from the current formal batch.
@@ -141,3 +141,8 @@ its failed cycle gate and is not a supported payoff claim. The baseline formal
 cycle ratios are 1.357461 / 1.348961 / 1.326270 (brief01, NG f7830186).
 Instruction reductions are 1.41% / 0.44% / 0.38%; the instruction signal is the
 reason to preserve this candidate for review despite the cycle block.
+
+Implementation candidate e22f8942 is pushed; the runtime tree matches the
+correctness-checked and screened working tree. Branch scope validation passed
+against e54e33eb; core.bare=false and Git author identity remained unchanged.
+Plan CI f86b59bc passed; candidate CI is pending at this recording.
