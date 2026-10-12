@@ -117,3 +117,5 @@ nothing about whether the code exists.
 | `wide-compact-tier` | not recorded | `adb77520` 2026-08-14 | not recorded |
 | `wide-tier-interpreter-exits` | T033 | `93f98a4a` 2026-09-22 | screen pass; rejected at batched promotion |
 | `wide-tier-math-calls-and-field-thunks` | T033 | `93f98a4a` 2026-09-22 | screen attempt 1 failed; nothing later recorded |
+
+| `global-numeric-binding-sinks` | Brief 02 | `e54e33eb` 2026-10-10 | plan frozen; implementation absent; two screen attempts; lead batches promotion |
