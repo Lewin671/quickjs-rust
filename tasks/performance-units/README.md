@@ -121,3 +121,5 @@ nothing about whether the code exists.
 | `class-field-batch-install` | T037 | `e54e33eb` 2026-10-09 | promotion inconclusive at `af4d0d3c`: audio-dft precision only; targets pass; implementation present on `integration/batch-1`; [integration record](../T037-integration-batch-1.md) |
 | `global-numeric-binding-sinks` | T018 | `e54e33eb` 2026-10-09 | original plan rejected; [leaf history](../archive/T018-batch-1-leaf-screens.md); reopened under the separate repin plan below |
 | `global-numeric-binding-sinks-repin` | T037 | `e54e33eb` 2026-10-09 | live plan; promotion inconclusive at `af4d0d3c`: audio-dft precision only; targets pass; implementation present on `integration/batch-1`; [integration record](../T037-integration-batch-1.md) |
+
+| `fixed-scope-binding-instantiation` | T039 | `af4d0d3c` 2026-10-12 | frozen; implementation pending |

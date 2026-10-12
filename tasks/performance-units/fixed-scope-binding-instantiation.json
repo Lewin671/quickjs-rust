@@ -1,0 +1,64 @@
+{
+  "schema_version": 2,
+  "unit_kind": "leaf",
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "fixed-scope-binding-instantiation",
+  "base_sha": "af4d0d3c81aad98721661689cf7224d2c17b9781",
+  "queue": {
+    "candidate_sha": "af4d0d3c81aad98721661689cf7224d2c17b9781",
+    "sha256": "2882db837308dca8db304e3d0de0b32efcb4326332fe218393020c2f9e275f26"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/sunspider-1.0/date-format-tofte"
+    ],
+    "rank_ceiling": 1,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Cache immutable captured-slot classification and a fixed-owned-cell topology proof on bytecode. For eligible direct-eval ordinary frames, keep the first ordered overlay and map identity/generation validation, then skip redundant full local/cell enumeration on memo hits. Private owned cells cannot be realm cells, so initial realm-membership classification may return zero under the same proof and module-routing guard. This opens the declaration packet without changing activation ABI, binding storage or tiers. Path boundary: bytecode/ir.rs, mod.rs, vm_frame_init.rs, vm_bindings.rs, new vm_binding_instantiation.rs/tests, function/env.rs, focused fixtures if needed, task/index/measurement files and env-model-rewrite.md invariant. All brief exclusions and hot-functions.order excluded.",
+    "generality": "Admission is derived from operation effects, local binding kinds, initialized cells and immutable slot/capture metadata, not function/source names, literals, sibling/scope counts, bytecode templates or benchmark identity. Values remain in their canonical slots/shared cells. Dynamic map remaps invalidate by existing generation; unsupported cell topology retains exact old validation.",
+    "semantic_risks": [
+      "Reject lexical clear/fresh iteration, global/sloppy/eval-deletable bindings, received upvalues, with and parameter prologues for fixed topology. Keep module-affine storage on original realm classification.",
+      "Arguments aliases and eval/closure mutations must share the original cells; eval-added names and declaration-bearing eval must still revoke scope bypass.",
+      "Cache captures only from immutable bytecode classification; eval metadata mutation must not stale topology eligibility.",
+      "Keep all new work out of line; no hot executor or call_leaf growth and no linker re-pin.",
+      "Controls include all six sentinels plus xparb, tagcloud, unpack-code, ai-astar and broad closure_allocation_call/captured_write. Extra eval-heavy file control repeated_cached_eval_scope will be included in every screen and held to 1.03 cycles/instructions; no plan/schema relaxation.",
+      "If a control fails cycles with unchanged instructions, report nm -n address/size for wide, VM, call_leaf and cache probe; classify placement without spending an attempt."
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "tofte/receipt.json",
+      "sha256": "888b37ac6a4acfda919c10b05a4b272c50dff00551578c98211f9ad8088963d9",
+      "base_sha": "af4d0d3c81aad98721661689cf7224d2c17b9781",
+      "opportunity_ids": [
+        "external/sunspider-1.0/date-format-tofte"
+      ],
+      "shared_cost": "Exact af4d0d3c sampler: 311/3448 overlay inclusive (9.02%), 75/3448 immutable upvalue resolution (2.18%), disjoint helper groups. Real-case counters: 27000 memo hits of 28000 scoped closures, 1.4m closure local visits, 38000 new frame cells and 45k captured cells. Parent-scope 16/50/100 nonempty declaration increments scale on Rust eval-capable frames while NG stays near 0.75k cycles/closure.",
+      "inclusive_fraction": 0.11194895591647332
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/date-format-tofte"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/date-format-xparb",
+      "external/sunspider-1.0/string-tagcloud",
+      "external/sunspider-1.0/string-unpack-code",
+      "external/kraken-1.1/ai-astar",
+      "broad/closure_allocation_call",
+      "broad/captured_write"
+    ],
+    "target_max_candidate_over_base": 0.92,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 2
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

@@ -15,6 +15,7 @@ it to `archive/` with `git mv` and move its row below.
 | --- | --- | --- |
 | [T018](T018-broad-performance.md) broad performance | active | The performance campaign contract and its targets against QuickJS-NG. Start performance work here, then follow [the workflow](../docs/performance-workflow.md). |
 | [T022](T022-performance-priority-controller.md) priority controller | active | The rules that select and stop performance units. |
+| [T039](T039-tofte-activation-components.md) binding instantiation | active | Fixed activation decomposed; static binding metadata leaf frozen before implementation. |
 | [T038](T038-audio-dft-variance.md) audio-dft variance | active | Top infrastructure item: isolated-case cycle variance and allocation/ASLR diagnosis. |
 | [T037](T037-integration-batch-1.md) integration batch 1 | active | Implementation present; targets/controls pass; promotion inconclusive; main stays e54e33eb. |
 | [T033](T033-wide-tier-interpreter-exits.md) wide-tier interpreter exits | active | Code is present; the frozen unit was formally rejected; candidates for the next unit are listed there. |
