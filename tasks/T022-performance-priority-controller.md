@@ -4,16 +4,17 @@
 - Implementation: present (`scripts/performance-decision.sh`,
   `tools/benchmark/performance_decision.py`,
   `tools/benchmark/performance_evaluation.py`). One acceptance box is open.
-- Verified at: not recorded for a specific commit. This file was last edited
-  at `ee6f9e52`, 2026-10-09 (text only).
-- Evidence: frozen unit plans in `tasks/performance-units/`. Opportunity
-  queues and decision files are generated artifacts under `target/`; they
-  are not stored in the repository, and a plan binds their SHA-256 values.
-- Unresolved: no repository ruleset requires a `Performance decision` check
-  (last acceptance box). No opportunity queue is recorded for the tree after
-  the 2026-10-09 removal of the loop-template plans.
-- Next action: generate a queue from a formal comparison of the current
-  revision, then profile its top external opportunities (Operating rule).
+- Verified at: selection evidence at `e54e33eb`, 2026-10-11, brief 01
+  fresh 30-block comparison and queue replay; no new controller code check.
+- Evidence: [T018 standing](T018-broad-performance.md#standing-at-e54e33eb)
+  records the full bundle/queue SHA-256, lane ratios, >1.10 list and
+  linearity diagnosis; raw artifacts are local, not retained.
+- Unresolved: readiness is `inconclusive`: audio-dft cycles relative
+  half-width 4.25% exceeds 3%. Selection is usable; promotion is not.
+  No ruleset requires the `Performance decision` check (last box).
+- Next action: `global-numeric-binding-sinks` and `class-field-batch-install`
+  are in progress; `mixed-call-execution-design` is in design. Use the
+  SHA-bound e54e33eb queue; the lead batches formal runs after screens.
 
 Commands and their interpretation are in
 [the performance workflow](../docs/performance-workflow.md); schemas and
