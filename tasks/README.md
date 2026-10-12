@@ -13,7 +13,6 @@ it to `archive/` with `git mv` and move its row below.
 
 | Task | Status | What it is |
 | --- | --- | --- |
-| [OwnSlot](own-slot-cache-hot-answers.md) hot answers | active | Lead-selected leaf; frozen plan before runtime work. |
 | [T018](T018-broad-performance.md) broad performance | active | The performance campaign contract and its targets against QuickJS-NG. Start performance work here, then follow [the workflow](../docs/performance-workflow.md). |
 | [T022](T022-performance-priority-controller.md) priority controller | active | The rules that select and stop performance units. |
 | [T033](T033-wide-tier-interpreter-exits.md) wide-tier interpreter exits | active | Code is present; the frozen unit was formally rejected; candidates for the next unit are listed there. |
@@ -36,6 +35,7 @@ outcome column says what happened, not what to do next.
 
 | Task | Outcome |
 | --- | --- |
+| [OwnSlot hot answers](archive/own-slot-cache-hot-answers.md) | Rejected after two diagnostic screens; runtime reverted, cdjs instruction regression. |
 | `T001-lexer-coverage.md` | Bootstrap work item. |
 | `T002-parser-expressions.md` | Bootstrap work item. |
 | `T003-runtime-values.md` | Bootstrap work item. |
