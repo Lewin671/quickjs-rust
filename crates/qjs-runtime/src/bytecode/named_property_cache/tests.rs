@@ -99,3 +99,118 @@ fn a_function_on_slotless_storage_is_cached_by_value_and_revision() {
     object.set("p0".to_owned(), Value::Number(-1.0));
     assert!(matches!(cache.probe(&object), CacheProbe::Miss));
 }
+
+#[test]
+fn hot_own_slot_reads_live_values_and_rejects_another_receiver() {
+    let object = ObjectRef::with_prototype(HashMap::new(), None);
+    let other = ObjectRef::with_prototype(HashMap::new(), None);
+    for receiver in [&object, &other] {
+        receiver.set("items".to_owned(), Value::String("first".into()));
+        receiver.set("name".to_owned(), Value::Null);
+    }
+    assert_eq!(object.layout_revision(), other.layout_revision());
+    let cache = NamedPropertyCache::default();
+    cache.update(&object, "items", &Value::String("first".into()));
+    assert!(matches!(cache.probe(&object), CacheProbe::Own(_)));
+    assert_eq!(
+        cache.probe_hot(&object),
+        Some(Value::String("first".into()))
+    );
+    assert_eq!(cache.probe_hot(&other), None);
+    let revision = object.layout_revision();
+    object.write_existing_own_data_property("items", &Value::Object(other.clone()));
+    assert_eq!(object.layout_revision(), revision);
+    assert!(matches!(cache.probe_hot(&object), Some(Value::Object(hit)) if hit.ptr_eq(&other)));
+}
+
+#[test]
+fn hot_own_slot_declines_deleted_reinserted_and_reconfigured_properties() {
+    let object = ObjectRef::with_prototype(HashMap::new(), None);
+    object.set("items".to_owned(), Value::String("first".into()));
+    let cache = NamedPropertyCache::default();
+    cache.update(&object, "items", &Value::String("first".into()));
+    assert!(cache.probe_hot(&object).is_some());
+    object.delete_own_property("items");
+    assert_eq!(cache.probe_hot(&object), None);
+    object.set("replacement".to_owned(), Value::Number(9.0));
+    object.set("items".to_owned(), Value::String("second".into()));
+    assert_eq!(cache.probe_hot(&object), None);
+    cache.update(&object, "items", &Value::String("second".into()));
+    assert!(matches!(cache.probe(&object), CacheProbe::Own(_)));
+    assert_eq!(
+        cache.probe_hot(&object),
+        Some(Value::String("second".into()))
+    );
+    object.define_property(
+        "items".to_owned(),
+        crate::value::Property::accessor(Some(Value::Undefined), None, true, true),
+    );
+    assert_eq!(cache.probe_hot(&object), None);
+    assert!(matches!(cache.probe(&object), CacheProbe::Miss));
+}
+
+#[test]
+fn hot_kind_tracks_exact_to_slot_writes_and_declines_hot_writes() {
+    let object = ObjectRef::with_prototype(HashMap::new(), None);
+    object.set("x".to_owned(), Value::Number(1.0));
+    let cache = NamedPropertyCache::default();
+    cache.update(&object, "x", &Value::Number(1.0));
+    assert_eq!(cache.probe_hot(&object), None);
+    assert!(matches!(
+        cache.write(&object, "x", &Value::Number(2.0)),
+        Some(crate::value::OwnDataPropertyWrite::Written)
+    ));
+    assert_eq!(cache.probe_hot(&object), Some(Value::Number(2.0)));
+    assert!(cache.write_hot(&object, &Value::Number(3.0)).is_none());
+    assert_eq!(object.get("x"), Some(Value::Number(2.0)));
+}
+
+#[test]
+fn hot_kind_follows_polymorphic_selection_overwrite_and_clear() {
+    use super::{HOT_INDEX_MASK, HOT_OWN_SLOT, NamedPropertyCacheEntry};
+    let cache = NamedPropertyCache::default();
+    let objects: Vec<_> = (0..6)
+        .map(|i| {
+            let object = ObjectRef::with_prototype(HashMap::new(), None);
+            object.set("x".to_owned(), Value::String(format!("v{i}").into()));
+            object
+        })
+        .collect();
+    let check = || {
+        let state = cache.0.borrow();
+        let hot = state.hot.get();
+        assert_eq!(
+            hot & HOT_OWN_SLOT != 0,
+            matches!(
+                state.entries[usize::from(hot & HOT_INDEX_MASK)],
+                Some(NamedPropertyCacheEntry::OwnSlot { .. })
+            )
+        );
+    };
+    for object in &objects {
+        cache.update(object, "x", &object.get("x").unwrap());
+        check();
+        assert!(matches!(cache.probe(object), CacheProbe::Own(_)));
+        check();
+    }
+    for object in objects.iter().rev().take(4) {
+        assert!(matches!(cache.probe(object), CacheProbe::Own(_)));
+        check();
+    }
+    cache.clear();
+    check();
+    assert_eq!(cache.probe_hot(&objects[5]), None);
+    let literal = ObjectRef::with_literal_properties(
+        ObjectLiteralShape::new(vec![Rc::from("x")]),
+        vec![Value::Number(7.0)],
+        None,
+    );
+    cache.update(&literal, "x", &Value::Number(7.0));
+    check();
+    assert!(matches!(
+        cache.probe(&literal),
+        CacheProbe::Own(Value::Number(7.0))
+    ));
+    check();
+    assert_eq!(cache.probe_hot(&literal), None);
+}
