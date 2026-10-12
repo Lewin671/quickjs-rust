@@ -49,7 +49,7 @@ unit. External times include startup, parsing and shutdown.
   ```sh
   cmake -S third_party/quickjs-ng -B third_party/quickjs-ng/build \
     -DCMAKE_BUILD_TYPE=Release -DBUILD_QJS_LIBC=ON
-  cmake --build third_party/quickjs-ng/build --target qjs
+  cmake --build third_party/quickjs-ng/build --target qjs_exe
   ```
 
   The frozen recipe records `-DBUILD_QJS_LIBC=ON`, so pass it; the pinned

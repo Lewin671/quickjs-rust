@@ -28,7 +28,7 @@ usage: scripts/perf-compare.sh --base <git-ref> --output-dir <dir> [options]
 Build the reference once with:
   cmake -S third_party/quickjs-ng -B third_party/quickjs-ng/build \
     -DCMAKE_BUILD_TYPE=Release -DBUILD_QJS_LIBC=ON
-  cmake --build third_party/quickjs-ng/build --target qjs
+  cmake --build third_party/quickjs-ng/build --target qjs_exe
 EOF
 }
 
