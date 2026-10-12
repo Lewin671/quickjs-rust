@@ -1,0 +1,61 @@
+{
+  "schema_version": 2,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_kind": "leaf",
+  "unit_id": "own-slot-cache-hot-answers-hash-map",
+  "base_sha": "e54e33eb9371c5cb4627bd8e590a648085a7fa26",
+  "queue": {
+    "candidate_sha": "e54e33eb9371c5cb4627bd8e590a648085a7fa26",
+    "sha256": "d064c7e9a06d2e7d2d998a26bc1d0febb0dc7e8177ccb7508d0d0f7108442e8c"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/jetstream3-js-subset/hash-map"
+    ],
+    "rank_ceiling": 1,
+    "override_reason": "Lead explicitly reopens rejected own-slot-cache-hot-answers (plan 2e879910, rejection 86e1a462) with hash-map alone as target; other former targets are controls. Site diagnosis before this plan finds hash-map methods already hot, 3.510M OwnSlot answers cold, and quantifies old A unnecessary helper/codegen penalties in cdjs. B remains held."
+  },
+  "mechanism": {
+    "summary": "Deliver the last guarded OwnSlot through probe_hot. Predecode OwnSlot in a spare bit of the existing hot-index byte; index masking and bit testing replace its old bounds handling, while the SharedSlot/prototype/grandprototype entry dispatch keeps its original cases. Call a borrowed out-of-line helper only for OwnSlot-marked entries. Maintain the hint when entries are installed, selected, changed by writes or cleared. This replaces the rejected unit, whose fallback called an OwnSlot helper for Exact/Literal entries and widened dispatch.",
+    "generality": "All ordinary successful OwnSlot reads, selected by operation/cache kind, receiver identity, layout epoch and live data-slot validity. No benchmark spellings, shape patterns or result recognition. Hash-map has 3,510,015 cold OwnSlot answers; cdjs has 28,022, so hash-map alone owns the payoff gate. Measured old A fixed-family costs and new before-screen micro pricing must show the unnecessary non-OwnSlot helper cost is gone; controls judged on instructions and cycles.",
+    "semantic_risks": [
+      "A stale encoded kind after overwrite, clear, Exact-to-OwnSlot conversion or polymorphic entry selection must not read a wrong slot",
+      "The bit must be masked before indexing; existing SharedSlot write_hot must still decline OwnSlot entries",
+      "Receiver identity and layout epoch must guard OwnSlot; a live value write is visible, descriptor or key/layout changes decline",
+      "Primitive/exotic/prototype guards and absence proofs stay unchanged; no new receiver-identity shortcut",
+      "Keep probe and executor growth small; no order-file or layout budget edits; a cycle-only control regression is reported as placement and is not chased"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "receipt/receipt.json",
+      "sha256": "26f55dc4d71d58813623dbab9b2842afa86dc708a118e00461712cc29f26e21c",
+      "base_sha": "e54e33eb9371c5cb4627bd8e590a648085a7fa26",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/hash-map"
+      ],
+      "shared_cost": "Fresh 2026-10-12 sample of exact sealed e54 executable, wrapper-only amplification to 64 iterations. Wide executor contains 1246/1248 main-thread samples, 632 flat (50.64%). Exact opcode counters independently establish 3,510,015 OwnSlot fallback answers and essentially zero steady-state method misses. Full site/reason tables and matched R/NG instruction prices retained in tasks/archive/e54-named-site-miss-diagnosis.md, committed before this plan. Inclusive fraction is whole wide stack, not exclusive OwnSlot share.",
+      "inclusive_fraction": 0.9983974358974359
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/jetstream3-js-subset/hash-map"
+    ],
+    "control_ids": [
+      "external/jetstream3-js-subset/cdjs",
+      "external/sunspider-1.0/3d-raytrace",
+      "external/sunspider-1.0/access-binary-trees",
+      "external/kraken-1.1/ai-astar"
+    ],
+    "target_max_candidate_over_base": 0.95,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 2
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

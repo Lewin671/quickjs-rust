@@ -5,7 +5,7 @@
 - Verified at: e54e33eb, 2026-10-12; three corpus checksums and per-site counter coverage, matched 4/8 instruction prices, fresh exact-base sampling receipt. Details in the diagnostic record.
 - Evidence: [site diagnosis](archive/e54-named-site-miss-diagnosis.md); raw target artifacts are local, not retained.
 - Unresolved: the new OwnSlot selector must avoid the rejected shape's miss-path and code-generation costs; no new screen yet.
-- Next action: freeze and validate the hash-map-only replacement plan before production runtime edits.
+- Next action: implement only after the frozen-plan commit, then price every family before the screen.
 
 ## Scope and predecessor
 
@@ -39,3 +39,11 @@ not a cycle-placement diagnosis. Keep the old three hot-entry dispatch cases
 and predecode OwnSlot eligibility in the existing hot-index byte; only a marked
 OwnSlot calls the borrowed helper. All cache mutation/probe paths must maintain
 the hint; identity, layout and live data-slot guards remain mandatory.
+
+## Frozen replacement plan
+
+[The plan](performance-units/own-slot-cache-hot-answers-hash-map.json) owns gates
+and attempts. Targets/controls changed by the lead, never by screen selection.
+Fresh exact-base profile plus the new diagnostic record replace the old evidence.
+The new metadata hint must be proved by focused negative tests and family pricing
+before a five-pair diagnostic screen. No formal run is authorized in this session.
