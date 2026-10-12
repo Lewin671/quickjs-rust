@@ -75,7 +75,11 @@ tool and artifact meanings are in [benchmarking.md](benchmarking.md).
 - **An executor's address and its callees' addresses both matter.** An
   order alone does not hold them, because functions placed earlier change
   size with most edits. Give the executor and each hot callee a fixed slot,
-  and re-pin after every change to them.
+  and re-pin after every change to them. The fast address window depends on
+  the executor revision; a formerly good offset can become the degraded one.
+  Re-scan the controls rather than treating a default offset as universal.
+  Revision-bound evidence belongs in the owning task (for example,
+  [batch 1](../tasks/T037-integration-batch-1.md#placement-check)).
 - **Keep an executor in its caller's codegen unit.** A generic dispatch
   loop is instantiated where it is called; moving that caller to another
   module recompiles the loop differently.

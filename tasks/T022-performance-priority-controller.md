@@ -6,15 +6,18 @@
   `tools/benchmark/performance_evaluation.py`). One acceptance box is open.
 - Verified at: selection evidence at `e54e33eb`, 2026-10-11, brief 01
   fresh 30-block comparison and queue replay; no new controller code check.
+  Integration correctness gates at `7095a4aa` and placement at `20c3cd22`
+  are recorded in [T037](T037-integration-batch-1.md); formal decisions pending.
 - Evidence: [T018 standing](T018-broad-performance.md#standing-at-e54e33eb)
   records the full bundle/queue SHA-256, lane ratios, >1.10 list and
   linearity diagnosis; raw artifacts are local, not retained.
 - Unresolved: readiness is `inconclusive`: audio-dft cycles relative
   half-width 4.25% exceeds 3%. Selection is usable; promotion is not.
   No ruleset requires the `Performance decision` check (last box).
-- Next action: `global-numeric-binding-sinks` and `class-field-batch-install`
-  are in progress; `mixed-call-execution-design` is in design. Use the
-  SHA-bound e54e33eb queue; the lead batches formal runs after screens.
+- Next action: follow [T037](T037-integration-batch-1.md). The two leaf
+  screens passed and their implementations are integrated on
+  `integration/batch-1`; formal decisions remain pending. Preserve the
+  e54e33eb queue and its exact candidate binary; do not regenerate it.
 
 Commands and their interpretation are in
 [the performance workflow](../docs/performance-workflow.md); schemas and

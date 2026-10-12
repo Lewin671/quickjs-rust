@@ -2,17 +2,21 @@
 
 - Status: active. This is the performance campaign contract.
 - Implementation: partial. Milestones B1-B2 are complete; B3-B6 are open.
+  Both screened leaves are integrated on `integration/batch-1`; formal
+  decisions are pending in [T037](T037-integration-batch-1.md).
 - Verified at: `e54e33eb`, 2026-10-11, fresh 30-block three-engine
   comparison against `d1313d52` and NG `f7830186`; all lanes complete.
+  Integration correctness gates at `7095a4aa` and placement at `20c3cd22`
+  are recorded in [T037](T037-integration-batch-1.md); formal decisions pending.
 - Evidence: standing below; brief 01 bundle/queue/profile index are local
   artifacts, not retained. SHA-256 values bind the recorded conclusions.
 - Unresolved: decision readiness is `inconclusive` (audio-dft precision);
   SunSpider geomean and ten external cases miss the near-term <=1.0 goal.
   No campaign completion threshold below is recorded as met.
-- Next action: selected units `global-numeric-binding-sinks` and
-  `class-field-batch-install` are in progress in isolated implementation
-  sessions; `mixed-call-execution-design` is in design. Screen first,
-  then let the lead batch formal comparisons; do not regenerate this queue.
+- Next action: complete T037's placement review, then run one quiet-host
+  formal batch against the original queue candidate executable. Use the live
+  `global-numeric-binding-sinks-repin` and `class-field-batch-install` plans;
+  their leaf screens passed. T036 remains design only.
 
 This file holds the contract and the last formal standing. It does not
 record units or select work.

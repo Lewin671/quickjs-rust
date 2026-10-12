@@ -15,6 +15,7 @@ it to `archive/` with `git mv` and move its row below.
 | --- | --- | --- |
 | [T018](T018-broad-performance.md) broad performance | active | The performance campaign contract and its targets against QuickJS-NG. Start performance work here, then follow [the workflow](../docs/performance-workflow.md). |
 | [T022](T022-performance-priority-controller.md) priority controller | active | The rules that select and stop performance units. |
+| [T037](T037-integration-batch-1.md) integration batch 1 | active | Two screened leaves integrated; placement review and formal batch decision pending. |
 | [T033](T033-wide-tier-interpreter-exits.md) wide-tier interpreter exits | active | Code is present; the frozen unit was formally rejected; candidates for the next unit are listed there. |
 | [T036](T036-mixed-call-execution-design.md) mixed-call migration | active | Pricing/attribution and standalone replay; four-stage migration not approved, leaf units re-ranked. |
 | [T017](T017-performance-benchmark-system.md) benchmark system | blocked | The measurement platform; the remaining milestones need fixed hardware. |
@@ -68,6 +69,7 @@ outcome column says what happened, not what to do next.
 ## Other Records In `archive/`
 
 - Design measurement record: [T036-mixed-call-execution-measurements.md](archive/T036-mixed-call-execution-measurements.md).
+- Batch 1 leaf handoffs: `T018-batch-1-leaf-screens.md`.
 - Experiment logs split out of task files: `T017-performance-benchmark-system-log.md`,
   `T018-broad-performance-log.md`, `T033-screen-log.md`.
 - Plans and measurements moved out of current documents:
