@@ -1,0 +1,1 @@
+eval("var events=[];function f(rows,n){var o={pear:2,extra:3},sum=0,guard=0;try{for(var i=0;i<n&&guard<23;i++,guard++){sum+=o.pear+o.extra+rows[i].value;}}catch(e){return sum+':'+e.message;}return sum+':done';}var late=new Proxy({value:7},{get(t,k){events.push('trap:'+k);throw Error('stop');}});[f([{value:1},{value:2},late],3),events.join(',')].join('|');\n")

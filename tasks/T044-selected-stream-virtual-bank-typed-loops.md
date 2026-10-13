@@ -89,6 +89,22 @@ early break/return, deopt/interrupt/residency and exact continuation stack/IP.
 All T043 cell/owner and ordinary prototype guards remain regression coverage.
 Existing diagnostic counters must prove typed entry, not only equal output.
 
+Nine finite semantic fixtures are retained in `tests/fixtures/compare-qjs/`:
+fresh values, zero trips, coercion, getter/proxy effects, writes/reinitialization,
+early exits, string accumulation and derived `this`. At `7ad94942` (runtime
+identical to `27ca5140`) all 247 script-goal NG fixtures pass. These output
+comparisons do not prove accelerator entry or a forced exit; the owner's
+counter and physical-site tests must establish those separately.
+
+One baseline gap is retained separately as
+[raw source](../tests/fixtures/known-gaps/eval-zero-trip-getter-proxy-tdz.js).
+At the same revision, running this source directly returns
+`0|12|0|15|0|ReferenceError|7` in both engines; `eval(JSON.stringify(source))`
+returns `0|12|0|15|0|ReferenceError|NaN` in Rust and the former result in NG.
+An arrow IIFE with an explicit return also agrees at `7`; the live zero-trip
+fixture covers that local shared-cell scope. The global direct-eval gap is
+not repaired by this unit and must be compared separately on the candidate.
+
 One coding owner may change `crates/qjs-runtime/src/bytecode/` and its existing
 runtime tests, plus necessary diagnostics counters only. The lead owns plans,
 docs, scripts, order files and Cargo. A read-only reviewer checks lowering,

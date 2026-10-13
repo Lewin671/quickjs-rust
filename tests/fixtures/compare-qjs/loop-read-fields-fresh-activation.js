@@ -1,0 +1,1 @@
+eval("function f(a,n){var o={pear:a,extra:3.5},v=[a,4],sum=0,guard=0;for(var i=0;i<n&&guard<23;i++,guard++){sum+=o.pear+o.extra+v[0]+v[1];}if(guard>=23)throw Error('guard');return sum;}[f(1,0),f(2,1),f(7,9),f(-0,3),f(11,1)].join('|');\n")

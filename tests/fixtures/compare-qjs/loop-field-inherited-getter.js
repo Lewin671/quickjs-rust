@@ -1,0 +1,1 @@
+eval("var events=[];function f(rows,n){var o={pear:2,extra:3},sum=0,guard=0;for(var i=0;i<n&&guard<23;i++,guard++){sum+=o.pear+o.extra+rows[i].value;}return sum;}var late=Object.create({get value(){events.push('getter');return 7;}});var a=f([{value:1},{value:2},late,{value:4}],4),b=f([{value:11},{value:12}],2);[a,b,events.join(',')].join('|');\n")

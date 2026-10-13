@@ -1,0 +1,1 @@
+eval("class B{constructor(){this.base=4;}}class D extends B{constructor(a){eval('super()');var read=()=>eval('this'),o={pear:a,extra:2},sum=0,guard=0;for(var i=0;i<7&&guard<23;i++,guard++){sum+=o.pear+o.extra;}this.sum=sum;this.same=read()===this&&eval('this')===this;}}var a=new D(3),b=new D(11);[a.sum,b.sum,a.same,b.same,a!==b,a.base,b.base].join('|');\n")
