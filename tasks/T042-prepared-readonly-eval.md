@@ -1,17 +1,18 @@
 # T042: Consume prepared read-only eval environments once
 
 - Status: active.
-- Implementation: present at `9ad0ab76` on `agent/prepared-readonly-eval/owner`;
+- Implementation: present at `f1c1b612` on `agent/prepared-readonly-eval/owner`;
   no projection-index cache, COW or T041 implementation is included.
-- Verified at: `9ad0ab76`, 2026-10-12; 2261 runtime tests and 117 selected
-  Test262 cases in the fast gate, 19 focused perf-counter tests, 23 diagnostics
-  and 220 NG fixtures; source scope and independent review passed.
+- Verified at: `f1c1b612`, 2026-10-12; full local gate with 5170 Test262 cases,
+  2264 runtime tests, 22 focused perf-counter tests, 23 diagnostics and 220 NG
+  fixtures. Production code equals `9ad0ab76`, whose remote CI is green.
 - Evidence: [plan](performance-units/prepared-cached-readonly-eval-owned-execution.json)
   binds the T040 queue and six receipts. Raw files are workspace-local,
   not retained; repeated-source profiles are diagnostic, not formal timings.
-- Unresolved: full gate, remote CI, exact x86_64 layout, screens and promotion.
-- Next action: complete full correctness/CI, integrate the candidate, repin its
-  actual target layout and execute the frozen screen. No attempt has been used.
+- Unresolved: follow-up CI, the layout pin's reproducible two-cycle, screens
+  and promotion. No screen attempt has been used.
+- Next action: inspect the saved A/B link evidence, fix the address model,
+  integrate the candidate after CI, verify its layout, then use the frozen screen.
 
 ## Scope and target architecture
 
@@ -55,6 +56,24 @@ SuperCall/Spread are rejected as implicit binding writes; live-slot/cell
 inspection also excludes uninitialized derived-this contexts. [T043](T043-derived-constructor-eval-context.md)
 records two original-native semantic gaps reproduced at the exact base and
 unchanged by the complete guarded candidate delta. They are not claimed fixed.
+
+## Layout diagnostic checkpoint
+
+Jobs `20261013T050459Z-prepared-eval-layout` and
+`20261013T052238Z-prepared-eval-layout-relinks` use exact production revision
+`9ad0ab76`; the latter preserves every order/nm snapshot. After warmup, orders
+alternate between SHA `f989072deb9e11c6c16973eb6557e420d1414b63f68bd48c7b31cd03b2c2bbda`
+and `fec37734e2b6a5848662ba6afb1c91ab4c5c3438b628cb2e7d221773b94edb8e`.
+Hot callee order/budgets and selected filler sizes stay unchanged; std filler
+selection and head count differ. Actual VM/wide page offsets alternate
+`0xc30/0x3f0` and `0xc50/0x410`, bracketing requested `0xc40/0x400`.
+First text symbols are at `0x100004850` and `0x100000860`; a static header
+diagnostic (job `20261013T053409Z-layout-header-diagnostic`) verifies B's
+`__text` start is `0x100000860`, aligned to 16 bytes. The exact cause still
+needs A/B evidence; increasing relinks alone does not resolve this cycle.
+These are build/address checks, never screen attempts or performance evidence.
+Raw files are workspace-local, not retained; do not accept the requested
+offsets merely because they appear in the order-file header.
 
 ## Profile interpretation
 
