@@ -1,17 +1,18 @@
 # T041: Ordinary own-data cache hot answers on x86_64
 
 - Status: active.
-- Implementation: none; the existing unpromoted production diff will be reused
-  only after this plan is committed.
-- Verified at: base `06f0ecd3`, 2026-10-12; exact-binary profile receipts and
-  `validate-unit --profile-root` passed for the new x86_64 queue.
+- Implementation: present at `33c7dfed` on `agent/own-data-hot-answers/owner`;
+  the production diff matches `95c3af21`, with five additional tests.
+- Verified at: `33c7dfed`, 2026-10-12; 12 cache tests, 11 NG comparisons,
+  2255 runtime tests and 65 selected Test262 cases in the fast gate; full
+  `scripts/check.sh` passed, including 5170 curated Test262 cases.
 - Evidence: [frozen plan](performance-units/own-data-cache-hot-answers-x86.json)
   binds queue SHA `7a4b49bbec9dc64a8d545a3d3b89fd85995b6fdc3144b543e220256b82cbf00f`.
   Raw comparison/profile files are workspace-local, not retained here.
-- Unresolved: implementation, additional state-transition coverage, x86_64
-  layout verification, the single screen, and formal promotion evidence.
-- Next action: apply only `95c3af21`'s runtime/cache-test diff in an isolated
-  owner checkout, add the missing guard/fallback tests, and run correctness.
+- Unresolved: x86_64 layout verification, the single screen, remote CI and
+  formal promotion evidence. No screen attempt has been used.
+- Next action: verify code layout on the measurement host, then screen the
+  frozen plan once; only a passing screen authorizes the formal comparison.
 
 ## Scope and evidence
 

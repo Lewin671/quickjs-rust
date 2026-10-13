@@ -1,16 +1,16 @@
 # T040: General runtime optimization on the x86_64 measurement host
 
 - Status: active.
-- Implementation: none; selecting a new unit from exact current evidence.
+- Implementation: T041's candidate is present on its owner branch; T042 is
+  frozen and being implemented. Neither has performance promotion evidence.
 - Verified at: `06f0ecd3`, 2026-10-12; full local `scripts/check.sh`, including
   5170 curated Test262 cases, passed. The new comparison is complete and sealed.
 - Evidence: measurement job `20261013T032141Z-campaign-current-06f0ecd3`;
   profile job `20261013T033011Z-campaign-profile-top8-receipts`. Raw artifacts
   are workspace-local and not retained in this repository.
-- Unresolved: exact-binary hotspot attribution, a frozen plan, and the local
-  pre-commit isolation fix's full gate.
-- Next action: finish the hook fix, read the fresh queue's profiles, then
-  validate and commit a runtime plan before coding.
+- Unresolved: unit screens, formal promotion and campaign performance gaps.
+- Next action: verify T041's layout and screen while T042 implements the
+  independently profiled read-only eval ownership route.
 
 ## Goal and ownership
 
@@ -66,6 +66,11 @@ and verified all branch/worktree identities and the main checkout's original
 unrelated deletion. Both hooks now isolate repository-local environment and
 choose the invoking checkout's scripts. The new regression rejects the old
 hook, passes both fixed hooks, and exercises a real linked-worktree commit.
+Its full gate passed. The layout symbol portability change (`0fcc58f4`) also
+passed its full gate and remote CI, and is integrated on the lead branch.
+An exact x86_64 symbol check found 130 admissible std filler functions and
+successfully formed gaps from 32 through 2048 bytes. This validates symbol
+selection, not old ARM64 offsets or a performance improvement.
 
 ## Mechanisms under investigation
 
