@@ -63,7 +63,8 @@ run_fixture() {
   fi
 
   set +e
-  qjs_output="$("$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT_SECONDS" "$QJS_BIN" -e "console.log($expression)" 2>&1)"
+  # Both CLI expressions are scripts; NG defaults -e to a module.
+  qjs_output="$("$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT_SECONDS" "$QJS_BIN" --script -e "console.log($expression)" 2>&1)"
   qjs_status=$?
   set -e
   if [ "$qjs_status" -ne 0 ]; then
