@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "prepared-cached-readonly-eval-owned-execution",
+  "base_sha": "06f0ecd3cb4ab7bea384d3b58700e3d958c0aeb0",
+  "queue": {
+    "candidate_sha": "06f0ecd3cb4ab7bea384d3b58700e3d958c0aeb0",
+    "sha256": "7a4b49bbec9dc64a8d545a3d3b89fd85995b6fdc3144b543e220256b82cbf00f"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/sunspider-1.0/date-format-tofte"
+    ],
+    "rank_ceiling": 1,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Consume the existing owned caller projection and cached immutable read-only direct-eval blueprint once in the same VM evaluator, avoiding redundant native dispatch/context lookup and environment clones. Preserve projection construction and all existing non-admitted paths. Record a stable weak eval-intrinsic identity per realm to guard this new route.",
+    "generality": "Admission uses direct-eval call provenance, a stable intrinsic function identity, live parser context, and immutable bytecode effects: no declarations, closure/template identity state, nested eval, with, suspension, or binding writes/deletes. It handles every admitted cached source and caller without recognizing source text, function names, paths, benchmark IDs, iteration counts or expected values. Each call obtains current values/cells from the ordinary independent projection; it never consumes the caller own environment or caches values/cells.",
+    "semantic_risks": [
+      "Intrinsic identity must be registered once per realm, remain stable after global eval rebinding, and conservatively reject foreign, bound, Proxy, synthetic-unregistered and dynamic-realm routes.",
+      "Cache eligibility and parse context must match the existing native path, including caller strictness, private names, this, super, home object, new.target, arguments and module routing; parameter prologues and with retain old behavior.",
+      "Read-only bytecode is not side-effect-free: callbacks can mutate canonical cells, realm bindings and objects or throw. Refresh realm-backed caller slots on both success and failure before using existing call-result handling.",
+      "Preserve cold/cache-miss, declaration/write/delete, nested-eval, non-string and indirect-eval paths, argument evaluation order, RegExp object identity, TDZ and evaluation-local state.",
+      "The consumed environment must be the already independent owned projection, not caller self.env. Reuse the same evaluator and necessary this initialization; no FrameBindings COW, slot-index cache, empty-frame shortcut or global binding-model change is part of this unit."
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "20261013T033011Z-campaign-profile-top8-receipts/out/profiles/sunspider-1.0--date-format-tofte/receipt-0/receipt.json",
+      "sha256": "211cb490b6abb4c58af128833a9bc6de85c72c003e2fb801a87434ee737116fe",
+      "base_sha": "06f0ecd3cb4ab7bea384d3b58700e3d958c0aeb0",
+      "opportunity_ids": [
+        "external/sunspider-1.0/date-format-tofte"
+      ],
+      "shared_cost": "Original pinned source: 44/116 samples pass through call_direct_eval. This is a lifecycle envelope containing necessary projection and execution, not an additive or removable cost estimate. Exact stacks and source show a cached blueprint and owned projection followed by redundant native context/cache lookup and two deep CallEnv clones; the unit removes only those redundant ownership layers for proven read-only cached eval.",
+      "inclusive_fraction": 0.3793103448275862
+    },
+    {
+      "source": "20261013T033011Z-campaign-profile-top8-receipts/out/profiles/sunspider-1.0--date-format-tofte/receipt-1/receipt.json",
+      "sha256": "1c1d8dad9b2893a49991682f6dee6f6cdad20ee02455ec17ae45821e2bb07b20",
+      "base_sha": "06f0ecd3cb4ab7bea384d3b58700e3d958c0aeb0",
+      "opportunity_ids": [
+        "external/sunspider-1.0/date-format-tofte"
+      ],
+      "shared_cost": "Original pinned source: 53/102 samples pass through call_direct_eval. This is a lifecycle envelope containing necessary projection and execution, not an additive or removable cost estimate. Exact stacks and source show a cached blueprint and owned projection followed by redundant native context/cache lookup and two deep CallEnv clones; the unit removes only those redundant ownership layers for proven read-only cached eval.",
+      "inclusive_fraction": 0.5196078431372549
+    },
+    {
+      "source": "20261013T033011Z-campaign-profile-top8-receipts/out/profiles/sunspider-1.0--date-format-tofte/receipt-2/receipt.json",
+      "sha256": "99c867b3d6e4b1402a9a42dd35d62bd9d86c87062a201d0a81912b3483413505",
+      "base_sha": "06f0ecd3cb4ab7bea384d3b58700e3d958c0aeb0",
+      "opportunity_ids": [
+        "external/sunspider-1.0/date-format-tofte"
+      ],
+      "shared_cost": "Original pinned source: 45/103 samples pass through call_direct_eval. This is a lifecycle envelope containing necessary projection and execution, not an additive or removable cost estimate. Exact stacks and source show a cached blueprint and owned projection followed by redundant native context/cache lookup and two deep CallEnv clones; the unit removes only those redundant ownership layers for proven read-only cached eval.",
+      "inclusive_fraction": 0.4368932038834951
+    },
+    {
+      "source": "20261013T035459Z-campaign-profile-top-level-repeat/out/profiles/sunspider-1.0--date-format-tofte/receipt-0/receipt.json",
+      "sha256": "382682da8da5f5e095eba8d685531d8cd74e7bbc29b9544ad7b82ffbca59f151",
+      "base_sha": "06f0ecd3cb4ab7bea384d3b58700e3d958c0aeb0",
+      "opportunity_ids": [
+        "external/sunspider-1.0/date-format-tofte"
+      ],
+      "shared_cost": "Diagnostic top-level source repetition (32 copies, no function wrapper; not formal timing): 1266/3300 samples pass through call_direct_eval. This is a lifecycle envelope containing necessary projection and execution, not an additive or removable cost estimate. Exact stacks and source show a cached blueprint and owned projection followed by redundant native context/cache lookup and two deep CallEnv clones; the unit removes only those redundant ownership layers for proven read-only cached eval.",
+      "inclusive_fraction": 0.3836363636363636
+    },
+    {
+      "source": "20261013T035459Z-campaign-profile-top-level-repeat/out/profiles/sunspider-1.0--date-format-tofte/receipt-1/receipt.json",
+      "sha256": "1facb11da784a6c58bd82df9a4a1f82f5d5c3749b8ae569416ebae51cce57f9a",
+      "base_sha": "06f0ecd3cb4ab7bea384d3b58700e3d958c0aeb0",
+      "opportunity_ids": [
+        "external/sunspider-1.0/date-format-tofte"
+      ],
+      "shared_cost": "Diagnostic top-level source repetition (32 copies, no function wrapper; not formal timing): 1299/3296 samples pass through call_direct_eval. This is a lifecycle envelope containing necessary projection and execution, not an additive or removable cost estimate. Exact stacks and source show a cached blueprint and owned projection followed by redundant native context/cache lookup and two deep CallEnv clones; the unit removes only those redundant ownership layers for proven read-only cached eval.",
+      "inclusive_fraction": 0.3941140776699029
+    },
+    {
+      "source": "20261013T035459Z-campaign-profile-top-level-repeat/out/profiles/sunspider-1.0--date-format-tofte/receipt-2/receipt.json",
+      "sha256": "a625c4073461d6b8ff64813c85793839f96c7efb60782a7e105a15bd206e7661",
+      "base_sha": "06f0ecd3cb4ab7bea384d3b58700e3d958c0aeb0",
+      "opportunity_ids": [
+        "external/sunspider-1.0/date-format-tofte"
+      ],
+      "shared_cost": "Diagnostic top-level source repetition (32 copies, no function wrapper; not formal timing): 1238/3294 samples pass through call_direct_eval. This is a lifecycle envelope containing necessary projection and execution, not an additive or removable cost estimate. Exact stacks and source show a cached blueprint and owned projection followed by redundant native context/cache lookup and two deep CallEnv clones; the unit removes only those redundant ownership layers for proven read-only cached eval.",
+      "inclusive_fraction": 0.3758348512446873
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/date-format-tofte"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/date-format-xparb",
+      "external/jetstream3-js-subset/hash-map",
+      "external/jetstream3-js-subset/cdjs",
+      "external/sunspider-1.0/3d-raytrace",
+      "external/sunspider-1.0/regexp-dna",
+      "external/sunspider-1.0/string-tagcloud",
+      "external/kraken-1.1/ai-astar",
+      "broad/plain_function_call",
+      "broad/closure_allocation_call"
+    ],
+    "target_max_candidate_over_base": 0.95,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 2
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
