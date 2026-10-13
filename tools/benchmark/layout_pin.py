@@ -43,7 +43,7 @@ ROOT = Path(__file__).resolve().parents[2]
 ORDER_NAME = ("hot-functions-x86_64.order" if platform.machine() == "x86_64"
               else "hot-functions.order")
 DEFAULT_ORDER = ROOT / "crates/qjs-cli" / ORDER_NAME
-DEFAULT_OFFSET = 0x400
+DEFAULT_OFFSET = 0x200 if platform.machine() == "x86_64" else 0x400
 # The same executor instantiated for the interpreter's own loops -- a
 # script's top-level `for` -- is pinned too, ahead of its wide twin:
 # it is most of access-fannkuch and math-partial-sums, and floating in the

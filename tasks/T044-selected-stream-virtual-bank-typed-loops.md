@@ -7,7 +7,7 @@
   lead `c9d2f49c`, full local gate and NG247; final debug CLI `7d965c89`.
 - Evidence: [plan](performance-units/selected-stream-readonly-virtual-bank-typed-loops.json);
   workspace queue/profile jobs and numbers below. Raw files are not retained.
-- Unresolved: lead CI, queued layout qualification, screens and complete
+- Unresolved: final layout relink and candidate CI, screens and complete
   promotion. The discovery run has three imprecise controls.
 - Next action: collect queued native layout scan/route diagnostics, re-pin
   and use the frozen screen after CI. No screen attempts are used yet.
@@ -114,10 +114,47 @@ is tested; this engine has no interrupt polling API to exercise.
 
 Lead checks at `c9d2f49c` pass the complete local gate (410 tool tests,
 including the native layout-scan fix) and 247 NG fixtures. Production files
-match the final reviewed manifest. CI `38384956641` is pending. Queued iMac
+match the final reviewed manifest. CI `38384956641` was superseded by a
+documentation update; its replacement `38385253266` at `af86ec70` passed.
+Queued iMac
 jobs `20261013T104052Z-t044-native-layout-scan` and
 `20261013T104134Z-t044-selected-stream-route` use that exact source; neither
 is a frozen-unit screen or a formal performance claim.
+
+The queued layout diagnostic completed with all placements retained, no
+DISTURBED flag and 18 light background samples. VM offsets are all `0xc40`;
+wide offsets are exactly `0/0x200/0x400`. Two-pair wall medians versus the
+initial `0x400` candidate (identical instructions, diagnostic only):
+
+| Canary | 0 | 200 | 400 |
+| --- | ---: | ---: | ---: |
+| recursive_call_tree | .9927 | .9755 | 1.0886 |
+| prototype_method_call | 1.0842 | .9571 | .9949 |
+| polymorphic_call_site | 1.0117 | .9839 | .9898 |
+| capturing_closure_call | 1.0098 | .9704 | 1.0039 |
+| heterogeneous_property_read | 1.0042 | .9928 | .9981 |
+| string_key_map_churn | 1.0142 | 1.0034 | .9777 |
+| ai-astar | 1.0111 | 1.0014 | .9938 |
+| imaging-desaturate | 1.0016 | 1.0106 | .9913 |
+| access-nsieve | .9859 | .9893 | .9919 |
+| access-nbody | .9980 | 1.0139 | .9954 |
+
+All-case geomeans are `1.0110/.9897/1.0021`. Initial base and the 400
+executable are byte-identical (`feb4d88c...`); the recursive range
+`1.0131..1.1640` there is A/A noise, not a reason to discard a pair. Sequence,
+load decline and two pairs limit inference. Adopt the central 200 placement
+for x86 qualification, retain ARM's unmeasured 400, and perform no further
+layout search for this unit. Four call canaries favor 200 in both pairs;
+the other six have geomean `1.0019`, including the two small regressions in
+the table. This fixes an engineering configuration, not a speed verdict.
+
+Supplemental route binary `693d61e1...` at `c9d2f49c` executes property_read
+14..39 and array_read 15..44 (`TLRUN Ran`, `TLCLAIM typed`, 13/16 ops).
+Both have one entry, zero declined edges and no deopt. Existing constant
+forwarding makes their bank-entry count zero; the general selected scalar
+path is what executes. Property_write rejects its region at compile time
+because it contains bank stores: zero entries and 10000 ordinary backedges.
+All three exit successfully; this is instrumented routing evidence only.
 
 Nine finite semantic fixtures are retained in `tests/fixtures/compare-qjs/`:
 fresh values, zero trips, coercion, getter/proxy effects, writes/reinitialization,
