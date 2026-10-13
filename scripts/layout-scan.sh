@@ -53,7 +53,7 @@ fi
 
 cargo_bin="$(qjs_resolve_cargo)" || { echo "error: cargo not found" >&2; exit 1; }
 cd "$ROOT_DIR"
-order=crates/qjs-cli/hot-functions.order
+order="$(python3 -c 'from tools.benchmark.layout_pin import DEFAULT_ORDER; print(DEFAULT_ORDER)')"
 scan_dir=target/layout-scan
 mkdir -p "$scan_dir"
 "$cargo_bin" build --release -q -p qjs-cli
@@ -75,12 +75,20 @@ for offset in "${offset_list[@]}"; do
   cp "$saved" "$order"
   # Fillers are sized from the binary they are computed on, so pin, relink
   # and pin again until the order file stops changing.
-  for _ in 1 2 3; do
+  stable=false
+  for _ in 1 2 3 4; do
     before="$(shasum "$order")"
-    python3 -m tools.benchmark.layout_pin --binary target/release/qjs --offset "$offset" >/dev/null
+    python3 -m tools.benchmark.layout_pin --binary target/release/qjs --order "$order" --offset "$offset" >/dev/null
     "$cargo_bin" build --release -q -p qjs-cli
-    [ "$(shasum "$order")" = "$before" ] && break
+    if [ "$(shasum "$order")" = "$before" ]; then
+      stable=true
+      break
+    fi
   done
+  if [ "$stable" != true ]; then
+    echo "error: layout did not stabilize at $offset; no screen was run" >&2
+    exit 1
+  fi
   cp target/release/qjs "$scan_dir/qjs-$offset"
   echo "== executor at $offset: $scan_dir/qjs-$offset" >&2
   python3 -m tools.benchmark.screen --candidate "$scan_dir/qjs-$offset" --base "$base" \

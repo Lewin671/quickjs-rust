@@ -62,7 +62,9 @@ artifacts mean.
 - `performance-decision.sh`: builds the opportunity queue, validates a frozen
   unit plan, records a decision. Workflow.
 - `layout-scan.sh`: scans the typed-loop executor's pinned code offset and
-  screens each placement. Diagnostic only. Workflow.
+  screens each stable placement; restores the native architecture's order
+  file on exit and refuses to screen an unstable layout. Diagnostic only.
+  Workflow.
 - `external-corpus-ab.py`: amplified A/B of two binaries over the cached
   SunSpider and Kraken sources. Diagnostic only. Benchmarking.
 - `external-performance-preview.sh`: audits, fetches, or runs the pinned
