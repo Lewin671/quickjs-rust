@@ -2,7 +2,7 @@
 
 - Status: active; first screen failed; one of two attempts remains.
 - Implementation: attempt 1 owner `0a95c1cc`, integrated as `c5f35035`;
-  attempt 2 in progress on `agent/selected-stream-virtual-bank-attempt2/owner`.
+  attempt 2 owner `5e107179`, integrated as `d5c7e83b`, lead gate pending.
   Nothing is promoted to main. Runtime work started after freeze.
 - Verified at: `292e75ff`, full local gate, CI `38387232179`, configured
   Test262 `38388016940` and native relink/UTC NG247. First screen failed.
@@ -10,9 +10,9 @@
   workspace queue/profile jobs and numbers below. Raw files are not retained.
 - Unresolved: captured_write control failure and complete promotion. The
   discovery run already marked that control imprecise; the failure stands.
-- Next action: finish the cold-table/edge-only lookup correction, independently
-  check semantics and then use the one remaining screen. Do not repeat
-  identical code for a better result or run formal after a failed screen.
+- Next action: finish lead gate/CI and native relink checks, then use the one
+  remaining screen. Do not repeat identical code for a better result or run
+  formal after a failed screen.
 
 ## Measured boundary
 
@@ -170,6 +170,13 @@ stay independent, shared code is disambiguated by the stable activation flag, an
 rejects acceleration. No eligibility, opcode, AST, dependency, ordinary heap-store or layout-search
 changes are included. Test late authority loss, forward jumps, cache lifetime, clone/reset and existing
 handback/route behavior before measuring; preserve cold wide-handback paths.
+
+Attempt 2 owner full gate passes 2283 runtime, 25 diagnostics, agents, 410 tools, 35 scripts and
+5170 Test262 subset; UTC NG247 also passes. Independent CLI `22be5cd9...` matches all 44 prior
+semantic checks with five production/build inputs unchanged. Local debug-info confirms Bytecode1200,
+view24 and variant48; x86 release layout still needs verification. Six new cold/lazy/foreign-code
+tests pass, including a genuinely nonempty numeric table rejecting foreign code. No performance
+verdict is implied. Owner CI `38394872992` is pending; the original failure is retained.
 
 Nine finite semantic fixtures are retained in `tests/fixtures/compare-qjs/`: fresh values, zero trips,
 coercion, getter/proxy effects, writes/reinitialization, early exits, string accumulation and derived

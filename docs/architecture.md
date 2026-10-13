@@ -109,6 +109,10 @@ selected original, full or data-only instruction stream, each with its own
 cache and physical stack/continuation coordinates. Switching streams resets
 the frame's declined-plan indices; a wide handback transfers those indices
 only when the VM selects the original stream.
+Lowered tables allocate their cold payload only at a real backward edge;
+the activation view holds only owner and code. Lookup follows the actual
+code's owner, using the stable function-context flag for shared variants.
+Unknown code rejects both accelerator families.
 
 **Compile-time lowering.** `bytecode/virtual_object/` proves which object,
 array and function literals have no observable identity and produces a
