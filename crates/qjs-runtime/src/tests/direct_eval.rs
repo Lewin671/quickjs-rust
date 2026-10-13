@@ -301,6 +301,86 @@ fn cached_super_construction_keeps_implicit_this_writes_on_native_execution() {
 }
 
 #[test]
+fn captured_arrow_does_not_make_uninitialized_constructor_this_ready() {
+    let (result, calls) = eval_with_prepared_calls(
+        "class Parent {} class Child extends Parent {
+           constructor() {
+             var x = 2, captured = () => this, results = [], guard = 0;
+             try { eval('this'); } catch (e) {}
+             for (var i = 0; i < 4; i++) {
+               if (++guard > 4) throw 99;
+               results.push(eval('x + 1'));
+             }
+             return { results: results.join(','), captured: captured };
+           }
+         }
+         var made = new Child();
+         var uninitialized = false;
+         try { made.captured(); } catch (e) { uninitialized = e instanceof ReferenceError; }
+         made.results + ':' + uninitialized;",
+    );
+    assert_eq!(result, Ok(Value::String("3,3,3,3:true".into())));
+    assert_eq!(
+        calls, 0,
+        "captured this still has a TDZ before super despite any slot placeholder"
+    );
+}
+
+#[test]
+fn captured_this_before_super_native_probe_never_enters_prepared_execution() {
+    let (result, calls) = eval_with_prepared_calls(
+        "var observations=[], constructions=0;
+         class B { constructor(){constructions++;this.x=4;} }
+         class D extends B {
+           constructor(){
+             var captured=()=>this;
+             try{observations.push('evalThis:'+typeof eval('this'));}
+             catch(e){observations.push('evalThis:'+e.name);}
+             try{eval('super()');observations.push('evalSuper:ok');}
+             catch(e){observations.push('evalSuper:'+e.name);}
+             try{observations.push('captured:'+captured().x);}
+             catch(e){observations.push('captured:'+e.name);}
+             return {};
+           }
+         }
+         new D(); new D(); observations.join('|')+';'+constructions;",
+    );
+    // This deliberately retains the native chain; its existing conformance
+    // discrepancy is owned by T043. Here only admission is under test.
+    assert!(result.is_ok());
+    assert_eq!(calls, 0);
+}
+
+#[test]
+fn captured_constructor_this_allows_cached_eval_only_after_super_binds_it() {
+    let (result, calls) = eval_with_prepared_calls(
+        "class Parent {} class Child extends Parent {
+           constructor() {
+             var x = 2, captured = () => this, results = [], guard = 0;
+             try { eval('this'); } catch (e) {}
+             for (var i = 0; i < 4; i++) {
+               if (++guard > 4) throw 99;
+               results.push(eval('x + 1'));
+             }
+             super();
+             for (var j = 0; j < 4; j++) {
+               if (++guard > 8) throw 99;
+               results.push(eval('x + 1'));
+             }
+             return { results: results.join(','), captured: captured };
+           }
+         }
+         var made = new Child();
+         made.results + ':' + (made.captured() instanceof Child);",
+    );
+    assert_eq!(result, Ok(Value::String("3,3,3,3,3,3,3,3:true".into())));
+    assert_eq!(
+        calls, 4,
+        "the identical already-warmed source enters only after this is an object"
+    );
+}
+
+#[test]
 fn cached_eval_creates_fresh_objects_and_regexp_instances() {
     let (result, calls) = eval_with_prepared_calls(
         "function make() { eval('({})'); return eval('({})'); }
