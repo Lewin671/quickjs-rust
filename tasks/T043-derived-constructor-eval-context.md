@@ -62,3 +62,39 @@ The configured Test262 snapshot's zero-gap result does not establish these
 untested programs are correct. Add cases that assert each completion and `this`
 state, not merely a final allocation count, then run focused Test262 and NG
 comparisons plus the full correctness gate.
+
+## Target architecture and migration stages
+
+The existing `FrameBindings["this"]` Upvalue is the authority for each derived
+constructor activation. It starts with the existing uninitialized marker and
+is shared by the constructor, its eval projections and lexical arrows. No
+`CallEnv` hot field or per-call name/value snapshot is introduced.
+
+1. Create the cell at derived activation; attach the declaring VM slot and
+   captures to it. Forks/projections preserve only this implicit derived cell's
+   identity, and stale value refresh/writeback cannot replace it.
+2. Reads of the marker throw rather than fall back to realm this. Native eval
+   preserves the same cell even in strict mode. Super executes arguments and
+   Base first, then checks uninitialized state, binds, and initializes fields.
+   Base failure leaves TDZ; field failure preserves the successful binding.
+   Completion rejects an uninitialized marker, while an explicit object return
+   remains legal.
+3. An optional FunctionColdState lexical context retains the cell and original
+   constructor owner for arrows, including nested/escaping arrows with no this
+   upvalue slot. Calling such an arrow restores that lexical authority; live
+   super lookup and field ownership cannot be replaced with new.target.
+
+Owner runtime paths: `function/{env,value,call}.rs`, `global.rs`,
+`bytecode/{vm_bindings,vm_capture,vm_frame_init,vm_call,vm_class,vm_result}.rs`
+and `bytecode/vm/rare_ops.rs`, plus focused helper/test modules. Shared design,
+allowlists and benchmark plans remain lead-owned. This is a correctness fix,
+not a new T042 optimization or a performance admission expansion.
+
+Coverage must check cold/warm eval, captured/nested/escaping arrows, multiple
+instances and reentry; pre-super this/typeof/super-property TDZ; duplicate
+super argument/Base effects with no repeated fields; Base and field throws;
+callback-super through read-only eval on success and throw; strict declaration
+isolation, indirect/global/module this and legitimate undefined this; and
+Reflect.construct with a distinct new.target. Assert completion, event order
+and cell identity, not just a final allocation count. T042 remains ineligible
+before binding and may admit ordinary read-only eval after binding.
