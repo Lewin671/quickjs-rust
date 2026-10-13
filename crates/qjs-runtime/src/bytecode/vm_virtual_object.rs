@@ -46,9 +46,6 @@ impl<'a> Vm<'a> {
             && self.env.immutable_function_name().is_none()
             && self.with_stack().is_empty();
         self.virtual_values.clear();
-        // A fresh activation may select another stream with another plan
-        // index table. Reconsider entry against that stream's current inputs.
-        self.declined_typed_loop_programs = 0;
     }
 
     pub(super) fn run_virtual_object_op(
@@ -279,7 +276,7 @@ impl<'a> Vm<'a> {
                     self.locals[*slot] = Some(Value::Number(value + 1.0));
                     if let Some(target) = jump {
                         let backedge = self.ip + *skip;
-                        self.jump_with_selected_loop_plans(program, *target, backedge);
+                        self.jump_with_loop_plans(program.loop_plans(), *target, backedge);
                     } else {
                         self.ip += *skip;
                     }
@@ -307,7 +304,7 @@ impl<'a> Vm<'a> {
                 self.pop()?;
                 if let Some(target) = jump {
                     let backedge = self.ip + *skip;
-                    self.jump_with_selected_loop_plans(program, *target, backedge);
+                    self.jump_with_loop_plans(program.loop_plans(), *target, backedge);
                 } else {
                     self.ip += *skip;
                 }

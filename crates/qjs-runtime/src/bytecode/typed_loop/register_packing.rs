@@ -11,32 +11,19 @@
 use super::{Class, MAX_REGISTERS, MAX_STACK_DEPTH, Typed, TypedOp};
 use crate::Value;
 
-pub(super) struct ScalarRegisterMetadata<'a> {
-    pub(super) locals: &'a mut [(u16, u32)],
-    pub(super) virtual_slots: &'a mut [(u16, u32)],
-    pub(super) written_locals: &'a mut [(u16, u32)],
-    pub(super) global_reads: &'a mut [(u16, String)],
-    pub(super) constants: &'a mut [(u16, Typed)],
-}
-
 pub(super) fn compact_scalar_registers(
     ops: &mut [TypedOp],
     site_entries: &mut [(Class, u16)],
-    metadata: ScalarRegisterMetadata<'_>,
+    local_slots: &mut [(u16, u32)],
+    written_locals: &mut [(u16, u32)],
+    global_reads: &mut [(u16, String)],
+    constants: &mut [(u16, Typed)],
     next_register: usize,
 ) -> Option<usize> {
-    let ScalarRegisterMetadata {
-        locals,
-        virtual_slots,
-        written_locals,
-        global_reads,
-        constants,
-    } = metadata;
     let stack_register_count = stack_register_count(ops, site_entries, Class::Scalar);
     remap_ops(ops, Class::Scalar, stack_register_count);
     remap_site_entries(site_entries, Class::Scalar, stack_register_count);
-    remap_register_pairs(locals, stack_register_count);
-    remap_register_pairs(virtual_slots, stack_register_count);
+    remap_register_pairs(local_slots, stack_register_count);
     remap_register_pairs(written_locals, stack_register_count);
     remap_register_pairs(global_reads, stack_register_count);
     remap_register_pairs(constants, stack_register_count);

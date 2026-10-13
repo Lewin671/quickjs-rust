@@ -7,7 +7,6 @@
 //! the complete candidate on the ordinary allocation path.
 
 use std::{
-    cell::OnceCell,
     collections::{BTreeMap, BTreeSet},
     rc::Rc,
 };
@@ -20,91 +19,22 @@ use crate::bytecode::{
     vm_props::fast_number_binary,
 };
 
-#[cfg(test)]
-#[path = "lower_cache_tests.rs"]
-mod cache_tests;
-
 #[derive(Clone, Debug)]
 pub(in crate::bytecode) struct VirtualObjectProgram {
     full: VirtualObjectVariant,
     data_only: VirtualObjectVariant,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct VirtualObjectVariant {
     lowered_code: Option<Rc<[Op]>>,
-    typed_loops: OnceCell<Box<VariantTypedPrograms>>,
     required_authoritative_slots: u128,
     /// Whether the variant keeps a literal's values in virtual slots rather
     /// than only fusing instructions in place.
     virtualizes: bool,
 }
 
-/// Cold table storage is allocated only when an executed stream reaches a
-/// backward edge. Keep its Vec header out of every Bytecode's inline payload.
-#[derive(Debug)]
-struct VariantTypedPrograms {
-    programs: Vec<super::super::typed_loop::TypedLoopProgram>,
-}
-
-impl Clone for VirtualObjectVariant {
-    fn clone(&self) -> Self {
-        Self {
-            lowered_code: self.lowered_code.clone(),
-            // An equivalent immutable code owner may share instructions,
-            // but it must not clone another variant's filled scratch/cache.
-            typed_loops: OnceCell::new(),
-            required_authoritative_slots: self.required_authoritative_slots,
-            virtualizes: self.virtualizes,
-        }
-    }
-}
-
 impl VirtualObjectProgram {
-    /// Resolve the owner of the executable already held by an activation.
-    /// Authority may lose bits when a closure captures a slot; selecting a new
-    /// stream here would mix its plans with the activation's physical code.
-    /// Full/data-only sharing code also share their required mask (Clone above),
-    /// so the activation-stable function-context flag disambiguates their caches.
-    pub(in crate::bytecode) fn typed_programs_for_stream<'a>(
-        &'a self,
-        bytecode: &'a Bytecode,
-        execution_code: &'a [Op],
-        allow_virtual_functions: bool,
-    ) -> Option<&'a [super::super::typed_loop::TypedLoopProgram]> {
-        if std::ptr::eq(execution_code, bytecode.code.as_slice()) {
-            return Some(
-                bytecode
-                    .typed_loop_programs
-                    .get_or_init(|| super::super::typed_loop::compile_all(bytecode)),
-            );
-        }
-        let matches = |variant: &VirtualObjectVariant| {
-            variant
-                .lowered_code
-                .as_deref()
-                .is_some_and(|code| std::ptr::eq(code, execution_code))
-        };
-        let variant = match (matches(&self.full), matches(&self.data_only)) {
-            (true, true) if allow_virtual_functions => &self.full,
-            (true, true) | (false, true) => &self.data_only,
-            (true, false) => &self.full,
-            (false, false) => return None,
-        };
-        Some(
-            &variant
-                .typed_loops
-                .get_or_init(|| {
-                    Box::new(VariantTypedPrograms {
-                        programs: super::super::typed_loop::compile_stream(
-                            bytecode,
-                            execution_code,
-                        ),
-                    })
-                })
-                .programs,
-        )
-    }
     /// Whether either variant rewrites the body at all. A body the lowering
     /// leaves untouched gains nothing from the interpreter's virtual-object
     /// path, so another tier may take it without losing that path's work.
@@ -253,7 +183,6 @@ fn lower_variant(
     };
     VirtualObjectVariant {
         lowered_code: Some(Rc::from(code.into_boxed_slice())),
-        typed_loops: OnceCell::new(),
         required_authoritative_slots,
         virtualizes: has_replacements,
     }
@@ -291,7 +220,6 @@ fn original_program() -> VirtualObjectProgram {
 fn original_variant() -> VirtualObjectVariant {
     VirtualObjectVariant {
         lowered_code: None,
-        typed_loops: OnceCell::new(),
         required_authoritative_slots: 0,
         virtualizes: false,
     }

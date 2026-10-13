@@ -113,17 +113,8 @@ impl<'a> FrameProgramView<'a> {
 
     /// The loop accelerators for this body, derived at the backward edge that
     /// needs them.
-    pub(super) fn loop_plans(&self, allow_virtual_functions: bool) -> LoopPlanView<'a> {
-        let Some(typed) = self
-            .bytecode
-            .virtual_object_program
-            .get()
-            .expect("the activation selected its executable")
-            .typed_programs_for_stream(self.bytecode, self.execution_code, allow_virtual_functions)
-        else {
-            return LoopPlanView::empty();
-        };
-        LoopPlanView::for_typed_programs(self.bytecode, typed)
+    pub(super) fn loop_plans(&self) -> LoopPlanView<'a> {
+        LoopPlanView::for_bytecode(self.bytecode)
     }
 }
 
@@ -177,8 +168,8 @@ mod tests {
             from_shared.execution_code
         ));
         assert!(std::ptr::eq(
-            from_borrowed.loop_plans(true).typed,
-            from_shared.loop_plans(true).typed
+            from_borrowed.loop_plans().typed,
+            from_shared.loop_plans().typed
         ));
     }
 

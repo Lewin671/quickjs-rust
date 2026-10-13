@@ -1,18 +1,17 @@
 # T044: Typed loops on selected virtual scalar banks
 
-- Status: active; first screen failed; one of two attempts remains.
-- Implementation: attempt 1 owner `0a95c1cc`, integrated as `c5f35035`;
-  attempt 2 owner `5e107179`, integrated as `d5c7e83b`, lead gate pending.
-  Nothing is promoted to main. Runtime work started after freeze.
-- Verified at: `292e75ff`, full local gate, CI `38387232179`, configured
-  Test262 `38388016940` and native relink/UTC NG247. First screen failed.
-- Evidence: [plan](performance-units/selected-stream-readonly-virtual-bank-typed-loops.json);
-  workspace queue/profile jobs and numbers below. Raw files are not retained.
-- Unresolved: captured_write control failure and complete promotion. The
-  discovery run already marked that control imprecise; the failure stands.
-- Next action: finish lead gate/CI and native relink checks, then use the one
-  remaining screen. Do not repeat identical code for a better result or run
-  formal after a failed screen.
+- Status: rejected; both frozen screen attempts failed and the budget is exhausted.
+- Implementation: runtime and experimental layout restored to 27ca5140 in the
+  lead checkout; removal gate pending. Rejected source 102cb2d2 is retained on
+  agent/rejected/selected-stream-virtual-bank-attempt2 for diagnosis.
+- Verified at: 292e75ff and 102cb2d2, complete local/CI/configured Test262
+  checks; exact iMac screen binaries and all pairs. Neither passed the screen.
+- Evidence: [frozen plan](../performance-units/selected-stream-readonly-virtual-bank-typed-loops.json),
+  two screen records, static/profile and correctness conclusions below.
+- Unresolved: performance retention. No formal comparison was run or allowed.
+- Next action: verify removal, preserve the generic tools/semantic fixtures and
+  ledger, then select another unit from fresh measured evidence. Reopening
+  needs a new profile and newly frozen plan, not another run of these candidates.
 
 ## Measured boundary
 
@@ -50,9 +49,9 @@ restart boundaries remain intact.
 
 1. Establish a selected-stream compile/cache view and a read-only bank input    interface. Preserve all
 original/wide behavior, stack effects and restart    ownership; do not add normal dispatch opcodes or a
-new hot VM field. 2. Translate eligible lowered virtual loads to existing scalar register inputs.
-Seed actual current primitive values on every entry/resume, guarded before    coercion. Reject related
-bank stores/init/discard/materialization and unknown    effects across the region. Object fields and
+new hot VM field. 2. Translate eligible lowered virtual loads to existing scalar register inputs. Seed
+actual current primitive values on every entry/resume, guarded before    coercion. Reject related bank
+stores/init/discard/materialization and unknown    effects across the region. Object fields and
 fixed-element arrays share this    scalar-bank path. Preserve exact stack/locals and selected IP on
 every exit.
 
@@ -171,12 +170,12 @@ rejects acceleration. No eligibility, opcode, AST, dependency, ordinary heap-sto
 changes are included. Test late authority loss, forward jumps, cache lifetime, clone/reset and existing
 handback/route behavior before measuring; preserve cold wide-handback paths.
 
-Attempt 2 owner full gate passes 2283 runtime, 25 diagnostics, agents, 410 tools, 35 scripts and
-5170 Test262 subset; UTC NG247 also passes. Independent CLI `22be5cd9...` matches all 44 prior
-semantic checks with five production/build inputs unchanged. Local debug-info confirms Bytecode1200,
-view24 and variant48; x86 release layout still needs verification. Six new cold/lazy/foreign-code
-tests pass, including a genuinely nonempty numeric table rejecting foreign code. No performance
-verdict is implied. Owner CI `38394872992` is pending; the original failure is retained.
+Attempt 2 owner full gate passes 2283 runtime, 25 diagnostics, agents, 410 tools, 35 scripts and 5170
+Test262 subset; UTC NG247 also passes. Independent CLI `22be5cd9...` matches all 44 prior semantic
+checks with five production/build inputs unchanged. Local debug-info confirms Bytecode1200, view24 and
+variant48; x86 release layout still needs verification. Six new cold/lazy/foreign-code tests pass,
+including a genuinely nonempty numeric table rejecting foreign code. No performance verdict is implied.
+Owner CI `38394872992` is pending; the original failure is retained.
 
 Nine finite semantic fixtures are retained in `tests/fixtures/compare-qjs/`: fresh values, zero trips,
 coercion, getter/proxy effects, writes/reinitialization, early exits, string accumulation and derived
@@ -185,8 +184,8 @@ output comparisons do not prove accelerator entry or a forced exit; the owner's 
 physical-site tests must establish those separately.
 
 One baseline gap is retained separately as [raw
-source](../tests/fixtures/known-gaps/eval-zero-trip-getter-proxy-tdz.js). At the same revision, running
-this source directly returns `0|12|0|15|0|ReferenceError|7` in both engines;
+source](../../tests/fixtures/known-gaps/eval-zero-trip-getter-proxy-tdz.js). At the same revision,
+running this source directly returns `0|12|0|15|0|ReferenceError|7` in both engines;
 `eval(JSON.stringify(source))` returns `0|12|0|15|0|ReferenceError|NaN` in Rust and the former result in
 NG. An arrow IIFE with an explicit return also agrees at `7`; the live zero-trip fixture covers that
 local shared-cell scope. The global direct-eval gap is not repaired by this unit and must be compared
@@ -196,7 +195,22 @@ The coding owner changes bytecode, its existing tests and necessary counters; th
 docs/tools/order/Cargo. Independent review covers ownership and handback. Correctness is local; every
 measurement/profile uses the iMac queue.
 
-Follow [the performance workflow](../docs/performance-workflow.md). The frozen plan owns target/control
-thresholds and its two attempts. Only a passing screen allows formal measurement; full portfolio and
-exact-candidate zero-gap Test262 are required before retention. No source/checksum special cases are
-allowed.
+Follow [the performance workflow](../../docs/performance-workflow.md). The frozen plan owns
+target/control thresholds and its two attempts. Only a passing screen allows formal measurement; full
+portfolio and exact-candidate zero-gap Test262 are required before retention. No source/checksum special
+cases are allowed.
+
+Attempt 2 (`102cb2d2`, binary `8f125395...`) screen `20261013T124130Z-t044-screen-attempt2-wait-quiet`
+fails: property_read wall `.1490`, array_read `.1557`, all target pairs below 1; dynamic_method_call
+`1.0545` and string_key_map_churn `1.0776` exceed 1.03. Captured_write is `1.0229`. No DISTURBED flag;
+all five pairs are retained. Both attempts count and neither authorizes formal measurement. Prior
+dispatch 122614 was cancelled while waiting for another project's CPU load: empty out/log and no
+measured cases, so it is not an additional implementation attempt. The workspace queue now waits for a
+continuous quiet minute without a forced busy-host start; benchmark thresholds are unchanged.
+
+Final x86 code confirms Bytecode1200 and Wide stack1016, and Wide admission normalized identical to
+base; Wide whole-body code and placement remain different. The concrete structure correction succeeded;
+its performance gate did not. Exact102 coverage38398145094 again passes configured42672 with zero
+fail/timeout/not_run/actionable gap; all53572 raw rows are byte-identical to the first candidate,
+including NG-excluded failures. Neither correctness nor target gain overrides the two frozen control
+failures.

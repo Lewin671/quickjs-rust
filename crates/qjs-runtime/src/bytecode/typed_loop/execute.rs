@@ -143,12 +143,7 @@ fn run<F: LoopFrame>(vm: &mut F, program: &TypedLoopProgram) -> Outcome {
             }
             perform_hoisted_reads(vm, program, &mut scratch.registers, &mut scratch.boxed)
         })
-        .map(|()| {
-            if !program.virtual_slots.is_empty() {
-                crate::diagnostics::count!(typed_virtual_bank_entries);
-            }
-            execute(vm, program, &mut scratch)
-        })
+        .map(|()| execute(vm, program, &mut scratch))
         .unwrap_or(Outcome::Declined);
     if program.deferred_global_publication && !matches!(outcome, Outcome::Declined) {
         publish_deferred_globals(vm, program, &scratch);
@@ -250,13 +245,6 @@ fn execute<F: LoopFrame>(
             continue;
         };
         pc += 1;
-        #[cfg(test)]
-        if super::test_handback::take_target(program.sites[pc - 1].ip as usize) {
-            let site = program.sites[pc - 1];
-            let outcome = deopt(vm, program, &registers[..], boxed, site);
-            super::test_handback::record(site.ip as usize, vm.handback_stack());
-            return outcome;
-        }
         match *op {
             TypedOp::Move { dst, src } => registers[reg(dst)] = registers[reg(src)],
             TypedOp::ToNumeric { dst, src } => {
@@ -710,19 +698,6 @@ fn seed_registers<F: LoopFrame>(
             Some(value) => Typed::from_value(&value)?,
             None => Typed::Undefined,
         };
-        registers[register as usize] = value;
-    }
-    for &(register, slot) in &program.virtual_slots {
-        // Guard before any operation/coercion. A missing bank or a nonprimitive
-        // input declines without consuming stack values or running user code.
-        let value = vm
-            .virtual_slot_value(slot as usize)
-            .and_then(|value| Typed::from_value(&value));
-        #[cfg(feature = "perf-counters")]
-        if value.is_none() {
-            crate::diagnostics::count!(typed_virtual_bank_declines);
-        }
-        let value = value?;
         registers[register as usize] = value;
     }
     for &(_, slot) in &program.written_locals {

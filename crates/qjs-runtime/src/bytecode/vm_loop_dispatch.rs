@@ -30,30 +30,12 @@ pub(super) struct LoopPlanView<'a> {
 }
 
 impl<'a> LoopPlanView<'a> {
-    /// No accelerator may consume coordinates from an unknown executable.
-    pub(super) const fn empty() -> Self {
-        Self {
-            typed: &[],
-            shared_numeric_mutation: &[],
-        }
-    }
-
     /// The accelerators for `bytecode`, compiling each family on first use.
     pub(super) fn for_bytecode(bytecode: &'a super::ir::Bytecode) -> Self {
-        Self::for_typed_programs(
-            bytecode,
-            bytecode
+        Self {
+            typed: bytecode
                 .typed_loop_programs
                 .get_or_init(|| super::typed_loop::compile_all(bytecode)),
-        )
-    }
-
-    pub(super) fn for_typed_programs(
-        bytecode: &'a super::ir::Bytecode,
-        typed: &'a [TypedLoopProgram],
-    ) -> Self {
-        Self {
-            typed,
             shared_numeric_mutation: bytecode
                 .numeric_mutation_loop_plans
                 .get_or_init(|| NumericMutationLoopPlan::compile_all(bytecode)),
@@ -62,25 +44,6 @@ impl<'a> LoopPlanView<'a> {
 }
 
 impl Vm<'_> {
-    /// Forward jumps need no accelerator/cache lookup. At a real backedge the
-    /// plans are owned by the physical stream this activation is executing.
-    pub(super) fn jump_with_selected_loop_plans(
-        &mut self,
-        program: &super::frame_program::FrameProgramView<'_>,
-        target: usize,
-        backedge: usize,
-    ) -> bool {
-        if target >= backedge {
-            self.ip = target;
-            return false;
-        }
-        self.jump_with_loop_plans(
-            program.loop_plans(self.current.virtual_function_context_safe),
-            target,
-            backedge,
-        )
-    }
-
     /// Frame-local numeric mutation loop plans, materialized from the shared
     /// bytecode plans on first deoptimization. Suppressing or rewriting a plan
     /// must not affect other invocations of the same function, so the frame

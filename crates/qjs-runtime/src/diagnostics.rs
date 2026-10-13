@@ -83,10 +83,6 @@ declare_counters! {
     /// Backward edges where a loop accelerator -- a numeric-mutation plan or
     /// a typed loop program -- ran the region.
     loop_plan_entries,
-    /// Typed entries seeded from current read-only virtual scalar slots.
-    typed_virtual_bank_entries,
-    /// Virtual scalar seeding declined before any typed-region execution.
-    typed_virtual_bank_declines,
     /// Backward edges where both accelerators were consulted and both
     /// declined. On such an edge the entire probe chain is overhead.
     declined_loop_plan_edges,
