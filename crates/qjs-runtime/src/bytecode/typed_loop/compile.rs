@@ -307,18 +307,6 @@ fn writes_slot(op: &Op, slot: usize) -> bool {
     }
 }
 
-/// result must remain boxed for a nested access.
-#[derive(Clone, Copy, PartialEq)]
-enum Origin {
-    Computed,
-    Local(u32),
-    ElementRead(u32),
-    /// A boxed named-property read at this bytecode site. When a scalar pop
-    /// consumes it the site is recorded, and the next pass reads the property
-    /// straight into the scalar file.
-    NamedRead(u32),
-}
-
 struct Builder<'a> {
     bytecode: &'a Bytecode,
     header: usize,
@@ -371,9 +359,10 @@ struct Builder<'a> {
     discovered_scalar_named_reads: Vec<u32>,
     /// Abstract operand stack of (register, class, origin).
     stack: Vec<(u16, Class, Origin)>,
+    identity_origins: IdentityOrigins,
     /// Abstract stack recorded for each bytecode index reached by a jump. Two
-    /// paths that meet must agree on depth, class, and origin — registers follow
-    /// from depth — so a join that disagrees declines instead of miscompiling.
+    /// paths that meet must agree on depth and class — registers follow from
+    /// depth. Identity origins form bounded unions for representation demand.
     states: Vec<Option<Vec<(u16, Class, Origin)>>>,
     /// Registers seeded once with a constant, as (register, value).
     constants: Vec<(u16, Typed)>,
@@ -398,6 +387,9 @@ struct Builder<'a> {
 mod admission;
 mod element;
 mod globals;
+mod provenance;
+
+use provenance::{IdentityOrigins, Origin};
 
 pub(super) use admission::{admitted_binary, admitted_unary};
 use admission::{expression_has_control_flow, scalar_expression_may_write_or_branch};
@@ -454,6 +446,7 @@ impl<'a> Builder<'a> {
             scalar_named_reads,
             discovered_scalar_named_reads: Vec::new(),
             stack: Vec::new(),
+            identity_origins: IdentityOrigins::default(),
             pending_skip: 0,
             unreachable: false,
             states: vec![None; span],
@@ -702,34 +695,6 @@ impl<'a> Builder<'a> {
             .any(|(_, class, _)| *class == Class::Boxed)
     }
 
-    /// Pops one operand as a boxed value, widening a scalar register.
-    ///
-    /// A scalar register that came straight from a frame slot cannot be widened
-    /// soundly — the slot may hold an object this pass modelled as a number — so
-    /// the slot is recorded and the region recompiled with it boxed.
-    fn pop_boxed(&mut self) -> Option<(u16, Origin)> {
-        let (register, class, origin) = self.stack.pop()?;
-        match class {
-            Class::Boxed => Some((register, origin)),
-            Class::Scalar => {
-                match origin {
-                    Origin::Local(slot) => {
-                        self.discovered_boxed.push(slot);
-                        return None;
-                    }
-                    Origin::ElementRead(site) => {
-                        self.discovered_boxed_element_reads.push(site);
-                        return None;
-                    }
-                    Origin::Computed | Origin::NamedRead(_) => {}
-                }
-                let dst = self.fresh_boxed()?;
-                self.emit(TypedOp::Box { dst, src: register });
-                Some((dst, origin))
-            }
-        }
-    }
-
     fn fresh_boxed(&mut self) -> Option<u16> {
         if self.next_boxed >= MAX_REGISTERS {
             return None;
@@ -894,13 +859,16 @@ impl<'a> Builder<'a> {
                 for depth in widen {
                     let dst = u16::try_from(depth).ok()?;
                     let src = self.stack[depth].0;
+                    if self.discover_identity_demand(self.stack[depth].2)? {
+                        return None;
+                    }
                     self.emit(TypedOp::Box { dst, src });
                     self.stack[depth] = (dst, Class::Boxed, Origin::Computed);
                 }
             }
             match self.states[offset].clone() {
                 Some(state) => {
-                    let merged = merge_states(&state, &self.stack)?;
+                    let merged = self.merge_identity_states(&state, &self.stack.clone())?;
                     self.stack = merged.clone();
                     self.states[offset] = Some(merged);
                 }
@@ -964,13 +932,7 @@ impl<'a> Builder<'a> {
             let (key, _, _) = self.stack.pop()?;
             let (receiver_register, receiver_class, receiver) = self.stack.pop()?;
             if receiver_class == Class::Scalar {
-                match receiver {
-                    Origin::Local(slot) => self.discovered_boxed.push(slot),
-                    Origin::ElementRead(site) => {
-                        self.discovered_boxed_element_reads.push(site);
-                    }
-                    Origin::Computed | Origin::NamedRead(_) => return None,
-                }
+                self.discover_identity_demand(receiver)?;
                 return None;
             }
             let dst = self.slot_boxed()?;
@@ -994,11 +956,7 @@ impl<'a> Builder<'a> {
             // An array is not something the scalar file can hold, so a
             // receiver has to come from a boxed register: that is also
             // what lets a deoptimization rebuild the operand stack.
-            match receiver {
-                Origin::Local(slot) => self.discovered_boxed.push(slot),
-                Origin::ElementRead(site) => self.discovered_boxed_element_reads.push(site),
-                Origin::Computed | Origin::NamedRead(_) => return None,
-            }
+            self.discover_identity_demand(receiver)?;
             return None;
         }
         let Origin::Local(receiver_slot) = receiver else {
@@ -1779,7 +1737,14 @@ impl<'a> Builder<'a> {
                             self.written_boxed_locals.push(dst);
                         }
                     }
-                    _ => return None,
+                    (false, true) => {
+                        self.discovered_boxed.push(u32::try_from(*from).ok()?);
+                        return None;
+                    }
+                    (true, false) => {
+                        self.discovered_boxed.push(u32::try_from(*to).ok()?);
+                        return None;
+                    }
                 }
                 self.pending_skip = *skip;
             }
@@ -1884,58 +1849,6 @@ impl<'a> Builder<'a> {
         let header = self.states.first()?.clone()?;
         (header.len() <= self.stack.len() && header == self.stack[..header.len()]).then_some(())
     }
-
-    /// Records the abstract stack a jump delivers to `target`.
-    ///
-    /// A forward jump merges into whatever is recorded, because the walk has not
-    /// reached the target yet and will see the merged state. A backward jump
-    /// cannot weaken a state the walk already used, so it requires the recorded
-    /// one to be no stronger than what it delivers.
-    fn record_target(&mut self, target: usize, ip: usize) -> Option<()> {
-        let offset = target.checked_sub(self.header)?;
-        let state = self.stack.clone();
-        if target <= ip {
-            let existing = self.states.get(offset)?.as_ref()?;
-            return (merge_states(existing, &state)?.as_slice() == existing.as_slice())
-                .then_some(());
-        }
-        match self.states.get_mut(offset)? {
-            Some(existing) => {
-                let merged = merge_states(existing, &state)?;
-                *existing = merged;
-                Some(())
-            }
-            slot => {
-                *slot = Some(state);
-                Some(())
-            }
-        }
-    }
-}
-
-/// Joins two abstract stacks: equal depth and equal register class per entry,
-/// keeping the weaker provenance. `None` when they cannot be joined.
-fn merge_states(
-    left: &[(u16, Class, Origin)],
-    right: &[(u16, Class, Origin)],
-) -> Option<Vec<(u16, Class, Origin)>> {
-    if left.len() != right.len() {
-        return None;
-    }
-    left.iter()
-        .zip(right)
-        .map(|(left, right)| {
-            (left.0 == right.0 && left.1 == right.1).then_some((
-                left.0,
-                left.1,
-                if left.2 == right.2 {
-                    left.2
-                } else {
-                    Origin::Computed
-                },
-            ))
-        })
-        .collect()
 }
 
 /// Which instructions of a region are the target of a jump inside it: those are

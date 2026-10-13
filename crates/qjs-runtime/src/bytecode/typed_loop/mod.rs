@@ -71,6 +71,10 @@ mod frame;
 mod global_binding_tests;
 pub(in crate::bytecode) mod helper_graph;
 mod hoist;
+#[cfg(test)]
+mod provenance_handback_tests;
+#[cfg(test)]
+mod provenance_tests;
 mod register_packing;
 
 pub(super) use compile::compile_all;
