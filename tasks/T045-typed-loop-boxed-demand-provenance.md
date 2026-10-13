@@ -1,15 +1,17 @@
 # T045: Boxed representation demand through identity-flow joins
 
 - Status: active.
-- Implementation: none. The plan is validated and frozen before runtime work.
-- Verified at: baseline `27ca5140`, 2026-10-13; three exact-executable
-  profiles and a supplemental execution trace. No candidate exists.
+- Implementation: candidate present only on `agent/typed-boxed-demand/owner`
+  at `dae07218`; main and the lead runtime remain unchanged. No retention yet.
+- Verified at: candidate `dae07218`, 2026-10-13; full local gate, 5170 Test262
+  subset, UTC NG247, CI38407657103 and complete configured zero-gap coverage.
 - Evidence: workspace-local jobs `20261013T130216Z-dynamic-method-main-exact-profiles`
   and `20261013T130253Z-dynamic-method-main-route`; hashes and conclusions below.
   Raw artifacts are local, not retained in this repository.
-- Unresolved: provenance design, semantics and performance of the candidate.
-- Next action: implement and review one general compiler mechanism in an
-  isolated worktree, then run the frozen gates.
+- Unresolved: performance. Attempt-one dispatch is waiting for an idle host;
+  no measurements or attempt outcome exist yet.
+- Next action: collect the frozen screen `20261013T135302Z-t045-screen-attempt1`.
+  Only a passing screen permits a formal run and retention decision.
 
 ## Evidence and boundary
 
@@ -78,3 +80,44 @@ mutation, receiver identity, early exits, residency and exact deopt stack/IP.
 Every loop regression probe is finite. Only a passing frozen screen permits a
 formal full-portfolio run; configured exact-candidate zero-gap conformance is
 also required before retention.
+
+## Candidate verification
+
+Owner commit `dae072185b1bacc81fe7f3829a918bdb6a30766a` changes only five typed-loop
+compiler/test files; scope validation passes. The compiler-only canonical union
+is bounded to 64 sources and 512 unions. Copy demands grow the existing boxed
+sets; computed operands stay opaque. Already-emitted opaque scalar predecessors
+and new backward-edge sources remain conservative rejection boundaries.
+
+Two regression tests fail on baseline: parameter sources are not boxed and
+checksum-correct execution has zero loop entries. Twelve new tests pass on the
+candidate, including actual entry, exact getter/Proxy/null guard continuation,
+method prefix stack `[21, receiver, receiver]`, local writeback, callback changes,
+coercion, TDZ, residency and bounded deterministic inference. Full local gate
+passes 2274 runtime tests, feature/clippy checks, tool/script gates and 5170
+curated cases; normal fast gate passes its 65 selected cases. CI38407657103 is
+green. The 247 UTC NG fixtures and 13 additional finite owner probes match.
+
+Independent review runs 13 public probes through raw, direct eval and arrow-IIFE
+goals: 39/39 baseline/candidate/NG match. Separate raw feature traces prove
+actual `Ran` or exact guard `Deoptimized`; opaque mixed and TDZ cases are only
+fallback coverage. Production/build inputs and immutable binaries remain
+unchanged across checks. Review finds no confirmed blocker. Raw receipts are
+workspace-local `outputs/quickjs-performance-20261012/t045-independent-probes/`.
+
+Exact coverage38408258713 records candidate `dae07218`: all 42672 configured
+cases pass, with zero fail/timeout/not-run/actionable gap; NG passes42602 and the
+remaining70 pass only in Rust. The full53572 comparison rows have SHA-256
+`81dc4818eab013bf4223fa66c301986384cf73ade27a0b6fddfb059d43936b03`, identical to
+the prior verified scan including its NG-excluded cohort. This is not a claim
+that all53572 pass. The append-only conformance ledger records this candidate.
+
+iMac job `20261013T134519Z-t045-fixed-layout-and-utc247` stabilizes in one link
+with no order change. Default executable SHA-256 is
+`4cc54bd1516d0bf8bf1e0f0eac9c23e2139e42578175b4fcc825c331b9138316`;
+order SHA-256 `5b121ecb3de9b7b4672476522e90b974c013de86f643a075667e8ef8cd5ca3c9`.
+Actual page offsets are VM`0xc40` and typed Wide`0x400`; there is no offset search
+or timing result. All247 UTC fixtures pass again. Job
+`20261013T135021Z-t045-dynamic-method-route` observes region15..48 `Ran` and
+`TLCLAIM typed` on the unchanged original target, unlike baseline's seed decline.
+Both jobs have empty disturbance logs. Feature traces remain supplemental.
