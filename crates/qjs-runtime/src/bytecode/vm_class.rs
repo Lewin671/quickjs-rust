@@ -709,7 +709,12 @@ impl Vm<'_> {
     pub(super) fn super_call(&mut self, arguments: Vec<Value>) -> Result<(), RuntimeError> {
         let result = self.super_call_inner(arguments);
         if let Some(this_value) = self.handle_runtime_result(result)? {
-            if let Some(slot) = self.bytecode.local_slot("this") {
+            if let Some(cell) = self.env.derived_this_cell() {
+                cell.set(this_value.clone());
+                if let Some(slot) = self.bytecode.this_slot() {
+                    self.locals[slot] = Some(this_value.clone());
+                }
+            } else if let Some(slot) = self.bytecode.local_slot("this") {
                 self.store_local(slot, this_value.clone())?;
             }
             self.env.insert("this".to_owned(), this_value.clone());
@@ -761,7 +766,11 @@ impl Vm<'_> {
         let value = result?;
         // A repeated `super(...)` still performs the parent construction after
         // argument evaluation, then fails while trying to initialize `this`.
-        if self.env.has_local_binding("this") {
+        let this_is_bound = self.env.derived_this_cell().map_or_else(
+            || self.env.has_local_binding("this"),
+            |cell| !cell.with_value(Value::is_uninitialized_lexical_marker),
+        );
+        if this_is_bound {
             return Err(RuntimeError {
                 thrown: None,
                 message: "ReferenceError: super constructor may only be called once".to_owned(),
@@ -781,8 +790,8 @@ impl Vm<'_> {
 
     fn current_this(&mut self) -> Result<Value, RuntimeError> {
         match self.env.get_local("this") {
-            Some(value) => Ok(value),
-            None => Err(RuntimeError {
+            Some(value) if !value.is_uninitialized_lexical_marker() => Ok(value),
+            _ => Err(RuntimeError {
                 thrown: None,
                 message: "ReferenceError: must call super constructor before accessing 'this'"
                     .to_owned(),

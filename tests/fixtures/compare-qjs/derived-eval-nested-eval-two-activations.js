@@ -1,0 +1,1 @@
+eval("var events=[];class B{constructor(){events.push('base');this.x=4;}}\nclass D extends B{field=(events.push('field'),7);constructor(){\ntry{eval(\"eval('this')\");}catch(e){events.push(e.name);}\neval(\"eval('super()')\");events.push(eval(\"eval('this')\").x+':'+this.field);}}\nnew D();new D();events.join('|');")

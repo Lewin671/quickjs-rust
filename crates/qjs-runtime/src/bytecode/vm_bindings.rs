@@ -233,6 +233,15 @@ impl Vm<'_> {
             if local.compiler_temporary {
                 continue;
             }
+            if local.name == "this"
+                && let Some(cell) = env.derived_this_cell()
+            {
+                local_upvalues[slot] = Some(cell);
+                if local.is_received_upvalue() {
+                    next_received += 1;
+                }
+                continue;
+            }
             if let Some(upvalue) = env.module_import_cell(&local.name) {
                 local_upvalues[slot] = Some(upvalue);
                 if local.is_received_upvalue() {
@@ -330,6 +339,9 @@ impl Vm<'_> {
                 continue;
             };
             if local.compiler_temporary {
+                continue;
+            }
+            if local.name == "this" && local_upvalues[slot].is_some() {
                 continue;
             }
             if local.is_received_upvalue() {
@@ -465,6 +477,19 @@ impl Vm<'_> {
     }
 
     pub(super) fn load_global(&mut self, name: &str) -> Result<Value, RuntimeError> {
+        if name == "this"
+            && let Some(cell) = self.env.derived_this_cell()
+        {
+            let value = cell.get();
+            if value.is_uninitialized_lexical_marker() {
+                return Err(RuntimeError {
+                    thrown: None,
+                    message: "ReferenceError: must call super constructor before accessing `this`"
+                        .to_owned(),
+                });
+            }
+            return Ok(value);
+        }
         // `this` belongs to the frame for function bodies (arrows inherit it
         // through capture). Module bodies provide their `this` binding through
         // the environment chain instead, while derived constructors without a
@@ -474,6 +499,14 @@ impl Vm<'_> {
                 return Ok(value.clone());
             }
             if let Some(value) = self.env.get_local(name) {
+                if value.is_uninitialized_lexical_marker() {
+                    return Err(RuntimeError {
+                        thrown: None,
+                        message:
+                            "ReferenceError: must call super constructor before accessing `this`"
+                                .to_owned(),
+                    });
+                }
                 return Ok(value);
             }
             if !self.env.has_local_binding(crate::SUPER_CONSTRUCTOR_BINDING)
@@ -1553,6 +1586,12 @@ impl Vm<'_> {
             })
             .collect::<HashSet<_>>();
         for (name, mut value) in locals {
+            // Implicit this is never assigned by ordinary name writeback.
+            // Derived initialization already reaches its shared cell; an
+            // outer frame's stale value must not write an inherited cell.
+            if name == "this" {
+                continue;
+            }
             if name.starts_with(crate::DIRECT_EVAL_PARAMETER_VAR_BINDING_PREFIX) {
                 self.env.insert_deopt(name, value);
                 continue;

@@ -493,12 +493,19 @@ impl FrameBindings {
             .collect()
     }
 
-    fn fork_values(&self) -> Self {
+    fn fork_values(&self, preserve_derived_this: bool) -> Self {
         Self(RefCell::new(
             self.0
                 .borrow()
                 .iter()
-                .map(|(name, value)| (name.clone(), FrameBindingValue::Direct(value.get())))
+                .map(|(name, value)| {
+                    let forked = if preserve_derived_this && name == "this" {
+                        value.clone()
+                    } else {
+                        FrameBindingValue::Direct(value.get())
+                    };
+                    (name.clone(), forked)
+                })
                 .collect(),
         ))
     }
@@ -1569,6 +1576,15 @@ impl CallEnv {
         if name == crate::NEW_TARGET_BINDING {
             return self.new_target.replace(value);
         }
+        // An inherited dynamic scope can still carry another activation's
+        // `this`. The current implicit cell always wins over that named view.
+        if name == "this"
+            && let Some(cell) = self.derived_this_cell()
+        {
+            let previous = cell.get();
+            cell.set(value);
+            return Some(previous);
+        }
         if let Some(bindings) = &self.deopt_bindings
             && bindings.contains_key(&name)
         {
@@ -1788,7 +1804,9 @@ impl CallEnv {
         Self {
             scope: Rc::clone(&self.scope),
             expose_global_lexical_values: false,
-            frame_bindings: self.frame_bindings.fork_values(),
+            frame_bindings: self
+                .frame_bindings
+                .fork_values(self.derived_this_cell().is_some()),
             new_target: self.new_target.clone(),
             deopt_bindings: None,
             catch_bindings: self.catch_bindings.clone(),
@@ -1802,6 +1820,27 @@ impl CallEnv {
             #[cfg(feature = "agents")]
             agent_context: self.agent_context.clone(),
         }
+    }
+
+    /// The implicit binding of one derived activation, never a realm cell.
+    /// Its marker denotes TDZ; forks and lexical arrows must retain identity.
+    pub(crate) fn derived_this_cell(&self) -> Option<Upvalue> {
+        if !self
+            .frame_bindings
+            .contains_key(crate::ACTIVE_CONSTRUCTOR_BINDING)
+        {
+            return None;
+        }
+        self.frame_bindings
+            .0
+            .borrow()
+            .iter()
+            .rev()
+            .find(|(name, _)| name == "this")
+            .and_then(|(_, value)| match value {
+                FrameBindingValue::Cell(cell) => Some(cell.clone()),
+                FrameBindingValue::Direct(_) => None,
+            })
     }
 }
 

@@ -6,6 +6,65 @@ use crate::{ObjectRef, Value};
 use std::{collections::HashMap, rc::Rc};
 
 #[test]
+fn derived_this_forks_share_only_the_implicit_cell() {
+    let mut env = CallEnv::detached();
+    let this = Upvalue::new(Value::Function(
+        crate::Function::uninitialized_lexical_marker(),
+    ));
+    let local = Upvalue::new(Value::Number(1.0));
+    env.insert(
+        crate::ACTIVE_CONSTRUCTOR_BINDING.to_owned(),
+        Value::Undefined,
+    );
+    env.insert_frame_cell("this".to_owned(), this.clone());
+    env.insert_frame_cell("local".to_owned(), local.clone());
+    let clone = env.clone();
+    let fork = env.fork_current_frame_values();
+    assert!(this.ptr_eq(&clone.derived_this_cell().unwrap()));
+    assert!(this.ptr_eq(&fork.derived_this_cell().unwrap()));
+    assert!(!local.ptr_eq(&fork.frame_binding_cell("local").unwrap()));
+    this.set(Value::Object(ObjectRef::new(HashMap::new())));
+    assert_eq!(env.get_local("this"), fork.get_local("this"));
+    local.set(Value::Number(2.0));
+    assert_eq!(fork.get_local("local"), Some(Value::Number(1.0)));
+}
+
+#[test]
+fn ordinary_undefined_this_is_not_a_derived_cell() {
+    let env = CallEnv::detached();
+    let this = Upvalue::undefined();
+    env.insert_frame_cell("this".to_owned(), this.clone());
+    assert!(env.derived_this_cell().is_none());
+    let fork = env.fork_current_frame_values();
+    assert!(!this.ptr_eq(&fork.frame_binding_cell("this").unwrap()));
+    assert_eq!(fork.get_local("this"), Some(Value::Undefined));
+}
+
+#[test]
+fn derived_this_insert_does_not_write_an_inherited_activations_cell() {
+    let mut env = CallEnv::detached();
+    let this = Upvalue::new(Value::Function(
+        crate::Function::uninitialized_lexical_marker(),
+    ));
+    let other = Upvalue::new(Value::Function(
+        crate::Function::uninitialized_lexical_marker(),
+    ));
+    let bindings = DynamicBindings::new();
+    bindings.insert_cell("this".to_owned(), other.clone());
+    env.set_deopt_bindings(bindings);
+    env.insert_frame(
+        crate::ACTIVE_CONSTRUCTOR_BINDING.to_owned(),
+        Value::Undefined,
+    );
+    env.insert_frame_cell("this".to_owned(), this.clone());
+    let receiver = Value::Object(ObjectRef::new(HashMap::new()));
+    env.insert("this".to_owned(), receiver.clone());
+    assert_eq!(this.get(), receiver);
+    assert!(other.with_value(Value::is_uninitialized_lexical_marker));
+    assert!(this.ptr_eq(&env.derived_this_cell().unwrap()));
+}
+
+#[test]
 fn frame_binding_promotes_to_a_cell_only_when_identity_is_requested() {
     let bindings = FrameBindings::default();
     bindings.insert("value".to_owned(), Value::Number(1.0));

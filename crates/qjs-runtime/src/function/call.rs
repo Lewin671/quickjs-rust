@@ -1216,6 +1216,8 @@ fn function_env<'a>(
     let use_direct_call_slots = can_seed_direct_leaf_call(function, bytecode)
         || (is_construct && can_seed_base_class_constructor_slots(function, bytecode));
     let lexical_this = received_upvalue_value(function, bytecode, "this");
+    let lexical_derived_this = function.lexical_derived_this();
+    let has_lexical_derived_this = lexical_derived_this.is_some();
     let lexical_field_initializer =
         received_upvalue_value(function, bytecode, FIELD_INITIALIZER_EVAL_BINDING);
     // Ordinary calls materialize `this`, each positional parameter, and a
@@ -1242,6 +1244,13 @@ fn function_env<'a>(
     // that `super(...)` can initialize the instance fields once `this` exists.
     if function.is_class_constructor && function.is_derived_constructor && is_construct {
         frame_env.insert(crate::ACTIVE_CONSTRUCTOR_BINDING.to_owned(), callee.clone());
+    } else if function.lexical_this
+        && let Some((_, constructor)) = &lexical_derived_this
+    {
+        frame_env.insert(
+            crate::ACTIVE_CONSTRUCTOR_BINDING.to_owned(),
+            Value::Function(constructor.clone()),
+        );
     }
     if function.is_field_initializer {
         frame_env.insert(
@@ -1258,24 +1267,18 @@ fn function_env<'a>(
     // `this` before `super(...)` is a ReferenceError, and `super(...)` binds
     // it. Every other function gets its `this` here.
     if function.is_derived_constructor && is_construct {
-        frame_env.remove_frame_binding("this");
+        frame_env.insert_frame_cell(
+            "this".to_owned(),
+            super::Upvalue::new(Value::Function(Function::uninitialized_lexical_marker())),
+        );
     } else if function.lexical_this {
-        let caller_has_derived_this_tdz = env.has_local_binding(crate::SUPER_CONSTRUCTOR_BINDING)
-            || env.has_local_binding(crate::ACTIVE_CONSTRUCTOR_BINDING);
-        let inherited_this = if caller_has_derived_this_tdz {
-            env.get_local("this")
+        if let Some((cell, _)) = lexical_derived_this {
+            frame_env.insert_frame_cell("this".to_owned(), cell);
         } else {
-            lexical_this
+            let inherited_this = lexical_this
                 .or_else(|| env.get_local("this"))
-                .or_else(|| env.get("this"))
-        };
-        if let Some(this_value) = inherited_this {
-            if matches!(
-                &this_value,
-                Value::Function(function) if function.is_uninitialized_lexical_marker()
-            ) {
-                frame_env.remove_frame_binding("this");
-            } else {
+                .or_else(|| env.get("this"));
+            if let Some(this_value) = inherited_this {
                 frame_env.insert("this".to_owned(), this_value);
             }
         }
@@ -1340,7 +1343,7 @@ fn function_env<'a>(
     // lexically nested function (notably an arrow) that inherits its function
     // context. Leaf functions without eval can avoid allocating the internal
     // binding on every call.
-    if (!function.lexical_this || function.is_field_initializer)
+    if (!function.lexical_this || function.is_field_initializer || has_lexical_derived_this)
         && (bytecode.contains_direct_eval() || bytecode.creates_closures())
     {
         frame_env.insert(

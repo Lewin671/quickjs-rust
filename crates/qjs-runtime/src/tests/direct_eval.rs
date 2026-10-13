@@ -1,5 +1,8 @@
 use crate::{Value, eval};
 
+#[path = "direct_eval/derived_this.rs"]
+mod derived_this;
+
 fn eval_with_prepared_calls(source: &str) -> (Result<Value, crate::RuntimeError>, usize) {
     crate::bytecode::reset_prepared_readonly_eval_calls();
     let result = eval(source);

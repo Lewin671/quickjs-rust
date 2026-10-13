@@ -1,0 +1,1 @@
+eval("var events=[];function make(){with({label:'scope'}){return class D extends Object{field=(events.push(label),7);constructor(){\nvar read=()=>eval('this');try{read();}catch(e){events.push(e.name);}\neval('super()');events.push(eval('label')+':'+read().field);}}}}\nvar D=make();new D();new D();events.join('|');")

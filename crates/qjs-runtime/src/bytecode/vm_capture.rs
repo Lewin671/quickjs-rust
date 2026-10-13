@@ -30,6 +30,11 @@ impl Vm<'_> {
             // binding exists shifts every later lexical upvalue.
             .filter(|local| local.is_received_upvalue())
             .filter_map(|local| {
+                if local.name == "this"
+                    && let Some(cell) = self.env.derived_this_cell()
+                {
+                    return Some(cell);
+                }
                 if let Some((name, upvalue)) = binding_override
                     && local.name == name
                 {

@@ -1,0 +1,1 @@
+eval("class B {constructor(){this.x=4;}}\n         class D extends B {constructor(){var read=()=>this;\n           eval('var hidden=1; super()');\n           this.ok=read()===this && typeof hidden==='undefined';\n         }}\n         [new D().ok,new D().ok].join(',');")

@@ -1505,6 +1505,8 @@ pub(crate) fn initialize_direct_eval_bindings(
     caller_locals: Option<&HashSet<String>>,
     eval_strict: bool,
 ) {
+    // An existing derived-this cell can hold the TDZ marker. Presence must
+    // preserve it, including strict eval copies, rather than seed realm this.
     if !env.has_local_binding("this")
         && let Some(value) = env.get("this")
     {

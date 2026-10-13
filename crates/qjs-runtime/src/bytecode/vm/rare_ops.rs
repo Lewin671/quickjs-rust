@@ -237,6 +237,15 @@ impl Vm<'_> {
                     with_stack: self.with_stack().to_vec(),
                     upvalues,
                 });
+                // Eval-only and nested arrows need this context even when
+                // the compiler emitted no received `this` upvalue slot.
+                if *lexical_this
+                    && let Some(cell) = self.env.derived_this_cell()
+                    && let Some(Value::Function(constructor)) =
+                        self.env.get_local(crate::ACTIVE_CONSTRUCTOR_BINDING)
+                {
+                    function.set_lexical_derived_this(cell, constructor);
+                }
                 if let Some(bindings) = bypass_scope {
                     bindings.bypass(&function);
                 }
