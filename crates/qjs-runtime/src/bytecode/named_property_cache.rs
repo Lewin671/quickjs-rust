@@ -20,11 +20,6 @@ use crate::{
 /// measured and is worse: a site that rotates through more receivers than it
 /// can hold then allocates on every other update.
 const POLYMORPHIC_CACHE_SLOTS: usize = 4;
-// The low bits retain the selected entry; the next bit predecodes an OwnSlot
-// answer. A hinted index uses the existing bounds-miss branch, so the
-// SharedSlot/prototype dispatch need not grow another variant arm.
-const HOT_INDEX_MASK: u8 = (POLYMORPHIC_CACHE_SLOTS - 1) as u8;
-const HOT_OWN_SLOT: u8 = POLYMORPHIC_CACHE_SLOTS as u8;
 
 #[cfg(test)]
 mod tests;
@@ -43,12 +38,8 @@ struct NamedPropertyCacheState {
     /// property is added, removed or reconfigured.
     receiver_miss: Option<(ObjectWeakRef, u64)>,
     /// The entry that answered the last own-property probe, which
-    /// `probe_hot` checks alone before the full walk. The next bit is an
-    /// OwnSlot hint, kept consistent when a selected entry is overwritten.
+    /// `probe_hot` checks alone before the full walk.
     hot: std::cell::Cell<u8>,
-    /// Predecoded selected-index codes; successful probes copy one byte rather
-    /// than redispatching the entry kind on every non-OwnSlot fallback.
-    hot_codes: [u8; POLYMORPHIC_CACHE_SLOTS],
 }
 
 #[derive(Clone, Debug)]
@@ -144,7 +135,6 @@ impl NamedPropertyCache {
             local_slot: Some(slot),
             receiver_miss: None,
             hot: std::cell::Cell::new(0),
-            hot_codes: [0; POLYMORPHIC_CACHE_SLOTS],
         })))
     }
 
@@ -178,13 +168,7 @@ impl NamedPropertyCache {
     #[inline(always)]
     pub(super) fn probe_hot(&self, object: &ObjectRef) -> Option<Value> {
         let state = self.0.borrow();
-        let hot = state.hot.get();
-        let Some(entry) = state.entries.get(usize::from(hot)) else {
-            // An OwnSlot hint lies just past the array: reuse the original
-            // index bounds branch rather than testing a bit on every miss.
-            return Self::read_hot_own_slot(state, object);
-        };
-        match entry {
+        match state.entries.get(usize::from(state.hot.get()))? {
             Some(NamedPropertyCacheEntry::SharedSlot { key, slot }) => {
                 object.shared_data_slot_value(key, *slot)
             }
@@ -225,39 +209,6 @@ impl NamedPropertyCache {
             }
             _ => None,
         }
-    }
-
-    /// Only a predecoded OwnSlot reaches this borrowed, out-of-line path.
-    /// Identity and layout still guard the live slot; the hint proves no value.
-    #[inline(never)]
-    fn read_hot_own_slot(
-        state: std::cell::Ref<'_, NamedPropertyCacheState>,
-        object: &ObjectRef,
-    ) -> Option<Value> {
-        let entry = state.entries[usize::from(state.hot.get() & HOT_INDEX_MASK)].as_ref()?;
-        let NamedPropertyCacheEntry::OwnSlot {
-            object: cached_object,
-            layout_revision,
-            slot,
-        } = entry
-        else {
-            return None;
-        };
-        if !cached_object.ptr_eq(object) || *layout_revision != object.layout_revision() {
-            return None;
-        }
-        object.own_data_slot_value(*slot)
-    }
-
-    /// Overwriting the selected entry also replaces its kind hint. Other
-    /// entries become hot only when a successful probe selects them.
-    fn install(state: &mut NamedPropertyCacheState, index: usize, entry: NamedPropertyCacheEntry) {
-        let kind = u8::from(matches!(entry, NamedPropertyCacheEntry::OwnSlot { .. }));
-        state.hot_codes[index] = index as u8 | (kind * HOT_OWN_SLOT);
-        if usize::from(state.hot.get() & HOT_INDEX_MASK) == index {
-            state.hot.set(state.hot_codes[index]);
-        }
-        state.entries[index] = Some(entry);
     }
 
     pub(super) fn probe(&self, object: &ObjectRef) -> CacheProbe {
@@ -336,7 +287,7 @@ impl NamedPropertyCache {
                 return None;
             }
             let value = Self::read_entry(entry, object)?;
-            state.hot.set(state.hot_codes[index]);
+            state.hot.set(index as u8);
             Some(CacheProbe::Own(value))
         }
     }
@@ -452,7 +403,7 @@ impl NamedPropertyCache {
             return;
         }
         let slot = state.next_slot;
-        Self::install(&mut state, slot, entry);
+        state.entries[slot] = Some(entry);
         state.next_slot = (slot + 1) % POLYMORPHIC_CACHE_SLOTS;
     }
 
@@ -543,7 +494,7 @@ impl NamedPropertyCache {
         };
         let mut state = self.0.borrow_mut();
         let slot = state.next_slot;
-        Self::install(&mut state, slot, entry);
+        state.entries[slot] = Some(entry);
         state.next_slot = (slot + 1) % POLYMORPHIC_CACHE_SLOTS;
     }
 
@@ -554,12 +505,7 @@ impl NamedPropertyCache {
         value: &Value,
     ) -> Option<OwnDataPropertyWrite> {
         let mut state = self.0.borrow_mut();
-        let NamedPropertyCacheState {
-            entries,
-            hot,
-            hot_codes,
-            ..
-        } = &mut *state;
+        let NamedPropertyCacheState { entries, hot, .. } = &mut *state;
         for (index, entry) in entries.iter_mut().enumerate() {
             let Some(entry) = entry else {
                 continue;
@@ -577,10 +523,6 @@ impl NamedPropertyCache {
                         layout_revision: object.layout_revision(),
                         slot,
                     };
-                    hot_codes[index] = index as u8 | HOT_OWN_SLOT;
-                    if usize::from(hot.get() & HOT_INDEX_MASK) == index {
-                        hot.set(hot_codes[index]);
-                    }
                     return Some(result);
                 }
                 NamedPropertyCacheEntry::OwnSlot {
@@ -618,9 +560,8 @@ impl NamedPropertyCache {
         value: &Value,
     ) -> Option<OwnDataPropertyWrite> {
         let state = self.0.borrow();
-        let Some(Some(NamedPropertyCacheEntry::SharedSlot { key, slot })) = state
-            .entries
-            .get(usize::from(state.hot.get() & HOT_INDEX_MASK))
+        let Some(Some(NamedPropertyCacheEntry::SharedSlot { key, slot })) =
+            state.entries.get(usize::from(state.hot.get()))
         else {
             return None;
         };
@@ -654,7 +595,7 @@ impl NamedPropertyCache {
             return;
         };
         let slot = state.next_slot;
-        Self::install(&mut state, slot, entry);
+        state.entries[slot] = Some(entry);
         state.next_slot = (slot + 1) % POLYMORPHIC_CACHE_SLOTS;
     }
 
@@ -663,8 +604,6 @@ impl NamedPropertyCache {
         state.entries = Default::default();
         state.next_slot = 0;
         state.receiver_miss = None;
-        state.hot.set(0);
-        state.hot_codes = [0; POLYMORPHIC_CACHE_SLOTS];
     }
 
     /// Whether `receiver` is the receiver this site last proved to have no
