@@ -15,8 +15,8 @@ it to `archive/` with `git mv` and move its row below.
 | --- | --- | --- |
 | [T018](T018-broad-performance.md) broad performance | active | The performance campaign contract and its targets against QuickJS-NG. Start performance work here, then follow [the workflow](../docs/performance-workflow.md). |
 | [T040](T040-imac-general-performance.md) x86_64 general optimization | active | Fresh current-main comparison and exact-binary profiles, followed by independent general runtime units. |
-| [T041](T041-own-data-cache-hot-answers.md) own-data cache hot answers | active | Frozen current-host plan to reuse the guarded hot-cache mechanism and strengthen state-transition tests. |
 | [T042](T042-prepared-readonly-eval.md) prepared read-only eval | active | Consume an already independent cached-eval projection once, preserving context and fallback semantics. |
+| [T043](T043-derived-constructor-eval-context.md) constructor eval context | active | Exact-base direct-super and pre-super this-TDZ gaps, separate from the read-only performance unit. |
 | [T022](T022-performance-priority-controller.md) priority controller | active | The rules that select and stop performance units. |
 | [T038](T038-audio-dft-variance.md) audio-dft variance | active | Top infrastructure item: isolated-case cycle variance and allocation/ASLR diagnosis. |
 | [T037](T037-integration-batch-1.md) integration batch 1 | active | Both promotions retained under the lead amendment; implementation is integrated into main; audio placement remains open. |
@@ -25,9 +25,10 @@ it to `archive/` with `git mv` and move its row below.
 | [T017](T017-performance-benchmark-system.md) benchmark system | active | The measurement platform; an x86_64 measurement host is characterized, the fixed-hardware milestones are open. |
 | [T013](T013-temporal-campaign.md) Temporal | blocked | Not started. Temporal is outside ES2025 and the reference engine's Test262 configuration skips it. |
 
-Conformance has no open campaign: the last recorded full scan passes every
-configured case (see [conformance records](../docs/conformance/README.md)).
-Take conformance work from `./scripts/find-qjsng-gaps.sh`.
+The last recorded full scan passes every configured case (see
+[conformance records](../docs/conformance/README.md)); T043 records additional
+reproduced programs outside that standing. Take broader conformance work from
+`./scripts/find-qjsng-gaps.sh`.
 
 Performance entries record scope and outcomes, not priority. Priority comes
 from a freshly generated opportunity queue. Reopening a closed proposal needs
@@ -41,6 +42,7 @@ outcome column says what happened, not what to do next.
 
 | Task | Outcome |
 | --- | --- |
+| `T041-own-data-cache-hot-answers.md` | Frozen x86_64 screen rejected the implementation; runtime reverted, owner commit retained for diagnosis. |
 | `T001-lexer-coverage.md` | Bootstrap work item. |
 | `T002-parser-expressions.md` | Bootstrap work item. |
 | `T003-runtime-values.md` | Bootstrap work item. |

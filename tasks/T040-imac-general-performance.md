@@ -1,16 +1,17 @@
 # T040: General runtime optimization on the x86_64 measurement host
 
 - Status: active.
-- Implementation: T041's candidate is present on its owner branch; T042 is
-  frozen and being implemented. Neither has performance promotion evidence.
+- Implementation: T041's candidate is reverted on the lead branch and retained
+  on its owner branch for diagnosis; T042 is frozen and being implemented.
+  Neither has performance promotion evidence.
 - Verified at: `06f0ecd3`, 2026-10-12; full local `scripts/check.sh`, including
   5170 curated Test262 cases, passed. The new comparison is complete and sealed.
 - Evidence: measurement job `20261013T032141Z-campaign-current-06f0ecd3`;
   profile job `20261013T033011Z-campaign-profile-top8-receipts`. Raw artifacts
   are workspace-local and not retained in this repository.
 - Unresolved: unit screens, formal promotion and campaign performance gaps.
-- Next action: verify T041's layout and screen while T042 implements the
-  independently profiled read-only eval ownership route.
+- Next action: finish T042's independent correctness review, verify its layout
+  and use its bounded screens. T041's frozen attempt budget is exhausted.
 
 ## Goal and ownership
 
