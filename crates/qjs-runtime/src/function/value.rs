@@ -274,6 +274,8 @@ pub struct FunctionAuxiliaryState {
 
 struct FunctionColdState {
     home_object: Option<Value>,
+    /// An arrow's retained derived activation: binding authority and field owner.
+    lexical_derived_this: Option<(Upvalue, Function)>,
     /// For a derived constructor, the parent constructor invoked by `super()`.
     super_constructor: Option<Value>,
     /// For a class constructor, the instance-field initializers run when a new
@@ -413,6 +415,7 @@ impl FunctionColdState {
     fn new(home_object: Option<Value>, super_constructor: Option<Value>) -> Self {
         Self {
             home_object,
+            lexical_derived_this: None,
             super_constructor,
             instance_elements: Rc::new(Vec::new()),
             property_order: Vec::new(),
@@ -1610,6 +1613,16 @@ impl Function {
     pub(crate) fn super_constructor(&self) -> Option<Value> {
         self.auxiliary
             .with_cold(|cold| cold.and_then(|cold| cold.super_constructor.clone()))
+    }
+
+    pub(crate) fn lexical_derived_this(&self) -> Option<(Upvalue, Function)> {
+        self.auxiliary
+            .with_cold(|cold| cold.and_then(|cold| cold.lexical_derived_this.clone()))
+    }
+
+    pub(crate) fn set_lexical_derived_this(&self, cell: Upvalue, constructor: Function) {
+        self.auxiliary
+            .with_cold_mut(|cold| cold.lexical_derived_this = Some((cell, constructor)));
     }
 
     #[cfg(test)]

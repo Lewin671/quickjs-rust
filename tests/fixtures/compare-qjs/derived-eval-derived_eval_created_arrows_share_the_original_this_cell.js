@@ -1,0 +1,1 @@
+eval("class B {constructor(){this.x=4;}}\n         class D extends B {constructor(){\n           var init=eval('()=>super()'),read=eval('()=>this'),error;\n           try{read();}catch(e){error=e instanceof ReferenceError;}\n           init();this.ok=error && read()===this;\n         }}\n         [new D().ok,new D().ok].join(',');")

@@ -92,8 +92,8 @@ impl FunctionBytecodeResult<'_> {
                     .map(Upvalue::get)
                     .or_else(|| self.locals.get(index).and_then(Option::as_ref).cloned())
             })
-            .filter(|value| !value.is_uninitialized_lexical_marker())
             .or_else(|| self.env.get_local(name))
+            .filter(|value| !value.is_uninitialized_lexical_marker())
     }
 
     pub(crate) fn binding(&self, name: &str) -> Option<Value> {

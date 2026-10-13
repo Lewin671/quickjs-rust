@@ -1,5 +1,8 @@
 use crate::{Value, eval};
 
+#[path = "direct_eval/derived_this.rs"]
+mod derived_this;
+
 /// A cached direct eval that writes and deletes no binding skips the
 /// write-back to its caller's frame. What it reads is still current, a
 /// function it calls still updates the caller's captured variables and the

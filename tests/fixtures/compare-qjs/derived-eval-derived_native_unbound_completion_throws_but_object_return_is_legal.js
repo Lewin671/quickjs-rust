@@ -1,0 +1,1 @@
+eval("class B {}\n              class Unbound extends B { constructor(){ eval('1'); } }\n              class ObjectReturn extends B { constructor(){ eval('1'); return {}; } }\n              var error; try { new Unbound(); } catch(e) { error=e instanceof ReferenceError; }\n              error && typeof new ObjectReturn() === 'object';")

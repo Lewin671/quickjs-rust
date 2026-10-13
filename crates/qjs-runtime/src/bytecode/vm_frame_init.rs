@@ -293,6 +293,9 @@ impl<'a> Vm<'a> {
             }
             if let Some(value) = self.local_slot_value(index) {
                 let name = self.bytecode.locals[index].name.clone();
+                if name == "this" && env.derived_this_cell().is_some() {
+                    continue;
+                }
                 // Slots are emitted in lexical declaration order. Inserting every
                 // active slot under its source name therefore makes an inner
                 // shadowing binding replace the outer entry, while an exited
@@ -316,6 +319,9 @@ impl<'a> Vm<'a> {
             if self.locals.get(index).is_some_and(Option::is_some)
                 || self.bytecode.locals[index].is_received_upvalue()
             {
+                if self.bytecode.locals[index].name == "this" && env.derived_this_cell().is_some() {
+                    continue;
+                }
                 env.insert_frame_cell(self.bytecode.locals[index].name.clone(), upvalue.clone());
             }
         }

@@ -199,6 +199,9 @@ impl Vm<'_> {
                 continue;
             }
             let name = &self.bytecode.locals[index].name;
+            if name == "this" && env.derived_this_cell().is_some() {
+                continue;
+            }
             if !direct_eval_selects_name(eval_bytecode, name) {
                 continue;
             }
@@ -217,6 +220,9 @@ impl Vm<'_> {
                 continue;
             }
             let name = &self.bytecode.locals[index].name;
+            if name == "this" && env.derived_this_cell().is_some() {
+                continue;
+            }
             if direct_eval_selects_name(eval_bytecode, name)
                 && (self.locals.get(index).is_some_and(Option::is_some)
                     || self.bytecode.locals[index].is_received_upvalue())
