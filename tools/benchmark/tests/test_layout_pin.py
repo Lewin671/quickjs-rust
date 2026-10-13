@@ -8,8 +8,8 @@ EXECUTOR = ("__RINvNtNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode10typed_loop7execut
             "try_run_typed_loopNtNtNtNtB6_10compact_fn4wide10loop_frame13WideLoopFrameEB8_")
 CALL_LEAF = "__RNvNtNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode10typed_loop7execute9call_leaf"
 VM = "__RNvMs5_NtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode2vmNtB5_2Vm22run_current_activation"
-STD = [f"__RNvNtCsg55jX0GwzBC_3std2io{n}" for n in ("a", "b", "c")]
-GENERIC = "__RINvNtCsg55jX0GwzBC_3std2rt15handle_rt_paniciEB4_"
+STD = [f"__RNvNtCsg55jX0GwzBC_3std2io1{n}" for n in ("a", "b", "c")]
+GENERIC = "__RINvNtCsg55jX0GwzBC_3std2rt15handle_rt_paniciE"
 
 
 class LayoutPinTests(unittest.TestCase):
@@ -23,6 +23,42 @@ class LayoutPinTests(unittest.TestCase):
         self.assertNotIn(GENERIC, layout_pin.filler(self.sizes, self.counts, 0x40, set()))
         with self.assertRaises(ValueError):
             layout_pin.filler(self.sizes, self.counts, 0x20, set())
+
+    def test_filler_accepts_other_std_hashes_but_keeps_all_exclusions(self):
+        alternate = "__RNvNtCsAnotherHash_3std2io1a"
+        unhashed = "__RNvNtC3std2io1b"
+        # A real identifier can contain text resembling a crate marker.
+        fake_marker = "CsAnotherHash_3std"
+        non_std = f"__RNvCsOtherHash_5other{len(fake_marker)}{fake_marker}"
+        stdio = "__RNvNtCsOtherHash_5stdio2io1a"
+        duplicate = "__RNvNtCsAnotherHash_3std2io1c"
+        misaligned = "__RNvNtCsAnotherHash_3std2io1d"
+        excluded = "__RNvNtCsAnotherHash_3std2io1e"
+        workspace_instance = ("__RNvNtCsAnotherHash_3std2rt4work"
+                              "CsWorkspaceHash_11qjs_runtime")
+        sizes = {alternate: 0x30, unhashed: 0x40, non_std: 0x70, stdio: 0x70,
+                 duplicate: 0x70, misaligned: 0x71, excluded: 0x70,
+                 workspace_instance: 0x70, GENERIC: 0x70}
+        counts = {name: 1 for name in sizes}
+        counts[duplicate] = 2
+        self.assertEqual(set(layout_pin.filler(sizes, counts, 0x70, {excluded})),
+                         {alternate, unhashed})
+        for rejected in (non_std, stdio, duplicate, misaligned, excluded,
+                         workspace_instance, GENERIC):
+            with self.subTest(symbol=rejected), self.assertRaises(ValueError):
+                layout_pin.filler({rejected: sizes[rejected]}, counts, 0x70, {excluded})
+
+    def test_definition_crate_follows_impl_paths_without_searching_identifiers(self):
+        module = "NtCsAlternate_3std2io"
+        error = "NtNtCsAlternate_3std2io5Error"
+        display = "NtNtCsCoreHash_4core3fmt7Display"
+        cursor = "INtNtCsAlternate_3std2io6CursorjE"
+        for parent in (module, f"Ms7_{module}{error}",
+                       f"Xs7_{module}{error}{display}", f"Y{cursor}{display}"):
+            self.assertEqual(layout_pin.definition_crate(f"__RNv{parent}1a"), "std")
+        for malformed in ("__RNv", "__RNvC", "__RNvCsMissingTerminator3std",
+                          "__RNvC99std", "__RNvN1C3std", "__RNvB0_"):
+            self.assertIsNone(layout_pin.definition_crate(malformed))
 
     def test_pin_places_filler_then_executor_then_callees(self):
         lines = [VM, CALL_LEAF, EXECUTOR]
@@ -60,7 +96,7 @@ class LayoutPinTests(unittest.TestCase):
         self.assertEqual(pinned, head + [VM])
 
     def test_budgeted_callees_keep_their_addresses_when_one_shrinks(self):
-        sizes = dict(self.sizes, **{f"__RNvNtCsg55jX0GwzBC_3std2io{n}": 0x10 * (n + 1)
+        sizes = dict(self.sizes, **{f"__RNvNtCsg55jX0GwzBC_3std2io{len(f'f{n}')}f{n}": 0x10 * (n + 1)
                                     for n in range(24)})
         counts = {name: 1 for name in sizes}
         budgets: dict[str, int] = {}
@@ -89,6 +125,23 @@ class LayoutPinTests(unittest.TestCase):
         self.assertEqual(new_position, position)
         # One that outgrows it gets a new slot with headroom.
         self.assertEqual(layout_pin.slot_budget(0x310, 0x300), 0x500)
+
+    def test_tail_callees_accept_alternate_hashes_and_keep_exact_value_types(self):
+        clone = ("__RNvXs1_NtCs9nYd1Hk1rek_11qjs_runtime5valueNtB5_5Value"
+                 "NtNtCsl8K0bEFm1U0_4core5clone5Clone5clone")
+        drop = ("__RINvNtCsl8K0bEFm1U0_4core3ptr13drop_in_place"
+                "NtNtCs9nYd1Hk1rek_11qjs_runtime5value5ValueEBK_")
+        # Preserve encoded lengths so the compiler-style backrefs remain valid.
+        clone = clone.replace("l8K0bEFm1U0", "a" * len("l8K0bEFm1U0"))
+        drop = drop.replace("9nYd1Hk1rek", "b" * len("9nYd1Hk1rek"))
+        unrelated = [clone.replace("5Value", "5Other"),
+                     drop.replace("11qjs_runtime", "11not_runtime"),
+                     drop.replace("5Value", "5Other")]
+        sizes = dict(self.sizes, **{name: 0x10 for name in [clone, drop, *unrelated]})
+        counts = {name: 1 for name in sizes}
+        head = layout_pin.pin_head([EXECUTOR], 0x100000000, sizes, counts, 0, None)
+        self.assertEqual(set(head[-2:]), {clone, drop})
+        self.assertTrue(set(unrelated).isdisjoint(head))
 
 if __name__ == "__main__":
     unittest.main()

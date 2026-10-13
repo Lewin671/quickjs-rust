@@ -88,8 +88,9 @@ CALLEE_OFFSETS = {"typed_loop7execute9call_leaf": 0x580}
 # After the budgeted callees: defined once per codegen unit, in a number of
 # copies that changes with unrelated code, so nothing pinned may follow them.
 TAIL_CALLEES = (
-    "5valueNtB5_5ValueNtNtCsl8K0bEFm1U0_4core5clone5Clone5clone",
-    "core3ptr13drop_in_placeNtNtCs9nYd1Hk1rek_11qjs_runtime5value5ValueEBK_",
+    re.compile(r"5valueNtB5_5ValueNtNtC(?:s[0-9A-Za-z]*_)?4core5clone5Clone5clone$"),
+    re.compile(r"core3ptr13drop_in_placeNtNtC(?:s[0-9A-Za-z]*_)?"
+               r"11qjs_runtime5value5ValueEBK_$"),
 )
 # The executor and each callee above own a fixed-size slot, the rest of it
 # standard-library filler, so a function that grows inside its slot moves
@@ -102,7 +103,41 @@ TAIL_CALLEES = (
 SLOT_GRANULE = 0x100
 SLOT_HEADROOM = 0x100
 _BUDGET = re.compile(r"^# budget (0x[0-9a-f]+) (\S+)$")
-_STD = "Csg55jX0GwzBC_3std"
+_DISAMBIGUATOR = re.compile(r"s[0-9A-Za-z]*_")
+_IDENTIFIER_LENGTH = re.compile(r"[1-9][0-9]*_?")
+
+
+def definition_crate(symbol: str) -> str | None:
+    """The first crate root of a concrete v0 item path, without its hash.
+
+    Follow only path prefixes, rather than searching identifier contents for a
+    crate-shaped substring. Impl paths carry an optional disambiguator before
+    their parent path; nested and instantiated paths put their parent first.
+    Unsupported prefixes conservatively exclude a filler candidate.
+    """
+    if not symbol.startswith("__RNv"):
+        return None
+    cursor = 3
+    while cursor < len(symbol):
+        tag = symbol[cursor]
+        cursor += 1
+        if tag == "N":
+            if cursor >= len(symbol) or not symbol[cursor].isascii() or not symbol[cursor].isalpha():
+                return None
+            cursor += 1  # namespace, followed by the parent path
+        elif tag in {"M", "X", "C"}:
+            if match := _DISAMBIGUATOR.match(symbol, cursor):
+                cursor = match.end()
+            if tag == "C":
+                match = _IDENTIFIER_LENGTH.match(symbol, cursor)
+                if match is None:
+                    return None
+                length = int(match.group().rstrip("_"))
+                cursor = match.end()
+                return symbol[cursor:cursor + length] if cursor + length <= len(symbol) else None
+        elif tag not in {"I", "Y"}:
+            return None
+    return None
 
 
 def text_symbols(binary: Path) -> tuple[int, dict[str, int], dict[str, int]]:
@@ -134,7 +169,7 @@ def filler(sizes: dict[str, int], counts: dict[str, int], length: int,
     symbol naming this workspace, whose instantiation could change size."""
     candidates = sorted(
         ((size, name) for name, size in sizes.items()
-         if counts.get(name) == 1 and name.startswith("__RNv") and _STD in name
+         if counts.get(name) == 1 and definition_crate(name) == "std"
          and "qjs" not in name and size > 0 and size % ALIGN == 0 and name not in exclude),
         reverse=True,
     )
@@ -185,9 +220,9 @@ def pin_head(lines: list[str], start: int, sizes: dict[str, int], counts: dict[s
         callees += [name for name in known
                     if name.endswith(suffix) and name not in callees and name != executor]
     tail = []
-    for suffix in TAIL_CALLEES:
+    for pattern in TAIL_CALLEES:
         tail += [name for name in known
-                 if name.endswith(suffix) and name not in callees + tail and name != executor]
+                 if pattern.search(name) and name not in callees + tail and name != executor]
     listed = set(lines)
     head: list[str] = []
     position = start
