@@ -14,7 +14,8 @@ use std::{cell::OnceCell, rc::Rc};
 use super::super::ir::{Bytecode, Op};
 use super::helper_graph::MAX_HELPER_ARITY;
 use super::register_packing::{
-    BoxedRegisterMetadata, compact_boxed_registers, compact_scalar_registers,
+    BoxedRegisterMetadata, ScalarRegisterMetadata, compact_boxed_registers,
+    compact_scalar_registers,
 };
 use super::{
     Class, DeoptSite, MAX_REGION_OPS, MAX_REGISTERS, MAX_STACK_DEPTH, Typed, TypedLoopProgram,
@@ -24,9 +25,13 @@ use crate::Value;
 
 /// Compiles every loop region of `bytecode` that the whitelist admits.
 pub(crate) fn compile_all(bytecode: &Bytecode) -> Vec<TypedLoopProgram> {
-    bytecode
-        .code
-        .iter()
+    compile_stream(bytecode, &bytecode.code)
+}
+
+/// Code, stack effects and handback sites belong to the selected stream.
+pub(crate) fn compile_stream(bytecode: &Bytecode, code: &[Op]) -> Vec<TypedLoopProgram> {
+    let mut regions = std::collections::BTreeSet::new();
+    code.iter()
         .enumerate()
         .filter_map(|(ip, op)| match op {
             Op::Jump(target) if *target < ip => Some((*target, ip)),
@@ -37,15 +42,24 @@ pub(crate) fn compile_all(bytecode: &Bytecode) -> Vec<TypedLoopProgram> {
                 slot: _,
                 skip,
                 jump: Some(target),
-            } if *target < ip => Some((*target, ip + skip)),
+            } if *target < ip => ip
+                .checked_add(1)?
+                .checked_add(*skip)
+                .map(|edge| (*target, edge)),
             _ => None,
         })
-        .filter_map(|(header, backedge)| compile(bytecode, header, backedge))
+        .filter(|region| regions.insert(*region))
+        .filter_map(|(header, backedge)| compile(bytecode, code, header, backedge))
         .collect()
 }
 
-fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedLoopProgram> {
-    let code = &bytecode.code;
+fn compile(
+    bytecode: &Bytecode,
+    code: &[Op],
+    header: usize,
+    backedge: usize,
+) -> Option<TypedLoopProgram> {
+    code.get(backedge)?;
     if backedge.checked_sub(header)? > MAX_REGION_OPS {
         return None;
     }
@@ -58,6 +72,7 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
     let builder = loop {
         let mut builder = Builder::new(
             bytecode,
+            code,
             header,
             backedge,
             boxed_slots.clone(),
@@ -117,6 +132,7 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
         mut site_entries,
         next_register,
         mut local_slots,
+        mut virtual_slots,
         mut written_locals,
         receiver_slots,
         helper_sites,
@@ -167,10 +183,13 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
     let register_count = compact_scalar_registers(
         &mut ops,
         &mut site_entries,
-        &mut local_slots,
-        &mut written_locals,
-        &mut global_reads,
-        &mut constants,
+        ScalarRegisterMetadata {
+            locals: &mut local_slots,
+            virtual_slots: &mut virtual_slots,
+            written_locals: &mut written_locals,
+            global_reads: &mut global_reads,
+            constants: &mut constants,
+        },
         next_register,
     )?;
     let boxed_count = compact_boxed_registers(
@@ -212,6 +231,7 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
         .iter()
         .chain(&written_locals)
         .map(|&(register, _)| (false, register))
+        .chain(virtual_slots.iter().map(|(register, _)| (false, *register)))
         .chain(global_reads.iter().map(|(register, _)| (false, *register)))
         .chain(constants.iter().map(|(register, _)| (false, *register)))
         .chain(boxed_locals.iter().map(|&(register, _)| (true, register)))
@@ -242,7 +262,13 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
         }))
         .collect();
     let mut sites = sites;
-    super::forward::forward_copies(&mut ops, &mut sites, &mut site_entries, &pinned);
+    #[cfg(test)]
+    let forward = !super::test_handback::unforwarded();
+    #[cfg(not(test))]
+    let forward = true;
+    if forward {
+        super::forward::forward_copies(&mut ops, &mut sites, &mut site_entries, &pinned);
+    }
     // `QJS_TL_TRACE=4` lists the program as it runs: registers packed,
     // invariant reads hoisted and copies forwarded (`TLOP` under `=3` is the
     // builder's output).
@@ -269,6 +295,7 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
         site_entries,
         register_count,
         local_slots,
+        virtual_slots,
         written_locals,
         receiver_slots,
         global_reads,
@@ -321,6 +348,7 @@ enum Origin {
 
 struct Builder<'a> {
     bytecode: &'a Bytecode,
+    code: &'a [Op],
     header: usize,
     backedge: usize,
     ops: Vec<TypedOp>,
@@ -331,6 +359,7 @@ struct Builder<'a> {
     next_register: usize,
     /// Register holding each referenced frame slot, keyed by slot.
     local_slots: Vec<(u16, u32)>,
+    virtual_slots: Vec<(u16, u32)>,
     written_locals: Vec<(u16, u32)>,
     receiver_slots: Vec<u32>,
     helper_sites: Vec<super::HelperSite>,
@@ -396,6 +425,9 @@ struct Builder<'a> {
 }
 
 mod admission;
+mod flow;
+mod virtual_bank;
+use flow::{is_target, merge_states};
 mod element;
 mod globals;
 
@@ -405,6 +437,7 @@ use admission::{expression_has_control_flow, scalar_expression_may_write_or_bran
 impl<'a> Builder<'a> {
     fn new(
         bytecode: &'a Bytecode,
+        code: &'a [Op],
         header: usize,
         backedge: usize,
         boxed_slots: Vec<u32>,
@@ -414,6 +447,7 @@ impl<'a> Builder<'a> {
         let span = backedge - header + 1;
         Self {
             bytecode,
+            code,
             header,
             backedge,
             ops: Vec::new(),
@@ -426,13 +460,13 @@ impl<'a> Builder<'a> {
             },
             next_register: MAX_STACK_DEPTH,
             local_slots: Vec::new(),
+            virtual_slots: Vec::new(),
             written_locals: Vec::new(),
             receiver_slots: Vec::new(),
             helper_sites: Vec::new(),
             global_reads: Vec::new(),
             sloppy_global_writes: Vec::new(),
-            deferred_global_publication: bytecode.code
-                [header..=backedge.min(bytecode.code.len() - 1)]
+            deferred_global_publication: code[header..=backedge.min(code.len() - 1)]
                 .iter()
                 .all(admission::cannot_observe_a_binding),
             next_boxed: MAX_STACK_DEPTH,
@@ -445,7 +479,7 @@ impl<'a> Builder<'a> {
             cache_count: 0,
             constants: Vec::new(),
             boxed_constants: Vec::new(),
-            is_target: is_target(bytecode, header, backedge),
+            is_target: is_target(code, header, backedge),
             join_floor: 0,
             boxed_slots,
             discovered_boxed: Vec::new(),
@@ -537,7 +571,7 @@ impl<'a> Builder<'a> {
 
     /// How many instructions in the region assign `slot`.
     fn writes_in_region(&self, slot: usize) -> usize {
-        self.bytecode.code[self.header..=self.backedge.min(self.bytecode.code.len() - 1)]
+        self.code[self.header..=self.backedge.min(self.code.len() - 1)]
             .iter()
             .filter(|op| writes_slot(op, slot))
             .count()
@@ -545,7 +579,7 @@ impl<'a> Builder<'a> {
 
     /// Whether any instruction in the region reads `slot`.
     fn reads_in_region(&self, slot: usize) -> bool {
-        self.bytecode.code[self.header..=self.backedge.min(self.bytecode.code.len() - 1)]
+        self.code[self.header..=self.backedge.min(self.code.len() - 1)]
             .iter()
             .any(|op| match op {
                 Op::LoadLocal(candidate)
@@ -769,7 +803,7 @@ impl<'a> Builder<'a> {
         let Ok(slot) = usize::try_from(slot) else {
             return false;
         };
-        let prefix = &self.bytecode.code[..self.header];
+        let prefix = &self.code[..self.header];
         let Some(store) = prefix.iter().rposition(|op| writes_slot(op, slot)) else {
             return false;
         };
@@ -847,7 +881,7 @@ impl<'a> Builder<'a> {
     }
 
     fn compile(&mut self) -> Option<()> {
-        let code = &self.bytecode.code;
+        let code = self.code;
         let mut ip = self.header;
         while ip <= self.backedge {
             let offset = ip - self.header;
@@ -927,7 +961,9 @@ impl<'a> Builder<'a> {
                 self.trace_give_up("TLGIVEUP", ip);
                 return None;
             }
-            ip += 1 + std::mem::take(&mut self.pending_skip);
+            ip = ip
+                .checked_add(1)?
+                .checked_add(std::mem::take(&mut self.pending_skip))?;
         }
         // Patch the forward jumps now that every program index is known.
         for (program_slot, target_ip) in std::mem::take(&mut self.pending_jumps) {
@@ -1071,17 +1107,14 @@ impl<'a> Builder<'a> {
                 self.header,
                 self.backedge,
                 ip,
-                self.bytecode.code.get(ip),
+                self.code.get(ip),
                 self.discovered_boxed,
                 self.discovered_boxed_element_reads
             );
             // `QJS_TL_TRACE=2` also lists the region's bytecode, which is
             // what names a shape the small reproductions do not have.
             if level == "2" {
-                for (offset, op) in self.bytecode.code[self.header..=self.backedge]
-                    .iter()
-                    .enumerate()
-                {
+                for (offset, op) in self.code[self.header..=self.backedge].iter().enumerate() {
                     eprintln!("    {:4} {op:?}", self.header + offset);
                 }
             }
@@ -1100,7 +1133,7 @@ impl<'a> Builder<'a> {
             return false;
         };
         matches!(
-            self.bytecode.code.get(site as usize),
+            self.code.get(site as usize),
             Some(Op::GetPropNamed { key, .. }) if key.as_ref() == name
         )
     }
@@ -1120,7 +1153,7 @@ impl<'a> Builder<'a> {
 
     /// Whether any instruction outside the loop region reads or writes `slot`.
     fn slot_is_read_outside_region(&self, slot: usize) -> bool {
-        self.bytecode.code.iter().enumerate().any(|(ip, op)| {
+        self.code.iter().enumerate().any(|(ip, op)| {
             if ip >= self.header && ip <= self.backedge {
                 return false;
             }
@@ -1236,6 +1269,11 @@ impl<'a> Builder<'a> {
 
     fn compile_op(&mut self, op: &Op, ip: usize) -> Option<()> {
         match op {
+            Op::LoadVirtualValue { .. }
+            | Op::LoadVirtualLength { .. }
+            | Op::LoadVirtualBinary { .. }
+            | Op::LoadVirtualNumber { .. }
+            | Op::GuardVirtualObject => self.compile_virtual_op(op)?,
             Op::LoadConst(index) => {
                 let constant = self.bytecode.constants.get(*index)?;
                 match Typed::from_value(constant) {
@@ -1743,13 +1781,26 @@ impl<'a> Builder<'a> {
                 match jump {
                     // The increment that closes this region: the executor loops
                     // on its own, and the walk ends with the skipped span.
-                    Some(target) if *target == self.header && ip + *skip == self.backedge => {
+                    Some(target)
+                        if *target == self.header
+                            && ip.checked_add(1).and_then(|ip| ip.checked_add(*skip))
+                                == Some(self.backedge) =>
+                    {
                         self.close_backedge()?;
                     }
-                    Some(_) => return None,
+                    Some(target) => {
+                        if *target < self.header || *target > self.backedge {
+                            return None;
+                        }
+                        self.normalize()?;
+                        self.record_target(*target, ip)?;
+                        self.pending_jumps.push((self.ops.len(), *target));
+                        self.emit(TypedOp::Jump { target: 0 });
+                        self.unreachable = true;
+                    }
                     None => {}
                 }
-                self.pending_skip = *skip;
+                self.pending_skip = skip.checked_add(usize::from(jump.is_some()))?;
             }
             Op::CopyLocal { from, to, skip } => {
                 match (self.slot_is_boxed(*from), self.slot_is_boxed(*to)) {
@@ -1911,56 +1962,4 @@ impl<'a> Builder<'a> {
             }
         }
     }
-}
-
-/// Joins two abstract stacks: equal depth and equal register class per entry,
-/// keeping the weaker provenance. `None` when they cannot be joined.
-fn merge_states(
-    left: &[(u16, Class, Origin)],
-    right: &[(u16, Class, Origin)],
-) -> Option<Vec<(u16, Class, Origin)>> {
-    if left.len() != right.len() {
-        return None;
-    }
-    left.iter()
-        .zip(right)
-        .map(|(left, right)| {
-            (left.0 == right.0 && left.1 == right.1).then_some((
-                left.0,
-                left.1,
-                if left.2 == right.2 {
-                    left.2
-                } else {
-                    Origin::Computed
-                },
-            ))
-        })
-        .collect()
-}
-
-/// Which instructions of a region are the target of a jump inside it: those are
-/// the joins, and an operand has to be in its depth's register at each one.
-fn is_target(bytecode: &Bytecode, header: usize, backedge: usize) -> Vec<bool> {
-    let mut targets = vec![false; backedge - header + 1];
-    let mut mark = |target: usize| {
-        if let Some(offset) = target.checked_sub(header)
-            && offset < targets.len()
-        {
-            targets[offset] = true;
-        }
-    };
-    for op in &bytecode.code[header..=backedge.min(bytecode.code.len() - 1)] {
-        match op {
-            Op::Jump(target) | Op::JumpIfFalse(target) | Op::JumpIfTrue(target) => mark(*target),
-            Op::CompareLocalsJumpFalse { target, .. } => {
-                mark(*target);
-                mark(*target + 1);
-            }
-            Op::IncrementLocal {
-                jump: Some(target), ..
-            } => mark(*target),
-            _ => {}
-        }
-    }
-    targets
 }

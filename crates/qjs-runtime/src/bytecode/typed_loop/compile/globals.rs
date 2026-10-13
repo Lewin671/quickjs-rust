@@ -22,7 +22,7 @@ impl Builder<'_> {
     /// Whether the region contains an instruction that could write `name`,
     /// which would make a hoisted read of that same binding observably stale.
     pub(super) fn region_writes_global_named(&self, name: &str) -> bool {
-        self.bytecode.code[self.header..=self.backedge]
+        self.code[self.header..=self.backedge]
             .iter()
             .any(|op| match op {
                 Op::StoreGlobalStrict(candidate) | Op::DefineGlobalVar(candidate) => {
@@ -46,14 +46,12 @@ impl Builder<'_> {
     /// those writes out of this tier; dense array writes remain separately
     /// guarded and cannot alter a global object's binding descriptors.
     pub(super) fn region_writes_a_sloppy_global(&self) -> bool {
-        self.bytecode.code[self.header..=self.backedge]
-            .iter()
-            .any(|op| {
-                matches!(
-                    op,
-                    Op::StoreLocalOrGlobalSloppy { .. } | Op::StoreGlobalSloppy { .. }
-                )
-            })
+        self.code[self.header..=self.backedge].iter().any(|op| {
+            matches!(
+                op,
+                Op::StoreLocalOrGlobalSloppy { .. } | Op::StoreGlobalSloppy { .. }
+            )
+        })
     }
 
     /// Returns the frame slot for an unresolved sloppy binding only when this

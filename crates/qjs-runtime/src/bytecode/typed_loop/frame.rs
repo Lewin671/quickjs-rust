@@ -31,6 +31,15 @@ pub(in crate::bytecode) trait LoopFrame {
     }
     /// A local slot's value; `None` for an uninitialized binding.
     fn local_slot_value(&self, slot: usize) -> Option<Value>;
+    /// Current frame-owned virtual data. Wide activations have no bank and
+    /// retain the original stream; no receiver is materialized for this read.
+    fn virtual_slot_value(&self, _slot: usize) -> Option<Value> {
+        None
+    }
+    #[cfg(test)]
+    fn handback_stack(&self) -> Vec<Value> {
+        Vec::new()
+    }
     /// Whether a plain store to `slot` is the whole observable effect.
     fn slot_accepts_typed_loop_write(&self, slot: usize) -> bool;
     fn write_typed_loop_slot(&mut self, slot: usize, value: Value);
@@ -69,6 +78,14 @@ pub(in crate::bytecode) trait LoopFrame {
 }
 
 impl LoopFrame for Vm<'_> {
+    #[cfg(test)]
+    fn handback_stack(&self) -> Vec<Value> {
+        self.stack.clone()
+    }
+    #[inline]
+    fn virtual_slot_value(&self, slot: usize) -> Option<Value> {
+        self.virtual_values.get(slot).cloned()
+    }
     #[inline]
     fn loop_env(&self) -> &CallEnv {
         &self.env
@@ -167,6 +184,12 @@ impl LoopFrame for Vm<'_> {
 
     #[cfg(feature = "perf-counters")]
     fn bytecode_op(&self, ip: usize) -> Option<&super::super::ir::Op> {
-        self.current.bytecode.code.get(ip)
+        super::super::frame_program::FrameProgramView::new(
+            &self.current.bytecode,
+            self.current.authoritative_slots,
+            self.current.virtual_function_context_safe,
+        )
+        .execution_code
+        .get(ip)
     }
 }

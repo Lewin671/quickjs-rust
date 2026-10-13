@@ -19,6 +19,37 @@ fn counted(source: &str) -> (Value, crate::Counters) {
 }
 
 #[test]
+fn selected_virtual_fields_and_elements_reach_typed_registers() {
+    let (value, counters) = counted(
+        "function fields(n,x) { var p={left:x*1,right:2}; var s=0;
+           for(var i=0;i<n;i++){s+=p.left;s+=p.right;} return {s:s}; }
+         function elements(n,x) {var p=[x*1,3];var s=0;
+           for(var i=0;i<n;i++){s+=p[0];s+=p[1];} return {s:s};}
+         [fields(0,4).s,fields(1,5).s,fields(9,7).s,fields(8,11).s,elements(10,6).s].join('|');",
+    );
+    assert_eq!(value, Value::String("0|7|81|104|90".into()));
+    assert!(counters.typed_virtual_bank_entries >= 4, "{counters:?}");
+    assert_eq!(counters.typed_virtual_bank_declines, 0);
+}
+
+#[test]
+fn selected_virtual_bank_rejects_related_writes_and_nonnumeric_coercion() {
+    let (value, counters) = counted(
+        "function write(n){var p={v:1};var s=0;for(var i=0;i<n;i++){p.v+=1;s+=p.v;}return s;}
+         var effects=0;
+         function read(n){var p={v:{valueOf(){effects++;return 3;}}};var s=0;
+           for(var i=0;i<n;i++)s+=p.v;return s;}
+         [write(6),read(0),read(4),effects].join('|');",
+    );
+    assert_eq!(value, Value::String("27|0|12|4".into()));
+    assert_eq!(counters.typed_virtual_bank_entries, 0, "{counters:?}");
+    assert!(
+        counters.typed_virtual_bank_declines > 0,
+        "coercible bank input must reach the entry guard: {counters:?}"
+    );
+}
+
+#[test]
 fn dispatched_opcode_families_partition_the_generic_loop() {
     let (_, counters) = counted(
         "function calculate(value) {

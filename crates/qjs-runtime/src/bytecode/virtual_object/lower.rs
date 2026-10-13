@@ -7,6 +7,7 @@
 //! the complete candidate on the ordinary allocation path.
 
 use std::{
+    cell::OnceCell,
     collections::{BTreeMap, BTreeSet},
     rc::Rc,
 };
@@ -25,16 +26,54 @@ pub(in crate::bytecode) struct VirtualObjectProgram {
     data_only: VirtualObjectVariant,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 struct VirtualObjectVariant {
     lowered_code: Option<Rc<[Op]>>,
+    typed_loops: OnceCell<Vec<super::super::typed_loop::TypedLoopProgram>>,
     required_authoritative_slots: u128,
     /// Whether the variant keeps a literal's values in virtual slots rather
     /// than only fusing instructions in place.
     virtualizes: bool,
 }
 
+impl Clone for VirtualObjectVariant {
+    fn clone(&self) -> Self {
+        Self {
+            lowered_code: self.lowered_code.clone(),
+            // An equivalent immutable code owner may share instructions,
+            // but it must not clone another variant's filled scratch/cache.
+            typed_loops: OnceCell::new(),
+            required_authoritative_slots: self.required_authoritative_slots,
+            virtualizes: self.virtualizes,
+        }
+    }
+}
+
 impl VirtualObjectProgram {
+    /// The active executable and its own typed-plan cache. Full and data-only
+    /// variants keep separate caches even when their immutable code is shared.
+    pub(in crate::bytecode) fn typed_stream_for_frame<'a>(
+        &'a self,
+        bytecode: &'a Bytecode,
+        authoritative_slots: u128,
+        allow_virtual_functions: bool,
+    ) -> (
+        &'a [Op],
+        &'a OnceCell<Vec<super::super::typed_loop::TypedLoopProgram>>,
+    ) {
+        let variant =
+            if allow_virtual_functions && self.full.is_frame_compatible(authoritative_slots) {
+                &self.full
+            } else if self.data_only.is_frame_compatible(authoritative_slots) {
+                &self.data_only
+            } else {
+                return (&bytecode.code, &bytecode.typed_loop_programs);
+            };
+        match variant.lowered_code.as_deref() {
+            Some(code) => (code, &variant.typed_loops),
+            None => (&bytecode.code, &bytecode.typed_loop_programs),
+        }
+    }
     /// Whether either variant rewrites the body at all. A body the lowering
     /// leaves untouched gains nothing from the interpreter's virtual-object
     /// path, so another tier may take it without losing that path's work.
@@ -183,6 +222,7 @@ fn lower_variant(
     };
     VirtualObjectVariant {
         lowered_code: Some(Rc::from(code.into_boxed_slice())),
+        typed_loops: OnceCell::new(),
         required_authoritative_slots,
         virtualizes: has_replacements,
     }
@@ -220,6 +260,7 @@ fn original_program() -> VirtualObjectProgram {
 fn original_variant() -> VirtualObjectVariant {
     VirtualObjectVariant {
         lowered_code: None,
+        typed_loops: OnceCell::new(),
         required_authoritative_slots: 0,
         virtualizes: false,
     }
