@@ -1,17 +1,20 @@
 # T043: Derived-constructor direct-eval context
 
 - Status: active.
-- Implementation: none; two baseline semantic gaps are reproduced.
-- Verified at: exact `06f0ecd3`, 2026-10-12, freshly compiled local debug CLI
-  versus clean fixed NG `f7830186`. These are correctness runs, not timings.
-- Evidence: minimal programs and outputs below. Raw scripts/JSON are workspace-
-  local under `outputs/quickjs-performance-20261012/base06-correctness`, not
-  retained in this repository. Base executable SHA
-  `622ec1add4f750cd14b7ef762b8072eaaf11b3260c2ea84afd8f5eddbb62dbed`.
-- Unresolved: propagation of implicit `this` initialization and the derived
-  `this` TDZ through the existing native eval route; introduction revision.
-- Next action: trace the original eval/frame/constructor context, add focused
-  differential coverage and fix separately from T042's read-only ownership unit.
+- Implementation: integrated at `4fd7d959` on the lead branch, including all
+  three stages. T042's rejected route/counters remain absent.
+- Verified at: `4fd7d959`, 2026-10-12, fast gate with 2276 runtime and 117
+  selected Test262 cases. Owner `83114d0f` full gate and remote CI are green;
+  integration full gate and script-goal NG comparison are pending.
+- Evidence: baseline reproductions below; workspace-local owner and independent
+  receipts under `outputs/quickjs-performance-20261012/t043-*`, not retained.
+  The independently checked 12-probe set matches NG on 10 and reproduces the
+  two other differences at exact baseline `06f0ecd3`.
+- Unresolved: integrated full gate/CI and x86_64 regression; original introducing
+  revision. Existing super-resolution-before-argument and global-this-property
+  pollution gaps are separate, not claimed fixed by this unit.
+- Next action: finish integrated verification, archive this correctness unit,
+  then generate a new campaign comparison from the resulting exact source.
 
 ## Reproductions
 

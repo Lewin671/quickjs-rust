@@ -101,6 +101,16 @@ upvalue indices, so shadowed names are different slots and different cells.
 11. **Suspension keeps the cells.** A suspended frame owns its `locals`,
     `local_upvalues` and `upvalues`: [generator-suspension.md](generator-suspension.md).
 
+## Derived constructor this
+
+Each derived activation shares one marker-initialized `Upvalue` through its
+FrameBindings, declaring slot, eval and arrows. Reads throw before binding;
+compatibility forks preserve this implicit cell, and name writeback skips it.
+Optional FunctionColdState retains an arrow's cell and original constructor.
+Super constructs Base before duplicate checking, then binds before fields:
+Base failure keeps TDZ; field failure keeps binding; completion rejects TDZ
+unless an object is returned. Tests: `tests/direct_eval/derived_this.rs`.
+
 ## Dynamic scope: direct `eval` and `with`
 
 Only these resolve a name at run time, so only they use a name-keyed map, and
