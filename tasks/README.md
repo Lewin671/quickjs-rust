@@ -15,6 +15,7 @@ it to `archive/` with `git mv` and move its row below.
 | --- | --- | --- |
 | [T018](T018-broad-performance.md) broad performance | active | The performance campaign contract and its targets against QuickJS-NG. Start performance work here, then follow [the workflow](../docs/performance-workflow.md). |
 | [T040](T040-imac-general-performance.md) x86_64 general optimization | active | Fresh current-main comparison and exact-binary profiles, followed by independent general runtime units. |
+| [T041](T041-own-data-cache-hot-answers.md) own-data cache hot answers | active | Frozen current-host plan to reuse the guarded hot-cache mechanism and strengthen state-transition tests. |
 | [T022](T022-performance-priority-controller.md) priority controller | active | The rules that select and stop performance units. |
 | [T038](T038-audio-dft-variance.md) audio-dft variance | active | Top infrastructure item: isolated-case cycle variance and allocation/ASLR diagnosis. |
 | [T037](T037-integration-batch-1.md) integration batch 1 | active | Both promotions retained under the lead amendment; implementation is integrated into main; audio placement remains open. |

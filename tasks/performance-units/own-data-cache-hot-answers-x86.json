@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "own-data-cache-hot-answers-x86",
+  "base_sha": "06f0ecd3cb4ab7bea384d3b58700e3d958c0aeb0",
+  "queue": {
+    "candidate_sha": "06f0ecd3cb4ab7bea384d3b58700e3d958c0aeb0",
+    "sha256": "7a4b49bbec9dc64a8d545a3d3b89fd85995b6fdc3144b543e220256b82cbf00f"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/jetstream3-js-subset/hash-map"
+    ],
+    "rank_ceiling": 8,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Answer an already-installed ordinary OwnSlot named-read cache entry on its hot path using a predecoded entry-kind hint and one transferred cache borrow, retaining identity, layout and live data-slot guards. Reuse the existing unpromoted implementation at 95c3af21 and supplement cache-state-transition and observable fallback tests.",
+    "generality": "The optimization depends only on cache entry kind, ordinary receiver identity and layout, and the current data slot. It applies to any named read that installs an OwnSlot entry; no workload identity, source text, function name, bytecode template, iteration count, value or checksum selects it. Exact, literal, shared and prototype entries keep their existing dispatch; accessors and exotic values keep ordinary fallback.",
+    "semantic_risks": [
+      "A hint must remain synchronized across entry installation, selected-entry replacement, Exact-to-OwnSlot writes and clear, but must never substitute for live semantic guards.",
+      "Writes must observe the current value; deletion, insertion and descriptor-to-accessor changes must reject stale slots before inherited lookup or user code.",
+      "Cache borrows must end before getter or Proxy execution; weak receiver entries must not keep receivers or former values alive.",
+      "The new helper can perturb code generation and layout of unrelated hot paths; preserve the complete broad, external and sentinel regression gates and verify layout on the exact x86_64 binary."
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "jetstream3-js-subset--hash-map/receipt-0/receipt.json",
+      "sha256": "a821e45d966667a598b89fc0155127a1f9a5a88c2d0ba364b05af49fc9f87255",
+      "base_sha": "06f0ecd3cb4ab7bea384d3b58700e3d958c0aeb0",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/hash-map"
+      ],
+      "shared_cost": "64/528 main-thread samples pass through the ordinary named-property cold path get_prop_named; this includes necessary slot reads and is an envelope, not an estimate that all of it can be removed. Cold probe followed by own_data_slot_value independently confirms live OwnSlot reads. A guarded hot answer avoids repeated cold dispatch and probing without caching a value.",
+      "inclusive_fraction": 0.12121212121212122
+    },
+    {
+      "source": "jetstream3-js-subset--hash-map/receipt-1/receipt.json",
+      "sha256": "76f6b57441de98ca91a106edea8f960fe01d5daff789dcae20e2d5b478d06819",
+      "base_sha": "06f0ecd3cb4ab7bea384d3b58700e3d958c0aeb0",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/hash-map"
+      ],
+      "shared_cost": "71/526 main-thread samples pass through the ordinary named-property cold path get_prop_named; this includes necessary slot reads and is an envelope, not an estimate that all of it can be removed. Cold probe followed by own_data_slot_value independently confirms live OwnSlot reads. A guarded hot answer avoids repeated cold dispatch and probing without caching a value.",
+      "inclusive_fraction": 0.13498098859315588
+    },
+    {
+      "source": "jetstream3-js-subset--hash-map/receipt-2/receipt.json",
+      "sha256": "df694427cbfc5afcfe08bf2013d2eeebf502bdd6f9c794575750de81646a03cb",
+      "base_sha": "06f0ecd3cb4ab7bea384d3b58700e3d958c0aeb0",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/hash-map"
+      ],
+      "shared_cost": "67/528 main-thread samples pass through the ordinary named-property cold path get_prop_named; this includes necessary slot reads and is an envelope, not an estimate that all of it can be removed. Cold probe followed by own_data_slot_value independently confirms live OwnSlot reads. A guarded hot answer avoids repeated cold dispatch and probing without caching a value.",
+      "inclusive_fraction": 0.1268939393939394
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/jetstream3-js-subset/hash-map"
+    ],
+    "control_ids": [
+      "external/jetstream3-js-subset/cdjs",
+      "external/sunspider-1.0/3d-raytrace",
+      "external/sunspider-1.0/access-binary-trees",
+      "external/sunspider-1.0/date-format-tofte",
+      "external/sunspider-1.0/crypto-md5",
+      "external/kraken-1.1/ai-astar",
+      "broad/property_read",
+      "broad/property_write",
+      "broad/dynamic_method_call"
+    ],
+    "target_max_candidate_over_base": 0.95,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
