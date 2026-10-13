@@ -18,9 +18,8 @@
 - Evidence: the records below; `benchmarks/performance-policy.json`;
   `docs/benchmarking.md`. Raw bundles are local artifacts, not retained.
 - Unresolved: no fixed-hardware fingerprint, no A/A shadow reports, no noise
-  envelope, no false-positive budget. Whether formal lanes may be measured
-  concurrently on one host is undecided (the probe below is not a
-  qualification).
+  envelope, no false-positive budget. Concurrent lanes are qualified on the
+  x86_64 host only, from one pair of runs.
 - Next action: a 30-block A/A bundle on the x86_64 host, then follow the
   activation order in `docs/benchmarking.md`, "Gate activation".
 
@@ -107,8 +106,8 @@ by at most 0.42% (4 workers) and 0.47% (8) from the serial ones, which is
 inside the serial estimate's own error. Pair standard deviation: 0.73%,
 1.05%, 1.64%. Four workers therefore give four times the samples per
 minute at 1.4 times the pair spread. Not covered: the external lane's
-memory-heavy cases, and more than one run. Nothing measures concurrently
-today.
+memory-heavy cases, and more than one run. The qualification below covers
+the external lane.
 
 **Concurrent-lane qualification, criteria written before measuring.** One
 30-block sequential bundle and one 30-block `--concurrent-lanes` bundle of
@@ -118,6 +117,26 @@ least 73 of the 76 candidate/base case ratios are within 3% of the
 sequential ones; each lane's geometric-mean shift of those ratios is within
 0.5%, and of the candidate/QuickJS-NG ratios within 1%; the concurrent
 bundle has at most two more imprecise cases than the sequential one.
+
+**Result, 2026-10-12: qualified on the x86_64 host.** Candidate `bf553ad6`,
+base `e54e33eb`, QuickJS-NG `f7830186`, 30 blocks each, measurement code of
+`bfb6b2e3`. Sequential 5122 s, concurrent 2697 s. Both: state success,
+`ready_for_unit_gates`, 30 valid blocks in broad and sentinel with linearity
+passing, no imprecise case. Candidate/base: 76 of 76 cases within 3%
+(largest `sunspider-1.0/controlflow-recursive` -2.0%, next
+`string-validate-input` -1.2%); geometric-mean shift broad -0.02%, sentinel
++0.12%, external -0.25%. Candidate/QuickJS-NG shift: -0.12%, -0.16%, -0.03%.
+Summary SHA-256: sequential `0d276fc7...8671e4e`, concurrent
+`c03b4a82...eeba090b`; the bundles are local artifacts. One pair of runs on
+one host: it qualifies this host, not concurrency in general, and says
+nothing about a host with fewer than three idle cores.
+
+An earlier sequential bundle (5528 s) is not the reference: another
+project's batch job ran on the host during it (about ten cores when looked
+at afterwards). It shows what an undetected neighbour does: `recursive_call_tree` block ratios from 0.62 to
+1.58 against 0.96 to 1.00, two base samples of `ai-astar` killed at the
+timeout, 11 imprecise cases, readiness inconclusive. During the reference
+run the other load seen was system daemons on one core, 25 s at the longest.
 
 ## Hosted preview record
 
