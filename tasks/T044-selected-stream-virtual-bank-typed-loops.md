@@ -3,14 +3,14 @@
 - Status: active; plan frozen at `e778be0d`, candidate integrated for checking.
 - Implementation: owner `0a95c1cc`, integrated as `c5f35035` on the lead branch;
   not promoted to main or screened. Runtime work started after freeze.
-- Verified at: owner `0a95c1cc`, full local gate and NG238; independent final
-  debug CLI `7d965c89` and production tree `9169fcaa`. Lead checks pending.
+- Verified at: owner `0a95c1cc`, full local gate/NG238 and CI `38384175694`;
+  lead `c9d2f49c`, full local gate and NG247; final debug CLI `7d965c89`.
 - Evidence: [plan](performance-units/selected-stream-readonly-virtual-bank-typed-loops.json);
   workspace queue/profile jobs and numbers below. Raw files are not retained.
-- Unresolved: lead gate/CI, queued layout qualification, screens and complete
+- Unresolved: lead CI, queued layout qualification, screens and complete
   promotion. The discovery run has three imprecise controls.
-- Next action: complete lead correctness checks and CI, then queued native
-  layout scan/re-pin and the frozen screen. No screen attempts are used yet.
+- Next action: collect queued native layout scan/route diagnostics, re-pin
+  and use the frozen screen after CI. No screen attempts are used yet.
 
 ## Measured boundary
 
@@ -111,6 +111,13 @@ stoppable site, restores its physical prefix/IP and resumes the VM. Discard2
 checks packed, unforwarded input mapping: Move cannot exit in production and
 copy forwarding may delete the discarded key. The existing residency bound
 is tested; this engine has no interrupt polling API to exercise.
+
+Lead checks at `c9d2f49c` pass the complete local gate (410 tool tests,
+including the native layout-scan fix) and 247 NG fixtures. Production files
+match the final reviewed manifest. CI `38384956641` is pending. Queued iMac
+jobs `20261013T104052Z-t044-native-layout-scan` and
+`20261013T104134Z-t044-selected-stream-route` use that exact source; neither
+is a frozen-unit screen or a formal performance claim.
 
 Nine finite semantic fixtures are retained in `tests/fixtures/compare-qjs/`:
 fresh values, zero trips, coercion, getter/proxy effects, writes/reinitialization,
