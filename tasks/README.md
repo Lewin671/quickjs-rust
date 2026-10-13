@@ -14,6 +14,7 @@ it to `archive/` with `git mv` and move its row below.
 | Task | Status | What it is |
 | --- | --- | --- |
 | [T018](T018-broad-performance.md) broad performance | active | The performance campaign contract and its targets against QuickJS-NG. Start performance work here, then follow [the workflow](../docs/performance-workflow.md). |
+| [T044](T044-selected-stream-virtual-bank-typed-loops.md) virtual scalar bridge | active | Selected-stream typed programs consume virtual scalar-bank values instead of erased heap aliases. |
 | [T040](T040-imac-general-performance.md) x86_64 general optimization | active | Fresh current-main comparison and exact-binary profiles, followed by independent general runtime units. |
 | [T022](T022-performance-priority-controller.md) priority controller | active | The rules that select and stop performance units. |
 | [T038](T038-audio-dft-variance.md) audio-dft variance | active | Top infrastructure item: isolated-case cycle variance and allocation/ASLR diagnosis. |

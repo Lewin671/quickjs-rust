@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "selected-stream-readonly-virtual-bank-typed-loops",
+  "base_sha": "27ca5140342df9050911dc5c76b5eb28a112266a",
+  "queue": {
+    "candidate_sha": "27ca5140342df9050911dc5c76b5eb28a112266a",
+    "sha256": "4d458d5657079cdb4e11478b743cb68788d1c1ad646fc55f0b85d5b9a949b712"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "broad/property_read",
+      "broad/array_read"
+    ],
+    "rank_ceiling": 3,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Compile typed loop plans against the activation selected original/full/data-only instruction stream and seed immutable primitive virtual-bank slots into existing typed registers. Preserve variant-specific stack/deopt coordinates and existing unlowered/wide behavior; do not materialize virtual objects merely to enter the tier.",
+    "generality": "Admission uses existing non-escaping virtual-lowering CFG/alias proof, active instruction semantics, primitive value guards and region-wide absence of writes/reinitialization/discard of the seeded bank slots. It accepts arbitrary field names, array elements, values and callers by operations/types/dataflow, not workload IDs, source/bytecode templates, iteration counts or expected checksums. Every entry/resume reads current bank values; nothing is cached across activations. Object and fixed-element array reads use the same virtual scalar bank representation.",
+    "semantic_risks": [
+      "Pair each cached plan with the exact selected program variant, preserve stack effects and lowered IP at every exit/deopt/restart; same-length streams alone do not prove equal intermediate stack layouts.",
+      "Use current bank values and existing virtual CFG/alias proof. Reject related stores/init/discard/materialization and unsupported effects; never read a placeholder as the receiver or silently disable virtualization by workload shape.",
+      "Primitive guards precede coercion/callbacks, reject non-admitted values without executing user code, preserve zero-trip/TDZ, getter/proxy/escape and prototype-guard fallback.",
+      "Keep local/upvalue/realm writeback, early break/return, interruption/residency and repeated-entry freshness correct. Read-only bank inputs require no heap-store flush; ordinary heap-store promotion is outside this unit.",
+      "Wide frames without a bank retain the unlowered plan path. Existing numeric-mutation ownership and frame-reselection boundaries remain sound; do not add normal dispatch opcodes, unsafe, AST or per-call name snapshots."
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "20261013T092227Z-campaign-broad3-valid-receipts/out/property_read/receipt-2/receipt.json",
+      "sha256": "27591b828c73e8ec63ab5f94f482c89d8ad216335139b5153caf141a7e2b608f",
+      "base_sha": "27ca5140342df9050911dc5c76b5eb28a112266a",
+      "opportunity_ids": [
+        "broad/property_read"
+      ],
+      "shared_cost": "Exact candidate, original broad workload with bound argv and 16x diagnostic iterations (not formal timing): 1670 main-thread samples; largest virtual dispatch branch 930. This is an overlapping lifecycle envelope, not a removable fraction. Source and supplemental trace show original typed plans compile but decline when lowering erases boxed aliases and stores real values in the virtual bank. The unit connects the selected stream and actual bank to existing scalar execution, retaining required reads/arithmetic. No inclusive parents/children are added.",
+      "inclusive_fraction": 0.5568862275449101
+    },
+    {
+      "source": "20261013T092227Z-campaign-broad3-valid-receipts/out/array_read/receipt-2/receipt.json",
+      "sha256": "a59677e3aa0e1f6669278d3f9502b4f3d4a2384a01907455a6ad76db5dc2d30a",
+      "base_sha": "27ca5140342df9050911dc5c76b5eb28a112266a",
+      "opportunity_ids": [
+        "broad/array_read"
+      ],
+      "shared_cost": "Exact candidate, original broad workload with bound argv and 16x diagnostic iterations (not formal timing): 1668 main-thread samples; largest virtual dispatch branch 945. This is an overlapping lifecycle envelope, not a removable fraction. Source and supplemental trace show original typed plans compile but decline when lowering erases boxed aliases and stores real values in the virtual bank. The unit connects the selected stream and actual bank to existing scalar execution, retaining required reads/arithmetic. No inclusive parents/children are added.",
+      "inclusive_fraction": 0.5665467625899281
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "broad/property_read",
+      "broad/array_read"
+    ],
+    "control_ids": [
+      "broad/property_write",
+      "broad/array_write",
+      "broad/dynamic_method_call",
+      "broad/captured_write",
+      "broad/property_dynamic_read",
+      "external/sunspider-1.0/date-format-tofte",
+      "external/sunspider-1.0/3d-raytrace",
+      "external/jetstream3-js-subset/hash-map",
+      "external/jetstream3-js-subset/cdjs",
+      "external/kraken-1.1/imaging-gaussian-blur"
+    ],
+    "target_max_candidate_over_base": 0.95,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 2
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

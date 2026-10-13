@@ -4,16 +4,17 @@
 - Implementation: T041 and T042 runtime candidates are rejected and reverted
   on the lead branch; measured sources remain for diagnosis. General layout
   and launch-preflight fixes remain. Neither runtime unit is promoted.
-- Verified at: `06f0ecd3`, 2026-10-12; full local `scripts/check.sh`, including
-  5170 curated Test262 cases, passed. The new comparison is complete and sealed.
-- Evidence: measurement job `20261013T032141Z-campaign-current-06f0ecd3`;
-  profile job `20261013T033011Z-campaign-profile-top8-receipts`. Raw artifacts
-  are workspace-local and not retained in this repository.
-- Unresolved: fresh post-correctness priority, new independent units and
-  campaign performance gaps.
-- Next action: run a fresh complete 30-block comparison of the verified
-  correctness/layout source, then profile its exact binary and freeze new units.
-  Both closed runtime units exhausted their frozen screen budgets.
+- Verified at: `27ca5140`, 2026-10-13; integrated T043 correctness, full local
+  gate (2276 runtime, 5170 Test262, 238 NG), remote CI and x86 layout/regression.
+  Main is updated. A new complete comparison and exact-binary profiles exist.
+- Evidence: comparison `20261013T071551Z-campaign-derived-this-27ca5140`, fresh
+  queue/top-eight profiles `20261013T073337Z-campaign-fresh-top8-profiles`, and
+  valid broad receipts `20261013T092227Z-campaign-broad3-valid-receipts`.
+  Raw artifacts are workspace-local, not retained; current standing below.
+- Unresolved: new performance units and campaign gaps. Three discovery cases
+  have imprecise intervals, so this comparison is not promotion evidence.
+- Next action: implement [T044](T044-selected-stream-virtual-bank-typed-loops.md)
+  from its validated frozen plan. Closed T041/T042 budgets remain exhausted.
 
 ## Goal and ownership
 
@@ -95,3 +96,26 @@ No runtime change is authorized by these hypotheses alone:
 Follow [the performance workflow](../docs/performance-workflow.md). Record every
 screen attempt and formal decision here; rejection is evidence to preserve,
 not permission to change thresholds or retry until a favorable sample appears.
+
+## Current standing after correctness integration
+
+Source `27ca5140`, exact binary
+`b97911efb7bfc31df8bd672922b64888aa16b8c5f2cc049d60f4720e2b94a1c2`.
+All 76 cases and 30 blocks are complete, workers four, no DISTURBED or
+measurement issues. Summary readiness is inconclusive because captured_write,
+property_dynamic_read and string-fasta have imprecise intervals; no rerun is
+ordered to obtain a favorable outcome. Candidate/NG wall geomeans are
+broad `1.078263`, sentinel `1.084706`, JetStream subset `1.247017`, Kraken
+`0.829364`, SunSpider `1.179602`. No overall superiority is established.
+
+Top broad gaps are property_read `6.0097x`, property_write `4.1470x` and
+array_read `3.8335x` NG. Largest external gap remains tofte `1.8474x`.
+Fresh broad stacks and a supplemental existing-counter trace expose compiled
+original typed plans declining against erased virtual aliases; T044 connects
+selected code and actual virtual scalar banks. It does not add a duplicate
+heap-property hoist or use benchmark shape recognition.
+
+Names cloning in short tofte samples is real but explicitly observed at only
+3/110, 3/104 and 3/100; larger env envelopes include necessary work. String ABI
+candidates are not supported as large costs there. Those read-only proposals
+remain unimplemented and do not establish a new plan or priority override.
