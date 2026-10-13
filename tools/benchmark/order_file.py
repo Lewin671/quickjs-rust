@@ -25,13 +25,13 @@ from collections import Counter
 from pathlib import Path
 from typing import Sequence
 
-from .layout_pin import DEFAULT_OFFSET, pin_order_file
+from .layout_pin import DEFAULT_OFFSET, DEFAULT_ORDER, pin_order_file
 from .screen import (
     DEFAULT_CACHE, ScreenError, _argv, calibrate, counter_tool, resolve_cases, sample,
 )
 
 ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_OUTPUT = ROOT / "crates/qjs-cli/hot-functions.order"
+DEFAULT_OUTPUT = DEFAULT_ORDER
 _HASH = re.compile(r"h[0-9a-f]{16}")
 _PROFILE_LINE = r"^[\s+!:|]*(\d+)\s+(.*?)\s+\(in {image}\)"
 _MANGLED_HASH = re.compile(r"17(h[0-9a-f]{16})E$")

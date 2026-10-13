@@ -32,6 +32,7 @@ docs/performance-workflow.md) after editing the executor.
 from __future__ import annotations
 
 import argparse
+import platform
 import re
 import subprocess
 import sys
@@ -39,7 +40,9 @@ from pathlib import Path
 from typing import Sequence
 
 ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_ORDER = ROOT / "crates/qjs-cli/hot-functions.order"
+ORDER_NAME = ("hot-functions-x86_64.order" if platform.machine() == "x86_64"
+              else "hot-functions.order")
+DEFAULT_ORDER = ROOT / "crates/qjs-cli" / ORDER_NAME
 DEFAULT_OFFSET = 0x400
 # The same executor instantiated for the interpreter's own loops -- a
 # script's top-level `for` -- is pinned too, ahead of its wide twin:

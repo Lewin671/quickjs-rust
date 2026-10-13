@@ -231,7 +231,10 @@ refused until `current_stage == stages`.
 ## Re-pinning the code layout
 
 `crates/qjs-cli/hot-functions.order` pins the hot functions' link order and
-the typed-loop executor's address. Re-pin in the commit that adds a hot
+the typed-loop executor's address on arm64; x86_64 uses
+`hot-functions-x86_64.order`. The tools default to the native host's file;
+pass `--order` or `--output` explicitly when inspecting another target.
+Re-pin in the commit that adds a hot
 function or changes the executor, a pinned callee or a pinned function's
 size, so every formal candidate carries a current file. Repeat the last two
 commands until the file stops changing:

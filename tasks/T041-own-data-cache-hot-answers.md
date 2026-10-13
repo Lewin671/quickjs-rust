@@ -14,6 +14,21 @@
 - Next action: verify code layout on the measurement host, then screen the
   frozen plan once; only a passing screen authorizes the formal comparison.
 
+## Candidate layout
+
+Job `20261013T042209Z-own-data-layout` built `33c7dfed`, profiled all three
+portfolios and regenerated the x86_64 hot set, including the new OwnSlot
+helper. Three relinks stabilized order SHA
+`85eaf9984717c59fd14502e94ae141e954f78e6d6e576064fa62068352cb5a98`.
+The linked VM/wide executor page offsets equal the requested `0xc40`/`0x400`.
+This is address verification, not qualification of those offsets as fast.
+
+The CLI selects a separate macOS x86_64 order file; arm64 keeps its prior file.
+The layout tools use the corresponding native default and permit an explicit
+other-target path. This prevents an x86_64 regeneration from replacing the
+arm64 symbol list. Tool tests and the full local gate passed after this build
+configuration change. No runtime screen or formal attempt has occurred.
+
 ## Scope and evidence
 
 Owner paths: `crates/qjs-runtime/src/bytecode/named_property_cache.rs` and
