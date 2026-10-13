@@ -24,6 +24,10 @@
 - Next action: a 30-block A/A bundle on the x86_64 host, then follow the
   activation order in `docs/benchmarking.md`, "Gate activation".
 
+A new-file launch delay and the symmetric screen preflight are recorded in
+[the diagnostic](archive/T017-launch-preflight-diagnostic.md); fixed-hardware
+noise qualification is still open.
+
 Record of the landed milestones, the original assignment and the notes:
 `tasks/archive/T017-performance-benchmark-system-log.md`.
 

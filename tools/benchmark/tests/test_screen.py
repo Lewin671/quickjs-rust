@@ -86,6 +86,33 @@ class ParseTests(unittest.TestCase):
             screen.counter_tool("Plan9")
 
 
+class LaunchPreflightTests(unittest.TestCase):
+    def test_same_program_per_file_and_aa_launches_only_once(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base, candidate = (Path(directory) / name for name in ("base", "candidate"))
+            for binary in (base, candidate):
+                binary.write_bytes(b"same executable")
+            calls = []
+
+            def runner(argv, timeout):
+                calls.append((argv, timeout))
+                return _result("0\n", "", wall_ns=900_000_000)
+
+            records = screen.launch_preflight((base, candidate, base), 12, runner)
+            self.assertEqual(calls, [([str(base), "--raw", "-e", "0"], 12),
+                                     ([str(candidate), "--raw", "-e", "0"], 12)])
+            self.assertEqual(len(records), 2)
+            self.assertEqual(records[0]["binary_sha256"], records[1]["binary_sha256"])
+            self.assertEqual([record["wall_ns"] for record in records], [900_000_000] * 2)
+
+    def test_preflight_failure_aborts_instead_of_becoming_a_sample(self):
+        for result in (_result("", "bad launch", exit_code=1),
+                       _result("", "timeout", exit_code=None)):
+            with self.subTest(result=result):
+                with self.assertRaises(screen.ScreenError):
+                    screen.launch_preflight((Path("/missing"),), 1, lambda *_: result)
+
+
 class ScreenCaseTests(unittest.TestCase):
     tool = screen.counter_tool("Darwin")
     case = screen.CaseSpec("sentinel/c", "internal", Path("w.js"), "c")

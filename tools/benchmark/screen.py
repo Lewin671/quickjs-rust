@@ -12,12 +12,15 @@ never reads it.
 Internal workloads are measured by increment: each pair runs N and 2N
 iterations and keeps the difference, which removes process startup and
 parsing. External bundles and plain scripts are whole-process measurements.
+Both executable files receive the same tiny launch preflight; its first-launch
+cost is recorded separately, and every measured sample starts a new process.
 """
 
 from __future__ import annotations
 
 import argparse
 import functools
+import hashlib
 import json
 import math
 import os
@@ -351,6 +354,29 @@ def screen_case(case: CaseSpec, candidate: Path, base: Path, pairs: int, tool: C
     return result
 
 
+def launch_preflight(binaries: Sequence[Path], timeout: float,
+                     runner: Callable[[list[str], float], ProcessResult] = run_process,
+                     ) -> list[dict[str, object]]:
+    """Run the same tiny program once per executable before measuring pairs.
+
+    New executable files can incur host launch validation without child CPU
+    work. Record that first launch separately; all measured pairs remain.
+    This resets no engine state: every measured sample is still a new process.
+    """
+    records: list[dict[str, object]] = []
+    for binary in dict.fromkeys(binaries):
+        argv = [str(binary), "--raw", "-e", "0"]
+        result = runner(argv, timeout)
+        if (result.exit_code != 0 or result.timed_out
+                or result.stdout_truncated or result.stderr_truncated):
+            raise ScreenError(f"{binary}: launch preflight failed: {result.stderr}")
+        records.append({"binary": str(binary),
+                        "binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
+                        "argv": argv, "started_at": result.started_at,
+                        "wall_ns": result.duration_ns, "exit_code": result.exit_code})
+    return records
+
+
 def gate_metric(tool: CounterTool) -> str:
     """What the plan gate judges: cycles, or wall time where cycles are not a clock."""
     return "cycles" if tool.cycles else "wall_ns"
@@ -534,6 +560,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             if competing and args.require_quiet:
                 raise ScreenError(f"competing processes still running: {', '.join(competing[:8])}")
             load_before = check_load(args.max_load, args.require_quiet, args.settle)
+            preflight = launch_preflight((base, candidate), args.timeout)
             results = []
             for case in cases:
                 print(f"screening {case.id} ...", file=sys.stderr, flush=True)
@@ -571,6 +598,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "base": str(base),
             "aa": args.aa,
             "pairs": args.pairs,
+            "launch_preflight": preflight,
             "load_average": {"before": load_before, "after": load_after},
             "cases": [{"id": r.id, "kind": r.kind, "iterations": r.iterations, "ratios": r.ratios} for r in results],
             "gate": verdict,

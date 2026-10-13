@@ -13,8 +13,8 @@
   not retained; repeated-source profiles are diagnostic, not formal timings.
 - Unresolved: measurement-startup diagnosis and promotion. Screen attempt 1 of 2 failed;
   no formal measurement is authorized by that result.
-- Next action: diagnose the first-pair wall-time delay with byte-identical
-  process-start controls before deciding whether a changed attempt is justified.
+- Next action: verify the shared symmetric launch-preflight method from
+  T017, then spend the remaining single screen attempt; no gate changes.
 
 ## Scope and target architecture
 
@@ -101,10 +101,14 @@ build/address checks, not screen attempts or performance qualification.
   no outlier is removed, no formal run follows, and identical reruns are not
   justified by the other pairs. Raw JSON is workspace-local, not retained.
 
-The first measured pair is slow despite stable instruction ratios. That is a
-startup hypothesis, not proof of disturbance or permission to ignore the
-failure. Next diagnosis uses byte-identical new/cached executable copies with
-absolute wall/user/system time and page-fault data; it cannot qualify this unit.
+Byte-identical fresh/cached controls subsequently reproduce new-file first-launch
+wall overhead with unchanged child CPU; symmetric tiny preflight removes that
+penalty in independent sets for both exact executable hashes. See
+[the shared-method diagnosis](archive/T017-launch-preflight-diagnostic.md).
+Screen 1 remains failed and consumes one attempt. The shared preflight records
+cold launch separately without changing production bytes, thresholds, measured
+pairs or the remaining budget. Only its verified method change justifies using
+attempt 2; a second failure stops this unit without a formal run.
 
 ## Profile interpretation
 

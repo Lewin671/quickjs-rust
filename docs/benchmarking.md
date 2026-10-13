@@ -107,6 +107,10 @@ External cases are whole-process samples of a generated bundle. QuickJS-NG
 runs with `--script`. Stdout must match the adapter's exact sentinel
 contract. That proves the script reached its end; correctness rests on each
 workload's own validation and on Test262.
+Counter screens preflight both executable files once with `--raw -e 0` before
+measuring. The JSON retains each first-launch cost, command and binary hash;
+every measured pair still runs fresh processes and whole-process costs remain.
+This separates new-file host launch work; it does not discard measured samples.
 
 Analysis (`tools/benchmark/analysis.py`, constants in
 `benchmarks/analysis.json`): for each case the effect is the median over

@@ -76,6 +76,7 @@ outcome column says what happened, not what to do next.
 
 - First batch-1 formal decisions: `T037-first-formal-decision.md`.
 - Audio DFT one-factor diagnostics: `T038-audio-dft-diagnostic-data.md`.
+- Executable launch controls: `T017-launch-preflight-diagnostic.md`.
 
 - Design measurement record: [T036-mixed-call-execution-measurements.md](archive/T036-mixed-call-execution-measurements.md).
 - Case-level formal standing: `T018-af4d0d3c-case-standing.md`.
