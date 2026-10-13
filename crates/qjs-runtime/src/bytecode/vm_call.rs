@@ -6,11 +6,8 @@
 //! `function::call_function` with a `CallEnv` built by `vm_call_env.rs`.
 //! The direct-leaf path hands the callee no caller bindings, so only a
 //! callee passing `is_direct_leaf_function` may take it.
-//! Cached read-only direct eval may instead consume its independent caller
-//! projection once, after intrinsic identity and bytecode effects are proved.
 
 use std::collections::HashMap;
-use std::rc::Rc;
 
 #[cfg(test)]
 use std::cell::Cell;
@@ -26,11 +23,6 @@ use super::vm::Vm;
 use super::vm_call_env::{VmCallEnv, VmCallEnvOrigin};
 
 const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
-
-struct PreparedCachedDirectEval {
-    bytecode: Rc<super::Bytecode>,
-    env: CallEnv,
-}
 
 #[cfg(test)]
 thread_local! {
@@ -147,13 +139,14 @@ impl Vm<'_> {
     /// bytecode was compiled.  Parameter initializers are kept conservative
     /// for their distinct eval environment as well.
     ///
-    /// Keep the immutable blueprint with the projection so a guarded read-only
-    /// invocation need not repeat native eval's context/cache lookup.
+    /// The flag is true when the eval writes and deletes no binding: nothing
+    /// in the returned environment then differs from the caller's frame after
+    /// it runs, and the write-back can be skipped.
     fn cached_direct_eval_call_env(
         &self,
         source: &crate::JsString,
         direct_eval_strict: bool,
-    ) -> Option<(CallEnv, Rc<super::Bytecode>)> {
+    ) -> Option<(CallEnv, bool)> {
         if self.bytecode.contains_with()
             || self.in_parameter_prologue()
             || !self.with_stack().is_empty()
@@ -183,7 +176,10 @@ impl Vm<'_> {
             return None;
         }
 
-        Some((self.selected_direct_eval_call_env(&bytecode), bytecode))
+        Some((
+            self.selected_direct_eval_call_env(&bytecode),
+            !bytecode.writes_bindings(),
+        ))
     }
 
     /// Builds the ordinary direct-eval base context, then overlays only
@@ -256,25 +252,6 @@ impl Vm<'_> {
         self.call_callee_with_marker(callee, this_value, arguments, false, false)
     }
 
-    #[inline(never)]
-    fn call_prepared_cached_direct_eval(
-        &mut self,
-        prepared: PreparedCachedDirectEval,
-    ) -> Result<(), RuntimeError> {
-        // This route replaces one native call, not an ordinary bytecode call.
-        crate::diagnostics::count!(native_calls);
-        crate::diagnostics::count!(prepared_readonly_eval_calls);
-        let result =
-            crate::bytecode::eval_prepared_readonly_direct_eval(&prepared.bytecode, prepared.env);
-        // Read-only source can invoke callbacks that write realm bindings and
-        // throw. Refresh before handling either completion, as on the old route.
-        self.refresh_realm_backed_locals_from_realm();
-        if let Some(value) = self.handle_call_result(result)? {
-            self.stack.push(value);
-        }
-        Ok(())
-    }
-
     fn call_callee_with_direct_eval(
         &mut self,
         callee: Value,
@@ -283,24 +260,6 @@ impl Vm<'_> {
         is_strict: bool,
     ) -> Result<(), RuntimeError> {
         self.call_callee_with_marker(callee, this_value, arguments, true, is_strict)
-    }
-
-    /// Before a derived constructor binds this, its implicit state cannot be
-    /// reduced to a read-only projection. Observe the live slot/cell first;
-    /// an arrow callback may have initialized it without updating a local copy.
-    fn prepared_eval_this_is_ready(&self) -> bool {
-        if !self.env.has_local_binding(crate::SUPER_CONSTRUCTOR_BINDING)
-            && !self
-                .env
-                .has_local_binding(crate::ACTIVE_CONSTRUCTOR_BINDING)
-        {
-            return true;
-        }
-        self.bytecode
-            .this_slot()
-            .and_then(|slot| self.local_slot_value(slot))
-            .or_else(|| self.env.get_local("this"))
-            .is_some_and(|value| !value.is_uninitialized_lexical_marker())
     }
 
     fn call_callee_with_marker(
@@ -358,21 +317,12 @@ impl Vm<'_> {
         let frame_independent_native = !effective_direct_eval
             && matches!(&callee, Value::Function(function) if function.native.is_some());
         let mut read_only_eval = false;
-        let mut prepared_bytecode = None;
         let mut env = if effective_direct_eval {
             let mut env = match arguments.first() {
                 Some(Value::String(source)) => self
                     .cached_direct_eval_call_env(source, direct_eval_strict)
-                    .map(|(env, bytecode)| {
-                        read_only_eval = !bytecode.writes_bindings();
-                        if super::prepared_readonly_eval_is_eligible(&bytecode)
-                            && !self.env.has_dynamic_function_realm_global()
-                            && self.prepared_eval_this_is_ready()
-                            && matches!(&callee, Value::Function(function)
-                                if self.realm.is_eval_intrinsic(function))
-                        {
-                            prepared_bytecode = Some(bytecode);
-                        }
+                    .map(|(env, read_only)| {
+                        read_only_eval = read_only;
                         VmCallEnv {
                             env,
                             origin: VmCallEnvOrigin::DirectEval,
@@ -417,12 +367,6 @@ impl Vm<'_> {
             env.env.remove(crate::DIRECT_EVAL_STRICT_BINDING);
             env.env
                 .remove(crate::DIRECT_EVAL_IN_PARAMETER_SCOPE_BINDING);
-        }
-        if let Some(bytecode) = prepared_bytecode {
-            return self.call_prepared_cached_direct_eval(PreparedCachedDirectEval {
-                bytecode,
-                env: env.env,
-            });
         }
         let restore_dynamic_realm_after_call = !matches!(&callee, Value::Function(function) if function.native == Some(NativeFunction::Eval));
         let dynamic_realm_snapshot = restore_dynamic_realm_after_call
@@ -1068,53 +1012,4 @@ fn fast_string_from_char_code_primitives(
         crate::string::push_code_unit(&mut result, code_unit);
     }
     Some(Ok(result))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn foreign_and_unregistered_eval_intrinsics_keep_native_execution() {
-        let source = qjs_parser::parse_script(
-            "function read() { var eval = foreignEval; eval('3 + 4'); return eval('3 + 4'); } read();",
-        )
-        .expect("source parses");
-        let bytecode = crate::bytecode::compile_script(&source).expect("source compiles");
-        let mut vm = Vm::new(&bytecode).expect("realm initializes");
-        let foreign_realm = crate::function::new_realm(HashMap::new());
-        let foreign_eval = Function::new_native(Some("eval"), 1, NativeFunction::Eval, false);
-        foreign_realm.initialize_eval_intrinsic(&foreign_eval);
-        vm.env
-            .insert_realm("foreignEval".to_owned(), Value::Function(foreign_eval));
-        crate::bytecode::reset_prepared_readonly_eval_calls();
-        assert_eq!(vm.run(), Ok(Value::Number(7.0)));
-        assert_eq!(crate::bytecode::prepared_readonly_eval_calls(), 0);
-
-        let source = qjs_parser::parse_script(
-            "function read() { eval('3 + 4'); return eval('3 + 4'); } read();",
-        )
-        .expect("source parses");
-        let bytecode = crate::bytecode::compile_script(&source).expect("source compiles");
-        let vm = Vm::new(&bytecode).expect("realm initializes");
-        let mut bindings = vm
-            .env
-            .binding_snapshot()
-            .iter()
-            .map(|(name, value)| (name.clone(), value.clone()))
-            .collect::<HashMap<_, _>>();
-        // The public binding snapshot hides the internal global-object slot.
-        // Restore it when constructing this deliberately unregistered realm.
-        bindings.insert(
-            crate::GLOBAL_THIS_BINDING.to_owned(),
-            vm.env.global_this().expect("initialized global object"),
-        );
-        let unregistered = CallEnv::from_map(bindings);
-        Vm::initialize_script_global_bindings(&bytecode, unregistered.realm())
-            .expect("synthetic script bindings initialize");
-        let mut vm = Vm::new_with_globals(&bytecode, unregistered);
-        crate::bytecode::reset_prepared_readonly_eval_calls();
-        assert_eq!(vm.run(), Ok(Value::Number(7.0)));
-        assert_eq!(crate::bytecode::prepared_readonly_eval_calls(), 0);
-    }
 }

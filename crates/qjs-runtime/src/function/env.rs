@@ -73,9 +73,6 @@ pub(crate) struct RealmState {
     /// sources. Entries share only immutable bytecode; each invocation still
     /// receives an independent VM frame and runtime values.
     direct_eval_cache: RefCell<DirectEvalCache>,
-    /// Stable %eval% identity, independent of the mutable global binding.
-    /// Weak ownership cannot introduce a realm/function reference cycle.
-    eval_intrinsic: OnceCell<super::FunctionWeakRef>,
     /// Compiled regular-expression programs and validated patterns, shared
     /// by every RegExp object with the same source and flags. Bounded; holds
     /// no objects or realm references.
@@ -111,7 +108,6 @@ impl RealmState {
             global_this,
             dynamic_function_realm_global: RefCell::new(dynamic_function_realm_global),
             direct_eval_cache: RefCell::new(DirectEvalCache::default()),
-            eval_intrinsic: OnceCell::new(),
             regexp_programs: RefCell::default(),
         };
         if let Some(prototype) = object_prototype {
@@ -125,17 +121,6 @@ impl RealmState {
 
     pub(crate) fn string_object_keys(&self) -> &crate::string::StringObjectKeys {
         &self.string_object_keys
-    }
-
-    pub(crate) fn initialize_eval_intrinsic(&self, function: &super::Function) {
-        self.eval_intrinsic.get_or_init(|| function.downgrade());
-    }
-
-    pub(crate) fn is_eval_intrinsic(&self, function: &super::Function) -> bool {
-        self.eval_intrinsic
-            .get()
-            .and_then(super::FunctionWeakRef::upgrade)
-            .is_some_and(|intrinsic| intrinsic.ptr_eq(function))
     }
 
     pub(crate) fn regexp_programs(&self) -> &RefCell<crate::regexp::ProgramCache> {
@@ -1806,4 +1791,192 @@ impl CallEnv {
 }
 
 #[cfg(test)]
-mod tests;
+mod tests {
+    use super::{
+        CallEnv, DYNAMIC_FUNCTION_REALM_GLOBAL, DynamicBindings, FrameBindingValue, FrameBindings,
+        Upvalue, new_realm,
+    };
+    use crate::{ObjectRef, Value};
+    use std::{collections::HashMap, rc::Rc};
+
+    #[test]
+    fn frame_binding_promotes_to_a_cell_only_when_identity_is_requested() {
+        let bindings = FrameBindings::default();
+        bindings.insert("value".to_owned(), Value::Number(1.0));
+        assert!(matches!(
+            &bindings.0.borrow()[0].1,
+            FrameBindingValue::Direct(Value::Number(1.0))
+        ));
+
+        let cell = bindings.cell("value").expect("binding should promote");
+        assert!(matches!(
+            &bindings.0.borrow()[0].1,
+            FrameBindingValue::Cell(_)
+        ));
+        cell.set(Value::Number(2.0));
+        assert!(matches!(bindings.get("value"), Some(Value::Number(2.0))));
+        assert!(cell.ptr_eq(&bindings.cell("value").expect("cell is stable")));
+    }
+
+    #[test]
+    fn function_frame_eval_conflict_sets_are_copy_on_write() {
+        let mut caller = CallEnv::new(new_realm(HashMap::new()));
+        caller.mark_catch_binding("caller_catch".to_owned());
+        caller.mark_direct_eval_var_conflict("caller_lexical".to_owned());
+
+        let mut callee = caller.new_function_frame();
+        callee.unmark_catch_binding("caller_catch");
+        callee.mark_catch_binding("callee_catch".to_owned());
+        callee.clear_direct_eval_var_conflicts();
+        callee.mark_direct_eval_var_conflict("callee_lexical".to_owned());
+
+        assert!(caller.is_catch_binding("caller_catch"));
+        assert!(!caller.is_catch_binding("callee_catch"));
+        assert!(caller.is_direct_eval_var_conflict("caller_lexical"));
+        assert!(!caller.is_direct_eval_var_conflict("callee_lexical"));
+        assert!(!callee.is_catch_binding("caller_catch"));
+        assert!(callee.is_catch_binding("callee_catch"));
+        assert!(!callee.is_direct_eval_var_conflict("caller_lexical"));
+        assert!(callee.is_direct_eval_var_conflict("callee_lexical"));
+    }
+
+    #[test]
+    fn direct_leaf_frames_share_empty_metadata_until_mutation() {
+        let caller = CallEnv::new(new_realm(HashMap::new()));
+        let imports: super::ModuleImports = Rc::new(Default::default());
+        let mut first = caller.new_direct_leaf_function_frame(Rc::clone(&imports));
+        let second = caller.new_direct_leaf_function_frame(Rc::clone(&imports));
+
+        assert!(first.catch_bindings.is_none() && second.catch_bindings.is_none());
+        assert!(first.direct_eval_var_conflicts.is_none());
+        assert!(Rc::ptr_eq(&first.module_imports, &imports));
+        assert!(Rc::ptr_eq(&second.module_imports, &imports));
+
+        first.mark_catch_binding("caught".to_owned());
+        assert!(first.is_catch_binding("caught"));
+        assert!(!second.is_catch_binding("caught"));
+        assert!(!first.is_direct_eval_var_conflict("caught"));
+    }
+
+    #[test]
+    fn unrelated_frame_binding_does_not_disable_an_authoritative_slot() {
+        let mut env = CallEnv::new(new_realm(HashMap::new()));
+        env.insert("this".to_owned(), Value::Undefined);
+
+        assert!(env.slot_is_authoritative("value"));
+        assert!(!env.slot_is_authoritative("this"));
+
+        env.set_deopt_bindings(DynamicBindings::new());
+        assert!(!env.slot_is_authoritative("value"));
+    }
+
+    #[test]
+    fn dynamic_cell_overlay_skips_only_the_identical_cell() {
+        let bindings = DynamicBindings::new();
+        let first = Upvalue::new(Value::Number(1.0));
+        assert!(bindings.overlay_cell("value", &first));
+        assert!(!bindings.overlay_cell("value", &first));
+
+        first.set(Value::Number(2.0));
+        assert!(matches!(bindings.get("value"), Some(Value::Number(2.0))));
+
+        let shadow = Upvalue::new(Value::Number(2.0));
+        assert!(bindings.overlay_cell("value", &shadow));
+        assert!(
+            bindings
+                .cell("value")
+                .is_some_and(|binding| binding.ptr_eq(&shadow))
+        );
+        assert!(!bindings.overlay_cell("value", &shadow));
+    }
+
+    #[test]
+    fn visible_local_scans_skip_shadowed_bindings() {
+        let mut env = CallEnv::new(new_realm(HashMap::new()));
+        let deopt = DynamicBindings::new();
+        deopt.insert("deopt-only".to_owned(), Value::Number(3.0));
+        deopt.insert("shadowed".to_owned(), Value::Number(1.0));
+        env.set_deopt_bindings(deopt);
+        env.frame_bindings
+            .push("shadowed".to_owned(), Value::Number(2.0));
+        env.frame_bindings
+            .push("shadowed".to_owned(), Value::Number(4.0));
+        env.frame_bindings
+            .push("frame-only".to_owned(), Value::Number(5.0));
+
+        let mut visited = Vec::new();
+        env.for_each_visible_local_value(|value| {
+            if let Value::Number(number) = value {
+                visited.push(*number as i32);
+            }
+        });
+        visited.sort_unstable();
+
+        assert_eq!(visited, vec![3, 4, 5]);
+
+        let names = env.visible_local_names();
+        assert_eq!(names.len(), 3);
+        assert!(names.contains("deopt-only"));
+        assert!(names.contains("shadowed"));
+        assert!(names.contains("frame-only"));
+
+        let entries = env
+            .visible_local_entries()
+            .into_iter()
+            .collect::<HashMap<_, _>>();
+        assert_eq!(entries.get("deopt-only"), Some(&Value::Number(3.0)));
+        assert_eq!(entries.get("shadowed"), Some(&Value::Number(4.0)));
+        assert_eq!(entries.get("frame-only"), Some(&Value::Number(5.0)));
+    }
+
+    #[test]
+    fn module_import_routes_share_until_environment_mutation() {
+        let mut env = CallEnv::new(new_realm(HashMap::new()));
+        let cloned = env.clone();
+        assert!(Rc::ptr_eq(&env.module_imports, &cloned.module_imports));
+
+        env.set_module_import(
+            "local".to_owned(),
+            DynamicBindings::new(),
+            "exported".to_owned(),
+        );
+        assert!(env.has_module_import("local"));
+        assert!(!cloned.has_module_import("local"));
+        assert!(!Rc::ptr_eq(&env.module_imports, &cloned.module_imports));
+    }
+
+    #[test]
+    fn dynamic_function_realm_cache_tracks_bulk_and_incremental_mutations() {
+        let first = ObjectRef::new(HashMap::new());
+        let mut bindings = HashMap::new();
+        bindings.insert(
+            DYNAMIC_FUNCTION_REALM_GLOBAL.to_owned(),
+            Value::Object(first.clone()),
+        );
+        let realm = new_realm(bindings);
+        assert!(
+            realm
+                .dynamic_function_realm_global()
+                .is_some_and(|global| global.ptr_eq(&first))
+        );
+
+        realm.insert_value(DYNAMIC_FUNCTION_REALM_GLOBAL.to_owned(), Value::Undefined);
+        realm.refresh_dynamic_function_realm_global();
+        assert!(realm.dynamic_function_realm_global().is_none());
+
+        let second = ObjectRef::new(HashMap::new());
+        let env = CallEnv::new(Rc::clone(&realm));
+        env.insert_realm(
+            DYNAMIC_FUNCTION_REALM_GLOBAL.to_owned(),
+            Value::Object(second.clone()),
+        );
+        assert!(
+            realm
+                .dynamic_function_realm_global()
+                .is_some_and(|global| global.ptr_eq(&second))
+        );
+
+        env.remove_realm(DYNAMIC_FUNCTION_REALM_GLOBAL);
+        assert!(realm.dynamic_function_realm_global().is_none());
+    }
+}

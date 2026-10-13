@@ -62,9 +62,6 @@ declare_counters! {
     generic_call_frames,
     /// Calls dispatched to a native builtin.
     native_calls,
-    /// Cached read-only direct eval calls consuming an independent owned
-    /// projection rather than rebuilding it inside the native dispatcher.
-    prepared_readonly_eval_calls,
     /// Nested `Vm` instances constructed to run a callee.
     nested_vm_constructions,
     /// Callee frames entered on the caller's own VM instead of a nested `Vm`.

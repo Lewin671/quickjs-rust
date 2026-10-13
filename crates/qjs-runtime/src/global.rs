@@ -254,11 +254,7 @@ fn define_global_function(
     length: usize,
     native: NativeFunction,
 ) {
-    let function = Function::new_native(Some(key), length, native, false);
-    if native == NativeFunction::Eval {
-        env.realm().initialize_eval_intrinsic(&function);
-    }
-    let value = Value::Function(function);
+    let value = Value::Function(Function::new_native(Some(key), length, native, false));
     env.insert_realm(key.to_owned(), value.clone());
     if let Value::Object(global_object) = global_this {
         global_object.define_non_enumerable(key.to_owned(), value);
@@ -1497,7 +1493,7 @@ fn can_declare_global_function(global_this: &ObjectRef, name: &str) -> bool {
     existing.configurable || (!existing.is_accessor() && existing.writable && existing.enumerable)
 }
 
-pub(crate) fn initialize_direct_eval_bindings(
+fn initialize_direct_eval_bindings(
     bytecode: &crate::bytecode::Bytecode,
     env: &mut CallEnv,
     direct_function_eval: bool,
