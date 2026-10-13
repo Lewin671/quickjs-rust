@@ -1,20 +1,18 @@
 # T042: Consume prepared read-only eval environments once
 
-- Status: active.
-- Implementation: integrated at `67766d1c` on `agent/performance-campaign/lead`;
-  no projection-index cache, COW or T041 implementation is included.
-- Verified at: `1bbbd875`, 2026-10-12; full local gate with 5170 Test262 cases,
-  2264 runtime tests, 22 focused perf-counter tests, 23 diagnostics and 220 NG
-  fixtures. Production code equals `9ad0ab76`; owner `f1c1b612` CI is green, and
-  the integrated full local gate plus NG comparison passed. The layout
-  commit full gate and integrated CI at `1bbbd875` are green.
-- Evidence: [plan](performance-units/prepared-cached-readonly-eval-owned-execution.json)
-  binds the T040 queue and six receipts. Raw files are workspace-local,
+- Status: closed; the frozen screen budget is exhausted, with no formal run.
+- Implementation: runtime/tests reverted at `66c26405`; owner `f1c1b612` and
+  measured source `15e47e2c` are retained for diagnosis. Generic layout and
+  launch-preflight tools remain; no prepared-eval route is promoted.
+- Verified at: `15e47e2c`, 2026-10-12; complete correctness gate, owner/integrated
+  CI and exact-binary layout checks passed before two failed screens.
+- Evidence: [frozen plan](../performance-units/prepared-cached-readonly-eval-owned-execution.json)
+  and both queued screen records below. Raw artifacts are workspace-local,
   not retained; repeated-source profiles are diagnostic, not formal timings.
-- Unresolved: measurement-startup diagnosis and promotion. Screen attempt 1 of 2 failed;
-  no formal measurement is authorized by that result.
-- Next action: verify the shared symmetric launch-preflight method from
-  T017, then spend the remaining single screen attempt; no gate changes.
+- Unresolved: no performance retention; the runtime family could be revisited
+  only with fresh priority/profile evidence and a newly frozen plan.
+- Next action: do not rerun this unit or loosen its gates. Continue T043's
+  separate correctness migration, then refresh the campaign's comparison.
 
 ## Scope and target architecture
 
@@ -55,7 +53,7 @@ The owned evaluator lives with the bytecode execution entries; `global.rs`
 only shares its existing initializer and registers the stable intrinsic.
 The env test module was extracted to stay within source-size limits. Direct
 SuperCall/Spread are rejected as implicit binding writes; live-slot/cell
-inspection also excludes uninitialized derived-this contexts. [T043](T043-derived-constructor-eval-context.md)
+inspection also excludes uninitialized derived-this contexts. [T043](../T043-derived-constructor-eval-context.md)
 records two original-native semantic gaps reproduced at the exact base and
 unchanged by the complete guarded candidate delta. They are not claimed fixed.
 
@@ -101,14 +99,21 @@ build/address checks, not screen attempts or performance qualification.
   no outlier is removed, no formal run follows, and identical reruns are not
   justified by the other pairs. Raw JSON is workspace-local, not retained.
 
-Byte-identical fresh/cached controls subsequently reproduce new-file first-launch
-wall overhead with unchanged child CPU; symmetric tiny preflight removes that
-penalty in independent sets for both exact executable hashes. See
-[the shared-method diagnosis](archive/T017-launch-preflight-diagnostic.md).
-Screen 1 remains failed and consumes one attempt. The shared preflight records
-cold launch separately without changing production bytes, thresholds, measured
-pairs or the remaining budget. Only its verified method change justifies using
-attempt 2; a second failure stops this unit without a formal run.
+- Attempt 2, source `15e47e2c`, job `20261013T062432Z-prepared-eval-screen-attempt2`:
+  **FAIL**, no DISTURBED flag. Shared preflight retains both first-launch costs;
+  production bytes and frozen gates are unchanged. Tofte wall median `0.8472`,
+  every pair `[0.8416, 0.8641]`, instruction median `0.8885`; target passes.
+  Sentinel heterogeneous_property_read wall median `1.0341`, range
+  `[0.9591, 1.0712]`, instruction median `1.0001`; it exceeds `1.03` and fails.
+  All other control medians pass. Both attempts count; the budget is exhausted,
+  no formal run follows, and the runtime is reverted. An unchanged instruction
+  ratio does not authorize overriding the failed wall gate.
+
+Byte-identical fresh/cached controls independently reproduce new-file startup
+wall overhead and tiny symmetric preflight removes it for both exact binaries;
+[the shared-method record](T017-launch-preflight-diagnostic.md) explains the
+fixed method change before attempt 2. That change does not erase attempt 1,
+reset the budget, mix raw measurements or retain this runtime implementation.
 
 ## Profile interpretation
 
@@ -129,6 +134,6 @@ rebinding, foreign/bound/Proxy and dynamic-realm fallback; extra arguments,
 RegExp identity, arguments, private/super/new.target and module context.
 Loop tests have in-script guard counters.
 
-Follow [the performance workflow](../docs/performance-workflow.md). The frozen
+Follow [the performance workflow](../../docs/performance-workflow.md). The frozen
 plan owns thresholds and attempts. Record every screen, complete external and
 broad results, sentinels and exact-candidate Test262 evidence before promotion.

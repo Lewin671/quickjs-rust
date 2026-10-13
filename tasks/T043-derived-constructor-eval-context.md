@@ -54,9 +54,9 @@ ascribe them to an earlier architectural change without a bisect.
 Trace `global.rs` native eval, `bytecode/vm_call.rs` caller projection and
 writeback, `vm_frame_init`/binding/`this` handling and derived construction.
 Preserve per-activation `this` identity, shared cells, single-super rules,
-callback effects and exceptions. T042 conservatively excludes direct
-SuperCall/Spread effects and uninitialized derived-this contexts; its ordinary
-read-only callback coverage must still preserve shared-cell effects.
+callback effects and exceptions. Rejected T042 is separate historical work;
+its prepared-eval route is absent after the lead revert. This correctness
+unit neither reinstates nor expands that performance admission.
 
 The configured Test262 snapshot's zero-gap result does not establish these
 untested programs are correct. Add cases that assert each completion and `this`
@@ -96,5 +96,5 @@ super argument/Base effects with no repeated fields; Base and field throws;
 callback-super through read-only eval on success and throw; strict declaration
 isolation, indirect/global/module this and legitimate undefined this; and
 Reflect.construct with a distinct new.target. Assert completion, event order
-and cell identity, not just a final allocation count. T042 remains ineligible
-before binding and may admit ordinary read-only eval after binding.
+and cell identity, not just a final allocation count. No prepared-eval
+performance route belongs to this correctness unit.

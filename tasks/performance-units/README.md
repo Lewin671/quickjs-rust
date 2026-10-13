@@ -36,7 +36,7 @@ nothing about whether the code exists.
 | Plan (`<name>.json`) | Task | Base | Recorded outcome |
 | --- | --- | --- | --- |
 | `own-data-cache-hot-answers-x86` | T041 | `06f0ecd3` 2026-10-12 | rejected on its single wall-time screen; runtime reverted |
-| `prepared-cached-readonly-eval-owned-execution` | T042 | `06f0ecd3` 2026-10-12 | implementation verified; screen attempt 1 of 2 failed, no formal qualification |
+| `prepared-cached-readonly-eval-owned-execution` | T042 | `06f0ecd3` 2026-10-12 | two screens failed; runtime reverted, no formal qualification |
 | `ascii-string-literal-span-copy` | T021 | `0c31864b` 2026-07-28 | rejected |
 | `base-class-constructor-direct-slots` | not recorded | `d3f9c179` 2026-07-28 | not recorded |
 | `borrowed-fast-native-predispatch` | T021 | `620bb67b` 2026-07-30 | rejected |
