@@ -3,17 +3,18 @@
 - Status: active.
 - Implementation: integrated at `67766d1c` on `agent/performance-campaign/lead`;
   no projection-index cache, COW or T041 implementation is included.
-- Verified at: `67766d1c`, 2026-10-12; full local gate with 5170 Test262 cases,
+- Verified at: `1bbbd875`, 2026-10-12; full local gate with 5170 Test262 cases,
   2264 runtime tests, 22 focused perf-counter tests, 23 diagnostics and 220 NG
   fixtures. Production code equals `9ad0ab76`; owner `f1c1b612` CI is green, and
-  the integrated full local gate plus NG comparison passed.
+  the integrated full local gate plus NG comparison passed. The layout
+  commit full gate and integrated CI at `1bbbd875` are green.
 - Evidence: [plan](performance-units/prepared-cached-readonly-eval-owned-execution.json)
   binds the T040 queue and six receipts. Raw files are workspace-local,
   not retained; repeated-source profiles are diagnostic, not formal timings.
-- Unresolved: current-layout CI, screens
-  and promotion. No screen attempt has been used.
-- Next action: verify the integrated layout commit, then use the frozen
-  screen (attempt 1 of 2).
+- Unresolved: measurement-startup diagnosis and promotion. Screen attempt 1 of 2 failed;
+  no formal measurement is authorized by that result.
+- Next action: diagnose the first-pair wall-time delay with byte-identical
+  process-start controls before deciding whether a changed attempt is justified.
 
 ## Scope and target architecture
 
@@ -88,6 +89,22 @@ page offsets are `0xc40/0x400`, unchanged from the requested targets. Order SHA
 The integrated flag applies only to macOS x86_64; arm64's existing layout remains.
 Raw headers, orders and metadata are workspace-local, not retained. These are
 build/address checks, not screen attempts or performance qualification.
+
+## Screen record
+
+- Attempt 1, source `1bbbd875`, job `20261013T060218Z-prepared-eval-screen-attempt1`:
+  **FAIL**, no DISTURBED flag and an empty intruders log. Exact candidate bytes
+  equal the layout probe; exact base bytes equal the frozen queue. Tofte wall
+  median `0.8744`, pairs `[3.7384, 0.8492, 0.8744, 0.8745, 0.8514]`, instruction
+  median `0.8886`. Every control/sentinel median is at most `1.0195`, within
+  `1.03`. The first target pair fails the required every-pair improvement;
+  no outlier is removed, no formal run follows, and identical reruns are not
+  justified by the other pairs. Raw JSON is workspace-local, not retained.
+
+The first measured pair is slow despite stable instruction ratios. That is a
+startup hypothesis, not proof of disturbance or permission to ignore the
+failure. Next diagnosis uses byte-identical new/cached executable copies with
+absolute wall/user/system time and page-fault data; it cannot qualify this unit.
 
 ## Profile interpretation
 
