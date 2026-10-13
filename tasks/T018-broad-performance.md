@@ -2,7 +2,7 @@
 
 - Status: active. This is the performance campaign contract.
 - Implementation: partial; B1-B2 complete, B3-B6 open. Both batch-1 leaves
-  are present on `integration/batch-1` and retained under the lead amendment.
+  are integrated into main and retained under the lead amendment.
 - Verified at: `af4d0d3c`, 2026-10-12, locked 30-block comparison against
   exact queue candidate `e54e33eb` and NG `f7830186`; all lanes complete;
   exact-candidate CI burndown passes all 42672 configured cases with zero gaps.
@@ -10,8 +10,9 @@
   Raw target/ artifacts are local, not retained.
 - Unresolved: audio-dft engine placement/variance; its unstable-base control
   uses the instruction floor. Both original target gates pass.
-- Next action: numeric-scratch-placement is approved on the af4d0d3c queue
-  after this result is pushed. Main stays e54e33eb; frozen evidence stays true.
+- Next action: [T040](T040-imac-general-performance.md) refreshes the current-main
+  x86_64 queue and profiles before selecting a new general optimization. The
+  af4d0d3c standing and its plans remain bound to that historical revision.
 
 
 

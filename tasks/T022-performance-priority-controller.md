@@ -11,9 +11,9 @@
   owns A/A evidence, instruction floor, hashes and both exact decision outputs.
 - Unresolved: no ruleset requires the Performance decision check (last box).
   Audio-dft's engine property remains open independently of retained controls.
-- Next action: push integration results, then freeze numeric-scratch-placement
-  from the integration tip with the lead-authorized af4d0d3c queue. Main stays
-  e54e33eb; existing plans retain their old base/queue bindings.
+- Next action: [T040](T040-imac-general-performance.md) generates a current-main
+  x86_64 queue and profiles. Integration results are already in main; existing
+  plans retain their old base/queue bindings and do not select new-host work.
 
 
 

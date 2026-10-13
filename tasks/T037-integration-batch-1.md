@@ -2,7 +2,7 @@
 
 - Status: active. Both batch-1 promotion decisions retained after the
   lead's 2026-10-12 unstable-base amendment; original measurements unchanged.
-- Implementation: present on integration/batch-1; both units retained.
+- Implementation: present in main; both units retained.
   No runtime code was reverted and no frozen plan/threshold was edited.
 - Verified at: candidate af4d0d3c; rule merge dbf98c55, 2026-10-12,
   30-block base A/A, both promotion re-decides and the full integration gate.
@@ -10,8 +10,9 @@
   re-decision below and [leaf screens](archive/T018-batch-1-leaf-screens.md).
 - Unresolved: audio-dft placement/variance still needs an engine unit;
   retained control uses instructions, not a claim of precise audio cycles.
-- Next action: push this integration update, then freeze/validate the lead's
-  numeric-scratch-placement unit on the af4d0d3c queue. Main stays e54e33eb.
+- Next action: audio-dft investigation remains with T038. New x86_64 unit
+  selection follows [T040](T040-imac-general-performance.md); the original
+  af4d0d3c queue and decisions are not relabelled as current-main evidence.
 
 
 ## Scope and integration
