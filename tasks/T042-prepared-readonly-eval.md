@@ -75,6 +75,17 @@ These are build/address checks, never screen attempts or performance evidence.
 Raw files are workspace-local, not retained; do not accept the requested
 offsets merely because they appear in the order-file header.
 
+Pure Python replay of both snapshots reproduces their next heads exactly.
+All 149 admissible filler size/name/count tuples and the 556-line ranked tail
+are identical. A start low bit pattern `0x850` chooses mmap `0x200` plus
+read_dir `0x1f0` and links B; B start `0x860` chooses print_raw_with_column
+`0x3e0` and links A. Thus the pin follows the previous binary's text start;
+alias, filler-span and ranked-tail drift do not explain this run. B's Mach-O
+header ends at `0x840` and its final eh_frame ends at the TEXT segment end.
+Next diagnostic: relink once with saved `10-before.order`, save A's complete
+otool/nm/binary without repinning, then compare A/B segment/section/header,
+unwind and function-starts data. More identical iterations cannot fix a cycle.
+
 ## Profile interpretation
 
 Original tofte call-lifecycle envelopes are 44/116, 53/102 and 45/103.

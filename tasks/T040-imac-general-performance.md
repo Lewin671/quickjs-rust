@@ -10,8 +10,9 @@
   profile job `20261013T033011Z-campaign-profile-top8-receipts`. Raw artifacts
   are workspace-local and not retained in this repository.
 - Unresolved: unit screens, formal promotion and campaign performance gaps.
-- Next action: finish T042's independent correctness review, verify its layout
-  and use its bounded screens. T041's frozen attempt budget is exhausted.
+- Next action: resolve T042's saved A/B text-start layout cycle, integrate its
+  correctness-verified candidate after CI, then use its bounded screens.
+  T041's frozen attempt budget is exhausted; neither unit is promoted.
 
 ## Goal and ownership
 
