@@ -429,7 +429,7 @@ impl Vm<'_> {
         target: usize,
     ) -> Option<FrameExit> {
         let backedge = self.ip - 1;
-        if self.jump_with_loop_plans(program.loop_plans(), target, backedge)
+        if self.jump_with_selected_loop_plans(program, target, backedge)
             || self
                 .current
                 .cold()
