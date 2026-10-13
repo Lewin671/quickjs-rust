@@ -21,6 +21,11 @@ fn main() {
         .join(filename);
     println!("cargo:rerun-if-changed={}", order.display());
     if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") && order.is_file() {
+        if env::var("CARGO_CFG_TARGET_ARCH").as_deref() == Ok("x86_64") {
+            // ld can move __text's start when the order changes. Page alignment
+            // makes the pin's starting offset independent of the previous link.
+            println!("cargo:rustc-link-arg-bin=qjs=-Wl,-sectalign,__TEXT,__text,1000");
+        }
         println!(
             "cargo:rustc-link-arg-bin=qjs=-Wl,-order_file,{}",
             order.display()

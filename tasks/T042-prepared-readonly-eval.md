@@ -10,10 +10,10 @@
 - Evidence: [plan](performance-units/prepared-cached-readonly-eval-owned-execution.json)
   binds the T040 queue and six receipts. Raw files are workspace-local,
   not retained; repeated-source profiles are diagnostic, not formal timings.
-- Unresolved: integrated CI, the layout pin's reproducible two-cycle, screens
+- Unresolved: current-layout CI, screens
   and promotion. No screen attempt has been used.
-- Next action: inspect the saved A/B link evidence, fix the address model,
-  verify a stable target layout, then use the frozen screen.
+- Next action: verify the integrated layout commit, then use the frozen
+  screen (attempt 1 of 2).
 
 ## Scope and target architecture
 
@@ -68,24 +68,26 @@ and `fec37734e2b6a5848662ba6afb1c91ab4c5c3438b628cb2e7d221773b94edb8e`.
 Hot callee order/budgets and selected filler sizes stay unchanged; std filler
 selection and head count differ. Actual VM/wide page offsets alternate
 `0xc30/0x3f0` and `0xc50/0x410`, bracketing requested `0xc40/0x400`.
-First text symbols are at `0x100004850` and `0x100000860`; a static header
-diagnostic (job `20261013T053409Z-layout-header-diagnostic`) verifies B's
-`__text` start is `0x100000860`, aligned to 16 bytes. The exact cause still
-needs A/B evidence; increasing relinks alone does not resolve this cycle.
-These are build/address checks, never screen attempts or performance evidence.
-Raw files are workspace-local, not retained; do not accept the requested
-offsets merely because they appear in the order-file header.
+First text symbols are at `0x100004850` and `0x100000860`. Full A/B
+headers have the same 15 commands, header end `0x840`, text size `0x514620`
+and other TEXT section sizes. Compact-unwind differs by 8 bytes: the first
+compressed page in A has one more entry and local encoding. TEXT sizes become
+`0x60c000/0x608000`, and front padding becomes `0x4010/0x20`. Reordering
+therefore changes unwind metadata and segment packing, which moves text's
+starting page offset; repinning follows the previous link and repeats the cycle.
+Filler sizes, hot budgets and ranked tail are identical, and pure-Python replay
+reproduces both next heads. Extra identical relinks cannot resolve the feedback.
 
-Pure Python replay of both snapshots reproduces their next heads exactly.
-All 149 admissible filler size/name/count tuples and the 556-line ranked tail
-are identical. A start low bit pattern `0x850` chooses mmap `0x200` plus
-read_dir `0x1f0` and links B; B start `0x860` chooses print_raw_with_column
-`0x3e0` and links A. Thus the pin follows the previous binary's text start;
-alias, filler-span and ranked-tail drift do not explain this run. B's Mach-O
-header ends at `0x840` and its final eh_frame ends at the TEXT segment end.
-Next diagnostic: relink once with saved `10-before.order`, save A's complete
-otool/nm/binary without repinning, then compare A/B segment/section/header,
-unwind and function-starts data. More identical iterations cannot fix a cycle.
+Job `20261013T055306Z-prepared-eval-sectalign-layout` uses production `9ad0ab76`
+with only the proposed linker section alignment. `-sectalign __TEXT __text 1000`
+fixes the starting page offset at zero: otool reports `0x100004000`, align
+`2^12`. The regenerated order stabilizes after one relink, and actual VM/wide
+page offsets are `0xc40/0x400`, unchanged from the requested targets. Order SHA
+`3314cfdd69c20a6faf919c0929f818c89f4b8cb1b21950cd2df594e41d31eccd`; binary SHA
+`e079067920853be584e0c022c854ccee46e6992fbdd0ddfe05752817e9e5bdf3`.
+The integrated flag applies only to macOS x86_64; arm64's existing layout remains.
+Raw headers, orders and metadata are workspace-local, not retained. These are
+build/address checks, not screen attempts or performance qualification.
 
 ## Profile interpretation
 
