@@ -169,6 +169,21 @@ pub(crate) fn direct_eval_bytecode_is_cacheable(bytecode: &Bytecode) -> bool {
             .any(|op| matches!(op, ir::Op::NewTemplateObject { .. }))
 }
 
+/// Effects required before a caller can consume its prepared eval projection
+/// without preserving another environment for declarations or write-back.
+pub(crate) fn prepared_readonly_eval_is_eligible(bytecode: &Bytecode) -> bool {
+    direct_eval_bytecode_is_cacheable(bytecode)
+        && !bytecode.contains_direct_eval()
+        && !bytecode.contains_with()
+        && !bytecode.suspends()
+        && !bytecode.writes_bindings()
+        // Super construction initializes the implicit this binding even
+        // though it is not a named assignment in writes_bindings().
+        && !bytecode.code.iter().any(|op| {
+            matches!(op, ir::Op::SuperCall(_) | ir::Op::SuperCallSpread)
+        })
+}
+
 /// A bytecode-compilation failure tagged with the stage a conformance harness
 /// should attribute it to.
 #[derive(Clone, Debug, PartialEq)]
@@ -490,6 +505,51 @@ pub(crate) fn eval_bytecode_with_env(
 ) -> FunctionBytecodeResult<'_> {
     let with_stack = env.direct_eval_with_stack();
     vm::eval_function_bytecode(bytecode, env, Vec::new(), with_stack, true, None)
+}
+
+#[cfg(test)]
+thread_local! {
+    static PREPARED_READONLY_EVAL_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
+pub(crate) fn reset_prepared_readonly_eval_calls() {
+    PREPARED_READONLY_EVAL_CALLS.with(|calls| calls.set(0));
+}
+
+#[cfg(test)]
+pub(crate) fn prepared_readonly_eval_calls() -> usize {
+    PREPARED_READONLY_EVAL_CALLS.with(std::cell::Cell::get)
+}
+
+/// Runs a guarded cached read-only direct eval in its independent caller
+/// projection. There are no eval declarations or binding writes to merge back,
+/// so the evaluator can own the projection rather than two cloned views of it.
+/// Callback effects still reach the original shared cells, objects and realm.
+pub(crate) fn eval_prepared_readonly_direct_eval(
+    bytecode: &crate::bytecode::Bytecode,
+    mut env: crate::CallEnv,
+) -> Result<Value, RuntimeError> {
+    debug_assert!(crate::bytecode::prepared_readonly_eval_is_eligible(
+        bytecode
+    ));
+    debug_assert!(env.deopt_bindings().is_none());
+    debug_assert!(matches!(
+        env.get_local(crate::DIRECT_EVAL_BINDING),
+        Some(Value::Boolean(true))
+    ));
+    #[cfg(test)]
+    PREPARED_READONLY_EVAL_CALLS.with(|calls| calls.set(calls.get() + 1));
+    let direct_function_eval = env.get_local("this").is_some();
+    crate::global::initialize_direct_eval_bindings(
+        bytecode,
+        &mut env,
+        direct_function_eval,
+        false,
+        None,
+        bytecode.is_strict(),
+    );
+    eval_bytecode_with_env_ephemeral_global_lexicals(bytecode, env).value
 }
 
 pub(crate) fn eval_bytecode_with_env_ephemeral_global_lexicals(
