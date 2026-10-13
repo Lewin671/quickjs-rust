@@ -1216,7 +1216,11 @@ fn function_env<'a>(
     let use_direct_call_slots = can_seed_direct_leaf_call(function, bytecode)
         || (is_construct && can_seed_base_class_constructor_slots(function, bytecode));
     let lexical_this = received_upvalue_value(function, bytecode, "this");
-    let lexical_derived_this = function.lexical_derived_this();
+    let lexical_derived_this = if function.lexical_this {
+        function.lexical_derived_this()
+    } else {
+        None
+    };
     let has_lexical_derived_this = lexical_derived_this.is_some();
     let lexical_field_initializer =
         received_upvalue_value(function, bytecode, FIELD_INITIALIZER_EVAL_BINDING);
