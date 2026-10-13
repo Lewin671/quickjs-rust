@@ -1,16 +1,16 @@
 # T044: Typed loops on selected virtual scalar banks
 
-- Status: active; plan frozen at `e778be0d`, owner implementation in progress.
-- Implementation: in progress on `agent/selected-stream-virtual-bank/owner`;
-  no candidate is integrated or screened. Runtime work starts after freeze.
-- Verified at: `27ca5140`, 2026-10-13, complete 30-block four-worker comparison,
-  exact-binary profiles and supplemental instrumented entry trace.
+- Status: active; plan frozen at `e778be0d`, candidate integrated for checking.
+- Implementation: owner `0a95c1cc`, integrated as `c5f35035` on the lead branch;
+  not promoted to main or screened. Runtime work started after freeze.
+- Verified at: owner `0a95c1cc`, full local gate and NG238; independent final
+  debug CLI `7d965c89` and production tree `9169fcaa`. Lead checks pending.
 - Evidence: [plan](performance-units/selected-stream-readonly-virtual-bank-typed-loops.json);
   workspace queue/profile jobs and numbers below. Raw files are not retained.
-- Unresolved: candidate implementation, screens
-  and complete promotion. The discovery run has three imprecise controls.
-- Next action: complete the two structural stages on the owner branch,
-  independently review variant/handback semantics, then use the frozen screen.
+- Unresolved: lead gate/CI, queued layout qualification, screens and complete
+  promotion. The discovery run has three imprecise controls.
+- Next action: complete lead correctness checks and CI, then queued native
+  layout scan/re-pin and the frozen screen. No screen attempts are used yet.
 
 ## Measured boundary
 
@@ -88,6 +88,29 @@ non-number values, coercion callbacks and throws; related writes/reinit/discard;
 early break/return, deopt/interrupt/residency and exact continuation stack/IP.
 All T043 cell/owner and ordinary prototype guards remain regression coverage.
 Existing diagnostic counters must prove typed entry, not only equal output.
+
+Owner verification passed 2277 runtime tests, 25 diagnostic tests, agents,
+408 tool and 35 script tests, hooks/file sizes and 5170 Test262 subset cases;
+238 NG fixtures also pass. Focused tests cover separate/shared-code variant
+caches, clone cache reset, refresh and wide bitmap ownership, current bank
+values, residency and fused-edge coordinates. The selected fused increment's
+edge is `ip + 1 + skip`; retained Jump discovery is deduplicated, and an
+unmapped incoming edge rejects the plan. Ordinary VM handling was correct.
+
+The final debug CLI hash is
+`7d965c899f353529dcf175c0b5bbea3285191748b874cd40dd3fb56309c82082`;
+production tree hash
+`9169fcaa20827eab5739bc01aea090fee59f16cf8cdea600828be71deab8dbdf`.
+Independent checks preserve all 15 production files and five build inputs
+before/after: 27 scope comparisons match baseline, 26 match NG (the existing
+eval gap below), and 17 T043 fixtures match NG. Fresh object/array inputs
+enter the bank tier four times per route; early return enters once.
+Getter/proxy/string-continuation probes have zero bank entries and establish
+fallback behavior only. A final-forwarded Binary test forces a genuine
+stoppable site, restores its physical prefix/IP and resumes the VM. Discard2
+checks packed, unforwarded input mapping: Move cannot exit in production and
+copy forwarding may delete the discarded key. The existing residency bound
+is tested; this engine has no interrupt polling API to exercise.
 
 Nine finite semantic fixtures are retained in `tests/fixtures/compare-qjs/`:
 fresh values, zero trips, coercion, getter/proxy effects, writes/reinitialization,

@@ -103,14 +103,21 @@ falls through to a plain jump when both decline:
    helper calls flattened into the program. It hands the loop back to the
    interpreter at the exact instruction it cannot complete.
 
-Plans are compiled once per `Bytecode` on first use; a frame that
-deoptimises a numeric-mutation plan takes a private copy.
+Numeric-mutation plans are compiled once per `Bytecode` on first use; a
+frame that deoptimises one takes a private copy. Typed plans belong to the
+selected original, full or data-only instruction stream, each with its own
+cache and physical stack/continuation coordinates. Switching streams resets
+the frame's declined-plan indices; a wide handback transfers those indices
+only when the VM selects the original stream.
 
 **Compile-time lowering.** `bytecode/virtual_object/` proves which object,
 array and function literals have no observable identity and produces a
 lowered instruction stream that keeps their fields in a frame-local value
 bank. The stream is chosen per activation; its instructions are handled by
-the ordinary dispatch (`bytecode/vm_virtual_object.rs`).
+the ordinary dispatch (`bytecode/vm_virtual_object.rs`). Eligible typed loops
+seed current primitive bank inputs on every entry without materializing a
+receiver. Bank mutation, initialization and unsupported effects reject this
+read-only path; wide frames keep their original stream without a bank.
 
 **In-place string append.** Before a compound string assignment the
 interpreter drops its own extra references to the target, so a uniquely held
