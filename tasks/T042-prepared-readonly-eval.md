@@ -1,15 +1,17 @@
 # T042: Consume prepared read-only eval environments once
 
 - Status: active.
-- Implementation: none; architecture and exact-evidence plan validated.
-- Verified at: base `06f0ecd3`, 2026-10-12; original and top-level-repeated
-  exact-binary receipts verified; `validate-unit --profile-root` passed.
+- Implementation: present at `9ad0ab76` on `agent/prepared-readonly-eval/owner`;
+  no projection-index cache, COW or T041 implementation is included.
+- Verified at: `9ad0ab76`, 2026-10-12; 2261 runtime tests and 117 selected
+  Test262 cases in the fast gate, 19 focused perf-counter tests, 23 diagnostics
+  and 220 NG fixtures; source scope and independent review passed.
 - Evidence: [plan](performance-units/prepared-cached-readonly-eval-owned-execution.json)
   binds the T040 queue and six receipts. Raw files are workspace-local,
   not retained; repeated-source profiles are diagnostic, not formal timings.
-- Unresolved: implementation, semantic/provenance tests, screens and promotion.
-- Next action: implement the owned read-only route in an isolated checkout,
-  retaining caller projection construction and every non-admitted fallback.
+- Unresolved: full gate, remote CI, exact x86_64 layout, screens and promotion.
+- Next action: complete full correctness/CI, integrate the candidate, repin its
+  actual target layout and execute the frozen screen. No attempt has been used.
 
 ## Scope and target architecture
 
@@ -40,11 +42,19 @@ Implementation stages within this leaf:
 2. Prove hit/fallback behavior and semantics, then use the plan's bounded
    screens and complete formal promotion. No stage alone is a speed claim.
 
-Owner paths: `bytecode/vm_call.rs`, `global.rs`, `function/env.rs`, their
+Owner paths: `bytecode/mod.rs`, `bytecode/vm_call.rs`, `global.rs`, `function/env.rs`, their
 existing eval-cache/direct-eval tests, and necessary test/perf counter hooks
 under `crates/qjs-runtime/src/`. The lead owns plans, docs and order files.
 No AST, dependency, general call ABI, COW, projection-slot cache or writes
 optimization belongs to this unit.
+
+The owned evaluator lives with the bytecode execution entries; `global.rs`
+only shares its existing initializer and registers the stable intrinsic.
+The env test module was extracted to stay within source-size limits. Direct
+SuperCall/Spread are rejected as implicit binding writes; live-slot/cell
+inspection also excludes uninitialized derived-this contexts. [T043](T043-derived-constructor-eval-context.md)
+records two original-native semantic gaps reproduced at the exact base and
+unchanged by the complete guarded candidate delta. They are not claimed fixed.
 
 ## Profile interpretation
 
