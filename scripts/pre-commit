@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Resolve symlinks so the hook works whether run directly or via .git/hooks/.
-SCRIPT_PATH="${BASH_SOURCE[0]}"
-while [ -L "$SCRIPT_PATH" ]; do
-  SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
-  SCRIPT_PATH="$(readlink "$SCRIPT_PATH")"
-  [[ "$SCRIPT_PATH" != /* ]] && SCRIPT_PATH="$SCRIPT_DIR/$SCRIPT_PATH"
+# Git invokes hooks from the committing worktree, but exports repository-local
+# variables. Nested test repositories must discover their own metadata instead
+# of inheriting this index or Git directory. A shared hook symlink also need not
+# point into this worktree, so resolve the checkout from the hook's cwd.
+GIT_LOCAL_ENV_VARS="$(git rev-parse --local-env-vars)"
+for variable in $GIT_LOCAL_ENV_VARS; do
+  unset "$variable"
 done
-ROOT_DIR="$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)"
+ROOT_DIR="$(git -C "$PWD" rev-parse --show-toplevel)"
 . "$ROOT_DIR/scripts/lib.sh"
 
 echo "pre-commit: change-aware fast checks..."

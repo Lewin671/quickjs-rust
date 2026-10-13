@@ -56,7 +56,10 @@ Python sources, 1200 for Python tests, 600 for top-level `tasks/*.md`.
 
 **Git hooks.** `scripts/pre-commit` runs
 `check-touched.sh --staged --explain`. `scripts/pre-push` runs the full
-`check.sh` on every push. `QJS_SKIP_PRE_PUSH=1` makes the pre-push hook exit
+`check.sh` on every push. Both select scripts from the invoking worktree and
+clear Git's repository-local environment before running nested checks, even
+when a shared hook symlink points into a different checkout.
+`QJS_SKIP_PRE_PUSH=1` makes the pre-push hook exit
 without checking; the script states no condition for using it, and
 `AGENTS.md` requires `check.sh` before a push either way. Hooks are stored in
 the shared git directory, so every worktree of a clone uses them.
