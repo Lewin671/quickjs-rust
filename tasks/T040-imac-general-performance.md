@@ -11,8 +11,8 @@
   are workspace-local and not retained in this repository.
 - Unresolved: fresh post-correctness priority, new independent units and
   campaign performance gaps.
-- Next action: integrate and verify T043's separate correctness migration,
-  verify the resulting target layout, then refresh comparison and profiles.
+- Next action: run a fresh complete 30-block comparison of the verified
+  correctness/layout source, then profile its exact binary and freeze new units.
   Both closed runtime units exhausted their frozen screen budgets.
 
 ## Goal and ownership

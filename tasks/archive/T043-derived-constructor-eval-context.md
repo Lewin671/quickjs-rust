@@ -1,20 +1,19 @@
 # T043: Derived-constructor direct-eval context
 
-- Status: active.
+- Status: closed; the derived-this authority migration is verified.
 - Implementation: integrated at `4fd7d959` on the lead branch, including all
   three stages. T042's rejected route/counters remain absent.
-- Verified at: `4fd7d959`, 2026-10-12, fast gate with 2276 runtime and 117
-  selected Test262 cases. Owner `83114d0f` full gate and remote CI are green;
-  integration full gate and script-goal NG comparison are pending.
-- Evidence: baseline reproductions below; workspace-local owner and independent
-  receipts under `outputs/quickjs-performance-20261012/t043-*`, not retained.
-  The independently checked 12-probe set matches NG on 10 and reproduces the
-  two other differences at exact baseline `06f0ecd3`.
-- Unresolved: integrated full gate/CI and x86_64 regression; original introducing
-  revision. Existing super-resolution-before-argument and global-this-property
-  pollution gaps are separate, not claimed fixed by this unit.
-- Next action: finish integrated verification, archive this correctness unit,
-  then generate a new campaign comparison from the resulting exact source.
+- Verified at: `fbe06ea8`, 2026-10-13, full local gate with 2276 runtime,
+  5170 Test262 cases and 238 script-goal NG fixtures; remote CI is green.
+  The regenerated x86_64 order and 17 derived NG fixtures pass on the iMac.
+- Evidence: the programs below and queue job
+  `20261013T070255Z-derived-this-layout-and-regression`; raw receipts/logs are
+  workspace-local under `outputs/quickjs-performance-20261012/t043-*`, not
+  retained. Owner `83114d0f` is retained as diagnostic source.
+- Unresolved: two separately reproduced baseline gaps below are not fixed;
+  the original introducing revision was not bisected. No performance claim.
+- Next action: refresh T040's comparison from the integrated source; any
+  further semantic family is a separate task, not a continuation of this unit.
 
 ## Reproductions
 
@@ -101,3 +100,45 @@ isolation, indirect/global/module this and legitimate undefined this; and
 Reflect.construct with a distinct new.target. Assert completion, event order
 and cell identity, not just a final allocation count. No prepared-eval
 performance route belongs to this correctness unit.
+
+## Integration and host verification
+
+The lead retains all 18 derived semantic cases and three cell-identity cases.
+Only the rejected T042 prepared-route counter assertion is removed; its
+callback/throw program and expected result remain unchanged. Baseline env tests
+are extracted to their own module with their bodies unchanged. T042's owned
+evaluator, weak eval identity and counters are absent from the integrated tree.
+
+The x86_64 layout stabilizes after one relink, actual VM/wide offsets
+`0xc40/0x400`. Regenerated order SHA
+`5b121ecb3de9b7b4672476522e90b974c013de86f643a075667e8ef8cd5ca3c9`,
+release binary SHA
+`b97911efb7bfc31df8bd672922b64888aa16b8c5f2cc049d60f4720e2b94a1c2`.
+All 17 derived fixtures match fixed NG on that exact binary. These are address
+and correctness checks, not performance qualification.
+
+## Remaining independent baseline gaps
+
+Both were independently reproduced at `06f0ecd3` and persist in the integrated
+debug CLI. They are outside this unit's binding-identity scope:
+
+```js
+class A {constructor(){this.which='A';}}
+class B {constructor(){this.which='B';}}
+class D extends A {constructor(){super((Object.setPrototypeOf(D,B),0));}}
+[new D().which,new D().which].join(',');
+```
+
+Rust returns `B,B`; NG script returns `A,B`. Super constructor resolution must
+precede argument effects, rather than observe the prototype after arguments.
+
+```js
+var obj={this:1,method(){var before=this;eval('this.this=2');
+  return eval('this')===before && this.this===2;}};
+var root=globalThis;root.this=99;var ok=obj.method();
+[ok,eval('this')===root,(0,eval)('this')===root,root.this].join(',');
+```
+
+Rust returns `true,false,false,99`; NG script returns `true,true,true,99`.
+An ordinary global object's `this` property must not replace implicit global
+this authority. The method's receiver/property mutation is correct in both.
