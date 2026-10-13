@@ -45,7 +45,11 @@ use crate::Value;
 mod branchy_nested_tests;
 mod compile;
 #[cfg(test)]
+mod test_handback;
+#[cfg(test)]
 mod test_residency;
+#[cfg(test)]
+mod virtual_bank_tests;
 
 // Production expands to the original constant. Only the explicit residency
 // test overrides the bound; unrelated diagnostics keep production admission.
@@ -73,7 +77,7 @@ pub(in crate::bytecode) mod helper_graph;
 mod hoist;
 mod register_packing;
 
-pub(super) use compile::compile_all;
+pub(super) use compile::{compile_all, compile_stream};
 pub(super) use execute::try_run_typed_loop;
 pub(in crate::bytecode) use frame::LoopFrame;
 
@@ -645,6 +649,8 @@ pub(super) struct TypedLoopProgram {
     register_count: usize,
     /// Register holding each referenced frame slot, as (register, slot).
     local_slots: Vec<(u16, u32)>,
+    /// Read-only virtual bank inputs, refreshed on every native entry.
+    virtual_slots: Vec<(u16, u32)>,
     /// Slots that must be written back when the loop ends, each with the
     /// register holding its value. Several slots may share one register: a
     /// completion temporary that only ever receives one expression's value needs

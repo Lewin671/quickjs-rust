@@ -32,10 +32,22 @@ pub(super) struct LoopPlanView<'a> {
 impl<'a> LoopPlanView<'a> {
     /// The accelerators for `bytecode`, compiling each family on first use.
     pub(super) fn for_bytecode(bytecode: &'a super::ir::Bytecode) -> Self {
+        Self::for_stream(bytecode, &bytecode.code, &bytecode.typed_loop_programs)
+    }
+
+    pub(super) fn for_stream(
+        bytecode: &'a super::ir::Bytecode,
+        code: &'a [super::ir::Op],
+        typed_cache: &'a std::cell::OnceCell<Vec<TypedLoopProgram>>,
+    ) -> Self {
         Self {
-            typed: bytecode
-                .typed_loop_programs
-                .get_or_init(|| super::typed_loop::compile_all(bytecode)),
+            typed: typed_cache.get_or_init(|| {
+                if std::ptr::eq(code, bytecode.code.as_slice()) {
+                    super::typed_loop::compile_all(bytecode)
+                } else {
+                    super::typed_loop::compile_stream(bytecode, code)
+                }
+            }),
             shared_numeric_mutation: bytecode
                 .numeric_mutation_loop_plans
                 .get_or_init(|| NumericMutationLoopPlan::compile_all(bytecode)),

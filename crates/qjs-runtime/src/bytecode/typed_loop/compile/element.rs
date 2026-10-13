@@ -14,7 +14,7 @@ use crate::bytecode::ir::Op;
 
 impl Builder<'_> {
     pub(super) fn compile_element_assignment(&mut self, ip: usize) -> Option<Option<usize>> {
-        let code = &self.bytecode.code;
+        let code = self.code;
         let (Some(Op::LoadLocal(receiver)), Some(Op::StoreLocal(receiver_temp))) =
             (code.get(ip), code.get(ip + 1))
         else {
@@ -126,7 +126,7 @@ impl Builder<'_> {
                 inner = next;
                 continue;
             }
-            let op = self.bytecode.code.get(inner)?;
+            let op = self.code.get(inner)?;
             // A branch inside the value expression would need its own join
             // bookkeeping relative to the elided temporaries.
             if expression_has_control_flow(op) {
@@ -181,7 +181,7 @@ impl Builder<'_> {
         let depth = self.stack.len();
         let mut cursor = start;
         while cursor < end {
-            let op = self.bytecode.code.get(cursor)?;
+            let op = self.code.get(cursor)?;
             if scalar_expression_may_write_or_branch(op) {
                 return None;
             }

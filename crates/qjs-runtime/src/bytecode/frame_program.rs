@@ -25,8 +25,8 @@
 //! *inside* the dispatch loop must return a restart boundary rather than
 //! replace code underneath a live view.
 
-use std::ops::Deref;
 use std::rc::Rc;
+use std::{cell::OnceCell, ops::Deref};
 
 use super::ir::{Bytecode, Op};
 use super::vm_loop_dispatch::LoopPlanView;
@@ -89,6 +89,7 @@ impl From<Rc<Bytecode>> for FrameBytecode<'_> {
 pub(super) struct FrameProgramView<'a> {
     pub(super) bytecode: &'a Bytecode,
     pub(super) execution_code: &'a [Op],
+    typed_cache: &'a OnceCell<Vec<super::typed_loop::TypedLoopProgram>>,
 }
 
 impl<'a> FrameProgramView<'a> {
@@ -100,21 +101,22 @@ impl<'a> FrameProgramView<'a> {
         let virtual_object_program = bytecode
             .virtual_object_program
             .get_or_init(|| super::virtual_object::lower(bytecode));
-        let execution_code = virtual_object_program.code_for_frame(
-            &bytecode.code,
+        let (execution_code, typed_cache) = virtual_object_program.typed_stream_for_frame(
+            bytecode,
             authoritative_slots,
             allow_virtual_functions,
         );
         Self {
             bytecode,
             execution_code,
+            typed_cache,
         }
     }
 
     /// The loop accelerators for this body, derived at the backward edge that
     /// needs them.
     pub(super) fn loop_plans(&self) -> LoopPlanView<'a> {
-        LoopPlanView::for_bytecode(self.bytecode)
+        LoopPlanView::for_stream(self.bytecode, self.execution_code, self.typed_cache)
     }
 }
 

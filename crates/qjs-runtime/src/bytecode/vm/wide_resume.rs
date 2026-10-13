@@ -122,6 +122,8 @@ pub(in crate::bytecode) fn resume_direct_call_bytecode(
                     }
                 } else {
                     vm.current.cold_mut().wide_handback = Some(None);
+                    let declined = vm.current.declined_typed_loop_programs;
+                    restore_original_declines(&mut vm, bytecode, declined);
                     run(&mut vm)
                 }
             } else {
@@ -132,7 +134,7 @@ pub(in crate::bytecode) fn resume_direct_call_bytecode(
         ResumeFrom::LoopDeoptimized {
             declined_typed_loop_programs,
         } => {
-            vm.current.declined_typed_loop_programs = declined_typed_loop_programs;
+            restore_original_declines(&mut vm, bytecode, declined_typed_loop_programs);
             vm.current.cold_mut().wide_handback = Some(None);
             run(&mut vm)
         }
@@ -208,5 +210,59 @@ impl Vm<'_> {
         self.current.ip = backedge;
         self.current.cold_mut().wide_handback = Some(Some(backedge));
         Some(FrameExit::Completed(Completion::Yield(Value::Undefined)))
+    }
+}
+
+/// Wide owns the original table. A VM handback can select a lowered table;
+/// only an unchanged stream may inherit the original table's index bitmap.
+fn restore_original_declines(vm: &mut Vm<'_>, bytecode: &Bytecode, declined: u128) {
+    let view = crate::bytecode::frame_program::FrameProgramView::new(
+        bytecode,
+        vm.current.authoritative_slots,
+        vm.current.virtual_function_context_safe,
+    );
+    vm.current.declined_typed_loop_programs =
+        if std::ptr::eq(view.execution_code, bytecode.code.as_slice()) {
+            declined
+        } else {
+            0
+        };
+}
+
+#[cfg(test)]
+mod selected_stream_tests {
+    use super::*;
+    #[test]
+    fn wide_decline_bitmap_transfers_only_to_the_original_stream() {
+        let script =
+            qjs_parser::parse_script("function f(n){var s=0;for(var i=0;i<n;i++)s+=i;return s;}")
+                .unwrap();
+        let root = crate::bytecode::compile_script(&script).unwrap();
+        let code = root
+            .code
+            .iter()
+            .find_map(|op| match op {
+                crate::bytecode::ir::Op::NewFunction { bytecode, .. } => Some(bytecode.as_ref()),
+                _ => None,
+            })
+            .unwrap();
+        let original = Bytecode::new(Vec::new(), Vec::new(), Vec::new());
+        let mut original_vm = Vm::new_with_globals(&original, CallEnv::detached());
+        restore_original_declines(&mut original_vm, &original, 0b101);
+        assert_eq!(original_vm.current.declined_typed_loop_programs, 0b101);
+        let mut vm = Vm::new_with_globals(code, CallEnv::detached());
+        vm.current.authoritative_slots = u128::MAX;
+        let selected = crate::bytecode::frame_program::FrameProgramView::new(code, u128::MAX, true);
+        assert!(!std::ptr::eq(selected.execution_code, code.code.as_slice()));
+        assert!(
+            !code
+                .virtual_object_program
+                .get()
+                .unwrap()
+                .virtualizes_values(),
+            "wide retains its no-bank guard"
+        );
+        restore_original_declines(&mut vm, code, 0b101);
+        assert_eq!(vm.current.declined_typed_loop_programs, 0);
     }
 }
