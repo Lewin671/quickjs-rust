@@ -18,8 +18,9 @@
 - Evidence: the records below; `benchmarks/performance-policy.json`;
   `docs/benchmarking.md`. Raw bundles are local artifacts, not retained.
 - Unresolved: no fixed-hardware fingerprint, no A/A shadow reports, no noise
-  envelope, no false-positive budget. Concurrent lanes are qualified on the
-  x86_64 host only, from one pair of runs.
+  envelope, no false-positive budget. Concurrent lanes and four workers are
+  qualified on the x86_64 host only, each from one run against the same
+  sequential reference.
 - Next action: a 30-block A/A bundle on the x86_64 host, then follow the
   activation order in `docs/benchmarking.md`, "Gate activation".
 
@@ -130,6 +131,21 @@ Summary SHA-256: sequential `0d276fc7...8671e4e`, concurrent
 `c03b4a82...eeba090b`; the bundles are local artifacts. One pair of runs on
 one host: it qualifies this host, not concurrency in general, and says
 nothing about a host with fewer than three idle cores.
+
+**Four workers, 2026-10-13: qualified on the x86_64 host** by the same
+criteria. `perf-compare.sh --workers 4` at `ff529117` shares the cases among
+four processes (broad in two shards, the sentinels in one, external cases
+one at a time, longest first); same three executables, 30 blocks, against
+the sequential reference above. 1404 s, where concurrent lanes took 2697 s
+because the external lane alone is 2676 s of work. State success,
+`ready_for_unit_gates`, 30 valid blocks and linearity passing in broad and
+sentinel, no imprecise case. Candidate/base: 76 of 76 within 3% (largest
+`kraken-1.1/imaging-gaussian-blur` +2.6%, next
+`sunspider-1.0/bitops-bitwise-and` -2.1%); geometric-mean shift broad
+-0.00%, sentinel -0.06%, external -0.19%. Candidate/QuickJS-NG shift:
++0.15%, -0.37%, -0.05%. Summary SHA-256 `8f1dc506...17782e5d`. One run on
+one host; more than four workers is not covered, and the earlier probe saw
+per-process time rise 32% at eight.
 
 An earlier sequential bundle (5528 s) is not the reference: another
 project's batch job ran on the host during it (about ten cores when looked
