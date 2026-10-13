@@ -524,103 +524,107 @@ def _report(manifest: Manifest, records: list[dict[str, Any]]) -> dict[str, Any]
     return analyze(manifest, records)
 
 
-def run_preview(
-    manifest: Manifest,
-    cache_root: Path,
-    work_root: Path,
-    output_dir: Path,
-    candidate_path: Path,
-    base_path: Path,
-    quickjs_path: Path,
-    *,
-    blocks: int | None = None,
-    timeout_seconds: int | None = None,
-) -> dict[str, Any]:
-    fetch_corpora(manifest, cache_root)
-    candidate, candidate_sha = _binary(candidate_path, "candidate")
-    base, base_sha = _binary(base_path, "base")
-    quickjs, quickjs_sha = _binary(quickjs_path, "quickjs-ng")
-    source_binaries = {"candidate": candidate, "base": base, "quickjs-ng": quickjs}
-    binary_hashes = {"candidate": candidate_sha, "base": base_sha, "quickjs-ng": quickjs_sha}
-    selected_blocks = blocks if blocks is not None else manifest.measurement.blocks
-    selected_timeout = (
-        timeout_seconds if timeout_seconds is not None else manifest.measurement.timeout_seconds
-    )
-    if selected_blocks < 1 or selected_timeout < 1:
-        raise ExternalPreviewError("blocks and timeout must be positive")
-    if (selected_blocks, selected_timeout) != (manifest.measurement.blocks, manifest.measurement.timeout_seconds):
-        manifest = Manifest(
-            manifest.path, manifest.sha256, manifest.preview_id,
-            Measurement(
-                selected_blocks, selected_timeout, manifest.measurement.metric,
-                manifest.measurement.phase_boundary, manifest.measurement.order,
-                manifest.measurement.seed,
-            ),
-            manifest.suites,
+class PreviewRun:
+    """One external measurement: engine snapshots and case bundles on disk,
+    and the samples of each case on request. `run_preview` asks for the cases
+    one after another; compare.py's workers ask for different cases at once,
+    one case never split between two of them."""
+
+    def __init__(
+        self,
+        manifest: Manifest,
+        cache_root: Path,
+        work_root: Path,
+        candidate_path: Path,
+        base_path: Path,
+        quickjs_path: Path,
+        *,
+        blocks: int | None = None,
+        timeout_seconds: int | None = None,
+    ):
+        fetch_corpora(manifest, cache_root)
+        candidate, candidate_sha = _binary(candidate_path, "candidate")
+        base, base_sha = _binary(base_path, "base")
+        quickjs, quickjs_sha = _binary(quickjs_path, "quickjs-ng")
+        source_binaries = {"candidate": candidate, "base": base, "quickjs-ng": quickjs}
+        self.binary_hashes = {"candidate": candidate_sha, "base": base_sha, "quickjs-ng": quickjs_sha}
+        self.blocks = blocks if blocks is not None else manifest.measurement.blocks
+        self.timeout = (
+            timeout_seconds if timeout_seconds is not None else manifest.measurement.timeout_seconds
         )
-    bundle_root = work_root.expanduser().resolve() / "bundles"
-    snapshot_root = work_root.expanduser().resolve() / "engine-snapshots"
-    if bundle_root.exists():
-        shutil.rmtree(bundle_root)
-    if snapshot_root.exists():
-        shutil.rmtree(snapshot_root)
-    bundle_root.mkdir(parents=True)
-    snapshot_root.mkdir(parents=True)
-    binaries: dict[str, Path] = {}
-    for role, source_binary in source_binaries.items():
-        snapshot = snapshot_root / role
-        shutil.copyfile(source_binary, snapshot)
-        snapshot.chmod(0o500)
-        if _sha256_file(snapshot) != binary_hashes[role]:
-            raise ExternalPreviewError(f"{role} executable snapshot hash mismatch")
-        binaries[role] = snapshot
-    records: list[dict[str, Any]] = []
-    try:
-        for suite_index, suite in enumerate(manifest.suites):
-            for case_index, case in enumerate(suite.cases):
-                bundle = bundle_root / suite.id / f"{case.id}.js"
-                bundle.parent.mkdir(parents=True, exist_ok=True)
-                bundle.write_text(_bundle_source(suite, case, cache_root), encoding="utf-8")
-                case_seed = (
-                    manifest.measurement.seed + suite_index * 10000 + case_index * 100
-                )
-                capable_roles: list[str] = []
-                capability_order = role_orders(
-                    list(EXTERNAL_ROLES), 1, case_seed + 1
-                )[0]
-                for order, role in enumerate(capability_order):
-                    argv = _command(role, binaries[role], bundle)
-                    _print_sample_progress(
-                        suite.id, case.id, "capability", role, None, selected_blocks
-                    )
-                    result = run_process(argv, selected_timeout)
-                    record = _record(
-                        manifest, suite, case, role, binary_hashes[role], bundle,
-                        "capability", None, order, result, argv,
-                    )
-                    records.append(record)
-                    if record["status"] == "ok":
-                        capable_roles.append(role)
-                if not capable_roles:
-                    continue
-                orders = role_orders(capable_roles, selected_blocks, case_seed)
-                for block in range(selected_blocks):
-                    for order, role in enumerate(orders[block]):
-                        argv = _command(role, binaries[role], bundle)
-                        _print_sample_progress(
-                            suite.id, case.id, "measurement", role, block, selected_blocks
-                        )
-                        result = run_process(argv, selected_timeout)
-                        records.append(
-                            _record(
-                                manifest, suite, case, role, binary_hashes[role], bundle,
-                                "measurement", block, order, result, argv,
-                            )
-                        )
-        for role, snapshot in binaries.items():
-            if _sha256_file(snapshot) != binary_hashes[role]:
+        if self.blocks < 1 or self.timeout < 1:
+            raise ExternalPreviewError("blocks and timeout must be positive")
+        if (self.blocks, self.timeout) != (manifest.measurement.blocks, manifest.measurement.timeout_seconds):
+            manifest = Manifest(
+                manifest.path, manifest.sha256, manifest.preview_id,
+                Measurement(
+                    self.blocks, self.timeout, manifest.measurement.metric,
+                    manifest.measurement.phase_boundary, manifest.measurement.order,
+                    manifest.measurement.seed,
+                ),
+                manifest.suites,
+            )
+        self.manifest = manifest
+        self.bundle_root = work_root.expanduser().resolve() / "bundles"
+        self.snapshot_root = work_root.expanduser().resolve() / "engine-snapshots"
+        for root in (self.bundle_root, self.snapshot_root):
+            if root.exists():
+                shutil.rmtree(root)
+            root.mkdir(parents=True)
+        try:
+            self.binaries: dict[str, Path] = {}
+            for role, source_binary in source_binaries.items():
+                snapshot = self.snapshot_root / role
+                shutil.copyfile(source_binary, snapshot)
+                snapshot.chmod(0o500)
+                if _sha256_file(snapshot) != self.binary_hashes[role]:
+                    raise ExternalPreviewError(f"{role} executable snapshot hash mismatch")
+                self.binaries[role] = snapshot
+            # (suite, case, seed, bundle) in manifest order, the order of the raw file.
+            self.cases: list[tuple[Suite, Case, int, Path]] = []
+            for suite_index, suite in enumerate(manifest.suites):
+                for case_index, case in enumerate(suite.cases):
+                    bundle = self.bundle_root / suite.id / f"{case.id}.js"
+                    bundle.parent.mkdir(parents=True, exist_ok=True)
+                    bundle.write_text(_bundle_source(suite, case, cache_root), encoding="utf-8")
+                    seed = manifest.measurement.seed + suite_index * 10000 + case_index * 100
+                    self.cases.append((suite, case, seed, bundle))
+        except Exception:
+            self.close()
+            raise
+
+    def _samples(self, index: int, phase: str, orders: list[list[str]]) -> list[dict[str, Any]]:
+        suite, case, _seed, bundle = self.cases[index]
+        records = []
+        for block, roles in enumerate(orders):
+            for order, role in enumerate(roles):
+                argv = _command(role, self.binaries[role], bundle)
+                measured = None if phase == "capability" else block
+                _print_sample_progress(suite.id, case.id, phase, role, measured, self.blocks)
+                result = run_process(argv, self.timeout)
+                records.append(_record(
+                    self.manifest, suite, case, role, self.binary_hashes[role], bundle,
+                    phase, measured, order, result, argv,
+                ))
+        return records
+
+    def capability(self, index: int) -> list[dict[str, Any]]:
+        """One run per engine; the engines whose record is `ok` are measured."""
+        seed = self.cases[index][2]
+        return self._samples(index, "capability", role_orders(list(EXTERNAL_ROLES), 1, seed + 1))
+
+    def measurement(self, index: int, capability: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        capable = [record["role"] for record in capability if record["status"] == "ok"]
+        if not capable:
+            return []
+        return self._samples(index, "measurement", role_orders(capable, self.blocks, self.cases[index][2]))
+
+    def finish(self, records: list[dict[str, Any]], output_dir: Path) -> dict[str, Any]:
+        """Write the evidence for `records`, every case's in manifest order."""
+        for role, snapshot in self.binaries.items():
+            if _sha256_file(snapshot) != self.binary_hashes[role]:
                 raise ExternalPreviewError(f"{role} executable snapshot changed during preview")
-        report = _report(manifest, records)
+        report = _report(self.manifest, records)
         output = output_dir.expanduser().resolve()
         raw = b"".join(
             (json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n").encode()
@@ -633,11 +637,39 @@ def run_preview(
             (json.dumps(report, indent=2, sort_keys=True, allow_nan=False) + "\n").encode(),
         )
         _atomic_write(output / "external-summary.md", render_markdown(report).encode())
-        _atomic_write(output / "external-manifest.json", manifest.path.read_bytes())
+        _atomic_write(output / "external-manifest.json", self.manifest.path.read_bytes())
         return report
+
+    def close(self) -> None:
+        shutil.rmtree(self.bundle_root, ignore_errors=True)
+        shutil.rmtree(self.snapshot_root, ignore_errors=True)
+
+
+def run_preview(
+    manifest: Manifest,
+    cache_root: Path,
+    work_root: Path,
+    output_dir: Path,
+    candidate_path: Path,
+    base_path: Path,
+    quickjs_path: Path,
+    *,
+    blocks: int | None = None,
+    timeout_seconds: int | None = None,
+) -> dict[str, Any]:
+    run = PreviewRun(
+        manifest, cache_root, work_root, candidate_path, base_path, quickjs_path,
+        blocks=blocks, timeout_seconds=timeout_seconds,
+    )
+    try:
+        records: list[dict[str, Any]] = []
+        for index in range(len(run.cases)):
+            capability = run.capability(index)
+            records += capability
+            records += run.measurement(index, capability)
+        return run.finish(records, output_dir)
     finally:
-        shutil.rmtree(bundle_root, ignore_errors=True)
-        shutil.rmtree(snapshot_root, ignore_errors=True)
+        run.close()
 
 
 def _parser() -> argparse.ArgumentParser:

@@ -26,6 +26,8 @@ usage: scripts/perf-compare.sh --base <git-ref> --output-dir <dir> [options]
                           (default third_party/quickjs-ng/build/qjs)
   --concurrent-lanes      measure the three lanes side by side; only on a
                           host qualified for it (docs/performance-workflow.md)
+  --workers <N>           share the cases of all lanes among N processes
+                          instead; the same condition applies
 
 Build the reference once with:
   cmake -S third_party/quickjs-ng -B third_party/quickjs-ng/build \
@@ -48,6 +50,7 @@ while [ $# -gt 0 ]; do
     --output-dir) output_dir="${2:?}"; shift 2 ;;
     --quickjs-ng) ng_bin="${2:?}"; shift 2 ;;
     --concurrent-lanes) lanes=(--concurrent-lanes); shift ;;
+    --workers) lanes=(--workers "${2:?}"); shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "error: unknown argument $1" >&2; usage >&2; exit 2 ;;
   esac

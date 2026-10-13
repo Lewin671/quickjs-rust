@@ -68,6 +68,18 @@ class CompareTests(unittest.TestCase):
                          {"report.json", "sentinel-report.json", "external-report.json"})
         self.assertEqual(json.loads((directory / "status.json").read_text())["state"], "success")
 
+    def test_a_worker_schedule_is_named_in_the_summary(self):
+        from argparse import Namespace
+        from tools.benchmark import compare
+        reports = {"broad": self.broad, "sentinel": self.sentinel, "external": self.external}
+        work = tempfile.TemporaryDirectory()
+        self.addCleanup(work.cleanup)
+        args = Namespace(output_dir=Path(work.name), workers=4)
+        with patch.object(compare, "_measure_with_workers", lambda *_: reports):
+            result = compare._measure(args, None, None, None, None)
+        self.assertEqual(result["lane_schedule"], "workers-4")
+        self.assertEqual(result["decision_readiness"], "ready_for_unit_gates")
+
     def test_a_failed_concurrent_lane_fails_the_comparison(self):
         with self.assertRaisesRegex(ValueError, "sentinel lane failed"):
             self._measure(True, fail="sentinel")

@@ -6,22 +6,29 @@ or silently replaces a failed sample. Hosted previews keep their existing path.
 
 The lanes run one after another, or with `--concurrent-lanes` side by side:
 one forked process per lane, each measuring its own lane in its usual order.
+`--workers N` instead shares the cases of all three lanes among N processes:
+the broad cases in N // 2 shards, the sentinels in one, and each external
+case on its own, longest first. A case's three engines always run in the
+same process, in the order the sequential schedule gives them.
 The files and the analysis are the same; only wall-clock overlap differs, and
-the summary records it as `lane_schedule`. Use it on a host with an idle
-core per lane whose ratios were shown not to move (docs/performance-workflow.md).
+the summary records it as `lane_schedule`. Use either on a host with an idle
+core per process whose ratios were shown not to move (docs/performance-workflow.md).
 """
 from __future__ import annotations
 
 import argparse
 import json
 import multiprocessing
+import shutil
 import sys
+import tempfile
 from dataclasses import replace
+from functools import partial
 from pathlib import Path
 
 from .adapters import load_engine
 from .analysis_schema import load_analysis_manifest
-from .external_preview import load_manifest as load_external, run_preview
+from .external_preview import PreviewRun, load_manifest as load_external, run_preview
 from .external_preview_markdown import render_markdown
 from .measure_lock import measurement_lock, wait_for_builds
 from .performance_evidence import (
@@ -33,6 +40,8 @@ from .receipts import load_receipt
 from .report import build_report, write_report
 from .runner import BenchmarkRun, JsonlWriter
 from .schema import load_manifest
+from .shards import ShardedRun
+from .worker_pool import Task, run_tasks
 
 
 def _engines(args, manifest):
@@ -139,6 +148,12 @@ def _measure_lane(lane, args, manifests, engines):
     with raw.open("x") as stream:
         success = BenchmarkRun(manifest, engines[lane], list(manifest.cases), args.blocks,
                                args.seed, JsonlWriter(stream), ROOT).execute()
+    return _internal_report(lane, args, manifest, success)
+
+
+def _internal_report(lane, args, manifest, success):
+    prefix = _PREFIX[lane]
+    raw = args.output_dir / f"{prefix}raw.jsonl"
     if not success:
         raise ValueError(f"{prefix}measurement failed; raw evidence preserved, no conclusion")
     analysis = load_analysis_manifest(ROOT / "benchmarks/analysis.json", manifest)
@@ -172,11 +187,87 @@ def _measure_concurrently(args, manifests, engines):
     return {lane: json.loads((args.output_dir / names[lane]).read_text(encoding="utf-8")) for lane in LANES}
 
 
+def _read_samples(path):
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+
+
+def _write_samples(path, samples):
+    path.write_text("".join(json.dumps(sample) + "\n" for sample in samples), encoding="utf-8")
+
+
+def _measure_shard(run, case_ids, path):
+    with path.open("x") as stream:
+        run.measure_shard(case_ids, JsonlWriter(stream))
+
+
+def _measure_with_workers(args, manifests, engines):
+    """Share the three lanes' cases among `args.workers` processes."""
+    scratch = Path(tempfile.mkdtemp(prefix="qjs-compare-workers."))
+    runs, streams, shards, preview = {}, {}, {}, None
+    try:
+        tasks = []
+        for lane, count in (("broad", max(1, args.workers // 2)), ("sentinel", 1)):
+            prefix, manifest = _PREFIX[lane], manifests[lane]
+            print(f"compare: {prefix}measurement ({args.blocks} blocks)", file=sys.stderr, flush=True)
+            (args.output_dir / f"{prefix}manifest.json").write_bytes(manifest.path.read_bytes())
+            streams[lane] = (args.output_dir / f"{prefix}raw.jsonl").open("x")
+            runs[lane] = ShardedRun(manifest, engines[lane], list(manifest.cases), args.blocks,
+                                    args.seed, JsonlWriter(streams[lane]), ROOT)
+            case_ids = [case.id for case in manifest.cases]
+            shards[lane] = [scratch / f"{lane}-{index}.jsonl" for index in range(count)]
+            tasks += [Task(f"{lane} shard {index + 1}",
+                           partial(_measure_shard, runs[lane], case_ids[index::count], path))
+                      for index, path in enumerate(shards[lane])]
+        preview = PreviewRun(load_external(ROOT / "benchmarks/external-preview.json"),
+                             args.external_cache, args.output_dir / "external-work",
+                             args.candidate, args.base, args.quickjs_ng, blocks=args.blocks)
+        cases = range(len(preview.cases))
+        capability = [scratch / f"external-capability-{index}.jsonl" for index in cases]
+        measured = [scratch / f"external-{index}.jsonl" for index in cases]
+
+        def probe():
+            for index in cases:
+                _write_samples(capability[index], preview.capability(index))
+
+        def measure(index):
+            _write_samples(measured[index],
+                           preview.measurement(index, _read_samples(capability[index])))
+
+        def external_cases():
+            # Longest first, by the capability runs, so the last worker to
+            # finish is not the one that drew the longest case late.
+            cost = {index: sum(sample["duration_ns"] for sample in _read_samples(capability[index]))
+                    for index in cases}
+            return [Task(f"external case {preview.cases[index][1].id}", partial(measure, index))
+                    for index in sorted(cases, key=lambda index: -cost[index])]
+
+        tasks.append(Task("external capability", probe, external_cases))
+        run_tasks(tasks, args.workers)
+        reports = {}
+        for lane, run in runs.items():
+            success = run.merge_shards([sample for path in shards[lane] for sample in _read_samples(path)])
+            streams[lane].close()
+            reports[lane] = _internal_report(lane, args, manifests[lane], success)
+        reports["external"] = preview.finish(
+            [sample for index in cases for path in (capability[index], measured[index])
+             for sample in _read_samples(path)], args.output_dir)
+        return reports
+    finally:
+        for run in runs.values():
+            run.close()
+        for stream in streams.values():
+            stream.close()
+        if preview is not None:
+            preview.close()
+        shutil.rmtree(scratch, ignore_errors=True)
+
+
 def _measure(args, broad_manifest, sentinel_manifest, broad_engines, sentinel_engines):
     phase = "initialization"
     manifests = {"broad": broad_manifest, "sentinel": sentinel_manifest}
     engines = {"broad": broad_engines, "sentinel": sentinel_engines}
     concurrent = getattr(args, "concurrent_lanes", False)
+    workers = getattr(args, "workers", None)
 
     def status(state, error=None):
         payload = {"state": state, "phase": phase, "claim_eligible": False, "error": error}
@@ -184,7 +275,11 @@ def _measure(args, broad_manifest, sentinel_manifest, broad_engines, sentinel_en
 
     try:
         status("running")
-        if concurrent:
+        if workers:
+            phase = f"measurement on {workers} workers"
+            status("running")
+            reports = _measure_with_workers(args, manifests, engines)
+        elif concurrent:
             phase = "concurrent measurement"
             status("running")
             reports = _measure_concurrently(args, manifests, engines)
@@ -196,7 +291,8 @@ def _measure(args, broad_manifest, sentinel_manifest, broad_engines, sentinel_en
                 reports[lane] = _measure_lane(lane, args, manifests, engines)
         phase = "summary"
         summary = summary_for(reports["broad"], reports["external"], reports["sentinel"])
-        summary["lane_schedule"] = "concurrent" if concurrent else "sequential"
+        summary["lane_schedule"] = (f"workers-{workers}" if workers
+                                    else "concurrent" if concurrent else "sequential")
         write_report(args.output_dir / "summary.json", summary)
         (args.output_dir / "summary.md").write_text(
             markdown_for(summary, reports["broad"], reports["external"], reports["sentinel"]))
@@ -222,10 +318,15 @@ def main():
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--concurrent-lanes", action="store_true",
                         help="measure the three lanes side by side, one process each")
+    parser.add_argument("--workers", type=int, choices=range(2, 9), metavar="N",
+                        help="share the cases of all lanes among N processes (2 to 8)")
     parser.add_argument("--settle", type=float, default=300.0,
                         help="seconds to wait for running builds or engines to finish before measuring")
     try:
-        result = run(parser.parse_args())
+        args = parser.parse_args()
+        if args.workers and args.concurrent_lanes:
+            parser.error("--workers and --concurrent-lanes are two schedules; pass one")
+        result = run(args)
         print(json.dumps(result, sort_keys=True))
         return 0
     except (ValueError, OSError, KeyError, TypeError) as error:

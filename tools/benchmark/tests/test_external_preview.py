@@ -182,54 +182,60 @@ class ExternalPreviewTests(unittest.TestCase):
                         f"stdout did not match the exact {role} sentinel contract",
                     )
 
+    def _fake_preview(self, directory: Path, case_ids: tuple[str, ...] = ("case",)):
+        """A manifest of direct-script cases and one shell script for all three engines."""
+        cache = directory / "cache"
+        source = b"var externalValue = 1;\n"
+        import hashlib
+
+        digest = hashlib.sha256(source).hexdigest()
+        source_path = cache / "suite" / "case.js"
+        source_path.parent.mkdir(parents=True)
+        source_path.write_bytes(source)
+        measurement = Measurement(
+            blocks=1,
+            timeout_seconds=10,
+            metric="outer_process_wall_time",
+            phase_boundary="before_process_spawn_to_wait_return",
+            order="seeded_role_rotation",
+            seed=7,
+        )
+        cases = tuple(Case(case_id, (SourceFile("case.js", digest),), "direct-script", None)
+                      for case_id in case_ids)
+        suite = Suite(
+            "suite",
+            "Suite",
+            "Per-case only.",
+            Source("https://github.com/example/suite.git", "a" * 40, ""),
+            cases,
+        )
+        manifest_file = directory / "manifest.json"
+        manifest_file.write_text("{}\n", encoding="utf-8")
+        manifest = Manifest(
+            manifest_file,
+            hashlib.sha256(b"{}\n").hexdigest(),
+            "quickjs-authoritative-external-preview-v2",
+            measurement,
+            (suite,),
+        )
+        engine = directory / "engine.sh"
+        engine.write_text(
+            "#!/bin/sh\n"
+            "case \"$1\" in\n"
+            "  --raw) printf '%s\\n%s\\n' '__QJS_EXTERNAL_OK__' "
+            "'__QJS_EXTERNAL_OK__' ;;\n"
+            "  --script) printf '%s\\n' '__QJS_EXTERNAL_OK__' ;;\n"
+            "  *) exit 64 ;;\n"
+            "esac\n",
+            encoding="utf-8",
+        )
+        engine.chmod(0o755)
+        return manifest, cache, engine
+
     def test_fake_three_engine_run_emits_same_run_base_report_and_removes_bundle(self) -> None:
         with tempfile.TemporaryDirectory() as directory_name:
             directory = Path(directory_name)
-            cache = directory / "cache"
-            source = b"var externalValue = 1;\n"
-            import hashlib
-
-            digest = hashlib.sha256(source).hexdigest()
-            source_path = cache / "suite" / "case.js"
-            source_path.parent.mkdir(parents=True)
-            source_path.write_bytes(source)
-            measurement = Measurement(
-                blocks=1,
-                timeout_seconds=10,
-                metric="outer_process_wall_time",
-                phase_boundary="before_process_spawn_to_wait_return",
-                order="seeded_role_rotation",
-                seed=7,
-            )
-            case = Case("case", (SourceFile("case.js", digest),), "direct-script", None)
-            suite = Suite(
-                "suite",
-                "Suite",
-                "Per-case only.",
-                Source("https://github.com/example/suite.git", "a" * 40, ""),
-                (case,),
-            )
-            manifest_file = directory / "manifest.json"
-            manifest_file.write_text("{}\n", encoding="utf-8")
-            manifest = Manifest(
-                manifest_file,
-                hashlib.sha256(b"{}\n").hexdigest(),
-                "quickjs-authoritative-external-preview-v2",
-                measurement,
-                (suite,),
-            )
-            engine = directory / "engine.sh"
-            engine.write_text(
-                "#!/bin/sh\n"
-                "case \"$1\" in\n"
-                "  --raw) printf '%s\\n%s\\n' '__QJS_EXTERNAL_OK__' "
-                "'__QJS_EXTERNAL_OK__' ;;\n"
-                "  --script) printf '%s\\n' '__QJS_EXTERNAL_OK__' ;;\n"
-                "  *) exit 64 ;;\n"
-                "esac\n",
-                encoding="utf-8",
-            )
-            engine.chmod(0o755)
+            manifest, cache, engine = self._fake_preview(directory)
             output = directory / "evidence"
             work = directory / "work"
             with patch(
@@ -326,6 +332,31 @@ class ExternalPreviewTests(unittest.TestCase):
             self.assertIn("| `suite/case` |", markdown)
             self.assertIn("Candidate ms/run", markdown)
             self.assertIn("Candidate/base", markdown)
+
+    def test_cases_measured_out_of_order_replay_in_manifest_order(self) -> None:
+        from tools.benchmark.external_preview import PreviewRun
+        from tools.benchmark.external_report import replay
+        with tempfile.TemporaryDirectory() as directory_name:
+            directory = Path(directory_name)
+            manifest, cache, engine = self._fake_preview(directory, ("first", "second"))
+            output = directory / "evidence"
+            with patch(
+                "tools.benchmark.external_preview.fetch_corpora",
+                return_value={"downloaded": 0, "reused": 1},
+            ), patch("sys.stderr", new_callable=io.StringIO):
+                run = PreviewRun(manifest, cache, directory / "work", engine, engine, engine, blocks=2)
+                try:
+                    # As two workers leave them: the second case's timers
+                    # precede the first's.
+                    samples = {}
+                    for index in (1, 0):
+                        capability = run.capability(index)
+                        samples[index] = capability + run.measurement(index, capability)
+                    report = run.finish(samples[0] + samples[1], output)
+                finally:
+                    run.close()
+            self.assertEqual([case["id"] for case in report["suites"][0]["cases"]], ["first", "second"])
+            self.assertEqual(replay(output / "external-raw.jsonl", run.manifest), report)
 
     def test_checked_in_cli_audit_works_outside_repository(self) -> None:
         with tempfile.TemporaryDirectory() as directory_name:

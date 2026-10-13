@@ -253,6 +253,9 @@ def replay(path: Path, manifest: Manifest) -> dict[str, Any]:
         for ci, case in enumerate(suite.cases):
             seed = manifest.measurement.seed + si * 10000 + ci * 100
             capable = []
+            # One process measures a case, so its samples never overlap;
+            # another case's may, measured by another worker (compare.py).
+            previous_end = 0
             for order, role in enumerate(role_orders(list(EXTERNAL_ROLES), 1, seed + 1)[0]):
                 if take(suite, case, "capability", None, order, role) == "ok":
                     capable.append(role)

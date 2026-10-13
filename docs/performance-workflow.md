@@ -68,9 +68,13 @@ unit. External times include startup, parsing and shutdown.
 - Lanes side by side, where qualified. `perf-compare.sh --concurrent-lanes`
   measures broad, sentinel and external at once, one process each; the
   summary says so in `lane_schedule`. It still holds the lock, and nothing
-  else may run. Use it only on a host with an idle core per lane for which
+  else may run. `--workers N` instead shares the cases of all three lanes
+  among N processes, a case's three engines always in the same one
+  (`lane_schedule` is `workers-N`). Use either only on a host with an idle
+  core per process for which
   [T017](../tasks/T017-performance-benchmark-system.md) records a passing
-  qualification; a queue and the decisions made from it use one schedule.
+  qualification of that schedule; a queue and the decisions made from it
+  use one schedule.
 
 ## 1. Regenerate the opportunity queue
 
