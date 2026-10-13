@@ -6,7 +6,9 @@
   and launch-preflight fixes remain. Neither runtime unit is promoted.
 - Verified at: `27ca5140`, 2026-10-13; integrated T043 correctness, full local
   gate (2276 runtime, 5170 Test262, 238 NG), remote CI and x86 layout/regression.
-  Main is updated. A new complete comparison and exact-binary profiles exist.
+  Main is updated. CI exact full coverage at that commit passes all 42672
+  configured cases, with zero failures/timeouts/not-run or NG-pass gaps. A new
+  complete comparison and exact-binary profiles exist.
 - Evidence: comparison `20261013T071551Z-campaign-derived-this-27ca5140`, fresh
   queue/top-eight profiles `20261013T073337Z-campaign-fresh-top8-profiles`, and
   valid broad receipts `20261013T092227Z-campaign-broad3-valid-receipts`.

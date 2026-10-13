@@ -1,6 +1,6 @@
 # T044: Typed loops on selected virtual scalar banks
 
-- Status: active; evidence-bound plan validated and ready to freeze.
+- Status: active; plan frozen at `e778be0d`, owner implementation in progress.
 - Implementation: none. No performance runtime code is written before freeze.
 - Verified at: `27ca5140`, 2026-10-13, complete 30-block four-worker comparison,
   exact-binary profiles and supplemental instrumented entry trace.
@@ -8,8 +8,8 @@
   workspace queue/profile jobs and numbers below. Raw files are not retained.
 - Unresolved: candidate implementation, screens
   and complete promotion. The discovery run has three imprecise controls.
-- Next action: commit the frozen plan, then implement the two structural
-  stages with independent semantic review and existing frozen gates.
+- Next action: complete the two structural stages on the owner branch,
+  independently review variant/handback semantics, then use the frozen screen.
 
 ## Measured boundary
 
@@ -67,6 +67,11 @@ mutation plan ownership and frame restart boundaries remain intact.
    coercion. Reject related bank stores/init/discard/materialization and unknown
    effects across the region. Object fields and fixed-element arrays share this
    scalar-bank path. Preserve exact stack/locals and selected IP on every exit.
+
+Known receiver/key operand discard on virtual-load instructions is a stack
+effect to preserve; the rejected discard means bank lifetime/content clearing.
+Variant changes must reset or map declined-program bits; array-index identity
+from an original/wide cache cannot name a different lowered program.
 
 Both stages complete before the bounded final screen. Heap-property store
 promotion, cross-activation value caching, binding-name ABI, AST/dependencies,
