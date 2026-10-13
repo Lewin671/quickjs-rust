@@ -20,6 +20,10 @@ use crate::bytecode::{
     vm_props::fast_number_binary,
 };
 
+#[cfg(test)]
+#[path = "lower_cache_tests.rs"]
+mod cache_tests;
+
 #[derive(Clone, Debug)]
 pub(in crate::bytecode) struct VirtualObjectProgram {
     full: VirtualObjectVariant,
@@ -29,11 +33,18 @@ pub(in crate::bytecode) struct VirtualObjectProgram {
 #[derive(Debug)]
 struct VirtualObjectVariant {
     lowered_code: Option<Rc<[Op]>>,
-    typed_loops: OnceCell<Vec<super::super::typed_loop::TypedLoopProgram>>,
+    typed_loops: OnceCell<Box<VariantTypedPrograms>>,
     required_authoritative_slots: u128,
     /// Whether the variant keeps a literal's values in virtual slots rather
     /// than only fusing instructions in place.
     virtualizes: bool,
+}
+
+/// Cold table storage is allocated only when an executed stream reaches a
+/// backward edge. Keep its Vec header out of every Bytecode's inline payload.
+#[derive(Debug)]
+struct VariantTypedPrograms {
+    programs: Vec<super::super::typed_loop::TypedLoopProgram>,
 }
 
 impl Clone for VirtualObjectVariant {
@@ -50,29 +61,49 @@ impl Clone for VirtualObjectVariant {
 }
 
 impl VirtualObjectProgram {
-    /// The active executable and its own typed-plan cache. Full and data-only
-    /// variants keep separate caches even when their immutable code is shared.
-    pub(in crate::bytecode) fn typed_stream_for_frame<'a>(
+    /// Resolve the owner of the executable already held by an activation.
+    /// Authority may lose bits when a closure captures a slot; selecting a new
+    /// stream here would mix its plans with the activation's physical code.
+    /// Full/data-only sharing code also share their required mask (Clone above),
+    /// so the activation-stable function-context flag disambiguates their caches.
+    pub(in crate::bytecode) fn typed_programs_for_stream<'a>(
         &'a self,
         bytecode: &'a Bytecode,
-        authoritative_slots: u128,
+        execution_code: &'a [Op],
         allow_virtual_functions: bool,
-    ) -> (
-        &'a [Op],
-        &'a OnceCell<Vec<super::super::typed_loop::TypedLoopProgram>>,
-    ) {
-        let variant =
-            if allow_virtual_functions && self.full.is_frame_compatible(authoritative_slots) {
-                &self.full
-            } else if self.data_only.is_frame_compatible(authoritative_slots) {
-                &self.data_only
-            } else {
-                return (&bytecode.code, &bytecode.typed_loop_programs);
-            };
-        match variant.lowered_code.as_deref() {
-            Some(code) => (code, &variant.typed_loops),
-            None => (&bytecode.code, &bytecode.typed_loop_programs),
+    ) -> Option<&'a [super::super::typed_loop::TypedLoopProgram]> {
+        if std::ptr::eq(execution_code, bytecode.code.as_slice()) {
+            return Some(
+                bytecode
+                    .typed_loop_programs
+                    .get_or_init(|| super::super::typed_loop::compile_all(bytecode)),
+            );
         }
+        let matches = |variant: &VirtualObjectVariant| {
+            variant
+                .lowered_code
+                .as_deref()
+                .is_some_and(|code| std::ptr::eq(code, execution_code))
+        };
+        let variant = match (matches(&self.full), matches(&self.data_only)) {
+            (true, true) if allow_virtual_functions => &self.full,
+            (true, true) | (false, true) => &self.data_only,
+            (true, false) => &self.full,
+            (false, false) => return None,
+        };
+        Some(
+            &variant
+                .typed_loops
+                .get_or_init(|| {
+                    Box::new(VariantTypedPrograms {
+                        programs: super::super::typed_loop::compile_stream(
+                            bytecode,
+                            execution_code,
+                        ),
+                    })
+                })
+                .programs,
+        )
     }
     /// Whether either variant rewrites the body at all. A body the lowering
     /// leaves untouched gains nothing from the interpreter's virtual-object

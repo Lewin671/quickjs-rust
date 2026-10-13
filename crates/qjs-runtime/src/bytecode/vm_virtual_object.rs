@@ -279,7 +279,7 @@ impl<'a> Vm<'a> {
                     self.locals[*slot] = Some(Value::Number(value + 1.0));
                     if let Some(target) = jump {
                         let backedge = self.ip + *skip;
-                        self.jump_with_loop_plans(program.loop_plans(), *target, backedge);
+                        self.jump_with_selected_loop_plans(program, *target, backedge);
                     } else {
                         self.ip += *skip;
                     }
@@ -307,7 +307,7 @@ impl<'a> Vm<'a> {
                 self.pop()?;
                 if let Some(target) = jump {
                     let backedge = self.ip + *skip;
-                    self.jump_with_loop_plans(program.loop_plans(), *target, backedge);
+                    self.jump_with_selected_loop_plans(program, *target, backedge);
                 } else {
                     self.ip += *skip;
                 }

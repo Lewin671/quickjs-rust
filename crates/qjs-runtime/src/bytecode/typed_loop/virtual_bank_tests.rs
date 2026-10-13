@@ -47,13 +47,13 @@ fn selected_variant_caches_are_independent_and_original_is_untouched() {
     let data = FrameProgramView::new(&code, u128::MAX, false);
     assert!(std::ptr::eq(original.execution_code, code.code.as_slice()));
     assert!(!std::ptr::eq(full.execution_code, code.code.as_slice()));
-    let fp = full.loop_plans().typed;
-    let dp = data.loop_plans().typed;
+    let fp = full.loop_plans(true).typed;
+    let dp = data.loop_plans(false).typed;
     assert!(!fp.is_empty());
     assert_eq!(fp.len(), dp.len());
     assert!(!std::ptr::eq(fp, dp));
     assert!(code.typed_loop_programs.get().is_none());
-    let op = original.loop_plans().typed;
+    let op = original.loop_plans(false).typed;
     assert!(!op.is_empty());
     assert!(!std::ptr::eq(op, fp));
     assert!(fp.iter().any(|plan| !plan.virtual_slots.is_empty()));
@@ -70,7 +70,7 @@ fn selected_variant_caches_are_independent_and_original_is_untouched() {
     assert!(std::ptr::eq(clone_view.execution_code, full.execution_code));
     assert!(
         clone_view
-            .loop_plans()
+            .loop_plans(true)
             .typed
             .iter()
             .all(|plan| plan.scratch_pool.get().is_none())
@@ -105,7 +105,7 @@ fn forced(source: &str, choose: impl Fn(&Op) -> bool, expected_prefix: Vec<Value
         .position(choose)
         .expect("selected physical op");
     assert!(
-        view.loop_plans()
+        view.loop_plans(true)
             .typed
             .iter()
             .any(|p| p.sites.iter().any(|s| s.ip as usize == ip))
