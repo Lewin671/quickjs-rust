@@ -1,7 +1,8 @@
 # T044: Typed loops on selected virtual scalar banks
 
 - Status: active; plan frozen at `e778be0d`, owner implementation in progress.
-- Implementation: none. No performance runtime code is written before freeze.
+- Implementation: in progress on `agent/selected-stream-virtual-bank/owner`;
+  no candidate is integrated or screened. Runtime work starts after freeze.
 - Verified at: `27ca5140`, 2026-10-13, complete 30-block four-worker comparison,
   exact-binary profiles and supplemental instrumented entry trace.
 - Evidence: [plan](performance-units/selected-stream-readonly-virtual-bank-typed-loops.json);
