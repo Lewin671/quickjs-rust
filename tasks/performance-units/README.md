@@ -36,7 +36,8 @@ nothing about whether the code exists.
 | Plan (`<name>.json`) | Task | Base | Recorded outcome |
 | --- | --- | --- | --- |
 | `own-data-cache-hot-answers-x86` | T041 | `06f0ecd3` 2026-10-12 | rejected on its single wall-time screen; runtime reverted |
-| `selected-stream-readonly-virtual-bank-typed-loops` | T044 | `27ca5140` 2026-10-13 | validated fresh queue and six exact-binary receipts; frozen before runtime code |
+| `typed-loop-boxed-demand-provenance` | T045 | `27ca5140` 2026-10-13 | fresh exact profiles and observed Object seed rejection; validated and frozen before runtime code |
+| `selected-stream-readonly-virtual-bank-typed-loops` | T044 | `27ca5140` 2026-10-13 | both screens failed their control ceiling; budget exhausted, runtime and layout reverted |
 | `prepared-cached-readonly-eval-owned-execution` | T042 | `06f0ecd3` 2026-10-12 | two screens failed; runtime reverted, no formal qualification |
 | `ascii-string-literal-span-copy` | T021 | `0c31864b` 2026-07-28 | rejected |
 | `base-class-constructor-direct-slots` | not recorded | `d3f9c179` 2026-07-28 | not recorded |

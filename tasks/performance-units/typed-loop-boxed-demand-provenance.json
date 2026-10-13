@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "typed-loop-boxed-demand-provenance",
+  "base_sha": "27ca5140342df9050911dc5c76b5eb28a112266a",
+  "queue": {
+    "candidate_sha": "27ca5140342df9050911dc5c76b5eb28a112266a",
+    "sha256": "4d458d5657079cdb4e11478b743cb68788d1c1ad646fc55f0b85d5b9a949b712"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "broad/dynamic_method_call"
+    ],
+    "rank_ceiling": 3,
+    "override_reason": "Fresh queue ranks this case fourth (3.3377x NG). The rank-one/rank-three selected-stream virtual-bank unit exhausted both attempts and is closed. Rank-two property_write needs mutable virtual-bank ownership, which this unit neither addresses nor reopens; its current evidence does not justify a separate implementation yet. Three exact profiles plus entry diagnostics identify a distinct compiler representation-demand defect on ordinary heap values. Fixing control-flow provenance can serve arbitrary receiver/array/callee selection; higher-ranked cases remain mandatory controls and full promotion portfolio members."
+  },
+  "mechanism": {
+    "summary": "Preserve identity-value provenance through abstract operand-stack joins and local-copy flows, and propagate an existing boxed consumer demand to all contributing locals or element-read sites during the typed compiler monotone fixed point. Object-valued inputs must not be seeded into scalar registers merely because control flow joined their origins. Use existing boxed/scalar moves, guards and deoptimization sites; change no ordinary VM dispatch or frame storage.",
+    "generality": "Admission is based only on bytecode operations, source-flow provenance and existing runtime guards. Parameter objects, arrays, alternative callees and copy chains are handled by the same rules irrespective of names, field keys, branch spelling, workload IDs or results. Arithmetic/coercion remains computed scalar dataflow; representation demand does not assert input type, cache an identity or execute user code. Unknown or oversized provenance remains conservative. This is ordinary Value representation inference, distinct from the rejected selected-stream/virtual-bank T044 mechanism.",
+    "semantic_risks": [
+      "Provenance must follow every identity-preserving incoming edge without conflating arithmetic results with their operands; merges and copy cycles require bounded monotone convergence and deterministic state comparison.",
+      "Mixed scalar/boxed paths and backward joins must still use matching stack depth/register representation. Recompile rather than reinterpret already-emitted predecessor instructions.",
+      "Guard failures must reconstruct the exact physical operand stack and instruction pointer, preserve completed side effects and evaluate getter/Proxy/coercion/call operands once. Keep zero-trip, TDZ, null/primitive and stale-callee behavior unchanged.",
+      "Keep local/upvalue writeback, mutation by callbacks, receiver this identity, early exits and residency handback sound. Prove actual typed entry independently of successful checksum.",
+      "No virtual-bank, selected-code cache, normal opcode, AST, Value/Function ABI, per-call name snapshot, unsafe or dependency changes. Numeric-only and unrelated external paths remain controls."
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "20261013T130216Z-dynamic-method-main-exact-profiles/out/main/receipt-0/receipt.json",
+      "sha256": "be1cdbe9a9fad4c6e6192d0dec33d53dbc07b3811216895f9212b5d534584ebc",
+      "base_sha": "27ca5140342df9050911dc5c76b5eb28a112266a",
+      "opportunity_ids": [
+        "broad/dynamic_method_call"
+      ],
+      "shared_cost": "810/1665 main-thread samples are ordinary Vm exclusive self. Exact queue candidate b97911ef, unchanged broad workload, bound original argv with 16x diagnostic iterations. Ordinary Vm is the dominant exclusive leaf; named-read and resolved-call subtrees already contain active caches and direct numeric leaf calls, not missing call-environment allocation. Supplemental trace compiles a conditional receiver loop then Declined with no TLCLAIM; source shows the identity join loses local provenance, leaving object input locals in scalar seed. The fraction is Vm exclusive sampling, not an estimated removable fraction or promised speedup. No overlapping caller/callee fractions are added. A separate non-timing seed diagnostic at base27 observes scalar register6/local_slot2 holding Object as the exact rejection; scalar locals2/3 are unboxed while receiver4 is boxed. Diagnostic patch SHA7ec023d8 is not an exact release profile.",
+      "inclusive_fraction": 0.4864864864864865
+    },
+    {
+      "source": "20261013T130216Z-dynamic-method-main-exact-profiles/out/main/receipt-1/receipt.json",
+      "sha256": "bf592280ae12912f50a015d28eebb06fff157d5778953fdd0bac9ae11a27ee63",
+      "base_sha": "27ca5140342df9050911dc5c76b5eb28a112266a",
+      "opportunity_ids": [
+        "broad/dynamic_method_call"
+      ],
+      "shared_cost": "821/1669 main-thread samples are ordinary Vm exclusive self. Exact queue candidate b97911ef, unchanged broad workload, bound original argv with 16x diagnostic iterations. Ordinary Vm is the dominant exclusive leaf; named-read and resolved-call subtrees already contain active caches and direct numeric leaf calls, not missing call-environment allocation. Supplemental trace compiles a conditional receiver loop then Declined with no TLCLAIM; source shows the identity join loses local provenance, leaving object input locals in scalar seed. The fraction is Vm exclusive sampling, not an estimated removable fraction or promised speedup. No overlapping caller/callee fractions are added. A separate non-timing seed diagnostic at base27 observes scalar register6/local_slot2 holding Object as the exact rejection; scalar locals2/3 are unboxed while receiver4 is boxed. Diagnostic patch SHA7ec023d8 is not an exact release profile.",
+      "inclusive_fraction": 0.4919113241461953
+    },
+    {
+      "source": "20261013T130216Z-dynamic-method-main-exact-profiles/out/main/receipt-2/receipt.json",
+      "sha256": "52f4f6558b44a6bbd470ed86b805d20eacdd5ad5e0a3b255a269cef599e9597d",
+      "base_sha": "27ca5140342df9050911dc5c76b5eb28a112266a",
+      "opportunity_ids": [
+        "broad/dynamic_method_call"
+      ],
+      "shared_cost": "867/1669 main-thread samples are ordinary Vm exclusive self. Exact queue candidate b97911ef, unchanged broad workload, bound original argv with 16x diagnostic iterations. Ordinary Vm is the dominant exclusive leaf; named-read and resolved-call subtrees already contain active caches and direct numeric leaf calls, not missing call-environment allocation. Supplemental trace compiles a conditional receiver loop then Declined with no TLCLAIM; source shows the identity join loses local provenance, leaving object input locals in scalar seed. The fraction is Vm exclusive sampling, not an estimated removable fraction or promised speedup. No overlapping caller/callee fractions are added. A separate non-timing seed diagnostic at base27 observes scalar register6/local_slot2 holding Object as the exact rejection; scalar locals2/3 are unboxed while receiver4 is boxed. Diagnostic patch SHA7ec023d8 is not an exact release profile.",
+      "inclusive_fraction": 0.5194727381665668
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "broad/dynamic_method_call"
+    ],
+    "control_ids": [
+      "broad/property_read",
+      "broad/property_write",
+      "broad/array_read",
+      "broad/array_write",
+      "broad/method_call",
+      "broad/plain_function_call",
+      "broad/captured_write",
+      "broad/property_dynamic_read",
+      "external/sunspider-1.0/3d-raytrace",
+      "external/sunspider-1.0/date-format-tofte",
+      "external/jetstream3-js-subset/hash-map",
+      "external/jetstream3-js-subset/cdjs",
+      "external/kraken-1.1/imaging-gaussian-blur"
+    ],
+    "target_max_candidate_over_base": 0.95,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 2
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

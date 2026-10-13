@@ -17,8 +17,10 @@
   Raw artifacts are workspace-local, not retained; current standing below.
 - Unresolved: new performance units and campaign gaps. Three discovery cases
   have imprecise intervals, so this comparison is not promotion evidence.
-- Next action: select a distinct general unit from
-  fresh measured evidence. All three closed attempt budgets remain exhausted;
+- Next action: implement and independently review
+  [T045](T045-typed-loop-boxed-demand-provenance.md), a compiler identity-flow
+  representation unit bound to new exact profiles and an observed seed rejection.
+  All three closed attempt budgets remain exhausted;
   [T044 history](archive/T044-selected-stream-virtual-bank-typed-loops.md)
   preserves its target gains, control failures and ABI correction.
 
