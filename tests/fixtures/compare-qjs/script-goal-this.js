@@ -1,0 +1,1 @@
+[typeof this, this === globalThis, eval('this') === this, (0, eval)('this') === this, (function () { return this === globalThis; })(), (function () { 'use strict'; return this === undefined; })()].join('|')
