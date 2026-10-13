@@ -114,6 +114,13 @@ that map holds cells, not values.
   `frame_deopt_bindings` overlays the live cells into the map under their
   source names, so `eval` code and compiled slot access update the same
   cell. A `var` created by `eval` becomes a new named cell in the map.
+- Cached read-only direct eval may consume its independently owned projection
+  once in the ordinary bytecode evaluator. Admission requires the realm's
+  stable intrinsic identity, the original parse-context cache key, no binding
+  writes/declarations or implicit super initialization, and an initialized
+  derived `this`. Other contexts use native eval. Canonical cells stay shared;
+  realm-backed caller slots refresh after both success and exception. This
+  removes duplicate context lookup and environment clones, not evaluation.
 - `with` pushes its object on the frame's `with_stack` (`bytecode/vm_with.rs`).
   Only free names inside the block compile to with-aware operations that
   consult the object first. A function created inside the block keeps the

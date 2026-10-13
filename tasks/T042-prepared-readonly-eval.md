@@ -1,18 +1,19 @@
 # T042: Consume prepared read-only eval environments once
 
 - Status: active.
-- Implementation: present at `f1c1b612` on `agent/prepared-readonly-eval/owner`;
+- Implementation: integrated at `67766d1c` on `agent/performance-campaign/lead`;
   no projection-index cache, COW or T041 implementation is included.
-- Verified at: `f1c1b612`, 2026-10-12; full local gate with 5170 Test262 cases,
+- Verified at: `67766d1c`, 2026-10-12; full local gate with 5170 Test262 cases,
   2264 runtime tests, 22 focused perf-counter tests, 23 diagnostics and 220 NG
-  fixtures. Production code equals `9ad0ab76`, whose remote CI is green.
+  fixtures. Production code equals `9ad0ab76`; owner `f1c1b612` CI is green, and
+  the integrated full local gate plus NG comparison passed.
 - Evidence: [plan](performance-units/prepared-cached-readonly-eval-owned-execution.json)
   binds the T040 queue and six receipts. Raw files are workspace-local,
   not retained; repeated-source profiles are diagnostic, not formal timings.
-- Unresolved: follow-up CI, the layout pin's reproducible two-cycle, screens
+- Unresolved: integrated CI, the layout pin's reproducible two-cycle, screens
   and promotion. No screen attempt has been used.
 - Next action: inspect the saved A/B link evidence, fix the address model,
-  integrate the candidate after CI, verify its layout, then use the frozen screen.
+  verify a stable target layout, then use the frozen screen.
 
 ## Scope and target architecture
 
