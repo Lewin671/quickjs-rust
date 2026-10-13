@@ -4,7 +4,8 @@
 - Implementation: T041/T042/T044 runtime candidates are rejected and restored
   to main runtime on the lead; measured sources remain for diagnosis. Generic
   layout-scan and preflight tools and semantic fixtures remain; no candidate
-  performance code is promoted. T044 removal gate is pending.
+  performance code is promoted. T044 removal full gate and UTC NG247 pass at
+  5c9e3ac0; runtime/layout match 27ca5140 exactly.
 - Verified at: `27ca5140`, 2026-10-13; integrated T043 correctness, full local
   gate (2267 runtime, 5170 Test262, 238 NG), remote CI and x86 layout/regression.
   Main is updated. CI exact full coverage at that commit passes all 42672
@@ -16,7 +17,7 @@
   Raw artifacts are workspace-local, not retained; current standing below.
 - Unresolved: new performance units and campaign gaps. Three discovery cases
   have imprecise intervals, so this comparison is not promotion evidence.
-- Next action: verify T044 removal, then select a distinct general unit from
+- Next action: select a distinct general unit from
   fresh measured evidence. All three closed attempt budgets remain exhausted;
   [T044 history](archive/T044-selected-stream-virtual-bank-typed-loops.md)
   preserves its target gains, control failures and ABI correction.

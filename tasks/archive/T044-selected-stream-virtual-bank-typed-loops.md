@@ -1,16 +1,16 @@
 # T044: Typed loops on selected virtual scalar banks
 
 - Status: rejected; both frozen screen attempts failed and the budget is exhausted.
-- Implementation: runtime and experimental layout restored to 27ca5140 in the
-  lead checkout; removal gate pending. Rejected source 102cb2d2 is retained on
+- Implementation: runtime and experimental layout restored to 27ca5140 by
+  5c9e3ac0; full removal gate and UTC NG247 pass. Rejected source 102cb2d2 is retained on
   agent/rejected/selected-stream-virtual-bank-attempt2 for diagnosis.
 - Verified at: 292e75ff and 102cb2d2, complete local/CI/configured Test262
   checks; exact iMac screen binaries and all pairs. Neither passed the screen.
 - Evidence: [frozen plan](../performance-units/selected-stream-readonly-virtual-bank-typed-loops.json),
   two screen records, static/profile and correctness conclusions below.
 - Unresolved: performance retention. No formal comparison was run or allowed.
-- Next action: verify removal, preserve the generic tools/semantic fixtures and
-  ledger, then select another unit from fresh measured evidence. Reopening
+- Next action: preserve the generic tools/semantic fixtures and ledger,
+  then select another unit from fresh measured evidence. Reopening
   needs a new profile and newly frozen plan, not another run of these candidates.
 
 ## Measured boundary
