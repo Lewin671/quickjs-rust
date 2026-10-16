@@ -1,11 +1,15 @@
 # T050: Ordinary VM layout causality diagnosis
 
-- Status: active.
+- Status: closed-landed (diagnostic record only).
 - Implementation: none; diagnostic binaries only, no production change planned.
-- Verified at: base 84ceebc4944fa2ecf5f1f4c46ebe98e8282bafdf; experiment not run yet.
-- Evidence: this task records the frozen diagnostic design; results pending.
-- Unresolved: whether T049 control regressions follow VM placement or property-read logic.
-- Next action: build and audit the diagnostic matrix on iMac, then measure once.
+- Verified at: runtime inputs identical to 84ceebc4; full gate at a648dc19,
+  2026-10-16; exact-binary and controlled-layout measurements below.
+- Evidence: the frozen protocols, binary identities and measured results below;
+  raw bundles are supplementary workspace artifacts.
+- Unresolved: global best placement and specific microarchitectural cause;
+  no performance promotion or production runtime change was attempted.
+- Next action: a separately frozen layout-maintenance unit should match current
+  symbols and preserve audited hot-function addresses before further runtime work.
 
 ## Goal and boundary
 
@@ -99,3 +103,74 @@ replacement. Retain all raw samples and require >=50 ms base increments.
 No offset search or promotion; a repeatable effect above A/A supports the
 actual executor's placement as a contributor, not a universal best offset.
 If the A/A control is unstable, the corresponding case remains unresolved.
+
+## Results and conclusion
+
+The ordinary-VM-only hypothesis was wrong for these controls. The sampled
+WideLoopFrame closure's placement alone reproduces the original regression's
+sign and almost all its magnitude, with unchanged reader semantics and every
+other shared text-symbol address fixed. This is evidence for layout as the
+principal contributor to these three regressions, not proof that every T049
+change came from this single address or that a particular CPU cache caused it.
+
+Ratios below use wall N/2N increments (hash-map is whole process), medians of
+15 balanced blocks; no samples removed. A/A is a byte-identical base copy.
+
+| Case | Exact original candidate/base | Only hot-loop 0x7a0/0x5c0 | Layout A/A |
+| --- | --- | --- | --- |
+| broad/branch_arithmetic | 1.085164 | 1.083914 | 1.002534 |
+| broad/global_read | 1.125122 | 1.129073 | 0.999176 |
+| broad/local_read | 1.080216 | 1.082748 | 1.001270 |
+| external/jetstream3-js-subset/hash-map | 0.988060 | 1.001710 | 0.999427 |
+
+The three layout effects' unadjusted paired-median bootstrap 95% intervals:
+- broad/branch_arithmetic: [1.074700, 1.089857], instruction ratio 1.000033.
+- broad/global_read: [1.122433, 1.131891], instruction ratio 1.000041.
+- broad/local_read: [1.072570, 1.093388], instruction ratio 1.000045.
+
+Fixing the other shared functions while varying the reader (phase 1) leaves
+hash-map only 0.8-1.2% faster, with about 1.2% fewer instructions. T049 stays
+rejected and reverted. Current main already has the original fast natural
+placement; this diagnostic does not claim a further 8-13% speedup over main.
+
+The current x86 order file matches only 32/625 named symbols and 0/541 runtime
+symbols against exact base 926ee634. It therefore does not pin the engine as
+intended. Match/address auditing and stable slots are the next maintenance
+boundary; an unchecked regeneration is not an accepted optimization.
+
+## Evidence identities and verification
+
+Valid jobs (all exit 0, none DISTURBED):
+
+- 20261016T113538Z-vm-layout-matrix-build-fixed: four-cell build and address audit.
+- 20261016T113550Z-vm-layout-factorial: 15 cases, 15 blocks, 4 workers plus A/A.
+- 20261016T113843Z-vm-layout-record-full-gate: full check at a648dc19, including
+  5170 Test262 subset cases; all later changes in this task are documentation.
+- 20261016T114727Z-vm-layout-control-routes: non-timing reused T049 counters;
+  diagnostic executable hash checked against that job's identity.
+- 20261016T115117Z-vm-layout-exact-control-profiles: untouched base sampling.
+- 20261016T115221Z-vm-layout-original-serial-warm: exact original binaries,
+  five cases, 15 blocks, serial, same warmed literal path.
+- 20261016T115424Z-typed-layout-pair-build: two baseline-logic builds, only
+  sampled closure displaced; addresses 0x10027a5c0 and 0x10027a7a0, size 13696.
+- 20261016T115447Z-typed-layout-serial: four cases, 15 blocks, serial same path.
+
+Controlled layout executable SHA-256 values (names identify requested offsets):
+
+- `base0020`: `166739b1d48b7f836888323cfcb9f9c0dcdac651962c653043c7aa07acc60c82`.
+- `base0270`: `14ec99fe3abff25a014ca3d23b0a1312bd1f6de0c5bb0d1413b41b7855318f32`.
+- `cand0020`: `31b31932fd916bf693fd4fc43c3888bedffc9533b4f78214bad5f73a4280fa08`.
+- `cand0270`: `ab3ad0903d13dc74654162760f6d4fecd25c62a63c6d947cbd35045c6471cd33`.
+- `base05c0`: `05a93b759d9d82e81f295791090112ee902f2e56f9402d495d722e6c638d4833`.
+- `base07a0`: `6dd35d1ebaa4f1e7b85a67a50c9a3a0f441958b3748d49755140051788605cfa`.
+
+Branch CI at 1ce0a880: 38897088772 passed. The final record runs context/fast
+checks and a post-integration full gate; production Rust/build inputs remain
+identical to 84ceebc4. Workspace outputs/quickjs-layout-study/report.md contains
+the Chinese report, paired raw-data analysis and reproducible diagnostic
+scripts; outputs/imac-bench/<job>/ holds supplementary original bundles.
+
+Protocol failures are preserved, not pooled: 113333Z build (assembly needed
+subsections), 114623Z serial (same-inode rename no-op), 115013Z serial
+(cancelled for launch-validation-contaminated calibration). No useful timing
+was discarded from the valid runs, and none of those failures reopened T049.
