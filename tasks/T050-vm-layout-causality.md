@@ -46,3 +46,24 @@ This does not demonstrate a globally optimal offset or authorize retention.
 Audit source diffs, binary identities, symbol sizes/addresses and workload
 checksums. Run repository context checks for the task record. No runtime
 candidate will be integrated by this diagnostic task.
+
+## Diagnostic follow-up frozen after phase 1
+
+The factorial run 20261016T113550Z-vm-layout-factorial completed all 15 cases
+with matching checksums and no queue disturbance. Placement did not reproduce
+the previous three 8-12% regressions consistently. However branch_arithmetic
+had very wide individual wall ratios (A/A 0.49-2.05), and
+property_dynamic_read A/A median was 1.0251. Those facts prevent interpreting
+small effects as established causes.
+
+Before collecting follow-up data, freeze one serial diagnosis of the exact
+saved T049 binaries (base 926ee634, candidate c07f0af5, plus byte-identical
+base copy), 15 balanced rotating blocks. Cases: branch_arithmetic, global_read,
+local_read, property_dynamic_read and hash-map. Every measured execution uses
+the same literal binary path through an atomically replaced hard link; hard
+link replacement happens outside the timed process. This removes concurrent
+worker load and argv-path differences together; it cannot distinguish those
+two causes from each other. Keep N/2N raw values and all outputs. No outliers,
+no promotion verdict, no subsequent favorable-repeat search. The purpose is to
+check whether the original large regression reproduces under this stronger
+control; non-reproduction does not prove the old observation was all noise.
