@@ -108,6 +108,36 @@ class FormalTests(unittest.TestCase):
                            panel=[data]*6)
         self.assertEqual(verdict['label'], 'reject')
 
+class MandatoryIterationTests(unittest.TestCase):
+    def test_blind_iteration_finishes_panel_even_when_natural_target_is_weak(self):
+        import json
+        import tempfile
+        from tools.benchmark import layout_iteration
+        p = policy()
+        name = 'broad/top_level_function_call'
+        natural = change(packet(p), name, wall=.98)
+        other = change(packet(p), name, wall=.9)
+        unit = {'base_sha': 'a'*40,
+                'layout_gate': {'policy_path': 'fake', 'policy_sha256': 'b'*64,
+                  'mechanism_class': 'instruction-blind', 'panel_required': True,
+                  'memory_wall_targets': [name]},
+                'fast_gate': {'target_ids': [name], 'target_max_candidate_over_base': .97}}
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)/'attempt'
+            with patch('sys.argv', ['layout_iteration', '--plan', 'fake', '--output', str(out)]), \
+                 patch('tools.benchmark.layout_iteration.load_unit', return_value=(unit, 'c'*64)), \
+                 patch('tools.benchmark.layout_iteration.load_policy', return_value=p), \
+                 patch('tools.benchmark.layout_identity.command', return_value=''), \
+                 patch('tools.benchmark.layout_iteration.build'), \
+                 patch('tools.benchmark.layout_iteration.measure_panel', side_effect=[
+                     {'panels': [natural]}, {'panels': [natural]+[other]*5}]) as measured, \
+                 patch('builtins.print'):
+                self.assertEqual(layout_iteration.main(), 3)
+            self.assertEqual(measured.call_count, 2)
+            self.assertTrue(measured.call_args.kwargs['complete'])
+            self.assertFalse(json.loads((out/'verdict.json').read_text())['passed'])
+
+
 class PlanBindingTests(unittest.TestCase):
     def test_schema_three_roundtrip_and_preimplementation_policy_host_binding(self):
         import json

@@ -39,13 +39,18 @@ def evaluate(policy, screen, targets, payoff, *, panel=None, held_out=None,
         wall = statistics.median(ratios['wall_ns'])
         instructions = ratios['instructions']
         label = 'pass'
+        target_aggregate = None
         if name in targets and not stage:
-            target_wall = (geomean([statistics.median(p[name]['wall_ns']) for p in panels])
-                           if panels else wall)
-            all_pairs = [v for p in (panels or [data]) for v in p[name]['wall_ns']]
-            if target_wall > min(payoff, 1 / band) or max(all_pairs) >= 1:
+            limit = min(payoff, 1 / band)
+            if wall > limit or max(ratios['wall_ns']) >= 1:
                 failures.append(name + ': target payoff/noise/all-pairs gate')
                 label = 'reject'
+            if panels is not None and (panel_required or instruction_blind):
+                target_aggregate = geomean([statistics.median(p[name]['wall_ns']) for p in panels])
+                all_pairs = [v for p in panels for v in p[name]['wall_ns']]
+                if target_aggregate > limit or max(all_pairs) >= 1:
+                    failures.append(name + ': predeclared target aggregate/all-pairs gate')
+                    label = 'reject'
         else:
             if min(instructions) > instruction_limit and statistics.median(instructions) > 1.03:
                 failures.append(name + ': consistent instruction excess exceeds median hard cap')
@@ -72,7 +77,8 @@ def evaluate(policy, screen, targets, payoff, *, panel=None, held_out=None,
                     label = 'pass'
         cases[name] = {'label': label, 'wall_median': wall, 'wall_band': band,
                        'instructions_median': statistics.median(instructions),
-                       'instructions_min': min(instructions), 'instruction_ceiling': instruction_limit}
+                       'instructions_min': min(instructions), 'instruction_ceiling': instruction_limit,
+                       'target_aggregate': target_aggregate}
     for k, values in enumerate(panels or [data]):
         for lane in ('broad', 'sentinel', 'external', 'portfolio'):
             value = geomean([statistics.median(r['wall_ns']) for n, r in values.items()

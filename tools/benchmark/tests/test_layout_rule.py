@@ -108,6 +108,16 @@ class VerdictTests(unittest.TestCase):
         data = change(self.data, 'broad/global_read', wall=.95)
         self.assertFalse(evaluate(self.policy, data, ['broad/global_read'], .97)['passed'])
 
+    def test_target_aggregate_is_additional_to_the_frozen_natural_gate(self):
+        data = change(self.data, self.name, wall=.98)
+        other = change(self.data, self.name, wall=.90)
+        panels = [data] + [other]*5
+        optional = evaluate(self.policy, data, [self.name], .97, panel=panels)
+        self.assertEqual(optional['label'], 'reject')
+        declared = evaluate(self.policy, data, [self.name], .97, panel=panels, panel_required=True)
+        self.assertEqual(declared['label'], 'reject')
+        self.assertLess(declared['cases'][self.name]['target_aggregate'], .97)
+
     def test_blind_requires_frozen_memory_targets_and_full_panel(self):
         with self.assertRaises(ValueError):
             self.run_rule(instruction_blind=True)

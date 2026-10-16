@@ -83,7 +83,8 @@ are historical and never acquire an extra attempt from this rule change.
   offsets and the complete measurement/attempt budget before implementation.
 - A target must beat both its payoff and reciprocal case wall band B_i,
   with every pair improving. A declared full panel uses all six target
-  medians as its geometric aggregate, with every target pair improving.
+  medians as an additional geometric aggregate; natural and panel targets
+  both require every pair to improve.
 - A control instruction change opens an event only when every pair exceeds
   max(1.01,I_i). A median-only excess is an unresolved instruction alert.
   A consistent excess with median above 1.03 rejects at the hard cap.

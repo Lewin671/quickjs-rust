@@ -72,3 +72,8 @@ ceiling are refused rather than silently ignored.
 The A2 band seed also binds its source host/recipe. The qualification
 publisher refuses transplanting those bands to a new host or recipe after
 only an A/A run; the six-layout envelope must be recalibrated there first.
+
+`panel_required: true` freezes an additional six-layout target aggregate.
+Those attempts always complete all six layouts, including a weak natural
+screen; both the natural and aggregate target gates remain required. An
+optional control-event panel does not change the frozen natural target statistic.

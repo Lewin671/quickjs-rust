@@ -40,7 +40,8 @@ def main():
             instruction_blind=gate['mechanism_class'] == 'instruction-blind',
             memory_targets=gate['memory_wall_targets'], panel_required=gate['panel_required'])
     result = verdict(evidence['panels'])
-    if result['panel_required'] and not result['failures']:
+    mandatory = gate['panel_required'] or gate['mechanism_class'] == 'instruction-blind'
+    if mandatory or (result['panel_required'] and not result['failures']):
         evidence = measure_panel(base, candidate, out / 'screen', complete=True)
         result = verdict(evidence['panels'])
     write_json(out / 'verdict.json', {'unit_sha256': unit_hash, **result})
