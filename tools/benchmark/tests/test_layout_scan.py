@@ -34,7 +34,13 @@ from pathlib import Path
 import sys
 args = sys.argv[1:]
 if args[0] == "-c":
-    print(os.environ["SCAN_ORDER"])
+    print("0x9a0" if "executor_offsets" in args[1] else os.environ["SCAN_ORDER"])
+elif args[1] == "tools.benchmark.build_cache":
+    target = Path(args[args.index("--target-dir") + 1]) / "test-target/release/qjs"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("binary")
+    target.chmod(0o755)
+    print(target)
 elif args[1] == "tools.benchmark.layout_pin":
     order = Path(args[args.index("--order") + 1])
     assert order == Path(os.environ["SCAN_ORDER"])
