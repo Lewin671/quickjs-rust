@@ -129,3 +129,34 @@ formal precision and held-out qualification precede production adoption.
 Full-gate job: 20261016T174543Z-layout-noise-a2-full-gate. Result documents
 use context/fast/whitespace/scope checks; no runtime semantics changed, so no
 additional focused semantic slice is selected by the fast gate.
+
+## Frozen phase B qualification (2026-10-16, before timing)
+
+Lead-authorized brief: workspace tmp/decision-rule-b/brief.md. Scope is tools,
+policy and documentation only; no engine changes, push or merge. Adopt the
+proposal with the lead's 1% instruction floor / 3% hard cap, mandatory held-out
+promotion and host-bound policy. Historical rejected budgets stay closed.
+
+Calibration source is the already audited natural A2 executable 153c1fe5,
+SHA-256 926ee634ca3901b89c778478702a4fe993288ef7e8e69cd93c238c694595aa85.
+Two separately queued `run --timing` jobs use layout_calibration: portfolio
+(76 cases) then held-out (all 9). Each has exactly 30 alternating paired
+blocks per case, unchanged screen calibration/increment/whole-process
+protocol, timeout 120 s, positive costs, internal increments >=50 ms.
+Each creates two distinct equal-length immutable executable paths once,
+preflights both, retains every sample and separates calibration. Invalid or
+DISTURBED jobs are retained and replaced entirely, never pooled.
+
+Decision statistic: median of paired ratios per case, equal-case geomean
+per lane and portfolio. Qualification uses deterministic joint-block
+percentile bootstrap, 20,000 draws, seed 0, 95% interval and <=3% relative
+half-width, matching the existing formal precision limit. Require every
+case/lane precise, no all-pair instruction excess above max(1.01,I_i), and
+lane interval within the proposed A2 lane ceilings; do not widen these
+ceilings to accommodate a failed qualification. Case B_i remains the A2
+maximum of both layout estimators and global A/A median bias. Longer A/A
+qualifies this envelope, rather than enlarging it. Held-out per-program
+bands and lane ceiling are the rounded-up reciprocal 95% A/A interval
+endpoints (one basis point), with a 1.0 minimum. It is acceptance-only.
+If qualification fails, record the exact failure and stop adoption for a
+lead decision; no favorable repeat of a valid failed qualification.
