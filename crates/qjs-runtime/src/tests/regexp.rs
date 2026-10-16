@@ -1315,6 +1315,45 @@ fn unicode_sets_flag_uses_unicode_matching_mode() {
 }
 
 #[test]
+fn escaped_character_class_range_endpoints_match() {
+    // Regression: `/[\x3a-\x40]/` was a SyntaxError because the `\xHH` endpoint
+    // left its hex digits to be misread as the range.
+    assert_eq!(
+        eval(r#"/[\x3a-\x40]/.test(":");"#),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(r#"/[\x2a-\x2f]/.test("*");"#),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(r#"/[\x3A-\x40]/.test(":");"#),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(r#"/[\u003a-\u0040]/.test(":");"#),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(r#"/[\x3a-\x40]/u.test(":");"#),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(r#"/[\x3a-\x40]/v.test(":");"#),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(eval(r#"/[a-\x62]/.test("b");"#), Ok(Value::Boolean(true)));
+    assert_eq!(eval(r#"/[\x61-b]/.test("a");"#), Ok(Value::Boolean(true)));
+    // A descending escaped range remains a SyntaxError.
+    assert_eq!(
+        eval(
+            r#"var ok = false; try { new RegExp("[\\x40-\\x30]"); } catch (error) { ok = error instanceof SyntaxError; } ok;"#
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn unicode_bare_sentinel_scalar_quantifiers_bind_the_whole_code_point() {
     assert_eq!(
         eval(
