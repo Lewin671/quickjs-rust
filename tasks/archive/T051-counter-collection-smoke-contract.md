@@ -1,12 +1,12 @@
 # T051: Counter collection smoke-test contract
 
-- Status: active.
+- Status: closed-landed.
 - Implementation: present; test-only portable positive-counter assertion.
-- Verified at: source base 55f76d54; iMac full gate job
-  20261016T120645Z-typed-layout-study-final-gate exposed the old assertion.
-- Evidence: exact failure and corrected contract below; verification pending.
-- Unresolved: run fast and full gates on the corrected test.
-- Next action: validate on iMac, integrate and close this record.
+- Verified at: corrected test at 73e8edb6, 2026-10-16; iMac fast and
+  post-integration full gates both passed.
+- Evidence: exact failure, corrected contract and successful checks below.
+- Unresolved: none.
+- Next action: none.
 
 ## Failure and correction
 
@@ -30,3 +30,13 @@ No Rust/build, collector or counter-trust implementation changes.
 
 Fast change-aware checks before commit and full check after integration,
 through the iMac queue. Keep the original failed gate artifact.
+
+## Verification outcome
+
+- 20261016T121011Z-counter-smoke-fast-gate: passed change-aware fast checks
+  at transport snapshot 81c4817f, including all 412 benchmark-tool tests.
+  Its tree was checked equal to the index before commit 73e8edb6.
+- 20261016T121214Z-counter-smoke-final-full-gate: passed full check after
+  integration at 73e8edb6, including all 412 tool tests and 5170 Test262 cases.
+- Final closure changes only documentation and passes context/fast checks.
+  The original failed 55f76d54 gate is retained; no timing result was rerun.
