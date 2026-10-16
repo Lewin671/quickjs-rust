@@ -19,7 +19,9 @@ class CollectionTests(unittest.TestCase):
         result = run_process([sys.executable, "-c", "print(sum(range(100000)))"], 30)
         self.assertEqual((result.exit_code, result.stdout), (0, "4999950000\n"))
         self.assertGreater(result.instructions, 1_000_000)
-        self.assertGreater(result.cycles, 100_000)
+        # Collection proves a positive readout, not a portable clock rate.
+        # cycle_trust separately rejects hosts whose cycles are not a clock.
+        self.assertGreater(result.cycles, 0)
 
     def test_timed_out_process_still_reports_consistent_fields(self):
         result = run_process([sys.executable, "-c", "import time; time.sleep(5)"], 0.5)
