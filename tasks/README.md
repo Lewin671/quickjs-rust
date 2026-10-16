@@ -14,7 +14,7 @@ it to `archive/` with `git mv` and move its row below.
 | Task | Status | What it is |
 | --- | --- | --- |
 | [T056](T056-interpreter-core-v2.md) interpreter core v2 | active | Target design for ordinary-path atoms/shapes, stable single-Vm frames and an 8-byte value word; implementation not started. |
-| [T055](T055-layout-noise-control.md) layout noise control | active | Lead-amended A2: six immutable R0 layouts, A/A then five complete screens; phase B proposal only. |
+| [T055](T055-layout-noise-control.md) layout noise control | active | A2 complete: six full screens without DISTURBED; observed case/lane bands and phase B proposal await lead review. |
 | [T018](T018-broad-performance.md) broad performance | active | The performance campaign contract and its targets against QuickJS-NG. Start performance work here, then follow [the workflow](../docs/performance-workflow.md). |
 | [T040](T040-imac-general-performance.md) x86_64 general optimization | active | Fresh current-main comparison and exact-binary profiles, followed by independent general runtime units. |
 | [T045](T045-typed-loop-boxed-demand-provenance.md) boxed demand provenance | active | Ordinary identity-flow joins lose boxed demand; exact profiles and seed diagnosis precede a compiler-only unit. |
@@ -87,7 +87,9 @@ outcome column says what happened, not what to do next.
 
 ## Other Records In `archive/`
 
-- [T055 phase A results](archive/T055-phase-a-log.md): static/correctness pass and invalid retired-sampler timing.
+- [T055 complete A2 diagnostic data](archive/T055-phase-a2-data.md): all case/lane ratios, A/A widths, literal medians and verified binary hashes.
+
+- T055 phase A: [superseded frozen plan](archive/T055-phase-a-plan.md) and [results](archive/T055-phase-a-log.md); static/correctness pass, invalid retired-sampler timing.
 
 - [T050 complete diagnostic tables](archive/T050-vm-layout-diagnostic-data.md), including the unattributed dynamic-read regression.
 
