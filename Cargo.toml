@@ -26,3 +26,11 @@ unsafe_code = "deny"
 
 [workspace.lints.clippy]
 all = "warn"
+
+# Optimized standalone CLI builds; embedding applications own their profiles.
+# Evidence and platform limits: tasks/archive/T046-compiler-configuration-study.md.
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 16
+panic = "abort"

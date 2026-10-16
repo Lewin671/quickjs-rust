@@ -25,25 +25,17 @@ from .hosted_preview import (
 )
 from .preview_summary import escape_markdown, render_preview
 from .schema import ManifestError, load_manifest, sha256_file
+from .build_cache import RUST_RECIPE
 
 
 class PreviewError(ValueError):
     """Hosted preview inputs cannot produce truthful informational evidence."""
 
 
+# Provenance must describe exactly the command/environment used by the builder.
 RUST_BUILD_FLAGS = (
-    "-Ctarget-cpu=generic",
-    "-Cllvm-args=-align-all-functions=4",
-    "--locked", "--release", "-p", "qjs-cli",
-    "--config=profile.release.opt-level=3",
-    "--config=profile.release.debug=false",
-    "--config=profile.release.debug-assertions=false",
-    "--config=profile.release.overflow-checks=false",
-    "--config=profile.release.lto=false",
-    "--config=profile.release.codegen-units=16",
-    "--config=profile.release.panic=\"unwind\"",
-    "--config=profile.release.incremental=false",
-    "--config=profile.release.strip=\"none\"",
+    *RUST_RECIPE["environment"]["CARGO_ENCODED_RUSTFLAGS"].split("\x1f"),
+    *RUST_RECIPE["cargo_args"],
 )
 HARNESS_MODES = (BASE_MODE, PUSH_MODE, MANUAL_MODE)
 HOSTED_CASES = (
@@ -291,14 +283,15 @@ def prepare(args: argparse.Namespace) -> None:
     rust_recipe = _recipe(
         "qjs-rust", _string(args.rust_toolchain, "Rust toolchain"),
         _string(args.rust_target, "Rust target"), rust_flags,
-        lto="off-forced-by-cargo-config",
-        strip="none-forced-by-cargo-config",
+        lto="fat-forced-by-cargo-config",
+        strip="none-release-default",
         allocator="source-controlled-not-independently-verified",
         host_features=(
-            "generic-cpu-and-16-byte-function-alignment-forced-by-"
+            "target-default-cpu-v0-symbols-and-16-byte-function-alignment-forced-by-"
             "cargo-encoded-rustflags"
         ),
     )
+    rust_recipe["features"] = ["agents"]
     quickjs_recipe = _recipe(
         template.reference_identity,
         _string(args.quickjs_toolchain, "QuickJS-NG toolchain"),

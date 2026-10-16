@@ -42,21 +42,16 @@ SOURCE_PATHS = (
 )
 RUST_RECIPE = {
     "cargo_args": [
-        "--locked", "--release", "-p", "qjs-cli",
+        "--locked", "--release", "-p", "qjs-cli", "--features", "agents",
         "--config=profile.release.opt-level=3",
-        "--config=profile.release.debug=false",
-        "--config=profile.release.debug-assertions=false",
-        "--config=profile.release.overflow-checks=false",
-        "--config=profile.release.lto=false",
+        "--config=profile.release.lto=\"fat\"",
         "--config=profile.release.codegen-units=16",
-        "--config=profile.release.panic=\"unwind\"",
-        "--config=profile.release.incremental=false",
-        "--config=profile.release.strip=\"none\"",
+        "--config=profile.release.panic=\"abort\"",
     ],
     "environment": {
         "CARGO_INCREMENTAL": "0",
         "CARGO_ENCODED_RUSTFLAGS": (
-            "-Ctarget-cpu=generic\x1f-Cllvm-args=-align-all-functions=4"
+            "-Csymbol-mangling-version=v0\x1f-Cllvm-args=-align-all-functions=4"
         ),
     },
     "binary": "qjs",
@@ -362,9 +357,27 @@ def _recipe_command(args: argparse.Namespace) -> None:
         print(value)
 
 
+def _build_rust_command(args: argparse.Namespace) -> None:
+    source = args.source.resolve()
+    environment = os.environ.copy()
+    environment.update(RUST_RECIPE["environment"])
+    target = next(line.removeprefix("host: ") for line in
+                  _run(["rustc", "-vV"], cwd=source).splitlines() if line.startswith("host: "))
+    environment["CARGO_BUILD_TARGET"] = target
+    environment["CARGO_TARGET_DIR"] = str(args.target_dir.resolve())
+    subprocess.run([configured_tool(args.cargo, "cargo"), "build", *RUST_RECIPE["cargo_args"]],
+                   cwd=source, env=environment, check=True)
+    print(args.target_dir.resolve() / target / "release/qjs")
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
+    build = commands.add_parser("build-rust")
+    build.add_argument("--cargo", default="")
+    build.add_argument("--source", type=Path, required=True)
+    build.add_argument("--target-dir", type=Path, required=True)
+    build.set_defaults(function=_build_rust_command)
     plan = commands.add_parser("plan")
     plan.add_argument("--candidate-source", type=Path, required=True)
     plan.add_argument("--base-source", type=Path, required=True)

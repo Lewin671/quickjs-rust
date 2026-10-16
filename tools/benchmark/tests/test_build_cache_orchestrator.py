@@ -184,7 +184,7 @@ exec "$TEST_REAL_PYTHON" "$@"
             self.assertEqual(log.read_text(encoding="utf-8").splitlines(), ["cargo", "make"])
             self.assertEqual(
                 rustflags_log.read_text(encoding="utf-8").split("\x1f"),
-                ["-Ctarget-cpu=generic", "-Cllvm-args=-align-all-functions=4"],
+                ["-Csymbol-mangling-version=v0", "-Cllvm-args=-align-all-functions=4"],
             )
             self.assertEqual(first_cache["roles"]["candidate"]["status"], "rebuilt")
             self.assertEqual(first_cache["roles"]["base"]["status"], "hit")

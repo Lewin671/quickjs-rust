@@ -401,7 +401,8 @@ class PreviewPreparationTests(unittest.TestCase):
                 self.assertEqual(len(dynamic.cases), 25)
                 rust = dynamic.build_recipes["qjs-rust"]
                 self.assertEqual(rust.flags, RUST_BUILD_FLAGS)
-                self.assertEqual(rust.lto, "off-forced-by-cargo-config")
+                self.assertEqual(rust.lto, "fat-forced-by-cargo-config")
+                self.assertEqual(rust.features, ("agents",))
                 self.assertEqual(
                     rust.allocator, "source-controlled-not-independently-verified"
                 )

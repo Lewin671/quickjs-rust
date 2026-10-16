@@ -54,6 +54,7 @@ jobs:
       - name: Build CLI
         # Release binaries include the optional agents feature so the standalone
         # CLI has the same Atomics/$262.agent support as the conformance runner.
+        # Cargo.toml owns the optimized release profile; do not override it here.
         run: cargo build --locked --release -p qjs-cli --features agents --target ${{ matrix.target }}
 
       - name: Package CLI

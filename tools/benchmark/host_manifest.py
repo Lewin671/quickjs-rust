@@ -1,8 +1,7 @@
 """Measurement manifests for the host that is measuring.
 
 The checked-in manifests name one platform profile and the build recipes of
-the host they were frozen on. On that platform they are used as they are. On
-another platform this module writes copies whose `profile` and
+the host they were frozen on. This module always writes copies whose `profile` and
 `build_recipes` describe the live host (the Rust target, and the C compiler
 and target the reference build was configured with), so a receipt never
 claims the frozen host's recipe for an executable built elsewhere.
@@ -25,6 +24,9 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+from .preview import RUST_BUILD_FLAGS
+from .local_receipt import rust_toolchain
 
 ROOT = Path(__file__).resolve().parents[2]
 LANES = ("manifest.json", "generic-sentinels-manifest.json")
@@ -71,6 +73,7 @@ def live_facts(build: Path = REFERENCE_BUILD) -> dict[str, str]:
         raise HostManifestError("rustc -vV reported no host target")
     return {
         "rust_target": rust_target,
+        "rust_toolchain": rust_toolchain(),
         "reference_toolchain": _run([compiler, "--version"]).splitlines()[0].strip(),
         "reference_target": _run([compiler, "-dumpmachine"]),
     }
@@ -80,7 +83,7 @@ def derive(frozen: dict, host: str, facts: dict[str, str]) -> dict:
     """`frozen` with its profile and recipes rewritten for `host`."""
     reference = frozen["reference_engine"]["identity"]
     derived = dict(frozen)
-    derived["profile"] = {"id": f"{host}-release-v1", "platform": host}
+    derived["profile"] = {"id": f"{host}-fat16-abort-v1", "platform": host}
     recipes = []
     for recipe in frozen["build_recipes"]:
         recipe = dict(recipe)
@@ -88,7 +91,12 @@ def derive(frozen: dict, host: str, facts: dict[str, str]) -> dict:
             recipe["toolchain"] = facts["reference_toolchain"]
             recipe["target"] = facts["reference_target"]
         else:
-            recipe["target"] = facts["rust_target"]
+            recipe.update(
+                target=facts["rust_target"], toolchain=facts["rust_toolchain"],
+                features=["agents"], flags=list(RUST_BUILD_FLAGS),
+                lto="fat-forced-by-cargo-config", strip="none-release-default",
+                host_features="target-default-cpu-v0-symbols-and-16-byte-function-alignment-forced-by-cargo-encoded-rustflags",
+            )
         recipes.append(recipe)
     derived["build_recipes"] = recipes
     return derived
@@ -107,10 +115,9 @@ def manifests(root: Path = ROOT, host: str | None = None, facts: dict[str, str] 
     for name in LANES:
         path = root / "benchmarks" / name
         frozen = json.loads(path.read_text(encoding="utf-8"))
-        if frozen["profile"]["platform"] != host:
-            facts = facts or live_facts(root / "third_party/quickjs-ng/build")
-            path = root / "benchmarks" / f".host-{host}-{name}"
-            _write_replace(path, (json.dumps(derive(frozen, host, facts), indent=2) + "\n").encode())
+        facts = facts or live_facts(root / "third_party/quickjs-ng/build")
+        path = root / "benchmarks" / f".host-{host}-{name}"
+        _write_replace(path, (json.dumps(derive(frozen, host, facts), indent=2) + "\n").encode())
         result.append(path)
     return result
 

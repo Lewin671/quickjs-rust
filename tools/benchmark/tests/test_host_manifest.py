@@ -11,7 +11,8 @@ from tools.benchmark.schema import load_manifest
 
 ROOT = Path(__file__).resolve().parents[3]
 FACTS = {"rust_target": "x86_64-apple-darwin", "reference_toolchain": "Apple clang version 14.0.0",
-         "reference_target": "x86_64-apple-darwin21.6.0"}
+         "reference_target": "x86_64-apple-darwin21.6.0",
+         "rust_toolchain": "live-rust-toolchain"}
 
 
 class HostManifestTests(unittest.TestCase):
@@ -32,9 +33,10 @@ class HostManifestTests(unittest.TestCase):
         self.assertEqual(host_manifest.host_platform("Darwin", "x86_64"), "macos-x86_64")
         self.assertEqual(host_manifest.host_platform("Linux", "x86_64"), "linux-x86_64")
 
-    def test_the_frozen_platform_measures_with_the_frozen_manifests(self):
-        paths = host_manifest.manifests(self.root, self.frozen_platform, facts=None)
-        self.assertEqual(paths, [self.root / "benchmarks" / name for name in host_manifest.LANES])
+    def test_the_frozen_platform_also_gets_the_current_recipe(self):
+        paths = host_manifest.manifests(self.root, self.frozen_platform, facts=FACTS)
+        self.assertEqual(paths, [self.root / "benchmarks" / f".host-{self.frozen_platform}-{name}"
+                                 for name in host_manifest.LANES])
 
     def test_another_platform_gets_its_own_profile_and_recipes_and_nothing_else(self):
         paths = host_manifest.manifests(self.root, "macos-x86_64", FACTS)
@@ -48,11 +50,12 @@ class HostManifestTests(unittest.TestCase):
             self.assertEqual(keep(derived), keep(frozen))
             loaded = load_manifest(path)
             self.assertEqual((loaded.profile.id, loaded.profile.platform),
-                             ("macos-x86_64-release-v1", "macos-x86_64"))
+                             ("macos-x86_64-fat16-abort-v1", "macos-x86_64"))
             rust, reference = loaded.build_recipes["qjs-rust"], loaded.build_recipes["quickjs-ng"]
             self.assertEqual(rust.target, "x86_64-apple-darwin")
-            self.assertEqual(rust.toolchain, load_manifest(self.root / "benchmarks" / name)
-                             .build_recipes["qjs-rust"].toolchain)
+            self.assertEqual(rust.toolchain, FACTS["rust_toolchain"])
+            self.assertEqual(rust.features, ("agents",))
+            self.assertEqual(rust.lto, "fat-forced-by-cargo-config")
             self.assertEqual((reference.toolchain, reference.target),
                              ("Apple clang version 14.0.0", "x86_64-apple-darwin21.6.0"))
 

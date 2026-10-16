@@ -63,10 +63,10 @@ A full run has three roles: `candidate`, `base` (both qjs-rust) and
 `benchmarks/manifest.json` and by `benchmarks/performance-policy.json`. It
 is a black-box executable, never a Cargo or FFI dependency.
 
-`build_recipes` in the manifest freezes, per engine identity, the build
-mode, toolchain, target, feature and flag lists, LTO, strip, allocator and
-host-feature policy. The checked-in recipes describe macOS arm64. A
-toolchain or recipe change is a new series.
+`build_recipes` freezes compiler inputs; changing them starts a new series.
+The checked-in recipes are historical. `perf-compare.sh` derives current host
+recipes; it and `perf-loop.sh` build both revisions with `build_cache build-rust`,
+using hosted previews' target, agents, flags and release settings, with fresh caches.
 
 A build receipt binds one executable's SHA-256 to a clean source revision
 and a recipe. `tools/benchmark/local_receipt.py` writes local receipts and

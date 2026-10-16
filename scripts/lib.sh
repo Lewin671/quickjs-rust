@@ -119,7 +119,7 @@ qjs_build_cli_bin() {
 #   bin="$(qjs_build_revision "$ROOT_DIR" "$cargo_bin" <sha>)"
 qjs_build_revision() {
   local root="$1" cargo_bin="$2" sha="$3"
-  local cache="$root/target/perf-loop"
+  local cache="$root/target/perf-loop/compiler-fat16-abort-v1"
   local bin="$cache/rev-$sha/qjs"
   if [ ! -x "$bin" ]; then
     local worktree
@@ -127,13 +127,14 @@ qjs_build_revision() {
     rmdir "$worktree"
     echo "building qjs at $sha" >&2
     git -C "$root" worktree add --detach --quiet "$worktree" "$sha" || return 1
-    if ! (cd "$worktree" && "$cargo_bin" build --release -p qjs-cli \
-        --target-dir "$cache/build-rev" --quiet >&2); then
+    local built
+    if ! built="$(cd "$root" && PYTHONPATH="$root" python3 -m tools.benchmark.build_cache \
+        build-rust --cargo "$cargo_bin" --source "$worktree" --target-dir "$cache/build-rev")"; then
       git -C "$root" worktree remove --force "$worktree"
       return 1
     fi
     mkdir -p "$(dirname "$bin")"
-    cp "$cache/build-rev/release/qjs" "$bin.tmp" && mv "$bin.tmp" "$bin"
+    cp "$built" "$bin.tmp" && mv "$bin.tmp" "$bin"
     git -C "$root" worktree remove --force "$worktree"
   fi
   printf '%s\n' "$bin"

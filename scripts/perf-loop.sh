@@ -72,8 +72,8 @@ base_bin="$(qjs_build_revision "$ROOT_DIR" "$cargo_bin" "$base_sha")" || {
 }
 
 echo "perf-loop: building candidate from the working tree" >&2
-"$cargo_bin" build --release -p qjs-cli --quiet
-candidate_bin="$ROOT_DIR/target/release/qjs"
+candidate_bin="$(python3 -m tools.benchmark.build_cache build-rust \
+  --cargo "$cargo_bin" --source "$ROOT_DIR" --target-dir "$ROOT_DIR/target/perf-loop/candidate-build")"
 
 screen_args=(--candidate "$candidate_bin" --base "$base_bin" --pairs "$pairs" --symbols "$symbols")
 if [ -n "$plan" ]; then

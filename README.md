@@ -80,7 +80,6 @@ cd quickjs-rust
 ```
 
 Use the CLI for scripts, modules, or direct evaluation:
-
 ```sh
 cargo run -p qjs-cli -- --raw -e 'JSON.stringify([1, 2, 3].toReversed())'
 # [3,2,1]
@@ -89,6 +88,16 @@ cargo run -p qjs-cli -- --interactive
 cargo run -p qjs-cli -- --module path/to/module.mjs
 cargo run -p qjs-cli -- path/to/script.js
 ```
+
+Build the optimized standalone CLI:
+
+```sh
+cargo build --locked --release -p qjs-cli --features agents
+```
+
+Release builds use fat LTO, 16 codegen units and `panic=abort`, with the
+target-default CPU. Rust panics end the process; JS exceptions retain normal
+engine handling. Embedding applications choose their own Cargo profiles.
 
 The runtime crate exposes direct evaluation and bytecode entry points for
 embedding layers:

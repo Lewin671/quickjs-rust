@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import argparse
+import io
 import json
 import os
+import re
 import subprocess
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
@@ -13,6 +17,7 @@ from tools.benchmark.build_cache import (
     RUST_KIND,
     RUST_RECIPE,
     _spec,
+    _build_rust_command,
     materialize,
     quickjs_spec,
     rust_spec,
@@ -77,11 +82,44 @@ class BuildCacheTests(unittest.TestCase):
             subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
             self.assertNotEqual(rust_source_digest(repo), original)
 
-    def test_hosted_rust_recipe_forces_generic_cpu_and_function_alignment(self) -> None:
+    def test_hosted_rust_recipe_preserves_measured_flags(self) -> None:
         encoded = RUST_RECIPE["environment"]["CARGO_ENCODED_RUSTFLAGS"]
         self.assertEqual(
             encoded.split("\x1f"),
-            ["-Ctarget-cpu=generic", "-Cllvm-args=-align-all-functions=4"],
+            ["-Csymbol-mangling-version=v0", "-Cllvm-args=-align-all-functions=4"],
+        )
+
+    def test_local_builder_uses_hosted_recipe_and_explicit_host_target(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory).resolve()
+            output = io.StringIO()
+            with patch("tools.benchmark.build_cache._run", return_value="host: example-target"), \
+                 patch("tools.benchmark.build_cache.configured_tool", return_value="cargo"), \
+                 patch("tools.benchmark.build_cache.subprocess.run") as run, redirect_stdout(output):
+                _build_rust_command(argparse.Namespace(source=source, target_dir=source / "build", cargo="cargo"))
+            command = run.call_args
+            self.assertEqual(command.args[0], ["cargo", "build", *RUST_RECIPE["cargo_args"]])
+            self.assertEqual(command.kwargs["env"]["CARGO_BUILD_TARGET"], "example-target")
+            self.assertEqual(command.kwargs["env"]["CARGO_ENCODED_RUSTFLAGS"],
+                             RUST_RECIPE["environment"]["CARGO_ENCODED_RUSTFLAGS"])
+            self.assertEqual(output.getvalue().strip(), str(source / "build/example-target/release/qjs"))
+
+    def test_hosted_overrides_match_workspace_release_recipe(self) -> None:
+        root = Path(__file__).resolve().parents[3]
+        # These controlled profile values are JSON scalars as well as TOML.
+        profile = (root / "Cargo.toml").read_text().split("[profile.release]", 1)[1]
+        release = dict(re.findall(r"^([\w-]+) = (.+)$", profile.split("[", 1)[0], re.M))
+        for key, value in release.items():
+            override = json.loads(next(
+                arg.split("=", 2)[2] for arg in RUST_RECIPE["cargo_args"]
+                if arg.startswith(f"--config=profile.release.{key}=")
+            ))
+            self.assertEqual(override, json.loads(value), key)
+        flags = json.loads(re.search(
+            r"^rustflags = (.+)$", (root / ".cargo/config.toml").read_text(), re.M
+        )[1])
+        self.assertEqual(
+            RUST_RECIPE["environment"]["CARGO_ENCODED_RUSTFLAGS"].split("\x1f"), flags
         )
 
     def test_key_binds_toolchain_target_platform_and_recipe(self) -> None:
