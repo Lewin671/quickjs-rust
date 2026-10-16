@@ -1,0 +1,385 @@
+{
+  "claim_eligible": false,
+  "measurement": {
+    "blocks": 3,
+    "metric": "outer_process_wall_time",
+    "order": "seeded_role_rotation",
+    "phase_boundary": "before_process_spawn_to_wait_return",
+    "seed": 20261016,
+    "timeout_seconds": 30
+  },
+  "preview_id": "quickjs-held-out-preview-v1",
+  "role": "held-out",
+  "schema_version": 1,
+  "suites": [
+    {
+      "cases": [
+        {
+          "driver": {
+            "path": "benchmarks/held-out/acorn.js",
+            "sha256": "313c3d8a55c3a7415a481649136b1196f267a87b87fe1066cbc18763bdd8e566"
+          },
+          "expected_checksum": "a1301bb6",
+          "files": [
+            {
+              "path": "dist/acorn.js",
+              "sha256": "b95392d79457d0357555c5ed3e56302d074b92dff119bcf3b44179500b10e9df"
+            }
+          ],
+          "id": "parse",
+          "role": "held-out"
+        }
+      ],
+      "id": "acorn",
+      "license_review": {
+        "evidence_urls": [
+          "https://www.npmjs.com/package/acorn/v/8.19.0"
+        ],
+        "redistribute_source_in_artifact": false,
+        "status": "execution-only"
+      },
+      "name": "acorn",
+      "package": {
+        "integrity": "sha512-oJlA3XiRm7Cyk6qFD2Jn8ak9B7jSy0qy00ADO3+8dpT0LSjFihQYv4C02LFCSYJV3Q37xYwwRy5m+IpIiUzqWw==",
+        "license": "MIT",
+        "license_evidence_urls": [
+          "https://www.npmjs.com/package/acorn/v/8.19.0"
+        ],
+        "name": "acorn",
+        "registry": "npm",
+        "sha256": "c6fad21ffa1f2ba20338bf1dde1de911c2093c1aaf7b3af17c477661bd3bfaaf",
+        "tarball_url": "https://registry.npmjs.org/acorn/-/acorn-8.19.0.tgz",
+        "version": "8.19.0"
+      },
+      "reporting_rule": "Held-out acceptance diagnostic only; never a leaderboard score and never used to select or rank work."
+    },
+    {
+      "cases": [
+        {
+          "driver": {
+            "path": "benchmarks/held-out/esprima.js",
+            "sha256": "63c2b35c0b36af4e956c273c434c1164bca61be95fd368a317b983163ab56eb1"
+          },
+          "expected_checksum": "fce35297",
+          "files": [
+            {
+              "path": "dist/esprima.js",
+              "sha256": "6c36c0e60387f5398f98f68ac76ae832688b32fa9162eae4cc9b6b2cad5f554e"
+            }
+          ],
+          "id": "parse",
+          "role": "held-out"
+        }
+      ],
+      "id": "esprima",
+      "license_review": {
+        "evidence_urls": [
+          "https://www.npmjs.com/package/esprima/v/4.0.1"
+        ],
+        "redistribute_source_in_artifact": false,
+        "status": "execution-only"
+      },
+      "name": "esprima",
+      "package": {
+        "integrity": "sha512-eGuFFw7Upda+g4p+QHvnW0RyTX/SVeJBDM/gCtMARO0cLuT2HcEKnTPvhjV6aGeqrCB/sbNop0Kszm0jsaWU4A==",
+        "license": "BSD-2-Clause",
+        "license_evidence_urls": [
+          "https://www.npmjs.com/package/esprima/v/4.0.1"
+        ],
+        "name": "esprima",
+        "registry": "npm",
+        "sha256": "d8a1910e9cbecc95b4c5df75376c46a7a9261859c294ef91505c1442e093cc74",
+        "tarball_url": "https://registry.npmjs.org/esprima/-/esprima-4.0.1.tgz",
+        "version": "4.0.1"
+      },
+      "reporting_rule": "Held-out acceptance diagnostic only; never a leaderboard score and never used to select or rank work."
+    },
+    {
+      "cases": [
+        {
+          "driver": {
+            "path": "benchmarks/held-out/marked.js",
+            "sha256": "6583c10d0a4ecf68a607c74a58d32d66625b0005132ce30a9cc82af017491b7a"
+          },
+          "expected_checksum": "4a1ea895",
+          "files": [
+            {
+              "path": "lib/marked.umd.js",
+              "sha256": "b82b9334406d8bdd16b6236c08de1cb65b2a859873ca9503d9cc0b292ca3c12a"
+            }
+          ],
+          "id": "render",
+          "role": "held-out"
+        }
+      ],
+      "id": "marked",
+      "license_review": {
+        "evidence_urls": [
+          "https://www.npmjs.com/package/marked/v/18.1.1"
+        ],
+        "redistribute_source_in_artifact": false,
+        "status": "execution-only"
+      },
+      "name": "marked",
+      "package": {
+        "integrity": "sha512-zEGgrtUG8crk+TrMacJSVABU4DYDDkS8uqgU3ohrn/2fW9C2AEfUrO3m6IhpIpQpl7YcVpiXXC9cSMWDANT3dg==",
+        "license": "MIT",
+        "license_evidence_urls": [
+          "https://www.npmjs.com/package/marked/v/18.1.1"
+        ],
+        "name": "marked",
+        "registry": "npm",
+        "sha256": "c05b3cff890d35e1208805a01fd0501571d09a81e725de0559b10bdfae90adad",
+        "tarball_url": "https://registry.npmjs.org/marked/-/marked-18.1.1.tgz",
+        "version": "18.1.1"
+      },
+      "reporting_rule": "Held-out acceptance diagnostic only; never a leaderboard score and never used to select or rank work."
+    },
+    {
+      "cases": [
+        {
+          "driver": {
+            "path": "benchmarks/held-out/mustache.js",
+            "sha256": "b104faee2e4b5fa653e734bf2ae6d0a5cfdb1325702b8eac0980a4120d35df14"
+          },
+          "expected_checksum": "b6d74f39",
+          "files": [
+            {
+              "path": "mustache.js",
+              "sha256": "a80aca795ca45cded108335257ad6493e9dc54fc4d9f0ebfe0d43185af590b90"
+            }
+          ],
+          "id": "render",
+          "role": "held-out"
+        }
+      ],
+      "id": "mustache",
+      "license_review": {
+        "evidence_urls": [
+          "https://www.npmjs.com/package/mustache/v/4.2.0"
+        ],
+        "redistribute_source_in_artifact": false,
+        "status": "execution-only"
+      },
+      "name": "mustache",
+      "package": {
+        "integrity": "sha512-71ippSywq5Yb7/tVYyGbkBggbU8H3u5Rz56fH60jGFgr8uHwxs+aSKeqmluIVzM0m0kB7xQjKS6qPfd0b2ZoqQ==",
+        "license": "MIT",
+        "license_evidence_urls": [
+          "https://www.npmjs.com/package/mustache/v/4.2.0"
+        ],
+        "name": "mustache",
+        "registry": "npm",
+        "sha256": "05ea84bf212d37d84fb201aa77a82b347a6f744a3fcaef750c88e58f889c357c",
+        "tarball_url": "https://registry.npmjs.org/mustache/-/mustache-4.2.0.tgz",
+        "version": "4.2.0"
+      },
+      "reporting_rule": "Held-out acceptance diagnostic only; never a leaderboard score and never used to select or rank work."
+    },
+    {
+      "cases": [
+        {
+          "driver": {
+            "path": "benchmarks/held-out/handlebars.js",
+            "sha256": "3d3f039d6eb8285c30eb6f7c10367ca986aac086940b7340a44fea957104165a"
+          },
+          "expected_checksum": "d1820ba0",
+          "files": [
+            {
+              "path": "dist/handlebars.js",
+              "sha256": "5e25e8190da08af70e4ef544849e51c37a95125cacc86d4dbfca46cde9979af4"
+            }
+          ],
+          "id": "render",
+          "role": "held-out"
+        }
+      ],
+      "id": "handlebars",
+      "license_review": {
+        "evidence_urls": [
+          "https://www.npmjs.com/package/handlebars/v/4.7.10"
+        ],
+        "redistribute_source_in_artifact": false,
+        "status": "execution-only"
+      },
+      "name": "handlebars",
+      "package": {
+        "integrity": "sha512-P5VJMVM7qgBn6vjXMw8WG9uVI+ncf2pi72j4de4yz5ZULLj2RGqLYaKOYGsgyrViQ0tePOVlN1tDCCXXtFqXKg==",
+        "license": "MIT",
+        "license_evidence_urls": [
+          "https://www.npmjs.com/package/handlebars/v/4.7.10"
+        ],
+        "name": "handlebars",
+        "registry": "npm",
+        "sha256": "14f356e6cadb5b064a156d2b39dd843abba8f4b1a38ee036935adecc1a13ad9f",
+        "tarball_url": "https://registry.npmjs.org/handlebars/-/handlebars-4.7.10.tgz",
+        "version": "4.7.10"
+      },
+      "reporting_rule": "Held-out acceptance diagnostic only; never a leaderboard score and never used to select or rank work."
+    },
+    {
+      "cases": [
+        {
+          "driver": {
+            "path": "benchmarks/held-out/crypto-js.js",
+            "sha256": "cb544bdee0b5bf645897a6a4d55f9da8eb04906c515d6b87346452020f3640a1"
+          },
+          "expected_checksum": "db9fff02",
+          "files": [
+            {
+              "path": "crypto-js.js",
+              "sha256": "ee02257ffbaf0a9b481c7039b0f3bb20c360c9674fe4be8b38ae709b2ea59bbe"
+            }
+          ],
+          "id": "hash",
+          "role": "held-out"
+        }
+      ],
+      "id": "crypto-js",
+      "license_review": {
+        "evidence_urls": [
+          "https://www.npmjs.com/package/crypto-js/v/4.2.0"
+        ],
+        "redistribute_source_in_artifact": false,
+        "status": "execution-only"
+      },
+      "name": "crypto-js",
+      "package": {
+        "integrity": "sha512-KALDyEYgpY+Rlob/iriUtjV6d5Eq+Y191A5g4UqLAi8CyGP9N1+FdVbkc1SxKc2r4YAYqG8JzO2KGL+AizD70Q==",
+        "license": "MIT",
+        "license_evidence_urls": [
+          "https://www.npmjs.com/package/crypto-js/v/4.2.0"
+        ],
+        "name": "crypto-js",
+        "registry": "npm",
+        "sha256": "2d288a658b3eae000d7fadfdfdf5fe2bec3952cb19212360db8c7686c2b6ce09",
+        "tarball_url": "https://registry.npmjs.org/crypto-js/-/crypto-js-4.2.0.tgz",
+        "version": "4.2.0"
+      },
+      "reporting_rule": "Held-out acceptance diagnostic only; never a leaderboard score and never used to select or rank work."
+    },
+    {
+      "cases": [
+        {
+          "driver": {
+            "path": "benchmarks/held-out/d3-array.js",
+            "sha256": "8202e49e7f25aeb0287c1aadeebdee509e6425dc0853e658c7628be1e8d8ed93"
+          },
+          "expected_checksum": "85f30c7c",
+          "files": [
+            {
+              "path": "dist/d3-array.js",
+              "sha256": "3323f43e0bb7bfa56a4d0a9e06a25b24028cad8f2962d84cbbc48d6b7f095a0f"
+            }
+          ],
+          "id": "aggregate",
+          "role": "held-out"
+        }
+      ],
+      "id": "d3-array",
+      "license_review": {
+        "evidence_urls": [
+          "https://www.npmjs.com/package/d3-array/v/3.2.4"
+        ],
+        "redistribute_source_in_artifact": false,
+        "status": "execution-only"
+      },
+      "name": "d3-array",
+      "package": {
+        "integrity": "sha512-tdQAmyA18i4J7wprpYq8ClcxZy3SC31QMeByyCFyRt7BVHdREQZ5lpzoe5mFEYZUWe+oq8HBvk9JjpibyEV4Jg==",
+        "license": "ISC",
+        "license_evidence_urls": [
+          "https://www.npmjs.com/package/d3-array/v/3.2.4"
+        ],
+        "name": "d3-array",
+        "registry": "npm",
+        "sha256": "6dbf3f2be39e48f86775be6e166a5d3e5a585ca7144453cd6ad1912f5ae4417f",
+        "tarball_url": "https://registry.npmjs.org/d3-array/-/d3-array-3.2.4.tgz",
+        "version": "3.2.4"
+      },
+      "reporting_rule": "Held-out acceptance diagnostic only; never a leaderboard score and never used to select or rank work."
+    },
+    {
+      "cases": [
+        {
+          "driver": {
+            "path": "benchmarks/held-out/ramda.js",
+            "sha256": "27fa94fb525f302c81b678df9c6a0f950348dfb980b11a3ae714bee0320ff436"
+          },
+          "expected_checksum": "42707ba0",
+          "files": [
+            {
+              "path": "dist/ramda.js",
+              "sha256": "f1b41513b80db800af76bb5498d0198ad4c915bab64d53189b0c8ac9fcf1eeb1"
+            }
+          ],
+          "id": "pipeline",
+          "role": "held-out"
+        }
+      ],
+      "id": "ramda",
+      "license_review": {
+        "evidence_urls": [
+          "https://www.npmjs.com/package/ramda/v/0.32.0"
+        ],
+        "redistribute_source_in_artifact": false,
+        "status": "execution-only"
+      },
+      "name": "ramda",
+      "package": {
+        "integrity": "sha512-GQWAHhxhxWBWA8oIBr1XahFVjQ9Fic6MK9ikijfd4TZHfE2+urfk+irVlR5VOn48uwMgM+loRRBJd6Yjsbc0zQ==",
+        "license": "MIT",
+        "license_evidence_urls": [
+          "https://www.npmjs.com/package/ramda/v/0.32.0"
+        ],
+        "name": "ramda",
+        "registry": "npm",
+        "sha256": "e99a665207ddba7c1177c8062f607c37d31ac376674d41200418627428863967",
+        "tarball_url": "https://registry.npmjs.org/ramda/-/ramda-0.32.0.tgz",
+        "version": "0.32.0"
+      },
+      "reporting_rule": "Held-out acceptance diagnostic only; never a leaderboard score and never used to select or rank work."
+    },
+    {
+      "cases": [
+        {
+          "driver": {
+            "path": "benchmarks/held-out/decimal.js",
+            "sha256": "275b2b0ed5d62e6343ec3988291cf79d9ea6d72f33b38ea9b411c6aa8ef28376"
+          },
+          "expected_checksum": "bcd3cec4",
+          "files": [
+            {
+              "path": "decimal.js",
+              "sha256": "6e99821f8204c5f611b56077e3fce056a1562d22bc341a1f4af01afe7e527d83"
+            }
+          ],
+          "id": "arith",
+          "role": "held-out"
+        }
+      ],
+      "id": "decimal.js",
+      "license_review": {
+        "evidence_urls": [
+          "https://www.npmjs.com/package/decimal.js/v/10.6.0"
+        ],
+        "redistribute_source_in_artifact": false,
+        "status": "execution-only"
+      },
+      "name": "decimal.js",
+      "package": {
+        "integrity": "sha512-YpgQiITW3JXGntzdUmyUR1V812Hn8T1YVXhCu+wO3OpS4eU9l4YdD3qjyiKdV6mvV29zapkMeD390UVEf2lkUg==",
+        "license": "MIT",
+        "license_evidence_urls": [
+          "https://www.npmjs.com/package/decimal.js/v/10.6.0"
+        ],
+        "name": "decimal.js",
+        "registry": "npm",
+        "sha256": "433210122e8149972f64054c54b0ce0872e5f15a3c5835aab57ff1a8e6d071b1",
+        "tarball_url": "https://registry.npmjs.org/decimal.js/-/decimal.js-10.6.0.tgz",
+        "version": "10.6.0"
+      },
+      "reporting_rule": "Held-out acceptance diagnostic only; never a leaderboard score and never used to select or rank work."
+    }
+  ]
+}

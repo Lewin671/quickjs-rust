@@ -69,6 +69,9 @@ artifacts mean.
   SunSpider and Kraken sources. Diagnostic only. Benchmarking.
 - `external-performance-preview.sh`: audits, fetches, or runs the pinned
   external corpus preview. Benchmarking.
+- `held-out-performance-preview.sh`: audits, fetches, or runs the pinned
+  held-out acceptance lane of third-party npm libraries, which never selects
+  work. Benchmarking.
 - `external-corpus-audit.sh`: validates the external-corpus registry.
   Benchmarking.
 - `benchmark.sh`, `benchmark-report.sh`: run the versioned benchmark manifest

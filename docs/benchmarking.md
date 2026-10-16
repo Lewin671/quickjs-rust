@@ -1,16 +1,15 @@
 # Performance benchmarking reference
 
-What the measurement tools and their artifacts mean. This is reference
-only. The procedure for one performance unit, with every command, is in
-[performance-workflow.md](performance-workflow.md). Rules that hold across
-revisions are in [performance-knowledge.md](performance-knowledge.md).
-Dated measurements and the earlier, longer text of this document are in
+What the measurement tools and their artifacts mean; the procedure for one
+unit is in [performance-workflow.md](performance-workflow.md), rules that hold
+across revisions in [performance-knowledge.md](performance-knowledge.md), and
+the earlier, longer text of this document in
 [the archive](../tasks/archive/benchmarking-history.md).
 
-Inventories, schema versions, protocol hashes and thresholds are defined by
-the files under `benchmarks/` and the loaders under `tools/benchmark/`.
-This document names those files instead of copying them; when the two
-disagree, the files are right.
+Inventories, schema versions, protocol hashes and thresholds are defined by the
+files under `benchmarks/` and the loaders under `tools/benchmark/`; this document
+names those files instead of copying them, and when the two disagree the files
+are right.
 
 ## Lanes and inventories
 
@@ -19,38 +18,39 @@ disagree, the files are right.
 | Broad | `benchmarks/manifest.json`, workload `benchmarks/workloads/broad-micro.js` | wall ns per declared operation |
 | Generic sentinels | `benchmarks/generic-sentinels-manifest.json`, workload `benchmarks/workloads/generic-sentinels.js` | wall ns per declared operation |
 | External | `benchmarks/external-preview.json` (sources fetched into a hash-checked cache) | whole-process wall time |
+| Held-out | `benchmarks/held-out-preview.json` (npm tarballs fetched into a hash-checked cache) | whole-process wall time |
 | Resources | `benchmarks/resources.json`, `benchmarks/resource-analysis.json`, workload `benchmarks/workloads/resource-probe.js` | fresh-process latency, peak RSS, binary size |
 | Lifecycle | Criterion bench behind `scripts/lifecycle-bench.sh` | parse and compile time at the public Rust API |
 
-Records from different lanes or series are never pooled, and no lane yields
-a headline engine score.
+Records from different lanes or series are never pooled, and no lane yields a headline engine score.
 
 **Broad** has 25 cases in eight families (call, binding, property, array,
-control, builtin, string, allocation). Each case is a small loop over one
-kind of operation. Each manifest entry declares the operations per
-iteration and a closed-form checksum. What broad measures depends on which
-tier answers each loop, and that changes with the engine, so this document
-makes no statement about its tier coverage. The last formal standing is in
-[T018](../tasks/T018-broad-performance.md). Read
-the [execution counters](#execution-counters) for a case before using it
-as evidence about a specializer or as a control for the generic path.
+control, builtin, string, allocation); each is a small loop over one kind of
+operation with a declared operation count and closed-form checksum. What broad
+measures depends on which tier answers each loop, and that changes with the
+engine, so this document makes no statement about its tier coverage; the last
+formal standing is in [T018](../tasks/T018-broad-performance.md). Read the
+[execution counters](#execution-counters) before using a case as evidence about a
+specializer or as a control for the generic path.
 
 **Generic sentinels** are six cases that withhold the static facts a
 specializer needs: recursion, prototype dispatch on a rotating receiver,
-callees and closures selected from run-time tables, reads across several
-storage shapes, and computed string keys. Each checksum must match the
-manifest's closed form and QuickJS-NG's result for the same iteration
-count. They are the controls for ordinary calls and property access.
+callees and closures from run-time tables, reads across storage shapes, and
+computed string keys. Each checksum must match the manifest's closed form and
+QuickJS-NG's result; they are the controls for ordinary calls and property access.
 
 **External** has 45 cases in three suites: SunSpider 1.0, Kraken 1.1 and a
-JetStream 3 JavaScript subset. Results are never an official score of any
-suite, and an incomplete suite has no suite score. The metric includes
-process start, parsing, execution and shutdown.
+JetStream 3 subset. Results are never an official score and an incomplete suite
+has no suite score; the metric includes process start, parsing, execution and shutdown.
+
+**Held-out** has 9 cases: pinned, unmodified third-party npm libraries (parsing,
+templating, numerics, crypto) driven by first-party scripts. It is the
+independent generalization check, so nothing ever selects work from it; see
+[performance-workflow.md](performance-workflow.md#terms).
 
 **Resources** are three independent lanes selected with
-`scripts/resource-benchmark.sh --lane fresh|rss|size`. Peak RSS is a
-single direct-process value, not a process tree. Binary size is the logical
-size of the main executable.
+`scripts/resource-benchmark.sh --lane fresh|rss|size`: peak RSS is a single
+direct-process value, not a tree; binary size is the logical executable size.
 
 **Lifecycle** times `qjs_parser::parse_script` and
 `qjs_runtime::compile_script` on two repository fixtures. It is diagnostic

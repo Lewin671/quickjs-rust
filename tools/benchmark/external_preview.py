@@ -91,6 +91,25 @@ class Manifest:
     suites: tuple[Suite, ...]
 
 
+@dataclass(frozen=True)
+class Lane:
+    """How one whole-process wall-time lane acquires, checks and analyzes runs.
+
+    The external lane and the held-out acceptance lane share `PreviewRun`; only
+    these callables and the artifact names differ, so both use one protocol.
+    `status(result, role, case)` returns `(status, error)` and `report(manifest,
+    records)` returns the lane's report object.
+    """
+
+    label: str
+    artifact_prefix: str
+    title: str
+    subtitle: str
+    fetch: Any
+    status: Any
+    report: Any
+
+
 def _reject_constant(value: str) -> None:
     raise ExternalPreviewError(f"manifest contains non-standard numeric constant {value}")
 
@@ -438,9 +457,10 @@ def _record(
     order: int,
     result: ProcessResult,
     argv: list[str],
+    status_fn: Any,
 ) -> dict[str, Any]:
     from .runner import _host_metadata
-    status, error = _sample_status(result, role)
+    status, error = status_fn(result, role, case)
     return {
         "host": _host_metadata(),
         # Version 3 added per-sample hardware counters (`instructions`, `cycles`).
@@ -503,6 +523,7 @@ def _atomic_write(path: Path, content: bytes) -> None:
 
 
 def _print_sample_progress(
+    label: str,
     suite_id: str,
     case_id: str,
     phase: str,
@@ -512,7 +533,7 @@ def _print_sample_progress(
 ) -> None:
     block_text = "" if block is None else f" block={block + 1}/{blocks}"
     print(
-        f"external-preview: suite={suite_id} case={case_id} "
+        f"{label}: suite={suite_id} case={case_id} "
         f"phase={phase}{block_text} role={role}",
         file=sys.stderr,
         flush=True,
@@ -522,6 +543,24 @@ def _print_sample_progress(
 def _report(manifest: Manifest, records: list[dict[str, Any]]) -> dict[str, Any]:
     from .external_report import _report as analyze
     return analyze(manifest, records)
+
+
+def _default_status(result: ProcessResult, role: str, case: Case) -> tuple[str, str | None]:
+    return _sample_status(result, role)
+
+
+EXTERNAL_LANE = Lane(
+    label="external-preview",
+    artifact_prefix="external",
+    title="External Benchmark Preview",
+    subtitle=(
+        "These are pinned, neutral shell ports; no row is an official JetStream, "
+        "Kraken, or SunSpider score, and incomplete suites have no aggregate score."
+    ),
+    fetch=fetch_corpora,
+    status=_default_status,
+    report=_report,
+)
 
 
 class PreviewRun:
@@ -541,8 +580,10 @@ class PreviewRun:
         *,
         blocks: int | None = None,
         timeout_seconds: int | None = None,
+        lane: Lane | None = None,
     ):
-        fetch_corpora(manifest, cache_root)
+        self.lane = EXTERNAL_LANE if lane is None else lane
+        self.lane.fetch(manifest, cache_root)
         candidate, candidate_sha = _binary(candidate_path, "candidate")
         base, base_sha = _binary(base_path, "base")
         quickjs, quickjs_sha = _binary(quickjs_path, "quickjs-ng")
@@ -600,11 +641,13 @@ class PreviewRun:
             for order, role in enumerate(roles):
                 argv = _command(role, self.binaries[role], bundle)
                 measured = None if phase == "capability" else block
-                _print_sample_progress(suite.id, case.id, phase, role, measured, self.blocks)
+                _print_sample_progress(
+                    self.lane.label, suite.id, case.id, phase, role, measured, self.blocks
+                )
                 result = run_process(argv, self.timeout)
                 records.append(_record(
                     self.manifest, suite, case, role, self.binary_hashes[role], bundle,
-                    phase, measured, order, result, argv,
+                    phase, measured, order, result, argv, self.lane.status,
                 ))
         return records
 
@@ -624,20 +667,26 @@ class PreviewRun:
         for role, snapshot in self.binaries.items():
             if _sha256_file(snapshot) != self.binary_hashes[role]:
                 raise ExternalPreviewError(f"{role} executable snapshot changed during preview")
-        report = _report(self.manifest, records)
+        report = self.lane.report(self.manifest, records)
         output = output_dir.expanduser().resolve()
+        prefix = self.lane.artifact_prefix
         raw = b"".join(
             (json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n").encode()
             for record in records
         )
         report["input"] = {"sha256": _sha256_bytes(raw), "byte_length": len(raw)}
-        _atomic_write(output / "external-raw.jsonl", raw)
+        _atomic_write(output / f"{prefix}-raw.jsonl", raw)
         _atomic_write(
-            output / "external-report.json",
+            output / f"{prefix}-report.json",
             (json.dumps(report, indent=2, sort_keys=True, allow_nan=False) + "\n").encode(),
         )
-        _atomic_write(output / "external-summary.md", render_markdown(report).encode())
-        _atomic_write(output / "external-manifest.json", self.manifest.path.read_bytes())
+        _atomic_write(
+            output / f"{prefix}-summary.md",
+            render_markdown(
+                report, title=self.lane.title, subtitle=self.lane.subtitle
+            ).encode(),
+        )
+        _atomic_write(output / f"{prefix}-manifest.json", self.manifest.path.read_bytes())
         return report
 
     def close(self) -> None:
@@ -656,10 +705,11 @@ def run_preview(
     *,
     blocks: int | None = None,
     timeout_seconds: int | None = None,
+    lane: Lane | None = None,
 ) -> dict[str, Any]:
     run = PreviewRun(
         manifest, cache_root, work_root, candidate_path, base_path, quickjs_path,
-        blocks=blocks, timeout_seconds=timeout_seconds,
+        blocks=blocks, timeout_seconds=timeout_seconds, lane=lane,
     )
     try:
         records: list[dict[str, Any]] = []

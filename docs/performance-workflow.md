@@ -14,13 +14,14 @@ from a fresh formal run and is not stored in the repository (step 1).
 | Broad | 25 cases of `benchmarks/workloads/broad-micro.js`, listed in `benchmarks/manifest.json` | ns per declared operation of small single-operation loops |
 | Sentinel | 6 cases, `benchmarks/generic-sentinels-manifest.json` | ns per operation of calls and property access whose callee, receiver or key varies at run time |
 | External | 45 cases in 3 suites, `benchmarks/external-preview.json` | whole-process wall time of pinned SunSpider, Kraken and JetStream 3 subset scripts |
+| Held-out | 9 cases, `benchmarks/held-out-preview.json` | whole-process wall time of pinned third-party npm libraries that never select work |
 
 Broad cases are answered by whichever tier admits each loop, and that
-changes with the engine. Do not assume which tier a broad case runs on, or
-use one as a neutrality control, until
-its [execution counters](benchmarking.md#execution-counters) show it runs
-the path under test. The six sentinels are mandatory controls for every
-unit. External times include startup, parsing and shutdown.
+changes with the engine: do not assume a tier until its
+[execution counters](benchmarking.md#execution-counters) show it runs the
+path under test. The six sentinels are mandatory controls for every unit.
+External and held-out times include startup, parsing and shutdown; held-out is
+acceptance only and never a source of work.
 
 - A **diagnostic screen** compares two executables on hardware counters in
   minutes. It writes no decision artifact and cannot retain or reject a unit.
@@ -34,14 +35,13 @@ unit. External times include startup, parsing and shutdown.
 
 ## Prerequisites
 
-- macOS with the toolchain pinned in `rust-toolchain.toml`;
-  `perf-compare.sh` refuses a `rustc`/`cargo` that differs from the recipe.
-  The checked-in recipes in `benchmarks/manifest.json` describe an arm64
-  host. On another platform `perf-compare.sh` measures with copies that
-  name the live host's profile, targets and reference compiler
-  (`tools/benchmark/host_manifest.py`); cases, policy and protocol are
-  unchanged. Bundles from different hosts are never compared: a queue, its
-  plans and their decisions all come from one host.
+- macOS with the toolchain pinned in `rust-toolchain.toml`; `perf-compare.sh`
+  refuses a `rustc`/`cargo` that differs from the recipe. The checked-in
+  recipes in `benchmarks/manifest.json` describe an arm64 host; on another
+  platform `perf-compare.sh` measures with copies that name the live host's
+  profile, targets and reference compiler (`tools/benchmark/host_manifest.py`).
+  Cases, policy and protocol are unchanged. Bundles from different hosts are
+  never compared: a queue, its plans and their decisions all come from one host.
 - Python 3.10 or newer as `python3`.
 - A built reference engine at `third_party/quickjs-ng/build/qjs`, with the
   submodule clean at the pinned revision:
