@@ -1,157 +1,131 @@
-# T055: Layout noise control, phase A
+# T055: Layout noise control, A2 complete / B proposal
 
-- Status: blocked; phase A timing is incomplete and invalid.
-- Implementation: none in production; workspace-only diagnostic tools/binaries.
-- Verified at: source 153c1fe5, plan 82a21c62, 2026-10-16; full gate,
-  static audit, both exact natural binaries' 5170 Test262 cases and 247 NG
-  fixtures passed. No complete timing matrix was obtained.
-- Evidence: frozen design and revision-bound results below; supplementary
-  workspace report: tmp/layout-noise-control/REPORT-phase-a.md.
-- Unresolved: valid 76-case layout band; R1 produced no machine-code change;
-  frozen N/2N wall sampling failed despite tiny-launch preflight.
-- Next action: lead decides whether to freeze a replacement sampling protocol
-  after A/A validation and worker-failure handling; no phase B work or further
-  timing under this invalid run.
+- Status: active; A2 complete; phase B proposal awaits lead review.
+- Implementation: none in production; original audited R0 diagnostic binaries.
+- Verified at: measured source 153c1fe5, frozen A2 eef1a203, 2026-10-16;
+  six screens and raw-record conservation pass. Full gate at eef1a203 passes
+  (232 s, including 5170 Test262 subset cases); later changes are task records.
+- Evidence: [complete A2 tables](archive/T055-phase-a2-data.md) and results
+  below; [phase A history](archive/T055-phase-a-log.md).
+- Unresolved: production calibration/adoption of the proposed rule, including
+  longer A/A and separately qualified held-out acceptance; not authorized here.
+- Next action: lead reviews workspace tmp/layout-noise-control/
+  PROPOSAL-phase-b.md and freezes a separate B implementation/qualification.
 
-## Scope and frozen recipes
+## Historical phase A
 
-Owner: agent/layout-noise-control/codex in its existing worktree; no push to
-origin, merge, main/other-owner changes, runtime/parser/AST/workload changes,
-production recipe adoption or phase B implementation. Queue transport refs
-are used only by the required workspace scripts/imac-bench.sh runner.
-Only this task and its tasks/README.md index entry are repository changes.
-Runtime/build inputs start at exactly 153c1fe5; temporary CLI build glue and
-linker-order inputs generate diagnostic placement variants outside the repo.
+The [original frozen contract](archive/T055-phase-a-plan.md) is superseded
+by the lead amendment below. Its failed samples never enter A2.
 
-R0 is T047/T046's exact canonical recipe: opt-level 3, fat LTO, 16 codegen
-units, panic abort, agents, explicit x86_64-apple-darwin target, incremental
-0, target-default CPU, Rust flags in order -Csymbol-mangling-version=v0 then
--Cllvm-args=-align-all-functions=4. R1 appends exactly
--Cllvm-args=-x86-branches-within-32B-boundaries. No R2.
+## Lead amendment and frozen phase A2 (2026-10-16)
 
-## Frozen placement generator and static stop
+The lead's brief-phase-a2.md supersedes phase A's sampling and R1 decision
+above. R1 is dropped: mitigation not available via this toolchain on macOS;
+hardware hypothesis untested. No further JCC work. The fixed-path binary-
+replacement sampler is retired; do not debug or reuse it. Phase A's invalid
+partial samples do not enter A2. Historical results are in the linked log.
 
-Six variants per recipe: v0 is the natural canonical build; v1..v5 insert
-one never-called retained NOP atom of respectively 16, 64, 240, 512 and
-1008 bytes before the entire natural text-function order, retaining every
-original function in that order. Atom alignment is 16 bytes. The order is
-obtained independently from each recipe's v0, without looking at timing.
-This samples both 32-byte phases and several cache-line/page residues using
-one generic rule, without matching benchmark source or bytecode.
+Reuse the six already audited R0 executables (source 153c1fe5), verifying
+SHA-256 against the phase A report before any measurement. Rebuild only if
+the originals cannot be verified. Each retains its existing immutable,
+equal-length path under the build job's out/binaries/R0v0..R0v5/qjs;
+never swap or overwrite them. New repository revision is a tooling context,
+not a claim that these executables were built from it.
 
-Build glue may assemble/link the padding and replay the natural order only;
-all runtime inputs and compiler settings within a recipe remain identical.
-Before timing, audit every original text symbol: names/order, function sizes,
-actual address shifts and disassembled instructions normalized only for
-relocated branch/RIP references. All original bodies must match their own
-recipe's v0; added NOP atom and final section alignment are the only allowed
-new instructions. Unexpected body/name/order/relative-address drift stops
-all timing and is reported, rather than repaired from performance results.
-Different code generation between R0 and R1 is expected and reported.
+Exactly six complete sequential screens: v0/v0 A/A, then v1/v0 through
+v5/v0. Each uses T054's tools.benchmark.screen CLI, all 76 original cases
+(25 broad, 6 sentinel, 45 external), five alternating pairs, unchanged
+calibration, launch preflight, quiet checks, timeout and measurement lock.
+Five pairs matches T054; this is a diagnostic band, not formal precision.
+Use workspace scripts/imac-bench.sh run --timing for each complete screen;
+retain/replace DISTURBED runs in full, never pool or remove observations.
+No held-out programs are used to select or profile work in this diagnostic.
 
-## Frozen measurement and precision
+A workspace wrapper only records the existing screen.sample return values
+and case boundaries outside timed subprocesses, preserving wall/instruction
+costs as well as the CLI's ratios; it changes no tools or sampler decisions.
+Require all five positive wall/instruction pairs per case; missing/short or
+nonpositive increments are reported as invalid, never silently discarded.
+Keep calibration samples separate. All raw samples, driver, identities,
+CLI JSON and logs are retained. A/A must complete validly before v1 timing.
 
-Use the iMac only via workspace scripts/imac-bench.sh; inspect status before
-CPU work. Build/check jobs use the shared queue. Timing uses run --timing,
-existing measurement lock, four workers partitioning cases (one worker owns
-each case), wall time, all 76 unmodified cases: 25 broad, 6 sentinel, 45
-external. No iMac build/test work during timing. Preserve DISTURBED runs and
-replace the entire disturbed run, never pool them.
+Per case report every paired wall/instruction median ratio vk/v0. For a
+cross-screen layout spread normalize each role's cost by iterations (internal
+only), divide each candidate's median cost by its same-screen base median,
+include v0=1, and take max/min over v0..v5. Also report the literal unnormalized
+six wall medians using the v0 role from A/A, flagging their cross-run drift;
+these cannot separate host drift from layout. A/A width is max/min of its
+five ratios, with min/max and median bias reported for both metrics. Per
+lane and portfolio report geometric means of case paired-median ratios per
+variant and their max/min spread; retain all cases with equal case weights.
 
-Before timing, run existing exact-binary correctness checks on v0 of each
-recipe: optimized 5170-case Test262 subset and every QuickJS-NG comparison
-fixture, UTC/C locale, using the pinned reference inputs. Static audit covers
-all other variants. Record full hashes, sizes, toolchain, commands and scripts.
+Phase B is a proposal only at workspace tmp/layout-noise-control/
+PROPOSAL-phase-b.md. Derive thresholds from A/A and the layout band, assess
+T053/T054 using their recorded pairs, cover instruction-blind effects and
+reserve held-out acceptance. Do not change production tools, workflow docs,
+rejected budgets or acceptance policy. Commit on this branch only; no push
+or merge (private queue transport refs are the existing authorized runner).
 
-Collect 60 rounds per variant per case, chosen conservatively against the
-historical ~0.8% paired wall noise and the known less stable audio case. Each
-round interleaves all 12 binaries: rotate the list R0v0..R0v5,R1v0..R1v5 by
-round modulo 12, reverse odd rounds. One literal executable path per worker,
-atomically replaced outside timing and launch-preflight warmed after each
-replacement (T050); argv/environment/workload paths remain fixed. Calibrate
-internal N/2N with existing screen calibration, target 200 ms and require
-all measured increments >=50 ms; external cases use whole-process wall time.
-Keep all N/2N/whole raw samples and checksums; remove no outliers. Report
-bootstrap 95% median intervals (10000 resamples, fixed seed 5500); flag any
-variant whose relative interval half-width exceeds 1%. Insufficient precision
-is a limitation, not permission for a favorable rerun or changed design.
+## Phase A2 results and proposed B rule (2026-10-16)
 
-## Frozen metrics and reading
+A2 was frozen at eef1a203 before timing, on repository base 09e8e0d3.
+Every original R0 hash matches phase A; no rebuild or path replacement.
+Screen code and its external loading/bundling functions are unchanged from
+T054. Six complete 76-case x 5-pair runs: 2280 pairs, 6420 measured process
+samples plus 978 separately retained calibration samples. All five wall/
+instruction pairs are positive; every internal wall increment >=50 ms.
+No samples removed/pooled and no DISTURBED run. Light activity remains in
+v2 (one sample) and v4 (seven samples), below the queue's 200% threshold.
 
-For each case/recipe report max/min of the six variant medians, sorted by
-spread. For each case take the geometric mean of its six variant medians;
-report its R1/R0 ratio and aggregate ratios geometrically per lane and overall.
-Also report each individual variant's lane geomean against R0v0.
+Queue jobs (UTC prefix 20261016; all exit 0):
 
-R1 reduces layout noise only if the median per-case spread excess above 1
-falls by at least half, its worst case spread is below 1.03, and no lane's
-R1/R0 geomean exceeds 1.01. ("Half" applies to max/min minus one, since the
-ratio itself cannot drop below one.) Otherwise report the observed band for
-phase B. This diagnostic neither promotes runtime code nor reopens rejected
-unit budgets. No offset search, extra recipe or post-result tuning.
+- T173552Z-layout-noise-a2-aa (524 s), T174435Z-layout-noise-a2-v1 (522 s).
+- T174436Z-layout-noise-a2-v2 (522 s), T174436Z-layout-noise-a2-v3 (524 s).
+- T174436Z-layout-noise-a2-v4 (518 s), T174437Z-layout-noise-a2-v5 (523 s).
 
-## Phase A results and blocker (2026-10-16)
+| Wall max/min statistic | Median | p95 | Maximum |
+| --- | ---: | ---: | ---: |
+| Six literal wall medians | 1.017945 | 1.053941 | 1.100113 (global_read) |
+| Same-screen-v0-normalized medians | 1.018054 | 1.071217 | 1.106055 (dynamic_method_call) |
+| A/A five-pair width | 1.034037 | 1.185257 | 1.738377 (captured_read) |
 
-Frozen plan commit: 82a21c6219977b63659f30131e5098d102bf02a1; the design
-above is unchanged. All runtime/build inputs start at the recorded source.
-No production change, origin push, merge or phase B implementation occurred.
+Same-v0 cross-run median drift reaches 1.079650 (dynamic_method_call).
+These are observed layout-plus-sampling bands, not isolated causal effects
+or confidence bounds. A/A maximum reciprocal median bias is 1.025025.
+Instruction layout-paired medians range 0.995911..1.004090; exact 1.0000
+invariance is false for some whole-process cases. Full per-case ratios,
+A/A min/max/median/width, literal medians and drift are in the linked table.
 
-Jobs (workspace outputs/imac-bench/<job>/):
+Proposed diagnostic ceilings use max(layout spread, reciprocal A/A bias),
+with the same geomean-of-case-medians statistic; no policy is adopted:
 
-- 20261016T150418Z-layout-noise-matrix-build: exit 1 before timing; the first
-  normalizer mistook integer immediates/embedded-data disassembly for relocated
-  addresses. Its first identity file is retained. Corrected address recognition
-  does not change recipes, padding, ordering or statistical rules.
-- 20261016T150643Z-layout-noise-full-gate: full check at 82a21c62 passed, 170 s.
-- 20261016T150830Z-layout-noise-matrix-audit-fixed: exit 0, 734 s. All 12
-  binaries built; each recipe's 4205 original functions survive, and each of
-  its five variants has exactly the declared uniform displacement, original
-  order/sizes and relocation-normalized instructions. Zero real static drift.
-  R0v0/R1v0 each pass 5170 subset cases and all 247 NG fixtures, UTC/C locale.
-- 20261016T151909Z-layout-noise-loaded-metadata: exit 0; all six corresponding
-  R0/R1 entire text sections are byte-identical at identical addresses.
-- 20261016T152218Z-layout-noise-matrix-timing: cancelled (130) after three
-  workers hit the frozen minimum-increment guard. No complete case/matrix.
+| Lane | Layout geomean spread / proposed ceiling |
+| --- | ---: |
+| Broad | 1.012949 |
+| Sentinel | 1.015687 |
+| External | 1.007380 |
+| Portfolio (76 equally weighted cases) | 1.008262 |
 
-The iMac is i7-10700 @ 2.90GHz, macOS 12.6 (21G115). R0v0 is the canonical
-6081812-byte binary, SHA-256
-926ee634ca3901b89c778478702a4fe993288ef7e8e69cd93c238c694595aa85.
-R1v0 has the same size, SHA-256
-543884ecf407d1a831e052bcd919f236a0a66f4c67b2baa229be76a16f20781e.
-Both natural text sections are 4916832 bytes, SHA-256
-6c2e7c07cb9ccd2f4a4b2c2c68358a2c844afee215b9ce6c51bd8d15228fc85b.
-All six padded pairs also have identical text; full hashes/sizes are in the
-workspace report. Cargo's runtime fingerprint confirms all three R1 flags.
-Thus R1 is a machine-code no-op here; the JCC hardware hypothesis remains
-untested, and no mitigation is adopted.
+Instruction controls: A/A-derived ceiling +0.21% for 71/76 cases, own A/A
+pair envelope for five noisy cases (max +1.44%); reject only with all five
+pairs beyond the case ceiling. Zero triggers in 380 neutral-layout cases.
+Case wall bands cover both ratio-of-medians and median-of-ratios layout
+spreads plus A/A median bias. Targets must beat frozen payoff and that band.
+A lone wall event is recorded, then checked across fixed K=6 layouts, never a best
+offset. Persistent six-of-six wall cost can reject despite flat instructions.
+K=6 costs 52.22 screen minutes plus >=6 quiet minutes, before build/formal
+costs. Memory/Value/allocator units require the full wall panel and resource
+checks; held-out stays acceptance-only with independent calibration.
 
-| Case | Round (zero-based) | Variant | N-to-2N wall ms |
-| --- | ---: | --- | ---: |
-| broad/plain_function_call | 1 | R0v4 | -56.458329 |
-| broad/captured_write | 4 | R0v2 | -190.853849 |
-| broad/method_call | 6 | R0v1 | -162.518805 |
+Hypothetical replay: T053 target 0.917431 passes and all lanes fit, but two
+instruction controls fail (+0.242% binary-trees, +1.240% controlflow-recursive).
+Both have faster recorded wall times: this is an instruction-contract failure,
+not proof of wall slowdown. Four wall events also lack K=6 evidence. T054
+fits all lane ceilings, but two wall events and one inconsistent cdjs
+instruction alert need more evidence; it is not retained. Historical rejected
+standing/budgets remain unchanged. Longer frozen A/A (proposed 30 blocks),
+formal precision and held-out qualification precede production adoption.
 
-Every offending execution followed a successful 80-84 ms tiny-launch warmup.
-For plain_function_call, N wall/user time is 633.976/290 ms and 2N is
-577.518/560 ms: extra non-user time corrupts the wall difference. Its specific
-system/validation/wait source is not resolved. Worker exceptions were delayed
-by executor shutdown waiting for the surviving worker; the queue job was
-cancelled after raw-data diagnosis and no child process remained.
-
-Retained partial rounds: plain_function_call 2, method_call 7, captured_write 5,
-captured_read 15, each below 60; 0/76 cases complete. All original samples and
-checksums remain; none were removed, pooled, or used for a spread/CI/verdict.
-The cancelled queue job has no final disturbance classification (observed
-intruder samples total at most 82% CPU, below its 200% threshold).
-
-Per-case spreads, all lane geomeans, precision and the predeclared noise-
-reduction reading are unavailable. Complete artifact/table inventory and
-blocking evidence: workspace tmp/layout-noise-control/REPORT-phase-a.md and
-outputs/layout-noise-control/blocked-result.json. These are supplementary;
-the conclusions, numbers and revisions are recorded here.
-
-The brief forbids changing the frozen design after seeing results. Obtaining
-a valid band now requires a newly frozen sampling/path-warmup protocol and
-prompt worker-error termination, first checked by A/A. That decision belongs
-to the lead; no replacement timing, additional recipe or favorable rerun was
-silently substituted. Phase A remains blocked, rather than claimed complete.
+Full-gate job: 20261016T174543Z-layout-noise-a2-full-gate. Result documents
+use context/fast/whitespace/scope checks; no runtime semantics changed, so no
+additional focused semantic slice is selected by the fast gate.
