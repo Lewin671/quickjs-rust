@@ -127,4 +127,4 @@ nothing about whether the code exists.
 | `global-numeric-binding-sinks` | T018 | `e54e33eb` 2026-10-09 | original plan rejected; [leaf history](../archive/T018-batch-1-leaf-screens.md); reopened under the separate repin plan below |
 | `global-numeric-binding-sinks-repin` | T037 | `e54e33eb` 2026-10-09 | live plan; retained (promotion re-decision): candidate `af4d0d3c`, lead rule `dbf98c55`, hashed audio-dft base A/A; implementation on `integration/batch-1`; [integration record](../T037-integration-batch-1.md) |
 
-- `ordinary-own-slot-hot-read-fat-lto.json`: T053, frozen on 9a0eeeca with fresh fat-LTO profiles; one screen; not yet implemented.
+- `ordinary-own-slot-hot-read-fat-lto.json`: T053, frozen on 9a0eeeca with fresh fat-LTO profiles; correctness passed, sole screen pending; not promoted.

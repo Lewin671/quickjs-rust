@@ -1,13 +1,13 @@
 # T053: Ordinary OwnSlot hot reads under the current compiler recipe
 
 - Status: active.
-- Implementation: none; frozen plan before runtime edits.
-- Verified at: base 9a0eeeca, fresh 30-block iMac standing and three exact
-  binary hash-map profiles, plus source-equivalent feature-only route counts.
+- Implementation: present on the isolated branch; not promoted or integrated.
+- Verified at: transport 3feb19e3; fast/full gates, optimized 5170-case subset,
+  all NG fixtures and reentrant getter/Proxy assertion passed on iMac.
 - Evidence: the frozen plan and current baseline/profiles below.
-- Unresolved: correctness, one complete screen and any subsequent formal gate.
-- Next action: validate and commit the plan, then port and review the guarded
-  OwnSlot cache mechanism; do not reopen or relabel the old T041 attempt.
+- Unresolved: the single complete screen is running; no formal result yet.
+- Next action: collect the single frozen screen; retain no runtime change
+  unless the complete formal and exact-candidate conformance gates pass.
 
 ## Scope and generality
 
@@ -54,3 +54,25 @@ prototype/Proxy fallback and no cache borrow across user callbacks.
 Use focused Rust tests, selected/full Test262, full check, all NG fixtures,
 the complete frozen screen and, only after a pass, formal 30-block comparison
 plus exact-candidate zero-gap Test262 evidence. Record every outcome here.
+
+## Implementation and correctness
+
+The cache source and tests were unchanged between 33c7dfed's parent and the
+new base; the prior guarded implementation applies without changing its
+admission rules. Host reviewed all insert/overwrite/write/clear paths and the
+live value, weak identity, layout and storage/accessor checks. The 4-byte
+predecoded-kind table never replaces these semantic guards. The new helper
+runs no user code and transfers the existing cache borrow.
+
+Transport 3feb19e3, job 20261016T130107Z-general-own-slot-correctness: fast and
+full checks passed, including selected and full debug Test262 subset. The
+canonical optimized CLI also passed all 5170 subset cases, all NG fixtures
+under UTC/C locale, and the observable reentrant getter/Proxy regression.
+Optimized CLI SHA-256: 4b39c6cde2dee960e18c8dc1ed44e25e6130a33abb88626647833348c4799f4e.
+The natural-order file replays the measured base; future size changes can still
+move addresses. No address was selected from a timing result.
+
+20261016T130336Z-general-own-slot-screen is the one authorized screen,
+76 cases x 5 paired measurements; pending. It uses immutable base/candidate
+copies, equal-length paths and the normal launch preflight. Do not rerun it
+for a favorable result, modify thresholds or discard a slow pair.
