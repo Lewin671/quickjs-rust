@@ -317,41 +317,7 @@ fn validate_class_ranges(
 ) -> Result<(), RuntimeError> {
     let mut index = start;
     while index < end {
-        if pattern[index] == '\\' {
-            if unicode
-                && let Some(next) = validate_unicode_decimal_escape(pattern, index, 0, false)?
-            {
-                index = next;
-                continue;
-            }
-            if unicode
-                && let Some(set_end) = unicode_class_set_escape_end(pattern, index, unicode_sets)?
-            {
-                if pattern.get(set_end) == Some(&'-') && set_end + 1 < end {
-                    return Err(regexp_syntax_error("invalid regular expression pattern"));
-                }
-                index = set_end;
-                continue;
-            }
-            let escape_end = if unicode {
-                validate_unicode_escape(pattern, index, true)?
-            } else {
-                class_escape_end(pattern, index, unicode)
-            };
-            if unicode
-                && pattern.get(escape_end) == Some(&'-')
-                && escape_end + 1 < end
-                && pattern.get(escape_end + 1) == Some(&'\\')
-                && unicode_class_set_escape_end(pattern, escape_end + 1, unicode_sets)?.is_some()
-            {
-                return Err(regexp_syntax_error("invalid regular expression pattern"));
-            }
-            index = escape_end;
-            continue;
-        }
-        if unicode_sets && is_unicode_sets_reserved_class_char(pattern[index]) {
-            return Err(regexp_syntax_error("invalid regular expression pattern"));
-        }
+        // `v` mode reserves two adjacent matching punctuators (`&&`, `!!`, ...).
         if unicode_sets
             && index + 1 < end
             && pattern[index] == pattern[index + 1]
@@ -359,22 +325,141 @@ fn validate_class_ranges(
         {
             return Err(regexp_syntax_error("invalid regular expression pattern"));
         }
-        if index + 2 < end && pattern[index + 1] == '-' {
-            if unicode
-                && pattern[index + 2] == '\\'
-                && unicode_class_set_escape_end(pattern, index + 2, unicode_sets)?.is_some()
-            {
-                return Err(regexp_syntax_error("invalid regular expression pattern"));
+
+        let member = class_member(pattern, index, unicode, unicode_sets)?;
+
+        // A `-` directly after a member is the range operator when another member
+        // follows (`[a-z]`, `[\x30-\x39]`); otherwise it is a literal `-` in
+        // Annex-B mode or a reserved `v`-mode punctuator (rejected below).
+        if member.end < end && pattern[member.end] == '-' && member.end + 1 < end {
+            let range = class_member(pattern, member.end + 1, unicode, unicode_sets)?;
+            match (member.value, range.value) {
+                (Some(low), Some(high)) => {
+                    if low > high {
+                        return Err(regexp_syntax_error("invalid regular expression pattern"));
+                    }
+                    index = range.end;
+                    continue;
+                }
+                // A character-class or property escape covers a set of code
+                // points. Unicode mode forbids it as a range endpoint; Annex-B
+                // mode treats the `-` as an ordinary member.
+                _ if unicode => {
+                    return Err(regexp_syntax_error("invalid regular expression pattern"));
+                }
+                _ => {}
             }
-            if pattern[index] > pattern[index + 2] {
-                return Err(regexp_syntax_error("invalid regular expression pattern"));
-            }
-            index += 3;
-            continue;
         }
-        index += 1;
+
+        index = member.end;
     }
     Ok(())
+}
+
+/// A validated character-class member: where it ends and, when it denotes a
+/// single code point that may be a range endpoint, that code point. A
+/// character-class escape (`\d`, `\w`, ...) or `\p{...}` names a set of code
+/// points and carries no value.
+struct ClassMember {
+    end: usize,
+    value: Option<u32>,
+}
+
+/// Scan one class member starting at `index` (inside the class, before `]`).
+///
+/// The range check has to compare the *code points* an endpoint denotes, so a
+/// range whose endpoint is an escape (`[\x30-\x39]`) is resolved here instead of
+/// being read as raw pattern characters.
+fn class_member(
+    pattern: &[char],
+    index: usize,
+    unicode: bool,
+    unicode_sets: bool,
+) -> Result<ClassMember, RuntimeError> {
+    if pattern[index] != '\\' {
+        if unicode_sets && is_unicode_sets_reserved_class_char(pattern[index]) {
+            return Err(regexp_syntax_error("invalid regular expression pattern"));
+        }
+        return Ok(ClassMember {
+            end: index + 1,
+            value: Some(u32::from(pattern[index])),
+        });
+    }
+    match pattern.get(index + 1) {
+        Some('d' | 'D' | 's' | 'S' | 'w' | 'W') => Ok(ClassMember {
+            end: index + 2,
+            value: None,
+        }),
+        Some('p' | 'P') if unicode => {
+            let end = validate_property_escape(pattern, index, unicode_sets)?;
+            Ok(ClassMember { end, value: None })
+        }
+        _ => {
+            let end = if unicode {
+                validate_unicode_escape(pattern, index, true)?
+            } else {
+                class_escape_end(pattern, index)
+            };
+            Ok(ClassMember {
+                end,
+                value: class_escape_value(pattern, index, end, unicode),
+            })
+        }
+    }
+}
+
+/// The single code point a validated class escape at `index` (ending at `end`)
+/// denotes, or `None` when it is not a single character. Set-valued escapes are
+/// resolved by [`class_member`] before this is reached.
+fn class_escape_value(pattern: &[char], index: usize, end: usize, unicode: bool) -> Option<u32> {
+    let escaped = *pattern.get(index + 1)?;
+    match escaped {
+        'b' => Some(0x08),
+        'f' => Some(0x0c),
+        'n' => Some(0x0a),
+        'r' => Some(0x0d),
+        't' => Some(0x09),
+        'v' => Some(0x0b),
+        'c' if end == index + 3 => pattern.get(index + 2).map(|ch| u32::from(*ch) % 32),
+        '0' if end == index + 2 => Some(0),
+        'x' if end == index + 4 => hex_code_units(pattern, index + 2, 2),
+        'u' if unicode && pattern.get(index + 2) == Some(&'{') => {
+            braced_code_point(pattern, index + 2)
+        }
+        // A `\uHHHH` that is not hex (Annex-B `\u{...}`) is the identity escape
+        // `u`.
+        'u' if end == index + 6 => hex_code_units(pattern, index + 2, 4).or(Some(u32::from('u'))),
+        _ if !unicode && end > index + 2 => octal_code_units(pattern, index + 1, end),
+        _ => Some(u32::from(escaped)),
+    }
+}
+
+fn hex_code_units(pattern: &[char], start: usize, digits: usize) -> Option<u32> {
+    let mut value = 0u32;
+    for offset in 0..digits {
+        value = value * 16 + pattern.get(start + offset)?.to_digit(16)?;
+    }
+    Some(value)
+}
+
+fn braced_code_point(pattern: &[char], brace: usize) -> Option<u32> {
+    let mut value = 0u32;
+    let mut index = brace + 1;
+    while pattern.get(index).is_some_and(|ch| *ch != '}') {
+        value = value
+            .checked_mul(16)?
+            .checked_add(pattern.get(index)?.to_digit(16)?)?;
+        index += 1;
+    }
+    Some(value)
+}
+
+fn octal_code_units(pattern: &[char], start: usize, end: usize) -> Option<u32> {
+    let mut value = 0u32;
+    for index in start..end {
+        value = value * 8 + pattern.get(index)?.to_digit(8)?;
+    }
+    Some(value)
 }
 
 fn is_unicode_sets_reserved_class_char(ch: char) -> bool {
@@ -442,18 +527,6 @@ fn validate_unicode_decimal_escape(
     Err(regexp_syntax_error("invalid regular expression pattern"))
 }
 
-fn unicode_class_set_escape_end(
-    pattern: &[char],
-    start: usize,
-    unicode_sets: bool,
-) -> Result<Option<usize>, RuntimeError> {
-    match pattern.get(start + 1) {
-        Some('d' | 'D' | 's' | 'S' | 'w' | 'W') => Ok(Some(start + 2)),
-        Some('p' | 'P') => validate_property_escape(pattern, start, unicode_sets).map(Some),
-        _ => Ok(None),
-    }
-}
-
 /// Validate a `\p{...}` / `\P{...}` Unicode property escape (unicode mode).
 /// `start` points at the backslash. Returns the index just past the closing
 /// brace, or a SyntaxError when the body is not a valid property expression.
@@ -478,17 +551,33 @@ fn validate_property_escape(
     Ok(close + 1)
 }
 
-fn class_escape_end(pattern: &[char], start: usize, unicode: bool) -> usize {
+/// The index just past a non-`u`/`v` class escape at `start` (a backslash).
+///
+/// Annex-B class escapes include the fixed-width `\xHH` hex escape and the
+/// legacy octal escape; `\uHHHH` spans a fixed six characters.
+fn class_escape_end(pattern: &[char], start: usize) -> usize {
     if pattern.get(start + 1) == Some(&'u') {
-        if unicode
-            && pattern.get(start + 2) == Some(&'{')
-            && let Some(end) = braced_escape_end(pattern, start + 2)
-        {
-            return end + 1;
-        }
         return (start + 6).min(pattern.len());
     }
-    if !unicode && let Some(first) = pattern.get(start + 1).and_then(|value| value.to_digit(8)) {
+    if pattern.get(start + 1) == Some(&'x')
+        && pattern
+            .get(start + 2)
+            .is_some_and(|value| value.is_ascii_hexdigit())
+        && pattern
+            .get(start + 3)
+            .is_some_and(|value| value.is_ascii_hexdigit())
+    {
+        return (start + 4).min(pattern.len());
+    }
+    if pattern.get(start + 1) == Some(&'c')
+        && pattern.get(start + 2).is_some_and(|value| {
+            value.is_ascii_alphabetic() || value.is_ascii_digit() || *value == '_'
+        })
+    {
+        // `\cX` ControlLetter, plus the Annex-B `\c<digit>`/`\c_` legacy forms.
+        return (start + 3).min(pattern.len());
+    }
+    if let Some(first) = pattern.get(start + 1).and_then(|value| value.to_digit(8)) {
         let max_digits = if first <= 3 { 3 } else { 2 };
         let mut index = start + 1;
         let mut digit_count = 0;
@@ -1083,5 +1172,59 @@ mod tests {
         accepts("(?<a>.)\\k<a>", "");
         // With no named group and no `u` flag, `\k` is an identity escape.
         accepts("\\k<a>", "");
+    }
+
+    #[test]
+    fn accepts_escaped_class_range_endpoints() {
+        // Regression: a class escape used as a range endpoint was scanned as its
+        // leading two characters, so `\xHH` left its hex digits in the stream and
+        // any range whose second hex digit is `a`-`f` became a false SyntaxError.
+        accepts("[\\x3a-\\x40]", "");
+        accepts("[\\x2a-\\x2f]", "");
+        accepts("[\\x3A-\\x40]", "");
+        accepts("[\\u003a-\\u0040]", "");
+        accepts("[\\x3a-\\x40]", "u");
+        accepts("[\\x3a-\\x40]", "v");
+        accepts("[\\u003a-\\u0040]", "u");
+        accepts("[\\u{3a}-\\u{40}]", "u");
+        accepts("[\\u{3a}-\\u{40}]", "v");
+        // A literal endpoint mixed with an escaped one.
+        accepts("[a-\\x62]", "");
+        accepts("[\\x61-b]", "");
+        accepts("[\\x61-\\x62]", "v");
+        // Other single-code-point escapes at an endpoint.
+        accepts("[\\0-\\u0001]", "u");
+        accepts("[\\cA-\\x40]", "");
+        accepts("[\\12-\\14]", "");
+        accepts("[\\t-\\r]", "u");
+    }
+
+    #[test]
+    fn rejects_descending_escaped_class_ranges() {
+        // The endpoint code points are still compared, so a descending range is
+        // a SyntaxError however its endpoints are spelled.
+        rejects("[\\x40-\\x30]", "");
+        rejects("[\\x40-\\x30]", "u");
+        rejects("[\\x40-\\x30]", "v");
+        rejects("[a-\\x40]", "");
+        rejects("[\\u0041-\\u0030]", "u");
+        rejects("[\\x62-\\x61]", "v");
+    }
+
+    #[test]
+    fn rejects_set_escapes_as_unicode_range_endpoints() {
+        // A character-class or property escape names a set, so unicode mode
+        // forbids it as a range endpoint.
+        rejects("[\\d-a]", "u");
+        rejects("[a-\\d]", "u");
+        rejects("[\\s-\\d]", "u");
+        rejects("[%-\\d]", "u");
+        rejects("[\\w-\\d]", "v");
+        rejects("[\\uFFFF-\\p{Hex}]", "u");
+        rejects("[\\p{L}-\\p{N}]", "v");
+        // Annex-B mode treats the `-` as an ordinary member instead.
+        accepts("[\\d-a]", "");
+        accepts("[a-\\d]", "");
+        accepts("[\\w-\\d]", "");
     }
 }
