@@ -1,15 +1,13 @@
 # T049: Property-read path cost study with the adopted compiler recipe
 
 - Status: active.
-- Implementation: none in production; research only until evidence and a
-  newly frozen plan justify a candidate.
+- Implementation: candidate present only on the study branch; main runtime unchanged.
 - Verified at: base `21e55fe2b530be09ea0453fcb87cde3b36423db3`, 2026-10-16;
   30-block current-recipe comparison, exact profiles and feature-only counts.
 - Evidence: local artifact, not retained: workspace queue job
   `20261016T101305Z-property-current-baseline`.
 - Unresolved: operation reach, exact-binary cost and net runtime benefit.
-- Next action: implement and verify the validated single-hot-probe unit, then
-  run its one complete-portfolio screen.
+- Next action: run the one frozen complete-portfolio screen of the verified candidate.
 
 ## Scope
 
@@ -90,3 +88,20 @@ validates against that queue and three exact profile receipts. It gives one
 attempt, hash-map <=0.98, every other case <=1.03. No runtime edit existed
 when the plan was frozen. Compiler recipes, order files and portfolios stay
 fixed. This is a research candidate, not a retained optimization.
+
+## Candidate correctness before timing
+
+The candidate removes only the second `probe_hot` in the compact cold named
+read. Captured class-field initializers explicitly perform their first probe;
+wide callers already do so. No cache entry kind, layout guard, object storage,
+compiler setting or order file changed. Three focused tests cover descriptor
+and prototype changes, Proxy/primitive/null fallbacks and live captured-member
+field initialization.
+
+Transport snapshot `a9e0f56d3061b5d19fed6b82b5aef060589a7dcd` passed the fast and full gates,
+then the exact optimized CLI passed all 5170 curated Test262 cases and all NG
+fixtures under UTC/C locale in job
+`20261016T104613Z-property-single-probe-correctness`. Subsequent task prose
+changes do not alter any Rust/build input. Optimized candidate SHA-256:
+`c07f0af58c956041e966bdf8b4e40e8f1599188280ce1b8f5d00a2bd9a1f232a`.
+Timing is still pending; this is not a retention claim.
