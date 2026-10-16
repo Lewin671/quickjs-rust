@@ -51,3 +51,13 @@ their own schema and statistics. Shared formal snapshots use padded role
 names (ten characters) and exclusive creation; measurement protocols are
 throughput v10, sentinels v3 and resources v3.
 
+
+Queue schema 3 additionally records the measured host. Schema-3 unit
+validation checks that host against the policy and refuses stale inventories
+before implementation. Older queue schema 2 remains readable for history.
+Instruction-blind decisions require `--resource-report` and `--resource-raw`:
+the current resource analyzer replays the report, binds both engines and
+host, and retains all reported costs. Missing/incomplete resource evidence
+blocks promotion. `layout_replay` is diagnostic-only; it accepts a qualified
+policy or explicitly unqualified `--diagnostic-bands` and never reopens an
+old unit's budget or changes its standing.

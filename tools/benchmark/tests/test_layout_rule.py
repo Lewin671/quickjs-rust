@@ -70,6 +70,8 @@ class VerdictTests(unittest.TestCase):
 
     def test_instruction_hard_cap_and_all_pairs_requirement(self):
         self.assertEqual(self.run_rule(change(self.data, self.name, instructions=1.031))['label'], 'reject')
+        self.assertEqual(self.run_rule(change(self.data, self.name,
+                            instructions=[1.02, 1.04, 1.04, 1.04, 1.04]))['label'], 'reject')
         self.assertNotEqual(self.run_rule(change(self.data, self.name,
                             instructions=[1., 1.04, 1.04, 1.04, 1.04]))['label'], 'reject')
 

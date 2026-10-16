@@ -108,10 +108,6 @@ class EvidenceTests(unittest.TestCase):
             self.assertEqual(len(out.with_suffix('.jsonl').read_text().splitlines()), 2)
             self.assertIs(screen.sample, original)
 
-
-if __name__ == '__main__':
-    unittest.main()
-
 class SnapshotTests(unittest.TestCase):
     def test_equal_paths_exclusive_files_and_hashes(self):
         from tools.benchmark.snapshots import SnapshotStore, SnapshotError
@@ -130,3 +126,42 @@ class SnapshotTests(unittest.TestCase):
                 self.assertEqual(paths[1].read_bytes(), b'binary')
             finally:
                 store.cleanup()
+
+class PanelCollectionTests(unittest.TestCase):
+    def test_matching_layouts_and_completion_never_remeasure_natural(self):
+        from contextlib import nullcontext
+        from tools.benchmark.layout_panel import measure_panel
+        import platform
+        with tempfile.TemporaryDirectory() as work:
+            folder = Path(work)
+            identities = {}
+            for role in ('base000', 'cand000'):
+                identities[role] = {'host': {}, 'host_node': platform.node(),
+                    'variants': [{'path': f'/tmp/{role}/v{k}/qjs'} for k in range(6)]}
+            calls = []
+            def take(case, candidate, base, pairs, tool, timeout, output):
+                calls.append((str(candidate), str(base)))
+                return screen.CaseResult('broad/a', 'whole', None,
+                    {'instructions': [1.]*pairs, 'wall_ns': [1.]*pairs, 'cycles': []})
+            with patch('tools.benchmark.layout_panel.host_identity', return_value={}), \
+                 patch('tools.benchmark.layout_panel.matrix', side_effect=lambda p: identities[str(p)]), \
+                 patch('tools.benchmark.screen.counter_tool'), \
+                 patch('tools.benchmark.screen.measurement_lock', side_effect=lambda *a: nullcontext()), \
+                 patch('tools.benchmark.screen.wait_for_builds', return_value=[]), \
+                 patch('tools.benchmark.screen.check_load'), \
+                 patch('tools.benchmark.screen.launch_preflight', return_value=[]), \
+                 patch('tools.benchmark.screen.resolve_cases', return_value=[
+                     screen.CaseSpec('broad/a', 'whole', folder/'case.js')]), \
+                 patch('tools.benchmark.layout_panel.measure', side_effect=take), \
+                 patch('tools.benchmark.layout_evidence.replay'):
+                initial = measure_panel(Path('base000'), Path('cand000'), folder/'out', natural=True)
+                before = digest(folder/'out/panel.json')
+                complete = measure_panel(Path('base000'), Path('cand000'), folder/'out', complete=True)
+            self.assertEqual(calls, [(f'/tmp/cand000/v{k}/qjs', f'/tmp/base000/v{k}/qjs') for k in range(6)])
+            self.assertEqual(complete['panels'][0], initial['panels'][0])
+            self.assertEqual(digest(folder/'out/panel.json'), before)
+            self.assertTrue((folder/'out/complete.json').is_file())
+
+
+if __name__ == '__main__':
+    unittest.main()

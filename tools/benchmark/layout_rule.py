@@ -11,7 +11,7 @@ from .layout_policy import geomean, rows
 
 
 def evaluate(policy, screen, targets, payoff, *, panel=None, held_out=None,
-             instruction_blind=False, memory_targets=(), promotion=False, panel_required=False, stage=False):
+             instruction_blind=False, memory_targets=(), promotion=False, panel_required=False, stage=False, stage_limit=1.25):
     data = rows(screen, policy['cases'])
     if screen['pairs'] < 5:
         raise ValueError('layout verdict needs at least five pairs')
@@ -33,6 +33,8 @@ def evaluate(policy, screen, targets, payoff, *, panel=None, held_out=None,
             raise ValueError('panel pair counts differ')
     for name, ratios in data.items():
         band = policy['cases'][name]['wall_band']
+        if stage:
+            band = min(band, stage_limit)
         instruction_limit = max(1.01, policy['cases'][name]['instruction_band'])
         wall = statistics.median(ratios['wall_ns'])
         instructions = ratios['instructions']
@@ -46,7 +48,7 @@ def evaluate(policy, screen, targets, payoff, *, panel=None, held_out=None,
                 label = 'reject'
         else:
             if min(instructions) > instruction_limit and statistics.median(instructions) > 1.03:
-                failures.append(name + ': instruction hard cap exceeded in every pair')
+                failures.append(name + ': consistent instruction excess exceeds median hard cap')
                 label = 'reject'
             elif min(instructions) > instruction_limit:
                 events[name] = label = 'control event'

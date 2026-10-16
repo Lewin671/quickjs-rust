@@ -16,7 +16,10 @@ def validate(unit):
     _sha256(gate['policy_sha256'], 'layout_gate.policy_sha256')
     if gate['mechanism_class'] not in ('cpu-work', 'instruction-blind'):
         raise ValueError('layout mechanism_class must be cpu-work or instruction-blind')
-    ids = _unique_strings(gate['memory_wall_targets'], 'layout memory targets', _opportunity_id)
+    raw_ids = gate['memory_wall_targets']
+    if not isinstance(raw_ids, list):
+        raise ValueError('memory_wall_targets must be an array')
+    ids = _unique_strings(raw_ids, 'layout memory targets', _opportunity_id) if raw_ids else []
     if not set(ids) <= set(unit['fast_gate']['target_ids']):
         raise ValueError('memory wall targets must be declared targets')
     if type(gate['panel_required']) is not bool:

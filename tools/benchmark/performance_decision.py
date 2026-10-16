@@ -212,7 +212,8 @@ def build_queue(
     if problems:
         raise PerformanceDecisionError("queue requires healthy complete evidence: " + "; ".join(problems))
     payload = {
-        "schema_version": 2,
+        "schema_version": 3,
+        "host": broad["run"]["host"],
         "artifact_type": _QUEUE_TYPE,
         "engines": summary["engines"],
         "candidate_sha": candidate_sha,
@@ -240,15 +241,15 @@ def build_queue(
 
 def load_queue(path: Path) -> tuple[dict[str, Any], str]:
     queue, digest = _read_json(path, "opportunity queue")
-    _keys(
-        queue,
-        {
-            "schema_version", "artifact_type", "candidate_sha", "comparison_base_sha",
-            "target_ratio", "evidence", "external", "broad", "sentinel", "engines",
-        },
-        "opportunity queue",
-    )
-    if queue["schema_version"] != 2 or queue["artifact_type"] != _QUEUE_TYPE:
+    expected = {
+        "schema_version", "artifact_type", "candidate_sha", "comparison_base_sha",
+        "target_ratio", "evidence", "external", "broad", "sentinel", "engines",
+    }
+    if queue.get("schema_version") == 3:
+        expected.add("host")
+        _object(queue.get("host"), "opportunity queue.host")
+    _keys(queue, expected, "opportunity queue")
+    if queue["schema_version"] not in {2, 3} or queue["artifact_type"] != _QUEUE_TYPE:
         raise PerformanceDecisionError("opportunity queue: unsupported schema")
     _revision(queue["candidate_sha"], "opportunity queue.candidate_sha")
     _revision(queue["comparison_base_sha"], "opportunity queue.comparison_base_sha")
@@ -482,6 +483,17 @@ def validate_unit_against_queue(unit: dict[str, Any], unit_sha: str, queue: dict
         raise PerformanceDecisionError("performance unit queue candidate SHA does not match supplied queue")
     if unit["base_sha"] != queue["candidate_sha"]:
         raise PerformanceDecisionError("performance unit base SHA must equal the queue candidate SHA")
+    if unit.get('schema_version') == 3:
+        from .layout_policy import load_policy
+        from .performance_evidence import ROOT, inventories
+        contract = unit['layout_gate']
+        policy = load_policy(ROOT / contract['policy_path'], contract['policy_sha256'], live=False)
+        if queue.get('host', {}).get('node') != policy['host_node']:
+            raise PerformanceDecisionError('layout policy and opportunity queue hosts differ')
+        expected = {f'{lane}/{case}' if lane in ('broad', 'sentinel') else f'external/{lane}/{case}'
+                    for lane, cases in inventories().items() for case in cases}
+        if set(policy['cases']) != expected or set(policy['held_out']) != _held_out_opportunity_ids():
+            raise PerformanceDecisionError('layout policy inventory differs from current corpora')
     priority = unit["priority"]
     targets = set(priority["opportunity_ids"])
     profile_targets = {
@@ -557,6 +569,8 @@ def _parser() -> argparse.ArgumentParser:
     decision.add_argument("--profile-root", type=Path, required=True)
     decision.add_argument("--test262-burndown", type=Path)
     decision.add_argument("--unstable-base-evidence", type=Path, action="append", default=[])
+    decision.add_argument("--resource-report", type=Path)
+    decision.add_argument("--resource-raw", type=Path)
     decision.add_argument("--layout-panel", type=Path)
     decision.add_argument("--held-out-panel", type=Path)
     decision.add_argument("--mode", choices=("stage", "fast", "promotion"), required=True)
@@ -607,7 +621,7 @@ def main() -> int:
             external, external_sha, args.mode, test262, sentinel=sentinel, sentinel_sha=sentinel_sha,
             profile_root=args.profile_root, unstable_base_checks=base_checks,
             layout_panel_path=args.layout_panel, held_out_path=args.held_out_panel,
-            formal_bundle=args.summary.parent,
+            formal_bundle=args.summary.parent, resource_report=args.resource_report, resource_raw=args.resource_raw,
         )
         _atomic_write(args.output, payload)
         print(json.dumps(payload, sort_keys=True))

@@ -14,57 +14,91 @@ import struct
 from .layout_identity import command, digest
 
 def sections(binary):
-    data=binary.read_bytes(); cursor=32; result=[]
-    assert struct.unpack_from('<I',data)[0]==0xfeedfacf
-    for _ in range(struct.unpack_from('<I',data,16)[0]):
-        cmd,size=struct.unpack_from('<II',data,cursor)
-        if cmd==0x19:
-            for i in range(struct.unpack_from('<I',data,cursor+64)[0]):
-                sec=cursor+72+i*80
-                name=data[sec:sec+16].rstrip(b'\0').decode()
-                segment=data[sec+16:sec+32].rstrip(b'\0').decode()
-                addr,length,offset=struct.unpack_from('<QQI',data,sec+32)
-                result.append((addr,length,segment+'/'+name,offset))
-        cursor+=size
+    """Read section address ranges from a thin x86_64 Mach-O executable."""
+    data = binary.read_bytes()
+    if len(data) < 32 or struct.unpack_from('<II', data) != (0xfeedfacf, 0x1000007):
+        raise ValueError('layout audit requires a thin x86_64 Mach-O executable')
+    cursor, result = 32, []
+    for _ in range(struct.unpack_from('<I', data, 16)[0]):
+        if cursor + 8 > len(data):
+            raise ValueError('truncated Mach-O load command')
+        kind, size = struct.unpack_from('<II', data, cursor)
+        if size < 8 or cursor + size > len(data):
+            raise ValueError('invalid Mach-O load command size')
+        if kind == 0x19:  # LC_SEGMENT_64
+            if size < 72:
+                raise ValueError('truncated Mach-O segment')
+            count = struct.unpack_from('<I', data, cursor + 64)[0]
+            if 72 + count * 80 > size:
+                raise ValueError('truncated Mach-O section table')
+            for i in range(count):
+                section = cursor + 72 + i * 80
+                name = data[section:section+16].rstrip(b'\0').decode()
+                segment = data[section+16:section+32].rstrip(b'\0').decode()
+                address, length, offset = struct.unpack_from('<QQI', data, section+32)
+                result.append((address, length, segment + '/' + name, offset))
+        cursor += size
     return result
 
+
 def inspect(binary, out, tag):
-    listing=command(['nm','-n',binary]); (out/(tag+'.nm')).write_text(listing)
-    rows=[]
+    listing = command(['nm', '-n', binary])
+    (out / (tag + '.nm')).write_text(listing)
+    rows = []
     for line in listing.splitlines():
-        p=line.split()
-        if len(p)==3 and p[1] in ('t','T') and p[2]!='__mh_execute_header': rows.append((int(p[0],16),p[2]))
-    assert len(rows)==len(set(n for a,n in rows))==len(set(a for a,n in rows))
-    sec=sections(binary);text=next(x for x in sec if x[2]=='__TEXT/__text')
-    addresses=[a for a,n in rows]; names=[n for a,n in rows]
+        parts = line.split()
+        if len(parts) == 3 and parts[1] in ('t', 'T') and parts[2] != '__mh_execute_header':
+            rows.append((int(parts[0], 16), parts[2]))
+    addresses = [address for address, _ in rows]
+    names = [name for _, name in rows]
+    if not rows or len(rows) != len(set(names)) or len(rows) != len(set(addresses)):
+        raise ValueError('layout audit needs unique text names and addresses')
+    segments = sections(binary)
+    text = next((s for s in segments if s[2] == '__TEXT/__text'), None)
+    if text is None:
+        raise ValueError('layout audit cannot find __TEXT/__text')
+
     def target(address):
-        if text[0]<=address<text[0]+text[1]:
-            i=bisect.bisect_right(addresses,address)-1
-            if i>=0:return names[i]+'+'+hex(address-addresses[i])
-        for a,size,name,off in sec:
-            if a<=address<a+size:return name+'+'+hex(address-a)
-        if 0x100000000 <= address < text[0]: return 'HEADER+'+hex(address-0x100000000)
+        if text[0] <= address < text[0] + text[1]:
+            index = bisect.bisect_right(addresses, address) - 1
+            if index >= 0:
+                return names[index] + '+' + hex(address - addresses[index])
+        for start, size, name, _ in segments:
+            if start <= address < start + size:
+                return name + '+' + hex(address - start)
+        if 0x100000000 <= address < text[0]:
+            return 'HEADER+' + hex(address - 0x100000000)
         return None
-    assembly=command(['otool','-tv',binary]);(out/(tag+'.asm')).write_text(assembly)
-    instr=[]
+
+    assembly = command(['otool', '-tv', binary])
+    (out / (tag + '.asm')).write_text(assembly)
+    instructions = []
     for line in assembly.splitlines():
-        m=re.match(r'^([0-9a-f]{16})\s+([^\s]+)\s*(.*)',line)
-        if m:instr.append((int(m[1],16),m[2],m[3].split('##')[0].strip()))
-    bodies={n:[] for a,n in rows}
-    for i,(a,op,args) in enumerate(instr):
-        idx=bisect.bisect_right(addresses,a)-1
-        if idx<0:continue
-        following=instr[i+1][0] if i+1<len(instr) else text[0]+text[1]
-        args=re.sub(r'(-?0x[0-9a-f]+)\(%rip\)',lambda m:'RIP['+(target(following+int(m[1],16)) or 'RAW:'+m[1])+']',args)
-        branch = op.startswith(('j','call','loop'))
-        if op in ('rep','repne','repe','bnd'):
-            branch = bool(re.match(r'(?:j\w*|call\w*|loop\w*)\s+',args))
+        match = re.match(r'^([0-9a-f]{16})\s+([^\s]+)\s*(.*)', line)
+        if match:
+            instructions.append((int(match[1], 16), match[2], match[3].split('##')[0].strip()))
+    if not instructions:
+        raise ValueError('layout audit found no disassembled instructions')
+    bodies = {name: [] for name in names}
+    for i, (address, operation, operands) in enumerate(instructions):
+        index = bisect.bisect_right(addresses, address) - 1
+        if index < 0:
+            continue
+        following = instructions[i+1][0] if i+1 < len(instructions) else text[0] + text[1]
+        operands = re.sub(r'(-?0x[0-9a-f]+)\(%rip\)',
+            lambda m: 'RIP[' + (target(following + int(m[1], 16)) or 'RAW:' + m[1]) + ']', operands)
+        branch = operation.startswith(('j', 'call', 'loop'))
+        if operation in ('rep', 'repne', 'repe', 'bnd'):
+            branch = bool(re.match(r'(?:j\w*|call\w*|loop\w*)\s+', operands))
         if branch:
-            args=re.sub(r'(?<![\w$])0x[0-9a-f]+$',lambda m:target(int(m[0],16)) or 'RAW_REL:'+hex(int(m[0],16)-following),args)
-        bodies[names[idx]].append(op+' '+args)
-    (out/(tag+'.normalized.json')).write_text(json.dumps(bodies,indent=2)+'\n')
-    sizes={n:b-a for (a,n),(b,_) in zip(rows,rows[1:])}
-    return {'sha256':digest(binary),'bytes':binary.stat().st_size,'addresses':dict((n,a) for a,n in rows),'sizes':sizes,'bodies':bodies,'sections':sec}
+            operands = re.sub(r'(?<![\w$])0x[0-9a-f]+$',
+                lambda m: target(int(m[0], 16)) or 'RAW_REL:' + hex(int(m[0], 16) - following), operands)
+        bodies[names[index]].append(operation + ' ' + operands)
+    (out / (tag + '.normalized.json')).write_text(json.dumps(bodies, indent=2) + '\n')
+    return {'sha256': digest(binary), 'bytes': binary.stat().st_size,
+            'addresses': dict(zip(names, addresses)),
+            'sizes': {name: end-start for (start, name), (end, _) in zip(rows, rows[1:])},
+            'bodies': bodies, 'sections': segments}
 
 
 def audit(natural, variant, pad):
