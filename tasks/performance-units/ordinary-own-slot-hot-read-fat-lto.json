@@ -1,0 +1,150 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "ordinary-own-slot-hot-read-fat-lto",
+  "base_sha": "9a0eeeca3521914d5743b10c77c7ecca6a856018",
+  "queue": {
+    "candidate_sha": "9a0eeeca3521914d5743b10c77c7ecca6a856018",
+    "sha256": "8cad194d85301be5645e9422e800e6a58ba788ddb365c4e2bc347a57880ef053"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/jetstream3-js-subset/hash-map"
+    ],
+    "rank_ceiling": 8,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Answer an ordinary OwnSlot named-property cache entry on the selected-entry hot path, with a synchronized packed entry-kind hint, one transferred cache borrow and the existing weak-identity/layout/live-slot guards. Reprice and port the prior unpromoted guarded mechanism under the current fat-LTO recipe; preserve the measured natural function order without timing-based offset selection.",
+    "generality": "The optimization depends only on cache entry kind, ordinary receiver identity and layout, and the current data slot. It applies to any named read that installs an OwnSlot entry; no workload identity, source text, function name, bytecode template, iteration count, value or checksum selects it. Exact, literal, shared and prototype entries keep their existing dispatch; accessors and exotic values keep ordinary fallback.",
+    "semantic_risks": [
+      "A hint must remain synchronized across entry installation, selected-entry replacement, Exact-to-OwnSlot writes and clear, but must never substitute for live semantic guards.",
+      "Writes must observe the current value; deletion, insertion and descriptor-to-accessor changes must reject stale slots before inherited lookup or user code.",
+      "Cache borrows must end before getter or Proxy execution; weak receiver entries must not keep receivers or former values alive.",
+      "The new helper can perturb code generation and layout of unrelated hot paths; preserve the complete broad, external and sentinel regression gates and verify layout on the exact x86_64 binary."
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "jetstream3-js-subset--hash-map/receipt-0/receipt.json",
+      "sha256": "7dc64f15e414fbe20fd842b7a96f4d616915c6a39681790f110309e37108c8eb",
+      "base_sha": "9a0eeeca3521914d5743b10c77c7ecca6a856018",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/hash-map"
+      ],
+      "shared_cost": "59/494 main-thread samples pass through cold get_prop_named. This inclusive envelope includes required work. Fresh feature-only counts independently show 7020006 OwnSlot hot rejections (including repeated probes) and 3780119 full probes; these are not timing evidence. Avoiding full dispatch for a previously guarded OwnSlot should remove only part of this cost.",
+      "inclusive_fraction": 0.1194331983805668
+    },
+    {
+      "source": "jetstream3-js-subset--hash-map/receipt-1/receipt.json",
+      "sha256": "71c9e10d318ce896c954283625db155906dba9482cd2bf7cc07a749bffbbc2e7",
+      "base_sha": "9a0eeeca3521914d5743b10c77c7ecca6a856018",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/hash-map"
+      ],
+      "shared_cost": "63/490 main-thread samples pass through cold get_prop_named. This inclusive envelope includes required work. Fresh feature-only counts independently show 7020006 OwnSlot hot rejections (including repeated probes) and 3780119 full probes; these are not timing evidence. Avoiding full dispatch for a previously guarded OwnSlot should remove only part of this cost.",
+      "inclusive_fraction": 0.12857142857142856
+    },
+    {
+      "source": "jetstream3-js-subset--hash-map/receipt-2/receipt.json",
+      "sha256": "307fa82314a50d2b31522a29a4427e4719db76451b2a9780fe7e60d0b253694b",
+      "base_sha": "9a0eeeca3521914d5743b10c77c7ecca6a856018",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/hash-map"
+      ],
+      "shared_cost": "70/492 main-thread samples pass through cold get_prop_named. This inclusive envelope includes required work. Fresh feature-only counts independently show 7020006 OwnSlot hot rejections (including repeated probes) and 3780119 full probes; these are not timing evidence. Avoiding full dispatch for a previously guarded OwnSlot should remove only part of this cost.",
+      "inclusive_fraction": 0.14227642276422764
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/jetstream3-js-subset/hash-map"
+    ],
+    "control_ids": [
+      "broad/plain_function_call",
+      "broad/method_call",
+      "broad/captured_read",
+      "broad/captured_write",
+      "broad/many_locals_call",
+      "broad/property_read",
+      "broad/array_read",
+      "broad/function_call_two_args",
+      "broad/function_call_reordered",
+      "broad/top_level_function_call",
+      "broad/dynamic_method_call",
+      "broad/local_read",
+      "broad/global_read",
+      "broad/property_dynamic_read",
+      "broad/property_write",
+      "broad/array_dynamic_read",
+      "broad/array_write",
+      "broad/empty_loop",
+      "broad/branch_arithmetic",
+      "broad/math_abs",
+      "broad/array_index_of",
+      "broad/string_slice",
+      "broad/object_allocation",
+      "broad/array_allocation",
+      "broad/closure_allocation_call",
+      "sentinel/recursive_call_tree",
+      "sentinel/prototype_method_call",
+      "sentinel/polymorphic_call_site",
+      "sentinel/capturing_closure_call",
+      "sentinel/heterogeneous_property_read",
+      "sentinel/string_key_map_churn",
+      "external/jetstream3-js-subset/cdjs",
+      "external/jetstream3-js-subset/gaussian-blur",
+      "external/jetstream3-js-subset/stanford-crypto-aes",
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/kraken-1.1/ai-astar",
+      "external/kraken-1.1/audio-beat-detection",
+      "external/kraken-1.1/audio-dft",
+      "external/kraken-1.1/audio-fft",
+      "external/kraken-1.1/audio-oscillator",
+      "external/kraken-1.1/imaging-gaussian-blur",
+      "external/kraken-1.1/imaging-darkroom",
+      "external/kraken-1.1/imaging-desaturate",
+      "external/kraken-1.1/json-parse-financial",
+      "external/kraken-1.1/json-stringify-tinderbox",
+      "external/kraken-1.1/stanford-crypto-aes",
+      "external/kraken-1.1/stanford-crypto-ccm",
+      "external/kraken-1.1/stanford-crypto-pbkdf2",
+      "external/kraken-1.1/stanford-crypto-sha256-iterative",
+      "external/sunspider-1.0/3d-cube",
+      "external/sunspider-1.0/3d-morph",
+      "external/sunspider-1.0/3d-raytrace",
+      "external/sunspider-1.0/access-binary-trees",
+      "external/sunspider-1.0/access-fannkuch",
+      "external/sunspider-1.0/access-nbody",
+      "external/sunspider-1.0/access-nsieve",
+      "external/sunspider-1.0/bitops-3bit-bits-in-byte",
+      "external/sunspider-1.0/bitops-bits-in-byte",
+      "external/sunspider-1.0/bitops-bitwise-and",
+      "external/sunspider-1.0/bitops-nsieve-bits",
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/sunspider-1.0/crypto-aes",
+      "external/sunspider-1.0/crypto-md5",
+      "external/sunspider-1.0/crypto-sha1",
+      "external/sunspider-1.0/date-format-tofte",
+      "external/sunspider-1.0/date-format-xparb",
+      "external/sunspider-1.0/math-cordic",
+      "external/sunspider-1.0/math-partial-sums",
+      "external/sunspider-1.0/math-spectral-norm",
+      "external/sunspider-1.0/regexp-dna",
+      "external/sunspider-1.0/string-base64",
+      "external/sunspider-1.0/string-fasta",
+      "external/sunspider-1.0/string-tagcloud",
+      "external/sunspider-1.0/string-unpack-code",
+      "external/sunspider-1.0/string-validate-input"
+    ],
+    "target_max_candidate_over_base": 0.97,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
