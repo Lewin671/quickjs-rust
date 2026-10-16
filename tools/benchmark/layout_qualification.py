@@ -119,6 +119,8 @@ def main():
     attestation = json.loads(args.host_attestation.read_text())
     recorded = packets['portfolio']['host']
     current = attestation['host']
+    if seed.get('source_host_node') != attestation['node'] or seed.get('source_host') != recorded:
+        raise ValueError('A2 bands belong to a different host/recipe: recalibrate the layout envelope')
     if {k: v for k, v in recorded.items() if k != 'manifests'} != {
             k: v for k, v in current.items() if k != 'manifests'}:
         raise ValueError('host attestation differs from calibration host')

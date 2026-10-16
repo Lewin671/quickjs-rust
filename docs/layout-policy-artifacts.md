@@ -67,3 +67,7 @@ Schema-3 `fast_gate` contains only `target_ids`,
 `target_max_candidate_over_base` and `max_attempts`. Its controls are the
 policy inventory minus targets; legacy `control_ids` and a single control
 ceiling are refused rather than silently ignored.
+
+The A2 band seed also binds its source host/recipe. The qualification
+publisher refuses transplanting those bands to a new host or recipe after
+only an A/A run; the six-layout envelope must be recalibrated there first.
