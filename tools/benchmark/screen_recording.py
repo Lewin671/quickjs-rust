@@ -6,6 +6,7 @@ It refuses incomplete/nonpositive/short increments instead of filtering pairs.
 from __future__ import annotations
 
 import dataclasses
+import json
 from pathlib import Path
 
 from . import screen
@@ -15,10 +16,14 @@ from .layout_identity import write_json
 def measure(case, candidate, base, pairs, tool, timeout, output: Path):
     samples = []
     original = screen.sample
+    raw_file = output.with_suffix('.jsonl').open('x', encoding='utf-8')
 
     def record(*args, **kwargs):
         sample = original(*args, **kwargs)
-        samples.append({'argv': list(args[1]), 'sample': dataclasses.asdict(sample)})
+        row = {'argv': list(args[1]), 'sample': dataclasses.asdict(sample)}
+        samples.append(row)
+        raw_file.write(json.dumps(row) + '\n')
+        raw_file.flush()
         return sample
 
     screen.sample = record
@@ -26,6 +31,7 @@ def measure(case, candidate, base, pairs, tool, timeout, output: Path):
         result = screen.screen_case(case, candidate, base, pairs, tool, timeout)
     finally:
         screen.sample = original
+        raw_file.close()
     internal = case.kind == 'internal'
     count = pairs * (4 if internal else 2)
     measured = samples[-count:]

@@ -1,16 +1,16 @@
 # T055: Layout noise control, A2 complete / B proposal
 
-- Status: active; A2 complete; phase B proposal awaits lead review.
-- Implementation: none in production; original audited R0 diagnostic binaries.
-- Verified at: measured source 153c1fe5, frozen A2 eef1a203, 2026-10-16;
-  six screens and raw-record conservation pass. Full gate at eef1a203 passes
-  (232 s, including 5170 Test262 subset cases); later changes are task records.
-- Evidence: [complete A2 tables](archive/T055-phase-a2-data.md) and results
-  below; [phase A history](archive/T055-phase-a-log.md).
-- Unresolved: production calibration/adoption of the proposed rule, including
-  longer A/A and separately qualified held-out acceptance; not authorized here.
-- Next action: lead reviews workspace tmp/layout-noise-control/
-  PROPOSAL-phase-b.md and freezes a separate B implementation/qualification.
+- Status: active; phase B implementation and host qualification in progress.
+- Implementation: layout builder, dual-metric verdicts and schema-3 tools
+  present; no qualified policy or production adoption yet.
+- Verified at: frozen screen calibration c35ed86c, 2026-10-16; focused rule,
+  historical replay, raw-evidence and snapshot tests pass (24 tests).
+- Evidence: [A2 tables](archive/T055-phase-a2-data.md), committed replay
+  fixtures under tools/benchmark/tests/fixtures/layout-policy and B plan below.
+- Unresolved: complete 30-pair screen/held-out and canonical 30-block A/A;
+  qualification, exact builder audit and final gates still pending.
+- Next action: fetch/review all queued calibration jobs; publish a policy only
+  if the frozen qualification passes. Otherwise report the failure for lead review.
 
 ## Historical phase A
 
@@ -160,3 +160,18 @@ bands and lane ceiling are the rounded-up reciprocal 95% A/A interval
 endpoints (one basis point), with a 1.0 minimum. It is acceptance-only.
 If qualification fails, record the exact failure and stop adoption for a
 lead decision; no favorable repeat of a valid failed qualification.
+
+The 30-pair increment qualification above additionally requalifies the screen
+instruction guard. Before any canonical formal timing, freeze a separate
+30-block three-engine A/A bundle: candidate=base=4c9f959e, `perf-compare.sh
+--blocks 30 --workers 4`, exact current canonical recipe. The source inputs
+are unchanged from the measured A2 source. Snapshot role names are padded to
+ten characters so all three binary paths are distinct and equal length;
+files are exclusively created once. This is a protocol correction, not a
+binary replacement sampler. Keep all existing formal health/linearity and
+<=3% CI requirements. Recompute geomean(case paired medians) and its joint
+20,000-draw 95% interval from the sealed raw data and require the frozen A2
+lane envelopes; no widening or precision waiver. Held-out remains its own
+30-pair whole-process qualification. Record the runner's stable hostname as
+an additional host attestation; same model/specifications on another host
+do not authorize reuse.

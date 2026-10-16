@@ -33,14 +33,6 @@ records an explicit retain/reject/inconclusive decision after measurement.
 This is process infrastructure, not a new runtime fast path. It does not turn
 variable GitHub-hosted preview numbers into fixed-hardware performance claims.
 
-## Why it exists
-
-The external portfolio is the anti-overfitting boundary, but task notes and
-agent instructions can become stale after a structural migration lands. T016,
-for example, completed the slot-local/shared-upvalue migration; treating its
-old proposal as the current priority would misroute later work. A current
-external ratio identifies a workload to profile, not a code change to make.
-
 ## Mechanism
 
 1. `scripts/performance-decision.sh queue` consumes one exact preview bundle
@@ -81,17 +73,46 @@ external ratio identifies a workload to profile, not a code change to make.
   lane-separated summary. Detailed commands and interpretation live in
   [the performance workflow](../docs/performance-workflow.md).
 
-## Single-host cycles promotion (2026-09-22)
+## Layout-robust decisions
 
-There is no separate measurement machine. On the development host, a 30-pair
-same-binary control under normal interactive load measured cycle intervals of
-about ±0.3-0.5% against ±0.7-1.8% for wall time, with single wall pairs off
-by up to 22%. Measurement protocol v9 (sentinel v2, analysis v6) therefore
-records per-process `instructions` and `cycles`, and `decide` judges cycles
-whenever every lane carries them, falling back to wall time elsewhere. A
-precise wall-time regression that cycles do not show keeps the decision
-`inconclusive` until explained. Measurements hold a host-wide lock and wait
-for concurrent builds. Mechanics: `docs/benchmarking.md`, "Decision metric".
+New units use the host-bound schema-3 rule qualified in
+[T055](T055-layout-noise-control.md). Older plans and their rejected budgets
+are historical and never acquire an extra attempt from this rule change.
+
+- Freeze targets/payoffs, controls, mechanism class, memory wall targets,
+  offsets and the complete measurement/attempt budget before implementation.
+- A target must beat both its payoff and reciprocal case wall band B_i,
+  with every pair improving. A declared full panel uses all six target
+  medians as its geometric aggregate, with every target pair improving.
+- A control instruction change opens an event only when every pair exceeds
+  max(1.01,I_i). A median-only excess is an unresolved instruction alert.
+  A consistent excess with median above 1.03 rejects at the hard cap.
+  Otherwise instructions alone do not reject: require all six matching
+  layouts' wall medians above B_i to establish persistent cost.
+- A single-layout wall median above B_i opens a wall event. Six medians
+  above B_i reject, even with flat instructions; a complete mixed panel
+  resolves the event as nonpersistent. An absent panel stays incomplete.
+- Every lane and the equal-case portfolio must fit their own wall ceilings;
+  a portfolio gain cannot hide a failed lane. Natural placement and every
+  measured panel layout must pass. Formal intervals stay mandatory.
+- Instruction-blind changes (Value, memory layout, allocation) predeclare
+  memory-sensitive wall targets, always run K=6, retain resource evidence,
+  and require longer formal wall evidence. Flat instructions do not waive
+  costs. No post-failure target, offset or threshold selection.
+- Held-out is mandatory promotion acceptance: every program within its own
+  measured band and its lane within its measured ceiling, with formal
+  precision. It never selects work. Missing evidence is incomplete.
+- Policy data is versioned/hash-bound to the host and compiler recipe.
+  A different host or recipe recalibrates. Measurements use distinct stable
+  equal-length binary paths created once. Retain/replace invalid or
+  DISTURBED jobs in full; valid failures consume the frozen attempt.
+
+The full K=6 panel is six screens total, not six independent attempts.
+Correctness, exact engine/profile identity, formal precision and the original
+migration/final-payoff requirements remain in force. Schema 1/2 keeps the
+previous cycles-first rule for replay; schema 3 uses wall plus instructions.
+Commands live in [the workflow](../docs/performance-workflow.md#screen-gate)
+and artifact contracts in [benchmarking](../docs/benchmarking.md#layout-policy-and-panel-artifacts).
 
 ## Unstable frozen-base cases: lead amendment, 2026-10-12
 
@@ -180,7 +201,7 @@ queue --output <path>` writes it under `target/`, and it is not stored in the
 repository. Generate it for the revision being worked on; `validate-unit`
 refuses a stale one. The work may proceed only after its plan passes
 `validate-unit`. Each implementation attempt is first checked with the
-hardware-counter screen; only a passing screen spends a formal run, and
+layout-robust dual-metric screen; only a passing screen spends a formal run, and
 screened units planned from the same queue may share one batched promotion
 run (gates and batching rules in
 [the performance workflow](../docs/performance-workflow.md#screen-gate)).

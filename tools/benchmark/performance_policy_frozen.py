@@ -21,7 +21,7 @@ PROTOCOL_KEYS = (
 )
 PROTOCOL_SHAPES = {
     "throughput_measurement": (
-        "benchmarks/manifest.json", "quickjs-measurement-protocol-v9"
+        "benchmarks/manifest.json", "quickjs-measurement-protocol-v10"
     ),
     "throughput_analysis": (
         "benchmarks/analysis.json", "quickjs-analysis-protocol-v6"
@@ -32,10 +32,10 @@ PROTOCOL_SHAPES = {
     # strength of its own self-hash alone.
     "sentinel_measurement": (
         "benchmarks/generic-sentinels-manifest.json",
-        "quickjs-generic-sentinel-protocol-v2",
+        "quickjs-generic-sentinel-protocol-v3",
     ),
     "resource_measurement": (
-        "benchmarks/resources.json", "quickjs-resource-measurement-protocol-v2"
+        "benchmarks/resources.json", "quickjs-resource-measurement-protocol-v3"
     ),
     "resource_analysis": (
         "benchmarks/resource-analysis.json", "quickjs-resource-analysis-protocol-v1"
@@ -65,6 +65,13 @@ PREVIEW_IMPLEMENTATION_FILES = (
     "tools/benchmark/external_preview_markdown.py",
     "tools/benchmark/external_report.py",
     "tools/benchmark/hosted_preview.py",
+    "tools/benchmark/layout_evidence.py",
+    "tools/benchmark/layout_formal.py",
+    "tools/benchmark/layout_formal_raw.py",
+    "tools/benchmark/layout_identity.py",
+    "tools/benchmark/layout_plan.py",
+    "tools/benchmark/layout_policy.py",
+    "tools/benchmark/layout_rule.py",
     "tools/benchmark/measure_lock.py",
     "tools/benchmark/performance_decision.py",
     "tools/benchmark/performance_evaluation.py",

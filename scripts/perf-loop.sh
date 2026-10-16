@@ -20,6 +20,7 @@ usage: scripts/perf-loop.sh (--plan <unit.json> | --base <git-ref>) [options]
   --case <spec>        extra screen case; repeatable (see tools.benchmark.screen)
   --pairs <n>          screen pairs (default 5)
   --symbols <n>        function-size changes to list (default 15, 0 disables)
+  --output <dir>      new layout-rule attempt directory (schema 3)
   --trace <spec>       also summarize QJS_TL_TRACE=1 for one case on a
                        perf-counters build of the working tree
   --require-quiet      refuse to screen while the load average is high
@@ -34,6 +35,7 @@ base_ref=""
 pairs=5
 symbols=15
 trace=""
+output=""
 quiet=()
 cases=()
 while [ $# -gt 0 ]; do
@@ -43,6 +45,7 @@ while [ $# -gt 0 ]; do
     --case) cases+=(--case "${2:?}"); shift 2 ;;
     --pairs) pairs="${2:?}"; shift 2 ;;
     --symbols) symbols="${2:?}"; shift 2 ;;
+    --output) output="${2:?}"; shift 2 ;;
     --trace) trace="${2:?}"; shift 2 ;;
     --require-quiet) quiet=(--require-quiet); shift ;;
     -h|--help) usage; exit 0 ;;
@@ -60,6 +63,18 @@ fi
 
 cargo_bin="$(qjs_resolve_cargo)" || { echo "error: cargo not found" >&2; exit 1; }
 cd "$ROOT_DIR"
+
+if [ -n "$plan" ] && [ "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["schema_version"])' "$plan")" = 3 ]; then
+  if [ -z "$output" ]; then
+    echo "error: schema-3 layout attempts require --output <new-directory>" >&2
+    exit 2
+  fi
+  if [ "$pairs" != 5 ] || [ "${#cases[@]}" -ne 0 ] || [ -n "$trace" ] || [ -n "$base_ref" ]; then
+    echo "error: schema-3 attempts use the frozen full portfolio and five pairs" >&2
+    exit 2
+  fi
+  exec python3 -m tools.benchmark.layout_iteration --plan "$plan" --output "$output"
+fi
 
 if [ -n "$plan" ]; then
   base_ref="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["base_sha"])' "$plan")"

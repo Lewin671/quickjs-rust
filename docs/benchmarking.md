@@ -6,7 +6,7 @@ across revisions in [performance-knowledge.md](performance-knowledge.md), and
 the earlier, longer text of this document in
 [the archive](../tasks/archive/benchmarking-history.md).
 
-Inventories, schema versions, protocol hashes and thresholds are defined by the
+Inventories, schemas, protocol hashes and thresholds are defined by the
 files under `benchmarks/` and the loaders under `tools/benchmark/`; this document
 names those files instead of copying them, and when the two disagree the files
 are right.
@@ -68,8 +68,7 @@ The checked-in recipes are historical. `perf-compare.sh` derives current host
 recipes; it and `perf-loop.sh` build both revisions with `build_cache build-rust`,
 using hosted previews' target, agents, flags and release settings, with fresh caches.
 
-A build receipt binds one executable's SHA-256 to a clean source revision
-and a recipe. `tools/benchmark/local_receipt.py` writes local receipts and
+A build receipt binds an executable hash to a clean revision and recipe. `tools/benchmark/local_receipt.py` writes local receipts and
 refuses a toolchain that differs from the recipe or a reference checkout
 that is not clean at the pin. A run without clean, recipe-matching receipts
 still measures but is recorded as unverified and cannot be comparison
@@ -183,8 +182,7 @@ local artifacts and are not retained; regenerate before reuse.
 
 A unit plan is `tasks/performance-units/<unit>.json`. Its schema is
 `load_unit` in `tools/benchmark/performance_decision.py`, which rejects
-unknown or missing keys. The index of existing plans is
-[tasks/performance-units/README.md](../tasks/performance-units/README.md).
+unknown or missing keys. Plans: [index](../tasks/performance-units/README.md).
 
 | Field | Meaning |
 | --- | --- |
@@ -195,25 +193,23 @@ unknown or missing keys. The index of existing plans is
 | `profile_evidence` | per receipt: path under `--profile-root`, SHA-256, covered opportunities, the shared cost named, its inclusive fraction |
 | `fast_gate` | `target_ids`, `control_ids`, `target_max_candidate_over_base`, `control_max_candidate_over_base`, `max_attempts` (1 or 2) |
 | `promotion_gate` | required completeness of broad, external and Test262 evidence |
-| `unit_kind`, `migration` | schema 2 only; see below |
+| `unit_kind`, `migration` | schema 2/3; staged architecture metadata |
+| `layout_gate` | schema 3; policy path/hash, mechanism class, memory wall targets and frozen measurement budget |
 
-Schema 1 plans have no `unit_kind` and are leaf units. Schema 2 adds
-`unit_kind` (`leaf` or `migration`). Both are accepted, so older plans keep
-their bytes and their SHA-256 bindings. A migration plan adds `stages` (2
-to 12), `current_stage`, `cumulative_target_ids` and
-`stage_max_candidate_over_base` (1.0 to 1.25).
+Schema 1 is a leaf plan; schema 2 adds `unit_kind` and optional `migration`
+(`stages` 2..12, `current_stage`, `cumulative_target_ids`,
+`stage_max_candidate_over_base` 1.0..1.25). Both remain readable with frozen
+bytes/hashes. Schema 3 adds the required layout contract for new units.
 
 The **opportunity queue** (`queue`) lists, per lane, the cases whose
 candidate/QuickJS-NG ratio exceeds `--target-ratio`, ranked by that ratio.
 It embeds the bundle's engine identities and evidence hashes. It is derived
 data and is not stored in the repository.
 
-A **profile receipt** (`tools/benchmark/profile.py`) copies and hashes a
-raw profile and its workload and records the sampler, its command and the
-sampled binary's SHA-256. Validation requires that hash to equal the
-queue candidate's executable hash.
+A **profile receipt** hashes the raw profile, workload, sampler command and
+exact executable (`profile.py`). Validation binds it to the queue candidate.
 
-**Decision metric.** `decide` judges cycles when every comparable case in
+**Legacy decision metric (schema 1/2).** `decide` judges cycles when every comparable case in
 every lane has cycle evidence, and wall time otherwise, as on hosted Linux
 runners and on hosts whose cycle counter fails the probe. Cycles exclude scheduling and frequency noise but also exclude
 time off-CPU. A precise wall-time regression beyond the control ceiling
@@ -227,7 +223,7 @@ the queue's candidate executable.
 
 ### Unstable frozen-base evidence
 
-Decision schema 4 adds `unstable_on_base`, `unstable_base_checks`,
+Legacy decision schema 4 adds `unstable_on_base`, `unstable_base_checks`,
 `precision_exclusions`, and hashes under `evidence.base_aa_evidence`.
 The policy and lead authorization live in [T022](../tasks/T022-performance-priority-controller.md#unstable-frozen-base-cases-lead-amendment-2026-10-12).
 The sealed bundle and its original readiness are never rewritten. The new
@@ -283,6 +279,15 @@ equals `stages`. `abort` closes one stage's implementation, not its
 mechanism family. The campaign's targets against QuickJS-NG are not
 enforced by these tools; they are acceptance criteria in T018.
 
+### Layout policy and panel artifacts
+
+Schema-3 plans bind a versioned host policy and frozen measurement budget.
+Decision schema 5 replays panel/held-out raw samples and canonical formal
+case/lane statistics, binding natural binary hashes to the sealed bundle.
+Field contracts, precision, builder audit and protocol versions live in
+[layout policy artifacts](layout-policy-artifacts.md). Standing rules live in
+[T022](../tasks/T022-performance-priority-controller.md#layout-robust-decisions).
+
 ## Execution counters
 
 Wall time cannot tell an accelerated workload from a folded one. The
@@ -336,11 +341,9 @@ a full interpreter frame.
 
 ## Pinned code layout
 
-On macOS the `qjs` binary links its functions in the order listed in
-`crates/qjs-cli/hot-functions.order` (`crates/qjs-cli/build.rs`; other
-hosts ignore the file). The workspace builds with v0 symbol mangling
-(`.cargo/config.toml`), whose names carry no signature hash, so the list
-keeps naming a function whose signature changes.
+macOS links the native CLI order file through `crates/qjs-cli/build.rs`:
+`hot-functions.order` on arm64, `hot-functions-x86_64.order` on x86_64.
+V0 mangling keeps names stable across signature changes.
 
 `tools/benchmark/order_file.py` generates the list by sampling every case.
 `tools/benchmark/layout_pin.py` rewrites its head so that the two
@@ -349,8 +352,7 @@ tier's) start at fixed offsets modulo 4 KiB, with the listed callees after
 the wide one in fixed-size slots padded with standard-library filler. The
 header comments record the pin and each slot budget. The offsets and callee
 lists are constants in `layout_pin.py`.
-When to regenerate, re-pin or re-scan is in
-[the workflow](performance-workflow.md#re-pinning-the-code-layout).
+Procedure: [layout re-pinning](performance-workflow.md#re-pinning-the-code-layout).
 
 ## Hosted workflows
 
@@ -453,8 +455,6 @@ sources without changing any registry decision.
 `scripts/external-corpus-audit.sh` validates it.
 
 ## Measurement artifacts
-
-These are properties of the method, not of a revision.
 
 - **Startup dilution.** When a case does little more work than process
   start, a one-run-per-binary ratio is mostly startup and is pulled toward

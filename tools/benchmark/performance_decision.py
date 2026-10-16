@@ -357,16 +357,18 @@ def unit_kind(unit: dict[str, Any]) -> str:
 def load_unit(path: Path) -> tuple[dict[str, Any], str]:
     unit, digest = _read_json(path, "performance unit")
     version = unit.get("schema_version")
-    if version not in {1, 2} or unit.get("artifact_type") != _UNIT_TYPE:
+    if version not in {1, 2, 3} or unit.get("artifact_type") != _UNIT_TYPE:
         raise PerformanceDecisionError("performance unit: unsupported schema")
     expected_keys = {
         "schema_version", "artifact_type", "unit_id", "base_sha", "queue",
         "priority", "mechanism", "profile_evidence", "fast_gate", "promotion_gate",
     }
-    if version == 2:
+    if version >= 2:
         expected_keys.add("unit_kind")
         if unit.get("unit_kind") == "migration":
             expected_keys.add("migration")
+    if version == 3:
+        expected_keys.add("layout_gate")
     _keys(unit, expected_keys, "performance unit")
     kind = unit_kind(unit)
     if kind not in {"leaf", "migration"}:
@@ -467,6 +469,9 @@ def load_unit(path: Path) -> tuple[dict[str, Any], str]:
     if kind == "migration":
         declared |= set(unit["migration"]["cumulative_target_ids"])
     _reject_held_out(declared, "performance unit")
+    if version == 3:
+        from .layout_plan import validate
+        validate(unit)
     return unit, digest
 
 
@@ -552,6 +557,8 @@ def _parser() -> argparse.ArgumentParser:
     decision.add_argument("--profile-root", type=Path, required=True)
     decision.add_argument("--test262-burndown", type=Path)
     decision.add_argument("--unstable-base-evidence", type=Path, action="append", default=[])
+    decision.add_argument("--layout-panel", type=Path)
+    decision.add_argument("--held-out-panel", type=Path)
     decision.add_argument("--mode", choices=("stage", "fast", "promotion"), required=True)
     decision.add_argument("--require-retained", action="store_true")
     decision.add_argument("--output", type=Path, required=True)
@@ -599,6 +606,8 @@ def main() -> int:
             unit, unit_sha, queue, queue_sha, summary, summary_sha, broad, broad_sha,
             external, external_sha, args.mode, test262, sentinel=sentinel, sentinel_sha=sentinel_sha,
             profile_root=args.profile_root, unstable_base_checks=base_checks,
+            layout_panel_path=args.layout_panel, held_out_path=args.held_out_panel,
+            formal_bundle=args.summary.parent,
         )
         _atomic_write(args.output, payload)
         print(json.dumps(payload, sort_keys=True))

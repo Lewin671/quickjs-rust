@@ -1,0 +1,317 @@
+{
+  "cases": {
+    "broad/array_allocation": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "broad/array_dynamic_read": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "broad/array_index_of": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0488228754017972
+    },
+    "broad/array_read": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "broad/array_write": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0262679019942824
+    },
+    "broad/branch_arithmetic": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.043830548695979
+    },
+    "broad/captured_read": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "broad/captured_write": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0284043650996164
+    },
+    "broad/closure_allocation_call": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0298435983447567
+    },
+    "broad/dynamic_method_call": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.1060548069069007
+    },
+    "broad/empty_loop": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0901624832202146
+    },
+    "broad/function_call_reordered": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "broad/function_call_two_args": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "broad/global_read": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.1034397524869684
+    },
+    "broad/local_read": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.068759186446303
+    },
+    "broad/many_locals_call": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "broad/math_abs": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "broad/method_call": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "broad/object_allocation": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "broad/plain_function_call": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0269582980631775
+    },
+    "broad/property_dynamic_read": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0450344086654433
+    },
+    "broad/property_read": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "broad/property_write": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "broad/string_slice": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0319282748522574
+    },
+    "broad/top_level_function_call": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/jetstream3-js-subset/cdjs": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/jetstream3-js-subset/gaussian-blur": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/jetstream3-js-subset/hash-map": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/jetstream3-js-subset/raytrace-public-class-fields": {
+      "instruction_band": 1.0046,
+      "wall_band": 1.0250249555257578
+    },
+    "external/jetstream3-js-subset/stanford-crypto-aes": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/kraken-1.1/ai-astar": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/kraken-1.1/audio-beat-detection": {
+      "instruction_band": 1.007,
+      "wall_band": 1.0250249555257578
+    },
+    "external/kraken-1.1/audio-dft": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.1115626917197916
+    },
+    "external/kraken-1.1/audio-fft": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/kraken-1.1/audio-oscillator": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/kraken-1.1/imaging-darkroom": {
+      "instruction_band": 1.0039,
+      "wall_band": 1.0550299211855159
+    },
+    "external/kraken-1.1/imaging-desaturate": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/kraken-1.1/imaging-gaussian-blur": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/kraken-1.1/json-parse-financial": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/kraken-1.1/json-stringify-tinderbox": {
+      "instruction_band": 1.0028,
+      "wall_band": 1.0250249555257578
+    },
+    "external/kraken-1.1/stanford-crypto-aes": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/kraken-1.1/stanford-crypto-ccm": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/kraken-1.1/stanford-crypto-pbkdf2": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0340441621571994
+    },
+    "external/kraken-1.1/stanford-crypto-sha256-iterative": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0315702271415257
+    },
+    "external/sunspider-1.0/3d-cube": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0392274073347878
+    },
+    "external/sunspider-1.0/3d-morph": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0290263938785502
+    },
+    "external/sunspider-1.0/3d-raytrace": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/sunspider-1.0/access-binary-trees": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/sunspider-1.0/access-fannkuch": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0438079797097166
+    },
+    "external/sunspider-1.0/access-nbody": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/sunspider-1.0/access-nsieve": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/sunspider-1.0/bitops-3bit-bits-in-byte": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/sunspider-1.0/bitops-bits-in-byte": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/sunspider-1.0/bitops-bitwise-and": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.027279929519659
+    },
+    "external/sunspider-1.0/bitops-nsieve-bits": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/sunspider-1.0/controlflow-recursive": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.041723342584479
+    },
+    "external/sunspider-1.0/crypto-aes": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/sunspider-1.0/crypto-md5": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/sunspider-1.0/crypto-sha1": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/sunspider-1.0/date-format-tofte": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/sunspider-1.0/date-format-xparb": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.028481032591131
+    },
+    "external/sunspider-1.0/math-cordic": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0288735101480309
+    },
+    "external/sunspider-1.0/math-partial-sums": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/sunspider-1.0/math-spectral-norm": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/sunspider-1.0/regexp-dna": {
+      "instruction_band": 1.0144,
+      "wall_band": 1.0334910365057965
+    },
+    "external/sunspider-1.0/string-base64": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/sunspider-1.0/string-fasta": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/sunspider-1.0/string-tagcloud": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/sunspider-1.0/string-unpack-code": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0307731605543728
+    },
+    "external/sunspider-1.0/string-validate-input": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0300489331425773
+    },
+    "sentinel/capturing_closure_call": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "sentinel/heterogeneous_property_read": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.032315623287719
+    },
+    "sentinel/polymorphic_call_site": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "sentinel/prototype_method_call": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "sentinel/recursive_call_tree": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0391473330404257
+    },
+    "sentinel/string_key_map_churn": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0523326615647108
+    }
+  },
+  "lanes": {
+    "broad": 1.0129493300226688,
+    "external": 1.0073802375536396,
+    "portfolio": 1.0082623319647204,
+    "sentinel": 1.015687001889914
+  },
+  "pairs": 5,
+  "source_revision": "153c1fe5e1ec2315d1ccb68a9aea0ca83843af64",
+  "source_sha256": "13e2148e9c436ae4dea898f171532fb672fa4dc78cbfbe687698c56d687d211c"
+}

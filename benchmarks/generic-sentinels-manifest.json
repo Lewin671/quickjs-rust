@@ -167,7 +167,7 @@
     "platform": "macos-arm64"
   },
   "protocol": {
-    "aggregate_sha256": "d4faefeb4e5d60cceb91e02b089105e7df7c7d50926e1b5a5b465245aa0f5195",
+    "aggregate_sha256": "fd0d8946ce730759a1bf81e9d261a334e8d4153bf2e2ae8872f18a19bc685b65",
     "files": [
       "benchmarks/workloads/generic-sentinels.js",
       "scripts/benchmark.sh",
@@ -185,7 +185,7 @@
       "tools/benchmark/schema.py",
       "tools/benchmark/snapshots.py"
     ],
-    "id": "quickjs-generic-sentinel-protocol-v2"
+    "id": "quickjs-generic-sentinel-protocol-v3"
   },
   "reference_engine": {
     "identity": "quickjs-ng",
