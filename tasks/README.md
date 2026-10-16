@@ -41,6 +41,7 @@ outcome column says what happened, not what to do next.
 
 | Task | Outcome |
 | --- | --- |
+| `T046-compiler-configuration-study.md` | Completed same-source CLI compiler study; fat LTO/16 units/abort recommended on x86_64 macOS; production defaults unchanged. |
 | `T044-selected-stream-virtual-bank-typed-loops.md` | Two failed screens; runtime/layout reverted, generic tools and semantic coverage retained. |
 | `T043-derived-constructor-eval-context.md` | Shared derived-this cell and arrow owner verified; two unrelated baseline gaps remain recorded. |
 | `T042-prepared-readonly-eval.md` | Two failed screens exhausted the budget; runtime reverted, general measurement fixes retained. |
