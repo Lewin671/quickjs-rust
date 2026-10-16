@@ -192,3 +192,14 @@ B calibration jobs: 20261016T184617Z-decision-rule-b-aa30 (screen guard),
 would be tested. Tool implementation through 5953689d passed the staged
 fast gate: context, Rust fmt/clippy, 518 benchmark tests and shell syntax;
 no runtime/parser/lexer semantic slice matched these tool-only changes.
+
+
+The first 30-pair screen completed (3052 s, exit 0) but the queue marked
+DISTURBED: one >=200% CPU intrusion sample. Its timing/counter observations
+are wholly ineligible. Retain the full job; replace it with
+20261016T193947Z-decision-rule-b-aa30-replacement1-frozen at the identical
+c35ed86c collector. A queued current-harness replacement was cancelled
+before execution to keep both qualification lanes on the frozen harness.
+The seed's host binding uses only non-timing identity from the discarded
+job, cross-checked against recorded A2 node/CPU/OS/Rust/Cargo/recipe; the
+replacement must match that identity exactly. No statistics are reused.
