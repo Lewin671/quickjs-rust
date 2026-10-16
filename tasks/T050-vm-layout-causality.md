@@ -67,3 +67,13 @@ two causes from each other. Keep N/2N raw values and all outputs. No outliers,
 no promotion verdict, no subsequent favorable-repeat search. The purpose is to
 check whether the original large regression reproduces under this stronger
 control; non-reproduction does not prove the old observation was all noise.
+
+Follow-up harness correction before usable data: the first execution stopped
+on POSIX rename of two hard links to the same inode (rename is a no-op).
+The corrected-link run was then cancelled: replacement re-triggered macOS
+launch validation (~200 ms with zero child CPU), falsely satisfying calibration
+at N=1024 and making N/2N increments negative. Neither run is evidence for
+engine speed. The final implementation warms and records a tiny launch after
+every path replacement, before calibration or measured N/2N, and refuses a
+base increment shorter than 50 ms. Keep invalid logs and partial raw data;
+replace the failed protocol once, without using its timing for decisions.
