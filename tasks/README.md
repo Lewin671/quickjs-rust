@@ -13,7 +13,6 @@ it to `archive/` with `git mv` and move its row below.
 
 | Task | Status | What it is |
 | --- | --- | --- |
-| [T054](T054-execution-layout-regions.md) stable execution regions | active | Frozen generic reference-layout maintenance prototype; runtime unchanged. |
 | [T018](T018-broad-performance.md) broad performance | active | The performance campaign contract and its targets against QuickJS-NG. Start performance work here, then follow [the workflow](../docs/performance-workflow.md). |
 | [T040](T040-imac-general-performance.md) x86_64 general optimization | active | Fresh current-main comparison and exact-binary profiles, followed by independent general runtime units. |
 | [T045](T045-typed-loop-boxed-demand-provenance.md) boxed demand provenance | active | Ordinary identity-flow joins lose boxed demand; exact profiles and seed diagnosis precede a compiler-only unit. |
@@ -42,6 +41,9 @@ outcome column says what happened, not what to do next.
 
 | Task | Outcome |
 | --- | --- |
+| `T054-execution-layout-regions.md` | Original page residues all preserved, but one control and sentinel lane failed sole neutrality screen; no production build change retained. |
+| `T052-general-performance-command-code.md` | Structural symbol matching/raw audit, canonical scan recipe and byte-identical natural order; full gates pass, no runtime optimization retained. |
+| `T053-ordinary-own-slot-hot-read-fat-lto.md` | Target -8.3% but six controls failed; sole budget exhausted, runtime restored and exact original binary rebuilt. |
 | `T051-counter-collection-smoke-contract.md` | Collector smoke test checks positive cycles without a nonportable absolute floor; fast/full gates passed on iMac. |
 | `T050-vm-layout-causality.md` | Isolated sampled typed-loop placement reproduces the 8-13% control regressions; stale x86 runtime order symbols confirmed; no runtime change retained. |
 | `T049-property-access-path-study.md` | Current-recipe 30-block baseline and path-cost study; single-probe candidate failed its only complete-portfolio screen and was reverted; no runtime optimization retained. |

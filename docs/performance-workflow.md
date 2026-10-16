@@ -56,7 +56,7 @@ unit. External times include startup, parsing and shutdown.
   `CMakeLists.txt` defines no option of that name.
 - A committed candidate. `perf-compare.sh` builds candidate and base from
   commits in clean worktrees and caches each executable as
-  `target/perf-loop/rev-<sha>/qjs`. Keep that cache between the queue run
+  `target/perf-loop/compiler-fat16-abort-v1/rev-<sha>/qjs`. Keep that cache between the queue run
   and the decision run: `decide` requires the decision's base executable to
   be byte-identical to the queue's candidate.
 - Serialized timing. `compare`, `screen` and `front_end` hold
@@ -101,7 +101,7 @@ cases whose candidate/QuickJS-NG ratio exceeds `--target-ratio` (default
 
 ## 2. Profile, then freeze the plan
 
-Profile the queue's candidate executable (`target/perf-loop/rev-<sha>/qjs`)
+Profile the queue's candidate executable (`target/perf-loop/compiler-fat16-abort-v1/rev-<sha>/qjs`)
 on a ranked workload (`python3 -m tools.benchmark.bundles` writes each
 external case to `target/bundles/<suite>--<case>.js` as a run executes it),
 then import the sampler output into a receipt:
@@ -109,7 +109,7 @@ then import the sampler output into a receipt:
 ```sh
 python3 -m tools.benchmark.profile \
   --input /path/to/case.sample --workload /path/to/case.js \
-  --binary target/perf-loop/rev-<sha>/qjs \
+  --binary target/perf-loop/compiler-fat16-abort-v1/rev-<sha>/qjs \
   --base-sha <full-queue-candidate-sha> \
   --tool 'sample <version>' --opportunity-id external/sunspider-1.0/3d-cube \
   --command-json '["sample","<pid>","10","-file","/path/to/case.sample"]' \
@@ -230,31 +230,31 @@ refused until `current_stage == stages`.
 
 ## Re-pinning the code layout
 
-`crates/qjs-cli/hot-functions.order` pins the hot functions' link order and
-the typed-loop executor's address on arm64; x86_64 uses
-`hot-functions-x86_64.order`. The tools default to the native host's file;
-pass `--order` or `--output` explicitly when inspecting another target.
-macOS x86_64 page-aligns `__text` to prevent unwind metadata from moving its start; verify actual addresses, since order headers only request them.
-Re-pin when adding hot functions or changing a pinned function's size, so
-every formal candidate carries a current file. Repeat the last two commands
-until the file stops changing:
+macOS arm64 uses `crates/qjs-cli/hot-functions.order`; x86_64 uses
+`hot-functions-x86_64.order` and page-aligns `__text`. Tools default to the
+native file; pass `--order`/`--output` for another target. Match actual current
+symbols and verify linked addresses; headers only request a placement.
+
+Use the canonical recipe (features, explicit host target, flags and profile):
 
 ```sh
-cargo build --release -p qjs-cli
-python3 -m tools.benchmark.layout_pin --binary target/release/qjs
-cargo build --release -p qjs-cli
+binary="$(python3 -m tools.benchmark.build_cache build-rust \
+  --source . --target-dir target/layout-build)"
+python3 -m tools.benchmark.layout_pin --binary "$binary" --preserve-offsets
+python3 -m tools.benchmark.build_cache build-rust \
+  --source . --target-dir target/layout-build
 ```
 
-When the hot set changes, rebuild the ranking with
-`python3 -m tools.benchmark.order_file --binary target/release/qjs` (it
-samples every case and applies the pin) and relink. Add a hot executor
-callee to `CALLEES` in `tools/benchmark/layout_pin.py`.
+Repeat pin/relink until stable; add changed hot callees to `layout_targets.py`.
+Audit current raw names with `python3 -m tools.benchmark.layout_audit --binary
+"$binary" --strict`; semantic replacements alone are not linker matches.
 
-After editing the executor itself, run
-`./scripts/layout-scan.sh --offsets 0x0,0x200,0x400` and adopt the centre
-of the fast window by setting `DEFAULT_OFFSET` in `layout_pin.py`. The scan
-rewrites `hot-functions.order` and relinks `target/release/qjs` for each
-offset, and restores the order file when it exits: do not build, commit or
-measure from that checkout while it runs. Its default canaries are the six
-sentinels, `ai-astar`, `imaging-desaturate`, `access-nsieve` and
-`access-nbody`.
+`./scripts/layout-scan.sh --offsets 0x0,0x200,0x400` is diagnostic: it rewrites
+the native order, relinks with the canonical recipe, screens canaries and
+restores the file on exit. Do not build or measure concurrently in that
+checkout. See `--help` for the canaries; their wins do not authorize adoption.
+
+Preserve audited baseline placements when comparing implementations. Adopting
+a production layout requires the complete broad, sentinel and external
+portfolio, not a favorable canary. Plain `cargo build --release -p qjs-cli`
+uses different features/target identity; use the canonical recipe above.

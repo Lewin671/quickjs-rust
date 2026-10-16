@@ -1,29 +1,24 @@
 # T040: General runtime optimization on the x86_64 measurement host
 
 - Status: active.
-- Implementation: T041/T042/T044 runtime candidates are rejected and restored
-  to main runtime on the lead; measured sources remain for diagnosis. Generic
-  layout-scan and preflight tools and semantic fixtures remain; no candidate
-  performance code is promoted. T044 removal full gate and UTC NG247 pass at
-  5c9e3ac0; runtime/layout match 27ca5140 exactly.
-- Verified at: `27ca5140`, 2026-10-13; integrated T043 correctness, full local
-  gate (2267 runtime, 5170 Test262, 238 NG), remote CI and x86 layout/regression.
-  Main is updated. CI exact full coverage at that commit passes all 42672
-  configured cases, with zero failures/timeouts/not-run or NG-pass gaps. A new
-  complete comparison and exact-binary profiles exist.
-- Evidence: comparison `20261013T071551Z-campaign-derived-this-27ca5140`, fresh
-  queue/top-eight profiles `20261013T073337Z-campaign-fresh-top8-profiles`, and
-  valid broad receipts `20261013T092227Z-campaign-broad3-valid-receipts`.
-  Raw artifacts are workspace-local, not retained; current standing below.
-- Unresolved: new performance units and campaign gaps. Three discovery cases
-  have imprecise intervals, so this comparison is not promotion evidence.
-- Next action: collect the frozen first screen of
-  [T045](T045-typed-loop-boxed-demand-provenance.md). Its compiler-only candidate
-  is independently reviewed and correctness-verified on an isolated branch;
-  it is not promoted or integrated into the lead runtime.
-  All three closed attempt budgets remain exhausted;
-  [T044 history](archive/T044-selected-stream-virtual-bank-typed-loops.md)
-  preserves its target gains, control failures and ABI correction.
+- Implementation: no new runtime optimization retained in the 2026-10-16
+  campaign. T049/T053 cache candidates and T054 build-region prototype are
+  rejected; original runtime and executable 926ee634 restored. T052 tooling
+  maintenance is integrated into main 153c1fe5, with green remote pipelines.
+- Verified at: main 153c1fe5, fast/full gates (469 tool tests, 5170 Test262),
+  post-integration full gate 20261016T143237Z; CI 38917460092, Test262 Coverage
+  38918285393 and Performance Preview 38917460111 all pass.
+- Evidence: [T053](archive/T053-ordinary-own-slot-hot-read-fat-lto.md) records
+  the fresh 76x30 baseline, exact profiles, rejected cache candidate and
+  restoration; [T054](archive/T054-execution-layout-regions.md) records the
+  independent frozen build experiment and complete failed neutrality screen.
+- Unresolved: no retained runtime gain; current binary's property-read and
+  Value/call costs remain opportunities, while page-residue equality alone
+  did not establish neutral layout maintenance.
+- Next action: stop after this round at the user's request; no further unit
+  or measurement is queued. On an explicit future resume, use a fresh
+  current-binary comparison and exact profiles, then freeze the next plan
+  before implementation. Closed budgets stay exhausted; T045 is not promoted.
 
 ## Goal and ownership
 
@@ -39,6 +34,28 @@ benchmark-identity or source-template recognition. Workload profiles identify
 costs; they do not define admission rules. Multiple independent external
 workloads and the complete regression portfolio must check generalization.
 
+## Current measured standing (2026-10-16)
+
+Job 20261016T122024Z-general-current-baseline measured base/candidate 9a0eeeca
+under the canonical fat/16/abort recipe, both executable 926ee634. Main
+153c1fe5 has identical runtime/build inputs and the natural-order replay was
+whole-executable byte-identical. All 76 cases x 30 blocks, four workers, are
+valid and ready_for_unit_gates, with no imprecise case or host disturbance.
+NG source f7830186 and binary 919f7235 are unchanged.
+
+| Lane or selected external suite | Rust / NG wall-time geometric mean |
+| --- | ---: |
+| Broad | 0.979341 |
+| Sentinel | 1.040126 |
+| JetStream JavaScript subset (5 programs) | 1.159785 |
+| Kraken (13 programs) | 0.776244 |
+| SunSpider (26 programs) | 1.089004 |
+
+These are same-host selected-program diagnostics, not official suite scores
+or completion of the fixed-hardware campaign targets. Raw sealed artifacts
+are workspace-local; the named revision and observed ratios are recorded here.
+The historical sections below remain evidence only for their named revisions.
+
 ## Starting point
 
 Starting revision: `06f0ecd3cb4ab7bea384d3b58700e3d958c0aeb0`. Batch 1 is already
@@ -51,7 +68,7 @@ task's new 30-block comparison uses that revision as base, `06f0ecd3` as
 candidate, and the qualified four-worker schedule. All decision evidence uses
 the exact candidate executable and same-host schedule.
 
-## Current standing and execution infrastructure
+## Historical 2026-10-13 standing and infrastructure
 
 The 30-block bundle completed successfully with all 25 broad, 6 sentinel and
 45 external cases, no imprecise cases or measurement issues, and no host

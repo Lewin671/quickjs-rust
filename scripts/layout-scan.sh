@@ -20,7 +20,7 @@ usage: scripts/layout-scan.sh --offsets <o1,o2,...> [--base <qjs>] [--case <spec
 
   --offsets   executor offsets modulo 4 KiB, e.g. 0x0,0x200,0x400
   --base      executable to compare against (default: a copy of the current
-              target/release/qjs, taken before the first relink)
+              canonical performance build, taken before the first relink)
   --case      tools.benchmark.screen case spec; repeatable (default: the six
               sentinels, ai-astar, imaging-desaturate, access-nsieve,
               access-nbody -- the cases the executor's placement has moved)
@@ -56,10 +56,20 @@ cd "$ROOT_DIR"
 order="$(python3 -c 'from tools.benchmark.layout_pin import DEFAULT_ORDER; print(DEFAULT_ORDER)')"
 scan_dir=target/layout-scan
 mkdir -p "$scan_dir"
-"$cargo_bin" build --release -q -p qjs-cli
+# Use the same features, explicit host target and flags as formal measurements.
+build_cli() {
+  python3 -m tools.benchmark.build_cache build-rust --source "$ROOT_DIR" \
+    --target-dir "$ROOT_DIR/$scan_dir/build" --cargo "$cargo_bin"
+}
+binary="$(build_cli)"
+vm_offset="$(python3 -c 'import sys; from pathlib import Path; from tools.benchmark.layout_pin import executor_offsets; value = executor_offsets(Path(sys.argv[1]))[1]; print("none" if value is None else hex(value))' "$binary")"
+if [ "$vm_offset" = none ]; then
+  echo "error: no interpreter executor; use layout_pin without a VM pin" >&2
+  exit 1
+fi
 if [ -z "$base" ]; then
   base="$scan_dir/qjs-base"
-  cp target/release/qjs "$base"
+  cp "$binary" "$base"
 fi
 saved="$(mktemp "${TMPDIR:-/tmp}/qjs-order.XXXXXX")"
 cp "$order" "$saved"
@@ -78,8 +88,8 @@ for offset in "${offset_list[@]}"; do
   stable=false
   for _ in 1 2 3 4; do
     before="$(shasum "$order")"
-    python3 -m tools.benchmark.layout_pin --binary target/release/qjs --order "$order" --offset "$offset" >/dev/null
-    "$cargo_bin" build --release -q -p qjs-cli
+    python3 -m tools.benchmark.layout_pin --binary "$binary" --order "$order" --offset "$offset" --vm-offset "$vm_offset" >/dev/null
+    binary="$(build_cli)"
     if [ "$(shasum "$order")" = "$before" ]; then
       stable=true
       break
@@ -89,7 +99,7 @@ for offset in "${offset_list[@]}"; do
     echo "error: layout did not stabilize at $offset; no screen was run" >&2
     exit 1
   fi
-  cp target/release/qjs "$scan_dir/qjs-$offset"
+  cp "$binary" "$scan_dir/qjs-$offset"
   echo "== executor at $offset: $scan_dir/qjs-$offset" >&2
   python3 -m tools.benchmark.screen --candidate "$scan_dir/qjs-$offset" --base "$base" \
     --pairs "$pairs" "${case_args[@]}"
