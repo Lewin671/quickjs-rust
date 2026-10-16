@@ -1,22 +1,16 @@
 # T022: Evidence-bound performance priority controller
 
-- Status: active. Standing selection and stop rules for T018.
-- Implementation: present (`scripts/performance-decision.sh`,
-  `tools/benchmark/performance_decision.py`,
-  `tools/benchmark/performance_evaluation.py`). One acceptance box is open.
-- Verified at: candidate af4d0d3c; rule merge dbf98c55, 2026-10-12,
-  30-block base A/A, both retained re-decisions, full gate and rule-branch CI.
-- Evidence: [T018 standing](T018-broad-performance.md#standing-at-af4d0d3c)
-  owns unchanged bundle/queue identities; [T037](T037-integration-batch-1.md)
-  owns A/A evidence, instruction floor, hashes and both exact decision outputs.
-- Unresolved: no ruleset requires the Performance decision check (last box).
-  Audio-dft's engine property remains open independently of retained controls.
-- Next action: [T040](T040-imac-general-performance.md) generates a current-main
-  x86_64 queue and profiles. Integration results are already in main; existing
-  plans retain their old base/queue bindings and do not select new-host work.
-
-
-
+- Status: active; standing controller, with schema-3 tooling awaiting host qualification.
+- Implementation: present; new layout/held-out gates are fail-closed until
+  [T055](T055-layout-noise-control.md) produces a qualified policy.
+- Verified at: f2fb8067, 2026-10-16, staged fast gate and 523 tool tests.
+  Legacy retained decisions remain verified only at their recorded revisions.
+- Evidence: T055 owns B jobs and host-band status; [T037](T037-integration-batch-1.md)
+  owns historical unstable-base evidence and exact retained outputs.
+- Unresolved: B qualification is blocked by repeated host disturbance; the
+  ruleset-required Performance decision check remains unconfigured.
+- Next action: lead chooses quiet host conditions or a separately frozen,
+  qualified sampling protocol before any schema-3 promotion.
 
 Commands and their interpretation are in
 [the performance workflow](../docs/performance-workflow.md); schemas and
@@ -117,7 +111,8 @@ and artifact contracts in [benchmarking](../docs/benchmarking.md#layout-policy-a
 
 ## Unstable frozen-base cases: lead amendment, 2026-10-12
 
-This is a rule change made by the lead on **2026-10-12**, for owner review.
+This historical waiver applies to schema-1/2 decisions; schema 3 retains its
+full wall-precision gates. The lead made this rule change on **2026-10-12**.
 A frozen base can itself be imprecise; requiring every candidate to repair its
 ratio would hold unrelated decisions hostage. A case can be unstable_on_base
 only with same-protocol base/base A/A evidence at least as long as the bundle,
@@ -187,8 +182,8 @@ base-SHA binding.
 ## Verification
 
 ```sh
-PYTHONDONTWRITEBYTECODE=1 python3 -m unittest \
-  tools.benchmark.tests.test_performance_decision -v
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover \
+  -s tools/benchmark/tests -v
 ./scripts/performance-decision.sh --help
 ./scripts/check.sh
 ```

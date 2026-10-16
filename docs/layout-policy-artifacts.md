@@ -78,3 +78,11 @@ only an A/A run; the six-layout envelope must be recalibrated there first.
 Those attempts always complete all six layouts, including a weak natural
 screen; both the natural and aggregate target gates remain required. An
 optional control-event panel does not change the frozen natural target statistic.
+
+An unqualified artifact may retain null budgets for unmeasured lanes. It is
+never usable by `validate-unit`, `screen` or `decide`; no fallback ceiling
+is invented. The [recorded iMac artifact](../benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v1.json)
+and its adjacent SHA-256 sidecar preserve the current evidence status.
+Screen/held-out A/A binds the frozen band-source executable; canonical
+formal A/A binds its own declared revision and byte-identical two roles.
+A different source revision is not required to have the old binary hash.

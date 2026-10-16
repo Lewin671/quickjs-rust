@@ -191,7 +191,7 @@ unknown or missing keys. Plans: [index](../tasks/performance-units/README.md).
 | `priority` | `opportunity_ids`, and either `mode: "queue"` with a `rank_ceiling` or an override with its reason |
 | `mechanism` | summary, generality argument and semantic risks |
 | `profile_evidence` | per receipt: path under `--profile-root`, SHA-256, covered opportunities, the shared cost named, its inclusive fraction |
-| `fast_gate` | `target_ids`, `control_ids`, `target_max_candidate_over_base`, `control_max_candidate_over_base`, `max_attempts` (1 or 2) |
+| `fast_gate` | frozen target/payoff/attempt budget; legacy plans also name controls and one ceiling; [schema-3 fields](layout-policy-artifacts.md) derive all controls from the policy |
 | `promotion_gate` | required completeness of broad, external and Test262 evidence |
 | `unit_kind`, `migration` | schema 2/3; staged architecture metadata |
 | `layout_gate` | schema 3; policy path/hash, mechanism class, memory wall targets and frozen measurement budget |
