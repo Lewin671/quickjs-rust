@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import platform
 import json
+import os
 from pathlib import Path
 
 from . import screen
@@ -37,7 +38,7 @@ def measure_panel(base_path, candidate_path, output, pairs=5, held=False, natura
             or base['host_node'] != platform.node() or candidate['host_node'] != platform.node()):
         raise ValueError('layout build host/recipe differs from measurement host')
     binaries = [Path(v['path']) for m in (base, candidate) for v in m['variants']]
-    if len(set(binaries)) != 12 or len({len(str(p)) for p in binaries}) != 1:
+    if len(set(binaries)) != 12 or len({len(os.fsencode(p)) for p in binaries}) != 1:
         raise ValueError('panel needs twelve distinct stable equal-length binary paths')
     output = output.resolve()
     output.mkdir(parents=True, exist_ok=complete)

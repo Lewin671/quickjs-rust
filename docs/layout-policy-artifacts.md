@@ -33,6 +33,7 @@ Any drift refuses timing. Only x86_64 macOS release builds are supported.
 
 `layout_panel` writes `quickjs-layout-panel` schema 1: source revisions,
 all binary hashes/audits, exact paths, host, preflight and raw case hashes.
+Path lengths are compared as filesystem bytes, including non-ASCII names.
 `panels` contains natural only or exactly six ordered matching-layout screens;
 held-out has one natural screen of 30 pairs. Raw case packets retain every
 sample, separate calibration, per-role costs and paired ratios. Replay

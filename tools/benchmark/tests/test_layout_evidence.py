@@ -76,6 +76,22 @@ class EvidenceTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     replay(folder / 'panel.json', policy)
 
+    def test_equal_character_counts_do_not_accept_different_argv_byte_lengths(self):
+        with tempfile.TemporaryDirectory() as work:
+            folder = Path(work)
+            evidence, policy, raw, path = fixture(folder)
+            for variant in evidence['candidate']['variants']:
+                variant['path'] = variant['path'].replace('/cand/', '/候选ab/')
+            for row in raw['samples']:
+                row['argv'][0] = row['argv'][0].replace('/cand/', '/候选ab/')
+            raw_path = folder/'variant0/external--s--a.json'
+            raw_path.write_text(json.dumps(raw))
+            evidence['case_files']['variant0/external--s--a.json'] = digest(raw_path)
+            path = folder/'panel.json'
+            path.write_text(json.dumps(evidence))
+            with self.assertRaisesRegex(ValueError, 'equal length'):
+                replay(path, policy)
+
     def test_frozen_blind_plan_and_budget_are_enforced(self):
         gate = {'policy_path': 'benchmarks/policies/test.json', 'policy_sha256': 'a'*64,
                 'mechanism_class': 'instruction-blind', 'memory_wall_targets': ['external/s/a'],

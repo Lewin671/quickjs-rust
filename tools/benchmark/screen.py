@@ -565,7 +565,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             load_unit(args.plan)
             contract = gate.layout_unit['layout_gate']
             policy = load_policy(ROOT / contract['policy_path'], contract['policy_sha256'])
-            if candidate == base or len(str(candidate)) != len(str(base)):
+            if candidate == base or len(os.fsencode(candidate)) != len(os.fsencode(base)):
                 raise ScreenError('layout rule needs distinct equal-length immutable binary paths')
             if args.json is None or args.pairs != contract['panel_pairs']:
                 raise ScreenError('layout rule requires --json and the frozen five pairs')

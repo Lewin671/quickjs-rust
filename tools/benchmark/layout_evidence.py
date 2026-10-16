@@ -6,6 +6,7 @@ process samples, whose command paths and checksums must match its two roles.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from .layout_identity import digest, OFFSETS
@@ -44,7 +45,7 @@ def replay(path: Path, policy, engines=None, *, held=False):
             if (matrix['revision'] != engine['source_revision']
                     or matrix['variants'][0]['sha256'] != engine['binary_sha256']):
                 raise ValueError('layout natural engine differs from formal bundle')
-    if len(set(paths)) != 12 or len({len(p) for p in paths}) != 1:
+    if len(set(paths)) != 12 or len({len(os.fsencode(p)) for p in paths}) != 1:
         raise ValueError('layout paths must be distinct and equal length')
     expected_files = set()
     expected_ids = policy['held_out' if held else 'cases']

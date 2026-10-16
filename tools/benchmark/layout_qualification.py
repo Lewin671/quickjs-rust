@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import statistics
 from pathlib import Path
 
@@ -79,7 +80,7 @@ def replay_calibration(path, binary_sha256):
     if identity['sha256'] != binary_sha256:
         raise ValueError('calibration executable differs from frozen A2 natural binary')
     binaries = identity['binaries']
-    if len(set(binaries)) != 2 or len({len(p) for p in binaries}) != 1:
+    if len(set(binaries)) != 2 or len({len(os.fsencode(p)) for p in binaries}) != 1:
         raise ValueError('calibration paths are not distinct/equal-length')
     for role in ('base0', 'cand0'):
         if digest(folder / role / 'qjs') != identity['sha256']:
