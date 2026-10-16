@@ -72,6 +72,15 @@ def qualify(seed, portfolio, held_out, formal=None):
             'lanes': lanes, 'qualification': results}
 
 
+def verify_formal_identity(summary, expected_revision):
+    """A/A roles share one frozen revision/image; older band-source code may differ."""
+    engines = summary['engines']
+    if any(engines[r]['source_revision'] != expected_revision for r in ('base', 'candidate')):
+        raise ValueError('formal A/A source differs from its frozen revision')
+    if engines['base']['binary_sha256'] != engines['candidate']['binary_sha256']:
+        raise ValueError('formal A/A roles must be byte-identical')
+
+
 def replay_calibration(path, binary_sha256):
     """Read the collector's summaries only after every raw case conserves costs."""
     from .screen_replay import replay_case
@@ -145,9 +154,7 @@ def main():
     folder = args.formal_bundle
     verify(folder / 'summary.json', folder / 'report.json', folder / 'external-report.json', folder / 'sentinel-report.json')
     summary = json.loads((folder / 'summary.json').read_text())
-    if any(summary['engines'][r]['binary_sha256'] != seed['calibration_binary_sha256']
-           for r in ('candidate', 'base')):
-        raise ValueError('formal A/A must use the frozen A2 natural executable')
+    verify_formal_identity(summary, seed['formal_source_revision'])
     replay_reports(folder / 'report.json', folder / 'external-report.json', folder / 'sentinel-report.json')
     from .layout_formal_raw import extract
     formal = extract(folder, attestation['node'])

@@ -187,6 +187,17 @@ class QualificationTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 load_policy(path, digest(path), live=False)
 
+    def test_formal_self_comparison_binds_its_own_revision_and_binary(self):
+        from tools.benchmark.layout_qualification import verify_formal_identity
+        summary = {'engines': {r: {'source_revision': 'b'*40, 'binary_sha256': 'c'*64}
+                               for r in ('base', 'candidate')}}
+        verify_formal_identity(summary, 'b'*40)
+        with self.assertRaisesRegex(ValueError, 'frozen revision'):
+            verify_formal_identity(summary, 'a'*40)
+        summary['engines']['candidate']['binary_sha256'] = 'd'*64
+        with self.assertRaisesRegex(ValueError, 'byte-identical'):
+            verify_formal_identity(summary, 'b'*40)
+
     def test_non_mac_x86_refuses_before_tools(self):
         with patch('platform.system', return_value='Linux'):
             with self.assertRaisesRegex(ValueError, 'x86_64 macOS'):
@@ -215,9 +226,11 @@ class QualificationTests(unittest.TestCase):
 class StaticAuditTests(unittest.TestCase):
     def test_uniform_shift_body_tail_and_drift(self):
         base = {'addresses': {'first': 1000, 'last': 1100},
-                'bodies': {'first': ['ret '], 'last': ['ret ', 'nop ']}}
+                'bodies': {'first': ['ret '], 'last': ['ret ', 'nop ']},
+                'sections': [(1000, 200, '__TEXT/__text', 0)]}
         new = {'addresses': {'_qjs_layout_noise_pad': 1000, 'first': 1016, 'last': 1116},
-               'bodies': {'first': ['ret '], 'last': ['ret ', 'nop ', 'int3 ']}}
+               'bodies': {'first': ['ret '], 'last': ['ret ', 'nop ', 'int3 ']},
+               'sections': [(1000, 216, '__TEXT/__text', 0)], 'padding_bytes': b'\x90'*16}
         self.assertEqual(audit(base, new, 16)['functions'], 2)
         for mutate in (lambda d: d['addresses'].__setitem__('last', 1132),
                        lambda d: d['bodies']['first'].append('nop '),
@@ -226,6 +239,23 @@ class StaticAuditTests(unittest.TestCase):
             mutate(value)
             with self.assertRaises(ValueError):
                 audit(base, value, 16)
+
+
+    def test_section_page_relocation_preserves_declared_padding_and_function_bodies(self):
+        base = {'addresses': {'first': 0x2000, 'last': 0x2100},
+                'sections': [(0x2000, 512, '__TEXT/__text', 0)],
+                'bodies': {'first': ['ret '], 'last': ['ret ']}}
+        new = {'addresses': {'_qjs_layout_noise_pad': 0x1000, 'first': 0x13f0, 'last': 0x14f0},
+               'sections': [(0x1000, 1520, '__TEXT/__text', 0)],
+               'bodies': {'first': ['ret '], 'last': ['ret ']}, 'padding_bytes': b'\x90'*1008}
+        result = audit(base, new, 1008)
+        self.assertEqual(result['actual_uniform_shift'], -3088)
+        self.assertEqual(result['text_section_shift'], -4096)
+        self.assertEqual(result['section_relative_shift'], 1008)
+        self.assertTrue(result['declared_nops_verified'])
+        new['padding_bytes'] = b'\x90'*1007 + b'\0'
+        with self.assertRaisesRegex(ValueError, 'NOP atom'):
+            audit(base, new, 1008)
 
 
 if __name__ == '__main__':

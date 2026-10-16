@@ -306,6 +306,8 @@
       "wall_band": 1.0523326615647108
     }
   },
+  "formal_source_note": "Current-main canonical A/A. e0cf202a changes RegExp code after the A2 source, so only the two formal roles, not different revisions, must share a binary hash.",
+  "formal_source_revision": "4c9f959e4ae3f508a10828a46cf59ec042d7ec13",
   "host_binding_provenance": {
     "a2_build_identity_sha256": "93d0ecbe84bce5f56b5d0ecd95f1bdc94147c687aa1ec167a4b900e05a7a85e5",
     "a2_host_metadata_sha256": "95f573d7e146a663bc91d464bbc64c2f080cf2e8b2c263aaaa24ebe2ee5fedb8",

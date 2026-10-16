@@ -27,8 +27,9 @@ immutable executable paths and nm/disassembly/normalized-body audits. The
 fixed NOP sizes are natural/16/64/240/512/1008; compiler alignment may round
 one shift by less than 32 bytes. Every original text symbol must keep its
 order, normalized instruction body and a single uniform displacement.
-Relocated branches/RIP references resolve to the same symbols/section
-offsets; only the last function's trailing section filler may differ.
+A whole-page movement of `__text` is recorded separately from the
+section-relative padding shift; declared leading NOP bytes are verified.
+Relocated branches/RIP references resolve to the same symbols/section offsets; only the last function's trailing section filler may differ.
 Any drift refuses timing. Only x86_64 macOS release builds are supported.
 
 `layout_panel` writes `quickjs-layout-panel` schema 1: source revisions,

@@ -1,7 +1,7 @@
 # T055: Layout noise control, phase B qualification
 
-- Status: active; phase B tools complete, qualification pending after two
-  DISTURBED runs were rejected in full.
+- Status: active; phase B tools present; adoption blocked after three complete
+  timing runs were marked DISTURBED; replacements stopped for lead decision.
 - Implementation: builder/auditor, schema-3 dual-metric decisions and mandatory
   held-out/resource gates present; no qualified policy or adoption yet.
 - Verified at: b9e47b19, 2026-10-16; staged fast gate passes, including 521
@@ -9,10 +9,10 @@
   their timing/counter observations remain ineligible due to disturbance.
 - Evidence: [A2 tables](archive/T055-phase-a2-data.md), committed replay fixtures
   under tools/benchmark/tests/fixtures/layout-policy, frozen B plan/jobs below.
-- Unresolved: valid screen/held-out replacements, canonical 30-block A/A,
-  builder correctness, final full gate and qualification are still pending.
-- Next action: inspect complete queue logs; use only undisturbed replacements.
-  Publish a policy only if frozen qualification passes; otherwise report for lead review.
+- Unresolved: a quiet measurement window or separately approved protocol is needed;
+  builder correction and final full gate are being completed.
+- Next action: complete static/correctness gates, then report the host blocker.
+  Resume timing only after the lead chooses suitable measurement conditions.
 
 ## Historical phase A
 
@@ -166,8 +166,8 @@ lead decision; no favorable repeat of a valid failed qualification.
 The 30-pair increment qualification above additionally requalifies the screen
 instruction guard. Before any canonical formal timing, freeze a separate
 30-block three-engine A/A bundle: candidate=base=4c9f959e, `perf-compare.sh
---blocks 30 --workers 4`, exact current canonical recipe. The source inputs
-are unchanged from the measured A2 source. Snapshot role/hash prefixes use a fixed width, preserving the role-dash
+--blocks 30 --workers 4`, exact current canonical recipe. This revision includes the RegExp correction e0cf202a after A2; each formal
+role must use the same current-main image, not the older A2 image. Snapshot role/hash prefixes use a fixed width, preserving the role-dash
 prefix so all three binary paths are distinct and equal length;
 files are exclusively created once. This is a protocol correction, not a
 binary replacement sampler. Keep all existing formal health/linearity and

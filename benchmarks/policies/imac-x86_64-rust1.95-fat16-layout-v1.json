@@ -1,0 +1,501 @@
+{
+  "artifact_type": "quickjs-layout-policy",
+  "cases": {
+    "broad/array_allocation": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "broad/array_dynamic_read": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "broad/array_index_of": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0488228754017972
+    },
+    "broad/array_read": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "broad/array_write": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0262679019942824
+    },
+    "broad/branch_arithmetic": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.043830548695979
+    },
+    "broad/captured_read": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "broad/captured_write": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0284043650996164
+    },
+    "broad/closure_allocation_call": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0298435983447567
+    },
+    "broad/dynamic_method_call": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.1060548069069007
+    },
+    "broad/empty_loop": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0901624832202146
+    },
+    "broad/function_call_reordered": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "broad/function_call_two_args": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "broad/global_read": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.1034397524869684
+    },
+    "broad/local_read": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.068759186446303
+    },
+    "broad/many_locals_call": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "broad/math_abs": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "broad/method_call": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "broad/object_allocation": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "broad/plain_function_call": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0269582980631775
+    },
+    "broad/property_dynamic_read": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0450344086654433
+    },
+    "broad/property_read": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "broad/property_write": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "broad/string_slice": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0319282748522574
+    },
+    "broad/top_level_function_call": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/jetstream3-js-subset/cdjs": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/jetstream3-js-subset/gaussian-blur": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/jetstream3-js-subset/hash-map": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/jetstream3-js-subset/raytrace-public-class-fields": {
+      "instruction_band": 1.0046,
+      "wall_band": 1.0250249555257578
+    },
+    "external/jetstream3-js-subset/stanford-crypto-aes": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/kraken-1.1/ai-astar": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/kraken-1.1/audio-beat-detection": {
+      "instruction_band": 1.007,
+      "wall_band": 1.0250249555257578
+    },
+    "external/kraken-1.1/audio-dft": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.1115626917197916
+    },
+    "external/kraken-1.1/audio-fft": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/kraken-1.1/audio-oscillator": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/kraken-1.1/imaging-darkroom": {
+      "instruction_band": 1.0039,
+      "wall_band": 1.0550299211855159
+    },
+    "external/kraken-1.1/imaging-desaturate": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/kraken-1.1/imaging-gaussian-blur": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/kraken-1.1/json-parse-financial": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/kraken-1.1/json-stringify-tinderbox": {
+      "instruction_band": 1.0028,
+      "wall_band": 1.0250249555257578
+    },
+    "external/kraken-1.1/stanford-crypto-aes": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/kraken-1.1/stanford-crypto-ccm": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/kraken-1.1/stanford-crypto-pbkdf2": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0340441621571994
+    },
+    "external/kraken-1.1/stanford-crypto-sha256-iterative": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0315702271415257
+    },
+    "external/sunspider-1.0/3d-cube": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0392274073347878
+    },
+    "external/sunspider-1.0/3d-morph": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0290263938785502
+    },
+    "external/sunspider-1.0/3d-raytrace": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/sunspider-1.0/access-binary-trees": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/sunspider-1.0/access-fannkuch": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0438079797097166
+    },
+    "external/sunspider-1.0/access-nbody": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/sunspider-1.0/access-nsieve": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/sunspider-1.0/bitops-3bit-bits-in-byte": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/sunspider-1.0/bitops-bits-in-byte": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/sunspider-1.0/bitops-bitwise-and": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.027279929519659
+    },
+    "external/sunspider-1.0/bitops-nsieve-bits": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/sunspider-1.0/controlflow-recursive": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.041723342584479
+    },
+    "external/sunspider-1.0/crypto-aes": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/sunspider-1.0/crypto-md5": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/sunspider-1.0/crypto-sha1": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/sunspider-1.0/date-format-tofte": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/sunspider-1.0/date-format-xparb": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.028481032591131
+    },
+    "external/sunspider-1.0/math-cordic": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0288735101480309
+    },
+    "external/sunspider-1.0/math-partial-sums": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/sunspider-1.0/math-spectral-norm": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/sunspider-1.0/regexp-dna": {
+      "instruction_band": 1.0144,
+      "wall_band": 1.0334910365057965
+    },
+    "external/sunspider-1.0/string-base64": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/sunspider-1.0/string-fasta": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/sunspider-1.0/string-tagcloud": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "external/sunspider-1.0/string-unpack-code": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0307731605543728
+    },
+    "external/sunspider-1.0/string-validate-input": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0300489331425773
+    },
+    "sentinel/capturing_closure_call": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "sentinel/heterogeneous_property_read": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.032315623287719
+    },
+    "sentinel/polymorphic_call_site": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "sentinel/prototype_method_call": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0250249555257578
+    },
+    "sentinel/recursive_call_tree": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0391473330404257
+    },
+    "sentinel/string_key_map_churn": {
+      "instruction_band": 1.0021,
+      "wall_band": 1.0523326615647108
+    }
+  },
+  "evidence": {
+    "a2_band_seed": {
+      "path": "tools/benchmark/tests/fixtures/layout-policy/a2-bands.json",
+      "sha256": "cae9f4e391bfd27e57df4c048365cb549ead05c1495d493f7c4bdc271f02f10a"
+    },
+    "a2_source_revision": "153c1fe5e1ec2315d1ccb68a9aea0ca83843af64",
+    "formal_binary_sha256": "c7f0f66a519181b214bdc5ca6404cf428f0d18cbd1ab1d0e26386097619b949e",
+    "formal_source_revision": "4c9f959e4ae3f508a10828a46cf59ec042d7ec13",
+    "screen_binary_sha256": "926ee634ca3901b89c778478702a4fe993288ef7e8e69cd93c238c694595aa85"
+  },
+  "failures": [
+    "Three consecutive complete timing runs were marked DISTURBED; no B timing/counter observations are eligible.",
+    "Independent held-out program/lane ceilings remain uncalibrated; promotion must stay blocked."
+  ],
+  "held_out": {
+    "held-out/acorn/parse": {
+      "wall_band": null
+    },
+    "held-out/crypto-js/hash": {
+      "wall_band": null
+    },
+    "held-out/d3-array/aggregate": {
+      "wall_band": null
+    },
+    "held-out/decimal.js/arith": {
+      "wall_band": null
+    },
+    "held-out/esprima/parse": {
+      "wall_band": null
+    },
+    "held-out/handlebars/render": {
+      "wall_band": null
+    },
+    "held-out/marked/render": {
+      "wall_band": null
+    },
+    "held-out/mustache/render": {
+      "wall_band": null
+    },
+    "held-out/ramda/pipeline": {
+      "wall_band": null
+    }
+  },
+  "host": {
+    "build_environment": {},
+    "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+    "cargo_configuration": {
+      "cargo_home": "/Users/qingyingliu/.cargo",
+      "configs": []
+    },
+    "cpu": "Intel(R) Core(TM) i7-10700 CPU @ 2.90GHz",
+    "hardware": "iMac20,1",
+    "linker": "Apple clang version 14.0.0 (clang-1400.0.29.202)\nTarget: x86_64-apple-darwin21.6.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin",
+    "machine": "x86_64",
+    "manifests": {
+      "benchmarks/external-preview.json": "a8ddeded582573bc676bf3f7bbbaf2625f6dfa7742f07bcdd6aaa26366f4e6c4",
+      "benchmarks/generic-sentinels-manifest.json": "ff3132906d183565fcf2c01f0e495a0cfb3c1ba1157e5af39e42b4567be3fc26",
+      "benchmarks/held-out-preview.json": "276e5b5e8b8359a46e6949079fcb05d7a996e38f8ef9934b708e6321562c6451",
+      "benchmarks/manifest.json": "73cf9d522ba668e3d00b10170875d22a60f43212dd71bb4d290ff599884247c6",
+      "rust-toolchain.toml": "80fd9457547f340dddb065165021df33dc8aa4a4bbf79a068dc189c5947d9e9d"
+    },
+    "memory": "34359738368",
+    "os": "12.6",
+    "recipe": {
+      "binary": "qjs",
+      "cargo_args": [
+        "--locked",
+        "--release",
+        "-p",
+        "qjs-cli",
+        "--features",
+        "agents",
+        "--config=profile.release.opt-level=3",
+        "--config=profile.release.lto=\"fat\"",
+        "--config=profile.release.codegen-units=16",
+        "--config=profile.release.panic=\"abort\""
+      ],
+      "environment": {
+        "CARGO_ENCODED_RUSTFLAGS": "-Csymbol-mangling-version=v0\u001f-Cllvm-args=-align-all-functions=4",
+        "CARGO_INCREMENTAL": "0"
+      }
+    },
+    "rustc": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: x86_64-apple-darwin\nrelease: 1.95.0\nLLVM version: 22.1.2",
+    "system": "Darwin"
+  },
+  "host_node": "iMac.local",
+  "lanes": {
+    "broad": 1.0129493300226688,
+    "external": 1.0073802375536396,
+    "held-out": null,
+    "portfolio": 1.0082623319647204,
+    "sentinel": 1.015687001889914
+  },
+  "offsets": [
+    0,
+    16,
+    64,
+    240,
+    512,
+    1008
+  ],
+  "policy_id": "imac-x86_64-rust1.95-fat16-layout-v1",
+  "qualification": {
+    "note": "Only valid historical A2 bands are populated. Null B budgets are unknown, never assumed.",
+    "runs": [
+      {
+        "exit_code": 0,
+        "job": "20261016T184617Z-decision-rule-b-aa30",
+        "kind": "screen-30-pair",
+        "log_sha256": "8c8346a8525c8bfd506f54afdd1cff69b472a91ab9b7acc67697db25d7d0c315",
+        "payload_sha256": "4d4c26c24ec6adfa1f9874bbc13329452e1c0b5c42801d5694a238ef70519167",
+        "queue_elapsed_seconds": 3052,
+        "reason": "DISTURBED",
+        "timing_eligible": false
+      },
+      {
+        "exit_code": 0,
+        "job": "20261016T184621Z-decision-rule-b-heldout30",
+        "kind": "held-out-30-pair",
+        "log_sha256": "df29e7cce366eace1c695d5f7cdecac15eb1cc317a61588c9fd1cad1e3e7656b",
+        "payload_sha256": "8972f0725cf895a8243e8b444a791ac5317ac05a14fa12d42f2bd2275a185635",
+        "queue_elapsed_seconds": 3113,
+        "reason": "DISTURBED",
+        "timing_eligible": false
+      },
+      {
+        "exit_code": 0,
+        "job": "20261016T191531Z-decision-rule-b-formal-aa30-fixed",
+        "kind": "formal-30-block",
+        "log_sha256": "87da0959eb158a68a857889ed53613568674c42c57d568cfb6498d1deb8eebf9",
+        "payload_sha256": "af3c62d273ee003ee37f1d38c310b5d199494ad0656e310ca33a3997e97b9bd8",
+        "queue_elapsed_seconds": 1424,
+        "reason": "DISTURBED",
+        "timing_eligible": false
+      }
+    ],
+    "status": "blocked-environment",
+    "valid_completed_calibrations": 0
+  },
+  "qualified": false,
+  "schema_version": 1,
+  "screen_host": {
+    "build_environment": {},
+    "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+    "cargo_configuration": {
+      "cargo_home": "/Users/qingyingliu/.cargo",
+      "configs": []
+    },
+    "cpu": "Intel(R) Core(TM) i7-10700 CPU @ 2.90GHz",
+    "hardware": "iMac20,1",
+    "linker": "Apple clang version 14.0.0 (clang-1400.0.29.202)\nTarget: x86_64-apple-darwin21.6.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin",
+    "machine": "x86_64",
+    "manifests": {
+      "benchmarks/external-preview.json": "a8ddeded582573bc676bf3f7bbbaf2625f6dfa7742f07bcdd6aaa26366f4e6c4",
+      "benchmarks/generic-sentinels-manifest.json": "5d3ca6caa246fb82221c36ef700ae079338d9a731c07fdfea7caa7a6f587ef64",
+      "benchmarks/held-out-preview.json": "276e5b5e8b8359a46e6949079fcb05d7a996e38f8ef9934b708e6321562c6451",
+      "benchmarks/manifest.json": "fdfd749a396c5cd569cf7680b37a257718e4aa5275b75af76d7cff924fdfeb61",
+      "rust-toolchain.toml": "80fd9457547f340dddb065165021df33dc8aa4a4bbf79a068dc189c5947d9e9d"
+    },
+    "memory": "34359738368",
+    "os": "12.6",
+    "recipe": {
+      "binary": "qjs",
+      "cargo_args": [
+        "--locked",
+        "--release",
+        "-p",
+        "qjs-cli",
+        "--features",
+        "agents",
+        "--config=profile.release.opt-level=3",
+        "--config=profile.release.lto=\"fat\"",
+        "--config=profile.release.codegen-units=16",
+        "--config=profile.release.panic=\"abort\""
+      ],
+      "environment": {
+        "CARGO_ENCODED_RUSTFLAGS": "-Csymbol-mangling-version=v0\u001f-Cllvm-args=-align-all-functions=4",
+        "CARGO_INCREMENTAL": "0"
+      }
+    },
+    "rustc": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: x86_64-apple-darwin\nrelease: 1.95.0\nLLVM version: 22.1.2",
+    "system": "Darwin"
+  },
+  "statistics": {
+    "aggregate": "equal-case-geomean",
+    "bootstrap_draws": 20000,
+    "case_effect": "median-paired-ratio",
+    "confidence": 0.95,
+    "maximum_half_width": 0.03,
+    "minimum_blocks": 30,
+    "seed": 0
+  }
+}

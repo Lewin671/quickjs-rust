@@ -95,10 +95,17 @@ def inspect(binary, out, tag):
                 lambda m: target(int(m[0], 16)) or 'RAW_REL:' + hex(int(m[0], 16) - following), operands)
         bodies[names[index]].append(operation + ' ' + operands)
     (out / (tag + '.normalized.json')).write_text(json.dumps(bodies, indent=2) + '\n')
+    padding = b''
+    if '_qjs_layout_noise_pad' in names:
+        pad_address = addresses[names.index('_qjs_layout_noise_pad')]
+        with binary.open('rb') as handle:
+            handle.seek(text[3] + pad_address - text[0])
+            from .layout_identity import OFFSETS
+            padding = handle.read(max(OFFSETS))
     return {'sha256': digest(binary), 'bytes': binary.stat().st_size,
             'addresses': dict(zip(names, addresses)),
             'sizes': {name: end-start for (start, name), (end, _) in zip(rows, rows[1:])},
-            'bodies': bodies, 'sections': segments}
+            'bodies': bodies, 'sections': segments, 'padding_bytes': padding}
 
 
 def audit(natural, variant, pad):
@@ -108,8 +115,14 @@ def audit(natural, variant, pad):
     if list(filtered) != list(original):
         raise ValueError('layout audit: function inventory/order changed')
     shift = actual[next(iter(original))] - original[next(iter(original))]
-    if not pad <= shift < pad + 32 or shift % 16:
-        raise ValueError('layout audit: invalid uniform shift')
+    old_text = next(s for s in natural['sections'] if s[2] == '__TEXT/__text')
+    new_text = next(s for s in variant['sections'] if s[2] == '__TEXT/__text')
+    text_shift = new_text[0] - old_text[0]
+    relative_shift = shift - text_shift
+    if (text_shift % 4096 or not pad <= relative_shift < pad + 32 or shift % 16):
+        raise ValueError('layout audit: invalid section-relative uniform shift')
+    if actual['_qjs_layout_noise_pad'] != new_text[0] or variant['padding_bytes'][:pad] != b'\x90' * pad:
+        raise ValueError('layout audit: declared leading NOP atom differs')
     if any(actual[n] != a + shift for n, a in original.items()):
         raise ValueError('layout audit: nonuniform function displacement')
     def strip_tail(body):
@@ -125,4 +138,6 @@ def audit(natural, variant, pad):
         if body != other:
             raise ValueError(f'layout audit: body drift in {name}')
     return {'functions': len(original), 'pad_bytes': pad,
-            'actual_uniform_shift': shift, 'body_drift': 0, 'address_drift': 0}
+            'actual_uniform_shift': shift, 'text_section_shift': text_shift,
+            'section_relative_shift': relative_shift, 'declared_nops_verified': True,
+            'body_drift': 0, 'address_drift': 0}
