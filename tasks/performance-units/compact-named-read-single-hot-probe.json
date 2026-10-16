@@ -1,0 +1,150 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "compact-named-read-single-hot-probe",
+  "base_sha": "21e55fe2b530be09ea0453fcb87cde3b36423db3",
+  "queue": {
+    "candidate_sha": "21e55fe2b530be09ea0453fcb87cde3b36423db3",
+    "sha256": "d1c2d3c4515c711968ac2f42561311a318e57c8f07629f569c91bd5f8ad6fc08"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/jetstream3-js-subset/hash-map"
+    ],
+    "rank_ceiling": 1,
+    "override_reason": "The user requested an iMac study of repeated cache probing and receiver-miss proof reuse. The fresh queue ranks hash-map seventh externally; three exact profiles show a 12-14 percent cold-read envelope and diagnostic counts confirm 3.78M repeated probes. Higher-ranked gaps remain controls. This is distinct from rejected T041 OwnSlot hot-answer expansion and T033 receiver-proof shortcuts."
+  },
+  "mechanism": {
+    "summary": "Compact named reads perform their initial hot probe once. Preserve ordinary/exotic guards and full cache probing in the cold continuation; the direct captured-field-initializer entry performs its own first hot probe before that continuation. Keep cache coverage, replacement policy, value/layout guards and generic fallbacks unchanged.",
+    "generality": "Only control flow proving an earlier side-effect-free hot probe returned None admits the continuation. No workload name, property name, source text, bytecode template, iteration count or expected value selects it.",
+    "semantic_risks": [
+      "Direct callers such as captured class-field initializers must retain their first hot probe.",
+      "Preserve ordinary/exotic classification, identity, layout, slot, descriptor and prototype guards. Getters and Proxies keep normal fallback.",
+      "Cache borrows must end before user code; retain weak ownership and invalidation after assignments, deletion, insertion, accessors and prototype replacement.",
+      "LTO and layout can move unrelated functions. Every case remains a control; no compiler/order-file tuning or favorable reruns are part of this attempt. Layout matching remains a limitation for production promotion."
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "jetstream3-js-subset--hash-map/receipt-0/receipt.json",
+      "sha256": "da761155d60e0eb8d4cbe74d86f217b0bec85e97e312d7ed713b12ad1f674d33",
+      "base_sha": "21e55fe2b530be09ea0453fcb87cde3b36423db3",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/hash-map"
+      ],
+      "shared_cost": "Exact adopted-recipe binary sample 0: 12.19 percent of main-thread samples pass through compact property::get_prop_named, including necessary probe, slot-read and Value transport work. This is an envelope, not removable time. Supplemental feature-only counts identify 3780111 repeated ordinary-object hot probes in the complete hash-map port, zero direct field-initializer ordinary probes and zero second hot hits. Remove only the second probe after a caller-proven miss, without expanding hot cache entry coverage.",
+      "inclusive_fraction": 0.12190082644628099
+    },
+    {
+      "source": "jetstream3-js-subset--hash-map/receipt-1/receipt.json",
+      "sha256": "4722fa31425a12fed9865d8014f67550052855f136f0792411b28b61d15c5bc7",
+      "base_sha": "21e55fe2b530be09ea0453fcb87cde3b36423db3",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/hash-map"
+      ],
+      "shared_cost": "Exact adopted-recipe binary sample 1: 13.94 percent of main-thread samples pass through compact property::get_prop_named, including necessary probe, slot-read and Value transport work. This is an envelope, not removable time. Supplemental feature-only counts identify 3780111 repeated ordinary-object hot probes in the complete hash-map port, zero direct field-initializer ordinary probes and zero second hot hits. Remove only the second probe after a caller-proven miss, without expanding hot cache entry coverage.",
+      "inclusive_fraction": 0.1393939393939394
+    },
+    {
+      "source": "jetstream3-js-subset--hash-map/receipt-2/receipt.json",
+      "sha256": "72e3817afa3152e79508e2824c47e07768cca2e77676960a9a3b0a02f2626366",
+      "base_sha": "21e55fe2b530be09ea0453fcb87cde3b36423db3",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/hash-map"
+      ],
+      "shared_cost": "Exact adopted-recipe binary sample 2: 12.86 percent of main-thread samples pass through compact property::get_prop_named, including necessary probe, slot-read and Value transport work. This is an envelope, not removable time. Supplemental feature-only counts identify 3780111 repeated ordinary-object hot probes in the complete hash-map port, zero direct field-initializer ordinary probes and zero second hot hits. Remove only the second probe after a caller-proven miss, without expanding hot cache entry coverage.",
+      "inclusive_fraction": 0.12857142857142856
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/jetstream3-js-subset/hash-map"
+    ],
+    "control_ids": [
+      "broad/array_allocation",
+      "broad/array_dynamic_read",
+      "broad/array_index_of",
+      "broad/array_read",
+      "broad/array_write",
+      "broad/branch_arithmetic",
+      "broad/captured_read",
+      "broad/captured_write",
+      "broad/closure_allocation_call",
+      "broad/dynamic_method_call",
+      "broad/empty_loop",
+      "broad/function_call_reordered",
+      "broad/function_call_two_args",
+      "broad/global_read",
+      "broad/local_read",
+      "broad/many_locals_call",
+      "broad/math_abs",
+      "broad/method_call",
+      "broad/object_allocation",
+      "broad/plain_function_call",
+      "broad/property_dynamic_read",
+      "broad/property_read",
+      "broad/property_write",
+      "broad/string_slice",
+      "broad/top_level_function_call",
+      "sentinel/capturing_closure_call",
+      "sentinel/heterogeneous_property_read",
+      "sentinel/polymorphic_call_site",
+      "sentinel/prototype_method_call",
+      "sentinel/recursive_call_tree",
+      "sentinel/string_key_map_churn",
+      "external/jetstream3-js-subset/cdjs",
+      "external/jetstream3-js-subset/gaussian-blur",
+      "external/jetstream3-js-subset/stanford-crypto-aes",
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/kraken-1.1/ai-astar",
+      "external/kraken-1.1/audio-beat-detection",
+      "external/kraken-1.1/audio-dft",
+      "external/kraken-1.1/audio-fft",
+      "external/kraken-1.1/audio-oscillator",
+      "external/kraken-1.1/imaging-gaussian-blur",
+      "external/kraken-1.1/imaging-darkroom",
+      "external/kraken-1.1/imaging-desaturate",
+      "external/kraken-1.1/json-parse-financial",
+      "external/kraken-1.1/json-stringify-tinderbox",
+      "external/kraken-1.1/stanford-crypto-aes",
+      "external/kraken-1.1/stanford-crypto-ccm",
+      "external/kraken-1.1/stanford-crypto-pbkdf2",
+      "external/kraken-1.1/stanford-crypto-sha256-iterative",
+      "external/sunspider-1.0/3d-cube",
+      "external/sunspider-1.0/3d-morph",
+      "external/sunspider-1.0/3d-raytrace",
+      "external/sunspider-1.0/access-binary-trees",
+      "external/sunspider-1.0/access-fannkuch",
+      "external/sunspider-1.0/access-nbody",
+      "external/sunspider-1.0/access-nsieve",
+      "external/sunspider-1.0/bitops-3bit-bits-in-byte",
+      "external/sunspider-1.0/bitops-bits-in-byte",
+      "external/sunspider-1.0/bitops-bitwise-and",
+      "external/sunspider-1.0/bitops-nsieve-bits",
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/sunspider-1.0/crypto-aes",
+      "external/sunspider-1.0/crypto-md5",
+      "external/sunspider-1.0/crypto-sha1",
+      "external/sunspider-1.0/date-format-tofte",
+      "external/sunspider-1.0/date-format-xparb",
+      "external/sunspider-1.0/math-cordic",
+      "external/sunspider-1.0/math-partial-sums",
+      "external/sunspider-1.0/math-spectral-norm",
+      "external/sunspider-1.0/regexp-dna",
+      "external/sunspider-1.0/string-base64",
+      "external/sunspider-1.0/string-fasta",
+      "external/sunspider-1.0/string-tagcloud",
+      "external/sunspider-1.0/string-unpack-code",
+      "external/sunspider-1.0/string-validate-input"
+    ],
+    "target_max_candidate_over_base": 0.98,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
