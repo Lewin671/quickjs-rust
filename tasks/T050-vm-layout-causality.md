@@ -77,3 +77,25 @@ engine speed. The final implementation warms and records a tiny launch after
 every path replacement, before calibration or measured N/2N, and refuses a
 base increment shorter than 50 ms. Keep invalid logs and partial raw data;
 replace the failed protocol once, without using its timing for decisions.
+
+## Correct hot-loop target (frozen before measuring it)
+
+Route counters at N=262144 give exactly one loop-plan entry and zero declines
+for all three original controls, with only 271 ordinary executed ops. Exact
+base-binary sampling (20261016T115117Z-vm-layout-exact-control-profiles) places
+836/834/835 samples respectively in the WideLoopFrame typed-loop closure;
+the ordinary VM is its inclusive caller, not the repeated dispatch body.
+This corrects the initial attribution; ordinary-VM displacement alone was
+an insufficient hypothesis.
+
+Freeze a final layout-only experiment on the unchanged original reader:
+move only that sampled WideLoopFrame closure between its original natural
+page offsets 0x5c0 and 0x7a0 (the T049 binaries differ by 480 bytes there).
+Use the same audited padding method as phase 1, two builds plus an identical
+copy of the first, and require every other shared text-symbol address to
+match. Measure branch_arithmetic, global_read, local_read and hash-map,
+15 serial balanced blocks, same literal execution path, warmed after every
+replacement. Retain all raw samples and require >=50 ms base increments.
+No offset search or promotion; a repeatable effect above A/A supports the
+actual executor's placement as a contributor, not a universal best offset.
+If the A/A control is unstable, the corresponding case remains unresolved.
