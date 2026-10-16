@@ -48,7 +48,12 @@ def paired_effect(candidate: list[dict], comparator: list[dict], blocks: int,
                       else "inconclusive"}
 
 
-def _report(manifest: Manifest, records: list[dict[str, Any]]) -> dict[str, Any]:
+def _report(
+    manifest: Manifest,
+    records: list[dict[str, Any]],
+    *,
+    artifact_type: str = "quickjs-external-preview-report",
+) -> dict[str, Any]:
     samples: dict[tuple[str, str, str, str], list[dict[str, Any]]] = {}
     for record in records:
         key = (
@@ -160,7 +165,7 @@ def _report(manifest: Manifest, records: list[dict[str, Any]]) -> dict[str, Any]
     return {
         # Version 3 added `paired_cycle_comparisons` per case.
         "schema_version": 3,
-        "artifact_type": "quickjs-external-preview-report",
+        "artifact_type": artifact_type,
         "preview_id": manifest.preview_id,
         "manifest_sha256": manifest.sha256,
         "claim_eligible": False,

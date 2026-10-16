@@ -5,11 +5,18 @@ from __future__ import annotations
 from typing import Any
 
 
-def render_markdown(report: dict[str, Any]) -> str:
+def render_markdown(
+    report: dict[str, Any],
+    *,
+    title: str = "External Benchmark Preview",
+    subtitle: str = (
+        "These are pinned, neutral shell ports; no row is an official JetStream, "
+        "Kraken, or SunSpider score, and incomplete suites have no aggregate score."
+    ),
+) -> str:
     lines = [
-        "## External Benchmark Preview", "",
-        "> **Informational only.** These are pinned, neutral shell ports; no row is an official",
-        "> JetStream, Kraken, or SunSpider score, and incomplete suites have no aggregate score.",
+        f"## {title}", "",
+        f"> **Informational only.** {subtitle}",
         "",
         "Win counts exclude inconclusive intervals and runs below 30 blocks.", "",
         "| Suite | Candidate/base comparable | Candidate/base | Resolved candidate/base wins | QuickJS comparable | Candidate/QuickJS-NG | Resolved candidate/QuickJS-NG wins |",

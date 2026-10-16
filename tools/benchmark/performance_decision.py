@@ -52,6 +52,27 @@ _UNIT_TYPE = "quickjs-performance-unit"
 _DECISION_TYPE = "quickjs-performance-decision"
 
 
+def _held_out_opportunity_ids() -> frozenset[str]:
+    """The frozen held-out acceptance cases, which never select work.
+
+    The queue and every plan are derived from the pinned performance suites.
+    The held-out lane is the independent check on the generality of the
+    result, so a plan that named one of its cases as a target or control -- or
+    profiled one -- would be using the acceptance set to select work. These
+    ids are therefore refused wherever a plan or queue may name a workload.
+    """
+    from .held_out import opportunity_ids
+    return opportunity_ids()
+
+
+def _reject_held_out(declared: set[str], where: str) -> None:
+    forbidden = sorted(declared & _held_out_opportunity_ids())
+    if forbidden:
+        raise PerformanceDecisionError(
+            f"{where}: a held-out case is an acceptance check, not a source of work: {forbidden}"
+        )
+
+
 def _atomic_write(path: Path, payload: dict[str, Any]) -> None:
     resolved = path.expanduser().resolve()
     if resolved.exists():
@@ -190,7 +211,7 @@ def build_queue(
     problems = validate_bundle(summary, broad, external, sentinel)
     if problems:
         raise PerformanceDecisionError("queue requires healthy complete evidence: " + "; ".join(problems))
-    return {
+    payload = {
         "schema_version": 2,
         "artifact_type": _QUEUE_TYPE,
         "engines": summary["engines"],
@@ -210,6 +231,11 @@ def build_queue(
             for entry in _broad_entries(sentinel, target_ratio)
         ],
     }
+    _reject_held_out(
+        {entry["id"] for channel in ("external", "broad", "sentinel") for entry in payload[channel]},
+        "opportunity queue",
+    )
+    return payload
 
 
 def load_queue(path: Path) -> tuple[dict[str, Any], str]:
@@ -262,6 +288,7 @@ def load_queue(path: Path) -> tuple[dict[str, Any], str]:
             base_ratio = entry.get("candidate_over_base")
             if base_ratio is not None:
                 _ratio(base_ratio, f"opportunity queue {opportunity_id}.candidate_over_base")
+    _reject_held_out(seen, "opportunity queue")
     return queue, digest
 
 
@@ -433,6 +460,13 @@ def load_unit(path: Path) -> tuple[dict[str, Any], str]:
     for key, value in promotion.items():
         if not _boolean(value, f"performance unit.promotion_gate.{key}"):
             raise PerformanceDecisionError(f"performance unit.promotion_gate.{key}: must remain true")
+    declared = set(priority["opportunity_ids"]) | set(target_ids)
+    declared |= set(fast_gate["control_ids"])
+    for receipt in profile_evidence:
+        declared |= set(receipt["opportunity_ids"])
+    if kind == "migration":
+        declared |= set(unit["migration"]["cumulative_target_ids"])
+    _reject_held_out(declared, "performance unit")
     return unit, digest
 
 
