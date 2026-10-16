@@ -8,6 +8,11 @@ def replay_case(raw, pairs, binaries):
     if raw['kind'] not in ('internal', 'whole'):
         raise ValueError('unknown screen case kind')
     internal = raw['kind'] == 'internal'
+    expected_internal = raw['id'].startswith(('broad/', 'sentinel/'))
+    if internal != expected_internal:
+        raise ValueError('screen case kind differs from its lane')
+    if internal and (type(raw.get('iterations')) is not int or raw['iterations'] <= 0):
+        raise ValueError('screen internal iterations must be a positive integer')
     samples = raw['samples']
     if len(samples) != pairs * (4 if internal else 2):
         raise ValueError('screen raw sample count mismatch')
@@ -22,6 +27,9 @@ def replay_case(raw, pairs, binaries):
             if any(s['argv'][0] != binaries[role] for s in taken):
                 raise ValueError('screen sample binary path mismatch')
             for i, row in enumerate(taken):
+                if any(type(row['sample'][m]) is not int or row['sample'][m] <= 0
+                       for m in ('wall_ns', 'instructions')):
+                    raise ValueError('screen sample metrics must be positive integers')
                 argv = row['argv']
                 if len(argv) != (5 if internal else 3) or argv[1] != '--raw':
                     raise ValueError('screen sample command mismatch')

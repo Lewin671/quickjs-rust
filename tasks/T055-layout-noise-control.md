@@ -182,3 +182,13 @@ was cancelled before timing: underscore padding before the role-dash would
 be misclassified by the site's disturbance monitor. The corrected equal-
 length prefix keeps `candidate-`/`base-`/`quickjs-ng-`; the same 30-block
 plan is requeued, with no valid observation discarded or pooled.
+
+
+B calibration jobs: 20261016T184617Z-decision-rule-b-aa30 (screen guard),
+20261016T184621Z-decision-rule-b-heldout30, and replacement canonical job
+20261016T191531Z-decision-rule-b-formal-aa30-fixed. Builder/audit/correctness:
+20261016T191531Z-decision-rule-b-builder-audit-fixed (no timing). The older
+190030Z builder job was cancelled while queued so the corrected producer
+would be tested. Tool implementation through 5953689d passed the staged
+fast gate: context, Rust fmt/clippy, 518 benchmark tests and shell syntax;
+no runtime/parser/lexer semantic slice matched these tool-only changes.

@@ -25,6 +25,9 @@ def command(args) -> str:
 def host_identity() -> dict:
     if platform.system() != 'Darwin' or platform.machine() != 'x86_64':
         raise ValueError('layout policy requires x86_64 macOS; recalibrate on a different host')
+    from .schema import load_manifest
+    for name in ('manifest.json', 'generic-sentinels-manifest.json'):
+        load_manifest(ROOT / 'benchmarks' / name)
     return {
         'system': platform.system(), 'machine': platform.machine(),
         'os': platform.mac_ver()[0],

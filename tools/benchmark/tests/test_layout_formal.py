@@ -129,12 +129,16 @@ class PlanBindingTests(unittest.TestCase):
         p = policy()
         p['host_node'] = 'test-host'
         p['held_out'] = {name: {'wall_band': 1.01} for name in opportunity_ids()}
-        queue = {'candidate_sha': unit['base_sha'], 'host': {'node': 'test-host'},
+        queue = {'schema_version': 3, 'candidate_sha': unit['base_sha'], 'host': {'node': 'test-host'},
                  'external': [{'id': unit['priority']['opportunity_ids'][0], 'rank': 1}],
                  'broad': [], 'sentinel': []}
         with patch('tools.benchmark.layout_policy.load_policy', return_value=p):
             result = validate_unit_against_queue(unit, sha, queue, unit['queue']['sha256'])
             self.assertEqual(result['status'], 'valid')
+            legacy = copy.deepcopy(unit)
+            legacy['schema_version'] = 2
+            with self.assertRaisesRegex(ValueError, 'schema-3 layout plan'):
+                validate_unit_against_queue(legacy, sha, queue, unit['queue']['sha256'])
             queue['host']['node'] = 'other-host'
             with self.assertRaisesRegex(ValueError, 'hosts differ'):
                 validate_unit_against_queue(unit, sha, queue, unit['queue']['sha256'])

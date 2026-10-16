@@ -111,6 +111,9 @@ class PerformanceDecisionTests(unittest.TestCase):
         broad_path = self._write(directory, "queue-broad.json", self._broad())
         external_path = self._write(directory, "queue-external.json", self._external())
         queue_payload = build_queue(summary_path, broad_path, external_path, 0.5)
+        # These fixtures replay schema-1/2 historical plans and their old queue.
+        queue_payload['schema_version'] = 2
+        queue_payload.pop('host')
         queue_path = self._write(directory, "queue.json", queue_payload)
         queue, queue_sha = load_queue(queue_path)
         unit_path = self._write(directory, "unit.json", self._unit(queue_sha))

@@ -54,7 +54,8 @@ throughput v10, sentinels v3 and resources v3.
 
 Queue schema 3 additionally records the measured host. Schema-3 unit
 validation checks that host against the policy and refuses stale inventories
-before implementation. Older queue schema 2 remains readable for history.
+before implementation. New queues require schema-3 plans; older queue schema 2 remains readable
+for historical plans.
 Instruction-blind decisions require `--resource-report` and `--resource-raw`:
 the current resource analyzer replays the report, binds both engines and
 host, and retains all reported costs. Missing/incomplete resource evidence

@@ -481,7 +481,11 @@ def validate_unit_against_queue(unit: dict[str, Any], unit_sha: str, queue: dict
         raise PerformanceDecisionError("performance unit queue candidate SHA does not match supplied queue")
     if unit["base_sha"] != queue["candidate_sha"]:
         raise PerformanceDecisionError("performance unit base SHA must equal the queue candidate SHA")
+    if queue.get('schema_version') == 3 and unit.get('schema_version') != 3:
+        raise PerformanceDecisionError('new opportunity queues require a schema-3 layout plan')
     if unit.get('schema_version') == 3:
+        if queue.get('schema_version') != 3:
+            raise PerformanceDecisionError('layout plans require a host-bound schema-3 queue')
         from .layout_policy import load_policy
         from .performance_evidence import ROOT, inventories
         contract = unit['layout_gate']

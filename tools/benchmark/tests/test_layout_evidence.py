@@ -22,7 +22,7 @@ def fixture(folder):
                 {'index': k, 'pad_bytes': pad, 'path': f'/tmp/{name}/v{k}/qjs', 'sha256': role[0]*64,
                  'audit': {'body_drift': 0, 'address_drift': 0}} for k, pad in enumerate(OFFSETS)]}
     ratios = {'wall_ns': [1.]*5, 'instructions': [1.]*5}
-    cases = [{'id': 'broad/a', 'ratios': ratios}]
+    cases = [{'id': 'external/s/a', 'ratios': ratios}]
     packet = {'pairs': 5, 'cases': cases}
     costs = {role: {'wall_ns': [100]*5, 'instructions': [10]*5} for role in binaries}
     samples = []
@@ -30,15 +30,15 @@ def fixture(folder):
         for role in (('base', 'candidate') if pair % 2 == 0 else ('candidate', 'base')):
             samples.append({'argv': [binaries[role]['variants'][0]['path'], '--raw', '/tmp/case.js'],
                             'sample': {'wall_ns': 100, 'instructions': 10, 'stdout': 'OK\n'}})
-    raw = {'id': 'broad/a', 'kind': 'whole', 'samples': samples, 'costs': costs, 'ratios': ratios}
-    path = folder / 'variant0/broad--a.json'
+    raw = {'id': 'external/s/a', 'kind': 'whole', 'samples': samples, 'costs': costs, 'ratios': ratios}
+    path = folder / 'variant0/external--s--a.json'
     path.parent.mkdir()
     path.write_text(json.dumps(raw))
     evidence = {'schema_version': 1, 'artifact_type': 'quickjs-layout-panel',
                 'host': {}, 'host_node': 'test-host', 'held_out': False, 'pairs': 5,
-                **binaries, 'panels': [packet], 'case_files': {'variant0/broad--a.json': digest(path)}}
+                **binaries, 'panels': [packet], 'case_files': {'variant0/external--s--a.json': digest(path)}}
     (folder / 'panel.json').write_text(json.dumps(evidence))
-    policy = {'host': {}, 'host_node': 'test-host', 'cases': {'broad/a': {}}}
+    policy = {'host': {}, 'host_node': 'test-host', 'cases': {'external/s/a': {}}}
     return evidence, policy, raw, path
 
 
@@ -71,16 +71,16 @@ class EvidenceTests(unittest.TestCase):
                 evidence, policy, raw, path = fixture(folder)
                 mutate(evidence, raw)
                 path.write_text(json.dumps(raw))
-                evidence['case_files']['variant0/broad--a.json'] = digest(path)
+                evidence['case_files']['variant0/external--s--a.json'] = digest(path)
                 (folder / 'panel.json').write_text(json.dumps(evidence))
                 with self.assertRaises(ValueError):
                     replay(folder / 'panel.json', policy)
 
     def test_frozen_blind_plan_and_budget_are_enforced(self):
         gate = {'policy_path': 'benchmarks/policies/test.json', 'policy_sha256': 'a'*64,
-                'mechanism_class': 'instruction-blind', 'memory_wall_targets': ['broad/a'],
+                'mechanism_class': 'instruction-blind', 'memory_wall_targets': ['external/s/a'],
                 'panel_required': True, 'panel_pairs': 5, 'held_out_pairs': 30, 'formal_blocks': 30}
-        unit = {'layout_gate': gate, 'fast_gate': {'target_ids': ['broad/a']}}
+        unit = {'layout_gate': gate, 'fast_gate': {'target_ids': ['external/s/a']}}
         validate(unit)
         for key, value in (('panel_required', False), ('memory_wall_targets', []),
                            ('policy_path', '../escape'), ('panel_pairs', 4), ('held_out_pairs', 5)):
@@ -143,7 +143,7 @@ class PanelCollectionTests(unittest.TestCase):
             calls = []
             def take(case, candidate, base, pairs, tool, timeout, output):
                 calls.append((str(candidate), str(base)))
-                return screen.CaseResult('broad/a', 'whole', None,
+                return screen.CaseResult('external/s/a', 'whole', None,
                     {'instructions': [1.]*pairs, 'wall_ns': [1.]*pairs, 'cycles': []})
             with patch('tools.benchmark.layout_panel.host_identity', return_value={}), \
                  patch('tools.benchmark.layout_panel.matrix', side_effect=lambda p: identities[str(p)]), \
@@ -153,7 +153,7 @@ class PanelCollectionTests(unittest.TestCase):
                  patch('tools.benchmark.screen.check_load'), \
                  patch('tools.benchmark.screen.launch_preflight', return_value=[]), \
                  patch('tools.benchmark.screen.resolve_cases', return_value=[
-                     screen.CaseSpec('broad/a', 'whole', folder/'case.js')]), \
+                     screen.CaseSpec('external/s/a', 'whole', folder/'case.js')]), \
                  patch('tools.benchmark.layout_panel.measure', side_effect=take), \
                  patch('tools.benchmark.layout_evidence.replay'):
                 initial = measure_panel(Path('base000'), Path('cand000'), folder/'out', natural=True)
@@ -178,7 +178,7 @@ class CalibrationReplayTests(unittest.TestCase):
             sha = digest(Path(binaries[0]))
             (folder/'identity.json').write_text(json.dumps({'sha256': sha, 'binaries': binaries, 'host': {}}))
             ratios = {'wall_ns': [1.]*30, 'instructions': [1.]*30}
-            packet = {'pairs': 30, 'host': {}, 'cases': [{'id': 'broad/a', 'ratios': ratios}]}
+            packet = {'pairs': 30, 'host': {}, 'cases': [{'id': 'external/s/a', 'ratios': ratios}]}
             screen_path = folder/'screen.json'
             screen_path.write_text(json.dumps(packet))
             costs = {r: {'wall_ns': [100]*30, 'instructions': [10]*30} for r in ('base', 'candidate')}
@@ -188,8 +188,8 @@ class CalibrationReplayTests(unittest.TestCase):
                     samples.append({'argv': [binaries[role == 'candidate'], '--raw', '/tmp/case.js'],
                         'sample': {'wall_ns': 100, 'instructions': 10, 'stdout': 'OK'}})
             (folder/'cases').mkdir()
-            raw_path = folder/'cases/broad--a.json'
-            raw = {'id': 'broad/a', 'kind': 'whole', 'ratios': ratios, 'costs': costs, 'samples': samples}
+            raw_path = folder/'cases/external--s--a.json'
+            raw = {'id': 'external/s/a', 'kind': 'whole', 'ratios': ratios, 'costs': costs, 'samples': samples}
             raw_path.write_text(json.dumps(raw))
             self.assertEqual(replay_calibration(screen_path, sha), packet)
             raw['samples'][0]['sample']['wall_ns'] = 99
