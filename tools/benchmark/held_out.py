@@ -25,13 +25,14 @@ import argparse
 import base64
 import hashlib
 import json
+import os
 import re
 import tarfile
 import tempfile
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Any
 
 from .external_preview import (
@@ -42,7 +43,6 @@ from .external_preview import (
     Measurement,
     Source,
     SourceFile,
-    _bundle_source,  # noqa: F401  (re-exported for tests)
     _safe_path,
     _sha256_file,
     run_preview,
@@ -378,10 +378,8 @@ def _write_cache(target: Path, content: bytes) -> None:
         with tempfile.NamedTemporaryFile(dir=target.parent, delete=False) as handle:
             handle.write(content)
             handle.flush()
-            import os
             os.fsync(handle.fileno())
             temporary = Path(handle.name)
-        import os
         os.replace(temporary, target)
         temporary = None
     finally:
