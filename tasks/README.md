@@ -13,7 +13,6 @@ it to `archive/` with `git mv` and move its row below.
 
 | Task | Status | What it is |
 | --- | --- | --- |
-| [T053](T053-ordinary-own-slot-hot-read-fat-lto.md) guarded OwnSlot hot reads | active | Fresh current-recipe unit; general selected-entry cache fast path, one complete-portfolio screen. |
 | [T018](T018-broad-performance.md) broad performance | active | The performance campaign contract and its targets against QuickJS-NG. Start performance work here, then follow [the workflow](../docs/performance-workflow.md). |
 | [T040](T040-imac-general-performance.md) x86_64 general optimization | active | Fresh current-main comparison and exact-binary profiles, followed by independent general runtime units. |
 | [T045](T045-typed-loop-boxed-demand-provenance.md) boxed demand provenance | active | Ordinary identity-flow joins lose boxed demand; exact profiles and seed diagnosis precede a compiler-only unit. |
@@ -42,6 +41,7 @@ outcome column says what happened, not what to do next.
 
 | Task | Outcome |
 | --- | --- |
+| `T053-ordinary-own-slot-hot-read-fat-lto.md` | Hash-map -8.3% but six regression controls failed; sole attempt exhausted, runtime restored and exact baseline executable reproduced. |
 | `T051-counter-collection-smoke-contract.md` | Collector smoke test checks positive cycles without a nonportable absolute floor; fast/full gates passed on iMac. |
 | `T050-vm-layout-causality.md` | Isolated sampled typed-loop placement reproduces the 8-13% control regressions; stale x86 runtime order symbols confirmed; no runtime change retained. |
 | `T049-property-access-path-study.md` | Current-recipe 30-block baseline and path-cost study; single-probe candidate failed its only complete-portfolio screen and was reverted; no runtime optimization retained. |

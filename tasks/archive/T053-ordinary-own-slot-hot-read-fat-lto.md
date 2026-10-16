@@ -1,13 +1,14 @@
 # T053: Ordinary OwnSlot hot reads under the current compiler recipe
 
-- Status: active.
-- Implementation: present on the isolated branch; not promoted or integrated.
+- Status: closed-rejected; the sole complete screen failed.
+- Implementation: reverted and verified; candidate remains reproducible at
+  8763f1f9. No runtime optimization is promoted or integrated.
 - Verified at: transport 3feb19e3; fast/full gates, optimized 5170-case subset,
   all NG fixtures and reentrant getter/Proxy assertion passed on iMac.
 - Evidence: the frozen plan and current baseline/profiles below.
-- Unresolved: the single complete screen is running; no formal result yet.
-- Next action: collect the single frozen screen; retain no runtime change
-  unless the complete formal and exact-candidate conformance gates pass.
+- Unresolved: none for this unit; attempt budget exhausted.
+- Next action: none for this unit; structural layout work needs a separate
+  predeclared experiment and independent validation.
 
 ## Scope and generality
 
@@ -24,7 +25,7 @@ by JS source, names, arity, loop shape, iteration count or checksum. The target
 is current external rank 7, inside the declared top-eight ceiling; no override.
 Fresh counts also observe OwnSlot rejection in 3d-raytrace and Kraken AES.
 Those counts establish path reach, not speedup. Their complete measurements
-remain mandatory controls, as do the other 74 portfolio cases.
+remain mandatory controls, as do the other 73 portfolio cases.
 
 T041's old implementation/gate remain rejected and exhausted. This is a newly
 priced unit at a different compiler recipe and source revision, with fresh
@@ -76,3 +77,43 @@ move addresses. No address was selected from a timing result.
 76 cases x 5 paired measurements; pending. It uses immutable base/candidate
 copies, equal-length paths and the normal launch preflight. Do not rerun it
 for a favorable result, modify thresholds or discard a slow pair.
+
+## Sole screen and rejection
+
+Job 20261016T130336Z-general-own-slot-screen completed 76 cases x 5 pairs,
+wall time, exit 3 (gate FAIL), with no DISTURBED warning. Candidate binary
+4b39c6cd and base 926ee634 were immutable exact copies. Target hash-map median
+ratio is 0.917431 (all five pairs <1), retired instructions 0.927549. Its gain
+cannot accept six controls that exceed the frozen 1.03 ceiling:
+
+| Control | Median wall ratio |
+| --- | ---: |
+| broad/top_level_function_call | 1.0388 |
+| broad/local_read | 1.0797 |
+| broad/global_read | 1.1279 |
+| broad/empty_loop | 1.0343 |
+| broad/branch_arithmetic | 1.0842 |
+| broad/array_index_of | 1.0365 |
+
+Local/global/branch instruction ratios remain ~1.000. Actual typed-loop
+placements changed: interpreter closure 0x1002679a0 -> 0x100260a50, wide
+closure 0x1002775c0 -> 0x100270660; their sizes are unchanged (13792/13696).
+The wide activation also changed size 25888 -> 24704, so this is not an
+isolated one-address causality experiment. T050 independently establishes
+layout sensitivity; do not attribute every new difference to it by assumption.
+
+CI at 8763f1f9 passed (38905661157), but correctness does not override this
+performance failure. The one-attempt budget is exhausted. No favorable rerun,
+threshold change or formal comparison was taken. The source/test delta is
+restored to 9a0eeeca; the separately byte-verified neutral natural order stays.
+Fresh structural layout work needs its own contract; do not relabel this
+rejected unit as retained or quietly reset its attempt count.
+
+## Restoration verification
+
+Transport c985e9c3, job 20261016T134638Z-general-own-slot-restoration: fast and
+full gates pass after removing the two runtime/test deltas. Canonical release
+rebuild is exactly 926ee634ca3901b89c778478702a4fe993288ef7e8e69cd93c238c694595aa85,
+the original measured baseline. Runtime files have no diff from 9a0eeeca;
+only the independently byte-identical natural order and this evidence remain.
+No formal comparison was spent on the rejected candidate.
