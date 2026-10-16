@@ -13,7 +13,7 @@ it to `archive/` with `git mv` and move its row below.
 
 | Task | Status | What it is |
 | --- | --- | --- |
-| [T055](T055-layout-noise-control.md) layout noise control | active | Frozen same-source six-layout diagnostic of canonical and JCC-mitigated recipes; phase A only. |
+| [T055](T055-layout-noise-control.md) layout noise control | blocked | Static/correctness pass; JCC flag leaves text identical; frozen wall sampler fails with negative increments. |
 | [T054](T054-execution-layout-regions.md) stable execution regions | active | Frozen generic layout-preservation prototype; static pass, correctness/neutrality pending. |
 | [T018](T018-broad-performance.md) broad performance | active | The performance campaign contract and its targets against QuickJS-NG. Start performance work here, then follow [the workflow](../docs/performance-workflow.md). |
 | [T040](T040-imac-general-performance.md) x86_64 general optimization | active | Fresh current-main comparison and exact-binary profiles, followed by independent general runtime units. |
