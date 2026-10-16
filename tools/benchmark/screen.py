@@ -440,9 +440,9 @@ def load_plan_gate(path: Path) -> PlanGate:
             unit_id=unit["unit_id"],
             base_sha=unit["base_sha"],
             target_ids=tuple(gate["target_ids"]),
-            control_ids=tuple(gate["control_ids"]),
+            control_ids=tuple(gate.get("control_ids", [])),
             target_max=float(gate["target_max_candidate_over_base"]),
-            control_max=float(gate["control_max_candidate_over_base"]),
+            control_max=float(gate.get("control_max_candidate_over_base", 1.0)),
             layout_unit=unit if unit.get("schema_version") == 3 else None,
         )
     except (KeyError, TypeError, ValueError) as error:

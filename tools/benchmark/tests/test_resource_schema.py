@@ -82,7 +82,7 @@ class ResourceSchemaTests(unittest.TestCase):
         )
         self.assertEqual(
             measurement.protocol_sha256,
-            "901fbdc1e0de0a09ecbcf89ab67a94ea22fa59e639be80507d38cb3599f0a5a1",
+            "cf0624b2c3f748f90b18fbc48d83e514aea0184a3b1a9b5a719ca55f7307b0f8",
         )
         self.assertEqual(
             analysis.protocol_sha256,

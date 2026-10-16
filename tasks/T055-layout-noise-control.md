@@ -165,8 +165,8 @@ The 30-pair increment qualification above additionally requalifies the screen
 instruction guard. Before any canonical formal timing, freeze a separate
 30-block three-engine A/A bundle: candidate=base=4c9f959e, `perf-compare.sh
 --blocks 30 --workers 4`, exact current canonical recipe. The source inputs
-are unchanged from the measured A2 source. Snapshot role names are padded to
-ten characters so all three binary paths are distinct and equal length;
+are unchanged from the measured A2 source. Snapshot role/hash prefixes use a fixed width, preserving the role-dash
+prefix so all three binary paths are distinct and equal length;
 files are exclusively created once. This is a protocol correction, not a
 binary replacement sampler. Keep all existing formal health/linearity and
 <=3% CI requirements. Recompute geomean(case paired medians) and its joint
@@ -175,3 +175,10 @@ lane envelopes; no widening or precision waiver. Held-out remains its own
 30-pair whole-process qualification. Record the runner's stable hostname as
 an additional host attestation; same model/specifications on another host
 do not authorize reuse.
+
+
+The initially queued canonical job 20261016T190012Z-decision-rule-b-formal-aa30
+was cancelled before timing: underscore padding before the role-dash would
+be misclassified by the site's disturbance monitor. The corrected equal-
+length prefix keeps `candidate-`/`base-`/`quickjs-ng-`; the same 30-block
+plan is requeued, with no valid observation discarded or pooled.

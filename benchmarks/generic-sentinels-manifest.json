@@ -167,7 +167,7 @@
     "platform": "macos-arm64"
   },
   "protocol": {
-    "aggregate_sha256": "fd0d8946ce730759a1bf81e9d261a334e8d4153bf2e2ae8872f18a19bc685b65",
+    "aggregate_sha256": "d5ae2485115579cfeb0898def36b8dd07753fe37b01fdda7bf271129301bb620",
     "files": [
       "benchmarks/workloads/generic-sentinels.js",
       "scripts/benchmark.sh",

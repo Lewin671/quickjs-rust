@@ -120,6 +120,8 @@ class PlanBindingTests(unittest.TestCase):
             'policy_path': 'benchmarks/policies/test.json', 'policy_sha256': 'a'*64,
             'mechanism_class': 'cpu-work', 'memory_wall_targets': [], 'panel_required': False,
             'panel_pairs': 5, 'held_out_pairs': 30, 'formal_blocks': 30})
+        original['fast_gate'].pop('control_ids')
+        original['fast_gate'].pop('control_max_candidate_over_base')
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp)/'unit.json'
             path.write_text(json.dumps(original))

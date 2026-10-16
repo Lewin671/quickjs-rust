@@ -47,8 +47,8 @@ medians; lanes/portfolio are equal-case geomeans. Their 95% intervals jointly
 resample block IDs with 20,000 draws, seed 0, and require >=30 blocks and
 <=3% relative half-width. Promotion checks held-out upper intervals against
 its program/lane bands as well as point estimates. Legacy decisions retain
-their own schema and statistics. Shared formal snapshots use padded role
-names (ten characters) and exclusive creation; measurement protocols are
+their own schema and statistics. Shared formal snapshots use equal-length role/hash
+prefixes that preserve the role-dash, and exclusive creation; measurement protocols are
 throughput v10, sentinels v3 and resources v3.
 
 
@@ -61,3 +61,8 @@ host, and retains all reported costs. Missing/incomplete resource evidence
 blocks promotion. `layout_replay` is diagnostic-only; it accepts a qualified
 policy or explicitly unqualified `--diagnostic-bands` and never reopens an
 old unit's budget or changes its standing.
+
+Schema-3 `fast_gate` contains only `target_ids`,
+`target_max_candidate_over_base` and `max_attempts`. Its controls are the
+policy inventory minus targets; legacy `control_ids` and a single control
+ceiling are refused rather than silently ignored.

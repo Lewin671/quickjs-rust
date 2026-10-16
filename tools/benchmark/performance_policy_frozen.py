@@ -81,6 +81,8 @@ PREVIEW_IMPLEMENTATION_FILES = (
     "tools/benchmark/performance_policy_frozen.py",
     "tools/benchmark/performance_schema.py",
     "tools/benchmark/profile.py",
+    "tools/benchmark/screen.py",
+    "tools/benchmark/screen_replay.py",
     "tools/benchmark/preview.py",
     "tools/benchmark/preview_identity.py",
     "tools/benchmark/preview_sentinel.py",

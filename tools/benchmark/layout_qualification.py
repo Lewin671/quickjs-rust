@@ -71,6 +71,35 @@ def qualify(seed, portfolio, held_out, formal=None):
             'lanes': lanes, 'qualification': results}
 
 
+def replay_calibration(path, binary_sha256):
+    """Read the collector's summaries only after every raw case conserves costs."""
+    from .screen_replay import replay_case
+    folder = path.parent
+    identity = json.loads((folder / 'identity.json').read_text())
+    if identity['sha256'] != binary_sha256:
+        raise ValueError('calibration executable differs from frozen A2 natural binary')
+    binaries = identity['binaries']
+    if len(set(binaries)) != 2 or len({len(p) for p in binaries}) != 1:
+        raise ValueError('calibration paths are not distinct/equal-length')
+    for role in ('base0', 'cand0'):
+        if digest(folder / role / 'qjs') != identity['sha256']:
+            raise ValueError('calibration binary hash changed')
+    packet = json.loads(path.read_text())
+    expected_files = set()
+    for case in packet['cases']:
+        file = folder / 'cases' / (case['id'].replace('/', '--') + '.json')
+        expected_files.add(file.name)
+        raw = json.loads(file.read_text())
+        if raw['id'] != case['id'] or raw['ratios'] != case['ratios']:
+            raise ValueError('calibration raw/report mismatch')
+        replay_case(raw, 30, dict(zip(('base', 'candidate'), binaries)))
+    if {p.name for p in (folder / 'cases').glob('*.json')} != expected_files:
+        raise ValueError('calibration raw inventory mismatch')
+    if packet['host'] != identity['host'] or packet['pairs'] != 30:
+        raise ValueError('calibration host/protocol mismatch')
+    return packet
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--a2-bands', type=Path, required=True)
@@ -83,7 +112,10 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     paths = {'a2': args.a2_bands, 'portfolio': args.portfolio, 'held-out': args.held_out}
-    packets = {k: json.loads(p.read_text()) for k, p in paths.items()}
+    seed = json.loads(args.a2_bands.read_text())
+    packets = {'a2': seed,
+               'portfolio': replay_calibration(args.portfolio, seed['calibration_binary_sha256']),
+               'held-out': replay_calibration(args.held_out, seed['calibration_binary_sha256'])}
     attestation = json.loads(args.host_attestation.read_text())
     recorded = packets['portfolio']['host']
     current = attestation['host']
@@ -109,6 +141,10 @@ def main():
     from .bundle import verify
     folder = args.formal_bundle
     verify(folder / 'summary.json', folder / 'report.json', folder / 'external-report.json', folder / 'sentinel-report.json')
+    summary = json.loads((folder / 'summary.json').read_text())
+    if any(summary['engines'][r]['binary_sha256'] != seed['calibration_binary_sha256']
+           for r in ('candidate', 'base')):
+        raise ValueError('formal A/A must use the frozen A2 natural executable')
     replay_reports(folder / 'report.json', folder / 'external-report.json', folder / 'sentinel-report.json')
     from .layout_formal_raw import extract
     formal = extract(folder, attestation['node'])

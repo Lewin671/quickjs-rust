@@ -28,7 +28,7 @@ def fixture(folder):
     samples = []
     for pair in range(5):
         for role in (('base', 'candidate') if pair % 2 == 0 else ('candidate', 'base')):
-            samples.append({'argv': [binaries[role]['variants'][0]['path']],
+            samples.append({'argv': [binaries[role]['variants'][0]['path'], '--raw', '/tmp/case.js'],
                             'sample': {'wall_ns': 100, 'instructions': 10, 'stdout': 'OK\n'}})
     raw = {'id': 'broad/a', 'kind': 'whole', 'samples': samples, 'costs': costs, 'ratios': ratios}
     path = folder / 'variant0/broad--a.json'
@@ -121,6 +121,8 @@ class SnapshotTests(unittest.TestCase):
                          for role in ('candidate', 'base', 'quickjs-ng')]
                 self.assertEqual(len(set(paths)), 3)
                 self.assertEqual(len({len(str(p)) for p in paths}), 1)
+                for role, path in zip(('candidate', 'base', 'quickjs-ng'), paths):
+                    self.assertTrue(path.name.startswith(role + '-'))
                 with self.assertRaises(SnapshotError):
                     store.snapshot_engine('base', binary, digest(binary))
                 self.assertEqual(paths[1].read_bytes(), b'binary')
@@ -161,6 +163,41 @@ class PanelCollectionTests(unittest.TestCase):
             self.assertEqual(complete['panels'][0], initial['panels'][0])
             self.assertEqual(digest(folder/'out/panel.json'), before)
             self.assertTrue((folder/'out/complete.json').is_file())
+
+class CalibrationReplayTests(unittest.TestCase):
+    def test_calibration_replays_all_pairs_and_refuses_changed_costs_or_binary(self):
+        from tools.benchmark.layout_qualification import replay_calibration
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            binaries = []
+            for role in ('base0', 'cand0'):
+                path = folder/role/'qjs'
+                path.parent.mkdir()
+                path.write_bytes(b'calibration binary')
+                binaries.append(str(path))
+            sha = digest(Path(binaries[0]))
+            (folder/'identity.json').write_text(json.dumps({'sha256': sha, 'binaries': binaries, 'host': {}}))
+            ratios = {'wall_ns': [1.]*30, 'instructions': [1.]*30}
+            packet = {'pairs': 30, 'host': {}, 'cases': [{'id': 'broad/a', 'ratios': ratios}]}
+            screen_path = folder/'screen.json'
+            screen_path.write_text(json.dumps(packet))
+            costs = {r: {'wall_ns': [100]*30, 'instructions': [10]*30} for r in ('base', 'candidate')}
+            samples = []
+            for pair in range(30):
+                for role in (('base', 'candidate') if pair % 2 == 0 else ('candidate', 'base')):
+                    samples.append({'argv': [binaries[role == 'candidate'], '--raw', '/tmp/case.js'],
+                        'sample': {'wall_ns': 100, 'instructions': 10, 'stdout': 'OK'}})
+            (folder/'cases').mkdir()
+            raw_path = folder/'cases/broad--a.json'
+            raw = {'id': 'broad/a', 'kind': 'whole', 'ratios': ratios, 'costs': costs, 'samples': samples}
+            raw_path.write_text(json.dumps(raw))
+            self.assertEqual(replay_calibration(screen_path, sha), packet)
+            raw['samples'][0]['sample']['wall_ns'] = 99
+            raw_path.write_text(json.dumps(raw))
+            with self.assertRaisesRegex(ValueError, 'costs differ'):
+                replay_calibration(screen_path, sha)
+            with self.assertRaisesRegex(ValueError, 'frozen A2'):
+                replay_calibration(screen_path, '0'*64)
 
 
 if __name__ == '__main__':

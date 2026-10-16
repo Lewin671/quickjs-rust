@@ -22,8 +22,8 @@ path under test. The six sentinels are mandatory controls for every unit.
 External and held-out times include startup, parsing and shutdown; held-out is
 acceptance only and never a source of work.
 
-- A **diagnostic screen** compares two executables on hardware counters in
-  minutes. It writes no decision artifact and cannot retain or reject a unit.
+- A **diagnostic screen** reports dual metrics and a screening verdict.
+  Retaining a unit still requires a complete formal decision.
 - A **formal run** is one sealed three-engine bundle from
   `scripts/perf-compare.sh` at 30 or 60 blocks. `queue` and `decide` read
   that bundle.

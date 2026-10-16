@@ -11,6 +11,7 @@ import argparse
 import platform
 import os
 import shutil
+import sys
 import subprocess
 import tarfile
 from pathlib import Path
@@ -88,8 +89,13 @@ def main():
     parser.add_argument('--revision', required=True)
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
-    build(args.revision, args.output)
+    try:
+        build(args.revision, args.output)
+    except (ValueError, OSError, subprocess.CalledProcessError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+    return 0
 
 
 if __name__ == '__main__':
-    main()
+    raise SystemExit(main())

@@ -1,4 +1,5 @@
 {
+  "calibration_binary_sha256": "926ee634ca3901b89c778478702a4fe993288ef7e8e69cd93c238c694595aa85",
   "cases": {
     "broad/array_allocation": {
       "instruction_band": 1.0021,

@@ -425,16 +425,13 @@ def load_unit(path: Path) -> tuple[dict[str, Any], str]:
         _fraction(receipt["inclusive_fraction"], f"performance unit.profile_evidence[{index}].inclusive_fraction")
 
     fast_gate = _object(unit["fast_gate"], "performance unit.fast_gate")
-    _keys(
-        fast_gate,
-        {
-            "target_ids", "control_ids", "target_max_candidate_over_base",
-            "control_max_candidate_over_base", "max_attempts",
-        },
-        "performance unit.fast_gate",
-    )
+    fast_keys = {"target_ids", "target_max_candidate_over_base", "max_attempts"}
+    if version < 3:
+        fast_keys |= {"control_ids", "control_max_candidate_over_base"}
+    _keys(fast_gate, fast_keys, "performance unit.fast_gate")
     target_ids = _unique_strings(fast_gate["target_ids"], "performance unit.fast_gate.target_ids", _opportunity_id)
-    _unique_strings(fast_gate["control_ids"], "performance unit.fast_gate.control_ids", _opportunity_id)
+    if version < 3:
+        _unique_strings(fast_gate["control_ids"], "performance unit.fast_gate.control_ids", _opportunity_id)
     if set(target_ids) != set(priority["opportunity_ids"]):
         raise PerformanceDecisionError(
             "performance unit.fast_gate.target_ids: must equal priority opportunity_ids"
@@ -445,12 +442,13 @@ def load_unit(path: Path) -> tuple[dict[str, Any], str]:
     )
     if target_max >= 1:
         raise PerformanceDecisionError("performance unit fast gate target must require an improvement")
-    control_max = _ratio(
-        fast_gate["control_max_candidate_over_base"],
-        "performance unit.fast_gate.control_max_candidate_over_base",
-    )
-    if control_max < 1:
-        raise PerformanceDecisionError("performance unit control gate cannot require every control to improve")
+    if version < 3:
+        control_max = _ratio(
+            fast_gate["control_max_candidate_over_base"],
+            "performance unit.fast_gate.control_max_candidate_over_base",
+        )
+        if control_max < 1:
+            raise PerformanceDecisionError("performance unit control gate cannot require every control to improve")
     if _integer(fast_gate["max_attempts"], "performance unit.fast_gate.max_attempts", 1) > 2:
         raise PerformanceDecisionError("performance unit max_attempts must not exceed two")
 
@@ -464,7 +462,7 @@ def load_unit(path: Path) -> tuple[dict[str, Any], str]:
         if not _boolean(value, f"performance unit.promotion_gate.{key}"):
             raise PerformanceDecisionError(f"performance unit.promotion_gate.{key}: must remain true")
     declared = set(priority["opportunity_ids"]) | set(target_ids)
-    declared |= set(fast_gate["control_ids"])
+    declared |= set(fast_gate.get("control_ids", []))
     for receipt in profile_evidence:
         declared |= set(receipt["opportunity_ids"])
     if kind == "migration":

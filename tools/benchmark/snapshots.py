@@ -23,13 +23,13 @@ class SnapshotStore:
         (self.path / "workloads").mkdir()
 
     def snapshot_engine(self, role: str, source: Path, expected_sha256: str) -> Path:
-        destination = self.path / "engines" / f"{role:_<10}-{expected_sha256[:16]}"
+        destination = self.path / "engines" / f"{role}-{'_' * (10 - len(role))}{expected_sha256[:16]}"
         self._copy_verified(source, destination, expected_sha256, 0o500)
         return destination
 
     def snapshot_version_probe(self, role: str, source: Path, expected_sha256: str) -> Path:
         """Create a disposable executable copy that measurement never uses."""
-        destination = self.path / "version-probes" / f"{role:_<10}-{expected_sha256[:16]}"
+        destination = self.path / "version-probes" / f"{role}-{'_' * (10 - len(role))}{expected_sha256[:16]}"
         self._copy_verified(source, destination, expected_sha256, 0o500)
         return destination
 

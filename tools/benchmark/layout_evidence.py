@@ -10,7 +10,7 @@ from pathlib import Path
 
 from .layout_identity import digest, OFFSETS
 from .layout_policy import rows
-from .screen import MIN_INCREMENT_NS
+from .screen_replay import replay_case
 
 
 def replay(path: Path, policy, engines=None, *, held=False):
@@ -59,36 +59,8 @@ def replay(path: Path, policy, engines=None, *, held=False):
             raw = json.loads(file.read_text())
             if raw['id'] != case['id'] or raw['ratios'] != case['ratios']:
                 raise ValueError('layout raw/report case mismatch')
-            internal = raw['kind'] == 'internal'
-            samples = raw['samples']
-            if len(samples) != pairs * (4 if internal else 2):
-                raise ValueError('layout raw sample count mismatch')
-            costs = {r: {m: [] for m in ('wall_ns', 'instructions')} for r in ('candidate', 'base')}
-            cursor = 0
-            for pair in range(pairs):
-                outputs = {}
-                for role in (('base', 'candidate') if pair % 2 == 0 else ('candidate', 'base')):
-                    taken = samples[cursor:cursor + (2 if internal else 1)]
-                    cursor += len(taken)
-                    binary = evidence[role]['variants'][k]['path']
-                    if any(s['argv'][0] != binary for s in taken):
-                        raise ValueError('layout sample binary path mismatch')
-                    outputs[role] = [s['sample']['stdout'] for s in taken]
-                    for metric in ('wall_ns', 'instructions'):
-                        value = taken[-1]['sample'][metric]
-                        if internal:
-                            value -= taken[0]['sample'][metric]
-                        if value <= 0 or (internal and metric == 'wall_ns' and value < MIN_INCREMENT_NS):
-                            raise ValueError('invalid layout increment')
-                        costs[role][metric].append(value)
-                if outputs['base'] != outputs['candidate']:
-                    raise ValueError('layout stdout mismatch')
-            if costs != raw['costs']:
-                raise ValueError('layout costs differ from raw replay')
-            for metric in ('wall_ns', 'instructions'):
-                rebuilt = [c / b for c, b in zip(costs['candidate'][metric], costs['base'][metric])]
-                if rebuilt != case['ratios'][metric]:
-                    raise ValueError('layout ratios differ from raw replay')
+            replay_case(raw, pairs, {role: evidence[role]['variants'][k]['path']
+                                     for role in ('base', 'candidate')})
     if expected_files != set(evidence['case_files']):
         raise ValueError('layout raw file inventory mismatch')
     return evidence

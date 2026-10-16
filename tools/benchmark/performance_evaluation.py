@@ -77,7 +77,7 @@ def decide(unit, unit_sha, queue, queue_sha, summary, summary_sha, broad, broad_
     metrics = comparison_index(broad, external, sentinel, metric)
     wall = comparison_index(broad, external, sentinel, "wall_time") if metric == "cycles" else metrics
     gate = unit["fast_gate"]
-    controls = set(gate["control_ids"])
+    controls = set(gate.get("control_ids", []))
     controls.update(f"sentinel/{case}" for case in inventories()["sentinel"])
     targets = set(gate["target_ids"])
     if mode == "stage":
@@ -85,7 +85,7 @@ def decide(unit, unit_sha, queue, queue_sha, summary, summary_sha, broad, broad_
         target_limit = control_limit = unit["migration"]["stage_max_candidate_over_base"]
     else:
         target_limit = gate["target_max_candidate_over_base"]
-        control_limit = gate["control_max_candidate_over_base"]
+        control_limit = gate.get("control_max_candidate_over_base", 1.0)
     if mode == "promotion":
         if any(suite.get("complete_comparison") is not True or suite.get("complete_base_comparison") is not True
                for suite in external["suites"]):
