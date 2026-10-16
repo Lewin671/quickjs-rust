@@ -13,7 +13,6 @@ it to `archive/` with `git mv` and move its row below.
 
 | Task | Status | What it is |
 | --- | --- | --- |
-| [T048](T048-preview-cargo-config-compatibility.md) preview config compatibility | active | Allow the audited prior Rust-flag order when comparing across compiler recipe adoption. |
 | [T018](T018-broad-performance.md) broad performance | active | The performance campaign contract and its targets against QuickJS-NG. Start performance work here, then follow [the workflow](../docs/performance-workflow.md). |
 | [T040](T040-imac-general-performance.md) x86_64 general optimization | active | Fresh current-main comparison and exact-binary profiles, followed by independent general runtime units. |
 | [T045](T045-typed-loop-boxed-demand-provenance.md) boxed demand provenance | active | Ordinary identity-flow joins lose boxed demand; exact profiles and seed diagnosis precede a compiler-only unit. |
@@ -42,6 +41,7 @@ outcome column says what happened, not what to do next.
 
 | Task | Outcome |
 | --- | --- |
+| `T048-preview-cargo-config-compatibility.md` | Fixed preview rejection of the audited previous Rust-flag order; main CI, full Test262 coverage and hosted preview passed. |
 | `T047-compiler-recipe-adoption.md` | Adopted fat LTO/16 units/abort for CLI release and performance builds; exact measured binary reproduced; correctness gates passed. |
 | `T046-compiler-configuration-study.md` | Completed same-source CLI compiler study; fat LTO/16 units/abort recommended on x86_64 macOS; production defaults unchanged. |
 | `T044-selected-stream-virtual-bank-typed-loops.md` | Two failed screens; runtime/layout reverted, generic tools and semantic coverage retained. |
