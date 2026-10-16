@@ -10,9 +10,6 @@
 //! tier's binary-coercion path: user hooks carry their own cells and global
 //! effects go through the realm.
 
-#[cfg(test)]
-mod tests;
-
 use std::rc::Rc;
 
 use crate::bytecode::named_property_cache::{CacheProbe, NamedPropertyCache};
@@ -37,9 +34,8 @@ pub(super) fn get_prop_named_hot(object: &Value, cache: &NamedPropertyCache) -> 
     cache.probe_hot(object_ref)
 }
 
-/// Continues a named read after `get_prop_named_hot` returned `None`.
-/// Callers preserve that first probe; this cold path keeps the ordinary/exotic
-/// guards, full cache walk and general [[Get]] fallback without probing twice.
+/// Reads the statically named property `key` of `object`, consulting `cache`
+/// before the general path, exactly as `Op::GetPropNamed` does.
 #[cold]
 #[inline(never)]
 pub(super) fn get_prop_named(
@@ -53,6 +49,9 @@ pub(super) fn get_prop_named(
         && !crate::typed_array::is_typed_array_object(object_ref)
         && !object_ref.is_module_namespace_exotic()
     {
+        if let Some(value) = cache.probe_hot(object_ref) {
+            return Ok(value);
+        }
         let probe = cache.probe(object_ref);
         if let CacheProbe::Own(value) = probe {
             return Ok(value);
@@ -896,9 +895,6 @@ pub(in crate::bytecode) fn field_initializer_member_read(
     let receiver = thunk.upvalues.get(index)?.get();
     if receiver.is_uninitialized_lexical_marker() {
         return None;
-    }
-    if let Some(value) = get_prop_named_hot(&receiver, cache) {
-        return Some(Ok(value));
     }
     Some(get_prop_named(&receiver, key, cache, env))
 }

@@ -1,13 +1,16 @@
 # T049: Property-read path cost study with the adopted compiler recipe
 
-- Status: active.
-- Implementation: candidate present only on the study branch; main runtime unchanged.
+- Status: closed-rejected.
+- Implementation: candidate reverted; production runtime remains byte-for-byte
+  source-identical to `21e55fe2`. Candidate preserved at `c1c6d13b`.
 - Verified at: base `21e55fe2b530be09ea0453fcb87cde3b36423db3`, 2026-10-16;
   30-block current-recipe comparison, exact profiles and feature-only counts.
 - Evidence: local artifact, not retained: workspace queue job
   `20261016T101305Z-property-current-baseline`.
-- Unresolved: operation reach, exact-binary cost and net runtime benefit.
-- Next action: run the one frozen complete-portfolio screen of the verified candidate.
+- Unresolved: causal attribution of code-layout regressions; broader object
+  representation and loop-executor costs are not resolved by this study.
+- Next action: none for this exhausted unit. Future work needs fresh
+  layout/profile evidence and a newly frozen plan.
 
 ## Scope
 
@@ -83,7 +86,7 @@ loop work is handled by loop plans, not the generic cache handlers; these
 counters do not claim there are no actual property accesses. These two VM
 leaves do not currently justify independent production candidates.
 
-[The frozen single-hot-probe unit](performance-units/compact-named-read-single-hot-probe.json)
+[The frozen single-hot-probe unit](../performance-units/compact-named-read-single-hot-probe.json)
 validates against that queue and three exact profile receipts. It gives one
 attempt, hash-map <=0.98, every other case <=1.03. No runtime edit existed
 when the plan was frozen. Compiler recipes, order files and portfolios stay
@@ -105,3 +108,59 @@ fixtures under UTC/C locale in job
 changes do not alter any Rust/build input. Optimized candidate SHA-256:
 `c07f0af58c956041e966bdf8b4e40e8f1599188280ce1b8f5d00a2bd9a1f232a`.
 Timing is still pending; this is not a retention claim.
+
+## One screen and closure
+
+Candidate `c1c6d13b1e54416e731a95078e10bc91b291d318`, binary SHA above, ran
+job `20261016T105327Z-property-single-probe-screen` with all 76 cases, five
+pairs each. Logical engine paths have equal lengths. Both actual optimized
+binaries also pass the three focused semantic assertions before timing.
+Load average 1.15 before/1.10 after; no disturbance or load warning. All five paired ratios
+are retained; no favorable rerun was performed.
+
+Hash-map wall ratios: `[1.006519, 0.982182, 0.977115, 0.991311, 0.981446]`;
+median `0.982182` misses the frozen `0.98` target, and one pair fails to
+improve. Control medians also fail: branch_arithmetic `1.085409`, global_read
+`1.124588`, local_read `1.083982`, property_dynamic_read `1.031830`.
+CDjs median is `0.993893`; class-field raytrace `0.989708`.
+Geomeans of case medians: broad `1.012411`, sentinels `1.006730`, external
+`0.998252`. These are screening observations, not formal decision evidence.
+The screen exits 3/FAIL, exhausts the one-attempt budget and does not receive
+a 30-block candidate formal run. No optimization is retained.
+
+Static address-range disassembly audit in job
+`20261016T110950Z-property-machine-code-audit` confirms a code-size side effect:
+compact cold named read shrinks 1936->1312 bytes (adjacent-symbol distance,
+including alignment); field initializer grows 512->1104. The ordinary VM entry
+moves from `0x100115020` to `0x100115270` (+592 bytes), while its size is still
+9360 bytes and its instruction-mnemonic sequence is identical. Wide executor
+address/size/mnemonic sequence are unchanged. This is not a byte/operand
+identity claim, and no layout-only counterfactual was timed: layout is a
+supported explanation to investigate, not a proven sole cause of regressions.
+Two earlier static extraction scripts failed to find local symbol labels;
+the address-range extraction succeeded without any performance remeasurement.
+
+Candidate fast/full gates, optimized 5170-case Test262 subset, UTC NG fixtures
+and CI38890193342 pass. The candidate was not rescanned on all 42672 configured
+Test262 cases and has no formal promotion standing. Restoring its two runtime
+files makes every Rust/build/tool/benchmark input identical to `21e55fe2`;
+restoration snapshot `e70a064cb2a872d8156c689deec5b677e2f69a3d` passes the fast and full gates in job
+`20261016T111505Z-property-study-restoration-check`, including all 5170 curated
+cases. Closure after that check changes only task prose, not any build input.
+
+## Deliverables and next research direction
+
+The Chinese report and reproducible input/result tables are local artifacts,
+not retained in the repository: workspace `outputs/quickjs-property-study/`
+contains `report.md`, `study.json`, `screen-cases.csv`, profile counts and the
+candidate patch. Queue directories named above retain raw pairs, binaries,
+profiles, diagnostic patches and execution-script snapshots.
+
+The tested duplicate-probe deletion does not justify production adoption.
+The ordinary VM leaf/proof changes have low observed reach, and the generic
+cache edits do not address most sentinel loop work. Prioritize build-specific
+hot-symbol/layout verification, then price the actual loop/wide execution
+paths. Integer property-name IDs, shared shape coverage and value transport
+remain structural hypotheses, not measured benefits or a reason to rewrite
+objects/GC now. Historical rejected hot-own-slot and prototype shortcuts stay
+closed until new evidence supports a separate plan.

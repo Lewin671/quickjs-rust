@@ -13,7 +13,6 @@ it to `archive/` with `git mv` and move its row below.
 
 | Task | Status | What it is |
 | --- | --- | --- |
-| [T049](T049-property-access-path-study.md) property path study | active | Measure repeated cache probes and receiver-miss proof reuse under the adopted compiler recipe. |
 | [T018](T018-broad-performance.md) broad performance | active | The performance campaign contract and its targets against QuickJS-NG. Start performance work here, then follow [the workflow](../docs/performance-workflow.md). |
 | [T040](T040-imac-general-performance.md) x86_64 general optimization | active | Fresh current-main comparison and exact-binary profiles, followed by independent general runtime units. |
 | [T045](T045-typed-loop-boxed-demand-provenance.md) boxed demand provenance | active | Ordinary identity-flow joins lose boxed demand; exact profiles and seed diagnosis precede a compiler-only unit. |
@@ -42,6 +41,7 @@ outcome column says what happened, not what to do next.
 
 | Task | Outcome |
 | --- | --- |
+| `T049-property-access-path-study.md` | Current-recipe 30-block baseline and path-cost study; single-probe candidate failed its only complete-portfolio screen and was reverted; no runtime optimization retained. |
 | `T048-preview-cargo-config-compatibility.md` | Fixed preview rejection of the audited previous Rust-flag order; main CI, full Test262 coverage and hosted preview passed. |
 | `T047-compiler-recipe-adoption.md` | Adopted fat LTO/16 units/abort for CLI release and performance builds; exact measured binary reproduced; correctness gates passed. |
 | `T046-compiler-configuration-study.md` | Completed same-source CLI compiler study; fat LTO/16 units/abort recommended on x86_64 macOS; production defaults unchanged. |
