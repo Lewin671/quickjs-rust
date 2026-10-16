@@ -228,13 +228,8 @@ for source in "$CANDIDATE_SOURCE" "$BASE_SOURCE"; do
     echo "error: legacy source-local Cargo config is not allowed in hosted preview" >&2
     exit 2
   fi
-  if [ -e "$source/.cargo/config.toml" ]; then
-    if [ ! -f "$EXPECTED_CARGO_CONFIG" ] \
-      || ! cmp -s "$source/.cargo/config.toml" "$EXPECTED_CARGO_CONFIG"; then
-      echo "error: source-local Cargo config does not match the trusted harness" >&2
-      exit 2
-    fi
-  fi
+  (cd "$HARNESS_ROOT" && python3 -m tools.benchmark.preview verify-cargo-config \
+    --source "$source" --expected "$EXPECTED_CARGO_CONFIG")
 done
 
 CURRENT_PHASE="reference_setup"

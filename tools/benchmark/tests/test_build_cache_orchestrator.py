@@ -308,8 +308,23 @@ exec "$TEST_REAL_PYTHON" "$@"
 
             environment.pop("TEST_DIRTY_BUILD")
             (base / ".cargo").mkdir()
+            current = (harness / ".cargo/config.toml").read_text()
+            previous = current.replace(
+                '["-Csymbol-mangling-version=v0", "-Cllvm-args=-align-all-functions=4"]',
+                '["-Cllvm-args=-align-all-functions=4", "-Csymbol-mangling-version=v0"]',
+            )
+            self.assertNotEqual(previous, current)
+            (base / ".cargo/config.toml").write_text(previous)
+            legacy, legacy_provenance = invoke("previous-flag-order")
+            self.assertEqual(legacy.returncode, 0, legacy.stderr)
+            self.assertIsNotNone(legacy_provenance)
+            # The source stays clean; only the trusted encoded flags reach cargo.
+            self.assertEqual((base / ".cargo/config.toml").read_text(), previous)
+            self.assertEqual(rustflags_log.read_text().split("\x1f"),
+                             ["-Csymbol-mangling-version=v0", "-Cllvm-args=-align-all-functions=4"])
             (base / ".cargo/config.toml").write_text(
-                "[build]\nrustc-wrapper = \"untrusted\"\n", encoding="utf-8"
+                previous.replace("[build]\n", '[build]\nrustc-wrapper = "untrusted"\n'),
+                encoding="utf-8"
             )
             mismatch, mismatch_provenance = invoke(
                 "mismatched-config", require_provenance=False

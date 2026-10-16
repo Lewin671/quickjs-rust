@@ -379,6 +379,24 @@ def verify_source(args: argparse.Namespace) -> None:
         )
 
 
+def verify_cargo_config(args: argparse.Namespace) -> None:
+    config = args.source / ".cargo/config.toml"
+    if not config.exists():
+        return
+    trusted = args.expected.read_bytes()
+    actual = config.read_bytes()
+    if actual == trusted:
+        return
+    # The compiler study reversed just these flags. The builder overrides them
+    # with CARGO_ENCODED_RUSTFLAGS for both revisions, so admit this exact old
+    # spelling without accepting wrappers, linkers or any other config changes.
+    current = b'rustflags = ["-Csymbol-mangling-version=v0", "-Cllvm-args=-align-all-functions=4"]'
+    previous = b'rustflags = ["-Cllvm-args=-align-all-functions=4", "-Csymbol-mangling-version=v0"]'
+    if trusted.count(current) == 1 and actual == trusted.replace(current, previous, 1):
+        return
+    raise PreviewError("source-local Cargo config does not match the trusted harness")
+
+
 def _comparison(
     report: dict[str, Any], key: str, label: str, expected: tuple[str, ...],
 ) -> dict[str, Any]:
@@ -644,6 +662,11 @@ def _parser() -> argparse.ArgumentParser:
     verify.add_argument("--source", type=Path, required=True)
     verify.add_argument("--revision", required=True)
     verify.set_defaults(function=verify_source)
+
+    config = commands.add_parser("verify-cargo-config")
+    config.add_argument("--source", type=Path, required=True)
+    config.add_argument("--expected", type=Path, required=True)
+    config.set_defaults(function=verify_cargo_config)
 
     build = commands.add_parser("prepare")
     for name in (
