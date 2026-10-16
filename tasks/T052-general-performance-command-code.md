@@ -53,3 +53,15 @@ The host checks Command Code's actual diff and log, not its summary alone.
 Run focused tooling tests, change-aware gate and full gate for the repair.
 Runtime units additionally require semantic coverage, NG comparisons and
 Test262 verification as specified by their frozen plan and T018/T022.
+
+## Frozen layout-maintenance diagnostic
+
+Before adopting a new production order, try exactly one natural-order replay:
+list the exact baseline's unique named functions in actual __text address
+order, excluding __mh_execute_header and symbols outside that section. Build
+with the identical canonical recipe in a clean temporary worktree. Adoption
+requires FULL executable SHA-256 equality to the measured baseline. If it
+changes any byte, retain the diagnostic and do not tune/retry or adopt it.
+No function offset is searched or selected from timing. This proves neutrality
+of this replay, not invariance under future function-size/toolchain changes.
+The new symbol audit must expose a future stale or ambiguous layout.
