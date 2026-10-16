@@ -1,16 +1,18 @@
-# T055: Layout noise control, A2 complete / B proposal
+# T055: Layout noise control, phase B qualification
 
-- Status: active; phase B implementation and host qualification in progress.
-- Implementation: layout builder, dual-metric verdicts and schema-3 tools
-  present; no qualified policy or production adoption yet.
-- Verified at: frozen screen calibration c35ed86c, 2026-10-16; focused rule,
-  historical replay, raw-evidence and snapshot tests pass (24 tests).
-- Evidence: [A2 tables](archive/T055-phase-a2-data.md), committed replay
-  fixtures under tools/benchmark/tests/fixtures/layout-policy and B plan below.
-- Unresolved: complete 30-pair screen/held-out and canonical 30-block A/A;
-  qualification, exact builder audit and final gates still pending.
-- Next action: fetch/review all queued calibration jobs; publish a policy only
-  if the frozen qualification passes. Otherwise report the failure for lead review.
+- Status: active; phase B tools complete, qualification pending after two
+  DISTURBED runs were rejected in full.
+- Implementation: builder/auditor, schema-3 dual-metric decisions and mandatory
+  held-out/resource gates present; no qualified policy or adoption yet.
+- Verified at: b9e47b19, 2026-10-16; staged fast gate passes, including 521
+  benchmark tool tests. Original 76x30 and 9x30 raw conservation replays pass;
+  their timing/counter observations remain ineligible due to disturbance.
+- Evidence: [A2 tables](archive/T055-phase-a2-data.md), committed replay fixtures
+  under tools/benchmark/tests/fixtures/layout-policy, frozen B plan/jobs below.
+- Unresolved: valid screen/held-out replacements, canonical 30-block A/A,
+  builder correctness, final full gate and qualification are still pending.
+- Next action: inspect complete queue logs; use only undisturbed replacements.
+  Publish a policy only if frozen qualification passes; otherwise report for lead review.
 
 ## Historical phase A
 
@@ -203,3 +205,10 @@ before execution to keep both qualification lanes on the frozen harness.
 The seed's host binding uses only non-timing identity from the discarded
 job, cross-checked against recorded A2 node/CPU/OS/Rust/Cargo/recipe; the
 replacement must match that identity exactly. No statistics are reused.
+
+
+The held-out run also completed (3113 s, exit 0) but is wholly ineligible:
+searchpartyuseragent reached 201.6% CPU at 20:23:13 UTC. Replacement:
+20261016T203135Z-decision-rule-b-heldout30-replacement1-frozen (c35ed86c).
+The guarded qualification job is now 20261016T203215Z-decision-rule-b-qualification-replacement;
+full gate at b9e47b19 is 20261016T195940Z-decision-rule-b-full-gate-complete.

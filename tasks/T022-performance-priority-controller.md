@@ -75,8 +75,8 @@ variable GitHub-hosted preview numbers into fixed-hardware performance claims.
 
 ## Layout-robust decisions
 
-New units use the host-bound schema-3 rule qualified in
-[T055](T055-layout-noise-control.md). Older plans and their rejected budgets
+New units use the host-bound schema-3 rule; adoption requires the qualified
+policy produced under [T055](T055-layout-noise-control.md). Older plans and their rejected budgets
 are historical and never acquire an extra attempt from this rule change.
 
 - Freeze targets/payoffs, controls, mechanism class, memory wall targets,

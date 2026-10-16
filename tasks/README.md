@@ -14,7 +14,7 @@ it to `archive/` with `git mv` and move its row below.
 | Task | Status | What it is |
 | --- | --- | --- |
 | [T056](T056-interpreter-core-v2.md) interpreter core v2 | active | Target design for ordinary-path atoms/shapes, stable single-Vm frames and an 8-byte value word; implementation not started. |
-| [T055](T055-layout-noise-control.md) layout noise control | active | A2 complete: six full screens without DISTURBED; observed case/lane bands and phase B proposal await lead review. |
+| [T055](T055-layout-noise-control.md) layout noise control | active | B tools present; two disturbed qualifications replaced in full, valid data and final gates pending. |
 | [T018](T018-broad-performance.md) broad performance | active | The performance campaign contract and its targets against QuickJS-NG. Start performance work here, then follow [the workflow](../docs/performance-workflow.md). |
 | [T040](T040-imac-general-performance.md) x86_64 general optimization | active | Fresh current-main comparison and exact-binary profiles, followed by independent general runtime units. |
 | [T045](T045-typed-loop-boxed-demand-provenance.md) boxed demand provenance | active | Ordinary identity-flow joins lose boxed demand; exact profiles and seed diagnosis precede a compiler-only unit. |
