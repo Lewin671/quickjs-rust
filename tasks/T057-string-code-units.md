@@ -1,15 +1,15 @@
 # T057: String code-unit migration
 
-- Status: active; development policy v3 qualified, stage-1 plan next.
+- Status: active; stage-1 plan frozen and validated, implementation next.
 - Implementation: none; target architecture and stage boundaries documented.
-- Verified at: registration `25158c8b98555efcbfccee1a70df9c5e7817a719`,
-  2026-10-17; staged documentation fast gate, context and whitespace checks pass.
-- Evidence: design below and the evidence/coordination record in this file.
-- Unresolved: stage-1 profile evidence on the exact queue binary, frozen plan,
-  implementation and performance/correctness decisions.
-- Next action: development targets are now eligible under qualified
-  [policy v3](archive/T057-development-policy.md); validate and commit the stage-1
-  plan from the v3 queue and exact-binary profiles.
+- Verified at: plan `string-handles-ascii-search-boundaries` validated against
+  v3 queue `424a1e79` on 2026-10-17 (validate-unit status valid, unit SHA-256
+  `d5536a29`); no runtime change yet.
+- Evidence: design below, [stage-1 plan](performance-units/string-handles-ascii-search-boundaries.json)
+  and the stage-1 record in this file.
+- Unresolved: implementation, correctness gates, screen, formal and held-out decision.
+- Next action: implement stage 1 per the design, then fast/full gates and the
+  budgeted v3 screen.
 
 ## Goal and scope
 
@@ -106,3 +106,26 @@ real matching work remains outside stage 1. Receipt SHA-256:
 `8c191b466278e0315410e92bdf0650246ec13b943e69ad5727acff0b5bd791b5`.
 Selection still awaits the complete clean development job, v3 qualification
 and the validated frozen runtime plan.
+
+## Stage-1 plan (frozen before runtime edits)
+
+Plan [`string-handles-ascii-search-boundaries`](performance-units/string-handles-ascii-search-boundaries.json):
+leaf, schema 3, base/queue candidate 351004f3 (image c7f0f66a), queue SHA-256
+`424a1e79...`, policy v3 `f655f25a...`, `cpu-work`, natural screen
+(no imprecise v3 case forces K=6), 2 attempts, both targets at most 0.95 and
+beyond their reciprocal bands (papaparse 1.0250, regexp-dna 1.0335); all
+other 84 policy cases are controls. Profile root (workspace-local):
+`outputs/t057-stage1/profiles/`.
+
+| Receipt | Exact-image profile | Stage-1 cost (inclusive) |
+| --- | --- | --- |
+| papaparse `bd02ec4a` | job `20261017T135712Z-t057-stage1-v3-profiles`, 60 s over two passes, 50158 samples | indexOf 4746 (9.46%), of which uncached ASCII scan in `byte_offset_for_char_index` 4556 |
+| regexp-dna `5fe9402e` | job `20261017T082306Z-...-development30`, 10 s of 100 passes, 8331 samples | per-exec subject copy rebuilds matcher view: `prepare_input` 1582 (19%) |
+
+js-yaml was also profiled (receipt `51f88495`, 16646 samples): String/RegExp
+handle or boundary costs are below 1%; it stays a control. The papaparse
+profile's dominant cost is outside stage 1: the lazy `[^]*?` RegExp replace is
+42710 inclusive (85%), 38165 in `SimpleAtom::step`, because
+`match_atom_and_continuation` measures the maximal fixed-width run with
+`simple_atom_max_count` before trying the lazy minimum, so each match scans
+to the end of the subject. That is a separate general matcher unit.

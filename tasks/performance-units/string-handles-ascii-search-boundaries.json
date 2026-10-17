@@ -1,0 +1,76 @@
+{
+  "schema_version": 3,
+  "unit_kind": "leaf",
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "string-handles-ascii-search-boundaries",
+  "base_sha": "351004f386f4c2c1d870467ae6e1e481952a330c",
+  "queue": {
+    "candidate_sha": "351004f386f4c2c1d870467ae6e1e481952a330c",
+    "sha256": "424a1e79700353a842d5d6bb53cc03c285388a77b43695c9c95300541fddea56"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "development/papaparse/csv",
+      "external/sunspider-1.0/regexp-dna"
+    ],
+    "rank_ceiling": 13,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "T057 stage 1 (docs/design/string-code-units.md): preserve the shared JsString handle through typed receiver/ToString coercion and the RegExp symbol-method protocols (match, matchAll iterator, search, replace custom-exec loop, string-needle replace callbacks), so repeated exec calls on one subject reuse its memoized matcher view instead of copying the subject and rebuilding the view per call; answer String search boundary helpers (indexOf/includes/startsWith/endsWith) from the memoized ASCII classification instead of rescanning the subject on every call; count the subject once per string-needle replacement instead of once per match. Wide indexing, storage and the legacy non-ASCII scalar search coordinates stay unchanged.",
+    "generality": "Admission depends only on value types and data flow: any primitive string or String wrapper receiver, any ToString argument that is already a string, any RegExp-like object whose exec is called repeatedly on one subject, and any ASCII subject searched with a cursor. No source, pattern or library shape is recognized.",
+    "semantic_risks": [
+      "ToPrimitive/toString/valueOf hook order and count must be unchanged for non-string arguments",
+      "Every Get(exec), Get(flags), Get/Set(lastIndex) and species lookup in the RegExp protocols must still be observed per call",
+      "The non-ASCII legacy search branch must keep its scalar coordinates; unit lengths must never be mixed with scalar offsets",
+      "Custom exec and replacement callbacks receive a string equal to the subject; sharing must not expose mutation or alias metadata",
+      "Memoized matcher views retained on long-lived subjects must not change results when Unicode modes alternate"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "papaparse--csv/receipt.json",
+      "sha256": "bd02ec4aec879c90411fe9ffc560b82e6823868f609fabb5f37ff675fe672aec",
+      "base_sha": "351004f386f4c2c1d870467ae6e1e481952a330c",
+      "opportunity_ids": [
+        "development/papaparse/csv"
+      ],
+      "shared_cost": "iMac job 20261017T135712Z-t057-stage1-v3-profiles, exact queue image c7f0f66a, 60 s sample over two complete passes (50158 main-thread samples). String.prototype.indexOf is 4746 inclusive, of which byte_offset_for_char_index (an uncached O(n) is_ascii scan of the retained document on every call) is 4556. The lazy-quantifier RegExp replace in the same profile (42710 inclusive, SimpleAtom::step 38165) is matcher work outside this unit.",
+      "inclusive_fraction": 0.0946
+    },
+    {
+      "source": "sunspider-1.0--regexp-dna/receipt.json",
+      "sha256": "5fe9402edca5fa550b15a0497a68cabf59173a0edb7bedd08193551c068ec443",
+      "base_sha": "351004f386f4c2c1d870467ae6e1e481952a330c",
+      "opportunity_ids": [
+        "external/sunspider-1.0/regexp-dna"
+      ],
+      "shared_cost": "iMac job 20261017T082306Z-t057-stage1-profiles-and-development30, exact queue image c7f0f66a, 10 s sample of 100 bundle passes (8331 samples). RegExp[Symbol.match] global_match calls exec with a fresh copy of the subject per match, so PreparedRegexp::prepare_input rebuilds the whole-subject matcher view per exec: 1582 inclusive samples under native exec, plus 138 in the per-exec copy/call wrapper.",
+      "inclusive_fraction": 0.19
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "development/papaparse/csv",
+      "external/sunspider-1.0/regexp-dna"
+    ],
+    "target_max_candidate_over_base": 0.95,
+    "max_attempts": 2
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  },
+  "layout_gate": {
+    "policy_path": "benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v3.json",
+    "policy_sha256": "f655f25a86f4933cfb11a097a7e109b493628bc1f9a9d320cd27bd7bf300ba33",
+    "mechanism_class": "cpu-work",
+    "memory_wall_targets": [],
+    "panel_required": false,
+    "panel_pairs": 5,
+    "held_out_pairs": 30,
+    "formal_blocks": 30
+  }
+}
