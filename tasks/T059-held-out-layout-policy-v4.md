@@ -97,3 +97,11 @@ three-role protocol and identities, by the power rule (cap 240), and marks
 the chain `candidate-base`. `decide --formal-continuation` replays the
 latest chain per case; case statistics use all blocks, lanes keep the
 original joint 30 blocks. A precise case cannot be continued.
+
+## Dispatch (tooling `1228aa64`, behind T056's running screen)
+
+| Job | Frozen phase |
+| --- | --- |
+| `20261017T205859Z-t059-v4-heldout-a2` | Replay reused inputs, held-out A2 (6 x 5 pairs), freeze seed (timed). |
+| `20261017T205900Z-t059-v4-heldout-aa30` | Fresh 30-pair held-out A/A and automatic power (timed). |
+| `20261017T205901Z-t059-v4-qualify` | Replay all inputs; write v4 with its actual state (no timing). |
