@@ -1,6 +1,6 @@
 # T055: Layout noise control — B pair-level qualification
 
-- Status: active; feedback-1 authorizes pair-level disturbance recovery.
+- Status: blocked; new collections complete, canonical formal input times out.
 - Implementation: present; versioned host policy v1 is unqualified and cannot
   be used for a new promotion. No runtime engine change.
 - Verified at: 5d255e5e staged fast gate, 2026-10-16; 531 benchmark tests,
@@ -9,10 +9,10 @@
 - Evidence: [B frozen plans and log](archive/T055-phase-b-plan-and-log.md),
   [A2 data](archive/T055-phase-a2-data.md),
   [unqualified policy v1](../benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v1.json).
-- Unresolved: no valid B qualification yet. Spotlight is now confirmed
-  disabled; photo/media analysis disable flags confirmed.
-- Next action: finish canonical 30-block A/A, then replay/qualify all three
-  new inputs under the frozen statistics; publish v2 only if every gate passes.
+- Unresolved: canonical external candidate imaging-gaussian-blur block 27
+  exceeds the frozen 15 s timeout; no heavy load, so load-only retries do not apply.
+- Next action: lead decides whether to authorize/freeze a new canonical timeout
+  protocol and full replacement; no policy adoption or favorable rerun now.
 
 ## Scope and boundary
 
@@ -96,7 +96,7 @@ remain frozen at 5d255e5e, never the older collectors or invalid samples.
 | --- | --- | --- |
 | 20261017T022615Z-decision-rule-b-aa30-pairs | 76x30, pair recovery | exit 0 / 3690 s |
 | 20261017T022616Z-decision-rule-b-heldout30-pairs | 9x30, pair recovery | exit 0 / 3181 s |
-| 20261017T022617Z-decision-rule-b-formal30-whole | canonical 30 blocks, workers-4 | running |
+| 20261017T022617Z-decision-rule-b-formal30-whole | canonical 30 blocks, workers-4 | exit 0 / 1361 s; incomplete external |
 
 
 The new portfolio collector completes all 76 cases: 2280 attempts, 2280 valid,
@@ -111,3 +111,23 @@ Held-out collection also completes: all 9 programs, 270 attempts, 270 valid,
 30 valid pairs and matching expected checksums. Statistical ceilings remain
 pending until the canonical formal input completes and qualification replays
 all raw data. No replacement attempt has been spent in this amendment.
+
+
+## Canonical input blocker (feedback-1 stop boundary)
+
+The canonical job has zero heavy intruder samples. Broad (25 cases) and
+sentinel (6) have 30 valid blocks, passing input/linearity/precision health.
+External has one non-ok measurement: kraken-1.1/imaging-gaussian-blur,
+candidate block 27 (human block 28), duration 15021374156 ns, exit -9,
+status timeout at the frozen 15-second case limit. All three engine
+capabilities are ok; candidate/base and candidate/NG comparisons are missing
+for this case because the complete paired input is absent. The entire formal
+input remains ineligible; do not omit/impute/retry that observation or waive
+health. It is not a load-invalid replacement. No replacement budget was spent.
+
+Qualification job 20261017T025048Z-decision-rule-b-qualify-pairs-v2 at a03b984a
+fails closed (exit 1 / 36 s): `formal external layout input invalid or on a
+different host`; the inspected reason is the timeout, not host identity.
+No v2 policy was generated. The v1 unqualified artifact remains untouched.
+A diagnostic-only analysis of the two valid component calibrations will be
+recorded below; it cannot substitute for canonical qualification or promotion.
