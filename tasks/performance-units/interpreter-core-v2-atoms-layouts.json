@@ -1,0 +1,99 @@
+{
+  "schema_version": 3,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_kind": "migration",
+  "unit_id": "interpreter-core-v2-atoms-layouts",
+  "base_sha": "351004f386f4c2c1d870467ae6e1e481952a330c",
+  "queue": {
+    "candidate_sha": "351004f386f4c2c1d870467ae6e1e481952a330c",
+    "sha256": "424a1e79700353a842d5d6bb53cc03c285388a77b43695c9c95300541fddea56"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "development/moment/dates",
+      "development/diff/compare",
+      "development/meriyah/parse"
+    ],
+    "rank_ceiling": 6,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "T056 M1 in three stages: (1) typed Value access facade with unchanged 16-byte representation/ownership, plus cached per-domain linking of bytecode property names to atoms; (2) atom-keyed layout authority and atomic mutation publication for every ordinary named-property store (Small, Dynamic, Shaped, ShapedPair, function and array named maps); (3) route ordinary and shared accelerated Get/Set through one layout lookup and retire the superseded rejecting probe chain. Stages 1-2 are judged against the cumulative regression budget; stage 3 must earn the payoff.",
+    "generality": "Admission is ordinary named-property semantics, receiver kind and atom-domain/layout identity. Every store, constructor/literal/native receiver and computed key (one ToPropertyKey, then interning) uses the same authority. Virtual field banks keep their existing route. No source text, property spelling, library or benchmark identity, literal template or iteration count admits a path; no environment snapshot or per-call name map is introduced.",
+    "semantic_risks": [
+      "Foreign/cross-realm code must never interpret another atom domain's IDs; exact WTF-16 keys, symbols, private names and numeric-index distinctions stay distinct.",
+      "Every add/delete/reconfigure/prototype/lazy-property change must publish the new layout identity/version before any cached observer can reuse a slot.",
+      "Getters, setters, Proxy traps and native re-entry run after property/Value borrows are released; receiver identity, strict-mode write errors and exotic algorithms are preserved.",
+      "Atom, link and weak-transition retention stays bounded under key churn; IDs never wrap or get reused; the facade adds no wrapper allocation or ownership temporary.",
+      "Tier coverage and lowered-opcode reach stay comparable: a payoff that comes only from a tier or literal-path switch does not count, and the env/cell binding boundary is untouched.",
+      "Layout changes can move unrelated hot code: all six predeclared placements, the complete portfolio and independent held-out acceptance apply; no placement is selected."
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "development--moment--dates/receipt.json",
+      "sha256": "0d4169030cb63c6039b9567bc9ed30fd165a70d5a9053a066b6f882c5509af66",
+      "base_sha": "351004f386f4c2c1d870467ae6e1e481952a330c",
+      "opportunity_ids": [
+        "development/moment/dates"
+      ],
+      "shared_cost": "2086/8335 main-thread samples (25.0%) have a named-property frame on the stack; owner-attributed self samples (allocator, mem*, hash and Value glue charged to their engine caller) put 22.5% in named-property code. Feature-only counters on the same source: 31.08M VM-path and 12.22M accelerated named attempts, 172.1M property-name string comparisons (4.0 per attempt, 77.3M inside VM handlers), 20.8M name hashes, 60% of 49.3M cache probes rejected. Envelope includes mandatory lookup and ownership work; not a removable fraction.",
+      "inclusive_fraction": 0.25026994601079783
+    },
+    {
+      "source": "development--diff--compare/receipt.json",
+      "sha256": "58b2bc7515f31343a7278552eab22eb3e654f2afb5fe71d4dcd1740306942c77",
+      "base_sha": "351004f386f4c2c1d870467ae6e1e481952a330c",
+      "opportunity_ids": [
+        "development/diff/compare"
+      ],
+      "shared_cost": "1468/6000 main-thread samples (24.5%) have a named-property frame on the stack; owner-attributed self samples put 19.5% in named-property code. Counters: 13.20M VM-path and 10.22M accelerated named attempts, 133.0M property-name comparisons (5.7 per attempt), 7.1M name hashes, 73% of 42.9M cache probes rejected. Envelope includes mandatory lookup and ownership work; not a removable fraction.",
+      "inclusive_fraction": 0.24466666666666667
+    },
+    {
+      "source": "development--meriyah--parse/receipt.json",
+      "sha256": "2d1531df9cd6df3672e0b34b3206d6a64210dc780556093ef267d1f5ecabb5b4",
+      "base_sha": "351004f386f4c2c1d870467ae6e1e481952a330c",
+      "opportunity_ids": [
+        "development/meriyah/parse"
+      ],
+      "shared_cost": "765/2412 main-thread samples (31.7%) have a named-property frame on the stack; owner-attributed self samples put 27.0% in named-property code. Counters: 2.31M VM-path and 7.44M accelerated named attempts, 18.8M property-name comparisons, 10.6M name hashes, 93% of 32.6M cache probes rejected. Envelope includes mandatory lookup and ownership work; not a removable fraction.",
+      "inclusive_fraction": 0.31716417910447764
+    }
+  ],
+  "migration": {
+    "stages": 3,
+    "current_stage": 1,
+    "cumulative_target_ids": [
+      "development/moment/dates",
+      "development/diff/compare",
+      "development/meriyah/parse"
+    ],
+    "stage_max_candidate_over_base": 1.025
+  },
+  "fast_gate": {
+    "target_ids": [
+      "development/moment/dates",
+      "development/diff/compare",
+      "development/meriyah/parse"
+    ],
+    "target_max_candidate_over_base": 0.97,
+    "max_attempts": 1
+  },
+  "layout_gate": {
+    "policy_path": "benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v3.json",
+    "policy_sha256": "f655f25a86f4933cfb11a097a7e109b493628bc1f9a9d320cd27bd7bf300ba33",
+    "mechanism_class": "cpu-work",
+    "memory_wall_targets": [],
+    "panel_required": true,
+    "panel_pairs": 5,
+    "held_out_pairs": 30,
+    "formal_blocks": 30
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
