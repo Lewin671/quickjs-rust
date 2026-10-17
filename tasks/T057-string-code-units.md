@@ -1,15 +1,15 @@
 # T057: String code-unit migration
 
-- Status: active; stage-1 screen passed, formal decision next.
-- Implementation: present (stage 1 on this branch, see Stage-1 implementation).
-- Verified at: plan commit `47a8042e` (validate-unit valid against v3 queue
-  `424a1e79`); implementation fast gate, focused tests and String/RegExp
-  Test262 zero-gap slices at the implementation commit (numbers below).
-- Evidence: [stage-1 plan](performance-units/string-handles-ascii-search-boundaries.json)
-  and the stage-1 records in this file.
-- Unresolved: screen attempt 1 passed (K=6 complete); formal 30-block run,
-  held-out panel, exact-candidate zero-gap burndown and promotion decision.
-- Next action: formal `026476d5` vs `351004f3`, then held-out and `decide --mode promotion`.
+- Status: active; stage-1 promotion decision **rejected** (held-out gate); lead review.
+- Implementation: present on this branch (`026476d5`), not reverted, not promoted.
+- Verified at: `026476d5`, 2026-10-17: full `check.sh`, compare-qjs 249/249,
+  String/RegExp zero-gap slices, exact `--exact --all` Test262 zero gap; screen
+  pass (K=6); formal 30-block; held-out 30; `decide --mode promotion` rejected.
+- Evidence: stage-1 records below; workspace `outputs/t057-stage1/`.
+- Unresolved: held-out wall bands exceeded with flat instructions (see
+  Stage-1 decision); one imprecise formal control; attempt 2 not spent.
+- Next action: lead decision on the held-out result (no attempt 2 shaped by
+  held-out); separately, plan the lazy-quantifier matcher unit.
 
 ## Goal and scope
 
@@ -180,3 +180,31 @@ every lane and the portfolio fit their ceilings on all six layouts (natural:
 broad 1.0086, sentinel 1.0091, external 0.9924, development 0.9851,
 portfolio 0.9974). Verdict copy: workspace `outputs/t057-stage1/screen1-verdict.json`;
 raw panel stays in the iMac runner's `target/layout-attempts/t057-stage1-attempt1/`.
+
+## Stage-1 decision (attempt 1)
+
+Formal job `20261017T174818Z-t057-stage1-formal30` (workers-4, 30 blocks,
+exit 0 / 3465 s, no DISTURBED): candidate image `4dffe000...`, base
+c7f0f66a. Targets: papaparse 0.8820 [0.8814, 0.8839], regexp-dna 0.7900
+[0.7840, 0.7946] (regexp-dna/NG now 0.993). Lanes: broad 1.0085 [1.0076,
+1.0095], sentinel 1.0011, external 0.9961, development 0.9882, portfolio
+0.9991, all inside ceilings. string-validate-input 1.0164 [1.0120, 1.0227]
+(inside B 1.0300). Control `bitops-3bit-bits-in-byte` 0.9974 [0.9387,
+1.0072] is imprecise (half-width 6.2%); candidate formals have no
+continuation tool (A/A only), so it stays a missing-evidence reason.
+
+Held-out job `20261017T174847Z-t057-stage1-heldout30` (natural, 30 pairs,
+exit 0 / 3207 s), acceptance only and not used to shape work: handlebars
+1.0233 (band 1.0066, instructions 1.0000), esprima 1.0087 (1.0030,
+instructions 0.9994), ramda 1.0090 (1.0065, 0.9996); lane 1.0050 above its
+1.0029 ceiling; the other six within bands. Exact-candidate burndown job
+`20261017T174848Z-t057-stage1-test262-exact`: 53572 total, 42672
+configured, Rust 42672 pass, zero actionable gap (SHA-256 `638cc0eb...`).
+
+`decide --mode promotion` (decision SHA-256 `45a6ec04...`): **rejected**
+on the held-out programs and lane; readiness inconclusive for the
+imprecise control. The held-out excesses are wall-only (flat or lower
+instructions in code the unit does not touch), consistent with code
+placement of a new binary; held-out acceptance is single natural layout,
+so it has no six-layout persistence test. Not a favorable-rerun or
+held-out-shaped attempt 2; outcome goes to the lead.
