@@ -12,7 +12,6 @@ mod fast_scan;
 mod first;
 mod groups;
 mod lookaround;
-mod normalization;
 mod repeat_visited;
 mod start_filter;
 #[cfg(test)]
@@ -32,7 +31,6 @@ use groups::{
     named_backreference, named_group_index,
 };
 use lookaround::match_lookaround;
-use normalization::normalized_regexp_source;
 use repeat_visited::RepeatVisited;
 use start_filter::StartFilter;
 
@@ -104,7 +102,6 @@ impl PreparedRegexp {
         dot_all: bool,
         multiline: bool,
     ) -> Self {
-        let source = normalized_regexp_source(source);
         let pattern: Vec<char> = if unicode {
             source.chars().collect()
         } else {

@@ -557,6 +557,18 @@ fn annex_b_malformed_named_backreferences_are_identity_escapes() {
 }
 
 #[test]
+fn pattern_source_compiles_as_written_without_rewriting() {
+    // A pattern without spaces must not be compiled as a different, spaced
+    // pattern, whatever text it happens to spell.
+    let compact = "^(Sun|Mon|Tue|Wed|Thu|Fri|Sat)(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[0-9]{2}[0-9]{4}[0-9]{2}:[0-9]{2}:[0-9]{2}GMT[+-][0-9]{4}(\\(.+\\))?$";
+    let spaced_input = "Mon Jan 01 2020 00:00:00 GMT+0000";
+    assert!(regexp_match_range(compact, spaced_input, 0, false, false, false).is_none());
+    let compact_input = "MonJan01202000:00:00GMT+0000";
+    let matched = regexp_match_range(compact, compact_input, 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, compact_input.len()));
+}
+
+#[test]
 fn top_level_alternatives_match_leftmost_first() {
     let matched = regexp_match_range("1|12", "123", 0, false, false, false).unwrap();
     assert_eq!((matched.start, matched.end), (0, 1));

@@ -138,7 +138,6 @@ pub(in crate::regexp) fn regexp_group_names(source: &str) -> Vec<Option<String>>
     if !source.contains("(?<") {
         return Vec::new();
     }
-    let source = super::normalization::normalized_regexp_source(source);
     let pattern: Vec<char> = source.chars().collect();
     let mut names = Vec::new();
     scan_capturing_groups(&pattern, |pc| {
