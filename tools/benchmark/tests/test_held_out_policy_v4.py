@@ -89,7 +89,7 @@ class HeldOutPersistenceRuleTests(unittest.TestCase):
         self.assertFalse(result['complete'])
         self.assertTrue(self.run_rule(natural, [natural]*5 + [held()])['passed'])
         failed = self.run_rule(natural, [natural]*6)
-        self.assertIn('held-out lane ceiling exceeded in every layout', failed['failures'])
+        self.assertIn('held-out: six-layout lane geomean or every layout exceeds ceiling', failed['failures'])
 
     def test_cap_imprecise_program_needs_panel_and_cannot_reject_by_wall(self):
         self.policy['precision'] = {'held_out': {PROGRAM: {'status': 'imprecise on this host'}}}
@@ -111,6 +111,68 @@ class HeldOutPersistenceRuleTests(unittest.TestCase):
             self.run_rule(natural, [natural]*6, p=legacy)
         # v3 semantics are unchanged: one natural excess rejects.
         self.assertIn('held-out program band exceeded', ' '.join(self.run_rule(natural, p=legacy)['failures']))
+
+
+class LaneEventRuleTests(unittest.TestCase):
+    """v4: a natural lane excess is a lane event resolved by the K=6 panel."""
+
+    def setUp(self):
+        self.policy = v4_policy()
+        self.base = packet(self.policy)
+
+    def lane(self, value):
+        data = copy.deepcopy(self.base)
+        for row in data['cases']:
+            if row['id'].startswith('sentinel/'):
+                row['ratios']['wall_ns'] = [value]*5
+        return data
+
+    def test_natural_lane_excess_is_an_event_that_needs_the_panel(self):
+        ceiling = self.policy['lanes']['sentinel']
+        natural = self.lane(ceiling + .002)
+        result = evaluate(self.policy, natural, [], .97)
+        self.assertEqual(result['label'], 'wall event')
+        self.assertEqual(result['events'], {'sentinel lane': 'lane event'})
+        self.assertIn('complete K=6 matching-layout panel required', result['missing'])
+        self.assertFalse(result['failures'])
+        legacy = copy.deepcopy(self.policy)
+        legacy.pop('held_out_rule')
+        self.assertEqual(evaluate(legacy, natural, [], .97)['label'], 'reject')
+
+    def test_panel_rejects_on_six_layout_geomean_or_every_layout(self):
+        ceiling = self.policy['lanes']['sentinel']
+        natural, low = self.lane(ceiling + .002), self.lane(1.)
+        self.assertTrue(evaluate(self.policy, natural, [], .97, panel=[natural] + [low]*5)['passed'])
+        heavy = self.lane(ceiling + .06)
+        result = evaluate(self.policy, natural, [], .97, panel=[natural, heavy, heavy, low, low, low])
+        self.assertIn('sentinel: six-layout lane geomean or every layout exceeds ceiling', result['failures'])
+        self.assertEqual(evaluate(self.policy, natural, [], .97, panel=[natural]*6)['label'], 'reject')
+        # A non-natural single excess under a neutral geomean is not a rejection.
+        self.assertTrue(evaluate(self.policy, low, [], .97, panel=[low]*5 + [natural])['passed'])
+
+    def test_instruction_hard_cap_still_rejects_immediately(self):
+        data = copy.deepcopy(self.base)
+        name = data['cases'][0]['id']
+        data['cases'][0]['ratios']['instructions'] = [1.04]*5
+        self.assertIn(name + ': consistent instruction excess exceeds median hard cap',
+                      evaluate(self.policy, data, [], .97)['failures'])
+
+    def test_t058_screen1_natural_packet_is_a_lane_event_needing_the_panel(self):
+        root = Path(__file__).resolve().parents[3]
+        path = root / 'benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v3.json'
+        p = load_policy(path, digest(path), live=False)
+        natural = json.loads((Path(__file__).parent / 'fixtures/layout-policy/t058-screen1-natural.json').read_text())
+        target = 'development/papaparse/csv'
+        legacy = evaluate(p, natural, [target], .7)
+        self.assertEqual(legacy['failures'], ['layout 0 broad: wall lane ceiling exceeded'])
+        p['held_out_rule'] = HELD_OUT_RULE
+        result = evaluate(p, natural, [target], .7)
+        self.assertFalse(result['failures'])
+        self.assertIn('broad lane', result['events'])
+        self.assertGreater(result['lanes']['0/broad']['ratio'], p['lanes']['broad'])
+        self.assertTrue(result['panel_required'])
+        self.assertIn('complete K=6 matching-layout panel required', result['missing'])
+        self.assertEqual(result['cases'][target]['label'], 'pass')
 
 
 class HeldOutPolicyLoadingTests(unittest.TestCase):

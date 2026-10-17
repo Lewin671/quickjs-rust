@@ -43,6 +43,9 @@ def main():
     unit, unit_hash = load_unit(args.plan)
     gate = unit['layout_gate']
     policy = load_policy(ROOT / gate['policy_path'], gate['policy_sha256'])
+    # After v4 publication, frozen v2/v3 plans are screened with v4's held-out/lane rule.
+    from .layout_policy import with_held_out_successor
+    policy, _ = with_held_out_successor(policy, gate['policy_sha256'])
     # Candidate commits are required; do not silently omit working-tree code.
     from .layout_identity import command
     if command(['git', 'status', '--porcelain', '--untracked-files=no']):

@@ -84,19 +84,22 @@ def evaluate(policy, screen, targets, payoff, *, panel=None, held_out=None, held
                        'instructions_median': statistics.median(instructions),
                        'instructions_min': min(instructions), 'instruction_ceiling': instruction_limit,
                        'target_aggregate': target_aggregate, 'diagnostic_only':diagnostic}
-    for k, values in enumerate(panels or [data]):
-        for lane in selection_lanes(policy):
-            value = geomean([statistics.median(r['wall_ns']) for n, r in values.items()
-                             if lane == 'portfolio' or n.startswith(lane + '/')])
-            ceiling = policy['lanes'][lane]
-            lanes[f'{k}/{lane}'] = {'ratio': value, 'ceiling': ceiling}
-            if value > ceiling:
+    persistence = policy.get('held_out_rule') == HELD_OUT_RULE
+    for lane in selection_lanes(policy):
+        ceiling = policy['lanes'][lane]
+        values = []
+        for k, layout in enumerate(panels or [data]):
+            values.append(geomean([statistics.median(r['wall_ns']) for n, r in layout.items()
+                                   if lane == 'portfolio' or n.startswith(lane + '/')]))
+            lanes[f'{k}/{lane}'] = {'ratio': values[-1], 'ceiling': ceiling}
+            if values[-1] > ceiling and not persistence:
                 failures.append(f'layout {k} {lane}: wall lane ceiling exceeded')
+        if persistence:
+            lane_event(lane, values, ceiling, panels is not None, events, failures)
     required = bool(events) or mandatory_panel
     if required and panels is None:
         missing.append('complete K=6 matching-layout panel required')
     held = None
-    persistence = policy.get('held_out_rule') == HELD_OUT_RULE
     if held_out_panel is not None and (held_out is None or not persistence):
         raise ValueError('held-out persistence panel requires a v4 policy and its natural screen')
     if held_out is not None:
@@ -173,17 +176,27 @@ def held_out_persistence(policy, natural, values, panel, failures, missing):
     ceiling = policy['lanes']['held-out']
     for k, layout in enumerate(panels or [values]):
         lanes[str(k)] = geomean([statistics.median(r['wall_ns']) for r in layout.values()])
-    if lanes['0'] > ceiling:
-        events['held-out lane'] = 'held-out lane event'
-        if panels is not None and all(v > ceiling for v in lanes.values()):
-            failures.append('held-out lane ceiling exceeded in every layout')
+    before = len(failures)
+    lane_event('held-out', list(lanes.values()), ceiling, panels is not None, events, failures)
     required = bool(events) or needs_panel(policy, held=True)
     if required and panels is None:
         missing.append('complete K=6 held-out panel required')
     resolved = bool(events) and panels is not None and not any(
-        p['label'] == 'reject' for p in programs.values()) and not (
-        lanes['0'] > ceiling and all(v > ceiling for v in lanes.values()))
+        p['label'] == 'reject' for p in programs.values()) and len(failures) == before
     return {'rule': HELD_OUT_RULE, 'cases': {n: p['wall_median'] for n, p in programs.items()},
             'programs': programs, 'ratio': lanes['0'], 'ceiling': ceiling, 'layout_lanes': lanes,
             'events': events, 'panel_required': required,
             'event_resolution': 'nonpersistent' if resolved else None}
+
+
+def lane_event(lane, values, ceiling, complete, events, failures):
+    """v4: a natural lane excess is an event; six neutral layouts set the ceiling.
+
+    The ceiling is the maximum of six neutral layouts, so a neutral seventh
+    placement exceeds it about one time in seven. With the complete panel the
+    lane rejects only if its six-layout geomean or every layout exceeds it.
+    """
+    if values[0] > ceiling:
+        events[lane + ' lane'] = 'lane event'
+    if complete and (geomean(values) > ceiling or all(v > ceiling for v in values)):
+        failures.append(f'{lane}: six-layout lane geomean or every layout exceeds ceiling')

@@ -113,7 +113,11 @@ def evaluate_formal(unit, summary, broad, external, sentinel, mode, panel_path, 
         if not stats['precise']:
             missing.append(lane + ': formal lane interval imprecise')
         lower, upper = stats['confidence_interval']['lower'], stats['confidence_interval']['upper']
-        if lower > policy['lanes'][lane]:
+        if persistence and upper > policy['lanes'][lane]:
+            # v4 lane event: the six-layout panel verdict decides, as in the screen.
+            if len(panels) != 6:
+                missing.append(lane + ': formal lane interval above ceiling requires K=6')
+        elif lower > policy['lanes'][lane]:
             failed.append(lane + ': formal lane ceiling exceeded')
         elif upper > policy['lanes'][lane]:
             missing.append(lane + ': formal lane interval crosses ceiling')

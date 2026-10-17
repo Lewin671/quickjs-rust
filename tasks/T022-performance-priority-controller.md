@@ -87,9 +87,10 @@ are historical and never acquire an extra attempt from this rule change.
 - A single-layout wall median above B_i opens a wall event. Six medians
   above B_i reject, even with flat instructions; a complete mixed panel
   resolves the event as nonpersistent. An absent panel stays incomplete.
-- Every lane and the equal-case portfolio must fit their own wall ceilings;
-  a portfolio gain cannot hide a failed lane. Natural placement and every
-  measured panel layout must pass. Formal intervals stay mandatory.
+- Every lane and the equal-case portfolio have their own wall ceilings; a
+  portfolio gain cannot hide a failed lane. Under v4 a natural lane excess is
+  a lane event needing K=6; it rejects only if the six-layout geomean or every
+  layout exceeds the ceiling (v2/v3: any layout). Formal intervals stay mandatory.
   Development-enabled policies add all ten programs (non-targets are controls)
   and their own lane ceiling. V2 remains valid without development references.
 - Instruction-blind changes (Value, memory layout, allocation) predeclare
@@ -109,8 +110,7 @@ are historical and never acquire an extra attempt from this rule change.
   equal-length binary paths created once. Apply the [load-only recovery contract](../docs/layout-policy-artifacts.md#load-only-pair-recovery);
   cap failures/formal DISTURBED jobs replace whole. Valid failures spend attempts.
 
-K=6 is six screens, not six attempts. Correctness, identity, formal precision
-and the migration/final-payoff requirements remain in force. Schema 1/2 keeps the
+K=6 is six screens, not six attempts; correctness, identity, formal precision and migration/payoff stay. Schema 1/2 keeps the
 previous cycles-first rule for replay; schema 3 uses wall plus instructions.
 Commands live in [the workflow](../docs/performance-workflow.md#screen-gate)
 and artifact contracts in [benchmarking](../docs/benchmarking.md#layout-policy-and-panel-artifacts).

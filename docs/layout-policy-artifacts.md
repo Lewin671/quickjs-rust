@@ -225,7 +225,8 @@ held-out program B_i and I_i, and the lane a ceiling, by the development A2
 estimators over six placements of the band-source image (five pairs each),
 maxed with the parent's 30-pair A/A band and ceiling; a fresh 30-pair A/A
 qualifies them (`layout_held_out_policy a2|qualify`). Every selection band,
-ceiling and precision record is the parent's. The decision rule is owned by
+ceiling and precision record is the parent's. The same `held_out_rule` marker
+also selects v4's lane-event rule for every lane and the portfolio. The decision rule is owned by
 [T022](../tasks/T022-performance-priority-controller.md#layout-robust-decisions).
 
 Complete a held-out event with `layout_panel --held-out --complete --pairs 30`

@@ -85,9 +85,31 @@ without that is a held-out wall event, resolved by a K=6 matching-layout
 held-out panel (the 30-pair natural screen is variant zero, five completed
 layouts at the same pair count): reject only if all six medians exceed B_i,
 or if any layout shows the consistent instruction excess with its wall above
-B_i. A held-out lane above its ceiling likewise needs the panel and rejects
-only if every layout is above it. Promotion intervals: an upper bound above
+B_i. The held-out lane follows the lane-event rule below. Promotion intervals: an upper bound above
 B_i or the lane ceiling needs the complete panel; imprecision stays missing.
+
+## Lane-event rule (lead decision 2026-10-17, recorded before any decision uses it)
+
+Rationale given: each lane ceiling is the observed maximum lane ratio over six
+neutral layouts, so a neutral candidate is effectively a seventh layout and
+exceeds each lane's max-of-six with probability about 1/7; with five or six
+lanes, a natural-only hard lane gate falsely rejects neutral or beneficial
+units often, and it is inconsistent with the per-case rule, where a
+single-layout wall excess is an event resolved by the K=6 panel. Exposed by
+T058 screen 1 (`20261017T222653Z-t058-screen1`): broad lane 1.0172 vs ceiling
+1.0129, driven by broad/top_level_function_call 1.43 with instructions
+1.0001-1.0002 and bimodal pairs (1.046, 1.018, 1.491, 1.526, 1.432) in a unit
+that only changed RegExp code; target papaparse 0.186.
+
+Rule (part of v4; no new calibration): a lane or the portfolio above its
+ceiling in the natural layout is a lane event, not a rejection, and requires
+the complete K=6 matching-layout panel. It rejects only if the geometric mean
+of that lane's six per-layout ratios exceeds the ceiling, or if every layout
+exceeds it. The same holds for the held-out lane. Consistent instruction
+regressions above the instruction ceiling and the per-case hard cap still
+reject immediately. A formal lane interval above its ceiling likewise needs
+the panel. The T058 natural packet is a test fixture (lane event, panel
+required).
 
 ## Candidate formal continuation
 
