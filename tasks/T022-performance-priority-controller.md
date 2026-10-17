@@ -7,10 +7,10 @@
   Legacy retained decisions remain verified only at their recorded revisions.
 - Evidence: T055 owns B jobs and host-band status; [T037](T037-integration-batch-1.md)
   owns historical unstable-base evidence and exact retained outputs.
-- Unresolved: B has valid A/A precision failure plus a non-load canonical
-  timeout (T055); no qualified policy. Ruleset-required check is unconfigured.
-- Next action: lead resolves T055 variance/timeout protocols; require fully
-  qualified host bands before any schema-3 promotion.
+- Unresolved: feedback-2 power allocation and replacement canonical A/A
+  await qualification (T055). Ruleset-required check remains unconfigured.
+- Next action: T055 executes the newly frozen protocol; require a fully
+  qualified host policy before any schema-3 promotion.
 
 Commands and their interpretation are in
 [the performance workflow](../docs/performance-workflow.md); schemas and
@@ -97,6 +97,9 @@ are historical and never acquire an extra attempt from this rule change.
 - Held-out is mandatory promotion acceptance: every program within its own
   measured band and its lane within its measured ceiling, with formal
   precision. It never selects work. Missing evidence is incomplete.
+- Imprecise A/A cases use frozen power allocation up to 240 pairs (same rule
+  for held-out). At the cap their wall band is diagnostic only and measuring
+  them always requires K=6; all other precision/payoff/budget gates remain.
 - Policy data is versioned/hash-bound to the host and compiler recipe.
   A different host or recipe recalibrates. Measurements use distinct stable
   equal-length binary paths created once. Apply the [load-only recovery contract](../docs/layout-policy-artifacts.md#load-only-pair-recovery);

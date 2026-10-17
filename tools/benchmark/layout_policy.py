@@ -88,4 +88,6 @@ def load_policy(path: Path, sha256: str, *, live=True):
         raise ValueError('invalid layout lane inventory')
     if any(not math.isfinite(v) or v < 1 for v in policy['lanes'].values()):
         raise ValueError('invalid layout lane ceiling')
+    from .layout_power import validate_precision
+    validate_precision(policy)
     return policy

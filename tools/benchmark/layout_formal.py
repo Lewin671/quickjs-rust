@@ -7,6 +7,7 @@ from .layout_evidence import replay
 from .layout_identity import digest
 from .layout_policy import load_policy, analyze, rows
 from .layout_rule import evaluate
+from .layout_power import diagnostic_only, needs_panel
 from .performance_evidence import ROOT
 
 
@@ -57,9 +58,16 @@ def evaluate_formal(unit, summary, broad, external, sentinel, mode, panel_path, 
         if not stats['precise']:
             missing.append(case + ': formal interval imprecise')
             continue
-        limit = min(payoff, 1 / band['wall_band']) if case in target_ids and mode != 'stage' else band['wall_band']
+        limit = (payoff if diagnostic_only(policy,case) else min(payoff, 1 / band['wall_band'])) if case in target_ids and mode != 'stage' else band['wall_band']
         if mode == 'stage':
             limit = min(limit, unit['migration']['stage_max_candidate_over_base'])
+        if diagnostic_only(policy,case) and (case not in target_ids or mode == 'stage'):
+            if len(panels) != 6:missing.append(case + ': diagnostic-only case requires K=6')
+            if mode == 'stage':
+                limit=unit['migration']['stage_max_candidate_over_base']
+                if lower > limit:failed.append(case + ': formal stage budget exceeded')
+                elif upper > limit:missing.append(case + ': formal stage interval crosses budget')
+            continue
         if upper <= limit:
             continue
         if case in target_ids and mode != 'stage':
@@ -87,11 +95,19 @@ def evaluate_formal(unit, summary, broad, external, sentinel, mode, panel_path, 
             missing.append(lane + ': formal lane interval crosses ceiling')
     verdict['formal_statistics'] = formal_stats
     if held:
+        if needs_panel(policy,held=True) and len(held['panels']) != 6:
+            missing.append('diagnostic-only held-out case requires K=6 held-out panel')
+        for extra in held['panels'][1:]:
+            check=evaluate(policy,panels[0],target_ids,payoff,
+                panel=panels if len(panels)==6 else None,held_out=extra,promotion=True,
+                instruction_blind=gate['mechanism_class']=='instruction-blind',
+                memory_targets=gate['memory_wall_targets'],panel_required=gate['panel_required'])
+            failed.extend(check['failures']);missing.extend(check['missing'])
         values = rows(held['panels'][0], policy['held_out'])
         for case, ratios in values.items():
             stats = analyze({case: ratios['wall_ns']})
             upper = stats['confidence_interval']['upper']
-            if not stats['precise'] or upper > policy['held_out'][case]['wall_band']:
+            if not stats['precise'] or (not diagnostic_only(policy,case,held=True) and upper > policy['held_out'][case]['wall_band']):
                 missing.append(case + ': held-out formal precision/upper interval gate')
         stats = analyze({n: r['wall_ns'] for n, r in values.items()})
         if not stats['precise'] or stats['confidence_interval']['upper'] > policy['lanes']['held-out']:

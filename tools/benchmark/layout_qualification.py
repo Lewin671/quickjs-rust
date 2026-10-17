@@ -12,7 +12,7 @@ from .layout_identity import OFFSETS, digest, write_json
 from .layout_policy import analyze, round_up, rows
 
 
-def qualify(seed, portfolio, held_out, formal=None):
+def qualify(seed, portfolio, held_out, formal=None, extensions=None):
     data = rows(portfolio, seed['cases'], 30)
     from .held_out import opportunity_ids
     held = rows(held_out, opportunity_ids(), 30)
@@ -20,11 +20,25 @@ def qualify(seed, portfolio, held_out, formal=None):
         raise ValueError('A/A hosts disagree')
     results = {'cases': {}, 'lanes': {}, 'held_out': {}}
     failures = []
-    for name, ratios in data.items():
-        stats = analyze({name: ratios['wall_ns']})
+    from .layout_power import precision_record
+    extensions = extensions or {}
+    if not set(extensions) <= set(data) | set(held):
+        raise ValueError('unknown precision continuation case')
+    precision = {'cases':{}, 'held_out':{}}
+    def case_stats(name, original, group):
+        ratios = extensions.get(name,original)
+        n = len(ratios['wall_ns'])
+        rows({'pairs':n,'cases':[{'id':name,'ratios':ratios}]},[name],n)
+        stats = analyze({name:ratios['wall_ns']})
+        pilot = analyze({name:original['wall_ns']}) if name in extensions else stats
+        record = precision_record(pilot,stats,n)
+        if record is None or record['status'] == 'needs cap continuation':
+            failures.append(name + ': frozen power allocation/precision incomplete')
+        precision[group][name] = record or {'pairs':n,'status':'incomplete'}
+        return ratios,stats
+    for name, original in data.items():
+        ratios,stats = case_stats(name,original,'cases')
         results['cases'][name] = stats
-        if not stats['precise']:
-            failures.append(name + ': imprecise 30-block A/A')
         if min(ratios['instructions']) > max(1.01, seed['cases'][name]['instruction_band']):
             failures.append(name + ': A/A instruction control event')
     for lane in ('broad', 'sentinel', 'external', 'portfolio'):
@@ -53,11 +67,9 @@ def qualify(seed, portfolio, held_out, formal=None):
             if not stats['precise'] or ci['upper'] > ceiling or ci['lower'] < 1 / ceiling:
                 failures.append(lane + ': canonical formal A/A interval outside frozen envelope')
     held_bands = {}
-    for name, ratios in held.items():
-        stats = analyze({name: ratios['wall_ns']})
+    for name, original in held.items():
+        ratios,stats = case_stats(name,original,'held_out')
         results['held_out'][name] = stats
-        if not stats['precise']:
-            failures.append(name + ': imprecise held-out A/A')
         ci = stats['confidence_interval']
         held_bands[name] = {'wall_band': round_up(max(1, ci['upper'], 1 / ci['lower']))}
     stats = analyze({n: r['wall_ns'] for n, r in held.items()})
@@ -69,7 +81,7 @@ def qualify(seed, portfolio, held_out, formal=None):
     return {'schema_version': 1, 'artifact_type': 'quickjs-layout-policy',
             'qualified': not failures, 'failures': failures, 'host': portfolio['host'],
             'offsets': list(OFFSETS), 'cases': seed['cases'], 'held_out': held_bands,
-            'lanes': lanes, 'qualification': results}
+            'lanes': lanes, 'qualification': results, 'precision':precision}
 
 
 def verify_formal_identity(summary, expected_revision):
@@ -128,13 +140,24 @@ def verify_host_inputs(recorded, current, context):
     for name, sha in recorded['manifests'].items():
         if sha == current['manifests'][name]:
             continue
-        if name not in ('benchmarks/manifest.json', 'benchmarks/generic-sentinels-manifest.json'):
+        if name not in ('benchmarks/manifest.json', 'benchmarks/generic-sentinels-manifest.json', 'benchmarks/external-preview.json'):
             raise ValueError('calibration recipe/corpus changed')
         old_text = command(['git', 'show', context + ':' + name]) + '\n'
         if hashlib.sha256(old_text.encode()).hexdigest() != sha:
-            raise ValueError('recorded calibration manifest/context mismatch')
+            raise ValueError('calibration recipe/corpus manifest/context mismatch')
         old, new = json.loads(old_text), json.loads((ROOT / name).read_text())
-        old.pop('protocol'); new.pop('protocol')
+        if name == 'benchmarks/external-preview.json':
+            # Feedback-2 authorizes only the hang-detector metadata revision;
+            # source programs, seeds, timing boundary and case inventory stay exact.
+            if (old['schema_version'],new['schema_version']) != (2,3):
+                raise ValueError('unqualified external protocol transition')
+            old.pop('schema_version');new.pop('schema_version')
+            old.pop('preview_id');new.pop('preview_id')
+            old['measurement'].pop('timeout_seconds')
+            new['measurement'].pop('timeout_seconds')
+            new['measurement'].pop('timeout_policy')
+        else:
+            old.pop('protocol'); new.pop('protocol')
         if old != new:
             raise ValueError('calibration case or recipe changed')
 
@@ -146,6 +169,8 @@ def main():
     parser.add_argument('--band-context', required=True, help='committed A2 host-binding manifest context')
     parser.add_argument('--screen-context', required=True, help='committed calibration tooling revision')
     parser.add_argument('--formal-bundle', type=Path, required=True)
+    parser.add_argument('--continuation',type=Path,action='append',default=[],
+                        help='latest immutable power continuation per case (chains retain pilot)')
     parser.add_argument('--formal-load-log', type=Path, required=True,
                         help='sealed queue intruders.log; any heavy sample invalidates formal A/A')
     parser.add_argument('--host-attestation', type=Path, required=True,
@@ -180,7 +205,19 @@ def main():
     replay_reports(folder / 'report.json', folder / 'external-report.json', folder / 'sentinel-report.json')
     from .layout_formal_raw import extract
     formal = extract(folder, attestation['node'])
-    policy = qualify(packets['a2'], packets['portfolio'], packets['held-out'], formal)
+    from .layout_continuation import replay as replay_continuation
+    extensions = {}
+    for path in args.continuation:
+        value = json.loads(path.read_text());name = value['case_id']
+        if name in extensions:
+            raise ValueError('duplicate latest continuation case')
+        pilot = args.held_out if name.startswith('held-out/') else args.portfolio
+        ratios, _, extended_host = replay_continuation(path.resolve(),pilot.resolve(),name)
+        if extended_host != current or value.get('host_node') != attestation['node']:
+            raise ValueError('power continuation host/recipe mismatch')
+        extensions[name] = ratios
+        paths['continuation/'+name] = path
+    policy = qualify(packets['a2'], packets['portfolio'], packets['held-out'], formal, extensions)
     paths['formal-summary'] = folder / 'summary.json' 
     policy['screen_host'] = recorded
     policy['host'] = current

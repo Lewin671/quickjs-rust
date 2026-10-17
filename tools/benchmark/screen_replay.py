@@ -77,6 +77,9 @@ def replay_attempts(raw, pairs, binaries):
     from .pair_disturbance import eligibility
     if raw.get('complete') is not True or not raw.get('rounds'):
         raise ValueError('incomplete pair recovery')
+    offset = raw.get('pair_index_offset', 0)
+    if type(offset) is not int or offset < 0:
+        raise ValueError('invalid pair index offset')
     attempts = raw['attempts']
     previous = 0
     missing = pairs
@@ -101,7 +104,7 @@ def replay_attempts(raw, pairs, binaries):
     last = 0
     for i, attempt in enumerate(attempts):
         samples = attempt['samples']
-        if (attempt['index'] != i or attempt['started_at'] < last
+        if (attempt['index'] != i + offset or attempt['started_at'] < last
                 or attempt['started_at'] != samples[0]['started_at']
                 or attempt['ended_at'] != samples[-1]['ended_at']):
             raise ValueError('pair timestamp/index mismatch')
@@ -111,6 +114,6 @@ def replay_attempts(raw, pairs, binaries):
             last = row['ended_at']
     all_samples = [s for a in attempts for s in a['samples']]
     costs, ratios = _costs({**raw, 'samples': all_samples}, len(attempts), binaries,
-                           list(range(len(attempts))), flags)
+                           list(range(offset, offset + len(attempts))), flags)
     selected = [s for i in indices for s in attempts[i]['samples']]
     return costs, ratios, selected

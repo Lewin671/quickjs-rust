@@ -9,6 +9,7 @@ from .layout_identity import ROOT, write_json
 from .layout_policy import load_policy
 from .layout_panel import measure_panel
 from .layout_rule import evaluate
+from .layout_power import needs_panel
 from .layout_variants import build
 from .performance_decision import load_unit
 
@@ -40,7 +41,7 @@ def main():
             instruction_blind=gate['mechanism_class'] == 'instruction-blind',
             memory_targets=gate['memory_wall_targets'], panel_required=gate['panel_required'])
     result = verdict(evidence['panels'])
-    mandatory = gate['panel_required'] or gate['mechanism_class'] == 'instruction-blind'
+    mandatory = gate['panel_required'] or gate['mechanism_class'] == 'instruction-blind' or needs_panel(policy)
     if mandatory or (result['panel_required'] and not result['failures']):
         evidence = measure_panel(base, candidate, out / 'screen', complete=True)
         result = verdict(evidence['panels'])

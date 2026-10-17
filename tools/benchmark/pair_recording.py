@@ -10,10 +10,9 @@ from .layout_identity import write_json
 from .pair_disturbance import Monitor, eligibility
 
 
-def measure(case, candidate, base, pairs, tool, timeout, output, monitor=None):
+def measure(case, candidate, base, pairs, tool, timeout, output, monitor=None, *, iterations=None, pair_offset=0):
     monitor = monitor or Monitor.from_queue()
     calibration, attempts, rounds = [], [], []
-    iterations = None
     with output.with_suffix('.jsonl').open('x', encoding='utf-8') as stream:
         def run(binary, count, target):
             argv = screen._argv(binary, case, count)
@@ -26,13 +25,13 @@ def measure(case, candidate, base, pairs, tool, timeout, output, monitor=None):
             screen._check_output(case, value.stdout)
             return value
 
-        if case.kind == 'internal':
+        if case.kind == 'internal' and iterations is None:
             iterations = screen.calibrate(lambda count: run(base, count, calibration))
         missing = pairs
         try:
             while missing:
                 for _ in range(missing):
-                    index = len(attempts)
+                    index = pair_offset + len(attempts)
                     rows = []
                     for role in (('base', 'candidate') if index % 2 == 0 else ('candidate', 'base')):
                         binary = base if role == 'base' else candidate
@@ -46,11 +45,11 @@ def measure(case, candidate, base, pairs, tool, timeout, output, monitor=None):
                 missing = pairs - sum(flags)
         except Exception as error:
             write_json(output, {'id': case.id, 'kind': case.kind, 'iterations': iterations,
-                'calibration': calibration, 'attempts': attempts, 'rounds': rounds,
+                'calibration': calibration, 'attempts': attempts, 'rounds': rounds, 'pair_index_offset': pair_offset,
                 'complete': False, 'error': str(error)})
             raise
     packet = {'id': case.id, 'kind': case.kind, 'iterations': iterations,
-              'calibration': calibration, 'attempts': attempts, 'rounds': rounds,
+              'calibration': calibration, 'attempts': attempts, 'rounds': rounds, 'pair_index_offset': pair_offset,
               'complete': True, 'valid_attempt_indices': [i for i, flag in enumerate(flags) if flag]}
     # Costs are constructed only after load-only eligibility is sealed. Keep
     # correctness failures and short/nonpositive increments fatal, never retry.

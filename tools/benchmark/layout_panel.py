@@ -31,8 +31,10 @@ def matrix(path):
     return value
 
 
-def measure_panel(base_path, candidate_path, output, pairs=5, held=False, natural=False, complete=False):
+def measure_panel(base_path, candidate_path, output, pairs=5, held=False, natural=False, complete=False, held_panel=False):
     from .pair_disturbance import Monitor, quieting_preflight, verify_run
+    if held_panel and (not held or natural or complete):
+        raise ValueError('held-out panel requires --held-out alone')
     quieting = quieting_preflight()
     monitor = Monitor.from_queue()
     host = host_identity()
@@ -64,7 +66,7 @@ def measure_panel(base_path, candidate_path, output, pairs=5, held=False, natura
         cases = (held_out_cases(screen.DEFAULT_CACHE, output / 'work') if held else
                  screen.resolve_cases(['broad', 'sentinel', 'external'], screen.DEFAULT_CACHE, output / 'work'))
         packets = list(previous['panels']) if previous else []
-        for k in (range(1, 6) if complete else [0] if held or natural else range(6)):
+        for k in (range(1, 6) if complete else [0] if (held and not held_panel) or natural else range(6)):
             folder = output / f'variant{k}'
             folder.mkdir()
             results = []
@@ -83,7 +85,7 @@ def measure_panel(base_path, candidate_path, output, pairs=5, held=False, natura
                 'host': host, 'host_node': platform.node(), 'base': base, 'candidate': candidate, 'held_out': held,
                 'pairs': pairs, 'panels': packets, 'quieting': quieting,
                 'disturbance_runs': [*(previous.get('disturbance_runs', []) if previous else []),
-                    {'variants': list(range(1,6)) if complete else [0] if held or natural else list(range(6)),
+                    {'variants': list(range(1,6)) if complete else [0] if (held and not held_panel) or natural else list(range(6)),
                      'load': disturbance, 'counts': counts}], 'launch_preflight': preflight,
                 'case_files': {str(p.relative_to(output)): digest(p)
                                for p in output.glob('variant*/*.json')}}
@@ -96,6 +98,7 @@ def main():
     parser.add_argument('--base-matrix', type=Path, required=True)
     parser.add_argument('--candidate-matrix', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--held-out-panel', action='store_true', help='all six held-out layouts for host precision fallback')
     parser.add_argument('--pairs', type=int, default=5)
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument('--held-out', action='store_true')
@@ -104,7 +107,7 @@ def main():
     args = parser.parse_args()
     if args.pairs < (30 if args.held_out else 5):
         raise ValueError('need >=5 panel pairs or >=30 held-out promotion pairs')
-    measure_panel(args.base_matrix, args.candidate_matrix, args.output, args.pairs, args.held_out, args.natural, args.complete)
+    measure_panel(args.base_matrix, args.candidate_matrix, args.output, args.pairs, args.held_out, args.natural, args.complete, args.held_out_panel)
 
 
 if __name__ == '__main__':

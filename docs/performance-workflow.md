@@ -155,8 +155,8 @@ extra `--case` remain diagnostic helpers.
 ### Screen gate
 
 The standing rule is in [T022](../tasks/T022-performance-priority-controller.md#layout-robust-decisions).
-The policy's measured bands apply only on its recorded host/toolchain/recipe;
-a mismatch requires recalibration before candidate timing. Every screen
+The policy's measured bands apply only on its host/toolchain/recipe; a mismatch
+requires recalibration. [Power/fallback rules](layout-policy-artifacts.md#precision-power-and-continuation) force K=6 for host-imprecise cases. Every screen
 covers all broad, sentinel and external cases, with every non-target a
 control. It reports `pass`, `control event`, `wall event`, `reject`, or
 `incomplete`, with per-case dual metrics and independent lane/portfolio gates.

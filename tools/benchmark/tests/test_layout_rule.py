@@ -260,3 +260,22 @@ class StaticAuditTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class PrecisionFallbackTests(unittest.TestCase):
+    def test_cap_band_is_diagnostic_but_panel_and_other_gates_stay_required(self):
+        p=policy();name=next(iter(p['cases']))
+        p['precision']={'cases':{name:{'status':'imprecise on this host'}}}
+        p['lanes']={k:2. for k in p['lanes']}
+        data=change(packet(p),name,wall=1.2)
+        result=evaluate(p,data,[],.97)
+        self.assertTrue(result['panel_required'])
+        self.assertFalse(result['complete'])
+        result=evaluate(p,data,[],.97,panel=[data]*6)
+        self.assertTrue(result['passed'])
+        self.assertTrue(result['cases'][name]['diagnostic_only'])
+        p['lanes']['portfolio']=1.0
+        self.assertIn('wall lane ceiling exceeded',' '.join(evaluate(p,data,[],.97,panel=[data]*6)['failures']))
+        p['lanes']['portfolio']=2.
+        data=change(data,name,instructions=1.04)
+        self.assertIn('hard cap',' '.join(evaluate(p,data,[],.97,panel=[data]*6)['failures']))

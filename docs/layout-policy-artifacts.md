@@ -138,3 +138,34 @@ the manifest. The loader recomputes limits and refuses missing or changed
 cases. Per-run timeout overrides are refused for this protocol; timeout remains
 failure. v2 archives retain their original uniform timeout and replay identity.
 This bounds hangs without hiding an engine's long tail or waiving precision.
+
+
+## Precision power and continuation
+
+Qualification starts with 30 valid A/A pairs per case/program. When pilot
+relative CI half-width h exceeds 3%, required n=min(240,ceil(30*(h/.03)^2)).
+Retain every pilot pair and append only n-30 valid pairs using the original
+immutable binary paths, iteration count and cumulative role order. If the
+predicted stage still misses 3%, one further stage reaches 240, retaining all
+pairs. These decisions use precision alone, never which side wins. Held-out
+uses the identical rule and remains acceptance-only.
+
+`layout_continuation --pilot <screen.json> --case <id> --pilot-context <sha>
+--output <new-dir>` creates an immutable segment. `--previous <continuation.json>`
+adds the cap stage. Segment packets bind pilot/predecessor/raw hashes, binary
+identity, the original iteration count and absolute attempt index, with a
+separate load log and cap replay for each job. Qualification accepts the latest
+`--continuation` per case, recursively replays every prefix and conserves all
+ratios. Case statistics use every valid pair; lane statistics keep the original
+joint 30-pair cohort because other cases are not remeasured.
+
+At 240, a still-imprecise case is recorded as "imprecise on this host" in
+policy `precision` metadata. Its wall band is diagnostic only; every unit
+measuring that case requires K=6, even when the natural target fails.
+Full-portfolio units therefore always complete the panel if such a case exists.
+This band alone cannot reject/promote or tighten target payoff by inverse band.
+Target payoff/all-pairs, instruction hard caps, stage budgets, independent
+formal precision, lane/portfolio and correctness gates remain binding.
+A held-out fallback requires all six held-out layouts (`--held-out-panel`
+with `--held-out --pairs 30`); precise program bands and every lane still bind.
+No 3% precision limit or adopted A2 envelope is widened.

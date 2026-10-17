@@ -20,7 +20,7 @@ def replay(path: Path, policy, engines=None, *, held=False):
             or evidence.get('host') != policy['host'] or evidence.get('held_out') != held
             or evidence.get('host_node') != policy.get('host_node')):
         raise ValueError('layout evidence schema/host/lane mismatch')
-    if len(evidence['panels']) not in ((1,) if held else (1, 6)):
+    if len(evidence['panels']) not in (1, 6):
         raise ValueError('incomplete layout panel')
     pairs = evidence['pairs']
     if type(pairs) is not int or pairs < (30 if held else 5):

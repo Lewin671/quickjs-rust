@@ -8,6 +8,7 @@ from __future__ import annotations
 import statistics
 
 from .layout_policy import geomean, rows
+from .layout_power import diagnostic_only, needs_panel
 
 
 def evaluate(policy, screen, targets, payoff, *, panel=None, held_out=None,
@@ -15,6 +16,8 @@ def evaluate(policy, screen, targets, payoff, *, panel=None, held_out=None,
     data = rows(screen, policy['cases'])
     if screen['pairs'] < 5:
         raise ValueError('layout verdict needs at least five pairs')
+    fallback_panel = needs_panel(policy)
+    mandatory_panel = panel_required or instruction_blind or fallback_panel
     targets = set(targets)
     if not targets <= set(data):
         raise ValueError('unknown layout target')
@@ -32,20 +35,21 @@ def evaluate(policy, screen, targets, payoff, *, panel=None, held_out=None,
         if any(packet['pairs'] != screen['pairs'] for packet in panel):
             raise ValueError('panel pair counts differ')
     for name, ratios in data.items():
+        diagnostic = diagnostic_only(policy,name)
         band = policy['cases'][name]['wall_band']
         if stage:
-            band = min(band, stage_limit)
+            band = stage_limit if diagnostic else min(band, stage_limit)
         instruction_limit = max(1.01, policy['cases'][name]['instruction_band'])
         wall = statistics.median(ratios['wall_ns'])
         instructions = ratios['instructions']
         label = 'pass'
         target_aggregate = None
         if name in targets and not stage:
-            limit = min(payoff, 1 / band)
+            limit = payoff if diagnostic else min(payoff, 1 / band)
             if wall > limit or max(ratios['wall_ns']) >= 1:
                 failures.append(name + ': target payoff/noise/all-pairs gate')
                 label = 'reject'
-            if panels is not None and (panel_required or instruction_blind):
+            if panels is not None and mandatory_panel:
                 target_aggregate = geomean([statistics.median(p[name]['wall_ns']) for p in panels])
                 all_pairs = [v for p in panels for v in p[name]['wall_ns']]
                 if target_aggregate > limit or max(all_pairs) >= 1:
@@ -70,7 +74,7 @@ def evaluate(policy, screen, targets, payoff, *, panel=None, held_out=None,
                     failures.append(name + ': panel instruction hard cap exceeded')
                     label = 'reject'
                 walls = [statistics.median(p[name]['wall_ns']) for p in panels]
-                if all(value > band for value in walls):
+                if (not diagnostic or stage) and all(value > band for value in walls):
                     failures.append(name + ': persistent six-layout wall cost')
                     label = 'reject'
                 elif name in events and label != 'reject':
@@ -78,7 +82,7 @@ def evaluate(policy, screen, targets, payoff, *, panel=None, held_out=None,
         cases[name] = {'label': label, 'wall_median': wall, 'wall_band': band,
                        'instructions_median': statistics.median(instructions),
                        'instructions_min': min(instructions), 'instruction_ceiling': instruction_limit,
-                       'target_aggregate': target_aggregate}
+                       'target_aggregate': target_aggregate, 'diagnostic_only':diagnostic}
     for k, values in enumerate(panels or [data]):
         for lane in ('broad', 'sentinel', 'external', 'portfolio'):
             value = geomean([statistics.median(r['wall_ns']) for n, r in values.items()
@@ -87,7 +91,7 @@ def evaluate(policy, screen, targets, payoff, *, panel=None, held_out=None,
             lanes[f'{k}/{lane}'] = {'ratio': value, 'ceiling': ceiling}
             if value > ceiling:
                 failures.append(f'layout {k} {lane}: wall lane ceiling exceeded')
-    required = bool(events) or instruction_blind or panel_required
+    required = bool(events) or mandatory_panel
     if required and panels is None:
         missing.append('complete K=6 matching-layout panel required')
     held = None
@@ -97,7 +101,7 @@ def evaluate(policy, screen, targets, payoff, *, panel=None, held_out=None,
             raise ValueError('insufficient held-out pairs')
         held = {n: statistics.median(r['wall_ns']) for n, r in values.items()}
         for name, value in held.items():
-            if value > policy['held_out'][name]['wall_band']:
+            if not diagnostic_only(policy,name,held=True) and value > policy['held_out'][name]['wall_band']:
                 failures.append(name + ': held-out program band exceeded')
         aggregate = geomean(list(held.values()))
         if aggregate > policy['lanes']['held-out']:
