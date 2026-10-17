@@ -146,6 +146,8 @@ def main():
     parser.add_argument('--band-context', required=True, help='committed A2 host-binding manifest context')
     parser.add_argument('--screen-context', required=True, help='committed calibration tooling revision')
     parser.add_argument('--formal-bundle', type=Path, required=True)
+    parser.add_argument('--formal-load-log', type=Path, required=True,
+                        help='sealed queue intruders.log; any heavy sample invalidates formal A/A')
     parser.add_argument('--host-attestation', type=Path, required=True,
                         help='queue-collected host node and full host identity')
     parser.add_argument('--output', type=Path, required=True)
@@ -156,6 +158,8 @@ def main():
                'portfolio': replay_calibration(args.portfolio, seed['calibration_binary_sha256']),
                'held-out': replay_calibration(args.held_out, seed['calibration_binary_sha256'])}
     attestation = json.loads(args.host_attestation.read_text())
+    from .pair_disturbance import verify_formal_load
+    verify_formal_load(args.formal_load_log.read_text(), attestation['started_at'])
     recorded = packets['portfolio']['host']
     current = attestation['host']
     if seed.get('source_host_node') != attestation['node']:
@@ -182,6 +186,7 @@ def main():
     policy['host'] = current
     policy['host_node'] = attestation['node']
     paths['host-attestation'] = args.host_attestation
+    paths['formal-load'] = args.formal_load_log
     policy['evidence'] = {k: {'path': str(p), 'sha256': digest(p)} for k, p in paths.items()}
     write_json(args.output, policy)
     print(json.dumps({'qualified': policy['qualified'], 'failures': policy['failures'], 'lanes': policy['lanes']}))

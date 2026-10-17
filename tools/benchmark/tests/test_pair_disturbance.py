@@ -42,6 +42,13 @@ class LoadTests(unittest.TestCase):
             check_cap([], list(range(10,71,5)))
         check_cap([], [10, 17, 70])
 
+    def test_canonical_formal_keeps_whole_run_invalidation(self):
+        from tools.benchmark.pair_disturbance import verify_formal_load
+        verify_formal_load('',1)
+        verify_formal_load('00:00:10 199 daemon\n',1)
+        with self.assertRaisesRegex(ValueError, 'whole-run replacement'):
+            verify_formal_load('00:00:10 100 a\n00:00:10 100 b\n',1)
+
     def test_snapshot_coverage_and_tampering(self):
         attempts = [{'started_at': 10, 'ended_at': 12}]
         self.assertEqual(eligibility(attempts, snapshot()), [True])

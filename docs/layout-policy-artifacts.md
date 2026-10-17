@@ -118,3 +118,10 @@ requires Spotlight disabled and photo/media analysis disable flags. Tools do
 not change OS services. Canonical multi-worker perf-compare has no sealed
 pair-window/retry contract and retains whole-run replacement on disturbance.
 Task T055 owns the frozen calibration attempt budget and campaign evidence.
+
+Qualification requires `--band-context` for the recorded A2 host-binding
+manifests and `--screen-context` for the committed collector. Only internal
+protocol metadata differences are accepted; cases/corpora/recipes stay exact.
+`--formal-load-log` supplies the sealed queue `intruders.log`; any heavy sample
+refuses qualification, and the accepted log hash is bound in policy evidence.
+Host attestation records the run's epoch start, node, full identity and quieting.

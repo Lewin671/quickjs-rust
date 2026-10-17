@@ -119,3 +119,9 @@ def quieting_preflight():
         if f'"{service}" => true' not in disabled:
             raise ValueError('expected user-approved disabled service: ' + service)
     return {'indexing': indexing, 'disabled_services': disabled}
+
+
+def verify_formal_load(text, anchor):
+    """Canonical formal bundles retain whole-run validity, never pair repair."""
+    if heavy_samples(text, anchor):
+        raise ValueError('DISTURBED: canonical formal A/A requires whole-run replacement')
