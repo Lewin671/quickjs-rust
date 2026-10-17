@@ -1,14 +1,14 @@
 # T057: String code-unit migration
 
-- Status: blocked on development-target decision policy; evidence collection queued.
+- Status: active; development policy qualification prerequisite authorized.
 - Implementation: none; target architecture and stage boundaries documented.
 - Verified at: registration `25158c8b98555efcbfccee1a70df9c5e7817a719`,
   2026-10-17; staged documentation fast gate, context and whitespace checks pass.
 - Evidence: design below and the evidence/coordination record in this file.
 - Unresolved: development-target layout-gate support; fresh queue/profile evidence,
   frozen plan, implementation and performance/correctness decisions.
-- Next action: resolve the policy boundary below; fetch the queued fresh
-  baseline/development/profiles, then validate and commit the stage-1 plan.
+- Next action: complete [development policy qualification](T057-development-policy.md),
+  then validate and commit the stage-1 plan from fresh queue/profile evidence.
 
 ## Goal and scope
 
@@ -46,10 +46,9 @@ third_party edits. No project push or merge; queue transport refs only.
   `evaluate` raises `ValueError: unknown layout target` before evaluating gates.
   Qualified v2 SHA-256:
   `22a1907dae06eb963dcb25592a05973e3bd69153e3c23a70ddec08ef64f07ca6`.
-- Two possible resolutions: keep development mandatory diagnostic evidence
-  and choose a profiled, covered suite target, or expand/calibrate the
-  development decision policy. Neither has been silently selected; no
-  performance plan has been frozen and no attempt budget has been spent.
+- Lead feedback `tmp/string-index-cost/feedback-t057-1.md` selects extension
+  and iMac qualification of policy v3 before runtime work. The separate
+  linked task owns the frozen calibration; no runtime plan or attempt spent.
 - Queued fresh current-main 30-block comparison:
   `20261017T074644Z-t057-main-baseline30`, candidate `351004f3`, base `b481894d`.
   Follow-up `20261017T074651Z-t057-stage1-evidence-fresh` validates the queue,

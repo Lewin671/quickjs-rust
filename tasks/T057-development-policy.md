@@ -1,0 +1,101 @@
+# T057: Development decision policy qualification
+
+- Status: active; calibration contract frozen before development policy timing.
+- Implementation: none; tooling extension precedes runtime work.
+- Verified at: `8d88ba3d`, 2026-10-17; v2 target gap reproduced; this
+  registration's context/fast gate pending.
+- Evidence: frozen contract below; no new calibration observations yet.
+- Unresolved: collectors/replay/tests, development calibration, qualification.
+- Next action: implement and verify the generic development pipeline, then
+  dispatch the frozen calibration through the shared iMac queue.
+
+## Frozen calibration contract (2026-10-17, before timing)
+
+Lead authorization: workspace `tmp/string-index-cost/feedback-t057-1.md`.
+Scope: generic benchmark tooling, tests, policy v3, runbooks and task records;
+no runtime, interpreter-core, property/value-word, dependency or third_party
+change. No project push/merge. Original [T057](T057-string-code-units.md)
+resumes only after this prerequisite qualifies. Existing v2 bytes stay frozen
+and remain usable for plans without development targets.
+
+Source image is qualified v2's canonical `4c9f959e4ae3f508a10828a46cf59ec042d7ec13`,
+SHA-256 `c7f0f66a519181b214bdc5ca6404cf428f0d18cbd1ab1d0e26386097619b949e`.
+Use its audited six variants (natural/16/64/240/512/1008 NOP bytes), or rebuild
+and require the exact natural hash plus zero body/order/uniform-shift drift.
+Runtime/build diff to `351004f3` is empty. Freeze all paths once, with equal
+filesystem byte lengths, distinct roles, separate launch preflight, all
+process samples/costs retained. No winning placement is selected.
+
+1. **A2 extension:** all ten pinned development programs, five paired
+   whole-process samples per case for each of six placements. Base is always
+   the natural image; candidate is placement k (natural/natural at k=0).
+   Alternate role order continuously per case within each packet. Record
+   raw paired ratios and role costs. Existing 76-case A2 observations remain
+   frozen; only their estimator inputs are reused, never their samples as
+   new joint measurements. No held-out profiling or selection.
+2. **Freeze new bands from A2 before longer A/A:** per development case,
+   B_i=max(six-layout spread of same-screen role medians normalized to v0,
+   spread of paired medians with v0=1, global reciprocal natural A/A median
+   bias). Include the existing A2 global bias as a floor for new cases;
+   leave all original 76 B_i/I_i unchanged. I_i rounds up to one basis point
+   the max of reciprocal natural A/A instruction pairs and global median
+   instruction bias (including the existing floor). New development lane
+   ceiling uses max(six-layout geomean spread, reciprocal natural A/A lane
+   median bias), exactly the A2 estimator. The new 86-case portfolio ceiling
+   uses these same estimators over all 86 measured case-estimator inputs;
+   this is an empirical envelope, not a pooled/bootstrap timing result.
+   Never widen either ceiling after observing longer qualification.
+3. **Screen qualification:** 30 alternating natural/natural pairs for each
+   development program, exact qualified image. The pilot stays immutable;
+   automatically append the precision-only allocation, then at most 240.
+   Per-case statistic is median paired ratios; lane is equal-case geomean.
+   Use seed-0 20,000-draw 95% joint bootstrap and <=3% relative half-width.
+   A/A instruction guard is max(1.01,I_i), no all-pair excess; development
+   lane interval must fit its frozen reciprocal envelope. Keep its original
+   30-pair joint cohort for lane statistics. Do not fabricate a joint screen
+   cohort by mixing the original 76-case calibration with this new run.
+4. **Canonical formal qualification:** new sealed 30-block workers-4 bundle,
+   candidate=base=`351004f386f4c2c1d870467ae6e1e481952a330c`, all 86 selection
+   cases and pinned NG, byte-identical two Rust roles. It includes all four
+   selection lanes under the existing whole-process/increment protocols.
+   Require complete identities, raw replay, correctness, health, linearity,
+   unchanged original lane ceilings, frozen new development/portfolio
+   ceilings and the same precision. Automatic formal A/A continuation keeps
+   original argv/images/iterations/absolute role rotation and every pilot
+   observation, reaches predicted count then cap; joint lane statistics keep
+   the initial 30 complete blocks. No favorable whole-bundle precision rerun.
+
+Development timeouts use the uniform reference rule max(60 seconds, 4 x
+pinned NG median), derived before policy calibration from the latest valid
+complete development reference run (queued baseline follow-up
+`20261017T074651Z-t057-stage1-evidence-fresh`). Freeze source raw/report hashes,
+all medians and derived thresholds in the development manifest; no candidate
+or later observed time may change a threshold. Existing manifest v1 remains
+readable for its frozen preliminary baseline. Held-out protocol is unchanged.
+
+Queue-only timing, quieting/service-state attestation, pair-level load-only
+recovery and caps are the v2 contracts. Preserve invalid attempts/rounds;
+formal disturbed jobs/segments are replaced whole, at most three load-only
+replacements. Non-load failures stop, and no samples are deleted or imputed.
+At 240, still-imprecise case bands become diagnostic and force K=6 for
+every unit including that case; payoff/all-pairs/instruction/lane/correctness
+gates remain binding. A valid qualification outside frozen lane envelopes
+does not authorize widening or another favorable attempt.
+
+Publish v3 only after complete replay and all applicable qualification gates
+pass. Preserve v2 held-out bands, precision and source evidence unchanged;
+held-out remains acceptance-only and cannot appear in priority/targets or
+profile evidence. New plans bind exact policy/manifest hashes. Every
+non-target development case follows the external control rules, and the
+development lane and 86-case portfolio ceilings bind each layout and formal
+decision. A v2 plan cannot name a development target.
+
+## Verification obligations
+
+Tests cover development target and control admission, instruction floor and
+hard cap, six-layout wall persistence, independent lane/portfolio ceilings,
+sealed raw/manifest/host/image replay, formal continuation of npm checksums,
+v2 compatibility, disjoint development/held-out programs and held-out target
+refusal. Fast/full gates and qualified host-policy loading precede handoff.
+Record every job, revision, artifact hash, count and qualification outcome
+before closing this task; no runtime promotion is claimed by calibration.
