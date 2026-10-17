@@ -11,8 +11,8 @@
   [unqualified policy v1](../benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v1.json).
 - Unresolved: no valid B qualification yet. Spotlight is now confirmed
   disabled; photo/media analysis disable flags confirmed.
-- Next action: finish full gate, then queue fresh 76x30, 9x30 and canonical
-  30-block calibrations at the frozen recovery implementation.
+- Next action: finish canonical 30-block A/A, then replay/qualify all three
+  new inputs under the frozen statistics; publish v2 only if every gate passes.
 
 ## Scope and boundary
 
@@ -95,8 +95,8 @@ remain frozen at 5d255e5e, never the older collectors or invalid samples.
 | Job | Plan | State |
 | --- | --- | --- |
 | 20261017T022615Z-decision-rule-b-aa30-pairs | 76x30, pair recovery | exit 0 / 3690 s |
-| 20261017T022616Z-decision-rule-b-heldout30-pairs | 9x30, pair recovery | running |
-| 20261017T022617Z-decision-rule-b-formal30-whole | canonical 30 blocks, workers-4 | queued |
+| 20261017T022616Z-decision-rule-b-heldout30-pairs | 9x30, pair recovery | exit 0 / 3181 s |
+| 20261017T022617Z-decision-rule-b-formal30-whole | canonical 30 blocks, workers-4 | running |
 
 
 The new portfolio collector completes all 76 cases: 2280 attempts, 2280 valid,
@@ -104,3 +104,10 @@ The new portfolio collector completes all 76 cases: 2280 attempts, 2280 valid,
 Every case has 30 valid pairs; collector raw/load conservation passes.
 This establishes collection integrity only; statistical qualification awaits
 all three new inputs. No old observations or bands have been recomputed.
+
+
+Held-out collection also completes: all 9 programs, 270 attempts, 270 valid,
+0 invalid, 0 heavy samples (6 light intruder rows). Every program has exactly
+30 valid pairs and matching expected checksums. Statistical ceilings remain
+pending until the canonical formal input completes and qualification replays
+all raw data. No replacement attempt has been spent in this amendment.
