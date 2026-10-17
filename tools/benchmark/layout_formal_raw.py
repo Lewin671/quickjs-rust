@@ -13,7 +13,7 @@ from .performance_evidence import load_archived_manifest
 from .raw_validation import validate_run
 
 
-def extract(folder: Path, host_node: str):
+def extract(folder: Path, host_node: str, *, development=None):
     result = {}
     counts = set()
     for lane, prefix in (('broad', ''), ('sentinel', 'sentinel-')):
@@ -27,18 +27,22 @@ def extract(folder: Path, host_node: str):
             result[f'{lane}/{case.id}'] = [
                 run.measurements[('candidate', case.id, block)] / run.measurements[('base', case.id, block)]
                 for block in range(run.blocks)]
-    records = [json.loads(line) for line in (folder / 'external-raw.jsonl').read_text().splitlines()]
+    if development is None:
+        summary = json.loads((folder / 'summary.json').read_text()) if (folder / 'summary.json').exists() else {}
+        development = summary.get('bundle', {}).get('schema_version') == 2
     samples = {}
-    for row in records:
-        if row.get('phase') != 'measurement' or row.get('role') not in ('base', 'candidate'):
-            continue
-        if row['status'] != 'ok' or row['host']['node'] != host_node:
-            raise ValueError('formal external layout input invalid or on a different host')
-        name = f"external/{row['suite_id']}/{row['case_id']}"
-        key = (name, row['role'], row['block'])
-        if key in samples:
-            raise ValueError('duplicate formal external sample')
-        samples[key] = row['duration_ns']
+    for lane in ('external', *(('development',) if development else ())):
+        records = [json.loads(line) for line in (folder / (lane + '-raw.jsonl')).read_text().splitlines()]
+        for row in records:
+            if row.get('phase') != 'measurement' or row.get('role') not in ('base', 'candidate'):
+                continue
+            if row['status'] != 'ok' or row['host']['node'] != host_node:
+                raise ValueError('formal whole-process layout input invalid or on a different host')
+            name = f"{lane}/{row['suite_id']}/{row['case_id']}"
+            key = (name, row['role'], row['block'])
+            if key in samples:
+                raise ValueError('duplicate formal whole-process sample')
+            samples[key] = row['duration_ns']
     if len(counts) != 1:
         raise ValueError('formal lane block counts differ')
     blocks = counts.pop()

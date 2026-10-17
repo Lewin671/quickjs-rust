@@ -23,13 +23,19 @@ ROLES=('candidate','base','quickjs-ng')
 def context(bundle, name):
     summary=json.loads((bundle/'summary.json').read_text())
     images={e['role']:e for e in json.loads((bundle/'report.json').read_text())['run']['engines']}
-    if name.startswith('external/'):
-        from .external_preview import load_manifest
-        manifest=load_manifest(bundle/'external-manifest.json')
+    whole = name.startswith(('external/', 'development/'))
+    development = name.startswith('development/')
+    if whole:
+        if development:
+            from .development import load_development_manifest as load_manifest
+        else:
+            from .external_preview import load_manifest
+        lane = name.split('/')[0]
+        manifest=load_manifest(bundle/(lane+'-manifest.json'))
         _,suite_id,case_id=name.split('/')
         si,suite=next((i,s) for i,s in enumerate(manifest.suites) if s.id==suite_id)
         ci,case=next((i,c) for i,c in enumerate(suite.cases) if c.id==case_id)
-        raw=bundle/'external-raw.jsonl'
+        raw=bundle/(lane+'-raw.jsonl')
         seed=manifest.measurement.seed+si*10000+ci*100
         rows=[json.loads(l) for l in raw.read_text().splitlines()]
         selected=[r for r in rows if r.get('phase')=='measurement' and r['suite_id']==suite_id and r['case_id']==case_id]
@@ -61,8 +67,8 @@ def context(bundle, name):
             raise ValueError('formal pilot argv changed')
     return {'bundle':bundle,'name':name,'summary':summary,'images':images,'manifest':manifest,
             'case':case,'templates':templates,'count':count,'seed':seed,'timeout':timeout,
-            'startup':startup,'raw':raw,'external':name.startswith('external/'),
-            'selected_cases':None if name.startswith('external/') else run.start['selected_cases']}
+            'startup':startup,'raw':raw,'external':whole,'development':development,
+            'selected_cases':None if whole else run.start['selected_cases']}
 
 
 def schedule(ctx, total):
@@ -84,8 +90,12 @@ def validate_result(ctx, role, result):
     from .raw_contract import validate_counters
     validate_counters(dataclasses.asdict(result),'formal continuation')
     if ctx['external']:
-        from .external_preview import _sample_status
-        status,error=_sample_status(result,role)
+        if ctx.get('development'):
+            from .npm_lane import npm_status
+            status,error=npm_status(result,role,ctx['case'])
+        else:
+            from .external_preview import _sample_status
+            status,error=_sample_status(result,role)
         if status!='ok':raise ValueError('formal continuation sample '+status+': '+str(error))
         return result.duration_ns
     from .raw_contract import validate_success
@@ -118,6 +128,8 @@ def prepare(ctx, cache):
         workload=Path(t['argv'][-1] if ctx['external'] else t['workload_snapshot_path'])
         if ctx['external']:
             from .external_preview import _bundle_source,fetch_corpora
+            if ctx.get('development'):
+                from .development import fetch_sources as fetch_corpora
             fetch_corpora(ctx['manifest'],cache)
             suite=next(s for s in ctx['manifest'].suites if s.id==t['suite_id'])
             data=_bundle_source(suite,ctx['case'],cache).encode()

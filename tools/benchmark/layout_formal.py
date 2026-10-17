@@ -5,7 +5,7 @@ from pathlib import Path
 
 from .layout_evidence import replay
 from .layout_identity import digest
-from .layout_policy import load_policy, analyze, rows
+from .layout_policy import load_policy, analyze, rows, selection_lanes
 from .layout_rule import evaluate
 from .layout_power import diagnostic_only, needs_panel
 from .performance_evidence import ROOT
@@ -43,7 +43,20 @@ def evaluate_formal(unit, summary, broad, external, sentinel, mode, panel_path, 
         missing.append('canonical raw formal bundle required')
     else:
         from .layout_formal_raw import extract
-        wall = extract(formal_bundle, policy['host_node'])
+        development = 'development' in policy['lanes']
+        if development:
+            import json
+            from .bundle import verify, development_report_path
+            from .performance_evidence import replay_reports, validate_development
+            verify(formal_bundle / 'summary.json', formal_bundle / 'report.json',
+                   formal_bundle / 'external-report.json', formal_bundle / 'sentinel-report.json')
+            dev_path = development_report_path(formal_bundle / 'summary.json')
+            if dev_path is None:
+                raise ValueError('development policy requires a sealed development formal lane')
+            replay_reports(formal_bundle / 'report.json', formal_bundle / 'external-report.json',
+                           formal_bundle / 'sentinel-report.json', dev_path)
+            missing.extend(validate_development(json.loads(dev_path.read_text()), summary['engines'], broad['run']['host']))
+        wall = extract(formal_bundle, policy['host_node'], development=development)
     if wall and any(len(values) != gate['formal_blocks'] for values in wall.values()):
         missing.append('formal evidence differs from frozen block budget')
     if set(wall) != set(policy['cases']):
@@ -82,7 +95,7 @@ def evaluate_formal(unit, summary, broad, external, sentinel, mode, panel_path, 
             missing.append(case + ': formal wall interval requires K=6')
         elif verdict['cases'][case]['label'] == 'reject':
             failed.append(case + ': persistent panel regression')
-    for lane in ('broad', 'sentinel', 'external', 'portfolio'):
+    for lane in selection_lanes(policy):
         values = {name: ratios for name, ratios in wall.items()
                   if lane == 'portfolio' or name.startswith(lane + '/')}
         if not values:

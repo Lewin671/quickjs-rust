@@ -13,11 +13,17 @@ from .pair_disturbance import Monitor, eligibility
 def measure(case, candidate, base, pairs, tool, timeout, output, monitor=None, *, iterations=None, pair_offset=0):
     monitor = monitor or Monitor.from_queue()
     calibration, attempts, rounds = [], [], []
+    contract = {}
+    if case.id.startswith('development/'):
+        from .development import MANIFEST_PATH
+        from .layout_identity import digest
+        contract = {'development_manifest_sha256': digest(MANIFEST_PATH),
+                    'workload_sha256': digest(case.workload), 'timeout_seconds': case.timeout_seconds}
     with output.with_suffix('.jsonl').open('x', encoding='utf-8') as stream:
         def run(binary, count, target):
             argv = screen._argv(binary, case, count)
             start = time.time()
-            value = screen.sample(tool, argv, timeout)
+            value = screen.sample(tool, argv, case.timeout_seconds or timeout)
             row = {'argv': argv, 'sample': dataclasses.asdict(value),
                    'started_at': start, 'ended_at': time.time()}
             target.append(row)
@@ -48,7 +54,9 @@ def measure(case, candidate, base, pairs, tool, timeout, output, monitor=None, *
                 'calibration': calibration, 'attempts': attempts, 'rounds': rounds, 'pair_index_offset': pair_offset,
                 'complete': False, 'error': str(error)})
             raise
-    packet = {'id': case.id, 'kind': case.kind, 'iterations': iterations,
+    if contract and digest(case.workload) != contract['workload_sha256']:
+        raise ValueError('development workload changed during measurement')
+    packet = {'id': case.id, 'kind': case.kind, 'iterations': iterations, **contract,
               'calibration': calibration, 'attempts': attempts, 'rounds': rounds, 'pair_index_offset': pair_offset,
               'complete': True, 'valid_attempt_indices': [i for i, flag in enumerate(flags) if flag]}
     # Costs are constructed only after load-only eligibility is sealed. Keep

@@ -115,6 +115,10 @@ def replay_calibration(path, binary_sha256):
         if digest(folder / role / 'qjs') != identity['sha256']:
             raise ValueError('calibration binary hash changed')
     packet = json.loads(path.read_text())
+    if identity.get('lane') == 'development':
+        from .development import MANIFEST_PATH
+        if any(obj.get('development_manifest_sha256') != digest(MANIFEST_PATH) for obj in (identity, packet)):
+            raise ValueError('calibration development manifest mismatch')
     expected_files = set()
     raws = []
     for case in packet['cases']:

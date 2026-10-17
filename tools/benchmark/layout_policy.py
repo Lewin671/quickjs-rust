@@ -24,6 +24,12 @@ def round_up(value):
     return math.ceil(value * 10000 - 1e-9) / 10000
 
 
+def selection_lanes(policy):
+    """Versioned policy inventory: v2 keeps its original three selection lanes."""
+    return ('broad', 'sentinel', 'external', *(
+        ('development',) if 'development' in policy['lanes'] else ()), 'portfolio')
+
+
 def rows(packet, expected=None, pairs=None):
     result = {}
     for row in packet['cases']:
@@ -84,7 +90,15 @@ def load_policy(path: Path, sha256: str, *, live=True):
             for value in bands.values():
                 if type(value) not in (int, float) or not math.isfinite(value) or value < 1:
                     raise ValueError('invalid layout policy band')
-    if set(policy['lanes']) != {'broad', 'sentinel', 'external', 'portfolio', 'held-out'}:
+    expected_lanes = {'broad', 'sentinel', 'external', 'portfolio', 'held-out'}
+    if 'development_manifest_sha256' in policy:
+        from .development import MANIFEST_PATH, opportunity_ids
+        if policy['development_manifest_sha256'] != digest(MANIFEST_PATH):
+            raise ValueError('layout policy development manifest mismatch')
+        if {n for n in policy['cases'] if n.startswith('development/')} != opportunity_ids():
+            raise ValueError('layout policy development inventory mismatch')
+        expected_lanes.add('development')
+    if set(policy['lanes']) != expected_lanes:
         raise ValueError('invalid layout lane inventory')
     if any(not math.isfinite(v) or v < 1 for v in policy['lanes'].values()):
         raise ValueError('invalid layout lane ceiling')

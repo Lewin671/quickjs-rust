@@ -33,7 +33,8 @@ def main():
     build(args.candidate, out / 'cand000')
     base = out / 'base000/identity.json'
     candidate = out / 'cand000/identity.json'
-    evidence = measure_panel(base, candidate, out / 'screen', natural=True)
+    development = 'development' in policy['lanes']
+    evidence = measure_panel(base, candidate, out / 'screen', natural=True, development=development)
     def verdict(packets):
         return evaluate(policy, packets[0], unit['fast_gate']['target_ids'],
             unit['fast_gate']['target_max_candidate_over_base'],
@@ -43,7 +44,7 @@ def main():
     result = verdict(evidence['panels'])
     mandatory = gate['panel_required'] or gate['mechanism_class'] == 'instruction-blind' or needs_panel(policy)
     if mandatory or (result['panel_required'] and not result['failures']):
-        evidence = measure_panel(base, candidate, out / 'screen', complete=True)
+        evidence = measure_panel(base, candidate, out / 'screen', complete=True, development=development)
         result = verdict(evidence['panels'])
     write_json(out / 'verdict.json', {'unit_sha256': unit_hash, **result})
     print(json.dumps(result, indent=2))
