@@ -111,35 +111,43 @@ def _summary_revisions(summary: dict[str, Any]) -> tuple[str, str]:
     )
 
 
-def _external_entries(report: dict[str, Any], target_ratio: float) -> list[dict[str, Any]]:
-    if report.get("artifact_type") != "quickjs-external-preview-report":
-        raise PerformanceDecisionError("external report: unsupported artifact type")
+def _preview_entries(
+    report: dict[str, Any], target_ratio: float, *, artifact_type: str, prefix: str
+) -> list[dict[str, Any]]:
+    """Rank one whole-process preview lane's cases above the campaign target.
+
+    The external and development lanes share this analysis shape: per case a
+    capability verdict and paired candidate/base and candidate/QuickJS-NG
+    ratios. Only the artifact type and the id prefix differ.
+    """
+    if report.get("artifact_type") != artifact_type:
+        raise PerformanceDecisionError("preview report: unsupported artifact type")
     if report.get("schema_version") != 3:
-        raise PerformanceDecisionError("external report: unsupported schema version")
+        raise PerformanceDecisionError("preview report: unsupported schema version")
     entries: list[dict[str, Any]] = []
     seen: set[str] = set()
-    for suite_index, raw_suite in enumerate(_array(report.get("suites"), "external report.suites")):
-        suite = _object(raw_suite, f"external report.suites[{suite_index}]")
-        suite_id = _string(suite.get("id"), f"external report.suites[{suite_index}].id")
+    for suite_index, raw_suite in enumerate(_array(report.get("suites"), "preview report.suites")):
+        suite = _object(raw_suite, f"preview report.suites[{suite_index}]")
+        suite_id = _string(suite.get("id"), f"preview report.suites[{suite_index}].id")
         for case_index, raw_case in enumerate(
-            _array(suite.get("cases"), f"external report.suites[{suite_index}].cases")
+            _array(suite.get("cases"), f"preview report.suites[{suite_index}].cases")
         ):
-            case = _object(raw_case, f"external report.suites[{suite_index}].cases[{case_index}]")
-            case_id = _string(case.get("id"), f"external report case {suite_id}.id")
-            opportunity_id = f"external/{suite_id}/{case_id}"
+            case = _object(raw_case, f"preview report.suites[{suite_index}].cases[{case_index}]")
+            case_id = _string(case.get("id"), f"preview report case {suite_id}.id")
+            opportunity_id = f"{prefix}/{suite_id}/{case_id}"
             if opportunity_id in seen:
-                raise PerformanceDecisionError(f"external report: duplicate {opportunity_id}")
+                raise PerformanceDecisionError(f"preview report: duplicate {opportunity_id}")
             seen.add(opportunity_id)
-            capability = _object(case.get("capability"), f"external report case {opportunity_id}.capability")
+            capability = _object(case.get("capability"), f"preview report case {opportunity_id}.capability")
             if any(capability.get(role) != "ok" for role in _ROLES):
                 continue
             quickjs_ratio = _ratio(
                 case.get("candidate_over_quickjs_ng"),
-                f"external report case {opportunity_id}.candidate_over_quickjs_ng",
+                f"preview report case {opportunity_id}.candidate_over_quickjs_ng",
             )
             base_value = case.get("candidate_over_base")
             base_ratio = None if base_value is None else _ratio(
-                base_value, f"external report case {opportunity_id}.candidate_over_base"
+                base_value, f"preview report case {opportunity_id}.candidate_over_base"
             )
             if quickjs_ratio > target_ratio:
                 entries.append(
@@ -155,6 +163,44 @@ def _external_entries(report: dict[str, Any], target_ratio: float) -> list[dict[
     for rank, entry in enumerate(entries, start=1):
         entry["rank"] = rank
     return entries
+
+
+def _external_entries(report: dict[str, Any], target_ratio: float) -> list[dict[str, Any]]:
+    return _preview_entries(
+        report, target_ratio,
+        artifact_type="quickjs-external-preview-report", prefix="external",
+    )
+
+
+def _development_entries(
+    report: dict[str, Any], target_ratio: float, engines: dict[str, Any], host: Any
+) -> list[dict[str, Any]]:
+    """Rank the development lane, whose cases may select work.
+
+    Development cases are real programs a plan may profile, so a queue keeps
+    them apart from the acceptance suites: same run, same engines, the frozen
+    corpus, ranked above the campaign target like every other selectable lane.
+    """
+    from .development import corpus_inventory
+    if report.get("binary_sha256") != {role: engines[role]["binary_sha256"] for role in _ROLES}:
+        raise PerformanceDecisionError("development: binary identities do not match summary")
+    if report.get("host") != host:
+        raise PerformanceDecisionError("development: different measurement host")
+    expected = corpus_inventory()
+    suites = report.get("suites", [])
+    ids = [suite.get("id") for suite in suites]
+    if len(ids) != len(set(ids)) or set(ids) != set(expected):
+        raise PerformanceDecisionError("development: wrong frozen suite inventory")
+    for suite in suites:
+        cases = [case.get("id") for case in suite.get("cases", [])]
+        if set(cases) != expected[suite["id"]]:
+            raise PerformanceDecisionError(
+                f"development/{suite['id']}: incomplete frozen case inventory"
+            )
+    return _preview_entries(
+        report, target_ratio,
+        artifact_type="quickjs-development-preview-report", prefix="development",
+    )
 
 
 def _broad_entries(report: dict[str, Any], target_ratio: float) -> list[dict[str, Any]]:
@@ -199,7 +245,15 @@ def build_queue(
     external_path: Path,
     target_ratio: float,
     sentinel_path: Path | None = None,
+    development_path: Path | None = None,
 ) -> dict[str, Any]:
+    """Rank the selectable lanes of one formal run.
+
+    The development lane is the one whole-process lane whose cases may select
+    work, so its report joins the queue as a channel of its own and a queue that
+    carries it is schema 4. Held-out evidence is refused: this command derives
+    work, and that lane never is work.
+    """
     if target_ratio <= 0 or not math.isfinite(target_ratio):
         raise PerformanceDecisionError("target ratio must be a finite positive number")
     summary, summary_sha = _read_json(summary_path, "preview summary")
@@ -208,12 +262,17 @@ def build_queue(
     candidate_sha, base_sha = _summary_revisions(summary)
     from .performance_evidence import validate_bundle
     sentinel, sentinel_sha = (None, None) if sentinel_path is None else _read_json(sentinel_path, "sentinel report")
+    development, development_sha = (
+        (None, None) if development_path is None
+        else _read_json(development_path, "development report")
+    )
     problems = validate_bundle(summary, broad, external, sentinel)
     if problems:
         raise PerformanceDecisionError("queue requires healthy complete evidence: " + "; ".join(problems))
+    host = broad["run"]["host"]
     payload = {
-        "schema_version": 3,
-        "host": broad["run"]["host"],
+        "schema_version": 4 if development is not None else 3,
+        "host": host,
         "artifact_type": _QUEUE_TYPE,
         "engines": summary["engines"],
         "candidate_sha": candidate_sha,
@@ -232,8 +291,14 @@ def build_queue(
             for entry in _broad_entries(sentinel, target_ratio)
         ],
     }
+    if development is not None:
+        payload["development"] = _development_entries(
+            development, target_ratio, summary["engines"], host
+        )
+        payload["evidence"]["development_report_sha256"] = development_sha
     _reject_held_out(
-        {entry["id"] for channel in ("external", "broad", "sentinel") for entry in payload[channel]},
+        {entry["id"] for channel in ("external", "broad", "sentinel", "development")
+         for entry in payload.get(channel, [])},
         "opportunity queue",
     )
     return payload
@@ -241,15 +306,18 @@ def build_queue(
 
 def load_queue(path: Path) -> tuple[dict[str, Any], str]:
     queue, digest = _read_json(path, "opportunity queue")
+    version = queue.get("schema_version")
     expected = {
         "schema_version", "artifact_type", "candidate_sha", "comparison_base_sha",
         "target_ratio", "evidence", "external", "broad", "sentinel", "engines",
     }
-    if queue.get("schema_version") == 3:
+    if version in {3, 4}:
         expected.add("host")
         _object(queue.get("host"), "opportunity queue.host")
+    if version == 4:
+        expected.add("development")
     _keys(queue, expected, "opportunity queue")
-    if queue["schema_version"] not in {2, 3} or queue["artifact_type"] != _QUEUE_TYPE:
+    if version not in {2, 3, 4} or queue["artifact_type"] != _QUEUE_TYPE:
         raise PerformanceDecisionError("opportunity queue: unsupported schema")
     _revision(queue["candidate_sha"], "opportunity queue.candidate_sha")
     _revision(queue["comparison_base_sha"], "opportunity queue.comparison_base_sha")
@@ -260,17 +328,22 @@ def load_queue(path: Path) -> tuple[dict[str, Any], str]:
             or engines["base"]["source_revision"] != queue["comparison_base_sha"]):
         raise PerformanceDecisionError("queue engine revisions disagree with queue identity")
     evidence = _object(queue["evidence"], "opportunity queue.evidence")
-    _keys(
-        evidence,
-        {"preview_summary_sha256", "broad_report_sha256", "external_report_sha256", "sentinel_report_sha256"},
-        "opportunity queue.evidence",
-    )
+    evidence_keys = {
+        "preview_summary_sha256", "broad_report_sha256", "external_report_sha256",
+        "sentinel_report_sha256",
+    }
+    if version == 4:
+        evidence_keys.add("development_report_sha256")
+    _keys(evidence, evidence_keys, "opportunity queue.evidence")
     for key, value in evidence.items():
-        if key == "sentinel_report_sha256" and value is None:
+        if key in {"sentinel_report_sha256", "development_report_sha256"} and value is None:
             continue
         _sha256(value, f"opportunity queue.evidence.{key}")
+    channels = ("external", "broad", "sentinel", "development") if version == 4 else (
+        "external", "broad", "sentinel"
+    )
     seen: set[str] = set()
-    for channel in ("external", "broad", "sentinel"):
+    for channel in channels:
         entries = _array(queue[channel], f"opportunity queue.{channel}")
         expected_rank = 1
         for index, raw_entry in enumerate(entries):
@@ -481,10 +554,10 @@ def validate_unit_against_queue(unit: dict[str, Any], unit_sha: str, queue: dict
         raise PerformanceDecisionError("performance unit queue candidate SHA does not match supplied queue")
     if unit["base_sha"] != queue["candidate_sha"]:
         raise PerformanceDecisionError("performance unit base SHA must equal the queue candidate SHA")
-    if queue.get('schema_version') == 3 and unit.get('schema_version') != 3:
+    if queue.get('schema_version') in {3, 4} and unit.get('schema_version') != 3:
         raise PerformanceDecisionError('new opportunity queues require a schema-3 layout plan')
     if unit.get('schema_version') == 3:
-        if queue.get('schema_version') != 3:
+        if queue.get('schema_version') not in {3, 4}:
             raise PerformanceDecisionError('layout plans require a host-bound schema-3 queue')
         from .layout_policy import load_policy
         from .performance_evidence import ROOT, inventories
@@ -509,8 +582,8 @@ def validate_unit_against_queue(unit: dict[str, Any], unit_sha: str, queue: dict
     if priority["mode"] == "queue":
         ranks = {
             item["id"]: item["rank"]
-            for channel in ("external", "broad", "sentinel")
-            for item in queue[channel]
+            for channel in ("external", "broad", "sentinel", "development")
+            for item in queue.get(channel) or []
         }
         missing = sorted(targets - set(ranks))
         if missing:
@@ -551,6 +624,7 @@ def _parser() -> argparse.ArgumentParser:
     queue.add_argument("--external-report", type=Path, required=True)
     queue.add_argument("--target-ratio", type=float, default=0.5)
     queue.add_argument("--sentinel-report", type=Path)
+    queue.add_argument("--development-report", type=Path)
     queue.add_argument("--output", type=Path, required=True)
 
     check = subparsers.add_parser("check-unit", help="validate one plan without evidence files")
@@ -588,9 +662,13 @@ def main() -> int:
             from .performance_evidence import replay_reports
             from .bundle import verify
             verify(args.summary, args.broad_report, args.external_report, args.sentinel_report)
-            replay_reports(args.broad_report, args.external_report, args.sentinel_report)
+            replay_reports(
+                args.broad_report, args.external_report, args.sentinel_report,
+                args.development_report,
+            )
             payload = build_queue(
-                args.summary, args.broad_report, args.external_report, args.target_ratio, args.sentinel_report
+                args.summary, args.broad_report, args.external_report, args.target_ratio,
+                args.sentinel_report, args.development_report,
             )
             _atomic_write(args.output, payload)
             print(json.dumps(payload, sort_keys=True))
