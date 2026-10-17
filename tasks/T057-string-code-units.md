@@ -1,14 +1,15 @@
 # T057: String code-unit migration
 
-- Status: active; stage-1 implementation committed, screen next.
+- Status: active; stage-1 screen passed, formal decision next.
 - Implementation: present (stage 1 on this branch, see Stage-1 implementation).
 - Verified at: plan commit `47a8042e` (validate-unit valid against v3 queue
   `424a1e79`); implementation fast gate, focused tests and String/RegExp
   Test262 zero-gap slices at the implementation commit (numbers below).
 - Evidence: [stage-1 plan](performance-units/string-handles-ascii-search-boundaries.json)
   and the stage-1 records in this file.
-- Unresolved: full gate, budgeted v3 screen (attempt 1 of 2), formal and held-out decision.
-- Next action: full `check.sh` (iMac no-timing), then `perf-loop --plan` screen.
+- Unresolved: screen attempt 1 passed (K=6 complete); formal 30-block run,
+  held-out panel, exact-candidate zero-gap burndown and promotion decision.
+- Next action: formal `026476d5` vs `351004f3`, then held-out and `decide --mode promotion`.
 
 ## Goal and scope
 
@@ -157,3 +158,25 @@ pins classify-once, not the absence of raw `str` scans. NG fixture
 `find-qjsng-gaps --filter ... --all` (release CLI): String 1221,
 RegExp/prototype 485, StringIteratorPrototype 7,
 RegExpStringIteratorPrototype 17 cases, zero gaps. Runtime lib: 2278 pass.
+Implementation commit `026476d5`: full `check.sh` on the iMac (job
+`20261017T141818Z-t057-stage1-full-check`, no-timing) exit 0 / 258 s,
+runtime lib 2278 tests, 5170 Test262 subset cases; local `compare-qjs.sh`
+249/249 fixtures match NG.
+
+## Stage-1 attempts
+
+| Attempt | Job | Candidate | Result |
+| --- | --- | --- | --- |
+| 1 | `20261017T142313Z-t057-stage1-screen1` | `026476d5` | **pass**, complete K=6 (exit 0 / 11977 s, no DISTURBED) |
+
+Attempt 1 natural screen: papaparse wall 0.8801 (instructions 0.9298),
+regexp-dna 0.7889 (0.8735); every target pair improved, both below 0.95 and
+their reciprocal bands. Events opened the full panel: wall events
+broad/method_call 1.0558 and broad/property_dynamic_read 1.0760 (instructions
+1.0000), and a control instruction event on string-validate-input (every
+pair above 1.01, median 1.0118 below the 1.03 hard cap; wall 1.0137 inside
+B 1.0300). The six-layout completion resolved all three as nonpersistent;
+every lane and the portfolio fit their ceilings on all six layouts (natural:
+broad 1.0086, sentinel 1.0091, external 0.9924, development 0.9851,
+portfolio 0.9974). Verdict copy: workspace `outputs/t057-stage1/screen1-verdict.json`;
+raw panel stays in the iMac runner's `target/layout-attempts/t057-stage1-attempt1/`.
