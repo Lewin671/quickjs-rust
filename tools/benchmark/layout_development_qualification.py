@@ -16,6 +16,18 @@ from .layout_policy import analyze, load_policy, rows, selection_lanes
 from .layout_power import precision_record
 
 
+def verify_seed_binding(seed, a2, parent_sha, qualified_engine, *, a2_sha, original_sha, formal_revision):
+    """The extension uses the parent's qualified image, not a caller's new seed image."""
+    if (seed.get('schema_version') != 1 or seed.get('artifact_type') != 'quickjs-development-a2-bands'
+            or seed.get('parent_policy_sha256') != parent_sha
+            or seed.get('a2_sha256') != a2_sha or seed.get('original_a2_sha256') != original_sha
+            or seed.get('formal_source_revision') != formal_revision
+            or seed.get('source_revision') != a2['source']['revision']
+            or seed.get('source_revision') != qualified_engine['source_revision']
+            or seed.get('calibration_binary_sha256') != qualified_engine['binary_sha256']):
+        raise ValueError('development seed source/evidence binding mismatch')
+
+
 def qualify(parent, seed, pilot, formal, extensions=None, formal_extensions=None):
     ids = opportunity_ids()
     data = rows(pilot, ids, 30)
@@ -92,6 +104,14 @@ def main():
     seed = json.loads(args.seed.read_text())
     from .layout_development_a2 import replay, bands
     a2, raw = replay(args.a2, seed['calibration_binary_sha256'])
+    parent_summary = parent['evidence']['formal-summary']
+    parent_path = Path(parent_summary['path'])
+    if digest(parent_path) != parent_summary['sha256']:
+        raise ValueError('parent qualified image receipt changed')
+    qualified_engine = json.loads(parent_path.read_text())['engines']['candidate']
+    verify_seed_binding(seed, a2, args.parent_sha256, qualified_engine,
+                        a2_sha=digest(args.a2), original_sha=digest(args.original_a2),
+                        formal_revision=args.formal_revision)
     original_seed = json.loads((Path(__file__).parent / 'tests/fixtures/layout-policy/a2-bands.json').read_text())
     if digest(args.original_a2) != original_seed['source_sha256']:
         raise ValueError('original A2 estimator source hash mismatch')

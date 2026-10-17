@@ -96,6 +96,28 @@ class DevelopmentRuleTests(unittest.TestCase):
 
 
 class DevelopmentBundleTests(unittest.TestCase):
+    def test_v2_decision_does_not_judge_unqualified_development_controls(self):
+        from tools.benchmark.performance_evaluation import decide
+        s = summary('c'*40, 'a'*40)
+        s['bundle'] = {'schema_version':2}
+        engines = s['engines']
+        unit = {'schema_version':3, 'unit_kind':'leaf', 'base_sha':'a'*40,
+                'unit_id':'legacy', 'layout_gate':{'policy_path':'test', 'policy_sha256':'b'*64},
+                'fast_gate':{'target_ids':['broad/plain_function_call'], 'target_max_candidate_over_base':.97}}
+        queue = {'engines':{'candidate':engines['base']}}
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch('tools.benchmark.performance_decision.validate_unit_against_queue', return_value={}), \
+             patch('tools.benchmark.performance_evaluation.verify_profiles', return_value=[]), \
+             patch('tools.benchmark.layout_policy.load_policy', return_value=policy()), \
+             patch('tools.benchmark.layout_formal.evaluate_formal', return_value=({'passed':True},[],[],{})):
+            # There is deliberately no development report. Policy v2's controls
+            # stay at 76 even when a caller supplies a newer bundle summary.
+            value = decide(unit,'u',queue,'q',s,'s',internal(engines),'b',external(engines),'e','fast',None,
+                           sentinel=internal(engines,lane='sentinel'),formal_bundle=Path(tmp))
+            self.assertEqual(value['decision'],'retained')
+            self.assertFalse(any(n.startswith('development/') for n in value['metrics']))
+            self.assertNotIn('development_report_sha256',value['evidence'])
+
     def test_new_bundle_seals_and_replays_all_development_artifacts(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -105,7 +127,7 @@ class DevelopmentBundleTests(unittest.TestCase):
             value = bundle.seal(root)
             self.assertEqual(value['bundle']['schema_version'], 2)
             bundle.verify(root/'summary.json', root/'report.json', root/'external-report.json', root/'sentinel-report.json')
-            self.assertEqual(bundle.development_report_path(root/'summary.json'), root/'development-report.json')
+            self.assertEqual(bundle.development_report_path(root/'summary.json'), root.resolve()/'development-report.json')
             with self.assertRaisesRegex(ValueError, 'sealed comparison'):
                 bundle.development_report_path(root/'summary.json', root/'other.json')
             (root/'development-raw.jsonl').write_text('changed')
@@ -182,6 +204,60 @@ class DevelopmentBundleTests(unittest.TestCase):
 
 
 class DevelopmentQualificationTests(unittest.TestCase):
+    def test_seed_binds_qualified_image_revision_and_each_evidence_source(self):
+        from tools.benchmark.layout_development_qualification import verify_seed_binding
+        seed = {'schema_version':1, 'artifact_type':'quickjs-development-a2-bands',
+                'parent_policy_sha256':'p', 'a2_sha256':'a', 'original_a2_sha256':'o',
+                'formal_source_revision':'formal', 'source_revision':'qualified',
+                'calibration_binary_sha256':'image'}
+        source = {'source':{'revision':'qualified'}}
+        engine = {'source_revision':'qualified', 'binary_sha256':'image'}
+        kwargs = dict(a2_sha='a', original_sha='o', formal_revision='formal')
+        verify_seed_binding(seed,source,'p',engine,**kwargs)
+        for field in ('parent_policy_sha256','a2_sha256','original_a2_sha256',
+                      'formal_source_revision','source_revision','calibration_binary_sha256'):
+            changed = {**seed,field:'different'}
+            with self.subTest(field=field),self.assertRaisesRegex(ValueError,'binding mismatch'):
+                verify_seed_binding(changed,source,'p',engine,**kwargs)
+
+    def test_a2_uses_both_estimators_and_global_bias_without_changing_old_cases(self):
+        from tools.benchmark.layout_development_a2 import bands
+        parent = policy()
+        original = {'cases': [{'id':n, 'metrics': {
+            'wall_ns': {'aa_median':.99, 'paired_median_ratios':[.99,1.002,1.,1.,1.,1.]},
+            'instructions': {'aa_median':.999}}} for n in parent['cases']]}
+        raw = {}
+        for name in opportunity_ids():
+            for k in range(6):
+                base = [10000]*5
+                candidate = [10200 if k == 0 else 10000]*5
+                instructions = [1.]*5
+                if name == 'development/papaparse/csv':
+                    if k == 0:
+                        instructions = [1.0001,1.0002,1.0003,1.0004,1.0051]
+                    elif k == 1:
+                        # The paired median is 1, but the ratio of role medians
+                        # is 1.1: correlated raw costs make the estimators differ.
+                        base = [10000,20000,30000,1000000,2000000]
+                        candidate = [10000,20000,33000,1000000,2000000]
+                    elif k == 2:
+                        candidate = [10400]*5
+                raw[(k,name)] = {'ratios': {'wall_ns':[c/b for c,b in zip(candidate,base)],
+                                          'instructions':instructions},
+                                 'costs': {'base':{'wall_ns':base},'candidate':{'wall_ns':candidate}}}
+        seed = bands(parent, original, raw)
+        self.assertEqual({n:seed['cases'][n] for n in parent['cases']},parent['cases'])
+        target = seed['cases']['development/papaparse/csv']
+        self.assertAlmostEqual(target['wall_band'],1.1)
+        self.assertAlmostEqual(target['instruction_band'],1.0051)
+        other = next(n for n in opportunity_ids() if n != 'development/papaparse/csv')
+        self.assertAlmostEqual(seed['cases'][other]['wall_band'],1.02)
+        self.assertAlmostEqual(seed['cases'][other]['instruction_band'],1.0011)
+        self.assertAlmostEqual(seed['lanes']['development'],1.02)
+        self.assertEqual(seed['lanes']['held-out'],parent['lanes']['held-out'])
+        with self.assertRaisesRegex(ValueError,'inventory mismatch'):
+            bands(parent, original, {key:v for key,v in raw.items() if key != (5,other)})
+
     def test_qualification_keeps_parent_and_held_out_budgets_and_requires_lane(self):
         from tools.benchmark import layout_development_qualification as qualification
         from tools.benchmark.layout_policy import geomean

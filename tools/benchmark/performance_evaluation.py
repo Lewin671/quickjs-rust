@@ -72,7 +72,8 @@ def decide(unit, unit_sha, queue, queue_sha, summary, summary_sha, broad, broad_
         from .layout_policy import load_policy
         layout_policy = load_policy(ROOT / unit['layout_gate']['policy_path'],
                                     unit['layout_gate']['policy_sha256'], live=False)
-        if formal_bundle is not None and summary.get('bundle', {}).get('schema_version') == 2:
+        if ('development' in layout_policy['lanes'] and formal_bundle is not None
+                and summary.get('bundle', {}).get('schema_version') == 2):
             from .performance_schema import _read_json
             from .performance_evidence import validate_development
             development, development_sha = _read_json(formal_bundle / 'development-report.json', 'development report')
