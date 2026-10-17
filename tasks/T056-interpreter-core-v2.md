@@ -1,18 +1,17 @@
 # T056: Interpreter core v2
 
-- Status: active; unit 0 part 1 main collection complete, exact-attribution
-  prerequisite still open after the completed short-process sampling attempts.
-- Implementation: no runtime edits in unit 0; migration-screen stage-budget
-  plumbing is fixed at `ddca5bdf`. M1 remains an unimplemented, unfrozen draft.
-- Verified at: measured runtime `b481894d351d933e94717a9c295c15fe4a466804`,
-  iMac, 2026-10-17 UTC; `check.sh` at `ddca5bdf` passes, including 5170 subset cases;
-  the final staged documentation/context/whitespace gates pass.
-- Evidence: [unit 0 part 1 record](archive/T056-unit0-part1-evidence.md),
-  with standing, counts, profiles, RSS, ABI probes and draft validation bindings.
-- Unresolved: absent scoped event counters; short-process profile attachment;
-  one imprecise formal case; part 2 independent development-program evidence.
-- Next action: resolve diagnostic scope and launch-time sampling, complete part 2,
-  then review ordering/budgets before freezing any runtime plan.
+- Status: active; unit 0 complete; first runtime unit (M1 stage 1) frozen, not started.
+- Implementation: no runtime optimization. The evidence-only counter overlay
+  (`84fee838`) is reverted; stage-budget plumbing from `ddca5bdf` remains.
+- Verified at: plan validated against v3 queue `424a1e79` at branch head,
+  2026-10-17; `check.sh` and NG fixtures passed on iMac at `84fee838` (5170 subset cases).
+- Evidence: [part 1](archive/T056-unit0-part1-evidence.md) and
+  [part 2](archive/T056-unit0-part2-evidence.md) records; plan
+  [`interpreter-core-v2-atoms-layouts`](performance-units/interpreter-core-v2-atoms-layouts.json).
+- Unresolved: M2 stages/budgets must absorb the activation-environment scope;
+  part 1's imprecise bitops-3bit-bits-in-byte interval.
+- Next action: implement M1.1 (facade + atom linking) against the frozen plan, then
+  screen it with `perf-loop.sh` under the stage budget.
 
 ## Goal and scope
 
@@ -109,7 +108,7 @@ fixed base; numbered substeps are independently correct stage boundaries.
 | M1.1 — value access facade + atom linking | Named operands link once, with no per-dispatch atom interning; facade leaves size/ownership unchanged. | Per-op re-interning, stale foreign atoms or facade conversion temporaries. |
 | M1.2 — layout authority for all stores and mutations | Ordinary own hits take one atom-to-slot lookup across all four stores; no descriptor cloning for data reads. | A storage family bypasses invalidation, or churn memory grows without bound. |
 | M1.3 — route ordinary Get/Set, retire old probes | Fewer probes/comparisons on interpreter paths and independent external property workloads; final M1 payoff. | Coverage shifts only on a tier/literal path, or final payoff fails. |
-| M2.1 — reusable frame store + split helper borrows | No whole-frame transfer; bounded slot/buffer allocations after warm-up, existing routing preserved. | Disassembly/counters show aggregate moves, per-call boxing or per-op window arithmetic. |
+| M2.1 — reusable frame store + split helper borrows | No whole-frame transfer; slots own and reuse activation-environment state, with no eager per-call name-keyed frame-cell install; bounded slot/buffer allocations after warm-up, existing routing preserved. | Disassembly/counters show aggregate moves, per-call boxing or per-op window arithmetic. |
 | M2.2 — ordinary call/throw/return routing | JS-to-JS frame calls stop constructing nested Vms, including capturing/dynamic-cell calls. | Wrong unwind/cleanup or reduced construction fails to reduce measured call work. |
 | M2.3 — constructors, eval/with, native and suspension boundaries | Same-Vm callback/resume routes, detachable leases; zero nested Vms inside an active context; final M2 payoff. | Borrow survives re-entry, lifetime/job-order mismatch, or final payoff fails. |
 | M3.1 — common heap headers under enum backend | One header allocation per heap payload; preserved weak/COW/escape behavior, counts quantified. | Extra wrapper allocation, unsafe proof failure or ownership/count overhead beyond budget. |
@@ -147,34 +146,33 @@ and computed-key code alongside literal fields. Held-out inputs stay distinct
 from the targets used to select the mechanism. Counter evidence must show that
 ordinary-path wins survive when accelerators decline, rather than a tier switch.
 
-## Unit 0 part 1 evidence
+## Unit 0 evidence and first-unit order
 
-Owner: `agent/t056-unit0/codex`, brief base `b481894d`; no runtime, compiler
-recipe, order, manifest or benchmark changes. The linked record owns all
-measurements and hashes; the workspace report directory holds the review-only
-M1.1 JSON and its successful `validate-unit` result, outside the frozen plan index.
+Owner branch: `agent/t056-unit0/codex`; no runtime
+optimization, recipe, order, manifest or benchmark changes. The linked records own
+every measurement and hash. Held-out programs never selected or profiled anything.
 
-The completed collection covers 76 selection cases and nine held-out programs;
-held-out never selects work or receives mechanism profiling. All engine
-measurement is on the shared iMac. Internal N/2N counts remove fixed startup;
-original and supplemental sampling outcomes remain separate. The formal
-bitops-3bit-bits-in-byte interval is still imprecise; no policy exception or
-favorable replacement is claimed. Existing counters cannot supply the requested
-scoped name/probe, Value ownership, allocation or emitted-copy event totals.
+Part 1: leading broad literal-field deficits execute virtual banks, not name lookup;
+HashMap and public-field Raytrace reach property helpers through accelerators only.
+`ddca5bdf` fixed the schema-3 wrapper so intermediate stages use the cumulative
+budget and final/leaf stages keep payoff.
 
-Leading broad literal-field deficits execute virtual banks, not ordinary name
-lookup. Dynamic method dispatch supplies actual ordinary-VM named reach;
-the provisional real payoff targets, HashMap and public-field Raytrace, mostly
-reach shared property helpers through accelerators. Part 2 and exact counters
-must price an ordinary-driver payoff before implementation. Preserve the facade
-as a dependency; split/re-rank atom authority versus Value transport if that
-additional evidence does not justify the proposed order. No speedup is forecast.
+Part 2 counted the development lane with a feature-only overlay (byte-identical
+canonical image with the feature off) and sampled it on the canonical image:
 
-The original schema-3 iteration wrapper omitted migration stage parameters,
-incorrectly applying final payoff to a neutral intermediate stage. `ddca5bdf`
-forwards cumulative stage targets/budget and preserves final/leaf payoff. Four
-focused regressions, the 556-test tool fast gate and full iMac check pass.
-This fixes tooling, not the missing runtime evidence or M1's implementation.
+- Named-property work owns a mean 15.4% of samples (at least 10% in 7/9 non-papaparse
+  programs) and is reached on the VM path, not only through accelerators: moment and
+  diff make 31.1M/13.2M VM-path attempts with 4.0/5.7 name comparisons per attempt.
+- Call/activation work is as large (mean 18.3%), but nested-Vm construction is only
+  3.5%; `CallEnv` construction, its name-keyed frame-cell layer and write-back take
+  11.3%. The design's frame section now assigns that state to M2.
+- Value clone/drop glue is 7.8–15.5% everywhere; virtual-field work is at most 1.1%.
+
+Order stays M1, M2, M3, with M2's scope widened; virtual-field admission stays an L4
+leaf. M1's frozen plan targets development moment/dates, diff/compare and
+meriyah/parse (stage cap 1.025, final 0.97 or 1/B_i, K=6, one attempt). Durable
+counters, when needed, become plain `cfg(feature = "perf-counters")` code
+admitted with a layout-rule neutrality screen, never text patches.
 
 ## Design acceptance and verification
 
@@ -187,6 +185,6 @@ This fixes tooling, not the missing runtime evidence or M1's implementation.
 - [x] Staged documentation fast gate passes for the three allowed files.
 
 The original design changed only Markdown and did not claim runtime verification.
-Unit 0's tooling and measurement verification is recorded in its section above.
+Unit 0's tooling and measurement verification is recorded in its archive records.
 Every future runtime migration stage must run full configured Test262,
 `check.sh` and NG comparisons as the design requires.

@@ -14,7 +14,7 @@ it to `archive/` with `git mv` and move its row below.
 | Task | Status | What it is |
 | --- | --- | --- |
 | [T057](T057-string-code-units.md) string code units | active | Policy v3 qualified (development targets eligible); stage-1 plan next. |
-| [T056](T056-interpreter-core-v2.md) interpreter core v2 | active | Target design and unit-0 evidence for names, frames and values; exact attribution remains open, M1 is an unimplemented draft. |
+| [T056](T056-interpreter-core-v2.md) interpreter core v2 | active | Target design for names, frames and values; unit 0 complete, M1 stage-1 plan frozen, implementation not started. |
 | [T018](T018-broad-performance.md) broad performance | active | The performance campaign contract and its targets against QuickJS-NG. Start performance work here, then follow [the workflow](../docs/performance-workflow.md). |
 | [T040](T040-imac-general-performance.md) x86_64 general optimization | active | Fresh current-main comparison and exact-binary profiles, followed by independent general runtime units. |
 | [T045](T045-typed-loop-boxed-demand-provenance.md) boxed demand provenance | active | Ordinary identity-flow joins lose boxed demand; exact profiles and seed diagnosis precede a compiler-only unit. |
@@ -88,8 +88,7 @@ outcome column says what happened, not what to do next.
 ## Other Records In `archive/`
 
 - T057: [preliminary development baseline](archive/T057-development-baseline.md) and [policy v3 qualification](archive/T057-development-policy.md).
-
-- T056: [unit 0 part 1 evidence](archive/T056-unit0-part1-evidence.md); standing, attribution limits, RSS, ABI probes and an unfrozen M1 draft.
+- T056: [unit 0 part 1 evidence](archive/T056-unit0-part1-evidence.md) (standing, attribution limits, RSS, ABI probes) and [part 2](archive/T056-unit0-part2-evidence.md) (mechanism counters, development profiles, first-unit ranking and plan binding).
 
 - T055: [qualified policy adoption](archive/T055-layout-noise-control.md), [feedback-2 record](archive/T055-feedback-2-qualification.md), [feedback-1 record](archive/T055-feedback-1-qualification.md), [complete A2 data](archive/T055-phase-a2-data.md) and [B frozen plans/blocked qualification log](archive/T055-phase-b-plan-and-log.md).
 

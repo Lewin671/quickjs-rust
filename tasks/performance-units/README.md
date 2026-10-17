@@ -35,6 +35,7 @@ nothing about whether the code exists.
 
 | Plan (`<name>.json`) | Task | Base | Recorded outcome |
 | --- | --- | --- | --- |
+| `interpreter-core-v2-atoms-layouts` | T056 | `351004f3` 2026-10-17 | frozen M1 migration at stage 1; not implemented or screened |
 | `compact-named-read-single-hot-probe` | T049 | `21e55fe2` 2026-10-16 | one screen failed: target 0.9822 and four controls exceeded 1.03; budget exhausted, runtime reverted, no formal run |
 | `own-data-cache-hot-answers-x86` | T041 | `06f0ecd3` 2026-10-12 | rejected on its single wall-time screen; runtime reverted |
 | `typed-loop-boxed-demand-provenance` | T045 | `27ca5140` 2026-10-13 | candidate `dae07218` correctness/review/CI and zero-gap coverage pass; first screen pending, no retention |
