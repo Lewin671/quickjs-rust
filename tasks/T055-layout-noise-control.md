@@ -1,12 +1,13 @@
 # T055: Layout-robust policy qualification
 
 - Status: active; lead feedback-2 authorizes uniform timeout and power rules.
-- Implementation: feedback-1 present; feedback-2 changes pending. No engine change.
-- Verified at: ea355b49 full gate, 532 tool tests and 5170 subset; 5a36b00f record.
+- Implementation: feedback-2 timeout/power/fallback present; qualification pending. No engine change.
+- Verified at: 3c082e6a fast gate (536 tests), a1ec956e fast gate (543 tests);
+  prior full ea355b49 passed 5170 subset. New full gate follows qualification.
 - Evidence: [feedback-1 record](archive/T055-feedback-1-qualification.md),
   [original B plan/log](archive/T055-phase-b-plan-and-log.md),
   [A2 data](archive/T055-phase-a2-data.md).
-- Unresolved: new protocol and qualification not yet implemented/measured.
+- Unresolved: new formal and power continuation jobs have not completed.
 - Next action: implement/test the frozen amendment below; append required pairs,
   replace canonical formal whole, qualify and close only after all gates pass.
 
@@ -88,3 +89,19 @@ the original stable-path boundary, uniformly across all cases. Existing raw
 archives retain their original argv and cannot become new formal evidence.
 Timeout implementation 1cf3b751 passes its staged gate (536 tests); the
 snapshot correction has actual PreviewRun path/order/identity regression.
+
+
+## Feedback-2 execution record
+
+Reference timeout implementation 1cf3b751 and equal-length path correction
+3c082e6a pass 536 fast tests; power/continuation/fallback implementation
+a1ec956e passes 543 fast tests. Focused tests cover formula/cap allocation,
+immutable pilot/segment hashes, frozen iterations, absolute order/parity,
+original lane cohort, diagnostic-only bands, mandatory K=6 and preserved gates.
+No runtime source change or new dependency. T038 records the separate engine
+wall-tail finding; it is not a policy exception.
+
+| Job | Frozen source/protocol | State |
+| --- | --- | --- |
+| 20261017T050401Z-decision-rule-b-feedback2-formal30 | 3c082e6a; source base=candidate4c; 30 blocks workers-4 | running |
+| 20261017T050856Z-decision-rule-b-power120 | a1ec956e; original A2 paths/N; append90 valid to30 | queued |
