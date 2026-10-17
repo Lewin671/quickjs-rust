@@ -1,17 +1,20 @@
 # T056: Interpreter core v2
 
-- Status: active; unit 0 complete; first runtime unit (M1 stage 1) frozen, not started.
-- Implementation: no runtime optimization. The evidence-only counter overlay
-  (`84fee838`) is reverted; stage-budget plumbing from `ddca5bdf` remains.
-- Verified at: plan validated against v3 queue `424a1e79` at branch head,
-  2026-10-17; `check.sh` and NG fixtures passed on iMac at `84fee838` (5170 subset cases).
-- Evidence: [part 1](archive/T056-unit0-part1-evidence.md) and
-  [part 2](archive/T056-unit0-part2-evidence.md) records; plan
-  [`interpreter-core-v2-atoms-layouts`](performance-units/interpreter-core-v2-atoms-layouts.json).
-- Unresolved: M2 stages/budgets must absorb the activation-environment scope;
-  part 1's imprecise bitops-3bit-bits-in-byte interval.
-- Next action: implement M1.1 (facade + atom linking) against the frozen plan, then
-  screen it with `perf-loop.sh` under the stage budget.
+- Status: active; unit 0 complete; M1 stage 1 implemented on
+  `agent/t056-m1-atoms/claude`, its stage screen pending.
+- Implementation: present on that branch (`11c9fc08`): atom domain, cached
+  per-domain linking of named operands, Value facade. Not on main.
+- Verified at: `11c9fc08`, 2026-10-17: fast gate, curated Test262 5170/5170,
+  NG fixtures 248/248 (local), exact Test262 scan with 0 Rust failures, iMac
+  `check.sh` pass; see [stage 1 record](archive/T056-m1-stage1-evidence.md).
+- Evidence: [part 1](archive/T056-unit0-part1-evidence.md),
+  [part 2](archive/T056-unit0-part2-evidence.md), [M1 stage 1](archive/T056-m1-stage1-evidence.md);
+  plan [`interpreter-core-v2-atoms-layouts`](performance-units/interpreter-core-v2-atoms-layouts.json).
+- Unresolved: stage-1 screen (first job ended in a load-monitor tool error,
+  replacement queued); M2 stages/budgets must absorb the activation-environment
+  scope; part 1's imprecise bitops-3bit-bits-in-byte interval.
+- Next action: read the replacement screen under the stage budget; if it
+  passes, integrate stage 1 and start M1.2 (layout authority for all stores).
 
 ## Goal and scope
 
@@ -173,6 +176,15 @@ leaf. M1's frozen plan targets development moment/dates, diff/compare and
 meriyah/parse (stage cap 1.025, final 0.97 or 1/B_i, K=6, one attempt). Durable
 counters, when needed, become plain `cfg(feature = "perf-counters")` code
 admitted with a layout-rule neutrality screen, never text patches.
+
+## M1 stage 1 (value facade + atom linking)
+
+Owner `agent/t056-m1-atoms/claude` from main `a0b6bb23`. Realms own an
+`AtomDomain` (dynamic `Function` scopes share their creator's); bytecode named
+operands index a symbolic pool and link once per body and domain; foreign or
+dead domains re-intern by content. Stores still key by text, so stage 1 is
+judged only against the cumulative 1.025 stage cap. Mechanism, tests, gates and
+the screen are in the [stage 1 record](archive/T056-m1-stage1-evidence.md).
 
 ## Design acceptance and verification
 
