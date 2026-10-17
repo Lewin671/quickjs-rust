@@ -53,7 +53,7 @@ def _test262_zero_gap(report: dict[str, Any], candidate_sha: str) -> bool:
 
 def decide(unit, unit_sha, queue, queue_sha, summary, summary_sha, broad, broad_sha,
            external, external_sha, mode, test262, *, sentinel=None, sentinel_sha=None,
-           profile_root=None, unstable_base_checks=None) -> dict[str, Any]:
+           profile_root=None, unstable_base_checks=None, layout_panel_path=None, held_out_path=None, formal_bundle=None, resource_report=None, resource_raw=None) -> dict[str, Any]:
     from .performance_decision import validate_unit_against_queue, _summary_revisions, unit_kind
     validation = validate_unit_against_queue(unit, unit_sha, queue, queue_sha)
     candidate_sha, base_sha = _summary_revisions(summary)
@@ -73,11 +73,11 @@ def decide(unit, unit_sha, queue, queue_sha, summary, summary_sha, broad, broad_
     profiles = verify_profiles(unit, queue, profile_root)
     if sentinel is None:
         reasons.append("missing generic-path sentinel evidence")
-    metric = promotion_metric(broad, external, sentinel)
+    metric = "wall_time" if unit.get("schema_version") == 3 else promotion_metric(broad, external, sentinel)
     metrics = comparison_index(broad, external, sentinel, metric)
     wall = comparison_index(broad, external, sentinel, "wall_time") if metric == "cycles" else metrics
     gate = unit["fast_gate"]
-    controls = set(gate["control_ids"])
+    controls = set(gate.get("control_ids", []))
     controls.update(f"sentinel/{case}" for case in inventories()["sentinel"])
     targets = set(gate["target_ids"])
     if mode == "stage":
@@ -85,7 +85,7 @@ def decide(unit, unit_sha, queue, queue_sha, summary, summary_sha, broad, broad_
         target_limit = control_limit = unit["migration"]["stage_max_candidate_over_base"]
     else:
         target_limit = gate["target_max_candidate_over_base"]
-        control_limit = gate["control_max_candidate_over_base"]
+        control_limit = gate.get("control_max_candidate_over_base", 1.0)
     if mode == "promotion":
         if any(suite.get("complete_comparison") is not True or suite.get("complete_base_comparison") is not True
                for suite in external["suites"]):
@@ -95,30 +95,38 @@ def decide(unit, unit_sha, queue, queue_sha, summary, summary_sha, broad, broad_
                             else f"external/{lane}/{case}" for case in cases)
     limits = {case: control_limit for case in controls}
     limits.update({case: target_limit for case in targets})
-    from .base_aa_evidence import classify
-    base_rows, excluded, base_reasons, failed = classify(
-        unstable_base_checks or {}, limits, targets, metrics)
-    reasons.extend(base_reasons)
-    missing = sorted(set(limits) - set(metrics))
-    if missing:
-        reasons.append(f"missing candidate/base evidence for {missing}")
-    for case, limit in sorted(limits.items()):
-        if case not in metrics or case in excluded:
-            continue
-        lower, upper, precise = interval(metrics[case], case)
-        if not precise:
-            reasons.append(f"{case}: insufficient blocks or wide confidence interval")
-        elif lower > limit:
-            failed.append(case)
-        elif upper > limit:
-            reasons.append(f"{case}: confidence interval crosses acceptance threshold {limit}")
+    layout_verdict, layout_hashes = None, {}
+    if unit.get('schema_version') == 3:
+        from .layout_formal import evaluate_formal
+        layout_verdict, layout_missing, failed, layout_hashes = evaluate_formal(
+            unit, summary, broad, external, sentinel, mode, layout_panel_path, held_out_path, formal_bundle, resource_report, resource_raw)
+        reasons.extend(layout_missing)
+        base_rows, excluded = {}, set()
+    else:
+        from .base_aa_evidence import classify
+        base_rows, excluded, base_reasons, failed = classify(
+            unstable_base_checks or {}, limits, targets, metrics)
+        reasons.extend(base_reasons)
+        missing = sorted(set(limits) - set(metrics))
+        if missing:
+            reasons.append(f"missing candidate/base evidence for {missing}")
+        for case, limit in sorted(limits.items()):
+            if case not in metrics or case in excluded:
+                continue
+            lower, upper, precise = interval(metrics[case], case)
+            if not precise:
+                reasons.append(f"{case}: insufficient blocks or wide confidence interval")
+            elif lower > limit:
+                failed.append(case)
+            elif upper > limit:
+                reasons.append(f"{case}: confidence interval crosses acceptance threshold {limit}")
     # Cycles exclude time off-CPU. A precise wall-time regression beyond the
     # control ceiling that cycles do not show points at I/O, syscalls, or
     # waiting, which the promotion metric cannot see; a human must explain it
     # first. The ceiling is the regression limit for every case, targets too:
     # a target whose wall time merely improves less is not a regression.
     wall_divergence = []
-    if metric == "cycles":
+    if metric == "cycles" and unit.get("schema_version") != 3:
         for case in sorted(limits):
             if case in wall and case not in failed:
                 lower, _upper, precise = interval(wall[case], f"wall {case}")
@@ -144,7 +152,7 @@ def decide(unit, unit_sha, queue, queue_sha, summary, summary_sha, broad, broad_
             reasons.append("Test262 parity gate is not zero")
     result = {
         # Version 4 also binds and reports lead-approved unstable-base evidence.
-        "schema_version": 4,
+        "schema_version": 5 if layout_verdict is not None else 4,
         "artifact_type": "quickjs-performance-decision",
         "claim_eligible": False,
         "unit_id": unit["unit_id"], "unit_sha256": unit_sha, "unit_kind": kind,
@@ -170,7 +178,12 @@ def decide(unit, unit_sha, queue, queue_sha, summary, summary_sha, broad, broad_
                      "test262_burndown_sha256": None if test262 is None else test262[1],
                      "base_aa_evidence": {case: row["sha256"] for case, row in base_rows.items()}},
         "unit_validation": validation,
+        **({"layout_verdict": layout_verdict, "layout_evidence": layout_hashes}
+           if layout_verdict is not None else {}),
     }
+    if layout_verdict is not None:
+        result['decision_readiness']['status'] = ('ready_for_unit_gates'
+            if bundle_complete and layout_verdict['passed'] else 'inconclusive')
     if mode == "stage":
         result.update(stage=unit["migration"]["current_stage"], stages=unit["migration"]["stages"])
     return result

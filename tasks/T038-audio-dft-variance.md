@@ -1,14 +1,14 @@
 # T038: Audio DFT cycle variance
 
 - Status: active. Top performance infrastructure item; diagnostic only.
-- Implementation: none. Batch 1 remains present on `integration/batch-1`,
-  with both promotions retained under the new rule; main stays e54e33eb.
+- Implementation: none; no engine variance fix is implemented here.
+  [T037](T037-integration-batch-1.md) owns the retained batch-1 standing.
 - Verified at: `8e208b8a`, 2026-10-12, isolated-case process measurements of
   the exact e54e33eb queue executable and the integration runtime executable.
 - Evidence: distributions and exclusions below. Raw diagnostic artifacts in
   `target/audio-dft-diagnostic/` are local, not retained.
-- Unresolved: the hardware cause and residual within-band cycle variance; no engine or
-  benchmark-protocol fix is approved or implemented.
+- Unresolved: hardware cause and residual execution variance, including the
+  related Gaussian wall-time tail below. No engine fix is implemented.
 - Next action: after retained results are pushed, freeze/validate the approved
   numeric-scratch-placement plan, then sweep a full page before choosing a fix.
 
@@ -182,3 +182,13 @@ After the retained-result update is pushed, freeze/validate its plan before
 implementation; first use a full-page diagnostic offset sweep to distinguish
 relative backing-store hazards from bank alignment/page splits. Do not ship
 an observed page offset or re-pin without screen evidence.
+
+
+## Related Gaussian blur engine finding
+
+[T055's Gaussian wall-tail data](archive/T038-gaussian-wall-tail-data.md)
+records same-image process tails on 4c9f959e: the old trial has a censored
+candidate timeout, and the new 60-second protocol retains a 15.694 s base
+sample (38.74% over its median) versus NG's 4.51% tail. This is an unresolved
+engine-variance finding, potentially related to the DFT family, not a policy
+exception or an established shared cause. No engine fix is implemented.

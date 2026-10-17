@@ -1,22 +1,16 @@
 # T022: Evidence-bound performance priority controller
 
-- Status: active. Standing selection and stop rules for T018.
-- Implementation: present (`scripts/performance-decision.sh`,
-  `tools/benchmark/performance_decision.py`,
-  `tools/benchmark/performance_evaluation.py`). One acceptance box is open.
-- Verified at: candidate af4d0d3c; rule merge dbf98c55, 2026-10-12,
-  30-block base A/A, both retained re-decisions, full gate and rule-branch CI.
-- Evidence: [T018 standing](T018-broad-performance.md#standing-at-af4d0d3c)
-  owns unchanged bundle/queue identities; [T037](T037-integration-batch-1.md)
-  owns A/A evidence, instruction floor, hashes and both exact decision outputs.
-- Unresolved: no ruleset requires the Performance decision check (last box).
-  Audio-dft's engine property remains open independently of retained controls.
-- Next action: [T040](T040-imac-general-performance.md) generates a current-main
-  x86_64 queue and profiles. Integration results are already in main; existing
-  plans retain their old base/queue bindings and do not select new-host work.
-
-
-
+- Status: active; standing controller, schema-3 host policy qualified.
+- Implementation: present; [qualified iMac v2](../benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v2.json)
+  binds layout/held-out gates; all other hosts/recipes require recalibration.
+- Verified at: 3be0ba66, final full/branch gates; 552 tests, 5170 Test262,
+  91 plans independently checked. Qualification/live load recorded in T055.
+  Legacy retained decisions remain verified only at their recorded revisions.
+- Evidence: [T055](archive/T055-layout-noise-control.md) owns B calibration and hashes;
+  [T037](T037-integration-batch-1.md) owns historical unstable-base decisions.
+- Unresolved: ruleset check unconfigured.
+- Next action: freeze fresh schema-3 queue/unit plans against qualified v2;
+  preserve the independent promotion gates below.
 
 Commands and their interpretation are in
 [the performance workflow](../docs/performance-workflow.md); schemas and
@@ -32,14 +26,6 @@ records an explicit retain/reject/inconclusive decision after measurement.
 
 This is process infrastructure, not a new runtime fast path. It does not turn
 variable GitHub-hosted preview numbers into fixed-hardware performance claims.
-
-## Why it exists
-
-The external portfolio is the anti-overfitting boundary, but task notes and
-agent instructions can become stale after a structural migration lands. T016,
-for example, completed the slot-local/shared-upvalue migration; treating its
-old proposal as the current priority would misroute later work. A current
-external ratio identifies a workload to profile, not a code change to make.
 
 ## Mechanism
 
@@ -81,21 +67,56 @@ external ratio identifies a workload to profile, not a code change to make.
   lane-separated summary. Detailed commands and interpretation live in
   [the performance workflow](../docs/performance-workflow.md).
 
-## Single-host cycles promotion (2026-09-22)
+## Layout-robust decisions
 
-There is no separate measurement machine. On the development host, a 30-pair
-same-binary control under normal interactive load measured cycle intervals of
-about ±0.3-0.5% against ±0.7-1.8% for wall time, with single wall pairs off
-by up to 22%. Measurement protocol v9 (sentinel v2, analysis v6) therefore
-records per-process `instructions` and `cycles`, and `decide` judges cycles
-whenever every lane carries them, falling back to wall time elsewhere. A
-precise wall-time regression that cycles do not show keeps the decision
-`inconclusive` until explained. Measurements hold a host-wide lock and wait
-for concurrent builds. Mechanics: `docs/benchmarking.md`, "Decision metric".
+New units use the host-bound schema-3 rule; adoption requires the qualified
+policy produced under [T055](archive/T055-layout-noise-control.md). Older plans and their rejected budgets
+are historical and never acquire an extra attempt from this rule change.
+
+- Freeze targets/payoffs, controls, mechanism class, memory wall targets,
+  offsets and the complete measurement/attempt budget before implementation.
+- A target must beat both its payoff and reciprocal case wall band B_i,
+  with every pair improving. A declared full panel uses all six target
+  medians as an additional geometric aggregate; natural and panel targets
+  both require every pair to improve.
+- A control instruction change opens an event only when every pair exceeds
+  max(1.01,I_i). A median-only excess is an unresolved instruction alert.
+  A consistent excess with median above 1.03 rejects at the hard cap.
+  Otherwise instructions alone do not reject: require all six matching
+  layouts' wall medians above B_i to establish persistent cost.
+- A single-layout wall median above B_i opens a wall event. Six medians
+  above B_i reject, even with flat instructions; a complete mixed panel
+  resolves the event as nonpersistent. An absent panel stays incomplete.
+- Every lane and the equal-case portfolio must fit their own wall ceilings;
+  a portfolio gain cannot hide a failed lane. Natural placement and every
+  measured panel layout must pass. Formal intervals stay mandatory.
+- Instruction-blind changes (Value, memory layout, allocation) predeclare
+  memory-sensitive wall targets, always run K=6, retain resource evidence,
+  and require longer formal wall evidence. Flat instructions do not waive
+  costs. No post-failure target, offset or threshold selection.
+- Held-out is mandatory promotion acceptance: every program within its own
+  measured band and its lane within its measured ceiling, with formal
+  precision. It never selects work. Missing evidence is incomplete.
+- Every calibration/formal A/A automatically uses frozen precision allocation
+  n=min(240,ceil(base_n*(h/.03)^2)); pilot retained; predicted stage then cap.
+  At240 imprecise bands are diagnostic, mandatory K=6, including held-out
+  and canonical formal cases. Other payoff/budget/precision gates remain.
+- Policy data is versioned/hash-bound to the host and compiler recipe.
+  A different host or recipe recalibrates. Measurements use distinct stable
+  equal-length binary paths created once. Apply the [load-only recovery contract](../docs/layout-policy-artifacts.md#load-only-pair-recovery);
+  cap failures/formal DISTURBED jobs replace whole. Valid failures spend attempts.
+
+The full K=6 panel is six screens total, not six independent attempts.
+Correctness, exact engine/profile identity, formal precision and the original
+migration/final-payoff requirements remain in force. Schema 1/2 keeps the
+previous cycles-first rule for replay; schema 3 uses wall plus instructions.
+Commands live in [the workflow](../docs/performance-workflow.md#screen-gate)
+and artifact contracts in [benchmarking](../docs/benchmarking.md#layout-policy-and-panel-artifacts).
 
 ## Unstable frozen-base cases: lead amendment, 2026-10-12
 
-This is a rule change made by the lead on **2026-10-12**, for owner review.
+This historical waiver applies to schema-1/2 decisions; schema 3 retains its
+full wall-precision gates. The lead made this rule change on **2026-10-12**.
 A frozen base can itself be imprecise; requiring every candidate to repair its
 ratio would hold unrelated decisions hostage. A case can be unstable_on_base
 only with same-protocol base/base A/A evidence at least as long as the bundle,
@@ -165,8 +186,8 @@ base-SHA binding.
 ## Verification
 
 ```sh
-PYTHONDONTWRITEBYTECODE=1 python3 -m unittest \
-  tools.benchmark.tests.test_performance_decision -v
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover \
+  -s tools/benchmark/tests -v
 ./scripts/performance-decision.sh --help
 ./scripts/check.sh
 ```
@@ -180,7 +201,7 @@ queue --output <path>` writes it under `target/`, and it is not stored in the
 repository. Generate it for the revision being worked on; `validate-unit`
 refuses a stale one. The work may proceed only after its plan passes
 `validate-unit`. Each implementation attempt is first checked with the
-hardware-counter screen; only a passing screen spends a formal run, and
+layout-robust dual-metric screen; only a passing screen spends a formal run, and
 screened units planned from the same queue may share one batched promotion
 run (gates and batching rules in
 [the performance workflow](../docs/performance-workflow.md#screen-gate)).

@@ -420,9 +420,12 @@ class PlanGate:
     control_ids: tuple[str, ...]
     target_max: float
     control_max: float
+    layout_unit: dict | None = None
 
     def case_specs(self) -> list[str]:
         """Targets, controls, then every sentinel, without duplicates."""
+        if self.layout_unit is not None:
+            return ["broad", "sentinel", "external"]
         specs = [*self.target_ids, *self.control_ids]
         specs += [f"sentinel/{case_id}" for case_id in _internal_case_ids("sentinel")]
         return list(dict.fromkeys(specs))
@@ -437,9 +440,10 @@ def load_plan_gate(path: Path) -> PlanGate:
             unit_id=unit["unit_id"],
             base_sha=unit["base_sha"],
             target_ids=tuple(gate["target_ids"]),
-            control_ids=tuple(gate["control_ids"]),
+            control_ids=tuple(gate.get("control_ids", [])),
             target_max=float(gate["target_max_candidate_over_base"]),
-            control_max=float(gate["control_max_candidate_over_base"]),
+            control_max=float(gate.get("control_max_candidate_over_base", 1.0)),
+            layout_unit=unit if unit.get("schema_version") == 3 else None,
         )
     except (KeyError, TypeError, ValueError) as error:
         raise ScreenError(f"{path}: not a performance unit plan with a fast_gate ({error})") from error
@@ -553,6 +557,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         tool = counter_tool()
         gate = load_plan_gate(args.plan) if args.plan else None
+        policy = None
+        recording = None
+        if gate and gate.layout_unit:
+            from .performance_decision import load_unit
+            from .layout_policy import load_policy
+            load_unit(args.plan)
+            contract = gate.layout_unit['layout_gate']
+            policy = load_policy(ROOT / contract['policy_path'], contract['policy_sha256'])
+            if candidate == base or len(os.fsencode(candidate)) != len(os.fsencode(base)):
+                raise ScreenError('layout rule needs distinct equal-length immutable binary paths')
+            if args.json is None or args.pairs != contract['panel_pairs']:
+                raise ScreenError('layout rule requires --json and the frozen five pairs')
+            recording = args.json.with_suffix('.samples')
+            recording.mkdir(parents=True, exist_ok=False)
         with measurement_lock("screen"), tempfile.TemporaryDirectory(prefix="qjs-screen-") as work:
             specs = list(dict.fromkeys([*(gate.case_specs() if gate else []), *args.case]))
             cases = resolve_cases(specs or ["sentinel"], args.cache_root, Path(work))
@@ -564,9 +582,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             results = []
             for case in cases:
                 print(f"screening {case.id} ...", file=sys.stderr, flush=True)
-                results.append(screen_case(case, candidate, base, args.pairs, tool, args.timeout, args.iterations))
+                if policy is not None:
+                    from .screen_recording import measure
+                    results.append(measure(case, candidate, base, args.pairs, tool, args.timeout,
+                                           recording / (case.id.replace('/', '--') + '.json')))
+                else:
+                    results.append(screen_case(case, candidate, base, args.pairs, tool, args.timeout, args.iterations))
             load_after = os.getloadavg()[0]
-    except (ScreenError, ExternalPreviewError) as error:
+    except (ScreenError, ExternalPreviewError, ValueError, OSError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
     metric = gate_metric(tool)
@@ -580,8 +603,19 @@ def main(argv: Sequence[str] | None = None) -> int:
                  " and it is what this host judges: screen again on a quiet host"))
     verdict = None
     if gate is not None:
-        passed, failures = gate_verdict(results, gate, metric)
-        verdict = {"unit_id": gate.unit_id, "metric": metric, "passed": passed, "failures": failures}
+        if policy is not None:
+            from .layout_rule import evaluate
+            packet = {"pairs": args.pairs, "cases": [
+                {"id": r.id, "ratios": r.ratios} for r in results]}
+            contract = gate.layout_unit['layout_gate']
+            verdict = evaluate(policy, packet, gate.target_ids, gate.target_max,
+                instruction_blind=contract['mechanism_class'] == 'instruction-blind',
+                memory_targets=contract['memory_wall_targets'], panel_required=contract['panel_required'])
+            passed, failures = verdict['passed'], verdict['failures'] + verdict['missing']
+            verdict.update(unit_id=gate.unit_id, metric='wall_ns+instructions')
+        else:
+            passed, failures = gate_verdict(results, gate, metric)
+            verdict = {"unit_id": gate.unit_id, "metric": metric, "passed": passed, "failures": failures}
         print(f"\nscreen gate for {gate.unit_id}: {'PASS' if passed else 'FAIL'}")
         for failure in failures:
             print(f"  - {failure}")

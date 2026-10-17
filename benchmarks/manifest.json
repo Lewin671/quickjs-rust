@@ -6,7 +6,7 @@
   },
   "lane": { "id": "throughput/wall_ns_per_operation" },
   "protocol": {
-    "id": "quickjs-measurement-protocol-v9",
+    "id": "quickjs-measurement-protocol-v10",
     "files": [
       "benchmarks/workloads/broad-micro.js",
       "scripts/benchmark.sh",
@@ -24,7 +24,7 @@
       "tools/benchmark/schema.py",
       "tools/benchmark/snapshots.py"
     ],
-    "aggregate_sha256": "c4bf9a5b24c880d0349c9a2b94dd1b70c2b620569af7a87ea8959050d006b91a"
+    "aggregate_sha256": "ab67b7cf62e3e980e86d133109d318bc18bc0f6bf345de47a137571df367a541"
   },
   "reference_engine": {
     "identity": "quickjs-ng",

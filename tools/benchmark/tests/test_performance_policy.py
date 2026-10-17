@@ -726,7 +726,7 @@ class SentinelProtocolBindingTests(unittest.TestCase):
             PROTOCOL_SHAPES["sentinel_measurement"],
             (
                 "benchmarks/generic-sentinels-manifest.json",
-                "quickjs-generic-sentinel-protocol-v2",
+                "quickjs-generic-sentinel-protocol-v3",
             ),
         )
         policy = json.loads(

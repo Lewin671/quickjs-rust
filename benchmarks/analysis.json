@@ -4,8 +4,8 @@
   "compatible_measurement": {
     "schema_version": 4,
     "protocol_ids": [
-      "quickjs-generic-sentinel-protocol-v2",
-      "quickjs-measurement-protocol-v9"
+      "quickjs-generic-sentinel-protocol-v3",
+      "quickjs-measurement-protocol-v10"
     ]
   },
   "protocol": {

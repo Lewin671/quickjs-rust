@@ -21,7 +21,7 @@ PROTOCOL_KEYS = (
 )
 PROTOCOL_SHAPES = {
     "throughput_measurement": (
-        "benchmarks/manifest.json", "quickjs-measurement-protocol-v9"
+        "benchmarks/manifest.json", "quickjs-measurement-protocol-v10"
     ),
     "throughput_analysis": (
         "benchmarks/analysis.json", "quickjs-analysis-protocol-v6"
@@ -32,10 +32,10 @@ PROTOCOL_SHAPES = {
     # strength of its own self-hash alone.
     "sentinel_measurement": (
         "benchmarks/generic-sentinels-manifest.json",
-        "quickjs-generic-sentinel-protocol-v2",
+        "quickjs-generic-sentinel-protocol-v3",
     ),
     "resource_measurement": (
-        "benchmarks/resources.json", "quickjs-resource-measurement-protocol-v2"
+        "benchmarks/resources.json", "quickjs-resource-measurement-protocol-v3"
     ),
     "resource_analysis": (
         "benchmarks/resource-analysis.json", "quickjs-resource-analysis-protocol-v1"
@@ -64,8 +64,21 @@ PREVIEW_IMPLEMENTATION_FILES = (
     "tools/benchmark/external_preview.py",
     "tools/benchmark/external_preview_markdown.py",
     "tools/benchmark/external_report.py",
+    "tools/benchmark/external_timeouts.py",
     "tools/benchmark/hosted_preview.py",
+    "tools/benchmark/formal_case_context.py",
+    "tools/benchmark/layout_formal_continuation.py",
+    "tools/benchmark/layout_evidence.py",
+    "tools/benchmark/layout_formal.py",
+    "tools/benchmark/layout_formal_raw.py",
+    "tools/benchmark/layout_identity.py",
+    "tools/benchmark/layout_plan.py",
+    "tools/benchmark/layout_policy.py",
+    "tools/benchmark/layout_power.py",
+    "tools/benchmark/layout_rule.py",
+    "tools/benchmark/layout_resources.py",
     "tools/benchmark/measure_lock.py",
+    "tools/benchmark/pair_disturbance.py",
     "tools/benchmark/performance_decision.py",
     "tools/benchmark/performance_evaluation.py",
     "tools/benchmark/performance_evidence.py",
@@ -73,6 +86,8 @@ PREVIEW_IMPLEMENTATION_FILES = (
     "tools/benchmark/performance_policy_frozen.py",
     "tools/benchmark/performance_schema.py",
     "tools/benchmark/profile.py",
+    "tools/benchmark/screen.py",
+    "tools/benchmark/screen_replay.py",
     "tools/benchmark/preview.py",
     "tools/benchmark/preview_identity.py",
     "tools/benchmark/preview_sentinel.py",

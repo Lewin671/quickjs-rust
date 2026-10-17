@@ -8,7 +8,6 @@ T018 and T022. Priority comes from an opportunity queue that is generated
 from a fresh formal run and is not stored in the repository (step 1).
 
 ## Terms
-
 | Lane | Inventory | What a run measures |
 | --- | --- | --- |
 | Broad | 25 cases of `benchmarks/workloads/broad-micro.js`, listed in `benchmarks/manifest.json` | ns per declared operation of small single-operation loops |
@@ -23,8 +22,8 @@ path under test. The six sentinels are mandatory controls for every unit.
 External and held-out times include startup, parsing and shutdown; held-out is
 acceptance only and never a source of work.
 
-- A **diagnostic screen** compares two executables on hardware counters in
-  minutes. It writes no decision artifact and cannot retain or reject a unit.
+- A **diagnostic screen** reports dual metrics and a screening verdict.
+  Retaining a unit still requires a complete formal decision.
 - A **formal run** is one sealed three-engine bundle from
   `scripts/perf-compare.sh` at 30 or 60 blocks. `queue` and `decide` read
   that bundle.
@@ -78,8 +77,7 @@ acceptance only and never a source of work.
 
 ## 1. Regenerate the opportunity queue
 
-A queue from an older revision does not establish priority. Build one from
-a formal bundle whose candidate is the revision you start from:
+Build the opportunity queue from a formal bundle at the starting revision:
 
 ```sh
 ./scripts/perf-compare.sh --base <earlier-commit> --candidate <start-sha> \
@@ -94,8 +92,7 @@ a formal bundle whose candidate is the revision you start from:
 
 If no bundle exists for the starting revision, run the comparison first;
 `--base` is then any earlier commit, normally the previous formal base.
-The output directory and queue file must be new, and the reports must be
-the files in the summary's own sealed directory. The queue ranks, per lane,
+Use new output paths and reports from the summary's sealed directory. The queue ranks, per lane,
 cases whose candidate/QuickJS-NG ratio exceeds `--target-ratio` (default
 0.5). It names workloads to profile, not tactics.
 
@@ -137,31 +134,56 @@ runtime code, commit the plan, and add its row to
 
 ## 3. Implement and screen
 
-`./scripts/perf-loop.sh --plan tasks/performance-units/<unit>.json` builds
-and caches the plan's base, builds the working tree, screens the plan's
-targets, controls and the six sentinels, and prints PASS or FAIL with the
-largest function-size changes. `--trace <case>` adds the typed-loop trace
-histograms from a `perf-counters` build, `--case <spec>` adds cases, and
-`--base <ref>` instead of `--plan` screens without a verdict.
+New performance units use schema 3 and freeze `layout_gate`: the policy
+artifact path and SHA-256, mechanism class, memory-sensitive wall targets,
+K=6 requirement and measurement budget. Schema 1/2 plans remain readable for
+historical decisions; do not reuse them to start a new unit.
+
+```sh
+./scripts/perf-loop.sh --plan tasks/performance-units/<unit>.json \
+  --output target/layout-attempts/<new-attempt>
+```
+
+This requires a committed clean candidate. It builds/audits both revisions'
+six variants before timing, screens natural placement, and completes the
+remaining five matching placements when the rule requires a panel. Natural
+samples are reused unchanged; completion never reruns variant zero. The
+output preserves raw samples, binary identities and the verdict. Run this
+through the site's serialized timing queue. Legacy `--base`, `--trace` and
+extra `--case` remain diagnostic helpers.
 
 ### Screen gate
 
-Cases and thresholds come from the frozen plan's `fast_gate`, never from
-screen results. The screen judges cycles, or wall time on a host whose
-cycle counter is not a clock (it says which); wall time needs a host with
-nothing else running. It passes when every target's
-median ratio is at most `target_max_candidate_over_base` with every pair
-below 1.0, and every control's and sentinel's median is at most
-`control_max_candidate_over_base`. Anything else fails.
+The standing rule is in [T022](../tasks/T022-performance-priority-controller.md#layout-robust-decisions).
+The policy's measured bands apply only on its host/toolchain/recipe; a mismatch
+requires recalibration. Every calibration/formal A/A automatically follows the
+[power/continuation procedure](layout-policy-artifacts.md#precision-power-and-continuation), including diagnostic bands/K=6 at the cap. Every screen
+covers all broad, sentinel and external cases, with every non-target a
+control. It reports `pass`, `control event`, `wall event`, `reject`, or `incomplete`,
+with per-case dual metrics and independent lane/portfolio gates.
+An event is incomplete evidence, not a rejection or a passing screen.
+For an explicit panel (both output paths must have equal-length names):
 
-Each implementation attempt gets one screen, and a failed screen consumes
-one of the plan's `fast_gate.max_attempts` (the validator accepts 1 or 2).
-No tool counts attempts: record every screen result as one line in the
-unit's task file. When the budget is spent the mechanism is closed; new work
-needs a new profile and plan. Only a passing screen spends a formal run.
+```sh
+python3 -m tools.benchmark.layout_variants --revision <base> --output target/layout/base000
+python3 -m tools.benchmark.layout_variants --revision <candidate> --output target/layout/cand000
+python3 -m tools.benchmark.layout_panel \
+  --base-matrix target/layout/base000/identity.json \
+  --candidate-matrix target/layout/cand000/identity.json --output target/layout/panel
+```
 
-An instruction ratio that moves opposite to cycles usually means a layout or
-inlining change: check the function-size list and re-pin the layout (below).
+Use every offset, never select a winning layout. The builder refuses other
+platforms. `--natural` measures only variant zero; `--complete` on that same
+output appends variants 1..5 and writes `complete.json`. Keep its original
+`panel.json` and raw files. `--held-out --pairs 30` with a fresh output
+measures mandatory promotion acceptance after candidate/targets are frozen.
+Never select work or change targets from held-out results.
+A valid failed screen consumes the plan's attempt. Record attempts/events and
+completed panels in its task. Resolve missing panels/instruction alerts within
+the frozen budget; no tool counts attempts. Layout collectors retain load-invalid pairs and append
+replacements under the [load-only recovery contract](layout-policy-artifacts.md#load-only-pair-recovery).
+Cap failures and formal DISTURBED jobs are replaced whole, never pooled.
+Only a passing screen spends a formal run.
 
 ## 4. Formal run and decision
 
@@ -179,15 +201,19 @@ evaluate the frozen plan:
   --broad-report target/comparison/<run2>/report.json \
   --sentinel-report target/comparison/<run2>/sentinel-report.json \
   --external-report target/comparison/<run2>/external-report.json \
+  --layout-panel target/layout/panel/panel.json \
+  --held-out-panel target/layout/held-out/panel.json \
   --test262-burndown /path/to/exact-candidate-burndown.json \
   --require-retained --output target/comparison/<run2>-decision.json
 ```
 
 The base is the plan's frozen `base_sha`, not the commit preceding the
-candidate. `--mode fast` checks the declared targets and controls plus the
-six sentinels. `--mode promotion` also holds every broad and external case
-to the control ceiling and needs complete QuickJS-NG comparisons and the
-candidate's zero-gap Test262 burndown. Do not rerun until a favorable
+candidate. `--mode fast` checks the full policy portfolio. `--mode promotion` additionally
+requires held-out evidence, complete QuickJS-NG comparisons and the candidate's
+zero-gap Test262 burndown. Panel and held-out raw samples are replayed and
+bound to the formal bundle's exact natural binary hashes and source revisions.
+The canonical formal bundle keeps all precision/health/linearity requirements;
+its raw paired ratios use the same case-median/lane statistic as qualification. Do not rerun until a favorable
 interval appears, drop outliers, or pool runs; `--blocks 3` bundles are
 diagnostic. Decision states are defined in
 [benchmarking.md](benchmarking.md#unit-plans-and-decisions). Record the
@@ -213,48 +239,22 @@ above. `advance` permits the next stage and is not a performance claim.
 record which, in those words. `--mode fast` and `--mode promotion` are
 refused until `current_stage == stages`.
 
-## Diagnostic helpers
-
-- `python3 -m tools.benchmark.screen --candidate B --base A --case <spec>`:
-  counter A/B. `--case` is repeatable and accepts `sentinel`, `broad`,
-  `external`, `sentinel/<id>`, `broad/<id>`, `external/<suite>/<case>` and
-  `file:<path>` (default: the six sentinels). `--aa` (without `--base`)
-  screens the candidate against itself for the host's noise floor.
-- `python3 -m tools.benchmark.front_end --binary B --reference
-  third_party/quickjs-ng/build/qjs`: lexing, parsing and compiling cost
-  alone; `--base A` compares two builds.
-- `./scripts/external-corpus-ab.py A B --reps 3`: amplified ranking of
-  short cases ([benchmarking.md](benchmarking.md#measurement-artifacts)).
-- Execution counters and the `QJS_TL_TRACE` / `QJS_CF_TRACE` traces on a
-  `perf-counters` build ([benchmarking.md](benchmarking.md#execution-counters)).
-
 ## Re-pinning the code layout
 
-macOS arm64 uses `crates/qjs-cli/hot-functions.order`; x86_64 uses
-`hot-functions-x86_64.order` and page-aligns `__text`. Tools default to the
-native file; pass `--order`/`--output` for another target. Match actual current
-symbols and verify linked addresses; headers only request a placement.
-
-Use the canonical recipe (features, explicit host target, flags and profile):
+macOS uses the native order file (`hot-functions.order` on arm64,
+`hot-functions-x86_64.order` on x86_64). Build with the canonical recipe,
+not plain cargo release; audit actual raw symbols and linked addresses:
 
 ```sh
 binary="$(python3 -m tools.benchmark.build_cache build-rust \
   --source . --target-dir target/layout-build)"
 python3 -m tools.benchmark.layout_pin --binary "$binary" --preserve-offsets
-python3 -m tools.benchmark.build_cache build-rust \
-  --source . --target-dir target/layout-build
+python3 -m tools.benchmark.build_cache build-rust --source . --target-dir target/layout-build
+python3 -m tools.benchmark.layout_audit --binary "$binary" --strict
 ```
 
 Repeat pin/relink until stable; add changed hot callees to `layout_targets.py`.
-Audit current raw names with `python3 -m tools.benchmark.layout_audit --binary
-"$binary" --strict`; semantic replacements alone are not linker matches.
-
-`./scripts/layout-scan.sh --offsets 0x0,0x200,0x400` is diagnostic: it rewrites
-the native order, relinks with the canonical recipe, screens canaries and
-restores the file on exit. Do not build or measure concurrently in that
-checkout. See `--help` for the canaries; their wins do not authorize adoption.
-
-Preserve audited baseline placements when comparing implementations. Adopting
-a production layout requires the complete broad, sentinel and external
-portfolio, not a favorable canary. Plain `cargo build --release -p qjs-cli`
-uses different features/target identity; use the canonical recipe above.
+`layout-scan.sh --offsets 0x0,0x200,0x400` restores the native order on exit;
+its canary wins cannot adopt production layout. Keep baseline placements
+while comparing implementations; production placement requires the whole
+portfolio. Do not build/measure concurrently in that checkout.

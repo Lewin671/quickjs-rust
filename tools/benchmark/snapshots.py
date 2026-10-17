@@ -23,13 +23,13 @@ class SnapshotStore:
         (self.path / "workloads").mkdir()
 
     def snapshot_engine(self, role: str, source: Path, expected_sha256: str) -> Path:
-        destination = self.path / "engines" / f"{role}-{expected_sha256[:16]}"
+        destination = self.path / "engines" / f"{role}-{'_' * (10 - len(role))}{expected_sha256[:16]}"
         self._copy_verified(source, destination, expected_sha256, 0o500)
         return destination
 
     def snapshot_version_probe(self, role: str, source: Path, expected_sha256: str) -> Path:
         """Create a disposable executable copy that measurement never uses."""
-        destination = self.path / "version-probes" / f"{role}-{expected_sha256[:16]}"
+        destination = self.path / "version-probes" / f"{role}-{'_' * (10 - len(role))}{expected_sha256[:16]}"
         self._copy_verified(source, destination, expected_sha256, 0o500)
         return destination
 
@@ -47,8 +47,10 @@ class SnapshotStore:
         mode: int,
     ) -> None:
         digest = hashlib.sha256()
+        created = False
         try:
             with source.open("rb") as input_handle, destination.open("xb") as output_handle:
+                created = True
                 while True:
                     chunk = input_handle.read(1024 * 1024)
                     if not chunk:
@@ -57,7 +59,8 @@ class SnapshotStore:
                     digest.update(chunk)
             destination.chmod(mode)
         except OSError as error:
-            destination.unlink(missing_ok=True)
+            if created:
+                destination.unlink(missing_ok=True)
             raise SnapshotError(f"cannot snapshot {source}: {error}") from error
         actual = digest.hexdigest()
         if actual != expected_sha256:

@@ -212,7 +212,8 @@ def build_queue(
     if problems:
         raise PerformanceDecisionError("queue requires healthy complete evidence: " + "; ".join(problems))
     payload = {
-        "schema_version": 2,
+        "schema_version": 3,
+        "host": broad["run"]["host"],
         "artifact_type": _QUEUE_TYPE,
         "engines": summary["engines"],
         "candidate_sha": candidate_sha,
@@ -240,15 +241,15 @@ def build_queue(
 
 def load_queue(path: Path) -> tuple[dict[str, Any], str]:
     queue, digest = _read_json(path, "opportunity queue")
-    _keys(
-        queue,
-        {
-            "schema_version", "artifact_type", "candidate_sha", "comparison_base_sha",
-            "target_ratio", "evidence", "external", "broad", "sentinel", "engines",
-        },
-        "opportunity queue",
-    )
-    if queue["schema_version"] != 2 or queue["artifact_type"] != _QUEUE_TYPE:
+    expected = {
+        "schema_version", "artifact_type", "candidate_sha", "comparison_base_sha",
+        "target_ratio", "evidence", "external", "broad", "sentinel", "engines",
+    }
+    if queue.get("schema_version") == 3:
+        expected.add("host")
+        _object(queue.get("host"), "opportunity queue.host")
+    _keys(queue, expected, "opportunity queue")
+    if queue["schema_version"] not in {2, 3} or queue["artifact_type"] != _QUEUE_TYPE:
         raise PerformanceDecisionError("opportunity queue: unsupported schema")
     _revision(queue["candidate_sha"], "opportunity queue.candidate_sha")
     _revision(queue["comparison_base_sha"], "opportunity queue.comparison_base_sha")
@@ -357,16 +358,18 @@ def unit_kind(unit: dict[str, Any]) -> str:
 def load_unit(path: Path) -> tuple[dict[str, Any], str]:
     unit, digest = _read_json(path, "performance unit")
     version = unit.get("schema_version")
-    if version not in {1, 2} or unit.get("artifact_type") != _UNIT_TYPE:
+    if version not in {1, 2, 3} or unit.get("artifact_type") != _UNIT_TYPE:
         raise PerformanceDecisionError("performance unit: unsupported schema")
     expected_keys = {
         "schema_version", "artifact_type", "unit_id", "base_sha", "queue",
         "priority", "mechanism", "profile_evidence", "fast_gate", "promotion_gate",
     }
-    if version == 2:
+    if version >= 2:
         expected_keys.add("unit_kind")
         if unit.get("unit_kind") == "migration":
             expected_keys.add("migration")
+    if version == 3:
+        expected_keys.add("layout_gate")
     _keys(unit, expected_keys, "performance unit")
     kind = unit_kind(unit)
     if kind not in {"leaf", "migration"}:
@@ -422,16 +425,13 @@ def load_unit(path: Path) -> tuple[dict[str, Any], str]:
         _fraction(receipt["inclusive_fraction"], f"performance unit.profile_evidence[{index}].inclusive_fraction")
 
     fast_gate = _object(unit["fast_gate"], "performance unit.fast_gate")
-    _keys(
-        fast_gate,
-        {
-            "target_ids", "control_ids", "target_max_candidate_over_base",
-            "control_max_candidate_over_base", "max_attempts",
-        },
-        "performance unit.fast_gate",
-    )
+    fast_keys = {"target_ids", "target_max_candidate_over_base", "max_attempts"}
+    if version < 3:
+        fast_keys |= {"control_ids", "control_max_candidate_over_base"}
+    _keys(fast_gate, fast_keys, "performance unit.fast_gate")
     target_ids = _unique_strings(fast_gate["target_ids"], "performance unit.fast_gate.target_ids", _opportunity_id)
-    _unique_strings(fast_gate["control_ids"], "performance unit.fast_gate.control_ids", _opportunity_id)
+    if version < 3:
+        _unique_strings(fast_gate["control_ids"], "performance unit.fast_gate.control_ids", _opportunity_id)
     if set(target_ids) != set(priority["opportunity_ids"]):
         raise PerformanceDecisionError(
             "performance unit.fast_gate.target_ids: must equal priority opportunity_ids"
@@ -442,12 +442,13 @@ def load_unit(path: Path) -> tuple[dict[str, Any], str]:
     )
     if target_max >= 1:
         raise PerformanceDecisionError("performance unit fast gate target must require an improvement")
-    control_max = _ratio(
-        fast_gate["control_max_candidate_over_base"],
-        "performance unit.fast_gate.control_max_candidate_over_base",
-    )
-    if control_max < 1:
-        raise PerformanceDecisionError("performance unit control gate cannot require every control to improve")
+    if version < 3:
+        control_max = _ratio(
+            fast_gate["control_max_candidate_over_base"],
+            "performance unit.fast_gate.control_max_candidate_over_base",
+        )
+        if control_max < 1:
+            raise PerformanceDecisionError("performance unit control gate cannot require every control to improve")
     if _integer(fast_gate["max_attempts"], "performance unit.fast_gate.max_attempts", 1) > 2:
         raise PerformanceDecisionError("performance unit max_attempts must not exceed two")
 
@@ -461,12 +462,15 @@ def load_unit(path: Path) -> tuple[dict[str, Any], str]:
         if not _boolean(value, f"performance unit.promotion_gate.{key}"):
             raise PerformanceDecisionError(f"performance unit.promotion_gate.{key}: must remain true")
     declared = set(priority["opportunity_ids"]) | set(target_ids)
-    declared |= set(fast_gate["control_ids"])
+    declared |= set(fast_gate.get("control_ids", []))
     for receipt in profile_evidence:
         declared |= set(receipt["opportunity_ids"])
     if kind == "migration":
         declared |= set(unit["migration"]["cumulative_target_ids"])
     _reject_held_out(declared, "performance unit")
+    if version == 3:
+        from .layout_plan import validate
+        validate(unit)
     return unit, digest
 
 
@@ -477,6 +481,21 @@ def validate_unit_against_queue(unit: dict[str, Any], unit_sha: str, queue: dict
         raise PerformanceDecisionError("performance unit queue candidate SHA does not match supplied queue")
     if unit["base_sha"] != queue["candidate_sha"]:
         raise PerformanceDecisionError("performance unit base SHA must equal the queue candidate SHA")
+    if queue.get('schema_version') == 3 and unit.get('schema_version') != 3:
+        raise PerformanceDecisionError('new opportunity queues require a schema-3 layout plan')
+    if unit.get('schema_version') == 3:
+        if queue.get('schema_version') != 3:
+            raise PerformanceDecisionError('layout plans require a host-bound schema-3 queue')
+        from .layout_policy import load_policy
+        from .performance_evidence import ROOT, inventories
+        contract = unit['layout_gate']
+        policy = load_policy(ROOT / contract['policy_path'], contract['policy_sha256'], live=False)
+        if queue.get('host', {}).get('node') != policy['host_node']:
+            raise PerformanceDecisionError('layout policy and opportunity queue hosts differ')
+        expected = {f'{lane}/{case}' if lane in ('broad', 'sentinel') else f'external/{lane}/{case}'
+                    for lane, cases in inventories().items() for case in cases}
+        if set(policy['cases']) != expected or set(policy['held_out']) != _held_out_opportunity_ids():
+            raise PerformanceDecisionError('layout policy inventory differs from current corpora')
     priority = unit["priority"]
     targets = set(priority["opportunity_ids"])
     profile_targets = {
@@ -552,6 +571,10 @@ def _parser() -> argparse.ArgumentParser:
     decision.add_argument("--profile-root", type=Path, required=True)
     decision.add_argument("--test262-burndown", type=Path)
     decision.add_argument("--unstable-base-evidence", type=Path, action="append", default=[])
+    decision.add_argument("--resource-report", type=Path)
+    decision.add_argument("--resource-raw", type=Path)
+    decision.add_argument("--layout-panel", type=Path)
+    decision.add_argument("--held-out-panel", type=Path)
     decision.add_argument("--mode", choices=("stage", "fast", "promotion"), required=True)
     decision.add_argument("--require-retained", action="store_true")
     decision.add_argument("--output", type=Path, required=True)
@@ -599,6 +622,8 @@ def main() -> int:
             unit, unit_sha, queue, queue_sha, summary, summary_sha, broad, broad_sha,
             external, external_sha, args.mode, test262, sentinel=sentinel, sentinel_sha=sentinel_sha,
             profile_root=args.profile_root, unstable_base_checks=base_checks,
+            layout_panel_path=args.layout_panel, held_out_path=args.held_out_panel,
+            formal_bundle=args.summary.parent, resource_report=args.resource_report, resource_raw=args.resource_raw,
         )
         _atomic_write(args.output, payload)
         print(json.dumps(payload, sort_keys=True))

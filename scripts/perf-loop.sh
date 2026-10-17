@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# One-command inner loop for performance work: build a cached base executable
-# and the working-tree candidate, run the hardware-counter screen, list the
-# largest function-size changes, and optionally summarize a typed-loop trace.
+# One-command performance iteration: schema 3 builds committed layout panels;
+# legacy plans/base-only mode screen a working-tree candidate with optional
+# function-size and typed-loop diagnostics.
 # Diagnostic only; formal acceptance follows docs/performance-workflow.md.
 set -euo pipefail
 
@@ -14,18 +14,23 @@ usage() {
   cat <<'EOF'
 usage: scripts/perf-loop.sh (--plan <unit.json> | --base <git-ref>) [options]
 
-  --plan <unit.json>   screen the plan's fast_gate targets/controls plus the
-                       six sentinels against its base_sha and print PASS/FAIL
-  --base <git-ref>     exploratory: screen against this revision (no verdict)
+  --plan <unit.json>   schema 3: committed clean candidate, full portfolio and
+                       frozen layout rule; requires --output
+                       legacy plan: targets/controls plus six sentinels
+  --base <git-ref>     exploratory working-tree screen (no verdict)
   --case <spec>        extra screen case; repeatable (see tools.benchmark.screen)
-  --pairs <n>          screen pairs (default 5)
-  --symbols <n>        function-size changes to list (default 15, 0 disables)
-  --trace <spec>       also summarize QJS_TL_TRACE=1 for one case on a
+  --pairs <n>          pairs (default 5; fixed at 5 for schema 3)
+  --symbols <n>        legacy function-size list (default 15, 0 disables)
+  --output <dir>      new layout-rule attempt directory (schema 3)
+  --trace <spec>       legacy: also summarize QJS_TL_TRACE=1 for one case on a
                        perf-counters build of the working tree
   --require-quiet      refuse to screen while the load average is high
 
-The base executable is built in a clean worktree and cached per commit under
-target/perf-loop/rev-<sha>/.
+Schema 3 builds/audits six variants of each revision before timing; mandatory
+panels always complete all six. Other events append variants 1..5 to the
+immutable natural screen. Use the site's serialized timing queue.
+Legacy base binaries are cached under
+target/perf-loop/compiler-fat16-abort-v1/rev-<sha>/.
 EOF
 }
 
@@ -34,6 +39,7 @@ base_ref=""
 pairs=5
 symbols=15
 trace=""
+output=""
 quiet=()
 cases=()
 while [ $# -gt 0 ]; do
@@ -43,6 +49,7 @@ while [ $# -gt 0 ]; do
     --case) cases+=(--case "${2:?}"); shift 2 ;;
     --pairs) pairs="${2:?}"; shift 2 ;;
     --symbols) symbols="${2:?}"; shift 2 ;;
+    --output) output="${2:?}"; shift 2 ;;
     --trace) trace="${2:?}"; shift 2 ;;
     --require-quiet) quiet=(--require-quiet); shift ;;
     -h|--help) usage; exit 0 ;;
@@ -60,6 +67,18 @@ fi
 
 cargo_bin="$(qjs_resolve_cargo)" || { echo "error: cargo not found" >&2; exit 1; }
 cd "$ROOT_DIR"
+
+if [ -n "$plan" ] && [ "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["schema_version"])' "$plan")" = 3 ]; then
+  if [ -z "$output" ]; then
+    echo "error: schema-3 layout attempts require --output <new-directory>" >&2
+    exit 2
+  fi
+  if [ "$pairs" != 5 ] || [ "${#cases[@]}" -ne 0 ] || [ -n "$trace" ] || [ -n "$base_ref" ]; then
+    echo "error: schema-3 attempts use the frozen full portfolio and five pairs" >&2
+    exit 2
+  fi
+  exec python3 -m tools.benchmark.layout_iteration --plan "$plan" --output "$output"
+fi
 
 if [ -n "$plan" ]; then
   base_ref="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["base_sha"])' "$plan")"

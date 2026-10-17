@@ -15,6 +15,7 @@ import tempfile
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
+from .external_timeouts import Measurement
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -70,16 +71,6 @@ class Suite:
     reporting_rule: str
     source: Source
     cases: tuple[Case, ...]
-
-
-@dataclass(frozen=True)
-class Measurement:
-    blocks: int
-    timeout_seconds: int
-    metric: str
-    phase_boundary: str
-    order: str
-    seed: int
 
 
 @dataclass(frozen=True)
@@ -190,16 +181,18 @@ def load_manifest(path: Path) -> Manifest:
         {"schema_version", "preview_id", "claim_eligible", "measurement", "suites"},
         "manifest",
     )
-    if _integer(root["schema_version"], "manifest.schema_version", 1) != 2:
-        raise ExternalPreviewError("manifest.schema_version: expected version 2")
+    version = _integer(root["schema_version"], "manifest.schema_version", 1)
+    if version not in (2, 3):
+        raise ExternalPreviewError("manifest.schema_version: expected version 2 or 3")
     if root["claim_eligible"] is not False:
         raise ExternalPreviewError("manifest.claim_eligible: preview must remain false")
     preview_id = _string(root["preview_id"], "manifest.preview_id")
-    if preview_id != "quickjs-authoritative-external-preview-v2":
+    if preview_id != f"quickjs-authoritative-external-preview-v{version}":
         raise ExternalPreviewError("manifest.preview_id: unexpected trust-root identity")
     measurement_data = _keys(
         root["measurement"],
-        {"blocks", "timeout_seconds", "metric", "phase_boundary", "order", "seed"},
+        {"blocks", "timeout_seconds", "metric", "phase_boundary", "order", "seed"}
+        | ({"timeout_policy"} if version == 3 else set()),
         "manifest.measurement",
     )
     measurement = Measurement(
@@ -320,6 +313,13 @@ def load_manifest(path: Path) -> Manifest:
         )
     if suite_ids != {"jetstream3-js-subset", "kraken-1.1", "sunspider-1.0"}:
         raise ExternalPreviewError("manifest.suites: expected exactly the three selected suites")
+    if version == 3:
+        from .external_timeouts import attach
+        try:
+            measurement = attach(measurement, measurement_data['timeout_policy'],
+                                 [s.id + '/' + c.id for s in suites for c in s.cases])
+        except ValueError as error:
+            raise ExternalPreviewError(str(error)) from error
     return Manifest(resolved, _sha256_bytes(raw), preview_id, measurement, tuple(suites))
 
 
@@ -467,7 +467,7 @@ def _record(
         "schema_version": 3,
         "record_type": "sample",
         "measurement_blocks": manifest.measurement.blocks,
-        "timeout_seconds": manifest.measurement.timeout_seconds,
+        "timeout_seconds": manifest.measurement.timeout_for(suite.id, case.id),
         "preview_id": manifest.preview_id,
         "manifest_sha256": manifest.sha256,
         "claim_eligible": False,
@@ -590,6 +590,8 @@ class PreviewRun:
         source_binaries = {"candidate": candidate, "base": base, "quickjs-ng": quickjs}
         self.binary_hashes = {"candidate": candidate_sha, "base": base_sha, "quickjs-ng": quickjs_sha}
         self.blocks = blocks if blocks is not None else manifest.measurement.blocks
+        if timeout_seconds is not None and manifest.measurement.case_timeouts is not None:
+            raise ExternalPreviewError("reference-derived case timeouts cannot be overridden")
         self.timeout = (
             timeout_seconds if timeout_seconds is not None else manifest.measurement.timeout_seconds
         )
@@ -601,7 +603,7 @@ class PreviewRun:
                 Measurement(
                     self.blocks, self.timeout, manifest.measurement.metric,
                     manifest.measurement.phase_boundary, manifest.measurement.order,
-                    manifest.measurement.seed,
+                    manifest.measurement.seed, manifest.measurement.case_timeouts,
                 ),
                 manifest.suites,
             )
@@ -615,7 +617,7 @@ class PreviewRun:
         try:
             self.binaries: dict[str, Path] = {}
             for role, source_binary in source_binaries.items():
-                snapshot = self.snapshot_root / role
+                snapshot = self.snapshot_root / f"{role}-{'_' * (10 - len(role))}{self.binary_hashes[role][:16]}"
                 shutil.copyfile(source_binary, snapshot)
                 snapshot.chmod(0o500)
                 if _sha256_file(snapshot) != self.binary_hashes[role]:
@@ -644,7 +646,7 @@ class PreviewRun:
                 _print_sample_progress(
                     self.lane.label, suite.id, case.id, phase, role, measured, self.blocks
                 )
-                result = run_process(argv, self.timeout)
+                result = run_process(argv, self.manifest.measurement.timeout_for(suite.id, case.id))
                 records.append(_record(
                     self.manifest, suite, case, role, self.binary_hashes[role], bundle,
                     phase, measured, order, result, argv, self.lane.status,

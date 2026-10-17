@@ -200,9 +200,11 @@ def replay(path: Path, manifest: Manifest) -> dict[str, Any]:
     if not records:
         raise ExternalPreviewError("external raw: empty run")
     blocks = _integer(records[0].get("measurement_blocks"), "external blocks", 1)
-    timeout = _integer(records[0].get("timeout_seconds"), "external timeout", 1)
+    timeout = (manifest.measurement.timeout_seconds if manifest.measurement.case_timeouts is not None
+               else _integer(records[0].get("timeout_seconds"), "external timeout", 1))
     manifest = replace(manifest, measurement=replace(manifest.measurement,
-                                                    blocks=blocks, timeout_seconds=timeout))
+                                                    blocks=blocks, timeout_seconds=(manifest.measurement.timeout_seconds
+                                                    if manifest.measurement.case_timeouts is not None else timeout)))
     cursor = 0
     previous_end = 0
     binary_hashes: dict[str, str] = {}
@@ -217,7 +219,7 @@ def replay(path: Path, manifest: Manifest) -> dict[str, Any]:
         expected = {
             "schema_version": 3, "record_type": "sample", "claim_eligible": False,
             "preview_id": manifest.preview_id, "manifest_sha256": manifest.sha256,
-            "measurement_blocks": blocks, "timeout_seconds": timeout,
+            "measurement_blocks": blocks, "timeout_seconds": manifest.measurement.timeout_for(suite.id, case.id),
             "host": records[0]["host"],
             "suite_id": suite.id, "case_id": case.id, "phase": phase, "block": block,
             "order": order, "role": role, "source_revision": suite.source.revision,
