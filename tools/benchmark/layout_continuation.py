@@ -103,6 +103,7 @@ def main():
     with screen.measurement_lock('layout-power-continuation'):
         if screen.wait_for_builds(300):raise ValueError('competing builds remain')
         screen.check_load(8,True,300)
+        preflight=screen.launch_preflight([Path(p) for p in binaries.values()],120)
         measure(case,Path(binaries['candidate']),Path(binaries['base']),needed-count,
                 screen.counter_tool(),120,out/'case.json',monitor,
                 iterations=original['iterations'],pair_offset=offset)
@@ -114,7 +115,7 @@ def main():
     value={'artifact_type':'quickjs-layout-continuation','schema_version':1,'case_id':args.case,
         'pilot':{'path':str(pilot),'sha256':digest(pilot)},
         'previous':{'path':str(args.previous.resolve()),'sha256':digest(args.previous)} if args.previous else None,
-        'host':host,'host_node':platform.node(),'pilot_context':args.pilot_context,'quieting':quieting,'sha256':identity['sha256'],'previous_pairs':count,'required_pairs':needed,
+        'host':host,'host_node':platform.node(),'launch_preflight':preflight,'pilot_context':args.pilot_context,'quieting':quieting,'sha256':identity['sha256'],'previous_pairs':count,'required_pairs':needed,
         'raw_file':'case.json','raw_sha256':digest(out/'case.json'),
         'disturbance':disturbance,'disturbance_counts':verify_run([raw],disturbance),
         'ratios':{m:ratios[m]+appended[m] for m in ('instructions','wall_ns')}}
