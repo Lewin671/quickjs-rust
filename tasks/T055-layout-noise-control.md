@@ -1,184 +1,79 @@
-# T055: Layout noise control — B pair-level qualification
+# T055: Layout-robust policy qualification
 
-- Status: blocked; canonical timeout plus valid component precision failure.
-- Implementation: present; versioned host policy v1 is unqualified and cannot
-  be used for a new promotion. No runtime engine change.
-- Verified at: ea355b49, 2026-10-16; final iMac full gate passes (163 s),
-  532 benchmark tests and 5170 subset cases. Base-main fast/context pass.
-  Prior f2fb8067 six-variant audit and 248 exact-image NG fixtures pass.
-- Evidence: [B frozen plans and log](archive/T055-phase-b-plan-and-log.md),
-  [A2 data](archive/T055-phase-a2-data.md),
-  [unqualified policy v1](../benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v1.json).
-- Unresolved: recursive_call_tree A/A half-width 5.9945% exceeds 3%; canonical
-  Gaussian blur candidate block 27 times out at 15 s. Neither is load-invalid.
-- Next action: lead resolves/freezes variance and canonical timeout protocols
-  before new qualification. No policy adoption or favorable rerun now.
+- Status: active; lead feedback-2 authorizes uniform timeout and power rules.
+- Implementation: feedback-1 present; feedback-2 changes pending. No engine change.
+- Verified at: ea355b49 full gate, 532 tool tests and 5170 subset; 5a36b00f record.
+- Evidence: [feedback-1 record](archive/T055-feedback-1-qualification.md),
+  [original B plan/log](archive/T055-phase-b-plan-and-log.md),
+  [A2 data](archive/T055-phase-a2-data.md).
+- Unresolved: new protocol and qualification not yet implemented/measured.
+- Next action: implement/test the frozen amendment below; append required pairs,
+  replace canonical formal whole, qualify and close only after all gates pass.
 
-## Scope and boundary
+## Frozen feedback-2 amendment (2026-10-16, before any new timing)
 
-The lead's phase B brief authorizes the layout-robust tool implementation and
-calibration, and explicitly says to stop and report when a lead decision is
-needed. The repeated shared-host interference reached that boundary. The task
-is not closed/archived as adopted, and no valid failure was favorably rerun.
+Authorization: workspace tmp/decision-rule-b/feedback-2.md. This supersedes
+only timeout and precision allocation in the earlier frozen plans. All original
+source images, host/recipe binding, A2 bands, statistic, 20,000-draw seed-0 95%
+bootstrap, 3% precision limit, load-only eligibility/caps and correctness gates
+stay unchanged. No candidate/base winner or payoff selects a protocol setting.
+No runtime engine change, dependency, project-remote push or merge.
 
-The rule lives in [T022](T022-performance-priority-controller.md#layout-robust-decisions),
-procedure in [the workflow](../docs/performance-workflow.md#screen-gate),
-and schemas in [artifact contracts](../docs/layout-policy-artifacts.md).
-The linked B log owns frozen plans, job identities, exact binaries, structural
-audit correction and gate results. Invalid observations remain retained but
-ineligible; held-out remains acceptance-only and its budgets remain unknown.
+Timeout is a uniform hang detector: for each external case use
+max(60 seconds, 4 x its pinned QuickJS-NG median in the latest fully valid
+available canonical run, 20261016T122024Z-general-current-baseline). That
+bundle is ready_for_unit_gates with no disturbance, 30 ok reference samples
+per case, pinned NG revision f7830186043e4488f2998759d60a514faf07cbc9 /
+binary 919f7235f61412ba69faf6aa05b534869aa7d69d1583b3d7aab3cd5b67cd6f40.
+Record all reference medians, input hashes and derived per-case timeouts in
+the manifest. Its largest reference median is 10.206905655 s, so all current
+45 case thresholds are 60 s. Derive before timing; never update from the new
+run. A timeout still fails. Bump manifest/protocol identity and hashes; archive
+readers retain old-protocol replay. Replace canonical A/A whole: base=candidate
+4c9f959e, 30 blocks, workers-4. It is the only eligible formal evidence.
+Up to three whole replacements are allowed solely for load-invalid runs.
 
-## Resume requirements
+Power allocation uses only valid A/A precision, never gain or loss. For any
+30-pair pilot case with h>0.03, freeze n=min(240, ceil(30*(h/0.03)^2)).
+Retain the exact original 30 valid pairs. Pilot source is the complete
+feedback-1 76x30 collector 20261017T022615Z-decision-rule-b-aa30-pairs;
+held-out source is 20261017T022616Z-decision-rule-b-heldout30-pairs. Both have
+zero heavy/invalid pairs and strict raw/source replay. The sole screen deficit
+is sentinel/recursive_call_tree, h=0.059945073264363824 -> n=120. Append 90
+valid pairs using the same image, immutable existing binary paths, frozen
+iteration count and cumulative role alternation. No recopy/replacement of
+these executables or remeasurement of their original pairs. Keep original
+packets immutable; continuation files bind their source hashes and every load
+log separately. All other screen cases and all nine held-out programs retain
+30 pairs. Apply the identical power function to held-out deficits (none).
 
-Keep the source/host/recipe identities and total measurement/attempt budget
-frozen before timing. For the original attempts retain/replace DISTURBED runs whole. New
-attempts follow the frozen amendment below; never pool independent jobs. All formal precision/correctness/identity gates still apply.
-The first policy is intentionally unqualified; do not edit it into acceptance.
-T053/T054 rejected standings and exhausted budgets are unchanged.
+Precision-only second stage: if the frozen predicted n still misses 3%, append
+to the 240-pair cap once, retaining all previous pairs. No intermediate search
+or stopping based on effect size. If still imprecise at 240, record "imprecise
+on this host": its wall band is diagnostic only; any unit measuring/touching
+that case must complete K=6. This does not waive formal precision, target
+payoff/all-pairs, instruction hard caps, lane/portfolio or correctness gates.
+A complete panel supplies the required diagnostic evidence; that case's
+unqualified wall band alone cannot reject/promote. Full-portfolio screens
+include every policy case, hence any such fallback forces their full K=6.
+Held-out remains acceptance-only; apply the same power/fallback rule, require
+K=6 held-out evidence if it reaches the cap, and retain independent precise
+formal/aggregate gates. No held-out case selects optimization work.
 
+Unequal per-case qualification counts use all valid pairs for case statistics;
+for lane statistics retain the original joint 30-pair cohort, since other cases
+are not remeasured. Do not duplicate/downsample the extended case into a false
+joint cohort or reinterpret independent continuation rounds as shared blocks.
+The original A2 lane envelopes stay fixed. Extension source, count decision,
+load replay and case precision are separately bound into policy evidence.
 
-## Frozen feedback-1 amendment (2026-10-16, before new timing)
+Engine finding: same-image Gaussian blur shows a heavy wall tail (+20-35%
+versus NG about +5%), potentially related to T038's variance family. Record
+it under T038 and the outcome as an engine finding with uncertainty; do not
+encode a benchmark-specific exception or fix the engine in this task.
 
-Authorization: workspace tmp/decision-rule-b/feedback-1.md. Keep all source,
-recipe, binaries, pair counts, A2 envelopes, qualification statistics and
-valid-failure stopping rules in the frozen B log. Prior invalid runs stay invalid.
-New screen/panel/held-out collectors use the existing queue intruders.log:
-5-second samples, individual >=30% process inclusion, summed CPU >=200%
-per UTC second. Do not change monitoring, thresholds or process exemptions.
-Record epoch start/end around every measured process. A pair's window spans
-its first process start through last process end, including intervening gaps.
-Invalidate iff that window expanded by 2 seconds intersects a heavy sample's
-one-second timestamp bucket (conservative timestamp quantization). Load alone
-selects pairs; retain all raw values and invalid reasons before calculating
-accepted costs. Nonpositive/short valid increments still fail, never trigger
-value-based replacement. Iteration calibration remains separate and frozen.
-
-Measure the original count first, wait 8 seconds for monitor/guard completion,
-then append a round containing exactly the missing count. Continue alternating
-base/candidate-first by cumulative attempt index, without resetting on retries.
-All rounds/samples survive in the packet; exactly the first required valid pairs
-enter statistics, in acquisition order. Fail the whole run if invalid attempts
-exceed 20% after a completed round (per case and whole run), or any consecutive
-heavy-sample cluster spans >=60 seconds (adjacent sample gaps <=6 seconds).
-Retain failed packets. No within-job or cross-job cherry-picking; no automatic
-retry of a statistically valid failed qualification. At most three whole-run
-replacements per calibration, only for load-invalid runs; then stop/report.
-
-Apply this protocol to all layout-rule screens, six-layout panels and held-out
-collectors, including calibration. Legacy screen artifacts retain their original
-protocol. Canonical perf-compare uses multi-worker, three-engine calibrated
-blocks without a sealed pair-window/retry contract; extending it would change
-its independently qualified scheduler. Keep formal 30-block A/A whole-run
-replacement on any heavy sample (maximum three load-invalid replacements),
-not partial filtering or pooling. Existing formal health and precision gates
-remain mandatory. Queue warning is retained for pair-recovered jobs; acceptance
-requires raw load replay, caps and complete valid counts, not the warning alone.
-
-Before every timing job record mdutil -s / and disabled photo/media service
-flags through the queue. Indexing must be disabled before starting timing;
-otherwise stop without measurements. Qualification publishes a new v2 artifact;
-v1 and the original B log remain immutable. Document actual jobs and decisions
-in this active task before archiving the completed outcome.
-
-
-## Feedback-1 execution record
-
-Pair-recovery implementation: 5d255e5e. Staged fast gate: 531 tests pass;
-focused overlap/guard/cap/conservation tests pass. Host readback initially
-showed indexing enabled, then disabled before any new timing. Both approved
-photo/media service disable flags are true. Full no-timing gate job:
-20261017T022339Z-decision-rule-b-pair-full-check passes, including 5170 subset
-cases. Qualification additionally requires a sealed formal load log; its
-focused guard and updated fast gate pass (532 tests). New timing collectors
-remain frozen at 5d255e5e, never the older collectors or invalid samples.
-
-| Job | Plan | State |
-| --- | --- | --- |
-| 20261017T022615Z-decision-rule-b-aa30-pairs | 76x30, pair recovery | exit 0 / 3690 s |
-| 20261017T022616Z-decision-rule-b-heldout30-pairs | 9x30, pair recovery | exit 0 / 3181 s |
-| 20261017T022617Z-decision-rule-b-formal30-whole | canonical 30 blocks, workers-4 | exit 0 / 1361 s; incomplete external |
-
-
-The new portfolio collector completes all 76 cases: 2280 attempts, 2280 valid,
-0 invalid, 0 heavy load samples; 2 light intruder rows remain below threshold.
-Every case has 30 valid pairs; collector raw/load conservation passes.
-This establishes collection integrity only; statistical qualification awaits
-all three new inputs. No old observations or bands have been recomputed.
-
-
-Held-out collection also completes: all 9 programs, 270 attempts, 270 valid,
-0 invalid, 0 heavy samples (6 light intruder rows). Every program has exactly
-30 valid pairs and matching expected checksums. Statistical ceilings remain
-pending until the canonical formal input completes and qualification replays
-all raw data. No replacement attempt has been spent in this amendment.
-
-
-## Canonical input blocker (feedback-1 stop boundary)
-
-The canonical job has zero heavy intruder samples. Broad (25 cases) and
-sentinel (6) have 30 valid blocks, passing input/linearity/precision health.
-External has one non-ok measurement: kraken-1.1/imaging-gaussian-blur,
-candidate block 27 (human block 28), duration 15021374156 ns, exit -9,
-status timeout at the frozen 15-second case limit. All three engine
-capabilities are ok; candidate/base and candidate/NG comparisons are missing
-for this case because the complete paired input is absent. The entire formal
-input remains ineligible; do not omit/impute/retry that observation or waive
-health. It is not a load-invalid replacement. No replacement budget was spent.
-
-Qualification job 20261017T025048Z-decision-rule-b-qualify-pairs-v2 at a03b984a
-fails closed (exit 1 / 36 s): `formal external layout input invalid or on a
-different host`; the inspected reason is the timeout, not host identity.
-No v2 policy was generated. The v1 unqualified artifact remains untouched.
-A diagnostic-only analysis of the two valid component calibrations will be
-recorded below; it cannot substitute for canonical qualification or promotion.
-
-
-## Valid component diagnostics (not a policy)
-
-Job 20261017T044845Z-decision-rule-b-component-diagnostics at a320b65f
-passes raw sample/load replay and source/host binding (exit 0 / 23 s).
-It uses the exact frozen 20,000-draw seed-0 bootstrap, without canonical
-statistics or any omission/imputation of the formal timeout. Its artifact is
-`quickjs-layout-calibration-diagnostic`, qualified/claim_eligible false.
-
-One of 76 screen cases fails precision: sentinel/recursive_call_tree has
-ratio 0.9984805608, 95% CI [0.9420116061, 1.0468012246], relative half-width
-0.0599450733 >0.03. All 30 pairs remain valid; this is a valid statistical
-failure, not a load-invalid replacement. No favorable repeat, 60-pair
-extension, outlier deletion, band widening or precision waiver is authorized.
-No other component case fails the frozen checks. All component lane CIs fit
-existing A2 envelopes; all 9 held-out program/lane precision checks pass.
-
-| Component lane | Ratio | 95% interval | Existing or diagnostic ceiling |
-| --- | ---: | --- | ---: |
-| broad | 1.001537836 | [0.999739931, 1.002973665] | 1.012949330 |
-| sentinel | 1.000153930 | [0.990211861, 1.008485743] | 1.015687002 |
-| external | 0.999664706 | [0.998456165, 1.000627944] | 1.007380238 |
-| portfolio | 1.000319118 | [0.999014938, 1.001381464] | 1.008262332 |
-| held-out | 1.001143444 | [0.999443171, 1.002899398] | 1.0029 (diagnostic only) |
-
-Held-out program diagnostic bands (rounded-up reciprocal CI envelope):
-acorn/parse 1.0088; esprima/parse 1.0030; marked/render 1.0076;
-mustache/render 1.0100; handlebars/render 1.0066; crypto-js/hash 1.0053;
-d3-array/aggregate 1.0042; ramda/pipeline 1.0065; decimal.js/arith 1.0038.
-They are measured component results, not adopted promotion ceilings. All
-A2 case/lane policy values and the frozen unqualified v1 artifact are unchanged.
-T055 cannot close as adopted; both blockers need a separately authorized plan.
-
-
-## Final verification and handoff
-
-Final full job 20261017T044950Z-decision-rule-b-feedback-final-check at
-ea355b49 passes (exit 0 / 163 s): 532 benchmark tests, Rust/workspace/feature
-checks and 5170 Test262 subset cases. Base-main fast gate at a320b65f passes
-532 tests (75.395 s), fmt/clippy/context/shell checks; final record-only
-staged/context gate also passes. No semantic focused slice matches tool-only
-changes. Runtime/parser/lexer sources remain unchanged from 4c9f959e.
-
-Final T053/T054 diagnostic replays retain control-event/wall-event labels,
-respectively; no direct rejection, but missing K=6 keeps both incomplete.
-Their rejected standings and exhausted budgets are unchanged. The diagnostic
-component artifact SHA-256 is
-b485f9b889f7167c78fb4f8c3b26ff21eda6602b298846757b05b123129ecdcb.
-No timing job remains from this task. T055 stays active/blocked for a lead
-variance/timeout decision; original logs, plans, bands and policy v1 stay frozen.
+After frozen changes/tests, check iMac status and quieting before timing, run
+only required continuation and one new canonical 30-block A/A, then qualify.
+Publish new hash-checked qualified policy v2 only if all applicable checks
+pass. Keep v1 and all prior logs/plans immutable; failed earlier formal input
+never contributes a sample. Stop/report any new real blocker.
