@@ -13,7 +13,7 @@ it to `archive/` with `git mv` and move its row below.
 
 | Task | Status | What it is |
 | --- | --- | --- |
-| [T056](T056-interpreter-core-v2.md) interpreter core v2 | active | Target design for ordinary-path atoms/shapes, stable single-Vm frames and an 8-byte value word; implementation not started. |
+| [T056](T056-interpreter-core-v2.md) interpreter core v2 | active | Target design and unit-0 evidence for names, frames and values; exact attribution remains open, M1 is an unimplemented draft. |
 | [T018](T018-broad-performance.md) broad performance | active | The performance campaign contract and its targets against QuickJS-NG. Start performance work here, then follow [the workflow](../docs/performance-workflow.md). |
 | [T040](T040-imac-general-performance.md) x86_64 general optimization | active | Fresh current-main comparison and exact-binary profiles, followed by independent general runtime units. |
 | [T045](T045-typed-loop-boxed-demand-provenance.md) boxed demand provenance | active | Ordinary identity-flow joins lose boxed demand; exact profiles and seed diagnosis precede a compiler-only unit. |
@@ -85,6 +85,8 @@ outcome column says what happened, not what to do next.
 | `T032-shaped-prototype-slot-reads.md` | Retained. |
 
 ## Other Records In `archive/`
+
+- T056: [unit 0 part 1 evidence](archive/T056-unit0-part1-evidence.md); standing, attribution limits, RSS, ABI probes and an unfrozen M1 draft.
 
 - T055: [qualified policy adoption](archive/T055-layout-noise-control.md), [feedback-2 record](archive/T055-feedback-2-qualification.md), [feedback-1 record](archive/T055-feedback-1-qualification.md), [complete A2 data](archive/T055-phase-a2-data.md) and [B frozen plans/blocked qualification log](archive/T055-phase-b-plan-and-log.md).
 

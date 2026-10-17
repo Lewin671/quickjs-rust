@@ -1,16 +1,18 @@
 # T056: Interpreter core v2
 
-- Status: active; unit 0 part 1 collection in progress; runtime implementation not started.
-- Implementation: no runtime changes; migration-screen stage-budget plumbing is
-  fixed in the benchmark iteration wrapper.
-- Verified at: source base `b481894d351d933e94717a9c295c15fe4a466804`,
-  2026-10-17 UTC, plus this tooling delta; four focused screen regression tests pass.
-- Evidence: unit 0 progress below; the target design remains
-  [interpreter-core-v2](../docs/design/interpreter-core-v2.md).
-- Unresolved: queued held-out/attribution/resource results; exact event counters
-  absent from the existing diagnostic build; part 2 development-lane evidence.
-- Next action: finish queued collection, record durable results, draft and validate
-  M1 without implementing it; resolve the diagnostic boundary before freezing.
+- Status: active; unit 0 part 1 main collection complete, exact-attribution
+  prerequisite still open after the completed short-process sampling attempts.
+- Implementation: no runtime edits in unit 0; migration-screen stage-budget
+  plumbing is fixed at `ddca5bdf`. M1 remains an unimplemented, unfrozen draft.
+- Verified at: measured runtime `b481894d351d933e94717a9c295c15fe4a466804`,
+  iMac, 2026-10-17 UTC; `check.sh` at `ddca5bdf` passes, including 5170 subset cases;
+  the final staged documentation/context/whitespace gates pass.
+- Evidence: [unit 0 part 1 record](archive/T056-unit0-part1-evidence.md),
+  with standing, counts, profiles, RSS, ABI probes and draft validation bindings.
+- Unresolved: absent scoped event counters; short-process profile attachment;
+  one imprecise formal case; part 2 independent development-program evidence.
+- Next action: resolve diagnostic scope and launch-time sampling, complete part 2,
+  then review ordering/budgets before freezing any runtime plan.
 
 ## Goal and scope
 
@@ -21,7 +23,8 @@ identity throughout. The target lives in the linked design; stage order and acce
 This design does not approve an implementation, reopen an exhausted leaf
 budget, establish a fresh performance priority, or claim a measured speedup.
 
-Original design-only owner: `agent/interpreter-core-design/codex`, base above, worktree
+Original design-only owner: `agent/interpreter-core-design/codex`, base
+`6af6230036f917f6b8df4dc51aa6402a7ef367ce`, worktree
 `worktrees/quickjs-rust/interpreter-core-design`. Allowed changes are the new
 design, this task and its tasks/README row. No runtime, dependency, benchmark,
 third_party, other worktree or performance-plan changes; no iMac jobs, push
@@ -144,27 +147,34 @@ and computed-key code alongside literal fields. Held-out inputs stay distinct
 from the targets used to select the mechanism. Counter evidence must show that
 ordinary-path wins survive when accelerators decline, rather than a tier switch.
 
-## Unit 0 part 1 progress
+## Unit 0 part 1 evidence
 
 Owner: `agent/t056-unit0/codex`, brief base `b481894d`; no runtime, compiler
-recipe, order, manifest or benchmark changes. All engine measurements run
-through the shared iMac queue. Independent development programs belong to part 2.
+recipe, order, manifest or benchmark changes. The linked record owns all
+measurements and hashes; the workspace report directory holds the review-only
+M1.1 JSON and its successful `validate-unit` result, outside the frozen plan index.
 
-The fresh 30-block workers-4 comparison completed in queue job
-`20261017T061057Z-t056-unit0-baseline30`, 1454 seconds, all 76 cases complete,
-no measurement-health issue or heavy disturbance. Current executable SHA-256 is
-`c7f0f66a519181b214bdc5ca6404cf428f0d18cbd1ab1d0e26386097619b949e`.
-The official summary remains inconclusive on the interval for
-`external/sunspider-1.0/bitops-3bit-bits-in-byte`; no favorable rerun or waiver.
-Held-out, existing counters, RSS, exact-binary samples and v2 raw replay are queued.
+The completed collection covers 76 selection cases and nine held-out programs;
+held-out never selects work or receives mechanism profiling. All engine
+measurement is on the shared iMac. Internal N/2N counts remove fixed startup;
+original and supplemental sampling outcomes remain separate. The formal
+bitops-3bit-bits-in-byte interval is still imprecise; no policy exception or
+favorable replacement is claimed. Existing counters cannot supply the requested
+scoped name/probe, Value ownership, allocation or emitted-copy event totals.
 
-The schema-3 iteration wrapper omitted `stage`/`stage_limit` when calling the
-existing rule. A neutral full six-layout packet therefore failed the final
-0.97 payoff even during an intermediate migration. The wrapper now uses the
-cumulative stage budget before the final stage and retains the final/leaf payoff.
-Four focused tests cover neutrality, persistent over-budget cost, final payoff
-and the unchanged leaf gate. This changes neither collection nor policy bands;
-no runtime screen, optimization or promotion is claimed.
+Leading broad literal-field deficits execute virtual banks, not ordinary name
+lookup. Dynamic method dispatch supplies actual ordinary-VM named reach;
+the provisional real payoff targets, HashMap and public-field Raytrace, mostly
+reach shared property helpers through accelerators. Part 2 and exact counters
+must price an ordinary-driver payoff before implementation. Preserve the facade
+as a dependency; split/re-rank atom authority versus Value transport if that
+additional evidence does not justify the proposed order. No speedup is forecast.
+
+The original schema-3 iteration wrapper omitted migration stage parameters,
+incorrectly applying final payoff to a neutral intermediate stage. `ddca5bdf`
+forwards cumulative stage targets/budget and preserves final/leaf payoff. Four
+focused regressions, the 556-test tool fast gate and full iMac check pass.
+This fixes tooling, not the missing runtime evidence or M1's implementation.
 
 ## Design acceptance and verification
 
