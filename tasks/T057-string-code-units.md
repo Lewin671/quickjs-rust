@@ -1,14 +1,15 @@
 # T057: String code-unit migration
 
-- Status: active; development policy qualification prerequisite authorized.
+- Status: active; development policy v3 qualified, stage-1 plan next.
 - Implementation: none; target architecture and stage boundaries documented.
 - Verified at: registration `25158c8b98555efcbfccee1a70df9c5e7817a719`,
   2026-10-17; staged documentation fast gate, context and whitespace checks pass.
 - Evidence: design below and the evidence/coordination record in this file.
-- Unresolved: development-target layout-gate support; fresh queue/profile evidence,
-  frozen plan, implementation and performance/correctness decisions.
-- Next action: complete [development policy qualification](T057-development-policy.md),
-  then validate and commit the stage-1 plan from fresh queue/profile evidence.
+- Unresolved: stage-1 profile evidence on the exact queue binary, frozen plan,
+  implementation and performance/correctness decisions.
+- Next action: development targets are now eligible under qualified
+  [policy v3](archive/T057-development-policy.md); validate and commit the stage-1
+  plan from the v3 queue and exact-binary profiles.
 
 ## Goal and scope
 

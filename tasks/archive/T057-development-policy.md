@@ -1,15 +1,22 @@
 # T057: Development decision policy qualification
 
-- Status: active; calibration contract frozen before development policy timing.
+- Status: closed-landed; policy v3 qualified and published.
 - Implementation: development collectors, sealed formal bundles, control/target
-  rules, continuation and additive qualification are committed through 9cb73da7;
-  no policy v3 is published and no runtime code changed.
-- Verified at: tooling `9cb73da7`, 2026-10-17; 586-test staged fast gate
-  (83.259 s), context/file-size/whitespace and shell syntax pass; full retry queued.
-- Evidence: frozen contract below; [preliminary baseline](archive/T057-development-baseline.md).
-- Unresolved: queued A2/A/A/formal/power/qualification; no policy v3 yet.
-- Next action: fetch/replay the frozen calibration phases and publish only
-  a qualified policy, then resume the original T057 brief.
+  rules, continuation and additive qualification (tooling through `ce2d250c`);
+  [policy v3](../../benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v3.json),
+  SHA-256 `f655f25a86f4933cfb11a097a7e109b493628bc1f9a9d320cd27bd7bf300ba33`.
+  No runtime code changed.
+- Verified at: iMac jobs `20261017T095816Z-t057-v3-development-a2`,
+  `20261017T095816Z-t057-v3-development-aa30`, `20261017T095817Z-t057-v3-formal-aa30`,
+  `20261017T095817Z-t057-v3-formal-power` and `20261017T095818Z-t057-v3-qualify`
+  (all exit 0, no DISTURBED); qualification `qualified: true, failures: []`, 86 cases.
+  Lane ceilings: broad 1.012949, sentinel 1.015687, external 1.007380,
+  development 1.009630, held-out 1.0029, portfolio 1.007249.
+  Fresh queue SHA-256 `424a1e79700353a842d5d6bb53cc03c285388a77b43695c9c95300541fddea56`.
+- Evidence: frozen contract and checkpoints below; raw job outputs are workspace-local
+  under `outputs/imac-bench/<job>/`.
+- Unresolved: none for qualification. v2 stays valid for plans naming no development case.
+- Next action: none; stage 1 continues in [T057](../T057-string-code-units.md).
 
 ## Frozen calibration contract (2026-10-17, before timing)
 

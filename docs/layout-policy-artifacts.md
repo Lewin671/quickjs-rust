@@ -84,7 +84,11 @@ never usable by `validate-unit`, `screen` or `decide`; no fallback ceiling
 is invented. The [recorded iMac artifact](../benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v1.json)
 and its adjacent SHA-256 sidecar preserve the original unqualified outcome.
 [Qualified iMac v2](../benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v2.json)
-and its adjacent SHA-256 sidecar are the adopted host policy; v1 remains frozen.
+remains valid for plans that name no development case.
+[Qualified iMac v3](../benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v3.json)
+adds the development lane (86 cases) and is required for any plan that names
+a development case; v1 remains frozen. [T057](../tasks/T057-string-code-units.md)
+owns the v3 qualification record.
 [T055](../tasks/archive/T055-layout-noise-control.md) owns qualification evidence.
 Screen/held-out A/A binds the frozen band-source executable; canonical
 formal A/A binds its own declared revision and byte-identical two roles.
@@ -206,4 +210,4 @@ acceptance-only, with its protocol and bands inherited unchanged.
 and automatic continuation. `layout_development_qualification` replays both
 and the four-lane sealed formal A/A, deriving no wider bands from qualification.
 The pre-timing contract and publication standing are owned by
-[T057 development policy](../tasks/T057-development-policy.md).
+[T057 development policy](../tasks/archive/T057-development-policy.md).

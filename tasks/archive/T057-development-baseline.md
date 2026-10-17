@@ -6,7 +6,7 @@
   30-block development preview and current iMac queue replay pass.
 - Evidence: conclusions/numbers/hashes below; raw files are workspace artifacts.
 - Unresolved: no performance candidate or retention decision was measured.
-- Next action: see [development policy qualification](../T057-development-policy.md).
+- Next action: see [development policy qualification](T057-development-policy.md).
 
 ## Identity and protocol
 
