@@ -2,10 +2,10 @@
 
 - Status: active; calibration contract frozen before development policy timing.
 - Implementation: development collectors, sealed formal bundles, control/target
-  rules, precision continuation and additive qualification are present in the
-  working tree; no policy v3 is published and no runtime code changed.
-- Verified at: tooling `353e9b76`, 2026-10-17; 583-test staged fast gate
-  (77.633 s), context/file-size/whitespace and shell syntax pass; full gate queued.
+  rules, continuation and additive qualification are committed through 9cb73da7;
+  no policy v3 is published and no runtime code changed.
+- Verified at: tooling `9cb73da7`, 2026-10-17; 586-test staged fast gate
+  (83.259 s), context/file-size/whitespace and shell syntax pass; full retry queued.
 - Evidence: frozen contract below; no new calibration observations yet.
 - Unresolved: collectors/replay/tests, development calibration, qualification.
 - Next action: obtain the reference-derived timeout manifest and dispatch
@@ -152,3 +152,23 @@ Full-check jobs at 2368e649/12b4ab47 were cancelled while queued as metadata
 and boundary checks advanced; current full gate is
 `20261017T081521Z-t057-development-tooling-full-final` at 353e9b76. No v3 timing
 has started. Runtime remains unchanged.
+
+## Build and gate checkpoint
+
+Matrix job `20261017T080252Z-t057-development-qualified-matrix` passed: all
+six hashes reproduce T055's qualified-image matrix exactly. Natural is c7f0f66a;
+each shifted variant audits 4201 functions, zero body/address drift and verified
+NOPs. Variant 5 has section-relative +1008 and whole-text -4096 (total -3088),
+as already allowed by the frozen audit; no production layout was changed.
+
+Full job `20261017T081521Z-t057-development-tooling-full-final` at 353e9b76
+failed one of 583 Python tests after passing its preceding Rust checks:
+`test_new_bundle_seals_and_replays_all_development_artifacts` compared
+`/private/var/...` with `/var/...` without normalizing the expected temp path.
+The assertion is fixed at 9cb73da7. Retry
+`20261017T084357Z-t057-development-tooling-full-path-fixed` additionally checks
+the parent's qualified-image receipt and explicitly enumerates frozen plans.
+No full pass or Test262 result is claimed yet for this tooling delta.
+
+The final local gate has 586 passing tests, including both A2 estimators,
+source/seed hash binding and v2 control scope when newer bundle metadata exists.

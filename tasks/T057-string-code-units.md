@@ -92,3 +92,16 @@ This is baseline evidence, not a candidate promotion. The later v3 canonical
 A/A uses identical source revisions and its automatic precision continuation.
 The policy task owns replacement profile/reference job ids and their
 pre-calibration driver amendment; no runtime plan or attempt is spent.
+
+Provisional exact-image profile in job
+`20261017T082306Z-t057-stage1-profiles-and-development30`: papaparse was sampled
+first for 10 seconds on c7f0f66a, source 351004f3, two complete unmodified
+bundle passes. Of 8359 main-thread samples, the collapsed stack-top table
+attributes 1058 to `byte_offset_for_char_index` (12.7%), 3912 to
+`SimpleAtom::step` and 1668 to `class_match_positive`. These are disjoint
+stack-top counts, not additive inclusive caller costs or a speedup forecast.
+The ASCII driver supports cached boundary classification as a general target;
+real matching work remains outside stage 1. Receipt SHA-256:
+`8c191b466278e0315410e92bdf0650246ec13b943e69ad5727acff0b5bd791b5`.
+Selection still awaits the complete clean development job, v3 qualification
+and the validated frozen runtime plan.
