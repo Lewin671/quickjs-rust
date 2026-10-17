@@ -87,3 +87,11 @@ correctness/host contracts, exact asset recovery, cap qualification and gates);
 115 layout tests passed. Staged fast gate passed all551 tool tests (79.339s),
 context/file-size/shell checks. Sealed source replay checked10 artifact hashes,
 30 original blocks, timeout60s, and573 scheduled append samples. No new timing yet.
+
+
+Pre-sample correction: job20261017T055212Z-decision-rule-b-feedback3-formal221
+at43027c89 exited1 in3s after quiet110s: Rust-only launch preflight sent
+`--raw` to NG. No measurement file/block was written. All assets restored
+with matching hashes; keep them unchanged. The corrected preflight runs the
+same `-e 0` expression via Rust `--raw` and NG's supported argv, explicitly
+tested before resubmission; no iteration/timing/sample protocol changes.

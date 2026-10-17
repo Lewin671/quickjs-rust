@@ -12,7 +12,7 @@ import platform
 import datetime
 from pathlib import Path
 
-from .formal_case_context import context, prepare, schedule, validate_result, verify_assets
+from .formal_case_context import context, prepare, schedule, validate_result, verify_assets, launch_preflight
 from .layout_identity import digest, host_identity, write_json
 from .layout_policy import analyze
 from .layout_power import allocation, CAP
@@ -86,7 +86,7 @@ def replay(path, bundle, name, *, pilot=None):
 
 def collect(bundle, name, out, previous=None):
     from .layout_formal_raw import extract
-    from .screen import measurement_lock, wait_for_builds, check_load, launch_preflight, DEFAULT_CACHE
+    from .screen import measurement_lock, wait_for_builds, check_load, DEFAULT_CACHE
     quiet=quieting_preflight();host=host_identity();node=platform.node()
     ctx=context(bundle,name);hashes=source_hashes(bundle)
     from .runner import _host_metadata
@@ -108,7 +108,7 @@ def collect(bundle, name, out, previous=None):
         if wait_for_builds(300):raise ValueError('competing builds remain')
         check_load(8,True,300)
         prepare(ctx,DEFAULT_CACHE)
-        preflight=launch_preflight([Path(t['argv'][0]) for t in ctx['templates'].values()],120)
+        preflight=launch_preflight(ctx)
         with (out/'samples.jsonl').open('x') as stream:
             for block,order,role in schedule(ctx,target):
                 if block<len(ratios):continue

@@ -15,7 +15,7 @@ from pathlib import Path
 
 from .layout_identity import digest
 from .planning import role_orders, measurement_plan
-from .process import ProcessResult
+from .process import ProcessResult, run_process
 
 ROLES=('candidate','base','quickjs-ng')
 
@@ -132,3 +132,17 @@ def verify_assets(ctx):
         expected=t['bundle_sha256'] if ctx['external'] else t['workload_sha256']
         if digest(Path(t['argv'][0]))!=t['binary_sha256'] or digest(workload)!=expected:
             raise ValueError('formal measured asset changed')
+
+
+def launch_preflight(ctx, timeout=120, runner=run_process):
+    """Launch the same tiny expression through each role's supported adapter."""
+    records=[]
+    for role,t in ctx['templates'].items():
+        argv=[t['argv'][0],*(['--raw'] if role!='quickjs-ng' else []),'-e','0']
+        result=runner(argv,timeout)
+        if (result.exit_code!=0 or result.timed_out or
+                result.stdout_truncated or result.stderr_truncated):
+            raise ValueError(f'{role}: formal launch preflight failed: {result.stderr}')
+        records.append({'role':role,'argv':argv,'binary_sha256':digest(Path(argv[0])),
+                        'result':dataclasses.asdict(result)})
+    return records

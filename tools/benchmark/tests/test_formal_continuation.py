@@ -39,6 +39,21 @@ class FormalContinuationTests(unittest.TestCase):
         self.assertEqual(contract.schedule(ctx,221)[90:],expected)
         self.assertTrue(any(order>2 for _,order,_ in expected))
 
+    def test_preflight_uses_role_adapters_and_never_runs_a_workload(self):
+        ctx=self.context();commands=[]
+        def runner(argv,timeout):
+            commands.append(argv)
+            self.assertEqual(argv[-2:],['-e','0'])
+            self.assertNotIn('/work.js',argv)
+            return self.result()
+        with patch.object(contract,'digest',return_value='same'):
+            records=contract.launch_preflight(ctx,runner=runner)
+            self.assertEqual(len(records),3)
+            self.assertEqual(commands,[['/candidate','--raw','-e','0'],
+                                       ['/base','--raw','-e','0'],['/quickjs-ng','-e','0']])
+            with self.assertRaisesRegex(ValueError,'launch preflight'):
+                contract.launch_preflight(ctx,runner=lambda a,t:dataclasses.replace(self.result(),exit_code=1))
+
     def test_restore_is_exact_and_never_replaces_existing_asset(self):
         with tempfile.TemporaryDirectory() as tmp:
             src=Path(tmp)/'source';dst=Path(tmp)/'snapshot';src.write_bytes(b'image')
