@@ -276,6 +276,15 @@ class ExternalPreviewTests(unittest.TestCase):
                 for line in (output / "external-raw.jsonl").read_text().splitlines()
             ]
             self.assertTrue(all(row["schema_version"] == 3 for row in records))
+            import os
+            images={role:{row['argv'][0] for row in records if row['role']==role}
+                    for role in ('candidate','base','quickjs-ng')}
+            self.assertTrue(all(len(paths)==1 for paths in images.values()))
+            paths=[next(iter(paths)) for paths in images.values()]
+            self.assertEqual(len(set(paths)),3)
+            self.assertEqual(len({len(os.fsencode(path)) for path in paths}),1)
+            for role,paths in images.items():
+                self.assertTrue(Path(next(iter(paths))).name.startswith(role+'-'))
             from tools.benchmark.external_report import replay
             raw_path = output / "external-raw.jsonl"
             self.assertEqual(replay(raw_path, manifest), report)

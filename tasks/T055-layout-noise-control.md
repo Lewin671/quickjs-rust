@@ -77,3 +77,14 @@ only required continuation and one new canonical 30-block A/A, then qualify.
 Publish new hash-checked qualified policy v2 only if all applicable checks
 pass. Keep v1 and all prior logs/plans immutable; failed earlier formal input
 never contributes a sample. Stop/report any new real blocker.
+
+
+## Pre-timing implementation clarification
+
+Timeout manifest v3 also corrects the external lane's unequal `candidate` /
+`base` snapshot names: fixed equal-byte-length role/hash names are created
+once and held stable for capability and all measured blocks. This fulfills
+the original stable-path boundary, uniformly across all cases. Existing raw
+archives retain their original argv and cannot become new formal evidence.
+Timeout implementation 1cf3b751 passes its staged gate (536 tests); the
+snapshot correction has actual PreviewRun path/order/identity regression.

@@ -617,7 +617,7 @@ class PreviewRun:
         try:
             self.binaries: dict[str, Path] = {}
             for role, source_binary in source_binaries.items():
-                snapshot = self.snapshot_root / role
+                snapshot = self.snapshot_root / f"{role}-{'_' * (10 - len(role))}{self.binary_hashes[role][:16]}"
                 shutil.copyfile(source_binary, snapshot)
                 snapshot.chmod(0o500)
                 if _sha256_file(snapshot) != self.binary_hashes[role]:
