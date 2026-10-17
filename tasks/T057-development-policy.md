@@ -4,12 +4,12 @@
 - Implementation: development collectors, sealed formal bundles, control/target
   rules, precision continuation and additive qualification are present in the
   working tree; no policy v3 is published and no runtime code changed.
-- Verified at: tooling `2368e649`, 2026-10-17; 583-test staged fast gate,
-  context/file-size/whitespace and shell syntax pass; iMac full gate queued.
+- Verified at: tooling `353e9b76`, 2026-10-17; 583-test staged fast gate
+  (77.633 s), context/file-size/whitespace and shell syntax pass; full gate queued.
 - Evidence: frozen contract below; no new calibration observations yet.
 - Unresolved: collectors/replay/tests, development calibration, qualification.
-- Next action: implement and verify the generic development pipeline, then
-  obtain the reference-derived timeout manifest and dispatch frozen calibration.
+- Next action: obtain the reference-derived timeout manifest and dispatch
+  frozen calibration after the queued full gate and matrix audit.
 
 ## Frozen calibration contract (2026-10-17, before timing)
 
@@ -129,3 +129,26 @@ Queued via the workspace dispatcher at this tooling revision (no timing):
 
 These jobs are pending, not passing results. The earlier current-main
 baseline and development/profile job precede them in the shared queue.
+
+## Pre-calibration preparation amendment
+
+Before any v3 calibration timing, the initial profile/development job
+`20261017T074651Z-t057-stage1-evidence-fresh` was cancelled: manifest ordering
+sampled diff before papaparse and its 100 complete passes were excessive
+(17 checksums observed while waiting). Preserve that partial diagnostic and
+its raw sample; it did not reach development baseline measurement and supplies
+no qualification observation. The child PID was verified absent after queue
+cancellation. No formal baseline or completed measurement was discarded.
+
+Replacement `20261017T082306Z-t057-stage1-profiles-and-development30` explicitly
+orders papaparse first (2 passes), then diff (3 passes), retaining 100 passes
+only for the shorter suite profiles. All three-engine development cases still
+use the unchanged 30-block whole-process protocol. Timeout-reference job
+`20261017T082337Z-t057-development-timeout-reference-fresh` replaces its
+cancelled predecessor and will use this latest complete NG run. The timeout
+formula, corpus, A2, qualification and power budgets are unchanged.
+
+Full-check jobs at 2368e649/12b4ab47 were cancelled while queued as metadata
+and boundary checks advanced; current full gate is
+`20261017T081521Z-t057-development-tooling-full-final` at 353e9b76. No v3 timing
+has started. Runtime remains unchanged.

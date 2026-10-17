@@ -79,3 +79,16 @@ tests, Test262, NG fixtures and full `check.sh` have not run for this
 documentation-only registration. Workspace-local report:
 `tmp/string-index-cost/REPORT-t057-stage1.md`; queued artifacts are pending,
 and are not durable evidence until their conclusions are recorded here.
+
+## Current-main baseline checkpoint
+
+`20261017T074644Z-t057-main-baseline30` completed exit 0 / 1424 s:
+30 blocks, workers-4, all 76 cases, no measurement-health issue or DISTURBED
+warning. Candidate 351004f3 and base b481894d share exact image
+c7f0f66a (full hash above); NG is 919f7235 / f7830186. Readiness remains
+inconclusive solely on regexp-dna interval precision; the raw evidence and
+interval are retained. Current queue replay on the iMac accepted this bundle.
+This is baseline evidence, not a candidate promotion. The later v3 canonical
+A/A uses identical source revisions and its automatic precision continuation.
+The policy task owns replacement profile/reference job ids and their
+pre-calibration driver amendment; no runtime plan or attempt is spent.
