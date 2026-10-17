@@ -15,6 +15,12 @@ from pathlib import Path
 from .layout_identity import OFFSETS, digest, host_identity
 from .statistics import relative_half_width
 
+# v4 policies resolve held-out wall excesses with six matching layouts.
+HELD_OUT_RULE = 'six-layout-persistence-v4'
+# Plans frozen on a parent policy keep its selection gates, but every decision
+# after the successor's publication uses the successor's held-out gate (T059).
+HELD_OUT_SUCCESSOR = None
+
 
 def geomean(values):
     return math.exp(statistics.fmean(math.log(x) for x in values))
@@ -90,6 +96,11 @@ def load_policy(path: Path, sha256: str, *, live=True):
             for value in bands.values():
                 if type(value) not in (int, float) or not math.isfinite(value) or value < 1:
                     raise ValueError('invalid layout policy band')
+    if 'held_out_rule' in policy:
+        if policy['held_out_rule'] != HELD_OUT_RULE:
+            raise ValueError('unsupported held-out rule')
+        if any(set(bands) != {'wall_band', 'instruction_band'} for bands in policy['held_out'].values()):
+            raise ValueError('held-out persistence policy needs wall and instruction bands')
     expected_lanes = {'broad', 'sentinel', 'external', 'portfolio', 'held-out'}
     if 'development_manifest_sha256' in policy:
         from .development import MANIFEST_PATH, opportunity_ids
@@ -105,3 +116,20 @@ def load_policy(path: Path, sha256: str, *, live=True):
     from .layout_power import validate_precision
     validate_precision(policy)
     return policy
+
+
+def with_held_out_successor(policy, sha256, successor=None):
+    """Replace a frozen parent's held-out bands/ceiling/rule by its v4 successor."""
+    successor = successor or HELD_OUT_SUCCESSOR
+    if successor is None or 'held_out_rule' in policy or sha256 not in successor['parents']:
+        return policy, None
+    from .layout_identity import ROOT
+    value = load_policy(ROOT / successor['path'], successor['sha256'], live=False)
+    if (value.get('held_out_rule') != HELD_OUT_RULE or value['host'] != policy['host']
+            or value.get('host_node') != policy.get('host_node') or set(value['held_out']) != set(policy['held_out'])):
+        raise ValueError('held-out successor policy does not match the frozen parent host/inventory')
+    merged = dict(policy, held_out=value['held_out'], held_out_rule=HELD_OUT_RULE,
+                  lanes={**policy['lanes'], 'held-out': value['lanes']['held-out']})
+    if 'precision' in policy:
+        merged['precision'] = {**policy['precision'], 'held_out': value['precision']['held_out']}
+    return merged, successor['sha256']

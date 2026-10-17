@@ -176,9 +176,8 @@ python3 -m tools.benchmark.layout_panel \
 Use every offset, never select a winning layout. The builder refuses other
 platforms. `--natural` measures only variant zero; `--complete` on that same
 output appends variants 1..5 and writes `complete.json`. Keep its original
-`panel.json` and raw files. `--held-out --pairs 30` with a fresh output
-measures mandatory promotion acceptance after candidate/targets are frozen.
-Never select work or change targets from held-out results.
+`panel.json` and raw files. `--held-out --pairs 30` with a fresh output measures mandatory promotion
+acceptance after candidate/targets are frozen; a held-out event then needs `--held-out --complete` (v4). Never select work or change targets from held-out results.
 A valid failed screen consumes the plan's attempt. Record attempts/events and
 completed panels in its task. Resolve missing panels/instruction alerts within
 the frozen budget; no tool counts attempts. Layout collectors retain load-invalid pairs and append
@@ -204,6 +203,7 @@ evaluate the frozen plan:
   --external-report target/comparison/<run2>/external-report.json \
   --layout-panel target/layout/panel/panel.json \
   --held-out-panel target/layout/held-out/panel.json \
+  --formal-continuation target/comparison/<run2>-power/<case>/continuation.json \
   --test262-burndown /path/to/exact-candidate-burndown.json \
   --require-retained --output target/comparison/<run2>-decision.json
 ```
@@ -212,11 +212,11 @@ The base is the plan's frozen `base_sha`, not the commit preceding the candidate
 requires held-out evidence, complete QuickJS-NG comparisons and the candidate's
 zero-gap Test262 burndown. Panel and held-out raw samples are replayed and
 bound to the formal bundle's exact natural binary hashes and source revisions.
-The canonical formal bundle keeps all precision/health/linearity requirements;
-its raw paired ratios use the same case-median/lane statistic as qualification. Do not rerun until a favorable
+The canonical formal bundle keeps all precision/health/linearity requirements; an imprecise case is
+completed by `layout_formal_continuation --bundle <run2>` under the [power rule](layout-policy-artifacts.md#precision-power-and-continuation), passed per case.
+Its raw paired ratios use the same case-median/lane statistic as qualification. Do not rerun until a favorable
 interval appears, drop outliers, or pool runs; `--blocks 3` bundles are
-diagnostic. Decision states are defined in
-[benchmarking.md](benchmarking.md#unit-plans-and-decisions). Record the
+diagnostic. Decision states are defined in [benchmarking.md](benchmarking.md#unit-plans-and-decisions). Record the
 result in the owning task and in the plan index. `rejected` is evidence to
 keep; `inconclusive` means complete the evidence; `retained` means this
 unit passed its gates on this run, not that the engine beats QuickJS-NG.

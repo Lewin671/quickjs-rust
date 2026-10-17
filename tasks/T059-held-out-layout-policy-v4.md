@@ -1,12 +1,12 @@
 # T059: Held-out layout persistence and candidate formal continuation (policy v4)
 
-- Status: active; calibration plan frozen, tooling in progress, no v4 timing yet.
-- Implementation: partial; tooling on branch `agent/policy-v4/claude`.
-- Verified at: not recorded.
+- Status: active; calibration plan frozen, tooling landed, v4 timing queued.
+- Implementation: present on branch `agent/policy-v4/claude` (no runtime change).
+- Verified at: tooling commit, staged fast gate 629 tool tests passing.
 - Evidence: frozen plan below; raw job outputs will be workspace-local under
   `outputs/imac-bench/<job>/`.
 - Unresolved: v4 not yet calibrated or qualified.
-- Next action: land and test the tooling, then dispatch the frozen jobs.
+- Next action: run the frozen jobs, then publish v4 and set `HELD_OUT_SUCCESSOR`.
 
 ## Lead decision (2026-10-17, recorded verbatim before any timing)
 

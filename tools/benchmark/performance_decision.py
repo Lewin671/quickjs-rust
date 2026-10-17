@@ -657,6 +657,8 @@ def _parser() -> argparse.ArgumentParser:
     decision.add_argument("--resource-raw", type=Path)
     decision.add_argument("--layout-panel", type=Path)
     decision.add_argument("--held-out-panel", type=Path)
+    decision.add_argument("--formal-continuation", type=Path, action="append", default=[],
+                          help="latest candidate/base precision continuation per formal case")
     decision.add_argument("--mode", choices=("stage", "fast", "promotion"), required=True)
     decision.add_argument("--require-retained", action="store_true")
     decision.add_argument("--output", type=Path, required=True)
@@ -714,6 +716,7 @@ def main() -> int:
             profile_root=args.profile_root, unstable_base_checks=base_checks,
             layout_panel_path=args.layout_panel, held_out_path=args.held_out_panel,
             formal_bundle=args.summary.parent, resource_report=args.resource_report, resource_raw=args.resource_raw,
+            formal_continuations=args.formal_continuation,
         )
         _atomic_write(args.output, payload)
         print(json.dumps(payload, sort_keys=True))

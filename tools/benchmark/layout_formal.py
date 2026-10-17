@@ -1,19 +1,24 @@
-"""Apply the host-bound rule beside sealed formal precision/correctness gates."""
+"""Apply the host-bound rule beside sealed formal precision/correctness gates.
+
+Formal case statistics may extend through replayed candidate/base precision
+continuations; lane statistics keep the sealed joint blocks.
+"""
 from __future__ import annotations
 
 from pathlib import Path
 
 from .layout_evidence import replay
 from .layout_identity import digest
-from .layout_policy import load_policy, analyze, rows, selection_lanes
+from .layout_policy import HELD_OUT_RULE, load_policy, analyze, rows, selection_lanes, with_held_out_successor
 from .layout_rule import evaluate
 from .layout_power import diagnostic_only, needs_panel
 from .performance_evidence import ROOT
 
 
-def evaluate_formal(unit, summary, broad, external, sentinel, mode, panel_path, held_path, formal_bundle=None, resource_report=None, resource_raw=None):
+def evaluate_formal(unit, summary, broad, external, sentinel, mode, panel_path, held_path, formal_bundle=None, resource_report=None, resource_raw=None, formal_continuations=()):
     gate = unit['layout_gate']
     policy = load_policy(ROOT / gate['policy_path'], gate['policy_sha256'], live=False)
+    policy, held_policy_sha = with_held_out_successor(policy, gate['policy_sha256'])
     missing, failed = [], []
     if panel_path is None:
         return {'label': 'incomplete', 'passed': False, 'failures': [],
@@ -25,11 +30,13 @@ def evaluate_formal(unit, summary, broad, external, sentinel, mode, panel_path, 
     held = replay(held_path, policy, summary['engines'], held=True) if held_path else None
     if held and held['pairs'] != gate['held_out_pairs']:
         missing.append('held-out evidence differs from frozen pair budget')
+    persistence = policy.get('held_out_rule') == HELD_OUT_RULE
+    held_panel = held['panels'] if held and persistence and len(held['panels']) == 6 else None
     target_ids = unit['fast_gate']['target_ids']
     payoff = unit['fast_gate']['target_max_candidate_over_base']
     verdict = evaluate(policy, panels[0], target_ids, payoff,
         panel=panels if len(panels) == 6 else None,
-        held_out=held['panels'][0] if held else None,
+        held_out=held['panels'][0] if held else None, held_out_panel=held_panel,
         instruction_blind=gate['mechanism_class'] == 'instruction-blind',
         memory_targets=gate['memory_wall_targets'], promotion=mode == 'promotion',
         panel_required=gate['panel_required'], stage=mode == 'stage',
@@ -61,11 +68,12 @@ def evaluate_formal(unit, summary, broad, external, sentinel, mode, panel_path, 
         missing.append('formal evidence differs from frozen block budget')
     if set(wall) != set(policy['cases']):
         missing.append('formal wall inventory does not match policy')
+    extended, continuation_hashes = continued_cases(policy, formal_bundle, wall, formal_continuations)
     formal_stats = {}
     for case, band in policy['cases'].items():
         if case not in wall:
             continue
-        stats = analyze({case: wall[case]})
+        stats = analyze({case: extended.get(case, wall[case])})
         formal_stats[case] = stats
         lower, upper = stats['confidence_interval']['lower'], stats['confidence_interval']['upper']
         diagnostic=diagnostic_only(policy,case)
@@ -110,7 +118,10 @@ def evaluate_formal(unit, summary, broad, external, sentinel, mode, panel_path, 
         elif upper > policy['lanes'][lane]:
             missing.append(lane + ': formal lane interval crosses ceiling')
     verdict['formal_statistics'] = formal_stats
-    if held:
+    verdict['formal_continued_blocks'] = {n: len(r) for n, r in extended.items()}
+    if held and persistence:
+        missing.extend(held_out_intervals(policy, held, held_panel is not None))
+    elif held:
         if needs_panel(policy,held=True) and len(held['panels']) != 6:
             missing.append('diagnostic-only held-out case requires K=6 held-out panel')
         for extra in held['panels'][1:]:
@@ -134,7 +145,48 @@ def evaluate_formal(unit, summary, broad, external, sentinel, mode, panel_path, 
         verdict['resources'] = resources
         missing.extend(resource_missing)
     hashes = {'policy_sha256': gate['policy_sha256'], 'layout_panel_sha256': digest(panel_path),
-              'held_out_panel_sha256': digest(held_path) if held_path else None}
+              'held_out_panel_sha256': digest(held_path) if held_path else None,
+              **({'formal_continuation_sha256': continuation_hashes} if continuation_hashes else {}),
+              **({'held_out_policy_sha256': held_policy_sha} if held_policy_sha else {})}
     verdict['label'] = 'reject' if failed else ('incomplete' if missing else 'pass')
     verdict['passed'] = not failed and not missing
     return verdict, missing, failed, hashes
+
+
+def continued_cases(policy, bundle, wall, paths):
+    """Latest candidate/base continuation per case; replay checks every prefix."""
+    extended, hashes = {}, {}
+    if paths and bundle is None:
+        raise ValueError('formal continuation requires its sealed formal bundle')
+    import json
+    from .layout_formal_continuation import replay as replay_formal
+    for path in paths:
+        name = json.loads(Path(path).read_text())['case_id']
+        if name in extended or name not in wall:
+            raise ValueError('duplicate or unknown formal continuation case: ' + name)
+        ratios, host = replay_formal(Path(path).resolve(), Path(bundle).resolve(), name,
+                                     pilot=wall[name], comparison='candidate-base')
+        if host != policy['host']:
+            raise ValueError('formal continuation host/recipe differs from policy')
+        extended[name], hashes[name] = ratios, digest(Path(path))
+    return extended, hashes
+
+
+def held_out_intervals(policy, held, complete_panel):
+    """v4: an upper bound above B_i or the lane ceiling needs the K=6 panel."""
+    missing = []
+    values = rows(held['panels'][0], policy['held_out'])
+    for case, ratios in values.items():
+        stats = analyze({case: ratios['wall_ns']})
+        diagnostic = diagnostic_only(policy, case, held=True)
+        if not stats['precise'] and not diagnostic:
+            missing.append(case + ': held-out formal precision gate')
+        elif (not diagnostic and stats['confidence_interval']['upper'] > policy['held_out'][case]['wall_band']
+              and not complete_panel):
+            missing.append(case + ': held-out upper interval crosses band; K=6 held-out panel required')
+    stats = analyze({n: r['wall_ns'] for n, r in values.items()})
+    if not stats['precise']:
+        missing.append('held-out lane formal precision gate')
+    elif stats['confidence_interval']['upper'] > policy['lanes']['held-out'] and not complete_panel:
+        missing.append('held-out lane upper interval crosses ceiling; K=6 held-out panel required')
+    return missing
