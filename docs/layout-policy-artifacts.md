@@ -126,3 +126,15 @@ protocol metadata differences are accepted; cases/corpora/recipes stay exact.
 `--formal-load-log` supplies the sealed queue `intruders.log`; any heavy sample
 refuses qualification, and the accepted log hash is bound in policy evidence.
 Host attestation records the run's epoch start, node, full identity and quieting.
+
+
+## Reference-derived external hang detector
+
+External manifest v3 carries a hash-bound reference timeout policy. Every case
+uses max(60 seconds, four times its pinned NG median from the latest valid
+canonical reference run), equally for all roles. Reference source revision,
+image, run, raw/summary hashes and every median/derived limit are recorded in
+the manifest. The loader recomputes limits and refuses missing or changed
+cases. Per-run timeout overrides are refused for this protocol; timeout remains
+failure. v2 archives retain their original uniform timeout and replay identity.
+This bounds hangs without hiding an engine's long tail or waiving precision.

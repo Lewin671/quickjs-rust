@@ -56,7 +56,7 @@ class ExternalPreviewTests(unittest.TestCase):
 
     def test_exact_three_suite_inventory_is_non_claim(self) -> None:
         manifest = load_manifest(MANIFEST)
-        self.assertEqual(manifest.preview_id, "quickjs-authoritative-external-preview-v2")
+        self.assertEqual(manifest.preview_id, "quickjs-authoritative-external-preview-v3")
         self.assertEqual(
             {suite.id: len(suite.cases) for suite in manifest.suites},
             {
@@ -106,8 +106,8 @@ class ExternalPreviewTests(unittest.TestCase):
             duplicate = directory / "duplicate.json"
             duplicate.write_text(
                 MANIFEST.read_text(encoding="utf-8").replace(
-                    '"schema_version": 2,',
-                    '"schema_version": 2,\n  "schema_version": 2,',
+                    '"schema_version": 3,',
+                    '"schema_version": 3,\n  "schema_version": 3,',
                     1,
                 ),
                 encoding="utf-8",

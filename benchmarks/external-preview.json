@@ -6,10 +6,206 @@
     "order": "seeded_role_rotation",
     "phase_boundary": "before_process_spawn_to_wait_return",
     "seed": 20260716,
-    "timeout_seconds": 15
+    "timeout_policy": {
+      "cases": {
+        "jetstream3-js-subset/cdjs": {
+          "reference_median_ns": 772487263.0,
+          "timeout_seconds": 60
+        },
+        "jetstream3-js-subset/gaussian-blur": {
+          "reference_median_ns": 841643993.5,
+          "timeout_seconds": 60
+        },
+        "jetstream3-js-subset/hash-map": {
+          "reference_median_ns": 417081043.0,
+          "timeout_seconds": 60
+        },
+        "jetstream3-js-subset/raytrace-public-class-fields": {
+          "reference_median_ns": 818928079.5,
+          "timeout_seconds": 60
+        },
+        "jetstream3-js-subset/stanford-crypto-aes": {
+          "reference_median_ns": 258124454.0,
+          "timeout_seconds": 60
+        },
+        "kraken-1.1/ai-astar": {
+          "reference_median_ns": 2726962598.5,
+          "timeout_seconds": 60
+        },
+        "kraken-1.1/audio-beat-detection": {
+          "reference_median_ns": 1659491745.5,
+          "timeout_seconds": 60
+        },
+        "kraken-1.1/audio-dft": {
+          "reference_median_ns": 1369014163.5,
+          "timeout_seconds": 60
+        },
+        "kraken-1.1/audio-fft": {
+          "reference_median_ns": 1558240985.0,
+          "timeout_seconds": 60
+        },
+        "kraken-1.1/audio-oscillator": {
+          "reference_median_ns": 1309870179.5,
+          "timeout_seconds": 60
+        },
+        "kraken-1.1/imaging-darkroom": {
+          "reference_median_ns": 1647027931.5,
+          "timeout_seconds": 60
+        },
+        "kraken-1.1/imaging-desaturate": {
+          "reference_median_ns": 3195494126.0,
+          "timeout_seconds": 60
+        },
+        "kraken-1.1/imaging-gaussian-blur": {
+          "reference_median_ns": 10206905655.0,
+          "timeout_seconds": 60
+        },
+        "kraken-1.1/json-parse-financial": {
+          "reference_median_ns": 178715503.5,
+          "timeout_seconds": 60
+        },
+        "kraken-1.1/json-stringify-tinderbox": {
+          "reference_median_ns": 173666167.0,
+          "timeout_seconds": 60
+        },
+        "kraken-1.1/stanford-crypto-aes": {
+          "reference_median_ns": 651524044.0,
+          "timeout_seconds": 60
+        },
+        "kraken-1.1/stanford-crypto-ccm": {
+          "reference_median_ns": 509752453.5,
+          "timeout_seconds": 60
+        },
+        "kraken-1.1/stanford-crypto-pbkdf2": {
+          "reference_median_ns": 1337408187.0,
+          "timeout_seconds": 60
+        },
+        "kraken-1.1/stanford-crypto-sha256-iterative": {
+          "reference_median_ns": 390796832.0,
+          "timeout_seconds": 60
+        },
+        "sunspider-1.0/3d-cube": {
+          "reference_median_ns": 41321887.5,
+          "timeout_seconds": 60
+        },
+        "sunspider-1.0/3d-morph": {
+          "reference_median_ns": 29546345.5,
+          "timeout_seconds": 60
+        },
+        "sunspider-1.0/3d-raytrace": {
+          "reference_median_ns": 30372646.5,
+          "timeout_seconds": 60
+        },
+        "sunspider-1.0/access-binary-trees": {
+          "reference_median_ns": 31456451.5,
+          "timeout_seconds": 60
+        },
+        "sunspider-1.0/access-fannkuch": {
+          "reference_median_ns": 75239102.5,
+          "timeout_seconds": 60
+        },
+        "sunspider-1.0/access-nbody": {
+          "reference_median_ns": 19459260.0,
+          "timeout_seconds": 60
+        },
+        "sunspider-1.0/access-nsieve": {
+          "reference_median_ns": 40425175.0,
+          "timeout_seconds": 60
+        },
+        "sunspider-1.0/bitops-3bit-bits-in-byte": {
+          "reference_median_ns": 14329191.0,
+          "timeout_seconds": 60
+        },
+        "sunspider-1.0/bitops-bits-in-byte": {
+          "reference_median_ns": 23590194.0,
+          "timeout_seconds": 60
+        },
+        "sunspider-1.0/bitops-bitwise-and": {
+          "reference_median_ns": 21559232.5,
+          "timeout_seconds": 60
+        },
+        "sunspider-1.0/bitops-nsieve-bits": {
+          "reference_median_ns": 24622661.5,
+          "timeout_seconds": 60
+        },
+        "sunspider-1.0/controlflow-recursive": {
+          "reference_median_ns": 11691304.5,
+          "timeout_seconds": 60
+        },
+        "sunspider-1.0/crypto-aes": {
+          "reference_median_ns": 47873240.0,
+          "timeout_seconds": 60
+        },
+        "sunspider-1.0/crypto-md5": {
+          "reference_median_ns": 12335151.0,
+          "timeout_seconds": 60
+        },
+        "sunspider-1.0/crypto-sha1": {
+          "reference_median_ns": 13101666.5,
+          "timeout_seconds": 60
+        },
+        "sunspider-1.0/date-format-tofte": {
+          "reference_median_ns": 81197907.0,
+          "timeout_seconds": 60
+        },
+        "sunspider-1.0/date-format-xparb": {
+          "reference_median_ns": 37117964.5,
+          "timeout_seconds": 60
+        },
+        "sunspider-1.0/math-cordic": {
+          "reference_median_ns": 37471246.5,
+          "timeout_seconds": 60
+        },
+        "sunspider-1.0/math-partial-sums": {
+          "reference_median_ns": 17571029.0,
+          "timeout_seconds": 60
+        },
+        "sunspider-1.0/math-spectral-norm": {
+          "reference_median_ns": 14690158.5,
+          "timeout_seconds": 60
+        },
+        "sunspider-1.0/regexp-dna": {
+          "reference_median_ns": 132759985.0,
+          "timeout_seconds": 60
+        },
+        "sunspider-1.0/string-base64": {
+          "reference_median_ns": 34683969.0,
+          "timeout_seconds": 60
+        },
+        "sunspider-1.0/string-fasta": {
+          "reference_median_ns": 121433975.5,
+          "timeout_seconds": 60
+        },
+        "sunspider-1.0/string-tagcloud": {
+          "reference_median_ns": 74373719.5,
+          "timeout_seconds": 60
+        },
+        "sunspider-1.0/string-unpack-code": {
+          "reference_median_ns": 153691139.5,
+          "timeout_seconds": 60
+        },
+        "sunspider-1.0/string-validate-input": {
+          "reference_median_ns": 33609538.0,
+          "timeout_seconds": 60
+        }
+      },
+      "id": "quickjs-reference-timeout-v1",
+      "minimum_seconds": 60,
+      "multiplier": 4,
+      "reference": {
+        "blocks": 30,
+        "job": "20261016T122024Z-general-current-baseline",
+        "raw_sha256": "2d329e4619355a15f4261787aa50eb5ce4dbb068ac9e1d9c72c40580415bcda8",
+        "reference_binary_sha256": "919f7235f61412ba69faf6aa05b534869aa7d69d1583b3d7aab3cd5b67cd6f40",
+        "reference_revision": "f7830186043e4488f2998759d60a514faf07cbc9",
+        "selection": "latest-valid-canonical-NG",
+        "summary_sha256": "cdc10d4f4e961afa3f91e4c7c77125b0c4cab819cdf3624ab0abb8074d0844bf"
+      }
+    },
+    "timeout_seconds": 60
   },
-  "preview_id": "quickjs-authoritative-external-preview-v2",
-  "schema_version": 2,
+  "preview_id": "quickjs-authoritative-external-preview-v3",
+  "schema_version": 3,
   "suites": [
     {
       "cases": [

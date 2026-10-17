@@ -61,6 +61,7 @@
       "tools/benchmark/external_preview.py",
       "tools/benchmark/external_preview_markdown.py",
       "tools/benchmark/external_report.py",
+      "tools/benchmark/external_timeouts.py",
       "tools/benchmark/hosted_preview.py",
       "tools/benchmark/layout_evidence.py",
       "tools/benchmark/layout_formal.py",
@@ -86,7 +87,7 @@
       "tools/benchmark/preview_sentinel.py",
       "tools/benchmark/preview_summary.py"
     ],
-    "aggregate_sha256": "cc639cc8611559cf38a6e24dcdc2305f1f4361676d8287fbcdbfe2ce1fd40bc8"
+    "aggregate_sha256": "c99045bb2281dcfaa617825b21a111d17884d7b13166cbdbdd0bc43de7c684c5"
   },
   "hosted_pr": {
     "tier": "informational_preview",

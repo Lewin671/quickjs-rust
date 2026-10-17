@@ -1,14 +1,14 @@
 # T038: Audio DFT cycle variance
 
 - Status: active. Top performance infrastructure item; diagnostic only.
-- Implementation: none. Batch 1 remains present on `integration/batch-1`,
-  with both promotions retained under the new rule; main stays e54e33eb.
+- Implementation: none; no engine variance fix is implemented here.
+  [T037](T037-integration-batch-1.md) owns the retained batch-1 standing.
 - Verified at: `8e208b8a`, 2026-10-12, isolated-case process measurements of
   the exact e54e33eb queue executable and the integration runtime executable.
 - Evidence: distributions and exclusions below. Raw diagnostic artifacts in
   `target/audio-dft-diagnostic/` are local, not retained.
-- Unresolved: the hardware cause and residual within-band cycle variance; no engine or
-  benchmark-protocol fix is approved or implemented.
+- Unresolved: hardware cause and residual execution variance, including the
+  related Gaussian wall-time tail below. No engine fix is implemented.
 - Next action: after retained results are pushed, freeze/validate the approved
   numeric-scratch-placement plan, then sweep a full page before choosing a fix.
 
@@ -182,3 +182,32 @@ After the retained-result update is pushed, freeze/validate its plan before
 implementation; first use a full-page diagnostic offset sweep to distinguish
 relative backing-store hazards from bank alignment/page splits. Do not ship
 an observed page offset or re-pin without screen evidence.
+
+
+## Related engine finding: same-image Gaussian blur wall tail
+
+T055 feedback-2 explicitly classifies this as an engine finding, not a
+measurement-rule exception. Source 4c9f959e, image
+c7f0f66a519181b214bdc5ca6404cf428f0d18cbd1ab1d0e26386097619b949e,
+canonical job 20261017T022617Z-decision-rule-b-formal30-whole (workers-4).
+Candidate and base are byte-identical; the host log has zero heavy samples.
+Kraken imaging-gaussian-blur successful process wall times:
+
+| Role | ok / attempted | median s | max ok s | max / median - 1 |
+| --- | --- | ---: | ---: | ---: |
+| candidate | 29 / 30 | 11.262680115 | 13.858422675 | 23.05% |
+| base | 30 / 30 | 11.213226504 | 13.341806271 | 18.98% |
+| pinned NG | 30 / 30 | 10.274794007 | 10.765107934 | 4.77% |
+
+Candidate block 27 additionally hits the 15-second timeout at 15.021374156 s;
+that observation is right-censored, at least 33.37% above its successful
+median. Do not treat it as an ok duration, delete it, or use the incomplete
+formal bundle for a promotion. The raw record and exact failure are preserved
+in [T055's prior qualification record](archive/T055-feedback-1-qualification.md).
+The engine's roughly 20-35% upper tail versus NG's roughly 5% is plausibly
+related to the DFT execution-variance family; no shared cause is established.
+No sampled stack/scratch addresses, intermediate floating-point exception
+state, continuous thermal telemetry or scheduler attribution accompany this
+Gaussian observation. Investigate it later as an engine issue with appropriate
+controlled evidence. T055's reference-derived hang timeout is uniform across
+cases/roles and does not remove the tail or waive the 3% precision gate.
