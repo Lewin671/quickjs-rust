@@ -66,7 +66,7 @@ def _held_out_opportunity_ids() -> frozenset[str]:
 
 
 def _reject_held_out(declared: set[str], where: str) -> None:
-    forbidden = sorted(declared & _held_out_opportunity_ids())
+    forbidden = sorted(name for name in declared if name.startswith('held-out/'))
     if forbidden:
         raise PerformanceDecisionError(
             f"{where}: a held-out case is an acceptance check, not a source of work: {forbidden}"
@@ -567,6 +567,14 @@ def validate_unit_against_queue(unit: dict[str, Any], unit_sha: str, queue: dict
             raise PerformanceDecisionError('layout policy and opportunity queue hosts differ')
         expected = {f'{lane}/{case}' if lane in ('broad', 'sentinel') else f'external/{lane}/{case}'
                     for lane, cases in inventories().items() for case in cases}
+        if 'development' in policy['lanes']:
+            from .development import opportunity_ids
+            expected |= opportunity_ids()
+        elif any(n.startswith('development/') for n in (
+                unit['fast_gate']['target_ids']
+                + unit.get('migration', {}).get('cumulative_target_ids', [])
+                + [n for receipt in unit['profile_evidence'] for n in receipt['opportunity_ids']])):
+            raise PerformanceDecisionError('development references require a qualified development policy')
         if set(policy['cases']) != expected or set(policy['held_out']) != _held_out_opportunity_ids():
             raise PerformanceDecisionError('layout policy inventory differs from current corpora')
     priority = unit["priority"]
@@ -662,6 +670,8 @@ def main() -> int:
             from .performance_evidence import replay_reports
             from .bundle import verify
             verify(args.summary, args.broad_report, args.external_report, args.sentinel_report)
+            from .bundle import development_report_path
+            args.development_report = development_report_path(args.summary, args.development_report)
             replay_reports(
                 args.broad_report, args.external_report, args.sentinel_report,
                 args.development_report,
@@ -686,7 +696,9 @@ def main() -> int:
         from .performance_evidence import replay_reports
         from .bundle import verify
         verify(args.summary, args.broad_report, args.external_report, args.sentinel_report)
-        replay_reports(args.broad_report, args.external_report, args.sentinel_report)
+        from .bundle import development_report_path
+        replay_reports(args.broad_report, args.external_report, args.sentinel_report,
+                       development_report_path(args.summary))
         sentinel, sentinel_sha = _read_json(args.sentinel_report, "sentinel report")
         summary, summary_sha = _read_json(args.summary, "preview summary")
         broad, broad_sha = _read_json(args.broad_report, "broad report")

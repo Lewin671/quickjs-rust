@@ -105,7 +105,7 @@ class DevelopmentManifestTests(unittest.TestCase):
 
     def test_inventory_is_non_claim_and_every_case_is_development(self) -> None:
         manifest = load_development_manifest(MANIFEST_PATH)
-        self.assertEqual(manifest.preview_id, "quickjs-development-preview-v1")
+        self.assertEqual(manifest.preview_id, "quickjs-development-preview-v2")
         self.assertFalse(self.data["claim_eligible"])
         self.assertEqual(manifest.role, "development")
         self.assertEqual(len(manifest.suites), 10)
@@ -443,7 +443,8 @@ class DevelopmentAllowanceTests(unittest.TestCase):
             f"{lane}/{case}" if lane in ("broad", "sentinel") else f"external/{lane}/{case}"
             for lane, cases in inventories().items() for case in cases
         }
-        policy = {"host_node": "test-host", "cases": expected, "held_out": held_out_ids()}
+        policy = {"host_node": "test-host", "cases": expected | set(opportunity_ids()),
+                  "held_out": held_out_ids(), "lanes": {"development": 1.01}}
         with tempfile.TemporaryDirectory() as directory_name:
             directory = Path(directory_name)
             data = {}
@@ -474,6 +475,17 @@ class DevelopmentAllowanceTests(unittest.TestCase):
                 loaded, unit_sha = load_unit(unit_path)
                 validation = validate_unit_against_queue(loaded, unit_sha, queue, queue_sha)
             self.assertEqual(validation["status"], "valid")
+
+            legacy = {**policy, 'cases': expected, 'lanes': {}}
+            with patch('tools.benchmark.layout_policy.load_policy', return_value=legacy):
+                with self.assertRaisesRegex(PerformanceDecisionError, 'qualified development policy'):
+                    validate_unit_against_queue(loaded, unit_sha, queue, queue_sha)
+                profile_only = copy.deepcopy(loaded)
+                target = 'external/sunspider-1.0/3d-cube'
+                profile_only['fast_gate']['target_ids'] = [target]
+                profile_only['priority']['opportunity_ids'] = [target]
+                with self.assertRaisesRegex(PerformanceDecisionError, 'qualified development policy'):
+                    validate_unit_against_queue(profile_only, unit_sha, queue, queue_sha)
 
             outside = copy.deepcopy(loaded)
             outside["priority"]["rank_ceiling"] = ranks[self.target] - 1

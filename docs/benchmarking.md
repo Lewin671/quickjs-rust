@@ -125,7 +125,7 @@ are too wide reports `extension_required`; the response is a new complete
 
 | Command | Does | Writes |
 | --- | --- | --- |
-| `scripts/perf-compare.sh` | builds candidate and base at commits, writes receipts, runs all three lanes | a sealed bundle directory |
+| `scripts/perf-compare.sh` | builds candidate and base at commits, writes receipts, runs all four selection lanes | a sealed bundle directory |
 | `scripts/performance-decision.sh` | `queue`, `check-unit`, `validate-unit`, `decide` | queue and decision JSON |
 | `scripts/perf-loop.sh` | builds base and working tree, runs the counter screen | stdout only |
 | `python3 -m tools.benchmark.screen` | counter A/B of two executables | stdout; optional `--json` |
@@ -156,12 +156,14 @@ created exclusively, so an existing path is an error. Report writers and
 | `manifest.json`, `raw.jsonl`, `report.json` | broad lane: the manifest copy, every sample, the analysis |
 | `sentinel-manifest.json`, `sentinel-raw.jsonl`, `sentinel-report.json` | sentinel lane, same shapes |
 | `external-manifest.json`, `external-raw.jsonl`, `external-report.json` | external lane |
+| `development-manifest.json`, `development-raw.jsonl`, `development-report.json` | selectable npm lane in new formal bundles |
 | `summary.json` | engine identities, `promotion_metric`, `decision_readiness`, and the seal |
 | `summary.md` | per-lane, per-case tables for reading |
 | `status.json` | the active phase, or the failure and the phase it happened in |
 
 `summary.json` carries a `bundle` object with an experiment id and the
-SHA-256 of each of the nine lane files (`tools/benchmark/bundle.py`).
+SHA-256 of each lane file (`tools/benchmark/bundle.py`): nine in legacy
+seal schema 1, twelve including development in schema 2.
 `queue` and `decide` require the report paths to be those files in the
 summary's own directory and recompute every hash. The seal prevents
 accidental mixing or replacement of files. It is not authentication.

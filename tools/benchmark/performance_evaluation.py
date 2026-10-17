@@ -67,6 +67,17 @@ def decide(unit, unit_sha, queue, queue_sha, summary, summary_sha, broad, broad_
     if kind == "migration" and mode != "stage" and unit["migration"]["current_stage"] != unit["migration"]["stages"]:
         raise PerformanceDecisionError("a migration reaches fast or promotion mode only at its final stage")
     reasons = validate_bundle(summary, broad, external, sentinel)
+    development, development_sha, layout_policy = None, None, None
+    if unit.get('schema_version') == 3:
+        from .layout_policy import load_policy
+        layout_policy = load_policy(ROOT / unit['layout_gate']['policy_path'],
+                                    unit['layout_gate']['policy_sha256'], live=False)
+        if ('development' in layout_policy['lanes'] and formal_bundle is not None
+                and summary.get('bundle', {}).get('schema_version') == 2):
+            from .performance_schema import _read_json
+            from .performance_evidence import validate_development
+            development, development_sha = _read_json(formal_bundle / 'development-report.json', 'development report')
+            reasons.extend(validate_development(development, summary['engines'], broad['run']['host']))
     bundle_complete = not reasons
     if summary["engines"]["base"] != queue.get("engines", {}).get("candidate"):
         raise PerformanceDecisionError("decision base executable differs from the profiled queue candidate")
@@ -75,11 +86,16 @@ def decide(unit, unit_sha, queue, queue_sha, summary, summary_sha, broad, broad_
         reasons.append("missing generic-path sentinel evidence")
     metric = "wall_time" if unit.get("schema_version") == 3 else promotion_metric(broad, external, sentinel)
     metrics = comparison_index(broad, external, sentinel, metric)
+    if development is not None and 'development' in layout_policy['lanes']:
+        from .performance_evidence import preview_comparisons
+        metrics.update(preview_comparisons(development, 'development', metric))
     wall = comparison_index(broad, external, sentinel, "wall_time") if metric == "cycles" else metrics
     gate = unit["fast_gate"]
     controls = set(gate.get("control_ids", []))
     controls.update(f"sentinel/{case}" for case in inventories()["sentinel"])
     targets = set(gate["target_ids"])
+    if layout_policy is not None:
+        controls.update(set(layout_policy['cases']) - targets)
     if mode == "stage":
         targets = set(unit["migration"]["cumulative_target_ids"])
         target_limit = control_limit = unit["migration"]["stage_max_candidate_over_base"]
@@ -182,6 +198,8 @@ def decide(unit, unit_sha, queue, queue_sha, summary, summary_sha, broad, broad_
            if layout_verdict is not None else {}),
     }
     if layout_verdict is not None:
+        if development_sha is not None:
+            result['evidence']['development_report_sha256'] = development_sha
         result['decision_readiness']['status'] = ('ready_for_unit_gates'
             if bundle_complete and layout_verdict['passed'] else 'inconclusive')
     if mode == "stage":

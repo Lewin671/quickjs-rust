@@ -8,9 +8,9 @@ configuration, canonical recipe and manifest hashes; `host_node` binds the
 specific machine. Analysis verifies the recorded host; collectors also
 verify the live host. An unqualified policy is never usable.
 
-`cases` maps all 76 selection cases to `wall_band` B_i and
+`cases` maps the 76 legacy selection cases (86 with development) to `wall_band` B_i and
 `instruction_band` I_i; `held_out` maps all nine acceptance programs to their
-A/A wall bands. `lanes` holds broad, sentinel, external, equal-case portfolio
+A/A wall bands. `lanes` holds broad, sentinel, external, optional development, equal-case portfolio
 and held-out ceilings. Qualification retains joint pilot intervals, extended case intervals and source
 hashes. B_i covers A2's two observed layout estimators and global A/A median
 bias; I_i covers its rounded A/A instruction envelope. Held-out bands use
@@ -84,7 +84,11 @@ never usable by `validate-unit`, `screen` or `decide`; no fallback ceiling
 is invented. The [recorded iMac artifact](../benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v1.json)
 and its adjacent SHA-256 sidecar preserve the original unqualified outcome.
 [Qualified iMac v2](../benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v2.json)
-and its adjacent SHA-256 sidecar are the adopted host policy; v1 remains frozen.
+remains valid for plans that name no development case.
+[Qualified iMac v3](../benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v3.json)
+adds the development lane (86 cases) and is required for any plan that names
+a development case; v1 remains frozen. [T057](../tasks/T057-string-code-units.md)
+owns the v3 qualification record.
 [T055](../tasks/archive/T055-layout-noise-control.md) owns qualification evidence.
 Screen/held-out A/A binds the frozen band-source executable; canonical
 formal A/A binds its own declared revision and byte-identical two roles.
@@ -191,3 +195,19 @@ load-only replacements. All other errors stop. Qualification accepts latest
 joint lane blocks. Formal cap-imprecise cases also set the policy's diagnostic
 band/K=6 status; precision alone cannot block qualification. Payoff, stage,
 instruction, precise-case, lane/portfolio and correctness gates still bind.
+
+## Development policy extension
+
+Development-enabled policies additionally bind `development_manifest_sha256`
+and its exact ten-case inventory. Non-target programs follow the same
+instruction floor/hard cap and six-layout wall-persistence rules as external
+cases. Development and the expanded equal-case portfolio each have a ceiling.
+Legacy policies remain usable without development targets. Held-out stays
+acceptance-only, with its protocol and bands inherited unchanged.
+
+`layout_development_a2` records natural-versus-each-placement observations;
+`layout_calibration --lane development` records the independent 30-pair pilot
+and automatic continuation. `layout_development_qualification` replays both
+and the four-lane sealed formal A/A, deriving no wider bands from qualification.
+The pre-timing contract and publication standing are owned by
+[T057 development policy](../tasks/archive/T057-development-policy.md).

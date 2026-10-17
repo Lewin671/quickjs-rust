@@ -13,6 +13,7 @@ it to `archive/` with `git mv` and move its row below.
 
 | Task | Status | What it is |
 | --- | --- | --- |
+| [T057](T057-string-code-units.md) string code units | active | Policy v3 qualified (development targets eligible); stage-1 plan next. |
 | [T056](T056-interpreter-core-v2.md) interpreter core v2 | active | Target design and unit-0 evidence for names, frames and values; exact attribution remains open, M1 is an unimplemented draft. |
 | [T018](T018-broad-performance.md) broad performance | active | The performance campaign contract and its targets against QuickJS-NG. Start performance work here, then follow [the workflow](../docs/performance-workflow.md). |
 | [T040](T040-imac-general-performance.md) x86_64 general optimization | active | Fresh current-main comparison and exact-binary profiles, followed by independent general runtime units. |
@@ -85,6 +86,8 @@ outcome column says what happened, not what to do next.
 | `T032-shaped-prototype-slot-reads.md` | Retained. |
 
 ## Other Records In `archive/`
+
+- T057: [preliminary development baseline](archive/T057-development-baseline.md) and [policy v3 qualification](archive/T057-development-policy.md).
 
 - T056: [unit 0 part 1 evidence](archive/T056-unit0-part1-evidence.md); standing, attribution limits, RSS, ABI probes and an unfrozen M1 draft.
 

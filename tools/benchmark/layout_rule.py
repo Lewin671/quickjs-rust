@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import statistics
 
-from .layout_policy import geomean, rows
+from .layout_policy import geomean, rows, selection_lanes
 from .layout_power import diagnostic_only, needs_panel
 
 
@@ -84,7 +84,7 @@ def evaluate(policy, screen, targets, payoff, *, panel=None, held_out=None,
                        'instructions_min': min(instructions), 'instruction_ceiling': instruction_limit,
                        'target_aggregate': target_aggregate, 'diagnostic_only':diagnostic}
     for k, values in enumerate(panels or [data]):
-        for lane in ('broad', 'sentinel', 'external', 'portfolio'):
+        for lane in selection_lanes(policy):
             value = geomean([statistics.median(r['wall_ns']) for n, r in values.items()
                              if lane == 'portfolio' or n.startswith(lane + '/')])
             ceiling = policy['lanes'][lane]

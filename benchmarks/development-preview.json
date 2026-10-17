@@ -6,11 +6,67 @@
     "order": "seeded_role_rotation",
     "phase_boundary": "before_process_spawn_to_wait_return",
     "seed": 20261017,
+    "timeout_policy": {
+      "cases": {
+        "big.js/arith": {
+          "reference_median_ns": 818999276.5,
+          "timeout_seconds": 60
+        },
+        "diff/compare": {
+          "reference_median_ns": 1756392327.0,
+          "timeout_seconds": 60
+        },
+        "graphlib/paths": {
+          "reference_median_ns": 451122916.0,
+          "timeout_seconds": 60
+        },
+        "immutable/persistent": {
+          "reference_median_ns": 919597079.0,
+          "timeout_seconds": 60
+        },
+        "js-yaml/document": {
+          "reference_median_ns": 980255654.5,
+          "timeout_seconds": 60
+        },
+        "lodash/transform": {
+          "reference_median_ns": 629638950.0,
+          "timeout_seconds": 60
+        },
+        "matter-js/simulate": {
+          "reference_median_ns": 1265963420.5,
+          "timeout_seconds": 60
+        },
+        "meriyah/parse": {
+          "reference_median_ns": 758631216.5,
+          "timeout_seconds": 60
+        },
+        "moment/dates": {
+          "reference_median_ns": 2719309212.0,
+          "timeout_seconds": 60
+        },
+        "papaparse/csv": {
+          "reference_median_ns": 983035923.5,
+          "timeout_seconds": 60
+        }
+      },
+      "id": "quickjs-reference-timeout-v1",
+      "minimum_seconds": 60,
+      "multiplier": 4,
+      "reference": {
+        "blocks": 30,
+        "job": "20261017T082306Z-t057-stage1-profiles-and-development30",
+        "raw_sha256": "e941f3878d711f16c1684ad7bf2e43af66e5c1108470ea3ff48159fce1e6fc3b",
+        "reference_binary_sha256": "919f7235f61412ba69faf6aa05b534869aa7d69d1583b3d7aab3cd5b67cd6f40",
+        "reference_revision": "f7830186043e4488f2998759d60a514faf07cbc9",
+        "selection": "latest-valid-canonical-NG",
+        "summary_sha256": "afdfd04a0bc939fd723566619b9c738a69472a0cd411a864566c071800afcfa4"
+      }
+    },
     "timeout_seconds": 60
   },
-  "preview_id": "quickjs-development-preview-v1",
+  "preview_id": "quickjs-development-preview-v2",
   "role": "development",
-  "schema_version": 1,
+  "schema_version": 2,
   "suites": [
     {
       "cases": [

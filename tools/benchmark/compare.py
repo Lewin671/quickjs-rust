@@ -1,13 +1,13 @@
 """Run one complete three-engine comparison from prebuilt receipts.
 
 This local entry point measures broad specializer coverage, generic sentinels,
-and external process-wall workloads on the same host. It never builds engines
+and external/development process-wall workloads on the same host. It never builds engines
 or silently replaces a failed sample. Hosted previews keep their existing path.
 
 The lanes run one after another, or with `--concurrent-lanes` side by side:
 one forked process per lane, each measuring its own lane in its usual order.
-`--workers N` instead shares the cases of all three lanes among N processes:
-the broad cases in N // 2 shards, the sentinels in one, and each external
+`--workers N` instead shares the cases of all four selection lanes among N processes:
+the broad cases in N // 2 shards, the sentinels in one, and each whole-process
 case on its own, longest first. A case's three engines always run in the
 same process, in the order the sequential schedule gives them.
 The files and the analysis are the same; only wall-clock overlap differs, and
@@ -62,16 +62,30 @@ def _engines(args, manifest):
     return engines
 
 
-def summary_for(broad, external, sentinel):
+def summary_for(broad, external, sentinel, development=None):
     summary = {"schema_version": 2, "state": "success", "claim_eligible": False,
                "classification": "same_host_diagnostic_not_fixed_hardware_claim",
                "engines": _engine_provenance(broad["run"])}
     reasons = validate_bundle(summary, broad, external, sentinel)
+    if development is not None:
+        from .performance_evidence import validate_development
+        reasons.extend(validate_development(development, summary["engines"], broad["run"]["host"]))
     metric = promotion_metric(broad, external, sentinel)
+    if development is not None and metric == 'cycles':
+        from .performance_evidence import preview_comparisons
+        from .development import opportunity_ids
+        if set(preview_comparisons(development, 'development', 'cycles')) != opportunity_ids():
+            metric = 'wall_time'
     summary["promotion_metric"] = metric
     rows = comparison_index(broad, external, sentinel, metric)
+    expected_count = sum(len(cases) for cases in inventories().values())
+    if development is not None:
+        from .performance_evidence import preview_comparisons
+        from .development import opportunity_ids
+        rows.update(preview_comparisons(development, "development", metric))
+        expected_count += len(opportunity_ids())
     imprecise = [key for key, row in rows.items() if not interval(row, key)[2]]
-    if len(rows) != sum(len(cases) for cases in inventories().values()):
+    if len(rows) != expected_count:
         reasons.append("missing candidate/base comparisons")
     if any(s.get("complete_comparison") is not True for s in external["suites"]):
         reasons.append("missing candidate/QuickJS-NG comparisons")
@@ -134,6 +148,10 @@ LANES = ("broad", "sentinel", "external")
 _PREFIX = {"broad": "", "sentinel": "sentinel-"}
 
 
+def selection_lanes(args):
+    return (*LANES, *(("development",) if getattr(args, "development", False) else ()))
+
+
 def _measure_lane(lane, args, manifests, engines):
     """Measure one lane into `args.output_dir` and return its report."""
     if lane == "external":
@@ -141,6 +159,11 @@ def _measure_lane(lane, args, manifests, engines):
                            args.external_cache, args.output_dir / "external-work",
                            args.output_dir, args.candidate, args.base, args.quickjs_ng,
                            blocks=args.blocks)
+    if lane == "development":
+        from .development import load_development_manifest, MANIFEST_PATH, run_development_preview
+        return run_development_preview(load_development_manifest(MANIFEST_PATH),
+            args.external_cache, args.output_dir / "development-work", args.output_dir,
+            args.candidate, args.base, args.quickjs_ng, blocks=args.blocks)
     prefix, manifest = _PREFIX[lane], manifests[lane]
     print(f"compare: {prefix}measurement ({args.blocks} blocks)", file=sys.stderr, flush=True)
     raw = args.output_dir / f"{prefix}raw.jsonl"
@@ -175,7 +198,7 @@ def _measure_concurrently(args, manifests, engines):
     interpreter; a fork also inherits withheld counters (cycle_trust.py)."""
     context = multiprocessing.get_context("fork")
     processes = {lane: context.Process(target=_lane_process, args=(lane, args, manifests, engines))
-                 for lane in LANES}
+                 for lane in selection_lanes(args)}
     for process in processes.values():
         process.start()
     for process in processes.values():
@@ -183,8 +206,9 @@ def _measure_concurrently(args, manifests, engines):
     failed = [lane for lane, process in processes.items() if process.exitcode != 0]
     if failed:
         raise ValueError(f"{', '.join(failed)} lane failed; raw evidence preserved, no conclusion")
-    names = {"broad": "report.json", "sentinel": "sentinel-report.json", "external": "external-report.json"}
-    return {lane: json.loads((args.output_dir / names[lane]).read_text(encoding="utf-8")) for lane in LANES}
+    names = {"broad": "report.json", "sentinel": "sentinel-report.json", "external": "external-report.json",
+             "development": "development-report.json"}
+    return {lane: json.loads((args.output_dir / names[lane]).read_text(encoding="utf-8")) for lane in selection_lanes(args)}
 
 
 def _read_samples(path):
@@ -201,9 +225,10 @@ def _measure_shard(run, case_ids, path):
 
 
 def _measure_with_workers(args, manifests, engines):
-    """Share the three lanes' cases among `args.workers` processes."""
+    """Share all selection cases among the same qualified worker limit."""
     scratch = Path(tempfile.mkdtemp(prefix="qjs-compare-workers."))
     runs, streams, shards, preview = {}, {}, {}, None
+    development = None
     try:
         tasks = []
         for lane, count in (("broad", max(1, args.workers // 2)), ("sentinel", 1)):
@@ -242,6 +267,14 @@ def _measure_with_workers(args, manifests, engines):
                     for index in sorted(cases, key=lambda index: -cost[index])]
 
         tasks.append(Task("external capability", probe, external_cases))
+        if getattr(args, "development", False):
+            from .development import load_development_manifest, MANIFEST_PATH, DEVELOPMENT_LANE
+            from .compare_preview_tasks import preview_tasks
+            development = PreviewRun(load_development_manifest(MANIFEST_PATH),
+                args.external_cache, args.output_dir / "development-work",
+                args.candidate, args.base, args.quickjs_ng, blocks=args.blocks, lane=DEVELOPMENT_LANE)
+            dev_tasks, dev_records = preview_tasks(development, scratch, "development")
+            tasks.extend(dev_tasks)
         run_tasks(tasks, args.workers)
         reports = {}
         for lane, run in runs.items():
@@ -251,6 +284,8 @@ def _measure_with_workers(args, manifests, engines):
         reports["external"] = preview.finish(
             [sample for index in cases for path in (capability[index], measured[index])
              for sample in _read_samples(path)], args.output_dir)
+        if development is not None:
+            reports["development"] = development.finish(dev_records(), args.output_dir)
         return reports
     finally:
         for run in runs.values():
@@ -259,6 +294,8 @@ def _measure_with_workers(args, manifests, engines):
             stream.close()
         if preview is not None:
             preview.close()
+        if development is not None:
+            development.close()
         shutil.rmtree(scratch, ignore_errors=True)
 
 
@@ -285,17 +322,22 @@ def _measure(args, broad_manifest, sentinel_manifest, broad_engines, sentinel_en
             reports = _measure_concurrently(args, manifests, engines)
         else:
             reports = {}
-            for lane in LANES:
+            for lane in selection_lanes(args):
                 phase = f"{lane} measurement"
                 status("running")
                 reports[lane] = _measure_lane(lane, args, manifests, engines)
         phase = "summary"
-        summary = summary_for(reports["broad"], reports["external"], reports["sentinel"])
+        summary = summary_for(reports["broad"], reports["external"], reports["sentinel"], reports.get("development"))
         summary["lane_schedule"] = (f"workers-{workers}" if workers
                                     else "concurrent" if concurrent else "sequential")
         write_report(args.output_dir / "summary.json", summary)
         (args.output_dir / "summary.md").write_text(
             markdown_for(summary, reports["broad"], reports["external"], reports["sentinel"]))
+        if "development" in reports:
+            from .development import SPEC
+            dev = reports["development"]
+            with (args.output_dir / "summary.md").open("a") as stream:
+                stream.write("\n" + render_markdown(dev, title=SPEC.title, subtitle=SPEC.subtitle))
         from .bundle import seal
         summary = seal(args.output_dir)
         status("success")
@@ -317,9 +359,11 @@ def main():
     parser.add_argument("--seed", type=int, default=20250713)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--concurrent-lanes", action="store_true",
-                        help="measure the three lanes side by side, one process each")
+                        help="measure the four selection lanes side by side, one process each")
     parser.add_argument("--workers", type=int, choices=range(2, 9), metavar="N",
                         help="share the cases of all lanes among N processes (2 to 8)")
+    parser.add_argument("--without-development", dest="development", action="store_false",
+                        help="legacy three-lane diagnostic bundle (development is included by default)")
     parser.add_argument("--settle", type=float, default=300.0,
                         help="seconds to wait for running builds or engines to finish before measuring")
     try:

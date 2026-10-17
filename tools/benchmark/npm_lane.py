@@ -281,18 +281,21 @@ def load_npm_manifest(spec: LaneSpec, path: Path, *, check_disjoint: bool = True
         {"schema_version", "preview_id", "claim_eligible", "role", "measurement", "suites"},
         "manifest",
     )
-    if _integer(root["schema_version"], "manifest.schema_version", 1) != 1:
-        raise ExternalPreviewError("manifest.schema_version: expected version 1")
+    version = _integer(root['schema_version'], 'manifest.schema_version', 1)
+    if version not in ((1, 2) if spec.key == 'development' else (1,)):
+        raise ExternalPreviewError('manifest.schema_version: unsupported npm protocol')
     if root["claim_eligible"] is not False:
         raise ExternalPreviewError(f"manifest.claim_eligible: the {spec.key} lane must remain non-claim")
     if _string(root["role"], "manifest.role") != spec.key:
         raise ExternalPreviewError(f"manifest.role: expected {spec.key}")
     preview_id = _string(root["preview_id"], "manifest.preview_id")
-    if preview_id != spec.preview_id:
+    expected_id = spec.preview_id if version == 1 else spec.preview_id.removesuffix('v1') + 'v2'
+    if preview_id != expected_id:
         raise ExternalPreviewError(f"manifest.preview_id: unexpected {spec.key} identity")
     measurement_data = _keys(
         root["measurement"],
-        {"blocks", "timeout_seconds", "metric", "phase_boundary", "order", "seed"},
+        {"blocks", "timeout_seconds", "metric", "phase_boundary", "order", "seed"}
+        | ({'timeout_policy'} if version == 2 else set()),
         "manifest.measurement",
     )
     measurement = Measurement(
@@ -345,6 +348,10 @@ def load_npm_manifest(spec: LaneSpec, path: Path, *, check_disjoint: bool = True
                 cases=cases,
             )
         )
+    if version == 2:
+        from .external_timeouts import attach
+        measurement = attach(measurement, measurement_data['timeout_policy'],
+                             {s.id + '/' + c.id for s in suites for c in s.cases})
     manifest = NpmManifest(
         path=resolved,
         sha256=_sha256_bytes(raw),

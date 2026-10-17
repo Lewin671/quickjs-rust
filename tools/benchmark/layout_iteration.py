@@ -53,11 +53,12 @@ def main():
     build(args.candidate, out / 'cand000')
     base = out / 'base000/identity.json'
     candidate = out / 'cand000/identity.json'
-    evidence = measure_panel(base, candidate, out / 'screen', natural=True)
+    development = 'development' in policy['lanes']
+    evidence = measure_panel(base, candidate, out / 'screen', natural=True, development=development)
     result = evaluate_attempt(unit, policy, evidence['panels'])
     mandatory = gate['panel_required'] or gate['mechanism_class'] == 'instruction-blind' or needs_panel(policy)
     if mandatory or (result['panel_required'] and not result['failures']):
-        evidence = measure_panel(base, candidate, out / 'screen', complete=True)
+        evidence = measure_panel(base, candidate, out / 'screen', complete=True, development=development)
         result = evaluate_attempt(unit, policy, evidence['panels'])
     write_json(out / 'verdict.json', {'unit_sha256': unit_hash, **result})
     print(json.dumps(result, indent=2))

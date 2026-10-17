@@ -18,7 +18,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--binary', type=Path, required=True)
     parser.add_argument('--sha256', required=True)
-    parser.add_argument('--lane', choices=('portfolio', 'held-out'), required=True)
+    parser.add_argument('--lane', choices=('portfolio', 'held-out', 'development'), required=True)
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     from .pair_disturbance import Monitor, quieting_preflight, verify_run
@@ -35,8 +35,12 @@ def main():
         target.parent.mkdir()
         shutil.copy2(args.binary, target)
         binaries.append(target)
+    binding = {}
+    if args.lane == 'development':
+        from .development import MANIFEST_PATH
+        binding['development_manifest_sha256'] = digest(MANIFEST_PATH)
     write_json(out / 'identity.json', {'host': identity, 'sha256': args.sha256,
-        'binaries': list(map(str, binaries)), 'pairs': 30, 'lane': args.lane})
+        'binaries': list(map(str, binaries)), 'pairs': 30, 'lane': args.lane, **binding})
     tool = screen.counter_tool()
     (out / 'cases').mkdir()
     (out / 'work').mkdir()
@@ -46,7 +50,8 @@ def main():
         screen.check_load(8, True, 300)
         preflight = screen.launch_preflight(binaries, 120)
         cases = (held_out_cases(screen.DEFAULT_CACHE, out / 'work') if args.lane == 'held-out'
-                 else screen.resolve_cases(['broad', 'sentinel', 'external'], screen.DEFAULT_CACHE, out / 'work'))
+                 else screen.resolve_cases(['development'] if args.lane == 'development' else
+                    ['broad', 'sentinel', 'external'], screen.DEFAULT_CACHE, out / 'work'))
         results = []
         for case in cases:
             print('CALIBRATE', case.id, flush=True)
@@ -58,7 +63,7 @@ def main():
     conservation = verify_run([json.loads(p.read_text()) for p in (out / 'cases').glob('*.json')], disturbance)
     write_json(out / 'screen.json', {'artifact_type': 'quickjs-layout-calibration',
         'pairs': 30, 'cases': results, 'disturbance': disturbance,
-        'disturbance_counts': conservation, 'quieting': quieting, 'launch_preflight': preflight, 'host': identity})
+        'disturbance_counts': conservation, 'quieting': quieting, 'launch_preflight': preflight, 'host': identity, **binding})
 
     # The pilot stays sealed. Each deficient case gets a separate immutable
     # chain; original joint lane cohorts never acquire fabricated observations.
