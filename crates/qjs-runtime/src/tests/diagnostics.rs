@@ -552,3 +552,24 @@ fn a_typed_loop_run_from_the_wide_tier_reads_the_receiver_and_keeps_the_stack() 
     assert_eq!(value, Value::Number(1_990.0));
     assert!(counters.nested_vm_constructions <= 3, "{counters:?}");
 }
+
+#[test]
+fn named_operands_link_once_per_body_and_domain() {
+    let source = |iterations: u32| {
+        format!(
+            // `try` keeps the body on the interpreter, off the compact tiers.
+            "function touch(o) {{ try {{ o.count = o.count + 1; }} finally {{}} return o.count; }}
+             var o = {{ count: 0 }};
+             for (var i = 0; i < {iterations}; i++) touch(o);
+             o.count;"
+        )
+    };
+    let (value, few) = counted(&source(3));
+    assert_eq!(value, Value::Number(3.0));
+    let (value, many) = counted(&source(3000));
+    assert_eq!(value, Value::Number(3000.0));
+    assert!(few.named_operand_links > 0);
+    assert_eq!(many.named_operand_links, few.named_operand_links);
+    assert_eq!(many.property_atoms_created, few.property_atoms_created);
+    assert!(many.dispatched_named_property_ops >= 3 * 3000);
+}

@@ -548,7 +548,7 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
                 });
                 continue;
             }
-            Op::GetPropNamed { key, cache }
+            Op::GetPropNamed { key, cache, .. }
                 if cache.local_slot().is_none()
                     && let Some(obj) = aliases[usize::from(top?)] =>
             {
@@ -751,7 +751,7 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
                     count,
                 });
             }
-            Op::GetPropNamed { key, cache } => {
+            Op::GetPropNamed { key, cache, .. } => {
                 let index = u16::try_from(named_reads.len()).ok()?;
                 named_reads.push(NamedReadSite {
                     key: Rc::clone(key),
@@ -842,6 +842,7 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
                 key,
                 cache,
                 is_strict,
+                ..
             } => {
                 let index = u16::try_from(named_writes.len()).ok()?;
                 named_writes.push(NamedWriteSite {

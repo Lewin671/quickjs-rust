@@ -14,6 +14,7 @@ use std::rc::Rc;
 
 use num_bigint::BigInt;
 
+mod access;
 mod array;
 mod collection_key;
 mod js_string;
@@ -24,6 +25,7 @@ mod property;
 mod set;
 mod teardown;
 
+pub use access::ValueKind;
 pub use array::ArrayRef;
 pub(crate) use array::{ArrayWeakRef, MAX_DENSE_STORAGE_LENGTH, array_index_property_key};
 pub(crate) use collection_key::CollectionKey;

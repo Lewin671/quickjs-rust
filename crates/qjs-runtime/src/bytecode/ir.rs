@@ -25,6 +25,8 @@ use crate::ObjectRef;
 use crate::{Value, value::ObjectLiteralShape};
 
 pub(super) use super::enumerate_keys_cache::EnumerateKeysCache;
+pub(super) use super::linked_code::PropertyNameId;
+use super::linked_code::{AtomLinks, PropertyNamePool};
 pub(super) use super::named_property_cache::NamedPropertyCache;
 use super::operand_stack::OperandStackRecycler;
 
@@ -196,8 +198,11 @@ pub(super) enum Op {
     ForInKeyIsEnumerable,
     /// Reads a statically named string property without materializing the key
     /// as an operand-stack value or allocating an owned string at runtime.
+    /// `key` is the symbolic name; `name` is its index in the body's property
+    /// name pool, which the interpreter resolves to a linked atom.
     GetPropNamed {
         key: Rc<str>,
+        name: PropertyNameId,
         cache: NamedPropertyCache,
     },
     /// Reads a computed numeric-literal property without materializing the
@@ -248,6 +253,7 @@ pub(super) enum Op {
     /// computed assignment. Leaves the assigned value on the stack.
     SetPropNamed {
         key: Rc<str>,
+        name: PropertyNameId,
         cache: Option<NamedPropertyCache>,
         is_strict: bool,
     },
@@ -725,6 +731,10 @@ pub struct Bytecode {
     /// declaration instantiation environment.
     strict: bool,
     pub(super) code: Vec<Op>,
+    /// The symbolic names of `code`'s named property operands, and their
+    /// cached per-domain atom links (`linked_code`).
+    pub(super) property_names: PropertyNamePool,
+    pub(super) atom_links: AtomLinks,
     pub(super) numeric_leaf_plan: OnceCell<Option<super::vm_numeric_leaf::NumericLeafPlan>>,
     /// A tiny direct-call plan for a body whose only observable work is
     /// reading one own data property from its object receiver. It is separate
@@ -861,7 +871,7 @@ impl Bytecode {
     fn with_scope_global_lexical_names_and_strict_with_parameter_slots(
         constants: Vec<Value>,
         locals: Vec<Local>,
-        code: Vec<Op>,
+        mut code: Vec<Op>,
         global_scope: bool,
         global_lexical_names: Vec<String>,
         strict: bool,
@@ -904,6 +914,7 @@ impl Bytecode {
             global_scope,
             &parameter_slots,
         );
+        let property_names = PropertyNamePool::assign(&mut code);
         let local_slots = collect_local_slots(&locals);
         let this_slot = local_slots.get("this").copied();
         let constant_return = match code.as_slice() {
@@ -930,6 +941,8 @@ impl Bytecode {
             dead_completion_slots,
             strict,
             code,
+            property_names,
+            atom_links: AtomLinks::default(),
             numeric_leaf_plan: OnceCell::new(),
             this_property_leaf_plan,
             compact_function_program: OnceCell::new(),

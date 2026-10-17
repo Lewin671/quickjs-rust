@@ -105,7 +105,7 @@ impl ThisPropertyReadPlan {
         let [
             Op::FunctionPrologueEnd,
             Op::LoadGlobal(this_name),
-            Op::GetPropNamed { key, cache },
+            Op::GetPropNamed { key, cache, .. },
             Op::Return,
             ..,
         ] = ops
@@ -150,7 +150,7 @@ impl ThisPropertyNumericPlan {
                 Op::LoadGlobal(name) if name == "this" => {
                     push_this_property_stack(&mut stack, ThisPropertyStackValue::Receiver)?;
                 }
-                Op::GetPropNamed { key, cache } => {
+                Op::GetPropNamed { key, cache, .. } => {
                     let source = match cache.local_slot() {
                         Some(slot) => ThisPropertySource::Argument(
                             parameter_slots

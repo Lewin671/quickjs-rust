@@ -33,6 +33,7 @@ use super::eval_cache::DirectEvalCache;
 
 use crate::{
     Bytecode, Function, JsString, ObjectRef, Value, function::Upvalue, private::PrivateEnvironment,
+    property::atom::AtomDomain,
 };
 
 const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
@@ -77,10 +78,14 @@ pub(crate) struct RealmState {
     /// by every RegExp object with the same source and flags. Bounded; holds
     /// no objects or realm references.
     regexp_programs: RefCell<crate::regexp::ProgramCache>,
+    /// The property-name atom domain. A realm derived from another (a
+    /// dynamic-function scope) shares its parent's domain because the two
+    /// exchange objects; an independent root owns a fresh one.
+    atoms: AtomDomain,
 }
 
 impl RealmState {
-    fn new(mut bindings: HashMap<String, Value>) -> Self {
+    fn new(mut bindings: HashMap<String, Value>, atoms: AtomDomain) -> Self {
         // Dynamic Function construction still enters through a compact flat
         // snapshot. Consume its internal-only intrinsic handoff markers before
         // the remaining values become ordinary realm bindings, so the marker
@@ -109,6 +114,7 @@ impl RealmState {
             dynamic_function_realm_global: RefCell::new(dynamic_function_realm_global),
             direct_eval_cache: RefCell::new(DirectEvalCache::default()),
             regexp_programs: RefCell::default(),
+            atoms,
         };
         if let Some(prototype) = object_prototype {
             let _ = realm.object_prototype.set(prototype);
@@ -125,6 +131,12 @@ impl RealmState {
 
     pub(crate) fn regexp_programs(&self) -> &RefCell<crate::regexp::ProgramCache> {
         &self.regexp_programs
+    }
+
+    /// The property-name atom domain this realm's code links against.
+    #[inline]
+    pub(crate) fn atoms(&self) -> &AtomDomain {
+        &self.atoms
     }
 
     pub(crate) fn initialize_object_prototype(&self, prototype: ObjectRef) {
@@ -302,8 +314,17 @@ impl fmt::Debug for RealmState {
 
 pub(crate) type Realm = Rc<RealmState>;
 
+/// A realm for an independent root, with its own atom domain.
 pub(crate) fn new_realm(bindings: HashMap<String, Value>) -> Realm {
-    Rc::new(RealmState::new(bindings))
+    Rc::new(RealmState::new(bindings, AtomDomain::new()))
+}
+
+/// A realm that exchanges objects with code using `atoms`, and so shares it.
+pub(crate) fn new_realm_sharing_atoms(
+    bindings: HashMap<String, Value>,
+    atoms: AtomDomain,
+) -> Realm {
+    Rc::new(RealmState::new(bindings, atoms))
 }
 pub(crate) type GlobalLexicalBindings = Rc<RefCell<crate::value::name_hash::NameSet<String>>>;
 pub(crate) type GlobalLexicalValues = Rc<RefCell<crate::value::name_hash::NameMap<String, Value>>>;

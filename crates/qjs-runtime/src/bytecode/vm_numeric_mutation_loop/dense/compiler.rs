@@ -295,7 +295,7 @@ impl<'a> Translator<'a> {
                 })?;
                 self.stack.push(AbstractValue::Number(register));
             }
-            Op::GetPropNamed { key, cache } => {
+            Op::GetPropNamed { key, cache, .. } => {
                 let value = if let Some(slot) = cache.local_slot() {
                     self.own_data(OwnDataSource {
                         owner: OwnDataOwner::Local(slot),
@@ -543,11 +543,11 @@ pub(super) fn compile_dynamic(
     let less_than_header = (|| {
         let (limit, cursor) = match code.get(header + 1)? {
             Op::LoadLocal(slot) => (DynamicLimit::LocalNumber(*slot), header + 2),
-            Op::GetPropNamed { key, cache } if key.as_ref() == "length" => (
+            Op::GetPropNamed { key, cache, .. } if key.as_ref() == "length" => (
                 DynamicLimit::LocalArrayLength(cache.local_slot()?),
                 header + 2,
             ),
-            Op::GetPropNamed { key, cache } => (
+            Op::GetPropNamed { key, cache, .. } => (
                 DynamicLimit::OwnDataNumber(OwnDataSource {
                     owner: OwnDataOwner::Local(cache.local_slot()?),
                     key: key.clone(),

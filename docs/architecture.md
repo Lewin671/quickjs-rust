@@ -121,6 +121,12 @@ interpreter drops its own extra references to the target, so a uniquely held
 buffer is extended in place; a real JavaScript alias keeps the buffer shared
 and immutable (`bytecode/vm_string_append.rs`).
 
+**Named operands.** A named property opcode indexes its body's name pool;
+the interpreter resolves it to an atom of the frame realm's `AtomDomain`
+(`property/atom.rs`), linking each body once per domain
+(`bytecode/linked_code.rs`). Stores still key by text; the atom-keyed layout
+authority is the staged target in [design/interpreter-core-v2.md](design/interpreter-core-v2.md).
+
 **Per-site caches.** `bytecode/named_property_cache.rs` caches named property
 reads and writes per instruction site, keyed by receiver layout.
 `bytecode/enumerate_keys_cache.rs` caches a `for-in` key list while the whole
@@ -144,7 +150,9 @@ Defined in `value/mod.rs`, `value/object.rs`, `value/property.rs` and
 
 - `Value` is a 16-byte enum. Every heap variant (string, BigInt, function,
   array, object, proxy, Map, Set) is a reference-counted handle, so cloning
-  a `Value` never deep copies.
+  a `Value` never deep copies. `value/access.rs` is the representation-
+  independent facade (`ValueKind`, typed borrowed views) that callers outside
+  `value/` should use instead of matching variants.
 - `ObjectRef` is `Rc<ObjectData>` and `ArrayRef` is `Rc<ArrayData>`. Identity
   is pointer identity. Caches hold `ObjectWeakRef`/`ArrayWeakRef`, never a
   strong reference. There is no tracing collector: a reference cycle is

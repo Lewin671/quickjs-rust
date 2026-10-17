@@ -75,6 +75,7 @@ pub(crate) fn native_function(
         params,
         body,
         dynamic_function_scope_snapshot(env),
+        env.realm().atoms().clone(),
         Rc::from(source),
     )?;
     // `new Function(...)` derives the [[Prototype]] from new.target, but a plain
@@ -223,7 +224,7 @@ fn build_dynamic_function(
         immutable_env_binding: None,
         immutable_env_value: None,
         params: Rc::new(params),
-        realm: super::env::new_realm(env_snapshot),
+        realm: super::env::new_realm_sharing_atoms(env_snapshot, env.realm().atoms().clone()),
         module_host: None,
         module_imports: Default::default(),
         bytecode: Rc::new(bytecode),
