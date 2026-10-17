@@ -35,10 +35,10 @@ pub(crate) fn native_regexp_prototype_split(
     // Keep the argument's own string value where it already is one: every
     // `exec` this loop performs reuses the character view memoized on it, so a
     // fresh copy per call would rebuild that view once per match.
-    let input = match argument_values.first().cloned().unwrap_or(Value::Undefined) {
-        Value::String(value) => value,
-        value => crate::JsString::from(to_js_string_with_env(value, env)?),
-    };
+    let input = crate::to_js_string_value_with_env(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     let (splitter, unicode_matching) = split_regexp_clone(this_value, env)?;
     let limit = split_limit(
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),

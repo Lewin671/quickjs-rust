@@ -384,10 +384,10 @@ pub(crate) fn native_regexp_prototype_exec(
     // Keep the argument's own string value where it already is one: the
     // matcher memoizes its character view, so a `/g` scan reuses it instead of
     // rebuilding it per match.
-    let input = match argument_values.first().cloned().unwrap_or(Value::Undefined) {
-        Value::String(value) => value,
-        value => crate::JsString::from(to_js_string_with_env(value, env)?),
-    };
+    let input = crate::to_js_string_value_with_env(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     let stateful = global || sticky;
     let last_index = regexp_last_index(&this_value, env)?;
     let start_code_unit = if stateful { last_index } else { 0 };
@@ -483,10 +483,10 @@ pub(crate) fn native_regexp_prototype_test(
     // Keep the argument's own string value where it already is one: the
     // matcher memoizes its character view, so a `/g` scan reuses it instead of
     // rebuilding it per match.
-    let input = match argument_values.first().cloned().unwrap_or(Value::Undefined) {
-        Value::String(value) => value,
-        value => crate::JsString::from(to_js_string_with_env(value, env)?),
-    };
+    let input = crate::to_js_string_value_with_env(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     let stateful = global || sticky;
     let last_index = regexp_last_index(&this_value, env)?;
     let start_code_unit = if stateful { last_index } else { 0 };
@@ -799,17 +799,14 @@ pub(crate) fn regexp_set_last_index(value: &Value, index: usize) {
 
 pub(crate) fn native_regexp_global_match(
     regexp: Value,
-    input: &str,
+    input: &JsString,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     regexp_set_last_index(&regexp, 0);
     let mut matches = Vec::new();
     loop {
-        let result = native_regexp_prototype_exec(
-            regexp.clone(),
-            &[Value::String(input.to_owned().into())],
-            env,
-        )?;
+        let result =
+            native_regexp_prototype_exec(regexp.clone(), &[Value::String(input.clone())], env)?;
         let Value::Array(array) = result else {
             break;
         };

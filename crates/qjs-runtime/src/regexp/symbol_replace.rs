@@ -1,8 +1,9 @@
 use crate::CallEnv;
 use crate::string::{string_code_units, string_from_code_units};
 use crate::{
-    Function, NativeFunction, ObjectRef, Property, PropertyKey, Prototype, RuntimeError, Value,
-    call_function, property_value, reflect, symbol, to_js_string_with_env, to_length_with_env,
+    Function, JsString, NativeFunction, ObjectRef, Property, PropertyKey, Prototype, RuntimeError,
+    Value, call_function, property_value, reflect, symbol, to_js_string_value_with_env,
+    to_js_string_with_env, to_length_with_env,
 };
 
 const MAX_STRING_LENGTH: usize = (1 << 30) - 1;
@@ -36,10 +37,10 @@ pub(crate) fn native_regexp_prototype_replace(
 
     // Keep the argument's own string value where it already is one, so the
     // matcher's memoized character view survives the whole replace.
-    let input = match argument_values.first().cloned().unwrap_or(Value::Undefined) {
-        Value::String(value) => value,
-        value => crate::JsString::from(to_js_string_with_env(value, env)?),
-    };
+    let input = to_js_string_value_with_env(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     let replace_value = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
     let replacement = if matches!(replace_value, Value::Function(_)) {
         Replacement::Function(Box::new(replace_value))
@@ -285,7 +286,7 @@ fn has_line_terminator(input: &str) -> bool {
         .any(|character| matches!(character, '\n' | '\r' | '\u{2028}' | '\u{2029}'))
 }
 
-fn regexp_exec(regexp: Value, input: &str, env: &mut CallEnv) -> Result<Value, RuntimeError> {
+fn regexp_exec(regexp: Value, input: &JsString, env: &mut CallEnv) -> Result<Value, RuntimeError> {
     let exec = property_value(regexp.clone(), "exec", env)?;
     if !matches!(exec, Value::Function(_)) {
         return Err(RuntimeError {
@@ -293,13 +294,7 @@ fn regexp_exec(regexp: Value, input: &str, env: &mut CallEnv) -> Result<Value, R
             message: "TypeError: RegExp exec method is not callable".to_owned(),
         });
     }
-    let result = call_function(
-        exec,
-        regexp,
-        vec![Value::String(input.to_owned().into())],
-        env,
-        false,
-    )?;
+    let result = call_function(exec, regexp, vec![Value::String(input.clone())], env, false)?;
     if matches!(result, Value::Null) || is_object_value(&result) {
         Ok(result)
     } else {
@@ -312,12 +307,14 @@ fn regexp_exec(regexp: Value, input: &str, env: &mut CallEnv) -> Result<Value, R
 
 fn match_record(
     exec_result: Value,
-    input: &str,
+    input: &JsString,
     env: &mut CallEnv,
 ) -> Result<MatchRecord, RuntimeError> {
     let matched = to_js_string_with_env(property_value(exec_result.clone(), "0", env)?, env)?;
+    // Clamp with the subject's memoized code-unit length; decoding the whole
+    // subject per exec result made a custom-exec loop quadratic.
     let position = to_length_with_env(property_value(exec_result.clone(), "index", env)?, env)?
-        .min(string_code_units(input).len());
+        .min(crate::string::js_string_code_unit_len(input));
     let length = to_length_with_env(property_value(exec_result.clone(), "length", env)?, env)?;
     let mut captures = Vec::new();
     for index in 1..length {
@@ -330,7 +327,7 @@ fn match_record(
     let groups = property_value(exec_result, "groups", env)?;
     Ok(MatchRecord {
         start: position,
-        end: position + string_code_units(&matched).len(),
+        end: position + crate::string::string_code_unit_len(&matched),
         matched,
         captures,
         groups,
@@ -665,7 +662,10 @@ fn set_last_index(receiver: Value, value: Value, env: &mut CallEnv) -> Result<()
     }
 }
 
-fn advance_string_index(input: &str, index: usize, unicode: bool) -> usize {
+fn advance_string_index(input: &JsString, index: usize, unicode: bool) -> usize {
+    if !unicode || input.is_ascii() {
+        return index + 1;
+    }
     let code_units = string_code_units(input);
     if unicode
         && matches!(

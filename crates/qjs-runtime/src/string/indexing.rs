@@ -1,26 +1,36 @@
 use crate::CallEnv;
 use crate::{
-    RuntimeError, Value, string_object_value, string_prototype, to_js_string_with_env,
+    JsString, RuntimeError, Value, string_prototype, to_js_string_value_with_env,
     to_number_with_env,
 };
 
 pub(super) fn this_string_value(value: Value, env: &mut CallEnv) -> Result<String, RuntimeError> {
+    this_js_string_value(value, env).map(JsString::into_string)
+}
+
+/// The receiver coerced as String.prototype methods do, as a shared string
+/// value: a primitive or a String wrapper's data is the same handle, never a
+/// copy. Any other receiver goes through the ordinary ToString hooks.
+pub(super) fn this_js_string_value(
+    value: Value,
+    env: &mut CallEnv,
+) -> Result<JsString, RuntimeError> {
     match value {
-        Value::String(value) => Ok(value.to_string()),
+        Value::String(value) => Ok(value),
         Value::Object(object) => {
-            if let Some(value) = string_object_value(&object) {
+            if let Some(value) = object.string_data() {
                 Ok(value)
             } else if string_prototype(env).is_some_and(|prototype| object.ptr_eq(&prototype)) {
-                Ok(String::new())
+                Ok(JsString::default())
             } else {
-                to_js_string_with_env(Value::Object(object), env)
+                to_js_string_value_with_env(Value::Object(object), env)
             }
         }
         Value::Null | Value::Undefined => Err(RuntimeError {
             thrown: None,
             message: "String.prototype method called on null or undefined".to_owned(),
         }),
-        value => to_js_string_with_env(value, env),
+        value => to_js_string_value_with_env(value, env),
     }
 }
 

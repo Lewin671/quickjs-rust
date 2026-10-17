@@ -4,12 +4,11 @@ pub(super) fn substitution_length(
     replacement: &str,
     matched: &str,
     position: usize,
-    input: &str,
+    input_len: usize,
     captures: &[Value],
 ) -> Option<usize> {
     let mut length = 0usize;
     let matched_len = matched.chars().count();
-    let input_len = input.chars().count();
     let suffix_len = input_len.saturating_sub(position + matched_len);
     let capture_lengths: Vec<_> = captures
         .iter()
@@ -51,6 +50,7 @@ pub(super) fn get_substitution(
     matched: &str,
     position: usize,
     input: &str,
+    input_len: usize,
     captures: &[Value],
 ) -> String {
     let mut result = String::new();
@@ -71,7 +71,7 @@ pub(super) fn get_substitution(
             '\'' => result.push_str(&input_char_slice(
                 input,
                 position + matched.chars().count(),
-                input.chars().count(),
+                input_len,
             )),
             '0'..='9' => substitute_capture(&mut result, &mut chars, captures, next),
             _ => {
@@ -158,7 +158,13 @@ mod tests {
         let captures = [Value::String(matched.clone().into())];
 
         assert_eq!(
-            substitution_length(&replacement, &matched, 0, &matched, &captures),
+            substitution_length(
+                &replacement,
+                &matched,
+                0,
+                matched.chars().count(),
+                &captures
+            ),
             Some(1usize << 31)
         );
     }

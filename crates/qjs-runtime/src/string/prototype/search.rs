@@ -1,10 +1,11 @@
 use crate::{
-    PropertyKey, RuntimeError, Value, call_function, construct_function, property_value,
-    property_value_key, regexp, symbol, to_js_string_with_env,
+    JsString, PropertyKey, RuntimeError, Value, call_function, construct_function, property_value,
+    property_value_key, regexp, symbol, to_js_string_value_with_env, to_js_string_with_env,
 };
 
 use super::super::indexing::{
-    string_end_position, string_last_search_position, string_search_start, this_string_value,
+    string_end_position, string_last_search_position, string_search_start, this_js_string_value,
+    this_string_value,
 };
 
 mod errors;
@@ -19,18 +20,15 @@ use symbol_method::{
 
 use super::MAX_STRING_LENGTH;
 
-/// The receiver as a shared string value, without copying one that already is a
-/// string.
-fn search_receiver(value: Value, env: &mut CallEnv) -> Result<crate::JsString, RuntimeError> {
-    match value {
-        Value::String(value) => Ok(value),
-        value => this_string_value(value, env).map(crate::JsString::from),
-    }
+/// The receiver as a shared string value, without copying a primitive or a
+/// String wrapper's data.
+fn search_receiver(value: Value, env: &mut CallEnv) -> Result<JsString, RuntimeError> {
+    this_js_string_value(value, env)
 }
 
 /// The receiver's length in the units these methods index by. ASCII text — the
 /// common case — answers from the memoized flag instead of a scan.
-fn search_length(value: &crate::JsString) -> usize {
+fn search_length(value: &JsString) -> usize {
     if value.is_ascii() {
         value.len()
     } else {
@@ -40,7 +38,11 @@ fn search_length(value: &crate::JsString) -> usize {
 
 /// Byte offset of character `index`, clamped to the end of the buffer. Used
 /// instead of rebuilding the remainder of the receiver as a fresh string.
-fn byte_offset_for_char_index(text: &str, index: usize) -> usize {
+///
+/// ASCII text answers from the memoized classification, so a cursor search
+/// over a retained document costs no subject scan per call. Other text keeps
+/// the legacy scalar coordinates [`search_length`] also counts in.
+fn byte_offset_for_char_index(text: &JsString, index: usize) -> usize {
     if text.is_ascii() {
         return index.min(text.len());
     }
@@ -57,14 +59,14 @@ pub(crate) fn native_string_prototype_ends_with(
     let value = search_receiver(this_value, env)?;
     let search_value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     reject_regexp_search_value(search_value.clone(), "String.prototype.endsWith", env)?;
-    let search = to_js_string_with_env(search_value, env)?;
+    let search = to_js_string_value_with_env(search_value, env)?;
     let end = string_end_position(
         search_length(&value),
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
         env,
     )?;
     let boundary = byte_offset_for_char_index(&value, end);
-    Ok(Value::Boolean(value[..boundary].ends_with(&search)))
+    Ok(Value::Boolean(value[..boundary].ends_with(search.as_str())))
 }
 
 pub(crate) fn native_string_prototype_includes(
@@ -75,14 +77,14 @@ pub(crate) fn native_string_prototype_includes(
     let value = search_receiver(this_value, env)?;
     let search_value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     reject_regexp_search_value(search_value.clone(), "String.prototype.includes", env)?;
-    let search = to_js_string_with_env(search_value, env)?;
+    let search = to_js_string_value_with_env(search_value, env)?;
     let start = string_search_start(
         search_length(&value),
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
         env,
     )?;
     let boundary = byte_offset_for_char_index(&value, start);
-    Ok(Value::Boolean(value[boundary..].contains(&search)))
+    Ok(Value::Boolean(value[boundary..].contains(search.as_str())))
 }
 
 pub(crate) fn native_string_prototype_index_of(
@@ -91,7 +93,7 @@ pub(crate) fn native_string_prototype_index_of(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let value = search_receiver(this_value, env)?;
-    let search = to_js_string_with_env(
+    let search = to_js_string_value_with_env(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
         env,
     )?;
@@ -101,10 +103,14 @@ pub(crate) fn native_string_prototype_index_of(
         env,
     )?;
     let boundary = byte_offset_for_char_index(&value, start);
-    let Some(byte_index) = value[boundary..].find(&search) else {
+    let Some(byte_index) = value[boundary..].find(search.as_str()) else {
         return Ok(Value::Number(-1.0));
     };
-    let char_offset = value[boundary..boundary + byte_index].chars().count();
+    let char_offset = if value.is_ascii() {
+        byte_index
+    } else {
+        value[boundary..boundary + byte_index].chars().count()
+    };
     Ok(Value::Number((start + char_offset) as f64))
 }
 
@@ -156,22 +162,16 @@ pub(crate) fn native_string_prototype_match(
             return call_function(matcher, pattern, vec![this_value], env, false);
         }
     }
-    let input = this_string_value(this_value, env)?;
+    let input = this_js_string_value(this_value, env)?;
     let regexp = regexp_value(pattern, env)?;
     if let Some(matcher) = symbol_match_method(regexp.clone(), env)?.method {
-        return call_function(
-            matcher,
-            regexp,
-            vec![Value::String(input.into())],
-            env,
-            false,
-        );
+        return call_function(matcher, regexp, vec![Value::String(input)], env, false);
     }
     if regexp::regexp_is_global(&regexp) {
         return regexp::native_regexp_global_match(regexp, &input, env);
     }
     let exec = property_value(regexp.clone(), "exec", env)?;
-    call_function(exec, regexp, vec![Value::String(input.into())], env, false)
+    call_function(exec, regexp, vec![Value::String(input)], env, false)
 }
 
 pub(crate) fn native_string_prototype_match_all(
@@ -182,7 +182,7 @@ pub(crate) fn native_string_prototype_match_all(
     if matches!(this_value, Value::Null | Value::Undefined) {
         return Err(string_method_null_error());
     }
-    let input = this_string_value(this_value, env)?;
+    let input = this_js_string_value(this_value, env)?;
     let regexp = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if !matches!(regexp, Value::Null | Value::Undefined) {
         let is_regexp = regexp::regexp_is_regexp_with_env(regexp.clone(), env)?;
@@ -210,7 +210,7 @@ pub(crate) fn native_string_prototype_match_all(
             return call_function(
                 matcher,
                 regexp.clone(),
-                vec![Value::String(input.into())],
+                vec![Value::String(input)],
                 env,
                 false,
             );
@@ -258,7 +258,7 @@ pub(crate) fn native_string_prototype_replace_all(
         );
     }
     if is_regexp && regexp::regexp_is_regexp(&search_value) && !replace_method.present {
-        let input = this_string_value(this_value, env)?;
+        let input = this_js_string_value(this_value, env)?;
         return regexp_replace_all(
             input,
             search_value,
@@ -267,7 +267,7 @@ pub(crate) fn native_string_prototype_replace_all(
         );
     }
 
-    let input = this_string_value(this_value, env)?;
+    let input = this_js_string_value(this_value, env)?;
     let search = to_js_string_with_env(search_value, env)?;
     let replacement_value = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
     let replacement = if matches!(replacement_value, Value::Function(_)) {
@@ -299,7 +299,7 @@ pub(crate) fn native_string_prototype_replace(
             );
         }
     }
-    let input = this_string_value(this_value, env)?;
+    let input = this_js_string_value(this_value, env)?;
     let matches = if regexp::regexp_is_regexp(&search_value) {
         if regexp::regexp_is_global(&search_value) {
             regexp_match_positions(&input, search_value, env)?
@@ -336,19 +336,13 @@ pub(crate) fn native_string_prototype_search(
             return call_function(searcher, search_value, vec![this_value], env, false);
         }
     }
-    let input = this_string_value(this_value, env)?;
+    let input = this_js_string_value(this_value, env)?;
     let regexp = regexp_value(search_value, env)?;
     if let Some(searcher) = symbol_search_method(regexp.clone(), env)?.method {
-        return call_function(
-            searcher,
-            regexp,
-            vec![Value::String(input.into())],
-            env,
-            false,
-        );
+        return call_function(searcher, regexp, vec![Value::String(input)], env, false);
     }
     let exec = property_value(regexp.clone(), "exec", env)?;
-    match call_function(exec, regexp, vec![Value::String(input.into())], env, false)? {
+    match call_function(exec, regexp, vec![Value::String(input)], env, false)? {
         Value::Array(array) => property_value(Value::Array(array), "index", env),
         Value::Null => Ok(Value::Number(-1.0)),
         _ => Ok(Value::Number(-1.0)),
@@ -363,14 +357,16 @@ pub(crate) fn native_string_prototype_starts_with(
     let value = search_receiver(this_value, env)?;
     let search_value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     reject_regexp_search_value(search_value.clone(), "String.prototype.startsWith", env)?;
-    let search = to_js_string_with_env(search_value, env)?;
+    let search = to_js_string_value_with_env(search_value, env)?;
     let start = string_search_start(
         search_length(&value),
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
         env,
     )?;
     let boundary = byte_offset_for_char_index(&value, start);
-    Ok(Value::Boolean(value[boundary..].starts_with(&search)))
+    Ok(Value::Boolean(
+        value[boundary..].starts_with(search.as_str()),
+    ))
 }
 
 enum Replacement {
@@ -386,7 +382,7 @@ struct StringMatch {
 }
 
 fn string_replace_all(
-    input: String,
+    input: JsString,
     search: String,
     replacement: Replacement,
     env: &mut CallEnv,
@@ -396,7 +392,7 @@ fn string_replace_all(
 }
 
 fn regexp_replace_all(
-    input: String,
+    input: JsString,
     regexp: Value,
     replacement_value: Value,
     env: &mut CallEnv,
@@ -469,7 +465,7 @@ fn string_first_match_position(input: &str, search: &str) -> Option<StringMatch>
 }
 
 fn regexp_match_positions(
-    input: &str,
+    input: &JsString,
     regexp: Value,
     env: &mut CallEnv,
 ) -> Result<Vec<StringMatch>, RuntimeError> {
@@ -480,7 +476,7 @@ fn regexp_match_positions(
         let result = call_function(
             exec,
             regexp.clone(),
-            vec![Value::String(input.to_owned().into())],
+            vec![Value::String(input.clone())],
             env,
             false,
         )?;
@@ -510,7 +506,7 @@ fn regexp_match_positions(
 }
 
 fn regexp_first_match_position(
-    input: &str,
+    input: &JsString,
     regexp: Value,
     env: &mut CallEnv,
 ) -> Result<Option<StringMatch>, RuntimeError> {
@@ -519,7 +515,7 @@ fn regexp_first_match_position(
     let result = call_function(
         exec,
         regexp.clone(),
-        vec![Value::String(input.to_owned().into())],
+        vec![Value::String(input.clone())],
         env,
         false,
     )?;
@@ -542,14 +538,15 @@ fn regexp_first_match_position(
 }
 
 fn replace_matches(
-    input: String,
+    input: JsString,
     matches: Vec<StringMatch>,
     replacement: Replacement,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let mut result = String::new();
     let mut result_len = 0usize;
-    let input_len = input.chars().count();
+    // Counted once per replacement, not once per match.
+    let input_len = search_length(&input);
     let replacement_is_function = matches!(&replacement, Replacement::Function(_));
     if let Replacement::String(replacement) = &replacement
         && !replacement.contains('$')
@@ -567,6 +564,7 @@ fn replace_matches(
         result.push_str(cursor.advance_to(&input, string_match.start));
         let replacement_string = match &replacement {
             Replacement::Function(function) => {
+                // The callback shares the subject instead of copying it per match.
                 functional_replacement((**function).clone(), &string_match, input.clone(), env)?
             }
             Replacement::String(replacement) => {
@@ -574,7 +572,7 @@ fn replace_matches(
                     replacement,
                     &string_match.matched,
                     string_match.start,
-                    &input,
+                    input_len,
                     &string_match.captures,
                 )
                 .ok_or_else(invalid_string_length)?;
@@ -584,6 +582,7 @@ fn replace_matches(
                     &string_match.matched,
                     string_match.start,
                     &input,
+                    input_len,
                     &string_match.captures,
                 )
             }
@@ -662,14 +661,14 @@ fn invalid_string_length() -> RuntimeError {
 fn functional_replacement(
     function: Value,
     string_match: &StringMatch,
-    input: String,
+    input: JsString,
     env: &mut CallEnv,
 ) -> Result<String, RuntimeError> {
     let mut arguments = Vec::with_capacity(3 + string_match.captures.len());
     arguments.push(Value::String(string_match.matched.clone().into()));
     arguments.extend(string_match.captures.iter().cloned());
     arguments.push(Value::Number(string_match.start as f64));
-    arguments.push(Value::String(input.into()));
+    arguments.push(Value::String(input));
     let value = call_function(function, Value::Undefined, arguments, env, false)?;
     to_js_string_with_env(value, env)
 }
@@ -712,7 +711,7 @@ fn regexp_value_with_flags(
 
 fn invoke_symbol_match_all(
     regexp: Value,
-    input: String,
+    input: JsString,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let Some(match_all_symbol) = symbol::match_all_symbol(env) else {
@@ -728,13 +727,7 @@ fn invoke_symbol_match_all(
             message: "TypeError: Symbol.matchAll method is not callable".to_owned(),
         });
     }
-    call_function(
-        matcher,
-        regexp,
-        vec![Value::String(input.into())],
-        env,
-        false,
-    )
+    call_function(matcher, regexp, vec![Value::String(input)], env, false)
 }
 
 fn reject_regexp_search_value(

@@ -1,7 +1,7 @@
 use crate::CallEnv;
 use crate::{
     PropertyKey, RuntimeError, Value, call_function, property_value, reflect, symbol,
-    to_js_string_with_env,
+    to_js_string_value_with_env,
 };
 
 pub(crate) fn native_regexp_prototype_search(
@@ -15,7 +15,7 @@ pub(crate) fn native_regexp_prototype_search(
             message: "RegExp.prototype[Symbol.search] requires an object receiver".to_owned(),
         });
     }
-    let input = to_js_string_with_env(
+    let input = to_js_string_value_with_env(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
         env,
     )?;
@@ -27,7 +27,7 @@ pub(crate) fn native_regexp_prototype_search(
     let result = call_function(
         exec,
         this_value.clone(),
-        vec![Value::String(input.into())],
+        vec![Value::String(input)],
         env,
         false,
     )?;

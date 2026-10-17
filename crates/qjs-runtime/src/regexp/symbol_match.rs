@@ -1,7 +1,8 @@
 use crate::CallEnv;
 use crate::{
-    ArrayRef, Function, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value,
-    call_function, property_value, reflect, symbol, to_js_string_with_env, to_length_with_env,
+    ArrayRef, Function, JsString, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError,
+    Value, call_function, property_value, reflect, symbol, to_js_string_value_with_env,
+    to_js_string_with_env, to_length_with_env,
 };
 
 pub(crate) fn install_regexp_prototype_match(env: &CallEnv, prototype: &ObjectRef) {
@@ -31,7 +32,9 @@ pub(crate) fn native_regexp_prototype_match(
         });
     }
 
-    let input = to_js_string_with_env(
+    // The subject stays one shared handle across every exec, so its memoized
+    // matcher view is built once rather than once per match.
+    let input = to_js_string_value_with_env(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
         env,
     )?;
@@ -48,7 +51,7 @@ pub(crate) fn native_regexp_prototype_match(
 
 fn global_match(
     regexp: Value,
-    input: &str,
+    input: &JsString,
     unicode: bool,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
@@ -63,9 +66,9 @@ fn global_match(
             };
         }
 
-        let match_string = to_js_string_with_env(property_value(result, "0", env)?, env)?;
+        let match_string = to_js_string_value_with_env(property_value(result, "0", env)?, env)?;
         let empty = match_string.is_empty();
-        matches.push(Value::String(match_string.into()));
+        matches.push(Value::String(match_string));
         if empty {
             let last_index =
                 to_length_with_env(property_value(regexp.clone(), "lastIndex", env)?, env)?;
@@ -75,7 +78,7 @@ fn global_match(
     }
 }
 
-fn regexp_exec(regexp: Value, input: &str, env: &mut CallEnv) -> Result<Value, RuntimeError> {
+fn regexp_exec(regexp: Value, input: &JsString, env: &mut CallEnv) -> Result<Value, RuntimeError> {
     let exec = property_value(regexp.clone(), "exec", env)?;
     if !matches!(exec, Value::Function(_)) {
         return Err(RuntimeError {
@@ -83,13 +86,7 @@ fn regexp_exec(regexp: Value, input: &str, env: &mut CallEnv) -> Result<Value, R
             message: "TypeError: RegExp exec method is not callable".to_owned(),
         });
     }
-    let result = call_function(
-        exec,
-        regexp,
-        vec![Value::String(input.to_owned().into())],
-        env,
-        false,
-    )?;
+    let result = call_function(exec, regexp, vec![Value::String(input.clone())], env, false)?;
     if matches!(result, Value::Null) || is_object_value(&result) {
         Ok(result)
     } else {
@@ -117,9 +114,8 @@ fn set_last_index(receiver: Value, value: Value, env: &mut CallEnv) -> Result<()
     }
 }
 
-fn advance_string_index(input: &str, index: usize, unicode: bool) -> usize {
-    let chars: Vec<_> = input.chars().collect();
-    crate::string::advance_string_index(&chars, index, unicode)
+fn advance_string_index(input: &JsString, index: usize, unicode: bool) -> usize {
+    crate::string::advance_js_string_index(input, index, unicode)
 }
 
 fn is_object_value(value: &Value) -> bool {

@@ -36,6 +36,10 @@ struct StringData {
     /// for. A RegExp scan re-executes against the same subject once per match,
     /// and rebuilding this view every time made scanning quadratic.
     matcher_view: RefCell<Option<(bool, Rc<[char]>)>>,
+    /// Test-only work count: how many times this buffer was scanned to
+    /// classify it as ASCII.
+    #[cfg(test)]
+    ascii_scans: Cell<usize>,
 }
 
 impl StringData {
@@ -46,6 +50,8 @@ impl StringData {
             ascii: Cell::new(ASCII_UNKNOWN),
             utf16_len: Cell::new(UTF16_LEN_UNKNOWN),
             matcher_view: RefCell::new(None),
+            #[cfg(test)]
+            ascii_scans: Cell::new(0),
         }
     }
 
@@ -65,6 +71,8 @@ impl Clone for StringData {
             ascii: Cell::new(self.ascii.get()),
             utf16_len: Cell::new(self.utf16_len.get()),
             matcher_view: RefCell::new(self.matcher_view.borrow().clone()),
+            #[cfg(test)]
+            ascii_scans: Cell::new(0),
         }
     }
 }
@@ -113,6 +121,8 @@ impl JsString {
             ASCII_YES => true,
             ASCII_NO => false,
             _ => {
+                #[cfg(test)]
+                self.0.ascii_scans.set(self.0.ascii_scans.get() + 1);
                 let ascii = self.0.text.is_ascii();
                 self.0.ascii.set(if ascii { ASCII_YES } else { ASCII_NO });
                 if ascii {
@@ -121,6 +131,12 @@ impl JsString {
                 ascii
             }
         }
+    }
+
+    /// How many times this buffer was scanned for its ASCII classification.
+    #[cfg(test)]
+    pub(crate) fn ascii_scan_count(&self) -> usize {
+        self.0.ascii_scans.get()
     }
 
     /// Returns the memoized UTF-16 code-unit length, computing it with

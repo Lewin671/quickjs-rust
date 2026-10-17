@@ -1,15 +1,14 @@
 # T057: String code-unit migration
 
-- Status: active; stage-1 plan frozen and validated, implementation next.
-- Implementation: none; target architecture and stage boundaries documented.
-- Verified at: plan `string-handles-ascii-search-boundaries` validated against
-  v3 queue `424a1e79` on 2026-10-17 (validate-unit status valid, unit SHA-256
-  `d5536a29`); no runtime change yet.
-- Evidence: design below, [stage-1 plan](performance-units/string-handles-ascii-search-boundaries.json)
-  and the stage-1 record in this file.
-- Unresolved: implementation, correctness gates, screen, formal and held-out decision.
-- Next action: implement stage 1 per the design, then fast/full gates and the
-  budgeted v3 screen.
+- Status: active; stage-1 implementation committed, screen next.
+- Implementation: present (stage 1 on this branch, see Stage-1 implementation).
+- Verified at: plan commit `47a8042e` (validate-unit valid against v3 queue
+  `424a1e79`); implementation fast gate, focused tests and String/RegExp
+  Test262 zero-gap slices at the implementation commit (numbers below).
+- Evidence: [stage-1 plan](performance-units/string-handles-ascii-search-boundaries.json)
+  and the stage-1 records in this file.
+- Unresolved: full gate, budgeted v3 screen (attempt 1 of 2), formal and held-out decision.
+- Next action: full `check.sh` (iMac no-timing), then `perf-loop --plan` screen.
 
 ## Goal and scope
 
@@ -129,3 +128,32 @@ profile's dominant cost is outside stage 1: the lazy `[^]*?` RegExp replace is
 `match_atom_and_continuation` measures the maximal fixed-width run with
 `simple_atom_max_count` before trying the lazy minimum, so each match scans
 to the end of the subject. That is a separate general matcher unit.
+
+## Stage-1 implementation
+
+Typed ToString `to_js_string_value_with_env` returns the shared `JsString`
+(string arguments and strings an object's ToPrimitive returns), with the
+same hook order. `this_js_string_value` shares primitive and wrapper data;
+`String.prototype.toString/valueOf` return the wrapper's handle and
+`is_string_object` no longer copies. Search helpers take the receiver
+handle: `byte_offset_for_char_index` answers ASCII from the memoized flag,
+`indexOf` returns the ASCII offset directly, needles are not copied.
+RegExp `exec`/`test`/`[Symbol.match|matchAll|search|replace|split]`,
+the matchAll iterator, the legacy global match and string-needle replace
+pass one subject handle to every exec and callback. Generic custom-exec
+replace clamps with the memoized UTF-16 length; empty-match advance is
+`index + 1` without a subject view in non-Unicode or ASCII text. String
+replacement counts the subject once (`substitution_length` takes its
+length). Non-ASCII search keeps legacy scalar coordinates; none of the five
+base differences is on a changed path, so all remain stage 2/3 work.
+
+Tests: `tests/strings/subject_sharing.rs` (7: hook order, boxed sharing,
+matchAll subject across next, one subject view per protocol, every
+exec/lastIndex lookup, callback input sharing/substitutions, one ASCII
+classification across a cursor search loop); four sharing tests fail on the
+base and pass here, the others pin unchanged semantics. The ASCII count test
+pins classify-once, not the absence of raw `str` scans. NG fixture
+`string-regexp-subject-protocols.js` matches NG. Exhaustive
+`find-qjsng-gaps --filter ... --all` (release CLI): String 1221,
+RegExp/prototype 485, StringIteratorPrototype 7,
+RegExpStringIteratorPrototype 17 cases, zero gaps. Runtime lib: 2278 pass.

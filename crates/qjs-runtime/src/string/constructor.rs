@@ -201,5 +201,5 @@ pub(crate) fn string_object_value(object: &ObjectRef) -> Option<String> {
 }
 
 pub(crate) fn is_string_object(object: &ObjectRef) -> bool {
-    string_object_value(object).is_some()
+    object.string_data().is_some()
 }
