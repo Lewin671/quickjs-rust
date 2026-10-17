@@ -476,6 +476,17 @@ class DevelopmentAllowanceTests(unittest.TestCase):
                 validation = validate_unit_against_queue(loaded, unit_sha, queue, queue_sha)
             self.assertEqual(validation["status"], "valid")
 
+            legacy = {**policy, 'cases': expected, 'lanes': {}}
+            with patch('tools.benchmark.layout_policy.load_policy', return_value=legacy):
+                with self.assertRaisesRegex(PerformanceDecisionError, 'qualified development policy'):
+                    validate_unit_against_queue(loaded, unit_sha, queue, queue_sha)
+                profile_only = copy.deepcopy(loaded)
+                target = 'external/sunspider-1.0/3d-cube'
+                profile_only['fast_gate']['target_ids'] = [target]
+                profile_only['priority']['opportunity_ids'] = [target]
+                with self.assertRaisesRegex(PerformanceDecisionError, 'qualified development policy'):
+                    validate_unit_against_queue(profile_only, unit_sha, queue, queue_sha)
+
             outside = copy.deepcopy(loaded)
             outside["priority"]["rank_ceiling"] = ranks[self.target] - 1
             with patch("tools.benchmark.layout_policy.load_policy", return_value=policy):
