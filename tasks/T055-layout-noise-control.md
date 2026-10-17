@@ -94,6 +94,13 @@ remain frozen at 5d255e5e, never the older collectors or invalid samples.
 
 | Job | Plan | State |
 | --- | --- | --- |
-| 20261017T022615Z-decision-rule-b-aa30-pairs | 76x30, pair recovery | running |
-| 20261017T022616Z-decision-rule-b-heldout30-pairs | 9x30, pair recovery | queued |
+| 20261017T022615Z-decision-rule-b-aa30-pairs | 76x30, pair recovery | exit 0 / 3690 s |
+| 20261017T022616Z-decision-rule-b-heldout30-pairs | 9x30, pair recovery | running |
 | 20261017T022617Z-decision-rule-b-formal30-whole | canonical 30 blocks, workers-4 | queued |
+
+
+The new portfolio collector completes all 76 cases: 2280 attempts, 2280 valid,
+0 invalid, 0 heavy load samples; 2 light intruder rows remain below threshold.
+Every case has 30 valid pairs; collector raw/load conservation passes.
+This establishes collection integrity only; statistical qualification awaits
+all three new inputs. No old observations or bands have been recomputed.
