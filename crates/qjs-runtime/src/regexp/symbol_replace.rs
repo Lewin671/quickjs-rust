@@ -79,9 +79,6 @@ fn collect_matches(
     unicode: bool,
     env: &mut CallEnv,
 ) -> Result<Vec<MatchRecord>, RuntimeError> {
-    if let Some(matches) = dot_plus_global_fast_path(&regexp, input, global, unicode, env)? {
-        return Ok(matches);
-    }
     if let Some(matches) = prepared_native_global_matches(&regexp, input, global, unicode, env)? {
         return Ok(matches);
     }
@@ -233,57 +230,6 @@ fn original_native_regexp(regexp: &Value, env: &CallEnv) -> Option<(ObjectRef, S
     }
     let (source, flags) = super::regexp_source_flags(regexp)?;
     Some((object.clone(), source, flags))
-}
-
-fn dot_plus_global_fast_path(
-    regexp: &Value,
-    input: &crate::JsString,
-    global: bool,
-    unicode: bool,
-    env: &mut CallEnv,
-) -> Result<Option<Vec<MatchRecord>>, RuntimeError> {
-    if !global || unicode || has_line_terminator(input) {
-        return Ok(None);
-    }
-    let Some((source, flags)) = super::regexp_source_flags(regexp) else {
-        return Ok(None);
-    };
-    if source != "(.+)" || flags.contains('s') {
-        return Ok(None);
-    }
-    let Value::Object(object) = regexp else {
-        return Ok(None);
-    };
-    if object.own_property("exec").is_some() {
-        return Ok(None);
-    }
-    let exec = property_value(regexp.clone(), "exec", env)?;
-    if !matches!(
-        exec,
-        Value::Function(function)
-            if function.native_kind() == Some(NativeFunction::RegExpPrototypeExec)
-    ) {
-        return Ok(None);
-    }
-
-    set_last_index(regexp.clone(), Value::Number(0.0), env)?;
-    if input.is_empty() {
-        return Ok(Some(Vec::new()));
-    }
-    let input = input.to_owned();
-    Ok(Some(vec![MatchRecord {
-        start: 0,
-        end: string_code_units(&input).len(),
-        matched: input.to_string(),
-        captures: vec![Value::String(input.clone())],
-        groups: Value::Undefined,
-    }]))
-}
-
-fn has_line_terminator(input: &str) -> bool {
-    input
-        .chars()
-        .any(|character| matches!(character, '\n' | '\r' | '\u{2028}' | '\u{2029}'))
 }
 
 fn regexp_exec(regexp: Value, input: &JsString, env: &mut CallEnv) -> Result<Value, RuntimeError> {
