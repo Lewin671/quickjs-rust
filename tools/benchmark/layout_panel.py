@@ -31,7 +31,7 @@ def matrix(path):
     return value
 
 
-def measure_panel(base_path, candidate_path, output, pairs=5, held=False, natural=False, complete=False, held_panel=False):
+def measure_panel(base_path, candidate_path, output, pairs=5, held=False, natural=False, complete=False, held_panel=False, development=False):
     from .pair_disturbance import Monitor, quieting_preflight, verify_run
     if held_panel and (not held or natural or complete):
         raise ValueError('held-out panel requires --held-out alone')
@@ -53,7 +53,8 @@ def measure_panel(base_path, candidate_path, output, pairs=5, held=False, natura
     if complete:
         previous = json.loads((output / 'panel.json').read_text())
         if (previous['base'] != base or previous['candidate'] != candidate
-                or previous['pairs'] != pairs or len(previous['panels']) != 1 or previous['held_out']):
+                or previous['pairs'] != pairs or len(previous['panels']) != 1 or previous['held_out']
+                or previous.get('development', False) != development):
             raise ValueError('completion must preserve the exact natural screen')
         from .layout_evidence import replay
         replay(output / 'panel.json', {'host': host, 'host_node': platform.node(), 'cases': {c['id']: {} for c in previous['panels'][0]['cases']}})
@@ -64,7 +65,7 @@ def measure_panel(base_path, candidate_path, output, pairs=5, held=False, natura
         screen.check_load(8, True, 300)
         preflight = screen.launch_preflight(binaries, 120)
         cases = (held_out_cases(screen.DEFAULT_CACHE, output / 'work') if held else
-                 screen.resolve_cases(['broad', 'sentinel', 'external'], screen.DEFAULT_CACHE, output / 'work'))
+                 screen.resolve_cases(['broad', 'sentinel', 'external'] + (['development'] if development else []), screen.DEFAULT_CACHE, output / 'work'))
         packets = list(previous['panels']) if previous else []
         for k in (range(1, 6) if complete else [0] if (held and not held_panel) or natural else range(6)):
             folder = output / f'variant{k}'
@@ -89,6 +90,9 @@ def measure_panel(base_path, candidate_path, output, pairs=5, held=False, natura
                      'load': disturbance, 'counts': counts}], 'launch_preflight': preflight,
                 'case_files': {str(p.relative_to(output)): digest(p)
                                for p in output.glob('variant*/*.json')}}
+    if development and not held:
+        from .development import MANIFEST_PATH
+        evidence.update(development=True, development_manifest_sha256=digest(MANIFEST_PATH))
     write_json(output / ('complete.json' if complete else 'panel.json'), evidence)
     return evidence
 
@@ -100,6 +104,7 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--held-out-panel', action='store_true', help='all six held-out layouts for host precision fallback')
     parser.add_argument('--pairs', type=int, default=5)
+    parser.add_argument('--development', action='store_true', help='include the selectable npm lane (v3 policy)')
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument('--held-out', action='store_true')
     modes.add_argument('--natural', action='store_true')
@@ -107,7 +112,7 @@ def main():
     args = parser.parse_args()
     if args.pairs < (30 if args.held_out else 5):
         raise ValueError('need >=5 panel pairs or >=30 held-out promotion pairs')
-    measure_panel(args.base_matrix, args.candidate_matrix, args.output, args.pairs, args.held_out, args.natural, args.complete, args.held_out_panel)
+    measure_panel(args.base_matrix, args.candidate_matrix, args.output, args.pairs, args.held_out, args.natural, args.complete, args.held_out_panel, args.development)
 
 
 if __name__ == '__main__':

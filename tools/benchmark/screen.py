@@ -92,6 +92,7 @@ class CaseSpec:
     workload: Path
     case_id: str | None = None
     expected_stdout: str | None = None
+    timeout_seconds: float | None = None
 
 
 @dataclass
@@ -218,6 +219,14 @@ def resolve_cases(specs: Sequence[str], cache_root: Path, work_dir: Path) -> lis
     cases: list[CaseSpec] = []
     external_manifest = None
     for spec in specs:
+        if spec == 'development' or spec.startswith('development/'):
+            from .screen_recording import development_cases
+            available = development_cases(cache_root, work_dir)
+            selected = available if spec == 'development' else [c for c in available if c.id == spec]
+            if not selected:
+                raise ScreenError(f'unknown development case {spec}')
+            cases.extend(selected)
+            continue
         if spec in INTERNAL_WORKLOADS:
             cases.extend(
                 CaseSpec(f"{spec}/{case_id}", "internal", INTERNAL_WORKLOADS[spec], case_id)
@@ -306,7 +315,7 @@ def screen_case(case: CaseSpec, candidate: Path, base: Path, pairs: int, tool: C
                 timeout: float, iterations: int | None = None,
                 runner: Callable[[list[str], float], ProcessResult] = run_process) -> CaseResult:
     def run(binary: Path, count: int | None) -> Sample:
-        return sample(tool, _argv(binary, case, count), timeout, runner)
+        return sample(tool, _argv(binary, case, count), case.timeout_seconds or timeout, runner)
 
     if case.kind == "internal" and iterations is None:
         iterations = calibrate(lambda count: run(base, count))

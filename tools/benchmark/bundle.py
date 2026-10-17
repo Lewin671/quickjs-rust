@@ -13,6 +13,18 @@ from .profile import digest
 ARTIFACTS = ("manifest.json", "raw.jsonl", "report.json",
              "external-manifest.json", "external-raw.jsonl", "external-report.json",
              "sentinel-manifest.json", "sentinel-raw.jsonl", "sentinel-report.json")
+DEVELOPMENT_ARTIFACTS = ('development-manifest.json', 'development-raw.jsonl', 'development-report.json')
+
+
+def development_report_path(summary_path, provided=None):
+    """A new formal bundle's npm report is sealed and cannot be substituted."""
+    summary, _ = _read_json(summary_path, 'comparison summary')
+    if summary.get('bundle', {}).get('schema_version') == 2:
+        expected = summary_path.resolve().parent / 'development-report.json'
+        if provided is not None and provided.resolve() != expected:
+            raise PerformanceDecisionError('development report must belong to the sealed comparison')
+        return expected
+    return provided
 
 
 def seal(directory: Path) -> dict:
@@ -21,9 +33,11 @@ def seal(directory: Path) -> dict:
     summary, _ = _read_json(summary_path, "comparison summary")
     if "bundle" in summary:
         raise PerformanceDecisionError("comparison is already sealed; use a new output directory")
-    hashes = {name: digest(directory / name) for name in ARTIFACTS if (directory / name).is_file()}
-    summary["bundle"] = {"schema_version": 1, "experiment_id": str(uuid.uuid4()),
-                         "artifacts": hashes, "missing": sorted(set(ARTIFACTS) - set(hashes))}
+    development = any((directory / name).exists() for name in DEVELOPMENT_ARTIFACTS)
+    inventory = (*ARTIFACTS, *(DEVELOPMENT_ARTIFACTS if development else ()))
+    hashes = {name: digest(directory / name) for name in inventory if (directory / name).is_file()}
+    summary["bundle"] = {"schema_version": 2 if development else 1, "experiment_id": str(uuid.uuid4()),
+                         "artifacts": hashes, "missing": sorted(set(inventory) - set(hashes))}
     _write_replace(summary_path, (json.dumps(summary, sort_keys=True, indent=2) + "\n").encode())
     return summary
 
@@ -31,7 +45,7 @@ def seal(directory: Path) -> dict:
 def verify(summary_path: Path, broad_path: Path, external_path: Path, sentinel_path: Path | None):
     summary, _ = _read_json(summary_path, "comparison summary")
     bundle = summary.get("bundle", {})
-    if bundle.get("schema_version") != 1:
+    if bundle.get("schema_version") not in (1, 2):
         raise PerformanceDecisionError("comparison requires a sealed artifact inventory; run a fresh comparison")
     try:
         uuid.UUID(bundle["experiment_id"])
@@ -44,9 +58,13 @@ def verify(summary_path: Path, broad_path: Path, external_path: Path, sentinel_p
             raise PerformanceDecisionError("report paths must belong to the same sealed comparison directory")
     hashes = bundle.get("artifacts", {})
     required = set(ARTIFACTS if sentinel_path is not None else ARTIFACTS[:6])
-    if not isinstance(hashes, dict) or not required <= set(hashes) or set(hashes) - set(ARTIFACTS):
+    inventory = set(ARTIFACTS)
+    if bundle['schema_version'] == 2:
+        inventory.update(DEVELOPMENT_ARTIFACTS)
+        required.update(DEVELOPMENT_ARTIFACTS)
+    if not isinstance(hashes, dict) or not required <= set(hashes) or set(hashes) - inventory:
         raise PerformanceDecisionError("comparison bundle is missing required artifacts")
-    if bundle.get("missing") != sorted(set(ARTIFACTS) - set(hashes)):
+    if bundle.get("missing") != sorted(inventory - set(hashes)):
         raise PerformanceDecisionError("comparison bundle missing inventory is inconsistent")
     for name, expected in hashes.items():
         _sha256(expected, f"bundle {name}")

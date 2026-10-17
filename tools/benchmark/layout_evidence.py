@@ -22,6 +22,9 @@ def replay(path: Path, policy, engines=None, *, held=False):
         raise ValueError('layout evidence schema/host/lane mismatch')
     if len(evidence['panels']) not in (1, 6):
         raise ValueError('incomplete layout panel')
+    if not held and 'development_manifest_sha256' in policy:
+        if evidence.get('development_manifest_sha256') != policy['development_manifest_sha256']:
+            raise ValueError('layout evidence development manifest mismatch')
     pairs = evidence['pairs']
     if type(pairs) is not int or pairs < (30 if held else 5):
         raise ValueError('invalid layout evidence pair count')

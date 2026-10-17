@@ -113,6 +113,23 @@ def _external_effect(case: dict, metric: str) -> dict | None:
     return (case.get(key) or {}).get("base")
 
 
+def preview_comparisons(report, prefix, metric='wall_time'):
+    return {f"{prefix}/{suite['id']}/{case['id']}": effect
+            for suite in report['suites'] for case in suite['cases']
+            if (effect := _external_effect(case, metric)) is not None}
+
+
+def validate_development(report, engines, host):
+    """Require the complete selectable npm lane, with the same identities as broad."""
+    from .performance_decision import _development_entries
+    _development_entries(report, 0.000001, engines, host)
+    issues = []
+    for suite in report['suites']:
+        if not suite.get('complete_comparison') or not suite.get('complete_base_comparison'):
+            issues.append('development/' + suite['id'] + ': incomplete comparisons')
+    return issues
+
+
 def comparison_index(broad: dict, external: dict, sentinel: dict | None,
                      metric: str = "wall_time") -> dict[str, dict]:
     if metric not in METRICS:

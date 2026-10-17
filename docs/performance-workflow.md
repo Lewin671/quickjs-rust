@@ -26,7 +26,7 @@ held-out is acceptance only, while development cases may be profiled and ranked.
 - A **diagnostic screen** reports dual metrics and a screening verdict;
   retaining a unit still requires a complete formal decision.
 - A **formal run** is one sealed three-engine bundle from `scripts/perf-compare.sh`
-  at 30 or 60 blocks; `queue` and `decide` read that bundle.
+  at 30 or 60 blocks, including development; `queue` and `decide` read that bundle.
 - A **leaf unit** is one mechanism that must pay for itself within its attempt
   budget. A **migration** (`"unit_kind": "migration"`) has stages judged only
   against a regression budget; the payoff gate applies at the last stage.
@@ -85,7 +85,7 @@ Build the opportunity queue from a formal bundle at the starting revision:
   --broad-report target/comparison/<run>/report.json \
   --sentinel-report target/comparison/<run>/sentinel-report.json \
   --external-report target/comparison/<run>/external-report.json \
-  --development-report target/development/<lane-run>/development-report.json \
+  --development-report target/comparison/<run>/development-report.json \
   --output target/comparison/<run>-queue.json
 ```
 
@@ -95,7 +95,8 @@ Use new output paths and reports from the summary's sealed directory. The queue
 ranks, per lane, cases whose candidate/QuickJS-NG ratio exceeds `--target-ratio`
 (default 0.5) and names workloads to profile, not tactics; a
 `--development-report` from the same host and executables, beside its own raw and
-manifest files, adds the development channel.
+manifest files, adds the development channel for legacy bundles. New bundles
+seal this lane automatically; a separate report is refused.
 
 ## 2. Profile, then freeze the plan
 
@@ -155,11 +156,11 @@ extra `--case` remain diagnostic helpers.
 ### Screen gate
 
 The standing rule is in [T022](../tasks/T022-performance-priority-controller.md#layout-robust-decisions).
-The policy's measured bands apply only on its host/toolchain/recipe; a mismatch
-requires recalibration. Every calibration/formal A/A automatically follows the
+The policy's bands bind its host/toolchain/recipe; a mismatch requires recalibration. Every calibration/formal A/A automatically follows the
 [power/continuation procedure](layout-policy-artifacts.md#precision-power-and-continuation), including diagnostic bands/K=6 at the cap. Every screen
-covers all broad, sentinel and external cases, with every non-target a
-control. It reports `pass`, `control event`, `wall event`, `reject`, or `incomplete`,
+covers every policy case; every non-target is a control. Development-enabled policies
+add ten cases and an independent lane ceiling; legacy policies cannot admit development targets.
+It reports `pass`, `control event`, `wall event`, `reject`, or `incomplete`,
 with per-case dual metrics and independent lane/portfolio gates.
 An event is incomplete evidence, not a rejection or a passing screen.
 For an explicit panel (both output paths must have equal-length names):
@@ -207,8 +208,7 @@ evaluate the frozen plan:
   --require-retained --output target/comparison/<run2>-decision.json
 ```
 
-The base is the plan's frozen `base_sha`, not the commit preceding the
-candidate. `--mode fast` checks the full policy portfolio. `--mode promotion` additionally
+The base is the plan's frozen `base_sha`, not the commit preceding the candidate. `--mode fast` checks the full policy portfolio. `--mode promotion` additionally
 requires held-out evidence, complete QuickJS-NG comparisons and the candidate's
 zero-gap Test262 burndown. Panel and held-out raw samples are replayed and
 bound to the formal bundle's exact natural binary hashes and source revisions.

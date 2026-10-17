@@ -443,7 +443,8 @@ class DevelopmentAllowanceTests(unittest.TestCase):
             f"{lane}/{case}" if lane in ("broad", "sentinel") else f"external/{lane}/{case}"
             for lane, cases in inventories().items() for case in cases
         }
-        policy = {"host_node": "test-host", "cases": expected, "held_out": held_out_ids()}
+        policy = {"host_node": "test-host", "cases": expected | set(opportunity_ids()),
+                  "held_out": held_out_ids(), "lanes": {"development": 1.01}}
         with tempfile.TemporaryDirectory() as directory_name:
             directory = Path(directory_name)
             data = {}

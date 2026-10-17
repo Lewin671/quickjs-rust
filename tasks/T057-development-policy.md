@@ -1,9 +1,12 @@
 # T057: Development decision policy qualification
 
 - Status: active; calibration contract frozen before development policy timing.
-- Implementation: none; tooling extension precedes runtime work.
+- Implementation: development collectors, sealed formal bundles, control/target
+  rules, precision continuation and additive qualification are present in the
+  working tree; no policy v3 is published and no runtime code changed.
 - Verified at: `8d88ba3d`, 2026-10-17; v2 target gap reproduced; this
-  registration's context/fast gate pending.
+  registration context/fast gate passed; 13 focused development policy tests
+  pass on the subsequent tooling delta; complete fast gate pending.
 - Evidence: frozen contract below; no new calibration observations yet.
 - Unresolved: collectors/replay/tests, development calibration, qualification.
 - Next action: implement and verify the generic development pipeline, then
