@@ -7,10 +7,10 @@
   Legacy retained decisions remain verified only at their recorded revisions.
 - Evidence: T055 owns B jobs and host-band status; [T037](T037-integration-batch-1.md)
   owns historical unstable-base evidence and exact retained outputs.
-- Unresolved: feedback-2 power allocation and replacement canonical A/A
-  await qualification (T055). Ruleset-required check remains unconfigured.
-- Next action: T055 executes the newly frozen protocol; require a fully
-  qualified host policy before any schema-3 promotion.
+- Unresolved: feedback-2 resolves timeout/screen precision, but new formal
+  bitops A/A precision blocks qualification (T055). Ruleset check unconfigured.
+- Next action: lead resolves canonical precision under a new frozen plan;
+  require a fully qualified host policy before any schema-3 promotion.
 
 Commands and their interpretation are in
 [the performance workflow](../docs/performance-workflow.md); schemas and

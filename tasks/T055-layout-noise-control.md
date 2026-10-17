@@ -1,15 +1,15 @@
 # T055: Layout-robust policy qualification
 
-- Status: active; lead feedback-2 authorizes uniform timeout and power rules.
-- Implementation: feedback-2 timeout/power/fallback present; qualification pending. No engine change.
+- Status: blocked; feedback-2 protocols complete, new canonical precision failure.
+- Implementation: present; uniform timeout, retained power cohorts and cap fallback. No engine change.
 - Verified at: 3c082e6a fast gate (536 tests), a1ec956e fast gate (543 tests);
   prior full ea355b49 passed 5170 subset. New full gate follows qualification.
 - Evidence: [feedback-1 record](archive/T055-feedback-1-qualification.md),
   [original B plan/log](archive/T055-phase-b-plan-and-log.md),
   [A2 data](archive/T055-phase-a2-data.md).
-- Unresolved: new formal and power continuation jobs have not completed.
-- Next action: implement/test the frozen amendment below; append required pairs,
-  replace canonical formal whole, qualify and close only after all gates pass.
+- Unresolved: new formal bitops-3bit-bits-in-byte A/A half-width 8.1347% >3%.
+- Next action: lead resolves the new canonical precision blocker under a separately
+  frozen plan; no favorable repeat, policy adoption or formal precision waiver.
 
 ## Frozen feedback-2 amendment (2026-10-16, before any new timing)
 
@@ -103,5 +103,56 @@ wall-tail finding; it is not a policy exception.
 
 | Job | Frozen source/protocol | State |
 | --- | --- | --- |
-| 20261017T050401Z-decision-rule-b-feedback2-formal30 | 3c082e6a; source base=candidate4c; 30 blocks workers-4 | running |
-| 20261017T050856Z-decision-rule-b-power120 | a1ec956e; original A2 paths/N; append90 valid to30 | queued |
+| 20261017T050401Z-decision-rule-b-feedback2-formal30 | 3c082e6a; base=candidate4c; 30 blocks workers-4 | exit0 / 1360 s; precision failure |
+| 20261017T050856Z-decision-rule-b-power120 | a1ec956e | cancelled before sampling for preflight parity |
+| 20261017T052450Z-decision-rule-b-power120-preflight | 1600baa9; append90 valid to30 | exit0 / 140 s; h=3.4352% |
+| 20261017T053205Z-decision-rule-b-power240-preflight | 1600baa9; append120 to120 | exit0 / 184 s; h=0.9350% |
+| 20261017T053231Z-decision-rule-b-feedback2-qualify | 1600baa9; all retained sources/new formal | exit3 / 82 s; qualified false |
+
+
+## Feedback-2 outcome
+
+Both lead-authorized changes work without changing engine code or A2 bands.
+All 4050 new formal external samples complete under their derived 60 s
+limits, no timeouts or heavy monitor samples. The two formal roles are the
+same c7f0f66a image at 4c9f959e; NG stays pinned at 919f7235/f7830186.
+Raw source hashes and every per-case reference median/limit are in external
+manifest v3. Stable external paths have equal filesystem-byte lengths.
+
+The recursive sentinel retains its original 30 valid pairs and adds only
+90 then 120 valid pairs (zero heavy/invalid in either segment), reusing the
+original immutable executables, frozen N and cumulative role order. Counts:
+
+| Valid pairs | Ratio | 95% CI | Relative half-width |
+| --- | ---: | --- | ---: |
+| 30 | 0.998480561 | [0.942011606, 1.046801225] | 5.9945% |
+| 120 | 0.993925854 | [0.960916266, 1.003287270] | 3.4352% |
+| 240 | 0.998217536 | [0.988970769, 1.005963685] | 0.9350% |
+
+It is precise at 240; no diagnostic-only fallback is needed for this host
+policy candidate. All nine held-out programs retain their original 30 pairs,
+pass precision, and are never used for selection. Their measured program
+bands and lane 1.0029 are unchanged from the prior diagnostic record. Primary
+lane qualification retains the original joint 30-pair cohort; every interval
+fits the unchanged A2 lane ceiling.
+
+Qualification fails exactly one gate: new canonical formal
+external/sunspider-1.0/bitops-3bit-bits-in-byte, 30 valid paired blocks,
+ratio 1.0088128966, CI [0.9952546429, 1.0908768199], relative half-width
+0.0813470204 >0.03. The complete raw input has no timeouts, missing samples,
+linearity failures or heavy disturbance; this is a valid formal precision
+failure. Screen power/cap fallback does not waive canonical formal precision
+or authorize another formal sample count. No formal observation is removed,
+retimed, imputed or pooled with earlier jobs.
+
+The rejected candidate artifact remains in the qualification job's output,
+qualified false; no qualified v2 is published. Frozen v1 is unchanged and
+still refused by load_policy. No further timing is queued. T055 cannot close
+as adopted. The separate [Gaussian engine-tail record](archive/T038-gaussian-wall-tail-data.md)
+preserves the new 15.694 s base observation (+38.74%) versus NG +4.51%; the
+uniform hang rule retains the tail rather than claiming an engine fix.
+
+Final base-main fast gate at 1600baa9 passes 543 tests (73.632 s),
+fmt/clippy/context/shell checks. Final full no-timing job
+20261017T053457Z-decision-rule-b-feedback2-final-check at 1600baa9 is running;
+its result and final diagnostic replays will be recorded before handoff.
