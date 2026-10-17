@@ -3,14 +3,14 @@
 - Status: active; standing controller, with schema-3 tooling awaiting host qualification.
 - Implementation: present; new layout/held-out gates are fail-closed until
   [T055](T055-layout-noise-control.md) produces a qualified policy.
-- Verified at: f2fb8067, 2026-10-16, staged fast gate and 523 tool tests.
+- Verified at: 5d255e5e, 2026-10-16, staged fast gate and 531 tool tests.
   Legacy retained decisions remain verified only at their recorded revisions.
 - Evidence: T055 owns B jobs and host-band status; [T037](T037-integration-batch-1.md)
   owns historical unstable-base evidence and exact retained outputs.
-- Unresolved: B qualification is blocked by repeated host disturbance; the
-  ruleset-required Performance decision check remains unconfigured.
-- Next action: lead chooses quiet host conditions or a separately frozen,
-  qualified sampling protocol before any schema-3 promotion.
+- Unresolved: B qualification is pending under the lead-authorized pair
+  recovery protocol; ruleset-required Performance decision remains unconfigured.
+- Next action: T055 reruns all calibrations with frozen load-only recovery;
+  require qualified host bands before any schema-3 promotion.
 
 Commands and their interpretation are in
 [the performance workflow](../docs/performance-workflow.md); schemas and
@@ -99,8 +99,8 @@ are historical and never acquire an extra attempt from this rule change.
   precision. It never selects work. Missing evidence is incomplete.
 - Policy data is versioned/hash-bound to the host and compiler recipe.
   A different host or recipe recalibrates. Measurements use distinct stable
-  equal-length binary paths created once. Retain/replace invalid or
-  DISTURBED jobs in full; valid failures consume the frozen attempt.
+  equal-length binary paths created once. Apply the [load-only recovery contract](../docs/layout-policy-artifacts.md#load-only-pair-recovery);
+  cap failures/formal DISTURBED jobs replace whole. Valid failures spend attempts.
 
 The full K=6 panel is six screens total, not six independent attempts.
 Correctness, exact engine/profile identity, formal precision and the original
