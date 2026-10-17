@@ -1,16 +1,15 @@
 # T022: Evidence-bound performance priority controller
 
-- Status: active; standing controller, with schema-3 tooling awaiting host qualification.
-- Implementation: present; new layout/held-out gates are fail-closed until
-  [T055](T055-layout-noise-control.md) produces a qualified policy.
-- Verified at: 1600baa9, 2026-10-16, final iMac full gate and 543 tool tests.
+- Status: active; standing controller, schema-3 host policy qualified.
+- Implementation: present; [qualified iMac v2](../benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v2.json)
+  binds layout/held-out gates; all other hosts/recipes require recalibration.
+- Verified at: ce13cefc, 552 tool tests and qualification/live load (T055).
   Legacy retained decisions remain verified only at their recorded revisions.
-- Evidence: T055 owns B jobs and host-band status; [T037](T037-integration-batch-1.md)
-  owns historical unstable-base evidence and exact retained outputs.
-- Unresolved: T055 applies the frozen standing formal A/A continuation;
-  final qualification pending. Ruleset check unconfigured.
-- Next action: complete T055 automatic qualification;
-  require a fully qualified host policy before any schema-3 promotion.
+- Evidence: [T055](T055-layout-noise-control.md) owns B calibration and hashes;
+  [T037](T037-integration-batch-1.md) owns historical unstable-base decisions.
+- Unresolved: final T055 handoff gate pending; ruleset check unconfigured.
+- Next action: freeze fresh schema-3 queue/unit plans against qualified v2;
+  preserve the independent promotion gates below.
 
 Commands and their interpretation are in
 [the performance workflow](../docs/performance-workflow.md); schemas and

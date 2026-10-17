@@ -1,14 +1,14 @@
 # T055: Layout-robust policy qualification
 
-- Status: active; feedback-3 makes precision power allocation standing/automatic.
-- Implementation: automatic screen/formal subset continuations and cap fallback present.
-- Verified at: 1600baa9 full gate, 543 tests/5170 subset; e7cd6d71 record.
+- Status: active; policy v2 qualified/published; final handoff gate pending.
+- Implementation: present; automatic continuations and qualified host policy v2.
+- Verified at: ce13cefc staged gate552 tests; valid formal continuation below.
+  Prior full gate1600baa9 (543 tests/5170 subset); final full gate pending.
 - Evidence: [feedback-2 snapshot](archive/T055-feedback-2-qualification.md),
   [feedback-1 record](archive/T055-feedback-1-qualification.md),
   [original B plan/log](archive/T055-phase-b-plan-and-log.md).
-- Unresolved: bitops continuation and final qualification not yet executed.
-- Next action: finish staged gate, commit collector, append bitops blocks,
-  qualify, publish/close on success; stop only for a new non-precision blocker.
+- Unresolved: final full gate and archival record pending.
+- Next action: run final branch/full gates, then archive this qualified task.
 
 ## Frozen feedback-3 standing protocol (2026-10-16, before timing)
 
@@ -95,3 +95,45 @@ at43027c89 exited1 in3s after quiet110s: Rust-only launch preflight sent
 with matching hashes; keep them unchanged. The corrected preflight runs the
 same `-e 0` expression via Rust `--raw` and NG's supported argv, explicitly
 tested before resubmission; no iteration/timing/sample protocol changes.
+
+
+## Feedback-3 continuation outcome
+
+Corrected collector ce13cefc passed staged fast gate:552 tests in75.645s,
+context/file-size/shell checks. Job20261017T055601Z-decision-rule-b-feedback3-formal221-fixed
+completed exit0 in21s, with zero monitor rows/heavy samples. Only191 new
+three-engine blocks (573 successful processes) were measured at indexes30..220.
+All30 pilot blocks remain; no further cap stage is needed. Combined221:
+ratio1.002087489398624, 95%CI[0.9924644484027332,1.0097705040547589],
+h=0.009696106506765112 (0.96961%) <=3%. No observations are removed,
+reconstructed, downsampled or imputed. All10 sealed source artifact hashes
+are unchanged. Original argv paths and restored images/workloads remain
+hash-identical. Three launch preflights are separate from measured blocks.
+
+Continuation set SHA256:
+`5a7989df54ba960242baca2e35c64587e392a1766efb8b6d4e6a8d6faec578e5`;
+appended raw SHA256:
+`57bfa100c989ed19ce6414cf3d05e50b172d95aad57b1a08fb2d4c229f2f3866`.
+Job20261017T055730Z-decision-rule-b-feedback3-qualify replays pilot/continuation
+chains, sealed formal raw, original joint lane cohorts and source/host/load
+bindings. It completed exit0 in84s: qualified=true, failures=[]; live policy
+loading passed on iMac. T053 replay=control event (5 events), T054=wall event
+(2 events); neither directly rejects, both need K=6, historical standing
+unchanged/claim_eligible=false. These are diagnostics, not reopened units.
+
+
+## Qualified policy publication
+
+[Policy v2](../benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v2.json)
+and adjacent SHA256 sidecar publish the exact qualified output:
+`22a1907dae06eb963dcb25592a05973e3bd69153e3c23a70ddec08ef64f07ca6`.
+The v1 artifact/hash stay unchanged and unqualified. All76 screen cases,
+76 formal cases and9 held-out programs now have precise intervals; no
+cap-imprecise fallback is needed in v2. Recursive screen retains30+90+120=240;
+formal bitops retains30+191=221; every other case/program retains30. Lane
+statistics keep original joint30 cohorts. A2 case bands are unchanged;
+ceilings broad1.0129493300226688, sentinel1.015687001889914,
+external1.0073802375536396, portfolio1.0082623319647204, held-out1.0029.
+All qualification lane intervals fit these envelopes. Host/recipe/revision
+and image distinctions remain as frozen above; this is adoption on the
+recorded iMac only, not an engine performance promotion or portable budget.
