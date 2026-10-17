@@ -4,13 +4,12 @@
 - Implementation: development collectors, sealed formal bundles, control/target
   rules, precision continuation and additive qualification are present in the
   working tree; no policy v3 is published and no runtime code changed.
-- Verified at: `8d88ba3d`, 2026-10-17; v2 target gap reproduced; this
-  registration context/fast gate passed; 13 focused development policy tests
-  pass on the subsequent tooling delta; complete fast gate pending.
+- Verified at: tooling `2368e649`, 2026-10-17; 583-test staged fast gate,
+  context/file-size/whitespace and shell syntax pass; iMac full gate queued.
 - Evidence: frozen contract below; no new calibration observations yet.
 - Unresolved: collectors/replay/tests, development calibration, qualification.
 - Next action: implement and verify the generic development pipeline, then
-  dispatch the frozen calibration through the shared iMac queue.
+  obtain the reference-derived timeout manifest and dispatch frozen calibration.
 
 ## Frozen calibration contract (2026-10-17, before timing)
 
@@ -102,3 +101,31 @@ v2 compatibility, disjoint development/held-out programs and held-out target
 refusal. Fast/full gates and qualified host-policy loading precede handoff.
 Record every job, revision, artifact hash, count and qualification outcome
 before closing this task; no runtime promotion is claimed by calibration.
+
+## Tooling checkpoint
+
+Calibration plan commit `1b61d515` precedes all v3 timing. Tooling
+`2368e6498c9c188e9cfa21072f58e86e45681135` adds development collection to the
+existing worker pool, seal schema 2 with twelve files, automatic sealed
+development queue selection, policy-derived controls/lanes, exact npm checksum
+continuation and additive A2/qualification collectors. Legacy seal schema 1
+and policy v2 remain readable. Development manifest schema 2 supports uniform
+NG-derived timeouts; schema 1 remains for the frozen reference run. No runtime,
+held-out protocol or dependency change.
+
+Staged fast gate: 583 tests / 72.308 s, all pass. Thirteen focused tests
+include both formal schedules, the shared workers-4 pool, target/controls,
+hard cap, wall persistence, lane ceiling, v2 and held-out boundaries,
+qualification envelope refusal and timeout derivation. The hosted implementation
+file inventory/hash is updated with its new transitive tools.
+
+Queued via the workspace dispatcher at this tooling revision (no timing):
+
+| Job | Obligation |
+| --- | --- |
+| `20261017T080252Z-t057-development-tooling-full-check` | Full check plus explicit enumeration/check of every frozen plan (runner lacks rg). |
+| `20261017T080252Z-t057-development-qualified-matrix` | Fresh six-variant build/audit of frozen qualified source; require exact c7f0f66a natural image. |
+| `20261017T080253Z-t057-development-timeout-reference` | Validate preliminary development raw and freeze all NG-derived thresholds before calibration. |
+
+These jobs are pending, not passing results. The earlier current-main
+baseline and development/profile job precede them in the shared queue.
