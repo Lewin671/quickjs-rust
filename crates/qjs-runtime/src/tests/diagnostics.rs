@@ -552,3 +552,5 @@ fn a_typed_loop_run_from_the_wide_tier_reads_the_receiver_and_keeps_the_stack() 
     assert_eq!(value, Value::Number(1_990.0));
     assert!(counters.nested_vm_constructions <= 3, "{counters:?}");
 }
+
+mod mechanism;

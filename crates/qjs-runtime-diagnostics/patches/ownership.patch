@@ -1,0 +1,392 @@
+--- a/src/function/value.rs
++++ b/src/function/value.rs
+@@ -1,3 +1,8 @@
++//! Function handles, callable metadata and lazy own-property state.
++//!
++//! Clones share one payload; identity is Rc identity. Mutable auxiliary
++//! state stays behind checked borrows, separate from immutable call metadata.
++
+ use std::{
+     cell::{Cell, Ref, RefCell, RefMut},
+     collections::HashMap,
+@@ -133,6 +138,8 @@
+ /// handle's public `Deref` implementation; the runtime does not re-export it.
+ #[doc(hidden)]
+ pub struct FunctionData {
++    #[cfg(feature = "perf-counters")]
++    _diagnostic_lifetime: crate::diagnostics::mechanism::HeapLifetime,
+     /// Optional internal function name.
+     pub name: Option<String>,
+     /// Whether `name` also creates the function body's internal name binding.
+@@ -331,6 +338,11 @@
+     }
+ }
+
++#[cfg(feature = "perf-counters")]
++use crate::diagnostics::property_index::FunctionPropertyMap;
++#[cfg(not(feature = "perf-counters"))]
++type FunctionPropertyMap = crate::value::name_hash::NameMap<String, Property>;
++
+ /// Compact property storage for functions that have not materialized an own
+ /// property table.
+ ///
+@@ -347,12 +359,10 @@
+ /// with the object tables' fast name hasher: `Date.prototype`,
+ /// `String.fromCharCode` and every other read of a constructor's property
+ /// hashes the name here.
+-pub(crate) struct LazyFunctionProperties(
+-    RefCell<Option<Box<crate::value::name_hash::NameMap<String, Property>>>>,
+-);
++pub(crate) struct LazyFunctionProperties(RefCell<Option<Box<FunctionPropertyMap>>>);
+
+ impl LazyFunctionProperties {
+-    pub(crate) fn borrow(&self) -> Ref<'_, crate::value::name_hash::NameMap<String, Property>> {
++    pub(crate) fn borrow(&self) -> Ref<'_, FunctionPropertyMap> {
+         self.ensure_allocated();
+         Ref::map(self.0.borrow(), |properties| {
+             properties
+@@ -361,9 +371,7 @@
+         })
+     }
+
+-    pub(crate) fn borrow_mut(
+-        &self,
+-    ) -> RefMut<'_, crate::value::name_hash::NameMap<String, Property>> {
++    pub(crate) fn borrow_mut(&self) -> RefMut<'_, FunctionPropertyMap> {
+         self.ensure_allocated();
+         RefMut::map(self.0.borrow_mut(), |properties| {
+             properties
+@@ -602,6 +610,10 @@
+         };
+         let auxiliary = FunctionAuxiliaryState::new(None, None);
+         let function = Self(Rc::new(FunctionData {
++            #[cfg(feature = "perf-counters")]
++            _diagnostic_lifetime: crate::diagnostics::mechanism::HeapLifetime::new(
++                crate::diagnostics::mechanism::HeapKind::Function,
++            ),
+             has_name_binding: name.is_some(),
+             immutable_name_binding: false,
+             immutable_env_binding: None,
+@@ -703,6 +715,10 @@
+         let has_dynamic_function_realm = realm.has_dynamic_function_realm_global();
+         let auxiliary = FunctionAuxiliaryState::new(home_object, super_constructor);
+         let function = Self(Rc::new(FunctionData {
++            #[cfg(feature = "perf-counters")]
++            _diagnostic_lifetime: crate::diagnostics::mechanism::HeapLifetime::new(
++                crate::diagnostics::mechanism::HeapKind::Function,
++            ),
+             has_name_binding,
+             immutable_name_binding,
+             immutable_env_binding,
+@@ -835,6 +851,10 @@
+         let name = bound_function_name(&target);
+         let auxiliary = FunctionAuxiliaryState::new(None, None);
+         let function = Self(Rc::new(FunctionData {
++            #[cfg(feature = "perf-counters")]
++            _diagnostic_lifetime: crate::diagnostics::mechanism::HeapLifetime::new(
++                crate::diagnostics::mechanism::HeapKind::Function,
++            ),
+             name: Some(name),
+             has_name_binding: false,
+             immutable_name_binding: false,
+@@ -900,6 +920,10 @@
+         let prototype = ObjectRef::new(HashMap::new());
+         let auxiliary = FunctionAuxiliaryState::new(None, None);
+         let function = Self(Rc::new(FunctionData {
++            #[cfg(feature = "perf-counters")]
++            _diagnostic_lifetime: crate::diagnostics::mechanism::HeapLifetime::new(
++                crate::diagnostics::mechanism::HeapKind::Function,
++            ),
+             has_name_binding: false,
+             immutable_name_binding: false,
+             immutable_env_binding: None,
+@@ -1202,7 +1226,9 @@
+     }
+
+     pub(crate) fn own_property(&self, key: &str) -> Option<Property> {
+-        if key == "length" && self.auxiliary.implicit_length_property.get() {
++        if crate::diagnostics::name_eq!(key, "length")
++            && self.auxiliary.implicit_length_property.get()
++        {
+             return self
+                 .properties
+                 .borrow()
+@@ -1210,7 +1236,8 @@
+                 .cloned()
+                 .or_else(|| Some(self.default_length_property()));
+         }
+-        if key == "name" && self.auxiliary.implicit_name_property.get() {
++        if crate::diagnostics::name_eq!(key, "name") && self.auxiliary.implicit_name_property.get()
++        {
+             return self
+                 .properties
+                 .borrow()
+@@ -1218,7 +1245,7 @@
+                 .cloned()
+                 .or_else(|| Some(self.default_name_property()));
+         }
+-        if key == "prototype" {
++        if crate::diagnostics::name_eq!(key, "prototype") {
+             self.ensure_default_prototype();
+         }
+         self.properties.borrow().get(key).cloned()
+--- a/src/proxy.rs
++++ b/src/proxy.rs
+@@ -14,6 +14,8 @@
+ }
+
+ struct ProxyData {
++    #[cfg(feature = "perf-counters")]
++    _diagnostic_lifetime: crate::diagnostics::mechanism::HeapLifetime,
+     state: RefCell<Option<ProxyState>>,
+     private_state: RefCell<PrivateState>,
+     /// Whether the proxy exposes `[[Call]]`/`[[Construct]]`. ProxyCreate fixes
+@@ -40,6 +42,10 @@
+         let constructor = target_is_constructor(&target);
+         Self {
+             inner: Rc::new(ProxyData {
++                #[cfg(feature = "perf-counters")]
++                _diagnostic_lifetime: crate::diagnostics::mechanism::HeapLifetime::new(
++                    crate::diagnostics::mechanism::HeapKind::Proxy,
++                ),
+                 state: RefCell::new(Some(ProxyState { target, handler })),
+                 private_state: RefCell::new(PrivateState::default()),
+                 callable,
+--- a/src/value/array.rs
++++ b/src/value/array.rs
+@@ -9,7 +9,7 @@
+
+ use std::{
+     cell::{Cell, OnceCell, Ref, RefCell, RefMut},
+-    collections::{BTreeSet, HashMap},
++    collections::BTreeSet,
+     fmt,
+     rc::Rc,
+ };
+@@ -47,6 +47,8 @@
+ }
+
+ struct ArrayData {
++    #[cfg(feature = "perf-counters")]
++    _diagnostic_lifetime: crate::diagnostics::mechanism::HeapLifetime,
+     elements: RefCell<Vec<Value>>,
+     length: Cell<usize>,
+     length_writable: Cell<bool>,
+@@ -66,7 +68,15 @@
+     /// Drops this reference; when it was the last, the array's own
+     /// children go onto `pending` first.
+     pub(super) fn release_into(self, pending: &mut Vec<Value>) {
+-        if let Some(mut data) = Rc::into_inner(self.0) {
++        #[cfg(feature = "perf-counters")]
++        let owned = {
++            let owned = self.0.clone();
++            drop(self);
++            owned
++        };
++        #[cfg(not(feature = "perf-counters"))]
++        let owned = self.0;
++        if let Some(mut data) = Rc::into_inner(owned) {
+             defer_children(data.elements.get_mut(), pending);
+         }
+     }
+@@ -88,10 +98,15 @@
+     }
+ }
+
++#[cfg(feature = "perf-counters")]
++use crate::diagnostics::property_index::ArrayPropertyMap;
++#[cfg(not(feature = "perf-counters"))]
++type ArrayPropertyMap = std::collections::HashMap<String, Property>;
++
+ #[derive(Default)]
+ struct ArrayColdData {
+     holes: RefCell<BTreeSet<usize>>,
+-    properties: RefCell<HashMap<String, Property>>,
++    properties: RefCell<ArrayPropertyMap>,
+     symbol_properties: RefCell<Vec<(ObjectRef, Property)>>,
+     prototype: RefCell<Option<Option<Prototype>>>,
+ }
+@@ -163,6 +178,10 @@
+     pub(crate) fn new(elements: Vec<Value>) -> Self {
+         let length = elements.len();
+         Self(Rc::new(ArrayData {
++            #[cfg(feature = "perf-counters")]
++            _diagnostic_lifetime: crate::diagnostics::mechanism::HeapLifetime::new(
++                crate::diagnostics::mechanism::HeapKind::Array,
++            ),
+             elements: RefCell::new(elements),
+             length: Cell::new(length),
+             length_writable: Cell::new(true),
+@@ -175,6 +194,10 @@
+
+     pub(crate) fn new_with_length(length: usize) -> Self {
+         Self(Rc::new(ArrayData {
++            #[cfg(feature = "perf-counters")]
++            _diagnostic_lifetime: crate::diagnostics::mechanism::HeapLifetime::new(
++                crate::diagnostics::mechanism::HeapKind::Array,
++            ),
+             elements: RefCell::new(Vec::new()),
+             length: Cell::new(length),
+             length_writable: Cell::new(true),
+@@ -198,6 +221,10 @@
+             (elements, holes)
+         };
+         let data = ArrayData {
++            #[cfg(feature = "perf-counters")]
++            _diagnostic_lifetime: crate::diagnostics::mechanism::HeapLifetime::new(
++                crate::diagnostics::mechanism::HeapKind::Array,
++            ),
+             elements: RefCell::new(elements),
+             length: Cell::new(length),
+             length_writable: Cell::new(true),
+--- a/src/value/js_string.rs
++++ b/src/value/js_string.rs
+@@ -25,6 +25,8 @@
+
+ #[derive(Debug)]
+ struct StringData {
++    #[cfg(feature = "perf-counters")]
++    _diagnostic_lifetime: crate::diagnostics::mechanism::HeapLifetime,
+     text: String,
+     /// Set only on the one shared instance an atom table hands out for its
+     /// text, so two atoms are equal exactly when they are the same instance.
+@@ -41,6 +43,10 @@
+ impl StringData {
+     fn new(text: String) -> Self {
+         Self {
++            #[cfg(feature = "perf-counters")]
++            _diagnostic_lifetime: crate::diagnostics::mechanism::HeapLifetime::new(
++                crate::diagnostics::mechanism::HeapKind::String,
++            ),
+             text,
+             atom: Cell::new(false),
+             ascii: Cell::new(ASCII_UNKNOWN),
+@@ -60,6 +66,10 @@
+ impl Clone for StringData {
+     fn clone(&self) -> Self {
+         Self {
++            #[cfg(feature = "perf-counters")]
++            _diagnostic_lifetime: crate::diagnostics::mechanism::HeapLifetime::new(
++                crate::diagnostics::mechanism::HeapKind::String,
++            ),
+             text: self.text.clone(),
+             atom: Cell::new(false),
+             ascii: Cell::new(self.ascii.get()),
+@@ -179,7 +189,15 @@
+
+     /// Consumes the value, reusing the buffer when it is uniquely held.
+     pub fn into_string(self) -> String {
+-        match Rc::try_unwrap(self.0) {
++        #[cfg(feature = "perf-counters")]
++        let owned = {
++            let owned = self.0.clone();
++            drop(self);
++            owned
++        };
++        #[cfg(not(feature = "perf-counters"))]
++        let owned = self.0;
++        match Rc::try_unwrap(owned) {
+             Ok(data) => data.text,
+             Err(shared) => shared.text.clone(),
+         }
+--- a/src/value/map.rs
++++ b/src/value/map.rs
+@@ -13,6 +13,8 @@
+ /// index answers `get`/`has`/`set`/`delete` in constant time — the vector alone
+ /// made every operation a scan, so filling a map was quadratic.
+ struct MapData {
++    #[cfg(feature = "perf-counters")]
++    _diagnostic_lifetime: crate::diagnostics::mechanism::HeapLifetime,
+     entries: RefCell<Vec<Option<(Value, Value)>>>,
+     index: RefCell<HashMap<CollectionKey, usize>>,
+     live: Cell<usize>,
+@@ -28,6 +30,10 @@
+         let object = ObjectRef::with_prototype_slot(HashMap::new(), prototype);
+         object.set_to_string_tag("Map");
+         Self(Rc::new(MapData {
++            #[cfg(feature = "perf-counters")]
++            _diagnostic_lifetime: crate::diagnostics::mechanism::HeapLifetime::new(
++                crate::diagnostics::mechanism::HeapKind::Map,
++            ),
+             entries: RefCell::new(Vec::new()),
+             index: RefCell::new(HashMap::new()),
+             live: Cell::new(0),
+--- a/src/value/mod.rs
++++ b/src/value/mod.rs
+@@ -41,7 +41,7 @@
+ use crate::{Function, proxy::ProxyRef, string};
+
+ /// A JavaScript value supported by the current runtime subset.
+-#[derive(Clone)]
++#[cfg_attr(not(feature = "perf-counters"), derive(Clone))]
+ #[allow(clippy::large_enum_variant)]
+ pub enum Value {
+     /// Number value.
+@@ -78,6 +78,33 @@
+     Set(SetRef),
+ }
+
++#[cfg(feature = "perf-counters")]
++impl Clone for Value {
++    fn clone(&self) -> Self {
++        crate::diagnostics::count!(value_clones);
++        if !matches!(
++            self,
++            Self::Number(_) | Self::Boolean(_) | Self::Null | Self::Undefined
++        ) {
++            crate::diagnostics::count!(value_heap_clones);
++        }
++        match self {
++            Self::Number(value) => Self::Number(*value),
++            Self::Boolean(value) => Self::Boolean(*value),
++            Self::Null => Self::Null,
++            Self::Undefined => Self::Undefined,
++            Self::BigInt(value) => Self::BigInt(value.clone()),
++            Self::String(value) => Self::String(value.clone()),
++            Self::Function(value) => Self::Function(value.clone()),
++            Self::Array(value) => Self::Array(value.clone()),
++            Self::Object(value) => Self::Object(value.clone()),
++            Self::Proxy(value) => Self::Proxy(value.clone()),
++            Self::Map(value) => Self::Map(value.clone()),
++            Self::Set(value) => Self::Set(value.clone()),
++        }
++    }
++}
++
+ impl fmt::Debug for Value {
+     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+         match self {
+@@ -137,7 +164,10 @@
+     }
+
+     pub(crate) fn bigint(value: BigInt) -> Self {
+-        Self::BigInt(Rc::new(value))
++        let value = Rc::new(value);
++        #[cfg(feature = "perf-counters")]
++        crate::diagnostics::mechanism::track_bigint(&value);
++        Self::BigInt(value)
+     }
+
+     pub(crate) fn is_uninitialized_lexical_marker(&self) -> bool {
+--- a/src/value/set.rs
++++ b/src/value/set.rs
+@@ -13,6 +13,8 @@
+ /// index answers `has`/`add`/`delete` in constant time — the vector alone made
+ /// every operation a scan, so filling a set was quadratic.
+ struct SetData {
++    #[cfg(feature = "perf-counters")]
++    _diagnostic_lifetime: crate::diagnostics::mechanism::HeapLifetime,
+     entries: RefCell<Vec<Option<Value>>>,
+     index: RefCell<HashMap<CollectionKey, usize>>,
+     live: Cell<usize>,
+@@ -28,6 +30,10 @@
+         let object = ObjectRef::with_prototype_slot(HashMap::new(), prototype);
+         object.set_to_string_tag("Set");
+         Self(Rc::new(SetData {
++            #[cfg(feature = "perf-counters")]
++            _diagnostic_lifetime: crate::diagnostics::mechanism::HeapLifetime::new(
++                crate::diagnostics::mechanism::HeapKind::Set,
++            ),
+             entries: RefCell::new(Vec::new()),
+             index: RefCell::new(HashMap::new()),
+             live: Cell::new(0),

@@ -25,9 +25,11 @@ agents = ["dep:parking_lot"]
 # diagnostics.rs`). Off by default and compiled out entirely: with the feature
 # off every counting site expands to nothing and the storage does not exist. A
 # build with it on is a diagnostic build and must not be used for timing.
-perf-counters = []
+perf-counters = ["dep:qjs-runtime-diagnostics"]
 
 [dependencies]
+# Compile-time diagnostic overlays preserve the canonical feature-off image.
+qjs-runtime-diagnostics = { path = "../qjs-runtime-diagnostics", optional = true }
 num-bigint = "0.4"
 num-traits = "0.2"
 parking_lot = { version = "0.12", optional = true }

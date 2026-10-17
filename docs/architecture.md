@@ -27,6 +27,9 @@ source text -> qjs-lexer (tokens with spans) -> qjs-parser (qjs-ast)
   `CallEnv`; `bytecode` holds the compiler, the IR and every executor; the
   remaining modules are builtins grouped by standard object.
 - `qjs-cli`: thin command-line wrapper; no engine semantics.
+- `qjs-runtime-diagnostics`: optional compile-time source overlays for
+  `perf-counters`; preserves production module source positions and default
+  code generation. It has no third-party dependencies or runtime component.
 
 `third_party/quickjs-ng` (behavioural oracle and reference) and
 `third_party/test262` (conformance input) are pinned submodules outside the

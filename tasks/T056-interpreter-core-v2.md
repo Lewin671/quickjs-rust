@@ -1,18 +1,18 @@
 # T056: Interpreter core v2
 
-- Status: active; unit 0 part 1 main collection complete, exact-attribution
-  prerequisite still open after the completed short-process sampling attempts.
-- Implementation: no runtime edits in unit 0; migration-screen stage-budget
-  plumbing is fixed at `ddca5bdf`. M1 remains an unimplemented, unfrozen draft.
-- Verified at: measured runtime `b481894d351d933e94717a9c295c15fe4a466804`,
-  iMac, 2026-10-17 UTC; `check.sh` at `ddca5bdf` passes, including 5170 subset cases;
-  the final staged documentation/context/whitespace gates pass.
-- Evidence: [unit 0 part 1 record](archive/T056-unit0-part1-evidence.md),
-  with standing, counts, profiles, RSS, ABI probes and draft validation bindings.
-- Unresolved: absent scoped event counters; short-process profile attachment;
-  one imprecise formal case; part 2 independent development-program evidence.
-- Next action: resolve diagnostic scope and launch-time sampling, complete part 2,
-  then review ordering/budgets before freezing any runtime plan.
+- Status: active; unit 0 part 2 diagnostic collection in progress.
+- Implementation: optional compile-time counter overlays; no runtime optimization.
+  Migration-screen stage-budget plumbing is fixed at `ddca5bdf`.
+- Verified at: measured part 1 runtime `b481894d`; current diagnostic source passes
+  2316 local agents/perf-counters tests and feature clippy. Local arm64 canonical
+  image is byte-identical to b481; iMac identity and full gates remain pending.
+- Evidence: [part 1 record](archive/T056-unit0-part1-evidence.md); part 2 will
+  record diagnostic scope, development profiles, ordering and the first plan.
+- Unresolved: iMac collection/identity, first-unit ordering and frozen plan.
+  Literal Value-destructor totals and emitted-copy counts are not inferred from
+  scoped handle/store/source-move counters.
+- Next action: collect all ten development programs and suite controls on iMac,
+  then rank M1/Value/dispatch/frames and freeze/validate the first runtime unit.
 
 ## Goal and scope
 

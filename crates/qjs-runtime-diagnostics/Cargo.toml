@@ -1,0 +1,13 @@
+[package]
+name = "qjs-runtime-diagnostics"
+version = "0.1.0"
+description = "Compile-time mechanism instrumentation for qjs-runtime perf-counters."
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lib]
+proc-macro = true
+
+[lints]
+workspace = true

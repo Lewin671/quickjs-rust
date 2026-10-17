@@ -4,6 +4,7 @@ members = [
     "crates/qjs-lexer",
     "crates/qjs-parser",
     "crates/qjs-runtime",
+    "crates/qjs-runtime-diagnostics",
     "crates/qjs-unicode",
     "crates/qjs-cli",
 ]
