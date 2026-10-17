@@ -1,7 +1,7 @@
 # T056: Interpreter core v2
 
-- Status: active; unit 0 complete; M1 stage 1 implemented on
-  `agent/t056-m1-atoms/claude`, its stage screen pending.
+- Status: blocked; unit 0 complete; M1 stage 1 implemented on
+  `agent/t056-m1-atoms/claude`, its stage screen blocked by a tool error.
 - Implementation: present on that branch (`11c9fc08`): atom domain, cached
   per-domain linking of named operands, Value facade. Not on main.
 - Verified at: `11c9fc08`, 2026-10-17: fast gate, curated Test262 5170/5170,
@@ -10,11 +10,12 @@
 - Evidence: [part 1](archive/T056-unit0-part1-evidence.md),
   [part 2](archive/T056-unit0-part2-evidence.md), [M1 stage 1](archive/T056-m1-stage1-evidence.md);
   plan [`interpreter-core-v2-atoms-layouts`](performance-units/interpreter-core-v2-atoms-layouts.json).
-- Unresolved: stage-1 screen (first job ended in a load-monitor tool error,
-  replacement queued); M2 stages/budgets must absorb the activation-environment
+- Unresolved: stage-1 screen blocked: both the screen and its whole
+  replacement ended in the load-monitor settle guard (host wall clock ran
+  short of `sleep(8)`), no verdict; M2 stages/budgets must absorb the activation-environment
   scope; part 1's imprecise bitops-3bit-bits-in-byte interval.
-- Next action: read the replacement screen under the stage budget; if it
-  passes, integrate stage 1 and start M1.2 (layout authority for all stores).
+- Next action: lead decides the settle-guard fix or a third whole run; then
+  screen `11c9fc08` under the stage budget and, if it passes, start M1.2.
 
 ## Goal and scope
 

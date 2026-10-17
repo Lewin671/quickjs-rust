@@ -73,6 +73,15 @@ through `imac-bench.sh loop`, candidate `11c9fc08` against plan base `351004f3`.
   compares wall-clock stamps taken around `sleep(8)`). No verdict exists, so no
   attempt is consumed; it is replaced whole, never pooled.
 - Replacement job `20261017T181346Z-t056-m1s1-screen1-replacement2`, output
-  `target/layout-attempts/t056-m1s1-attempt1-replacement`: pending. (Job
+  `target/layout-attempts/t056-m1s1-attempt1-replacement`, exit 1 after 5,077 s
+  with the same tool error: variants 0 and 1 complete (86 cases each), variant 2
+  stopped at `external/jetstream3-js-subset/raytrace-public-class-fields` with
+  the snapshot sealed 7.95109 s after the last pair. No verdict; no attempt
+  consumed. Timing samples of either job were not read.
+- Blocker: twice the iMac wall clock advanced less than the 8 s `sleep` it
+  surrounded (by 1.5 ms and 49 ms), so the guard fails on host clock
+  adjustment rather than on load. Repeating the whole screen is a gamble of
+  about 2.5 h per try; the screen waits for a lead decision on the tool
+  (for example a monotonic settle measurement) before a third run. (Job
   `20261017T181321Z` was cancelled before running: it had been submitted from a
   working tree with an uncommitted documentation change.)

@@ -14,7 +14,7 @@ it to `archive/` with `git mv` and move its row below.
 | Task | Status | What it is |
 | --- | --- | --- |
 | [T057](T057-string-code-units.md) string code units | active | Policy v3 qualified (development targets eligible); stage-1 plan next. |
-| [T056](T056-interpreter-core-v2.md) interpreter core v2 | active | Target design for names, frames and values; unit 0 complete, M1 stage 1 implemented on its branch, screen pending. |
+| [T056](T056-interpreter-core-v2.md) interpreter core v2 | active | Target design for names, frames and values; unit 0 complete, M1 stage 1 implemented on its branch, screen blocked by a load-monitor tool error. |
 | [T018](T018-broad-performance.md) broad performance | active | The performance campaign contract and its targets against QuickJS-NG. Start performance work here, then follow [the workflow](../docs/performance-workflow.md). |
 | [T040](T040-imac-general-performance.md) x86_64 general optimization | active | Fresh current-main comparison and exact-binary profiles, followed by independent general runtime units. |
 | [T045](T045-typed-loop-boxed-demand-provenance.md) boxed demand provenance | active | Ordinary identity-flow joins lose boxed demand; exact profiles and seed diagnosis precede a compiler-only unit. |
