@@ -1,13 +1,17 @@
 # T058: RegExp lazy quantifiers and pattern-template removal
 
-- Status: active; root causes confirmed, leaf plan frozen, no runtime change yet.
-- Implementation: none.
-- Verified at: registration on `a0b6bb23` (runtime-identical to queue
-  candidate `351004f3`), 2026-10-17; scaling probes below.
-- Evidence: this file; exact-image profile receipt from iMac job
-  `20261017T135712Z-t057-stage1-v3-profiles`.
-- Unresolved: implementation, gates and screen.
-- Next action: implement lazy simple-atom steps and remove the literal-source recognizers.
+- Status: active; implementation committed, screen queued on the iMac.
+- Implementation: present (`0dc5d6a1`, `1b8c2159`, `cec613d2`).
+- Verified at: `cec613d2`, 2026-10-17, local M1 Pro: full `check.sh` ok
+  (2737 Rust tests, Test262 subset 5170), compare-qjs 250/250 including the
+  two new fixtures, exact zero-gap slices `test/built-ins/RegExp` (1573 both
+  pass), `test/language/literals/regexp` (155), String `replace` (54),
+  `match` (48), `split` (120), Date `toString`/`toDateString`/`toUTCString`
+  (8/7/9); `staging/sm/String/replace-math.js` passes directly.
+- Evidence: this file; plan and profile receipt below; screen job pending.
+- Unresolved: screen result; RGI_Emoji template (see Implementation).
+- Next action: record the screen; the formal/promotion decision waits for
+  policy v4 (held-out layout bands and held-out K=6), owned by T059.
 
 ## Goal
 
@@ -72,9 +76,9 @@ stage 1 owns that fix and it is not part of this unit.
 ## Acceptance
 
 - [x] Frozen plan validated and committed before runtime edits.
-- [ ] Lazy simple-atom steps extend one repetition at a time.
-- [ ] Literal-source recognizers removed or replaced structurally.
-- [ ] Focused tests, NG fixtures, RegExp Test262 slices, fast and full gates.
+- [x] Lazy simple-atom steps extend one repetition at a time.
+- [x] Literal-source recognizers removed (`(.+)`, Date rewrite); RGI_Emoji template open.
+- [x] Focused tests, NG fixtures, RegExp Test262 slices, fast and full gates.
 - [ ] Qualified screen recorded; formal decision left to policy v4.
 
 ## Verification
@@ -98,3 +102,24 @@ candidate `351004f3`) with the papaparse receipt
 `outputs/imac-bench/20261017T135712Z-t057-stage1-v3-profiles/out/profiles`.
 Development target `development/papaparse/csv` (queue rank 1, 34.06x NG);
 policy v3 controls; two attempts.
+
+## Implementation (`0dc5d6a1`, `1b8c2159`, `cec613d2`)
+
+- `0dc5d6a1`: `FirstMatcher::match_lazy_simple_atom` steps the minimum,
+  tries the continuation, then extends one repetition per failure, bounded by
+  `max` and the first failed atom step. Greedy keeps the longest-run scans.
+- `1b8c2159`: `dot_plus_global_fast_path` removed; the prepared global loop
+  answers `(.+)` linearly (local M1 Pro, 1M-char replace: 4.8 ms vs NG 5.05).
+- `cec613d2`: `matcher/normalization.rs` removed; sources compile as written.
+- Not changed: `matches_rgi_emoji_repetition`. The general matcher has no
+  property-of-strings support (`/^(?:\p{RGI_Emoji})+$/v` fails), so
+  removing the template needs real RGI_Emoji sequence data; separate unit.
+
+After `0dc5d6a1`+`1b8c2159` (local, `tmp/t058-probes/scaling-replace.js`,
+n=16000 / 4n, ms): `"([^]*?)"` g 9/30 (NG 15/57, base 1816/29135),
+`x[\s\S]*?y` 4/16 (NG 10/38, base 8755/139111), `a.*?,` 3/14,
+`([^x]*?);` y 15/54 (NG 7/29), `(\w+?)=\1;` 8/32: all linear. Still
+quadratic and outside this unit: `String.prototype.match` `g` (subject copy
+per exec) and empty-match advancement (both changed on the T057 branch), and
+`u`-mode replace (O(n) code-unit/scalar index conversion in `regexp.rs` per
+match, T057 code-unit design).
