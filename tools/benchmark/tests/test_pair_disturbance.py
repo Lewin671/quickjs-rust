@@ -118,21 +118,35 @@ class LoadTests(unittest.TestCase):
     def test_source_host_binding_preserves_case_and_recipe_identity(self):
         from tools.benchmark.layout_qualification import verify_host_inputs
         from tools.benchmark.layout_identity import digest, ROOT
-        recorded = json.loads((ROOT/'tools/benchmark/tests/fixtures/layout-policy/a2-bands.json').read_text())['source_host']
+        name = 'benchmarks/manifest.json'
+        old = json.loads((ROOT/name).read_text())
+        old['protocol'] = {'id': 'previous-qualified-protocol'}
+        text = json.dumps(old)
+        recorded = {'cpu': 'same host', 'recipe': 'same recipe', 'manifests':
+                    {name: hashlib.sha256((text+'\n').encode()).hexdigest(),
+                     'benchmarks/external-preview.json': 'a'*64}}
         current = copy.deepcopy(recorded)
-        current['manifests'] = {p: digest(ROOT/p) for p in recorded['manifests']}
-        verify_host_inputs(recorded,current,'c35ed86c')
+        current['manifests'][name] = digest(ROOT/name)
+        with patch('tools.benchmark.layout_identity.command', return_value=text):
+            verify_host_inputs(recorded,current,'recorded-context')
         current['cpu'] = 'other host'
         with self.assertRaisesRegex(ValueError, 'host attestation'):
-            verify_host_inputs(recorded,current,'c35ed86c')
+            verify_host_inputs(recorded,current,'recorded-context')
         current['cpu'] = recorded['cpu']
         current['manifests']['benchmarks/external-preview.json'] = '0'*64
-        with self.assertRaisesRegex(ValueError, 'recipe/corpus'):
-            verify_host_inputs(recorded,current,'c35ed86c')
-        current['manifests']['benchmarks/external-preview.json'] = recorded['manifests']['benchmarks/external-preview.json']
+        with patch('tools.benchmark.layout_identity.command', return_value=text):
+            with self.assertRaisesRegex(ValueError, 'recipe/corpus'):
+                verify_host_inputs(recorded,current,'recorded-context')
+        current['manifests']['benchmarks/external-preview.json'] = 'a'*64
         with patch('tools.benchmark.layout_identity.command', return_value='{}'):
             with self.assertRaisesRegex(ValueError, 'manifest/context'):
-                verify_host_inputs(recorded,current,'c35ed86c')
+                verify_host_inputs(recorded,current,'recorded-context')
+        old['cases'][0]['id'] = 'different-case'
+        text = json.dumps(old)
+        recorded['manifests'][name] = hashlib.sha256((text+'\n').encode()).hexdigest()
+        with patch('tools.benchmark.layout_identity.command', return_value=text):
+            with self.assertRaisesRegex(ValueError, 'case or recipe changed'):
+                verify_host_inputs(recorded,current,'recorded-context')
 
     def test_valid_bad_cost_is_fatal_and_retained(self):
         class Monitor:
