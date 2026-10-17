@@ -1,13 +1,13 @@
 """Run one complete three-engine comparison from prebuilt receipts.
 
 This local entry point measures broad specializer coverage, generic sentinels,
-and external process-wall workloads on the same host. It never builds engines
+and external/development process-wall workloads on the same host. It never builds engines
 or silently replaces a failed sample. Hosted previews keep their existing path.
 
 The lanes run one after another, or with `--concurrent-lanes` side by side:
 one forked process per lane, each measuring its own lane in its usual order.
-`--workers N` instead shares the cases of all three lanes among N processes:
-the broad cases in N // 2 shards, the sentinels in one, and each external
+`--workers N` instead shares the cases of all four selection lanes among N processes:
+the broad cases in N // 2 shards, the sentinels in one, and each whole-process
 case on its own, longest first. A case's three engines always run in the
 same process, in the order the sequential schedule gives them.
 The files and the analysis are the same; only wall-clock overlap differs, and
@@ -359,7 +359,7 @@ def main():
     parser.add_argument("--seed", type=int, default=20250713)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--concurrent-lanes", action="store_true",
-                        help="measure the three lanes side by side, one process each")
+                        help="measure the four selection lanes side by side, one process each")
     parser.add_argument("--workers", type=int, choices=range(2, 9), metavar="N",
                         help="share the cases of all lanes among N processes (2 to 8)")
     parser.add_argument("--without-development", dest="development", action="store_false",

@@ -105,7 +105,7 @@ class DevelopmentManifestTests(unittest.TestCase):
 
     def test_inventory_is_non_claim_and_every_case_is_development(self) -> None:
         manifest = load_development_manifest(MANIFEST_PATH)
-        self.assertEqual(manifest.preview_id, "quickjs-development-preview-v1")
+        self.assertEqual(manifest.preview_id, "quickjs-development-preview-v2")
         self.assertFalse(self.data["claim_eligible"])
         self.assertEqual(manifest.role, "development")
         self.assertEqual(len(manifest.suites), 10)

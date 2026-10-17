@@ -64,9 +64,9 @@ held-out is acceptance only, while development cases may be profiled and ranked.
   is per checkout: measurements from different worktrees are not queued
   against each other, so run them one at a time.
 - Lanes side by side, where qualified. `perf-compare.sh --concurrent-lanes`
-  measures broad, sentinel and external at once, one process each; the summary
+  measures all four selection lanes at once, one process each; the summary
   says so in `lane_schedule`. It still holds the lock, and nothing else may
-  run. `--workers N` shares the cases of all three lanes among N processes, a
+  run. `--workers N` shares the cases of all four selection lanes among N processes, a
   case's three engines always in the same one (`lane_schedule` is
   `workers-N`). Use either only on a host with an idle core per process whose
   [T017](../tasks/T017-performance-benchmark-system.md) records a passing

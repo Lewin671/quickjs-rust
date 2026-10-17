@@ -125,7 +125,7 @@ are too wide reports `extension_required`; the response is a new complete
 
 | Command | Does | Writes |
 | --- | --- | --- |
-| `scripts/perf-compare.sh` | builds candidate and base at commits, writes receipts, runs all three lanes | a sealed bundle directory |
+| `scripts/perf-compare.sh` | builds candidate and base at commits, writes receipts, runs all four selection lanes | a sealed bundle directory |
 | `scripts/performance-decision.sh` | `queue`, `check-unit`, `validate-unit`, `decide` | queue and decision JSON |
 | `scripts/perf-loop.sh` | builds base and working tree, runs the counter screen | stdout only |
 | `python3 -m tools.benchmark.screen` | counter A/B of two executables | stdout; optional `--json` |

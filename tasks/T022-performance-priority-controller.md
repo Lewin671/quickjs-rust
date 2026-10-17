@@ -31,7 +31,7 @@ variable GitHub-hosted preview numbers into fixed-hardware performance claims.
 
 1. `scripts/performance-decision.sh queue` consumes one exact preview bundle
    (`summary.json`, `report.json`, and `external-report.json`) and emits a
-   SHA-bound queue of broad and external opportunities above the campaign
+   SHA-bound queue of broad, sentinel, external and development opportunities above the campaign
    target ratio.
 2. A future optimization declares
    `tasks/performance-units/<unit>.json` before implementation. The plan fixes
@@ -90,6 +90,8 @@ are historical and never acquire an extra attempt from this rule change.
 - Every lane and the equal-case portfolio must fit their own wall ceilings;
   a portfolio gain cannot hide a failed lane. Natural placement and every
   measured panel layout must pass. Formal intervals stay mandatory.
+  Development-enabled policies add all ten programs (non-targets are controls)
+  and their own lane ceiling. V2 remains valid without development references.
 - Instruction-blind changes (Value, memory layout, allocation) predeclare
   memory-sensitive wall targets, always run K=6, retain resource evidence,
   and require longer formal wall evidence. Flat instructions do not waive
