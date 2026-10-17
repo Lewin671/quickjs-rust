@@ -6,6 +6,10 @@ in the module headers it names and in two invariant notes,
 [design/generator-suspension.md](design/generator-suspension.md)
 (suspension). How to verify a change is in [harness.md](harness.md).
 
+The staged String/RegExp target is in
+[string-code-units](design/string-code-units.md); [T057](../tasks/T057-string-code-units.md)
+records what is implemented and verified.
+
 ```text
 source text -> qjs-lexer (tokens with spans) -> qjs-parser (qjs-ast)
             -> qjs-runtime (bytecode compiler, VM, builtins) -> qjs-cli
