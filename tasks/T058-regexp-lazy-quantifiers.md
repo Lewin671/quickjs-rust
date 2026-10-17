@@ -1,17 +1,21 @@
 # T058: RegExp lazy quantifiers and pattern-template removal
 
-- Status: active; implementation committed, screen queued on the iMac.
-- Implementation: present (`0dc5d6a1`, `1b8c2159`, `cec613d2`).
+- Status: active; screen attempt 1 of 2 labelled `reject` (broad wall lane);
+  lead decision pending.
+- Implementation: present (`0dc5d6a1`, `1b8c2159`, `cec613d2`; screened at
+  merge `392ca717`, runtime-identical to them).
 - Verified at: `cec613d2`, 2026-10-17, local M1 Pro: full `check.sh` ok
   (2737 Rust tests, Test262 subset 5170), compare-qjs 250/250 including the
   two new fixtures, exact zero-gap slices `test/built-ins/RegExp` (1573 both
   pass), `test/language/literals/regexp` (155), String `replace` (54),
   `match` (48), `split` (120), Date `toString`/`toDateString`/`toUTCString`
   (8/7/9); `staging/sm/String/replace-math.js` passes directly.
-- Evidence: this file; plan and profile receipt below; screen job pending.
-- Unresolved: screen result; RGI_Emoji template (see Implementation).
-- Next action: record the screen; the formal/promotion decision waits for
-  policy v4 (held-out layout bands and held-out K=6), owned by T059.
+- Evidence: this file; screen job `20261017T222653Z-t058-screen1`; raw
+  samples and verdict at workspace `outputs/t058-screen1/`.
+- Unresolved: whether the broad failure is a host timing shift (flat
+  instructions, bimodal pairs) or a layout effect; RGI_Emoji template.
+- Next action: lead decides between attempt 2 (complete K=6) and treating
+  attempt 1 as an event; formal/promotion only under policy v4 (T059).
 
 ## Goal
 
@@ -79,7 +83,7 @@ stage 1 owns that fix and it is not part of this unit.
 - [x] Lazy simple-atom steps extend one repetition at a time.
 - [x] Literal-source recognizers removed (`(.+)`, Date rewrite); RGI_Emoji template open.
 - [x] Focused tests, NG fixtures, RegExp Test262 slices, fast and full gates.
-- [ ] Qualified screen recorded; formal decision left to policy v4.
+- [x] Qualified screen recorded; formal decision left to policy v4.
 
 ## Verification
 
@@ -123,3 +127,32 @@ quadratic and outside this unit: `String.prototype.match` `g` (subject copy
 per exec) and empty-match advancement (both changed on the T057 branch), and
 `u`-mode replace (O(n) code-unit/scalar index conversion in `regexp.rs` per
 match, T057 code-unit design).
+
+## Screen attempt 1
+
+iMac job `20261017T222653Z-t058-screen1` (`perf-loop.sh`, policy v3, natural
+layout only, 2490 s, exit 3; light background activity in 6 samples, below
+the disturbance threshold). Verdict SHA-256 `9489c3e9...c9c807`: label
+`reject`, failure `layout 0 broad: wall lane ceiling exceeded`, K=6 not
+run because the natural layout already failed and the gate is not
+mandatory-panel.
+
+| Lane | ratio | ceiling |
+| --- | --- | --- |
+| broad | 1.0172 | 1.0129 |
+| sentinel | 0.9693 | 1.0157 |
+| external | 0.9974 | 1.0074 |
+| development | 0.8541 | 1.0096 |
+| portfolio | 0.9832 | 1.0072 |
+
+Target `development/papaparse/csv`: wall 0.1862, instructions 0.1146
+(frozen threshold 0.70). Wall events: `broad/top_level_function_call` 1.4316
+(band 1.0250, instructions 1.0002), `broad/string_slice` 1.0407 (band
+1.0319, instructions 1.0000), `external/jetstream3-js-subset/cdjs` 1.0336
+(band 1.0250, instructions 0.9885). The broad lane failure comes from
+`top_level_function_call`, whose five pairs are 1.046, 1.018, 1.491, 1.526,
+1.432 with instructions 1.0001-1.0002 throughout: a step change between
+pairs 2 and 3 on a 9 ms workload, which code that only changed the RegExp
+matcher cannot explain by instructions. No other case regressed in
+instructions beyond 1.0002. The attempt counts against the budget under the
+written rule unless the lead classifies it otherwise.
