@@ -7,9 +7,9 @@
   Legacy retained decisions remain verified only at their recorded revisions.
 - Evidence: T055 owns B jobs and host-band status; [T037](T037-integration-batch-1.md)
   owns historical unstable-base evidence and exact retained outputs.
-- Unresolved: B canonical input has a non-load timeout (see T055); no
-  qualified policy. Ruleset-required Performance decision remains unconfigured.
-- Next action: lead resolves T055 canonical timeout/protocol; require fully
+- Unresolved: B has valid A/A precision failure plus a non-load canonical
+  timeout (T055); no qualified policy. Ruleset-required check is unconfigured.
+- Next action: lead resolves T055 variance/timeout protocols; require fully
   qualified host bands before any schema-3 promotion.
 
 Commands and their interpretation are in

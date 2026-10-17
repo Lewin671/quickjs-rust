@@ -1,6 +1,6 @@
 # T055: Layout noise control — B pair-level qualification
 
-- Status: blocked; new collections complete, canonical formal input times out.
+- Status: blocked; canonical timeout plus valid component precision failure.
 - Implementation: present; versioned host policy v1 is unqualified and cannot
   be used for a new promotion. No runtime engine change.
 - Verified at: 5d255e5e staged fast gate, 2026-10-16; 531 benchmark tests,
@@ -9,10 +9,10 @@
 - Evidence: [B frozen plans and log](archive/T055-phase-b-plan-and-log.md),
   [A2 data](archive/T055-phase-a2-data.md),
   [unqualified policy v1](../benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v1.json).
-- Unresolved: canonical external candidate imaging-gaussian-blur block 27
-  exceeds the frozen 15 s timeout; no heavy load, so load-only retries do not apply.
-- Next action: lead decides whether to authorize/freeze a new canonical timeout
-  protocol and full replacement; no policy adoption or favorable rerun now.
+- Unresolved: recursive_call_tree A/A half-width 5.9945% exceeds 3%; canonical
+  Gaussian blur candidate block 27 times out at 15 s. Neither is load-invalid.
+- Next action: lead resolves/freezes variance and canonical timeout protocols
+  before new qualification. No policy adoption or favorable rerun now.
 
 ## Scope and boundary
 
@@ -131,3 +131,36 @@ different host`; the inspected reason is the timeout, not host identity.
 No v2 policy was generated. The v1 unqualified artifact remains untouched.
 A diagnostic-only analysis of the two valid component calibrations will be
 recorded below; it cannot substitute for canonical qualification or promotion.
+
+
+## Valid component diagnostics (not a policy)
+
+Job 20261017T044845Z-decision-rule-b-component-diagnostics at a320b65f
+passes raw sample/load replay and source/host binding (exit 0 / 23 s).
+It uses the exact frozen 20,000-draw seed-0 bootstrap, without canonical
+statistics or any omission/imputation of the formal timeout. Its artifact is
+`quickjs-layout-calibration-diagnostic`, qualified/claim_eligible false.
+
+One of 76 screen cases fails precision: sentinel/recursive_call_tree has
+ratio 0.9984805608, 95% CI [0.9420116061, 1.0468012246], relative half-width
+0.0599450733 >0.03. All 30 pairs remain valid; this is a valid statistical
+failure, not a load-invalid replacement. No favorable repeat, 60-pair
+extension, outlier deletion, band widening or precision waiver is authorized.
+No other component case fails the frozen checks. All component lane CIs fit
+existing A2 envelopes; all 9 held-out program/lane precision checks pass.
+
+| Component lane | Ratio | 95% interval | Existing or diagnostic ceiling |
+| --- | ---: | --- | ---: |
+| broad | 1.001537836 | [0.999739931, 1.002973665] | 1.012949330 |
+| sentinel | 1.000153930 | [0.990211861, 1.008485743] | 1.015687002 |
+| external | 0.999664706 | [0.998456165, 1.000627944] | 1.007380238 |
+| portfolio | 1.000319118 | [0.999014938, 1.001381464] | 1.008262332 |
+| held-out | 1.001143444 | [0.999443171, 1.002899398] | 1.0029 (diagnostic only) |
+
+Held-out program diagnostic bands (rounded-up reciprocal CI envelope):
+acorn/parse 1.0088; esprima/parse 1.0030; marked/render 1.0076;
+mustache/render 1.0100; handlebars/render 1.0066; crypto-js/hash 1.0053;
+d3-array/aggregate 1.0042; ramda/pipeline 1.0065; decimal.js/arith 1.0038.
+They are measured component results, not adopted promotion ceilings. All
+A2 case/lane policy values and the frozen unqualified v1 artifact are unchanged.
+T055 cannot close as adopted; both blockers need a separately authorized plan.
