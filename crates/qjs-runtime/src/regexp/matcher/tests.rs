@@ -587,6 +587,70 @@ fn lazy_quantifiers_try_shorter_matches_first() {
 }
 
 #[test]
+fn lazy_simple_atom_requires_its_minimum_before_the_continuation() {
+    assert!(regexp_match_range("^a{3,}?$", "aa", 0, false, false, false).is_none());
+    let matched = regexp_match_range("a{2,}?", "aaaa", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 2));
+    let matched = regexp_match_range("^a{2,}?$", "aaaa", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 4));
+    let matched = regexp_match_range("a{0}?b", "ab", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (1, 2));
+}
+
+#[test]
+fn lazy_simple_atom_stops_at_its_upper_bound_and_first_atom_failure() {
+    // From index 0 the lazy run may not exceed two repetitions, so the match
+    // starts one position later.
+    let matched = regexp_match_range("a{1,2}?b", "aaab", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (1, 4));
+    // The class run ends at `x`; the continuation never sees a later `;`.
+    assert!(regexp_match_range("^[^x]*?;", "abx;", 0, false, false, false).is_none());
+}
+
+#[test]
+fn lazy_simple_atom_continuations_keep_captures_backreferences_and_lookahead() {
+    let matched =
+        regexp_match_range(r#""([^]*?)""#, r#"x"ab"cd""#, 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (1, 5));
+    assert_eq!(matched.captures, vec![Some((2, 4))]);
+
+    let matched = regexp_match_range(r"(\w+?)=\1;", "ab=ab;", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 6));
+    assert_eq!(matched.captures, vec![Some((0, 2))]);
+
+    let matched = regexp_match_range(r"[^]*?(?=;)", "abc;", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 3));
+    let matched = regexp_match_range(r"[\s\S]*?(?!a)", "aab", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 2));
+}
+
+#[test]
+fn lazy_simple_atom_advances_by_code_point_in_unicode_mode() {
+    let pair = format!(
+        "{}{}",
+        string_from_code_unit(0xD83D),
+        string_from_code_unit(0xDE00)
+    );
+    let input = format!("{pair}{pair}x");
+    let matched = regexp_match_range(r"^(.+?)x$", &input, 0, false, true, false).unwrap();
+    assert_eq!(matched.end, input.chars().count());
+    assert_eq!(matched.captures, vec![Some((0, input.chars().count() - 1))]);
+    // Without `u` the same lazy dot steps one code unit and stops after one
+    // half of the first pair.
+    let matched = regexp_match_range(r"^.+?", &input, 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 1));
+}
+
+#[test]
+fn lazy_simple_atom_at_a_sticky_start_matches_only_from_that_index() {
+    let input = crate::JsString::from("ab;cd;");
+    let matched = regexp_match_at("[^x]*?;", &input, 3, false, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (3, 6));
+    let input = crate::JsString::from("ab;cdx");
+    assert!(regexp_match_at("[^x]*?;", &input, 3, false, false, false, false).is_none());
+}
+
+#[test]
 fn nested_lazy_quantified_groups_prune_duplicate_states() {
     let input = "<html>\n<body onXXX=\"alert(event.type);\">\n<p>Kibology for all</p>\n<p>All for Kibology</p>\n</body>\n</html>";
     let matched =
