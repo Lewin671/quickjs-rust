@@ -88,6 +88,8 @@ outcome column says what happened, not what to do next.
 
 ## Other Records In `archive/`
 
+- T057: [preliminary development baseline](archive/T057-development-baseline.md), before policy v3 qualification.
+
 - T055: [qualified policy adoption](archive/T055-layout-noise-control.md), [feedback-2 record](archive/T055-feedback-2-qualification.md), [feedback-1 record](archive/T055-feedback-1-qualification.md), [complete A2 data](archive/T055-phase-a2-data.md) and [B frozen plans/blocked qualification log](archive/T055-phase-b-plan-and-log.md).
 
 - T055 phase A: [superseded frozen plan](archive/T055-phase-a-plan.md) and [results](archive/T055-phase-a-log.md); static/correctness pass, invalid retired-sampler timing.

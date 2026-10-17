@@ -6,10 +6,10 @@
   no policy v3 is published and no runtime code changed.
 - Verified at: tooling `9cb73da7`, 2026-10-17; 586-test staged fast gate
   (83.259 s), context/file-size/whitespace and shell syntax pass; full retry queued.
-- Evidence: frozen contract below; no new calibration observations yet.
-- Unresolved: collectors/replay/tests, development calibration, qualification.
-- Next action: obtain the reference-derived timeout manifest and dispatch
-  frozen calibration after the queued full gate and matrix audit.
+- Evidence: frozen contract below; [preliminary baseline](archive/T057-development-baseline.md).
+- Unresolved: queued A2/A/A/formal/power/qualification; no policy v3 yet.
+- Next action: fetch/replay the frozen calibration phases and publish only
+  a qualified policy, then resume the original T057 brief.
 
 ## Frozen calibration contract (2026-10-17, before timing)
 
@@ -172,3 +172,19 @@ No full pass or Test262 result is claimed yet for this tooling delta.
 
 The final local gate has 586 passing tests, including both A2 estimators,
 source/seed hash binding and v2 control scope when newer bundle metadata exists.
+
+## Calibration dispatch checkpoint
+
+Full retry `20261017T084357Z-t057-development-tooling-full-path-fixed` passed
+at 9cb73da7: exit 0 / 173 s, 586 tool tests, preceding Rust checks,
+5170 Test262 subset cases, and 91 plans independently checked. Manifest/data
+commit fd5c87c2 passed its staged gate (586 tests / 73.068 s).
+All frozen phases below are queued at fd5c87c2; no runtime implementation:
+
+| Job (20261017 prefix) | Frozen phase |
+| --- | --- |
+| `T095816Z-t057-v3-development-a2` | Six placements, 5 pairs, freeze extension bands. |
+| `T095816Z-t057-v3-development-aa30` | 30-pair development A/A and automatic power. |
+| `T095817Z-t057-v3-formal-aa30` | Sealed 86-case, 30-block workers-4 A/A. |
+| `T095817Z-t057-v3-formal-power` | Automatic retained formal case continuation. |
+| `T095818Z-t057-v3-qualify` | Replay all inputs; write policy only with its actual qualification state. |
