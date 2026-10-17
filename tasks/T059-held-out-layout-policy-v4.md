@@ -98,10 +98,31 @@ the chain `candidate-base`. `decide --formal-continuation` replays the
 latest chain per case; case statistics use all blocks, lanes keep the
 original joint 30 blocks. A precise case cannot be continued.
 
-## Dispatch (tooling `1228aa64`, behind T056's running screen)
+## Dispatch and frozen seed
 
-| Job | Frozen phase |
-| --- | --- |
-| `20261017T205859Z-t059-v4-heldout-a2` | Replay reused inputs, held-out A2 (6 x 5 pairs), freeze seed (timed). |
-| `20261017T205900Z-t059-v4-heldout-aa30` | Fresh 30-pair held-out A/A and automatic power (timed). |
-| `20261017T205901Z-t059-v4-qualify` | Replay all inputs; write v4 with its actual state (no timing). |
+Tooling `1228aa64`. A2 job `20261017T205859Z-t059-v4-heldout-a2`: exit 0 /
+3565 s, no DISTURBED; reused inputs replayed and every v3 held-out band and
+the 1.0029 ceiling reproduced from their A/A. Seed SHA-256
+`c1ee591ffa22edf63933daa113e15ba1ecef5a5fcb30b0dd6d56be7019923a99`, frozen
+before the qualification A/A:
+
+| Program | B_i (v3) | I_i |
+| --- | --- | --- |
+| acorn/parse | 1.025025 (1.0088) | 1.0060 |
+| crypto-js/hash | 1.025025 (1.0053) | 1.0021 |
+| d3-array/aggregate | 1.025289 (1.0042) | 1.0021 |
+| decimal.js/arith | 1.025025 (1.0038) | 1.0021 |
+| esprima/parse | 1.025025 (1.0030) | 1.0086 |
+| handlebars/render | 1.035681 (1.0066) | 1.0021 |
+| marked/render | 1.025025 (1.0076) | 1.0021 |
+| mustache/render | 1.027152 (1.0100) | 1.0021 |
+| ramda/pipeline | 1.025025 (1.0065) | 1.0021 |
+
+Held-out lane ceiling 1.005018 (v3 1.0029). 1.025025 is the global A2 median
+bias floor that every v3 selection case already carries.
+
+The first A/A/qualify submissions (`20261017T205900Z`, `20261017T205901Z`)
+were cancelled while queued, unmeasured, to pick up main's wall-clock settle
+fix (`f1dc1032`, merged as `7bc826bb`); replacements
+`20261017T223239Z-t059-v4-heldout-aa30-r2` (timed) and
+`20261017T223240Z-t059-v4-qualify-r2` (no timing) run at `7bc826bb`.
