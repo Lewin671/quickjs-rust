@@ -3,16 +3,16 @@
 - Status: active; feedback-1 authorizes pair-level disturbance recovery.
 - Implementation: present; versioned host policy v1 is unqualified and cannot
   be used for a new promotion. No runtime engine change.
-- Verified at: 3a66cda9, 2026-10-16; iMac full gate passes (166 s), 523 benchmark
-  tests. Base-main fast/context checks pass. Fresh six-variant build/audit,
-  5170 subset and 248 NG fixtures pass.
+- Verified at: 5d255e5e staged fast gate, 2026-10-16; 531 benchmark tests,
+  fmt/clippy/context/shell pass. Full iMac gate is running. Prior builder
+  f2fb8067 six-variant audit, 5170 subset and 248 NG fixtures pass.
 - Evidence: [B frozen plans and log](archive/T055-phase-b-plan-and-log.md),
   [A2 data](archive/T055-phase-a2-data.md),
   [unqualified policy v1](../benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v1.json).
-- Unresolved: no valid B qualification yet; Spotlight was still enabled at
-  the pre-implementation check. Photo/media analysis disable flags confirmed.
-- Next action: implement/test the frozen recovery protocol below, recheck
-  indexing, then queue fresh 76x30, 9x30 and canonical 30-block calibrations.
+- Unresolved: no valid B qualification yet. Spotlight is now confirmed
+  disabled; photo/media analysis disable flags confirmed.
+- Next action: finish full gate, then queue fresh 76x30, 9x30 and canonical
+  30-block calibrations at the frozen recovery implementation.
 
 ## Scope and boundary
 
@@ -79,3 +79,13 @@ flags through the queue. Indexing must be disabled before starting timing;
 otherwise stop without measurements. Qualification publishes a new v2 artifact;
 v1 and the original B log remain immutable. Document actual jobs and decisions
 in this active task before archiving the completed outcome.
+
+
+## Feedback-1 execution record
+
+Pair-recovery implementation: 5d255e5e. Staged fast gate: 531 tests pass;
+focused overlap/guard/cap/conservation tests pass. Host readback initially
+showed indexing enabled, then disabled before any new timing. Both approved
+photo/media service disable flags are true. Full no-timing gate job:
+20261017T022339Z-decision-rule-b-pair-full-check (pending). New timing jobs
+will use 5d255e5e, never the older collectors or their invalid samples.
