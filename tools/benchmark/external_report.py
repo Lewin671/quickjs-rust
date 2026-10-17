@@ -186,13 +186,30 @@ def _report(
 
 
 
-def replay(path: Path, manifest: Manifest) -> dict[str, Any]:
-    """Validate the physical plan and replay a complete raw run without binaries."""
+def replay(
+    path: Path,
+    manifest: Manifest,
+    artifact_type: str = "quickjs-external-preview-report",
+    status: Any | None = None,
+    report: Any | None = None,
+) -> dict[str, Any]:
+    """Validate the physical plan and replay a complete raw run without binaries.
+
+    `status` and `report` are the lane's own sample contract and report shape,
+    as `Lane` carries them: the external lane accepts the bare sentinel and
+    reports the external artifact, the npm lanes accept a pinned checksum
+    followed by it and add their own role and checksum per case.
+    """
     from dataclasses import replace
     from .external_preview import ExternalPreviewError, _sample_status
     from .performance_schema import _integer, _sha256, _unique_object, _reject_constant
     from .planning import role_orders
     from .process import ProcessResult
+
+    sample_status = status or (lambda result, role, case: _sample_status(result, role))
+    build_report = report or (
+        lambda manifest, records: _report(manifest, records, artifact_type=artifact_type)
+    )
 
     raw = path.read_bytes()
     records = [json.loads(line, object_pairs_hook=_unique_object,
@@ -251,10 +268,10 @@ def replay(path: Path, manifest: Manifest) -> dict[str, Any]:
             raise ExternalPreviewError("external raw: incorrect shell adapter")
         fields = ProcessResult.__dataclass_fields__
         result = ProcessResult(**{key: row[key] for key in fields})
-        status, error = _sample_status(result, role)
-        if (status, error) != (row.get("status"), row.get("error")):
+        verdict, error = sample_status(result, role, case)
+        if (verdict, error) != (row.get("status"), row.get("error")):
             raise ExternalPreviewError("external raw: result status does not match output")
-        return status
+        return verdict
 
     for si, suite in enumerate(manifest.suites):
         for ci, case in enumerate(suite.cases):
@@ -273,6 +290,6 @@ def replay(path: Path, manifest: Manifest) -> dict[str, Any]:
                     take(suite, case, "measurement", block, order, role)
     if cursor != len(records):
         raise ExternalPreviewError("external raw: extra records after complete plan")
-    report = _report(manifest, records)
+    report = build_report(manifest, records)
     report["input"] = {"sha256": hashlib.sha256(raw).hexdigest(), "byte_length": len(raw)}
     return report

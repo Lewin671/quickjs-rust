@@ -14,12 +14,11 @@ from types import SimpleNamespace
 from tools.benchmark.external_preview import SENTINEL, SourceFile, _bundle_source
 from tools.benchmark.held_out import (
     MANIFEST_PATH,
-    _extract_member,
-    _verify_integrity,
     held_out_status,
     load_held_out_manifest,
     opportunity_ids,
 )
+from tools.benchmark.npm_lane import _extract_member, _verify_integrity
 from tools.benchmark.performance_decision import (
     PerformanceDecisionError,
     _external_entries,

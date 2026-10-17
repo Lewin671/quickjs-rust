@@ -72,6 +72,9 @@ artifacts mean.
 - `held-out-performance-preview.sh`: audits, fetches, or runs the pinned
   held-out acceptance lane of third-party npm libraries, which never selects
   work. Benchmarking.
+- `development-performance-preview.sh`: audits, fetches, or runs the pinned
+  development lane of third-party npm libraries, which may be profiled and may
+  rank in the opportunity queue. Benchmarking.
 - `external-corpus-audit.sh`: validates the external-corpus registry.
   Benchmarking.
 - `benchmark.sh`, `benchmark-report.sh`: run the versioned benchmark manifest

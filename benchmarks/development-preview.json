@@ -1,0 +1,426 @@
+{
+  "claim_eligible": false,
+  "measurement": {
+    "blocks": 3,
+    "metric": "outer_process_wall_time",
+    "order": "seeded_role_rotation",
+    "phase_boundary": "before_process_spawn_to_wait_return",
+    "seed": 20261017,
+    "timeout_seconds": 60
+  },
+  "preview_id": "quickjs-development-preview-v1",
+  "role": "development",
+  "schema_version": 1,
+  "suites": [
+    {
+      "cases": [
+        {
+          "driver": {
+            "path": "benchmarks/development/lodash.js",
+            "sha256": "85625be9ecc562b441a5c11618dc443089f2b8785df5a1d22b862dc0b6cfebdf"
+          },
+          "expected_checksum": "dd804f67",
+          "files": [
+            {
+              "path": "lodash.js",
+              "sha256": "f5465f55566bf544aad0a31c6135889ca1ed81eea8f53ec61c6cbe86926f07cf"
+            }
+          ],
+          "id": "transform",
+          "role": "development"
+        }
+      ],
+      "id": "lodash",
+      "license_review": {
+        "evidence_urls": [
+          "https://www.npmjs.com/package/lodash/v/4.18.1"
+        ],
+        "redistribute_source_in_artifact": false,
+        "status": "execution-only"
+      },
+      "name": "lodash",
+      "package": {
+        "integrity": "sha512-dMInicTPVE8d1e5otfwmmjlxkZoUpiVLwyeTdUsi/Caj/gfzzblBcCE5sRHV/AsjuCmxWrte2TNGSYuCeCq+0Q==",
+        "license": "MIT",
+        "license_evidence_urls": [
+          "https://www.npmjs.com/package/lodash/v/4.18.1"
+        ],
+        "name": "lodash",
+        "registry": "npm",
+        "sha256": "696942c2a488c9d7428e9ca5f12ccf03b52de01dcdbfe4d4751d392f0491ae16",
+        "tarball_url": "https://registry.npmjs.org/lodash/-/lodash-4.18.1.tgz",
+        "version": "4.18.1"
+      },
+      "reporting_rule": "Development lane: may be profiled and may rank in the opportunity queue; never a leaderboard score and never an official benchmark result."
+    },
+    {
+      "cases": [
+        {
+          "driver": {
+            "path": "benchmarks/development/meriyah.js",
+            "sha256": "f5fae403bd9f3c40ed6f1a3edf8732961b9899b91c53915f7b321a9db47063e2"
+          },
+          "expected_checksum": "6482be",
+          "files": [
+            {
+              "path": "dist/meriyah.umd.js",
+              "sha256": "b8315d0d9994cdd0936662f07b928c62dd21cbabdfeaa6b8eb70a10b4daecedf"
+            }
+          ],
+          "id": "parse",
+          "role": "development"
+        }
+      ],
+      "id": "meriyah",
+      "license_review": {
+        "evidence_urls": [
+          "https://www.npmjs.com/package/meriyah/v/7.4.0"
+        ],
+        "redistribute_source_in_artifact": false,
+        "status": "execution-only"
+      },
+      "name": "meriyah",
+      "package": {
+        "integrity": "sha512-4npg8C/aeb+kOZo8/6XZrwzo+neA+NQU7U6BHP3KxqTzprtYQb+Fs752GRuvsJLREvblRjQng4F76DEe2QKblQ==",
+        "license": "ISC",
+        "license_evidence_urls": [
+          "https://www.npmjs.com/package/meriyah/v/7.4.0"
+        ],
+        "name": "meriyah",
+        "registry": "npm",
+        "sha256": "62d8210fc778e731a6cf2fc8e61f1e30e007a1d2f0f2579fcee27832b960b26f",
+        "tarball_url": "https://registry.npmjs.org/meriyah/-/meriyah-7.4.0.tgz",
+        "version": "7.4.0"
+      },
+      "reporting_rule": "Development lane: may be profiled and may rank in the opportunity queue; never a leaderboard score and never an official benchmark result."
+    },
+    {
+      "cases": [
+        {
+          "driver": {
+            "path": "benchmarks/development/immutable.js",
+            "sha256": "a3e3ae52ceccb31eac27785a131f8024ea44017392dc20511c5b88b44ee25c00"
+          },
+          "expected_checksum": "2fd9ba00",
+          "files": [
+            {
+              "path": "dist/immutable.js",
+              "sha256": "357518ba2cab55c9990e60550dadddb8c39108bfe44ace61809af254a34d5d54"
+            }
+          ],
+          "id": "persistent",
+          "role": "development"
+        }
+      ],
+      "id": "immutable",
+      "license_review": {
+        "evidence_urls": [
+          "https://www.npmjs.com/package/immutable/v/5.1.9"
+        ],
+        "redistribute_source_in_artifact": false,
+        "status": "execution-only"
+      },
+      "name": "immutable",
+      "package": {
+        "integrity": "sha512-m8nVez3rwrgmWxtLMt1ZYXB2Lv7OKYn/disyxAlSDYAlKSlFoPPfIAmAM/M5xqL4m4C/wAPw7S2/CNaUii1Hxg==",
+        "license": "MIT",
+        "license_evidence_urls": [
+          "https://www.npmjs.com/package/immutable/v/5.1.9"
+        ],
+        "name": "immutable",
+        "registry": "npm",
+        "sha256": "9481d33c209e07f82933a0f8132348ee9325d72ce196ebc47a93b9b2703f3068",
+        "tarball_url": "https://registry.npmjs.org/immutable/-/immutable-5.1.9.tgz",
+        "version": "5.1.9"
+      },
+      "reporting_rule": "Development lane: may be profiled and may rank in the opportunity queue; never a leaderboard score and never an official benchmark result."
+    },
+    {
+      "cases": [
+        {
+          "driver": {
+            "path": "benchmarks/development/moment.js",
+            "sha256": "7d9b0725b4626a4c2526da70e5c0337f1d76fd493ba87b0a6fbdd6e1f1d218ec"
+          },
+          "expected_checksum": "77a28ccb",
+          "files": [
+            {
+              "path": "moment.js",
+              "sha256": "7dc0a51c32dae143f2eade235145dfd6a7756388c0f0bf409fa373dd6c233629"
+            }
+          ],
+          "id": "dates",
+          "role": "development"
+        }
+      ],
+      "id": "moment",
+      "license_review": {
+        "evidence_urls": [
+          "https://www.npmjs.com/package/moment/v/2.30.1"
+        ],
+        "redistribute_source_in_artifact": false,
+        "status": "execution-only"
+      },
+      "name": "moment",
+      "package": {
+        "integrity": "sha512-uEmtNhbDOrWPFS+hdjFCBfy9f2YoyzRpwcl+DqpC6taX21FzsTLQVbMV/W7PzNSX6x/bhC1zA3c2UQ5NzH6how==",
+        "license": "MIT",
+        "license_evidence_urls": [
+          "https://www.npmjs.com/package/moment/v/2.30.1"
+        ],
+        "name": "moment",
+        "registry": "npm",
+        "sha256": "52219a9fee5e1faade4c72536c173c54cedd5e2619272dd0c251a30aeafcde8c",
+        "tarball_url": "https://registry.npmjs.org/moment/-/moment-2.30.1.tgz",
+        "version": "2.30.1"
+      },
+      "reporting_rule": "Development lane: may be profiled and may rank in the opportunity queue; never a leaderboard score and never an official benchmark result."
+    },
+    {
+      "cases": [
+        {
+          "driver": {
+            "path": "benchmarks/development/diff.js",
+            "sha256": "35dd4905f6b6c95c9ed9e2d601b41d22fd9503290d223a7c489a835761dc7b63"
+          },
+          "expected_checksum": "9cf0f84a",
+          "files": [
+            {
+              "path": "dist/diff.js",
+              "sha256": "5773c7efb34715bb9a9b6a9ebf5b0ff00f85f9efa6d9fd69fc65e181364f7b2e"
+            }
+          ],
+          "id": "compare",
+          "role": "development"
+        }
+      ],
+      "id": "diff",
+      "license_review": {
+        "evidence_urls": [
+          "https://www.npmjs.com/package/diff/v/9.0.0"
+        ],
+        "redistribute_source_in_artifact": false,
+        "status": "execution-only"
+      },
+      "name": "diff",
+      "package": {
+        "integrity": "sha512-svtcdpS8CgJyqAjEQIXdb3OjhFVVYjzGAPO8WGCmRbrml64SPw/jJD4GoE98aR7r25A0XcgrK3F02yw9R/vhQw==",
+        "license": "BSD-3-Clause",
+        "license_evidence_urls": [
+          "https://www.npmjs.com/package/diff/v/9.0.0"
+        ],
+        "name": "diff",
+        "registry": "npm",
+        "sha256": "b898bf23c95594607576e25ddd4013f1d51ed0e862aaf0732815830c87b3b58f",
+        "tarball_url": "https://registry.npmjs.org/diff/-/diff-9.0.0.tgz",
+        "version": "9.0.0"
+      },
+      "reporting_rule": "Development lane: may be profiled and may rank in the opportunity queue; never a leaderboard score and never an official benchmark result."
+    },
+    {
+      "cases": [
+        {
+          "driver": {
+            "path": "benchmarks/development/papaparse.js",
+            "sha256": "7a54c3a9ed95aaf307cd12a46032cc216196a0f314ec5f912ee5b7df2844eea9"
+          },
+          "expected_checksum": "74046808",
+          "files": [
+            {
+              "path": "papaparse.js",
+              "sha256": "01d32cdc0b8ceced438f078c6859e16c8aefc0d3eb5fb06992df0d3f63666ba0"
+            }
+          ],
+          "id": "csv",
+          "role": "development"
+        }
+      ],
+      "id": "papaparse",
+      "license_review": {
+        "evidence_urls": [
+          "https://www.npmjs.com/package/papaparse/v/5.7.0"
+        ],
+        "redistribute_source_in_artifact": false,
+        "status": "execution-only"
+      },
+      "name": "papaparse",
+      "package": {
+        "integrity": "sha512-qBGxg/7Q3Kl9Wfhrz2Z74UnvnHTXLNG6jmKJFeBvP2+y4lV7So+7SR62+Zd47JvdrCkX+nDcnr0ObPzek/+6RA==",
+        "license": "MIT",
+        "license_evidence_urls": [
+          "https://www.npmjs.com/package/papaparse/v/5.7.0"
+        ],
+        "name": "papaparse",
+        "registry": "npm",
+        "sha256": "263bac53bab292390bcf2697a8c14f0bc382ab3c192fa088e1caa9a8241956b1",
+        "tarball_url": "https://registry.npmjs.org/papaparse/-/papaparse-5.7.0.tgz",
+        "version": "5.7.0"
+      },
+      "reporting_rule": "Development lane: may be profiled and may rank in the opportunity queue; never a leaderboard score and never an official benchmark result."
+    },
+    {
+      "cases": [
+        {
+          "driver": {
+            "path": "benchmarks/development/js-yaml.js",
+            "sha256": "75f6deaa83a94e5d99d599477fc05366a4ddcfeb522115de3e75fc86723764fb"
+          },
+          "expected_checksum": "7f1866a1",
+          "files": [
+            {
+              "path": "dist/js-yaml.js",
+              "sha256": "c738b0020702aa631abd8de23a902a3079d99d3060e44166955cb51f570881c4"
+            }
+          ],
+          "id": "document",
+          "role": "development"
+        }
+      ],
+      "id": "js-yaml",
+      "license_review": {
+        "evidence_urls": [
+          "https://www.npmjs.com/package/js-yaml/v/4.1.0"
+        ],
+        "redistribute_source_in_artifact": false,
+        "status": "execution-only"
+      },
+      "name": "js-yaml",
+      "package": {
+        "integrity": "sha512-wpxZs9NoxZaJESJGIZTyDEaYpl0FKSA+FB9aJiyemKhMwkxQg63h4T1KJgUGHpTqPDNRcmmYLugrRjJlBtWvRA==",
+        "license": "MIT",
+        "license_evidence_urls": [
+          "https://www.npmjs.com/package/js-yaml/v/4.1.0"
+        ],
+        "name": "js-yaml",
+        "registry": "npm",
+        "sha256": "0dae332559cf22b21c26ea70e732afd8303ff99412f9c3d9d209faa8882cf2ca",
+        "tarball_url": "https://registry.npmjs.org/js-yaml/-/js-yaml-4.1.0.tgz",
+        "version": "4.1.0"
+      },
+      "reporting_rule": "Development lane: may be profiled and may rank in the opportunity queue; never a leaderboard score and never an official benchmark result."
+    },
+    {
+      "cases": [
+        {
+          "driver": {
+            "path": "benchmarks/development/big.js",
+            "sha256": "4c69970416e076cadfef3467c946f86b94630a9d8d698dc3c3c0c33266f67766"
+          },
+          "expected_checksum": "d4940ea1",
+          "files": [
+            {
+              "path": "big.js",
+              "sha256": "ab26627cd4cb266a350217a86fe5e9b99ae6d1d3e2e5aafd0c31d0a3174ada39"
+            }
+          ],
+          "id": "arith",
+          "role": "development"
+        }
+      ],
+      "id": "big.js",
+      "license_review": {
+        "evidence_urls": [
+          "https://www.npmjs.com/package/big.js/v/6.2.2"
+        ],
+        "redistribute_source_in_artifact": false,
+        "status": "execution-only"
+      },
+      "name": "big.js",
+      "package": {
+        "integrity": "sha512-y/ie+Faknx7sZA5MfGA2xKlu0GDv8RWrXGsmlteyJQ2lvoKv9GBK/fpRMc2qlSoBAgNxrixICFCBefIq8WCQpQ==",
+        "license": "MIT",
+        "license_evidence_urls": [
+          "https://www.npmjs.com/package/big.js/v/6.2.2"
+        ],
+        "name": "big.js",
+        "registry": "npm",
+        "sha256": "62e015b705d95f3d6e5b1063e95cd8c130ccc0688962289465fbb4d28ebe4a98",
+        "tarball_url": "https://registry.npmjs.org/big.js/-/big.js-6.2.2.tgz",
+        "version": "6.2.2"
+      },
+      "reporting_rule": "Development lane: may be profiled and may rank in the opportunity queue; never a leaderboard score and never an official benchmark result."
+    },
+    {
+      "cases": [
+        {
+          "driver": {
+            "path": "benchmarks/development/matter-js.js",
+            "sha256": "a63cc776e6e18b4a0d442f659f4bf7d7f138913196c719b167de42b0ef505d33"
+          },
+          "expected_checksum": "8e0e844",
+          "files": [
+            {
+              "path": "build/matter.js",
+              "sha256": "016f108075a42e8bb8f75c43cf5b6d9f07b1d88857975ed9d96b0ede921416ce"
+            }
+          ],
+          "id": "simulate",
+          "role": "development"
+        }
+      ],
+      "id": "matter-js",
+      "license_review": {
+        "evidence_urls": [
+          "https://www.npmjs.com/package/matter-js/v/0.20.0"
+        ],
+        "redistribute_source_in_artifact": false,
+        "status": "execution-only"
+      },
+      "name": "matter-js",
+      "package": {
+        "integrity": "sha512-iC9fYR7zVT3HppNnsFsp9XOoQdQN2tUyfaKg4CHLH8bN+j6GT4Gw7IH2rP0tflAebrHFw730RR3DkVSZRX8hwA==",
+        "license": "MIT",
+        "license_evidence_urls": [
+          "https://www.npmjs.com/package/matter-js/v/0.20.0"
+        ],
+        "name": "matter-js",
+        "registry": "npm",
+        "sha256": "c2594c16b67adf76d32d9c4576a388a32cee80e5dfe2823cd3bf1b8fb93cc7f2",
+        "tarball_url": "https://registry.npmjs.org/matter-js/-/matter-js-0.20.0.tgz",
+        "version": "0.20.0"
+      },
+      "reporting_rule": "Development lane: may be profiled and may rank in the opportunity queue; never a leaderboard score and never an official benchmark result."
+    },
+    {
+      "cases": [
+        {
+          "driver": {
+            "path": "benchmarks/development/graphlib.js",
+            "sha256": "f1be6ffef4d2d10c47c8045047d6c87c33294306e8730b86b82af4ae15b28dee"
+          },
+          "expected_checksum": "e845d023",
+          "files": [
+            {
+              "path": "dist/graphlib.js",
+              "sha256": "08f8ad4107dd5665c27f8449c1d0aec179fbf34c9ab7c0ec1849f2eeb03d652e"
+            }
+          ],
+          "id": "paths",
+          "role": "development"
+        }
+      ],
+      "id": "graphlib",
+      "license_review": {
+        "evidence_urls": [
+          "https://www.npmjs.com/package/@dagrejs/graphlib/v/4.0.5"
+        ],
+        "redistribute_source_in_artifact": false,
+        "status": "execution-only"
+      },
+      "name": "graphlib",
+      "package": {
+        "integrity": "sha512-7xrBTqIts3o+PMUZX97wSc+7TUbW+/rULzGNCTP6yooNVDXbzw4Wutg/H/xOutTB/c/k0YqOAavgPh4/Zk9PFA==",
+        "license": "MIT",
+        "license_evidence_urls": [
+          "https://www.npmjs.com/package/@dagrejs/graphlib/v/4.0.5"
+        ],
+        "name": "@dagrejs/graphlib",
+        "registry": "npm",
+        "sha256": "a0fce2b8ccde6bb23b622242f70444972da50d5a629dacb374a1c34c00d43f48",
+        "tarball_url": "https://registry.npmjs.org/@dagrejs/graphlib/-/graphlib-4.0.5.tgz",
+        "version": "4.0.5"
+      },
+      "reporting_rule": "Development lane: may be profiled and may rank in the opportunity queue; never a leaderboard score and never an official benchmark result."
+    }
+  ]
+}

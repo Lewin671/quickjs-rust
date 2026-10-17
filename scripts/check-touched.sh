@@ -150,7 +150,7 @@ while IFS= read -r path; do
     crates/qjs-lexer/*) touches_lexer=1 ;;
     crates/qjs-ast/*) touches_ast=1 ;;
     crates/qjs-cli/*) touches_cli=1 ;;
-    benchmarks/*|.cargo/config.toml|tools/__init__.py|tools/benchmark/*|scripts/benchmark*.sh|scripts/resource-benchmark*.sh|scripts/lifecycle-bench.sh|scripts/external-corpus-audit.sh|scripts/performance-policy-audit.sh|scripts/performance-preview.sh|scripts/performance-decision.sh|scripts/perf-loop.sh|scripts/perf-compare.sh|scripts/held-out-performance-preview.sh|.github/workflows/performance-smoke.yml)
+    benchmarks/*|.cargo/config.toml|tools/__init__.py|tools/benchmark/*|scripts/benchmark*.sh|scripts/resource-benchmark*.sh|scripts/lifecycle-bench.sh|scripts/external-corpus-audit.sh|scripts/performance-policy-audit.sh|scripts/performance-preview.sh|scripts/performance-decision.sh|scripts/perf-loop.sh|scripts/perf-compare.sh|scripts/held-out-performance-preview.sh|scripts/development-performance-preview.sh|.github/workflows/performance-smoke.yml)
       touches_benchmark=1
       ;;
     tasks/performance-units/*.json)
@@ -222,7 +222,8 @@ if [ "$touches_benchmark" -eq 1 ]; then
     "$ROOT_DIR/scripts/performance-policy-audit.sh" \
     "$ROOT_DIR/scripts/performance-preview.sh" \
     "$ROOT_DIR/scripts/performance-decision.sh" \
-    "$ROOT_DIR/scripts/held-out-performance-preview.sh"
+    "$ROOT_DIR/scripts/held-out-performance-preview.sh" \
+    "$ROOT_DIR/scripts/development-performance-preview.sh"
 fi
 
 if [ "$touches_performance_unit" -eq 1 ]; then

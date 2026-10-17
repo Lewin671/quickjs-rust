@@ -14,23 +14,22 @@ from a fresh formal run and is not stored in the repository (step 1).
 | Sentinel | 6 cases, `benchmarks/generic-sentinels-manifest.json` | ns per operation of calls and property access whose callee, receiver or key varies at run time |
 | External | 45 cases in 3 suites, `benchmarks/external-preview.json` | whole-process wall time of pinned SunSpider, Kraken and JetStream 3 subset scripts |
 | Held-out | 9 cases, `benchmarks/held-out-preview.json` | whole-process wall time of pinned third-party npm libraries that never select work |
+| Development | 10 cases, `benchmarks/development-preview.json` | whole-process wall time of pinned third-party npm libraries that may select work |
 
 Broad cases are answered by whichever tier admits each loop, and that
 changes with the engine: do not assume a tier until its
 [execution counters](benchmarking.md#execution-counters) show it runs the
 path under test. The six sentinels are mandatory controls for every unit.
-External and held-out times include startup, parsing and shutdown; held-out is
-acceptance only and never a source of work.
+External and both npm lanes' times include startup, parsing and shutdown;
+held-out is acceptance only, while development cases may be profiled and ranked.
 
-- A **diagnostic screen** reports dual metrics and a screening verdict.
-  Retaining a unit still requires a complete formal decision.
-- A **formal run** is one sealed three-engine bundle from
-  `scripts/perf-compare.sh` at 30 or 60 blocks. `queue` and `decide` read
-  that bundle.
-- A **leaf unit** is one mechanism that must pay for itself within its
-  attempt budget. A **migration** (`"unit_kind": "migration"`) has stages
-  judged only against a regression budget; the payoff gate applies at the
-  last stage.
+- A **diagnostic screen** reports dual metrics and a screening verdict;
+  retaining a unit still requires a complete formal decision.
+- A **formal run** is one sealed three-engine bundle from `scripts/perf-compare.sh`
+  at 30 or 60 blocks; `queue` and `decide` read that bundle.
+- A **leaf unit** is one mechanism that must pay for itself within its attempt
+  budget. A **migration** (`"unit_kind": "migration"`) has stages judged only
+  against a regression budget; the payoff gate applies at the last stage.
 
 ## Prerequisites
 
@@ -65,12 +64,11 @@ acceptance only and never a source of work.
   is per checkout: measurements from different worktrees are not queued
   against each other, so run them one at a time.
 - Lanes side by side, where qualified. `perf-compare.sh --concurrent-lanes`
-  measures broad, sentinel and external at once, one process each; the
-  summary says so in `lane_schedule`. It still holds the lock, and nothing
-  else may run. `--workers N` instead shares the cases of all three lanes
-  among N processes, a case's three engines always in the same one
-  (`lane_schedule` is `workers-N`). Use either only on a host with an idle
-  core per process for which
+  measures broad, sentinel and external at once, one process each; the summary
+  says so in `lane_schedule`. It still holds the lock, and nothing else may
+  run. `--workers N` shares the cases of all three lanes among N processes, a
+  case's three engines always in the same one (`lane_schedule` is
+  `workers-N`). Use either only on a host with an idle core per process whose
   [T017](../tasks/T017-performance-benchmark-system.md) records a passing
   qualification of that schedule; a queue and the decisions made from it
   use one schedule.
@@ -87,14 +85,17 @@ Build the opportunity queue from a formal bundle at the starting revision:
   --broad-report target/comparison/<run>/report.json \
   --sentinel-report target/comparison/<run>/sentinel-report.json \
   --external-report target/comparison/<run>/external-report.json \
+  --development-report target/development/<lane-run>/development-report.json \
   --output target/comparison/<run>-queue.json
 ```
 
 If no bundle exists for the starting revision, run the comparison first;
 `--base` is then any earlier commit, normally the previous formal base.
-Use new output paths and reports from the summary's sealed directory. The queue ranks, per lane,
-cases whose candidate/QuickJS-NG ratio exceeds `--target-ratio` (default
-0.5). It names workloads to profile, not tactics.
+Use new output paths and reports from the summary's sealed directory. The queue
+ranks, per lane, cases whose candidate/QuickJS-NG ratio exceeds `--target-ratio`
+(default 0.5) and names workloads to profile, not tactics; a
+`--development-report` from the same host and executables, beside its own raw and
+manifest files, adds the development channel.
 
 ## 2. Profile, then freeze the plan
 
@@ -134,10 +135,9 @@ runtime code, commit the plan, and add its row to
 
 ## 3. Implement and screen
 
-New performance units use schema 3 and freeze `layout_gate`: the policy
-artifact path and SHA-256, mechanism class, memory-sensitive wall targets,
-K=6 requirement and measurement budget. Schema 1/2 plans remain readable for
-historical decisions; do not reuse them to start a new unit.
+New units use schema 3 and freeze `layout_gate`: policy path and SHA-256,
+mechanism class, memory-sensitive wall targets, K=6 and measurement budget.
+Schema 1/2 plans stay readable for historical decisions, never for a new unit.
 
 ```sh
 ./scripts/perf-loop.sh --plan tasks/performance-units/<unit>.json \
