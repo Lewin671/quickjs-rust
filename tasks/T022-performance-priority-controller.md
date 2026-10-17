@@ -3,7 +3,7 @@
 - Status: active; standing controller, with schema-3 tooling awaiting host qualification.
 - Implementation: present; new layout/held-out gates are fail-closed until
   [T055](T055-layout-noise-control.md) produces a qualified policy.
-- Verified at: ea355b49, 2026-10-16, final iMac full gate and 532 tool tests.
+- Verified at: 1600baa9, 2026-10-16, final iMac full gate and 543 tool tests.
   Legacy retained decisions remain verified only at their recorded revisions.
 - Evidence: T055 owns B jobs and host-band status; [T037](T037-integration-batch-1.md)
   owns historical unstable-base evidence and exact retained outputs.

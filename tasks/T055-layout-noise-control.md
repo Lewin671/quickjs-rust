@@ -2,8 +2,8 @@
 
 - Status: blocked; feedback-2 protocols complete, new canonical precision failure.
 - Implementation: present; uniform timeout, retained power cohorts and cap fallback. No engine change.
-- Verified at: 3c082e6a fast gate (536 tests), a1ec956e fast gate (543 tests);
-  prior full ea355b49 passed 5170 subset. New full gate follows qualification.
+- Verified at: 1600baa9 final iMac full gate, 543 tool tests and 5170 subset,
+  exit0 / 165 s. Base-main fast/context pass; final record-only gate passes.
 - Evidence: [feedback-1 record](archive/T055-feedback-1-qualification.md),
   [original B plan/log](archive/T055-phase-b-plan-and-log.md),
   [A2 data](archive/T055-phase-a2-data.md).
@@ -154,5 +154,13 @@ uniform hang rule retains the tail rather than claiming an engine fix.
 
 Final base-main fast gate at 1600baa9 passes 543 tests (73.632 s),
 fmt/clippy/context/shell checks. Final full no-timing job
-20261017T053457Z-decision-rule-b-feedback2-final-check at 1600baa9 is running;
-its result and final diagnostic replays will be recorded before handoff.
+20261017T053457Z-decision-rule-b-feedback2-final-check at 1600baa9 passes
+(exit0 / 165 s): 543 benchmark tests, Rust/workspace/feature checks, script /
+hook / context / size guards and 5170 Test262 subset cases. Final record-only
+staged/context gate also passes. No focused semantic slice matches tooling-only
+changes. Runtime/parser/lexer sources remain unchanged from 4c9f959e.
+
+Final T053/T054 replays use explicitly unqualified diagnostic A2 bands:
+control event and wall event respectively, no direct rejection, missing K=6.
+Their rejected standings and exhausted budgets are unchanged. No timing task
+remains scheduled; the worktree/branch stays available for the lead decision.
