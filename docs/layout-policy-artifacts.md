@@ -40,7 +40,7 @@ held-out has one natural screen of 30 pairs. Raw case packets retain every
 sample, separate calibration, per-role costs and paired ratios. Replay
 recomputes all ratios, validates complete inventories and binds natural
 binary hashes/revisions to the sealed formal bundle. It refuses missing,
-short/nonpositive increments, altered paths, checksums, samples or hashes.
+short/nonpositive valid increments, altered paths, checksums, samples or hashes.
 `panel.json` stays immutable; completion adds `complete.json`.
 
 Decision schema 5 carries `layout_verdict`, raw-replayed formal statistics
@@ -86,3 +86,35 @@ and its adjacent SHA-256 sidecar preserve the current evidence status.
 Screen/held-out A/A binds the frozen band-source executable; canonical
 formal A/A binds its own declared revision and byte-identical two roles.
 A different source revision is not required to have the old binary hash.
+
+
+## Load-only pair recovery
+
+New layout collectors require the serialized timing queue's `BENCH_OUT` and
+adjacent `intruders.log`. Raw packets add `attempts` (cumulative alternating
+index, epoch window, process samples), `rounds` (append count and sealed load
+snapshot), `valid_attempt_indices`, and `complete`. Original `samples`, `costs`
+and `ratios` contain exactly the required valid pairs. A JSONL stream retains
+all processes, including interrupted/failed rounds and separate calibration.
+An invalid-load pair's metrics never choose its replacement; correctness and
+positive sample checks still cover every process. A valid short/nonpositive
+increment fails instead of being replaced.
+
+CPU threshold is the existing monitor's >=200% aggregate per UTC second;
+process inclusion remains >=30% and cadence 5 seconds. A pair is invalid if
+its first-start/last-end window, expanded by 2 seconds, intersects the heavy
+sample's one-second timestamp bucket. After each round wait 8 seconds before
+sealing load; append exactly the missing number, continuing role alternation.
+More than 20% invalid attempts per case or run, or a >=60-second heavy cluster
+(sample gaps <=6 seconds), invalidates the whole run. Retain it and replace
+whole; independent jobs never pool. Timestamp order, guard completion, original
+and appended counts, sample/cost conservation, append-only load history and
+caps are replayed. Run summaries seal the final load snapshot and counts;
+panels retain separate run bindings for natural and completion collections.
+Legacy raw packets retain their frozen whole-run validity rules.
+
+Record user-managed indexing/service state before timing; current qualification
+requires Spotlight disabled and photo/media analysis disable flags. Tools do
+not change OS services. Canonical multi-worker perf-compare has no sealed
+pair-window/retry contract and retains whole-run replacement on disturbance.
+Task T055 owns the frozen calibration attempt budget and campaign evidence.

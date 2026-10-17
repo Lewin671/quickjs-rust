@@ -1,64 +1,16 @@
 """Lossless screen samples and costs, with calibration kept out of measured pairs.
 
-The recorder wraps the existing screen sampler outside timed subprocesses.
-It refuses incomplete/nonpositive/short increments instead of filtering pairs.
+The queue-backed recorder retains load-invalid attempts and appends rounds.
+Valid nonpositive/short increments fail; measured values never select pairs.
 """
 from __future__ import annotations
 
-import dataclasses
-import json
 from pathlib import Path
 
 from . import screen
-from .layout_identity import write_json
 
 
-def measure(case, candidate, base, pairs, tool, timeout, output: Path):
-    samples = []
-    original = screen.sample
-    raw_file = output.with_suffix('.jsonl').open('x', encoding='utf-8')
-
-    def record(*args, **kwargs):
-        sample = original(*args, **kwargs)
-        row = {'argv': list(args[1]), 'sample': dataclasses.asdict(sample)}
-        samples.append(row)
-        raw_file.write(json.dumps(row) + '\n')
-        raw_file.flush()
-        return sample
-
-    screen.sample = record
-    try:
-        result = screen.screen_case(case, candidate, base, pairs, tool, timeout)
-    finally:
-        screen.sample = original
-        raw_file.close()
-    internal = case.kind == 'internal'
-    count = pairs * (4 if internal else 2)
-    measured = samples[-count:]
-    if len(measured) != count:
-        raise screen.ScreenError(f'{case.id}: incomplete samples')
-    costs = {role: {m: [] for m in ('wall_ns', 'instructions')} for role in ('base', 'candidate')}
-    cursor = 0
-    for pair in range(pairs):
-        for role in (('base', 'candidate') if pair % 2 == 0 else ('candidate', 'base')):
-            rows = measured[cursor:cursor + (2 if internal else 1)]
-            cursor += len(rows)
-            for metric in ('wall_ns', 'instructions'):
-                value = rows[-1]['sample'][metric]
-                if internal:
-                    value -= rows[0]['sample'][metric]
-                if value <= 0 or (internal and metric == 'wall_ns' and value < screen.MIN_INCREMENT_NS):
-                    raise screen.ScreenError(f'{case.id}: invalid {role} {metric} increment {value}')
-                costs[role][metric].append(value)
-    for metric in ('wall_ns', 'instructions'):
-        ratios = [c / b for c, b in zip(costs['candidate'][metric], costs['base'][metric])]
-        if ratios != result.ratios[metric] or len(ratios) != pairs:
-            raise screen.ScreenError(f'{case.id}: ratio/sample conservation failed')
-    packet = {'id': case.id, 'kind': case.kind, 'iterations': result.iterations,
-              'calibration': samples[:-count], 'samples': measured, 'costs': costs,
-              'ratios': result.ratios}
-    write_json(output, packet)
-    return result
+from .pair_recording import measure
 
 
 def held_out_cases(cache: Path, work: Path):

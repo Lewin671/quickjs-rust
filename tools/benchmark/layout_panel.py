@@ -32,6 +32,9 @@ def matrix(path):
 
 
 def measure_panel(base_path, candidate_path, output, pairs=5, held=False, natural=False, complete=False):
+    from .pair_disturbance import Monitor, quieting_preflight, verify_run
+    quieting = quieting_preflight()
+    monitor = Monitor.from_queue()
     host = host_identity()
     base, candidate = matrix(base_path), matrix(candidate_path)
     if (base['host'] != host or candidate['host'] != host
@@ -68,14 +71,20 @@ def measure_panel(base_path, candidate_path, output, pairs=5, held=False, natura
             for case in cases:
                 print('PANEL', k, case.id, flush=True)
                 result = measure(case, binaries[6+k], binaries[k], pairs, tool, 120,
-                                 folder / (case.id.replace('/', '--') + '.json'))
+                                 folder / (case.id.replace('/', '--') + '.json'), monitor)
                 import dataclasses
                 results.append(dataclasses.asdict(result))
             packet = {'pairs': pairs, 'cases': results}
             packets.append(packet)
+    disturbance = monitor.snapshot()
+    new_files = list(output.glob('variant[1-5]/*.json')) if complete else list(output.glob('variant*/*.json'))
+    counts = verify_run([json.loads(p.read_text()) for p in new_files], disturbance)
     evidence = {'schema_version': 1, 'artifact_type': 'quickjs-layout-panel',
                 'host': host, 'host_node': platform.node(), 'base': base, 'candidate': candidate, 'held_out': held,
-                'pairs': pairs, 'panels': packets, 'launch_preflight': preflight,
+                'pairs': pairs, 'panels': packets, 'quieting': quieting,
+                'disturbance_runs': [*(previous.get('disturbance_runs', []) if previous else []),
+                    {'variants': list(range(1,6)) if complete else [0] if held or natural else list(range(6)),
+                     'load': disturbance, 'counts': counts}], 'launch_preflight': preflight,
                 'case_files': {str(p.relative_to(output)): digest(p)
                                for p in output.glob('variant*/*.json')}}
     write_json(output / ('complete.json' if complete else 'panel.json'), evidence)

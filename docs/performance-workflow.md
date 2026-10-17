@@ -178,12 +178,12 @@ output appends variants 1..5 and writes `complete.json`. Keep its original
 `panel.json` and raw files. `--held-out --pairs 30` with a fresh output
 measures mandatory promotion acceptance after candidate/targets are frozen.
 Never select work or change targets from held-out results.
-
-A valid failed screen consumes the plan's attempt. Record every attempt,
-including events and their completed panel, in its owning task. Missing
-panels or instruction alerts must be resolved within the frozen budget;
-no tool counts attempts. Invalid or DISTURBED jobs are retained and replaced
-in full, never pooled. Only a passing screen spends a formal run.
+A valid failed screen consumes the plan's attempt. Record attempts/events and
+completed panels in its task. Resolve missing panels/instruction alerts within
+the frozen budget; no tool counts attempts. Layout collectors retain load-invalid pairs and append
+replacements under the [load-only recovery contract](layout-policy-artifacts.md#load-only-pair-recovery).
+Cap failures and formal DISTURBED jobs are replaced whole, never pooled.
+Only a passing screen spends a formal run.
 
 ## 4. Formal run and decision
 

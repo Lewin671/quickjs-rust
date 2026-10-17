@@ -71,6 +71,7 @@
       "tools/benchmark/layout_rule.py",
       "tools/benchmark/layout_resources.py",
       "tools/benchmark/measure_lock.py",
+      "tools/benchmark/pair_disturbance.py",
       "tools/benchmark/performance_decision.py",
       "tools/benchmark/performance_evaluation.py",
       "tools/benchmark/performance_evidence.py",
@@ -85,7 +86,7 @@
       "tools/benchmark/preview_sentinel.py",
       "tools/benchmark/preview_summary.py"
     ],
-    "aggregate_sha256": "e626061072b769cc6554a399d4192c2179f041844c250360f9d2118d186e5dd0"
+    "aggregate_sha256": "bfdcdae59bc6347452832afb725644d0964750cc17d71fa5542a99f148cab46a"
   },
   "hosted_pr": {
     "tier": "informational_preview",

@@ -74,6 +74,7 @@ PREVIEW_IMPLEMENTATION_FILES = (
     "tools/benchmark/layout_rule.py",
     "tools/benchmark/layout_resources.py",
     "tools/benchmark/measure_lock.py",
+    "tools/benchmark/pair_disturbance.py",
     "tools/benchmark/performance_decision.py",
     "tools/benchmark/performance_evaluation.py",
     "tools/benchmark/performance_evidence.py",

@@ -48,9 +48,11 @@ def replay(path: Path, policy, engines=None, *, held=False):
     if len(set(paths)) != 12 or len({len(os.fsencode(p)) for p in paths}) != 1:
         raise ValueError('layout paths must be distinct and equal length')
     expected_files = set()
+    raw_panels = {}
     expected_ids = policy['held_out' if held else 'cases']
     for k, packet in enumerate(evidence['panels']):
         rows(packet, expected_ids, pairs)
+        raw_panels[k] = []
         for case in packet['cases']:
             relative = f"variant{k}/{case['id'].replace('/', '--')}.json"
             expected_files.add(relative)
@@ -60,8 +62,19 @@ def replay(path: Path, policy, engines=None, *, held=False):
             raw = json.loads(file.read_text())
             if raw['id'] != case['id'] or raw['ratios'] != case['ratios']:
                 raise ValueError('layout raw/report case mismatch')
+            raw_panels[k].append(raw)
             replay_case(raw, pairs, {role: evidence[role]['variants'][k]['path']
                                      for role in ('base', 'candidate')})
     if expected_files != set(evidence['case_files']):
         raise ValueError('layout raw file inventory mismatch')
+    if any('attempts' in r for panel in raw_panels.values() for r in panel):
+        from .pair_disturbance import verify_run
+        covered = []
+        for run in evidence['disturbance_runs']:
+            covered.extend(run['variants'])
+            raws = [r for k in run['variants'] for r in raw_panels[k]]
+            if verify_run(raws, run['load']) != run['counts']:
+                raise ValueError('panel disturbance count mismatch')
+        if sorted(covered) != list(raw_panels):
+            raise ValueError('panel disturbance run inventory mismatch')
     return evidence

@@ -105,24 +105,6 @@ class EvidenceTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 validate(altered)
 
-    def test_invalid_sample_is_retained_and_sampler_restored(self):
-        with tempfile.TemporaryDirectory() as work:
-            out = Path(work) / 'bad.json'
-            sample = screen.Sample(10, 0, 0, 0, '')
-            original = screen.sample
-            def broken(*args):
-                for _ in range(2):
-                    screen.sample(None, ['/binary'], 10)
-                return screen.CaseResult('case', 'whole', None,
-                                         {'wall_ns': [], 'instructions': []})
-            with patch('tools.benchmark.screen.sample', return_value=sample) as sampler, \
-                 patch('tools.benchmark.screen.screen_case', side_effect=broken):
-                with self.assertRaises(screen.ScreenError):
-                    measure(screen.CaseSpec('case', 'whole', Path('/case.js')),
-                            Path('/cand'), Path('/base'), 1, None, 10, out)
-                self.assertIs(screen.sample, sampler)
-            self.assertEqual(len(out.with_suffix('.jsonl').read_text().splitlines()), 2)
-            self.assertIs(screen.sample, original)
 
 class SnapshotTests(unittest.TestCase):
     def test_equal_paths_exclusive_files_and_hashes(self):
@@ -157,11 +139,14 @@ class PanelCollectionTests(unittest.TestCase):
                 identities[role] = {'host': {}, 'host_node': platform.node(),
                     'variants': [{'path': f'/tmp/{role}/v{k}/qjs'} for k in range(6)]}
             calls = []
-            def take(case, candidate, base, pairs, tool, timeout, output):
+            def take(case, candidate, base, pairs, tool, timeout, output, monitor):
                 calls.append((str(candidate), str(base)))
                 return screen.CaseResult('external/s/a', 'whole', None,
                     {'instructions': [1.]*pairs, 'wall_ns': [1.]*pairs, 'cycles': []})
-            with patch('tools.benchmark.layout_panel.host_identity', return_value={}), \
+            with patch('tools.benchmark.pair_disturbance.quieting_preflight', return_value={}), \
+                 patch('tools.benchmark.pair_disturbance.Monitor.from_queue') as monitor, \
+                 patch('tools.benchmark.pair_disturbance.verify_run', return_value={}), \
+                 patch('tools.benchmark.layout_panel.host_identity', return_value={}), \
                  patch('tools.benchmark.layout_panel.matrix', side_effect=lambda p: identities[str(p)]), \
                  patch('tools.benchmark.screen.counter_tool'), \
                  patch('tools.benchmark.screen.measurement_lock', side_effect=lambda *a: nullcontext()), \
@@ -172,6 +157,7 @@ class PanelCollectionTests(unittest.TestCase):
                      screen.CaseSpec('external/s/a', 'whole', folder/'case.js')]), \
                  patch('tools.benchmark.layout_panel.measure', side_effect=take), \
                  patch('tools.benchmark.layout_evidence.replay'):
+                monitor.return_value.snapshot.return_value = {}
                 initial = measure_panel(Path('base000'), Path('cand000'), folder/'out', natural=True)
                 before = digest(folder/'out/panel.json')
                 complete = measure_panel(Path('base000'), Path('cand000'), folder/'out', complete=True)

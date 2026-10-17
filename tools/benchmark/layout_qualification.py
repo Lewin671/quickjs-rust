@@ -96,6 +96,7 @@ def replay_calibration(path, binary_sha256):
             raise ValueError('calibration binary hash changed')
     packet = json.loads(path.read_text())
     expected_files = set()
+    raws = []
     for case in packet['cases']:
         file = folder / 'cases' / (case['id'].replace('/', '--') + '.json')
         expected_files.add(file.name)
@@ -103,18 +104,46 @@ def replay_calibration(path, binary_sha256):
         if raw['id'] != case['id'] or raw['ratios'] != case['ratios']:
             raise ValueError('calibration raw/report mismatch')
         replay_case(raw, 30, dict(zip(('base', 'candidate'), binaries)))
+        raws.append(raw)
     if {p.name for p in (folder / 'cases').glob('*.json')} != expected_files:
         raise ValueError('calibration raw inventory mismatch')
     if packet['host'] != identity['host'] or packet['pairs'] != 30:
         raise ValueError('calibration host/protocol mismatch')
+    if any('attempts' in raw for raw in raws):
+        from .pair_disturbance import verify_run
+        if verify_run(raws, packet['disturbance']) != packet['disturbance_counts']:
+            raise ValueError('calibration disturbance count mismatch')
     return packet
 
+
+
+def verify_host_inputs(recorded, current, context):
+    """Allow independently qualified protocol metadata, never case/recipe drift."""
+    from .layout_identity import command, ROOT
+    if {k: v for k, v in recorded.items() if k != 'manifests'} != {
+            k: v for k, v in current.items() if k != 'manifests'}:
+        raise ValueError('host attestation differs from calibration host')
+    if set(recorded['manifests']) != set(current['manifests']):
+        raise ValueError('calibration manifest inventory changed')
+    for name, sha in recorded['manifests'].items():
+        if sha == current['manifests'][name]:
+            continue
+        if name not in ('benchmarks/manifest.json', 'benchmarks/generic-sentinels-manifest.json'):
+            raise ValueError('calibration recipe/corpus changed')
+        old_text = command(['git', 'show', context + ':' + name]) + '\n'
+        if hashlib.sha256(old_text.encode()).hexdigest() != sha:
+            raise ValueError('recorded calibration manifest/context mismatch')
+        old, new = json.loads(old_text), json.loads((ROOT / name).read_text())
+        old.pop('protocol'); new.pop('protocol')
+        if old != new:
+            raise ValueError('calibration case or recipe changed')
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--a2-bands', type=Path, required=True)
     parser.add_argument('--portfolio', type=Path, required=True)
     parser.add_argument('--held-out', type=Path, required=True)
+    parser.add_argument('--band-context', required=True, help='committed A2 host-binding manifest context')
     parser.add_argument('--screen-context', required=True, help='committed calibration tooling revision')
     parser.add_argument('--formal-bundle', type=Path, required=True)
     parser.add_argument('--host-attestation', type=Path, required=True,
@@ -129,32 +158,21 @@ def main():
     attestation = json.loads(args.host_attestation.read_text())
     recorded = packets['portfolio']['host']
     current = attestation['host']
-    if seed.get('source_host_node') != attestation['node'] or seed.get('source_host') != recorded:
-        raise ValueError('A2 bands belong to a different host/recipe: recalibrate the layout envelope')
-    if {k: v for k, v in recorded.items() if k != 'manifests'} != {
-            k: v for k, v in current.items() if k != 'manifests'}:
-        raise ValueError('host attestation differs from calibration host')
-    # The canonical snapshot protocol was independently requalified. Screen
-    # inputs may differ only in that protocol metadata, never in case/recipe.
-    from .layout_identity import command, ROOT
-    for name, sha in recorded['manifests'].items():
-        if sha == current['manifests'][name]:
-            continue
-        if name not in ('benchmarks/manifest.json', 'benchmarks/generic-sentinels-manifest.json'):
-            raise ValueError('calibration recipe/corpus changed')
-        old_text = command(['git', 'show', args.screen_context + ':' + name]) + '\n'
-        if hashlib.sha256(old_text.encode()).hexdigest() != sha:
-            raise ValueError('recorded calibration manifest/context mismatch')
-        old, new = json.loads(old_text), json.loads((ROOT / name).read_text())
-        old.pop('protocol'); new.pop('protocol')
-        if old != new:
-            raise ValueError('calibration case or recipe changed')
-    from .performance_evidence import replay_reports
+    if seed.get('source_host_node') != attestation['node']:
+        raise ValueError('A2 bands belong to a different host: recalibrate the layout envelope')
+    verify_host_inputs(seed['source_host'], current, args.band_context)
+    verify_host_inputs(recorded, current, args.screen_context)
+    from .performance_evidence import replay_reports, validate_bundle
     from .bundle import verify
     folder = args.formal_bundle
     verify(folder / 'summary.json', folder / 'report.json', folder / 'external-report.json', folder / 'sentinel-report.json')
     summary = json.loads((folder / 'summary.json').read_text())
     verify_formal_identity(summary, seed['formal_source_revision'])
+    reports = [json.loads((folder / name).read_text()) for name in
+               ('report.json', 'external-report.json', 'sentinel-report.json')]
+    problems = validate_bundle(summary, *reports)
+    if problems:
+        raise ValueError('canonical formal bundle unhealthy: ' + '; '.join(problems))
     replay_reports(folder / 'report.json', folder / 'external-report.json', folder / 'sentinel-report.json')
     from .layout_formal_raw import extract
     formal = extract(folder, attestation['node'])

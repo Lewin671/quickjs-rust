@@ -21,6 +21,9 @@ def main():
     parser.add_argument('--lane', choices=('portfolio', 'held-out'), required=True)
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
+    from .pair_disturbance import Monitor, quieting_preflight, verify_run
+    quieting = quieting_preflight()
+    monitor = Monitor.from_queue()
     identity = host_identity()
     if digest(args.binary) != args.sha256:
         raise ValueError('calibration binary hash mismatch')
@@ -48,10 +51,14 @@ def main():
         for case in cases:
             print('CALIBRATE', case.id, flush=True)
             result = measure(case, binaries[1], binaries[0], 30, tool, 120,
-                             out / 'cases' / (case.id.replace('/', '--') + '.json'))
+                             out / 'cases' / (case.id.replace('/', '--') + '.json'), monitor)
             results.append(dataclasses_asdict(result))
+    import json
+    disturbance = monitor.snapshot()
+    conservation = verify_run([json.loads(p.read_text()) for p in (out / 'cases').glob('*.json')], disturbance)
     write_json(out / 'screen.json', {'artifact_type': 'quickjs-layout-calibration',
-        'pairs': 30, 'cases': results, 'launch_preflight': preflight, 'host': identity})
+        'pairs': 30, 'cases': results, 'disturbance': disturbance,
+        'disturbance_counts': conservation, 'quieting': quieting, 'launch_preflight': preflight, 'host': identity})
 
 
 def dataclasses_asdict(value):
