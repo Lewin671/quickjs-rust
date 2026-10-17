@@ -4,7 +4,7 @@
 - Implementation: present; versioned host policy v1 is unqualified and cannot
   be used for a new promotion. No runtime engine change.
 - Verified at: 5d255e5e staged fast gate, 2026-10-16; 531 benchmark tests,
-  fmt/clippy/context/shell pass. Full iMac gate is running. Prior builder
+  fmt/clippy/context/shell pass. Full iMac gate passes (167 s). Prior builder
   f2fb8067 six-variant audit, 5170 subset and 248 NG fixtures pass.
 - Evidence: [B frozen plans and log](archive/T055-phase-b-plan-and-log.md),
   [A2 data](archive/T055-phase-a2-data.md),
@@ -87,5 +87,13 @@ Pair-recovery implementation: 5d255e5e. Staged fast gate: 531 tests pass;
 focused overlap/guard/cap/conservation tests pass. Host readback initially
 showed indexing enabled, then disabled before any new timing. Both approved
 photo/media service disable flags are true. Full no-timing gate job:
-20261017T022339Z-decision-rule-b-pair-full-check (pending). New timing jobs
-will use 5d255e5e, never the older collectors or their invalid samples.
+20261017T022339Z-decision-rule-b-pair-full-check passes, including 5170 subset
+cases. Qualification additionally requires a sealed formal load log; its
+focused guard and updated fast gate pass (532 tests). New timing collectors
+remain frozen at 5d255e5e, never the older collectors or invalid samples.
+
+| Job | Plan | State |
+| --- | --- | --- |
+| 20261017T022615Z-decision-rule-b-aa30-pairs | 76x30, pair recovery | running |
+| 20261017T022616Z-decision-rule-b-heldout30-pairs | 9x30, pair recovery | queued |
+| 20261017T022617Z-decision-rule-b-formal30-whole | canonical 30 blocks, workers-4 | queued |
