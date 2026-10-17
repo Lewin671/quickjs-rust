@@ -3,9 +3,9 @@
 - Status: blocked; canonical timeout plus valid component precision failure.
 - Implementation: present; versioned host policy v1 is unqualified and cannot
   be used for a new promotion. No runtime engine change.
-- Verified at: 5d255e5e staged fast gate, 2026-10-16; 531 benchmark tests,
-  fmt/clippy/context/shell pass. Full iMac gate passes (167 s). Prior builder
-  f2fb8067 six-variant audit, 5170 subset and 248 NG fixtures pass.
+- Verified at: ea355b49, 2026-10-16; final iMac full gate passes (163 s),
+  532 benchmark tests and 5170 subset cases. Base-main fast/context pass.
+  Prior f2fb8067 six-variant audit and 248 exact-image NG fixtures pass.
 - Evidence: [B frozen plans and log](archive/T055-phase-b-plan-and-log.md),
   [A2 data](archive/T055-phase-a2-data.md),
   [unqualified policy v1](../benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v1.json).
@@ -164,3 +164,21 @@ d3-array/aggregate 1.0042; ramda/pipeline 1.0065; decimal.js/arith 1.0038.
 They are measured component results, not adopted promotion ceilings. All
 A2 case/lane policy values and the frozen unqualified v1 artifact are unchanged.
 T055 cannot close as adopted; both blockers need a separately authorized plan.
+
+
+## Final verification and handoff
+
+Final full job 20261017T044950Z-decision-rule-b-feedback-final-check at
+ea355b49 passes (exit 0 / 163 s): 532 benchmark tests, Rust/workspace/feature
+checks and 5170 Test262 subset cases. Base-main fast gate at a320b65f passes
+532 tests (75.395 s), fmt/clippy/context/shell checks; final record-only
+staged/context gate also passes. No semantic focused slice matches tool-only
+changes. Runtime/parser/lexer sources remain unchanged from 4c9f959e.
+
+Final T053/T054 diagnostic replays retain control-event/wall-event labels,
+respectively; no direct rejection, but missing K=6 keeps both incomplete.
+Their rejected standings and exhausted budgets are unchanged. The diagnostic
+component artifact SHA-256 is
+b485f9b889f7167c78fb4f8c3b26ff21eda6602b298846757b05b123129ecdcb.
+No timing job remains from this task. T055 stays active/blocked for a lead
+variance/timeout decision; original logs, plans, bands and policy v1 stay frozen.
