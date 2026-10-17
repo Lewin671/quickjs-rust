@@ -184,30 +184,11 @@ relative backing-store hazards from bank alignment/page splits. Do not ship
 an observed page offset or re-pin without screen evidence.
 
 
-## Related engine finding: same-image Gaussian blur wall tail
+## Related Gaussian blur engine finding
 
-T055 feedback-2 explicitly classifies this as an engine finding, not a
-measurement-rule exception. Source 4c9f959e, image
-c7f0f66a519181b214bdc5ca6404cf428f0d18cbd1ab1d0e26386097619b949e,
-canonical job 20261017T022617Z-decision-rule-b-formal30-whole (workers-4).
-Candidate and base are byte-identical; the host log has zero heavy samples.
-Kraken imaging-gaussian-blur successful process wall times:
-
-| Role | ok / attempted | median s | max ok s | max / median - 1 |
-| --- | --- | ---: | ---: | ---: |
-| candidate | 29 / 30 | 11.262680115 | 13.858422675 | 23.05% |
-| base | 30 / 30 | 11.213226504 | 13.341806271 | 18.98% |
-| pinned NG | 30 / 30 | 10.274794007 | 10.765107934 | 4.77% |
-
-Candidate block 27 additionally hits the 15-second timeout at 15.021374156 s;
-that observation is right-censored, at least 33.37% above its successful
-median. Do not treat it as an ok duration, delete it, or use the incomplete
-formal bundle for a promotion. The raw record and exact failure are preserved
-in [T055's prior qualification record](archive/T055-feedback-1-qualification.md).
-The engine's roughly 20-35% upper tail versus NG's roughly 5% is plausibly
-related to the DFT execution-variance family; no shared cause is established.
-No sampled stack/scratch addresses, intermediate floating-point exception
-state, continuous thermal telemetry or scheduler attribution accompany this
-Gaussian observation. Investigate it later as an engine issue with appropriate
-controlled evidence. T055's reference-derived hang timeout is uniform across
-cases/roles and does not remove the tail or waive the 3% precision gate.
+[T055's Gaussian wall-tail data](archive/T038-gaussian-wall-tail-data.md)
+records same-image process tails on 4c9f959e: the old trial has a censored
+candidate timeout, and the new 60-second protocol retains a 15.694 s base
+sample (38.74% over its median) versus NG's 4.51% tail. This is an unresolved
+engine-variance finding, potentially related to the DFT family, not a policy
+exception or an established shared cause. No engine fix is implemented.
