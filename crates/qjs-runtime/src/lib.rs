@@ -12,17 +12,14 @@ mod atomics;
 mod bigint;
 mod boolean;
 mod builtins;
-#[cfg_attr(feature = "perf-counters", path = "perf_bytecode.rs")]
 mod bytecode;
 mod conversion;
 mod data_view;
 mod date;
-#[cfg_attr(feature = "perf-counters", path = "perf_diagnostics.rs")]
 mod diagnostics;
 mod disposable_stack;
 mod error;
 mod finalization_registry;
-#[cfg_attr(feature = "perf-counters", path = "perf_function.rs")]
 mod function;
 mod generator;
 mod global;
@@ -38,7 +35,6 @@ mod operations;
 mod private;
 mod promise;
 mod property;
-#[cfg_attr(feature = "perf-counters", path = "perf_proxy.rs")]
 mod proxy;
 mod reflect;
 mod regexp;
@@ -47,35 +43,29 @@ mod string;
 mod symbol;
 mod test262_host;
 mod typed_array;
-#[cfg_attr(feature = "perf-counters", path = "perf_value.rs")]
 mod value;
 mod weak_map;
 mod weak_ref;
 mod weak_set;
 
 mod module;
-use builtins::initialize_builtins;
-pub use bytecode::{
-    Bytecode, CompileError, EvalOutcome, compile_script, compile_script_classified, eval_bytecode,
-    eval_bytecode_keep_jobs, eval_bytecode_source,
+
+pub use module::{
+    MapResolver, ModuleResolveError, ModuleResolver, ResolvedModule, eval_module,
+    eval_module_with_prelude, module_specifier_code_units, module_specifier_to_utf8_lossy,
 };
+
+use builtins::initialize_builtins;
 pub(crate) use conversion::{
     PreferredType, error_value, is_truthy, ordinary_to_primitive, string_to_number,
     to_int32_number, to_int32_with_env, to_js_string_with_env, to_length_with_env,
     to_number_with_env, to_primitive_with_env, to_primitive_with_hint, to_uint16_with_env,
     to_uint32_number, to_uint32_with_env,
 };
-#[cfg(feature = "perf-counters")]
-pub use diagnostics::reset_counters;
-pub use diagnostics::{Counters, counters};
 pub(crate) use function::{
     CallEnv, call_field_initializer, call_function, construct_function, ensure_constructor,
 };
 use function::{Function, NativeFunction};
-pub use module::{
-    MapResolver, ModuleResolveError, ModuleResolver, ResolvedModule, eval_module,
-    eval_module_with_prelude, module_specifier_code_units, module_specifier_to_utf8_lossy,
-};
 pub(crate) use property::{
     PropertyKey, array_as_prototype_slot, array_has_own_property, array_own_property_descriptor,
     array_own_property_keys, array_own_property_names, array_prototype,
@@ -95,6 +85,16 @@ use value::{
     array_index_property_key,
 };
 pub use value::{JsString, Value};
+
+#[cfg(feature = "perf-counters")]
+pub use diagnostics::reset_counters;
+pub use diagnostics::{Counters, counters};
+
+pub use bytecode::{
+    Bytecode, CompileError, EvalOutcome, compile_script, compile_script_classified, eval_bytecode,
+    eval_bytecode_keep_jobs, eval_bytecode_source,
+};
+
 pub(crate) const GLOBAL_THIS_BINDING: &str = "\0global_this";
 pub(crate) const DIRECT_EVAL_BINDING: &str = "\0\0direct_eval";
 pub(crate) const DIRECT_EVAL_STRICT_BINDING: &str = "\0\0direct_eval_strict";

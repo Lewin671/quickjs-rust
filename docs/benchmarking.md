@@ -295,13 +295,13 @@ Field contracts, precision, builder audit and protocol versions live in
 
 Wall time cannot tell an accelerated workload from a folded one. The
 `perf-counters` cargo feature (`qjs-cli` forwards it to `qjs-runtime`)
-loads diagnostic-only source overlays and counters. Feature-off modules and
-source positions are preserved for canonical byte identity. A diagnostic image
-adds work to the observed paths and is never used for timing.
+compiles in counters and traces that can. Without the feature every
+counting site expands to nothing. A `perf-counters` build adds work to the
+paths it observes and is never used for timing.
 
 After evaluation the CLI prints a `QJS_PERF_COUNTERS` line to stderr,
-followed by one `name value` line per counter. Declarations live in `diagnostics.rs` and the optional
-`qjs-runtime-diagnostics/patches/counters.patch` overlay. The ones used most:
+followed by one `name value` line per counter. The counters are the fields
+documented in `crates/qjs-runtime/src/diagnostics.rs`. The ones used most:
 
 - `ordinary_call_attempts`, `closed_form_leaf_evaluations`,
   `direct_leaf_frames`, `generic_call_frames`, `native_calls`,
@@ -318,8 +318,6 @@ followed by one `name value` line per counter. Declarations live in `diagnostics
 - `compact_function_ops`, `compact_standalone_activations`,
   `compact_direct_calls`, `compact_caller_env_calls`: work done by the
   compact tiers.
-
-Mechanism-event scopes and limitations: [`diagnostics/mechanism.rs`](../crates/qjs-runtime/src/diagnostics/mechanism.rs).
 
 The same build reads these environment variables. A level is matched
 exactly, not as a threshold.

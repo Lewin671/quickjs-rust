@@ -292,14 +292,9 @@ dependencies = [
  "parking_lot",
  "qjs-ast",
  "qjs-parser",
- "qjs-runtime-diagnostics",
  "qjs-unicode",
  "unicode-normalization",
 ]
-
-[[package]]
-name = "qjs-runtime-diagnostics"
-version = "0.1.0"
 
 [[package]]
 name = "qjs-unicode"

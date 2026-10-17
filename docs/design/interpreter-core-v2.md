@@ -4,8 +4,8 @@ Proposed architecture, **not implemented or a frozen performance plan**. The ord
 even when every accelerator declines. Calls, names, layouts and values share the contracts below; none depends on a
 benchmark or a literal's source form. [T056](../../tasks/T056-interpreter-core-v2.md) owns evidence, source checks and
 next work; [architecture](../architecture.md) describes today's code. The protected [binding](env-model-rewrite.md) and
-[suspension](generator-suspension.md) invariants remain requirements. The migrations use the existing runtime crate. Unit 0 uses an optional compile-time
-diagnostic helper; its scope is in [architecture](../architecture.md). FFI and Rust async remain excluded.
+[suspension](generator-suspension.md) invariants remain requirements. No new crate, dependency, FFI or Rust async is
+needed.
 
 ## Contracts shared by the three changes
 
