@@ -3,11 +3,12 @@
 - Status: active; standing controller, schema-3 host policy qualified.
 - Implementation: present; [qualified iMac v2](../benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v2.json)
   binds layout/held-out gates; all other hosts/recipes require recalibration.
-- Verified at: ce13cefc, 552 tool tests and qualification/live load (T055).
+- Verified at: 3be0ba66, final full/branch gates; 552 tests, 5170 Test262,
+  91 plans independently checked. Qualification/live load recorded in T055.
   Legacy retained decisions remain verified only at their recorded revisions.
-- Evidence: [T055](T055-layout-noise-control.md) owns B calibration and hashes;
+- Evidence: [T055](archive/T055-layout-noise-control.md) owns B calibration and hashes;
   [T037](T037-integration-batch-1.md) owns historical unstable-base decisions.
-- Unresolved: final T055 handoff gate pending; ruleset check unconfigured.
+- Unresolved: ruleset check unconfigured.
 - Next action: freeze fresh schema-3 queue/unit plans against qualified v2;
   preserve the independent promotion gates below.
 
@@ -69,7 +70,7 @@ variable GitHub-hosted preview numbers into fixed-hardware performance claims.
 ## Layout-robust decisions
 
 New units use the host-bound schema-3 rule; adoption requires the qualified
-policy produced under [T055](T055-layout-noise-control.md). Older plans and their rejected budgets
+policy produced under [T055](archive/T055-layout-noise-control.md). Older plans and their rejected budgets
 are historical and never acquire an extra attempt from this rule change.
 
 - Freeze targets/payoffs, controls, mechanism class, memory wall targets,

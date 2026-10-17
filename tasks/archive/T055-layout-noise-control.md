@@ -1,14 +1,16 @@
 # T055: Layout-robust policy qualification
 
-- Status: active; policy v2 qualified/published; final handoff gate pending.
-- Implementation: present; automatic continuations and qualified host policy v2.
-- Verified at: ce13cefc staged gate552 tests; valid formal continuation below.
-  Prior full gate1600baa9 (543 tests/5170 subset); final full gate pending.
-- Evidence: [feedback-2 snapshot](archive/T055-feedback-2-qualification.md),
-  [feedback-1 record](archive/T055-feedback-1-qualification.md),
-  [original B plan/log](archive/T055-phase-b-plan-and-log.md).
-- Unresolved: final full gate and archival record pending.
-- Next action: run final branch/full gates, then archive this qualified task.
+- Status: closed; layout-robust rule adopted with qualified host policy v2.
+- Implementation: present; collector ce13cefc, policy publication3be0ba66.
+- Verified at: 3be0ba66, final iMac full gate (552 tests/5170 Test262),
+  branch gate and independent91-plan validation; final record changes docs only.
+- Evidence: [qualified v2](../../benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v2.json),
+  [feedback-2 snapshot](T055-feedback-2-qualification.md),
+  [feedback-1 record](T055-feedback-1-qualification.md),
+  [original B plan/log](T055-phase-b-plan-and-log.md); final jobs below.
+- Unresolved: no qualification blocker; T038 owns engine wall-tail diagnosis.
+- Next action: freeze fresh schema-3 queue/unit plans under [T022](../T022-performance-priority-controller.md)
+  using qualified v2 on the recorded host before T056 implementation.
 
 ## Frozen feedback-3 standing protocol (2026-10-16, before timing)
 
@@ -124,7 +126,7 @@ unchanged/claim_eligible=false. These are diagnostics, not reopened units.
 
 ## Qualified policy publication
 
-[Policy v2](../benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v2.json)
+[Policy v2](../../benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v2.json)
 and adjacent SHA256 sidecar publish the exact qualified output:
 `22a1907dae06eb963dcb25592a05973e3bd69153e3c23a70ddec08ef64f07ca6`.
 The v1 artifact/hash stay unchanged and unqualified. All76 screen cases,
@@ -137,3 +139,29 @@ external1.0073802375536396, portfolio1.0082623319647204, held-out1.0029.
 All qualification lane intervals fit these envelopes. Host/recipe/revision
 and image distinctions remain as frozen above; this is adoption on the
 recorded iMac only, not an engine performance promotion or portable budget.
+
+
+## Final handoff verification
+
+Publication3be0ba66 passed staged fast gate552 tests (80.341s).
+`check-touched.sh --base main --explain` passed552 tests (76.871s), context,
+file-size and shell checks. No runtime/parser/lexer semantics changed, so
+no focused semantic slice was selected; the full gate ran the curated subset.
+Job20261017T060112Z-decision-rule-b-feedback3-full-check at3be0ba66 ran
+`./scripts/check.sh`: exit0/163s,552 tool tests (101.748s), Rust/feature checks,
+script guards and5170 Test262 subset cases (48s) pass.
+
+Exact environment warning: `./scripts/check.sh: line 63: rg: command not found`.
+That script's plan enumeration did not run. No claim is based on that skipped
+step: job20261017T060329Z-decision-rule-b-feedback3-plan-check at3be0ba66
+independently enumerated the same JSON plans in sorted order with Python and
+called the original `performance-decision.sh check-unit` on every file:
+all91 valid, exit0/10s. No tool installation or OS-service change was made.
+The script's missing-rg assumption remains outside this task's boundary.
+
+Final qualified T053/T054 diagnostic outputs preserve historical standings
+and exhausted budgets. Main is unchanged; commits stay on
+`agent/decision-rule-b/codex`, with no project-remote push/merge. Queue transport
+refs only. Final report and raw outputs live in the workspace outside this
+worktree; the clean task worktree is removed after the final record commit,
+retaining the branch for later integration.
