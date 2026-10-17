@@ -72,8 +72,13 @@ class Monitor:
 
     def snapshot(self):
         # Observe beyond the last timed window and guard, allowing one full
-        # monitor period plus integer-second timestamp quantization.
+        # monitor period plus integer-second timestamp quantization. Window and
+        # monitor timestamps are wall-clock, and the host clock may be slewed,
+        # so wait until the wall clock itself has advanced by the settle time.
+        started = time.time()
         time.sleep(PROTOCOL['settle_seconds'])
+        while time.time() - started < PROTOCOL['settle_seconds']:
+            time.sleep(0.05)
         text = self.path.read_text()
         return {'protocol': PROTOCOL, 'anchor': self.anchor, 'text': text,
                 'sha256': hashlib.sha256(text.encode()).hexdigest(), 'sealed_at': time.time()}

@@ -58,6 +58,26 @@ class LoadTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'hash'):
             eligibility(attempts, altered)
 
+    def test_snapshot_waits_for_wall_clock_despite_slew(self):
+        # A slewed host clock can advance less than the monotonic sleep; the
+        # seal must still cover the settle time in wall-clock terms.
+        from tools.benchmark.pair_disturbance import Monitor
+        with tempfile.TemporaryDirectory() as root:
+            log = Path(root) / 'intruders.log'
+            log.write_text('')
+            clock = {'now': 1000.0}
+
+            def slewed_sleep(seconds):
+                clock['now'] += seconds * 0.99
+
+            with patch('tools.benchmark.pair_disturbance.time.time', lambda: clock['now']), \
+                    patch('tools.benchmark.pair_disturbance.time.sleep', slewed_sleep):
+                monitor = Monitor(log)
+                ended = clock['now']
+                sealed = monitor.snapshot()
+            self.assertGreaterEqual(sealed['sealed_at'], ended + PROTOCOL['settle_seconds'])
+            eligibility([{'started_at': ended - 1, 'ended_at': ended}], sealed)
+
     def test_appended_recovery_conserves_all_attempts_and_order(self):
         class Monitor:
             anchor = 1
