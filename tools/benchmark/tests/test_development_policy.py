@@ -202,6 +202,7 @@ class DevelopmentQualificationTests(unittest.TestCase):
             self.assertEqual(good['held_out'], parent['held_out'])
             self.assertEqual(good['evidence'] if 'evidence' in good else {}, parent.get('evidence', {}))
             self.assertEqual(good['precision']['held_out'], parent['precision']['held_out'])
+            self.assertEqual(set(good['qualification']['formal']), set(formal) | {'broad', 'sentinel', 'external', 'development', 'portfolio'})
             bad_formal = {n: [1.02]*30 if n.startswith('development/') else [.9]*30 for n in formal}
             bad = qualification.qualify(parent, seed, pilot, bad_formal)
             self.assertFalse(bad['qualified'])

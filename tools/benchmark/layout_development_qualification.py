@@ -68,7 +68,7 @@ def qualify(parent, seed, pilot, formal, extensions=None, formal_extensions=None
         if not result['precise'] or ci['upper'] > ceiling or ci['lower'] < 1 / ceiling:
             failures.append(name + ': formal A/A interval outside frozen lane envelope')
     policy.update(qualified=not failures, failures=failures, precision=precision,
-                  development_qualification=stats)
+                  qualification={'inherited_v2': parent.get('qualification', {}), **stats})
     return policy
 
 
