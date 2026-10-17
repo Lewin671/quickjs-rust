@@ -1,4 +1,4 @@
-"""Frozen 30-pair A/A qualification at the layout decision statistic.
+"""A/A qualification: frozen 30-pair pilot with automatic precision continuation.
 
 Collect only through the site's serialized timing queue. This command never
 widens an existing lane budget or silently replaces a failed run.
@@ -59,6 +59,20 @@ def main():
     write_json(out / 'screen.json', {'artifact_type': 'quickjs-layout-calibration',
         'pairs': 30, 'cases': results, 'disturbance': disturbance,
         'disturbance_counts': conservation, 'quieting': quieting, 'launch_preflight': preflight, 'host': identity})
+
+    # The pilot stays sealed. Each deficient case gets a separate immutable
+    # chain; original joint lane cohorts never acquire fabricated observations.
+    from .layout_continuation import complete
+    from .layout_policy import analyze
+    from .layout_identity import command
+    context=command(['git','rev-parse','HEAD'])
+    continuations=[]
+    for result in results:
+        if analyze({result['id']:result['ratios']['wall_ns']})['relative_half_width']>.03:
+            path=complete(out/'screen.json',result['id'],context,
+                          out/'power'/result['id'].replace('/','--'))
+            continuations.append({'path':str(path),'sha256':digest(path)})
+    write_json(out/'power.json',{'continuations':continuations})
 
 
 def dataclasses_asdict(value):

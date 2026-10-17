@@ -12,16 +12,18 @@ PILOT = 30
 CAP = 240
 
 
-def required_pairs(half_width):
+def required_pairs(half_width, base_n=PILOT):
     if type(half_width) not in (int,float) or not math.isfinite(half_width) or half_width < 0:
         raise ValueError('invalid pilot relative half-width')
-    return min(CAP, max(PILOT, math.ceil(PILOT * (half_width / LIMIT) ** 2)))
+    if type(base_n) is not int or not 1 <= base_n <= CAP:
+        raise ValueError('invalid frozen pilot count')
+    return min(CAP, max(base_n, math.ceil(base_n * (half_width / LIMIT) ** 2)))
 
 
-def allocation(pilot_stats, current_pairs=PILOT, current_precise=False):
+def allocation(pilot_stats, current_pairs=PILOT, current_precise=False, *, base_n=PILOT):
     """One predicted stage, then the fixed cap if precision still fails."""
-    predicted = required_pairs(pilot_stats['relative_half_width'])
-    if current_pairs == PILOT:
+    predicted = required_pairs(pilot_stats['relative_half_width'], base_n)
+    if current_pairs == base_n:
         return predicted
     if current_pairs not in (predicted, CAP):
         raise ValueError('case count differs from frozen power allocation')
@@ -29,15 +31,17 @@ def allocation(pilot_stats, current_pairs=PILOT, current_precise=False):
 
 
 def diagnostic_only(policy, name, *, held=False):
-    return policy.get('precision', {}).get('held_out' if held else 'cases', {}).get(name, {}).get('status') == 'imprecise on this host'
+    groups = ('held_out',) if held else ('cases', 'formal')
+    return any(policy.get('precision', {}).get(g, {}).get(name, {}).get('status') ==
+               'imprecise on this host' for g in groups)
 
 
 def needs_panel(policy, *, held=False):
     return any(diagnostic_only(policy,n,held=held) for n in policy['held_out' if held else 'cases'])
 
 
-def precision_record(pilot, measured, count):
-    predicted = required_pairs(pilot.get('relative_half_width',0))
+def precision_record(pilot, measured, count, *, base_n=PILOT):
+    predicted = required_pairs(pilot.get('relative_half_width',0), base_n)
     if count not in (predicted,CAP):
         return None
     status = ('precise' if measured['precise'] else
@@ -50,9 +54,11 @@ def precision_record(pilot, measured, count):
 def validate_precision(policy):
     if 'precision' not in policy:
         return
-    for group in ('cases','held_out'):
+    for group in ('cases','held_out','formal'):
+        if group == 'formal' and group not in policy['precision']:
+            continue
         records = policy['precision'][group]
-        if set(records) != set(policy[group]):
+        if set(records) != set(policy['cases' if group == 'formal' else group]):
             raise ValueError('precision policy inventory mismatch')
         for name, record in records.items():
             count = record['pairs']; width = record['relative_half_width']

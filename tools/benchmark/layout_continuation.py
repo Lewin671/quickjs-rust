@@ -40,6 +40,10 @@ def replay(path, pilot, name):
     """Return all original and appended ratios, checking every immutable prefix."""
     identity, binaries, original = load_case(pilot,name)
     value = json.loads(path.read_text())
+    if value.get('artifact_type')=='quickjs-layout-continuation-set':
+        latest=Path(value['latest']['path'])
+        if digest(latest)!=value['latest']['sha256']:raise ValueError('continuation set hash mismatch')
+        return replay(latest,pilot,name)
     if value['pilot'] != {'path':str(pilot), 'sha256':digest(pilot)} or value['case_id'] != name:
         raise ValueError('continuation pilot binding mismatch')
     if value['previous']:
@@ -70,35 +74,28 @@ def replay(path, pilot, name):
     return merged,offset+len(raw['attempts']),value['host']
 
 
-def main():
-    parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--pilot',type=Path,required=True)
-    parser.add_argument('--case',required=True)
-    parser.add_argument('--previous',type=Path)
-    parser.add_argument('--pilot-context',required=True)
-    parser.add_argument('--output',type=Path,required=True)
-    args=parser.parse_args()
-    pilot=args.pilot.resolve()
+def collect(pilot, name, context, out, previous=None):
+    pilot=pilot.resolve()
     from .layout_qualification import replay_calibration, verify_host_inputs
-    identity,binaries,original=load_case(pilot,args.case)
+    identity,binaries,original=load_case(pilot,name)
     replay_calibration(pilot,identity['sha256'])
     host=host_identity()
-    verify_host_inputs(identity['host'],host,args.pilot_context)
+    verify_host_inputs(identity['host'],host,context)
     quieting=quieting_preflight()
     ratios,offset=(original['ratios'],len(original['attempts']))
-    if args.previous:
-        ratios,offset,prior_host=replay(args.previous.resolve(),pilot,args.case)
+    if previous:
+        ratios,offset,prior_host=replay(previous.resolve(),pilot,name)
         if prior_host != host:raise ValueError('continuation host changed')
     count=len(ratios['wall_ns'])
-    pilot_stats=analyze({args.case:original['ratios']['wall_ns']})
-    stats=analyze({args.case:ratios['wall_ns']})
+    pilot_stats=analyze({name:original['ratios']['wall_ns']})
+    stats=analyze({name:ratios['wall_ns']})
     needed=allocation(pilot_stats,count,stats['precise'])
     if needed<=count:raise ValueError('no power continuation is required')
-    out=args.output.resolve();out.mkdir(parents=True,exist_ok=False)
+    out=out.resolve();out.mkdir(parents=True,exist_ok=False)
     (out/'work').mkdir()
-    cases=(screen.resolve_cases([args.case],screen.DEFAULT_CACHE,out/'work') if not args.case.startswith('held-out/') else
+    cases=(screen.resolve_cases([name],screen.DEFAULT_CACHE,out/'work') if not name.startswith('held-out/') else
            __import__('tools.benchmark.screen_recording',fromlist=['held_out_cases']).held_out_cases(screen.DEFAULT_CACHE,out/'work'))
-    case=next(c for c in cases if c.id==args.case)
+    case=next(c for c in cases if c.id==name)
     monitor=Monitor.from_queue()
     with screen.measurement_lock('layout-power-continuation'):
         if screen.wait_for_builds(300):raise ValueError('competing builds remain')
@@ -112,16 +109,43 @@ def main():
     appended=raw['ratios']
     for binary in binaries.values():
         if digest(Path(binary))!=identity['sha256']:raise ValueError('continuation binary changed')
-    value={'artifact_type':'quickjs-layout-continuation','schema_version':1,'case_id':args.case,
+    value={'artifact_type':'quickjs-layout-continuation','schema_version':1,'case_id':name,
         'pilot':{'path':str(pilot),'sha256':digest(pilot)},
-        'previous':{'path':str(args.previous.resolve()),'sha256':digest(args.previous)} if args.previous else None,
-        'host':host,'host_node':platform.node(),'launch_preflight':preflight,'pilot_context':args.pilot_context,'quieting':quieting,'sha256':identity['sha256'],'previous_pairs':count,'required_pairs':needed,
+        'previous':{'path':str(previous.resolve()),'sha256':digest(previous)} if previous else None,
+        'host':host,'host_node':platform.node(),'launch_preflight':preflight,'pilot_context':context,'quieting':quieting,'sha256':identity['sha256'],'previous_pairs':count,'required_pairs':needed,
         'raw_file':'case.json','raw_sha256':digest(out/'case.json'),
         'disturbance':disturbance,'disturbance_counts':verify_run([raw],disturbance),
         'ratios':{m:ratios[m]+appended[m] for m in ('instructions','wall_ns')}}
     write_json(out/'continuation.json',value)
-    replay(out/'continuation.json',pilot,args.case)
-    print(json.dumps({'case':args.case,'valid_pairs':needed,'precision':analyze({args.case:value['ratios']['wall_ns']})}))
+    replay(out/'continuation.json',pilot,name)
+    return out/'continuation.json',analyze({name:value['ratios']['wall_ns']})
+
+
+def complete(pilot, name, context, root, previous=None):
+    """Finish the predicted stage and, if necessary, cap without a precision stop."""
+    root.mkdir(parents=True,exist_ok=False)
+    for stage in range(2):
+        latest,stats=collect(pilot,name,context,root/f'stage{stage}',previous)
+        if stats['precise'] or stats['blocks']==CAP:break
+        previous=latest
+    meta=json.loads(latest.read_text())
+    path=root/'continuation.json'
+    write_json(path,{'artifact_type':'quickjs-layout-continuation-set',
+        'case_id':name,'host':meta['host'],'host_node':meta['host_node'],
+        'latest':{'path':str(latest),'sha256':digest(latest)},'precision':stats})
+    return path
+
+
+def main():
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--pilot',type=Path,required=True)
+    parser.add_argument('--case',required=True)
+    parser.add_argument('--previous',type=Path)
+    parser.add_argument('--pilot-context',required=True)
+    parser.add_argument('--output',type=Path,required=True)
+    args=parser.parse_args()
+    path=complete(args.pilot.resolve(),args.case,args.pilot_context,args.output.resolve(),args.previous)
+    print(json.dumps({'continuation':str(path),'precision':json.loads(path.read_text())['precision']}))
 
 
 if __name__=='__main__':main()

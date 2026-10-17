@@ -1,13 +1,13 @@
 # T055: Layout-robust policy qualification
 
 - Status: active; feedback-3 makes precision power allocation standing/automatic.
-- Implementation: prior timeout/screen power present; formal subset continuation pending.
+- Implementation: automatic screen/formal subset continuations and cap fallback present.
 - Verified at: 1600baa9 full gate, 543 tests/5170 subset; e7cd6d71 record.
 - Evidence: [feedback-2 snapshot](archive/T055-feedback-2-qualification.md),
   [feedback-1 record](archive/T055-feedback-1-qualification.md),
   [original B plan/log](archive/T055-phase-b-plan-and-log.md).
-- Unresolved: formal continuation and final qualification not yet executed.
-- Next action: implement/test frozen standing rule below, append bitops blocks,
+- Unresolved: bitops continuation and final qualification not yet executed.
+- Next action: finish staged gate, commit collector, append bitops blocks,
   qualify, publish/close on success; stop only for a new non-precision blocker.
 
 ## Frozen feedback-3 standing protocol (2026-10-16, before timing)
@@ -72,3 +72,18 @@ keep their precise30 observations. A2 bands, host/recipe bindings and 20,000-
 draw seed-0 95% paired-median/geomean statistics remain unchanged. Keep old
 policy v1 and every earlier archived log/plan immutable; publish a new
 qualified v2 only after the complete replay and applicable gates pass.
+
+
+## Feedback-3 implementation checks before timing
+
+Generic three-role subset collector restores hash-identical transient assets,
+keeps absolute seeded schedules and frozen per-role argv/N, and seals separate
+immutable segment chains. Calibration completes deficient screen/held-out cases
+automatically; formal continuation defaults to all deficient cases or accepts
+a subset. Both finish predicted then cap stages without a precision question.
+Formal cap metadata also forces K=6 and diagnostic bands. Focused 25 tests
+passed (append counts/rotation, raw conservation/tamper refusal, timer/counter/
+correctness/host contracts, exact asset recovery, cap qualification and gates);
+115 layout tests passed. Staged fast gate passed all551 tool tests (79.339s),
+context/file-size/shell checks. Sealed source replay checked10 artifact hashes,
+30 original blocks, timeout60s, and573 scheduled append samples. No new timing yet.

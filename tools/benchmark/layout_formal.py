@@ -55,7 +55,10 @@ def evaluate_formal(unit, summary, broad, external, sentinel, mode, panel_path, 
         stats = analyze({case: wall[case]})
         formal_stats[case] = stats
         lower, upper = stats['confidence_interval']['lower'], stats['confidence_interval']['upper']
-        if not stats['precise']:
+        diagnostic=diagnostic_only(policy,case)
+        if diagnostic and len(panels)!=6:
+            missing.append(case + ': diagnostic-only case requires K=6')
+        if not stats['precise'] and not diagnostic:
             missing.append(case + ': formal interval imprecise')
             continue
         limit = (payoff if diagnostic_only(policy,case) else min(payoff, 1 / band['wall_band'])) if case in target_ids and mode != 'stage' else band['wall_band']

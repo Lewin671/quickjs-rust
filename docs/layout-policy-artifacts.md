@@ -11,7 +11,7 @@ verify the live host. An unqualified policy is never usable.
 `cases` maps all 76 selection cases to `wall_band` B_i and
 `instruction_band` I_i; `held_out` maps all nine acceptance programs to their
 A/A wall bands. `lanes` holds broad, sentinel, external, equal-case portfolio
-and held-out ceilings. Qualification retains 30-block intervals and source
+and held-out ceilings. Qualification retains joint pilot intervals, extended case intervals and source
 hashes. B_i covers A2's two observed layout estimators and global A/A median
 bias; I_i covers its rounded A/A instruction envelope. Held-out bands use
 rounded reciprocal 95% A/A interval endpoints. These empirical envelopes do
@@ -142,17 +142,19 @@ This bounds hangs without hiding an engine's long tail or waiving precision.
 
 ## Precision power and continuation
 
-Qualification starts with 30 valid A/A pairs per case/program. When pilot
-relative CI half-width h exceeds 3%, required n=min(240,ceil(30*(h/.03)^2)).
-Retain every pilot pair and append only n-30 valid pairs using the original
+Every calibration and formal A/A automatically applies this standing rule.
+For frozen base_n observations (30 formal blocks) and valid relative CI
+half-width h>3%, n=min(240,ceil(base_n*(h/.03)^2)). Retain every pilot
+observation and append only the deficit using the original
 immutable binary paths, iteration count and cumulative role order. If the
 predicted stage still misses 3%, one further stage reaches 240, retaining all
 pairs. These decisions use precision alone, never which side wins. Held-out
 uses the identical rule and remains acceptance-only.
 
 `layout_continuation --pilot <screen.json> --case <id> --pilot-context <sha>
---output <new-dir>` creates an immutable segment. `--previous <continuation.json>`
-adds the cap stage. Segment packets bind pilot/predecessor/raw hashes, binary
+--output <new-dir>` automatically finishes the predicted stage and cap if needed.
+`--previous <continuation.json>` resumes a retained chain. Calibration invokes
+this automatically and records latest chains in `power.json`. Segment packets bind pilot/predecessor/raw hashes, binary
 identity, the original iteration count and absolute attempt index, with a
 separate load log and cap replay for each job. Qualification accepts the latest
 `--continuation` per case, recursively replays every prefix and conserves all
@@ -164,8 +166,26 @@ policy `precision` metadata. Its wall band is diagnostic only; every unit
 measuring that case requires K=6, even when the natural target fails.
 Full-portfolio units therefore always complete the panel if such a case exists.
 This band alone cannot reject/promote or tighten target payoff by inverse band.
-Target payoff/all-pairs, instruction hard caps, stage budgets, independent
-formal precision, lane/portfolio and correctness gates remain binding.
+Target payoff/all-pairs, instruction hard caps, stage budgets, lane/portfolio precision and correctness gates remain binding.
 A held-out fallback requires all six held-out layouts (`--held-out-panel`
 with `--held-out --pairs 30`); precise program bands and every lane still bind.
 No 3% precision limit or adopted A2 envelope is widened.
+
+
+`layout_formal_continuation --bundle <sealed-dir> --output <new-dir>`
+automatically continues all deficient formal A/A cases; `--case <id>` limits
+it to a subset and `--previous <continuation.json>` resumes that case. It
+requires byte-identical base/candidate source/images. Three-role argv, per-role
+N/startup eligibility, timeout, workload/image hashes and seeded rotation at
+absolute block indexes come from the sealed bundle, without re-calibration.
+Removed transient assets are restored at the original argv paths only from
+matching pinned bytes; existing files are never replaced. Original sealed
+files remain immutable. Each segment seals raw process windows/results, load,
+source/predecessor hashes and exact retained ratios; replay refuses role/order,
+count, correctness, counter, timer or identity drift. Formal load invalidates
+an entire appended segment; retained failed segments allow at most three whole
+load-only replacements. All other errors stop. Qualification accepts latest
+`--formal-continuation` chains, uses all case observations and keeps original
+joint lane blocks. Formal cap-imprecise cases also set the policy's diagnostic
+band/K=6 status; precision alone cannot block qualification. Payoff, stage,
+instruction, precise-case, lane/portfolio and correctness gates still bind.

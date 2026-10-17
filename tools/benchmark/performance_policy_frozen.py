@@ -66,6 +66,8 @@ PREVIEW_IMPLEMENTATION_FILES = (
     "tools/benchmark/external_report.py",
     "tools/benchmark/external_timeouts.py",
     "tools/benchmark/hosted_preview.py",
+    "tools/benchmark/formal_case_context.py",
+    "tools/benchmark/layout_formal_continuation.py",
     "tools/benchmark/layout_evidence.py",
     "tools/benchmark/layout_formal.py",
     "tools/benchmark/layout_formal_raw.py",

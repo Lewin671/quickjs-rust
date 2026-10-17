@@ -12,7 +12,7 @@ from .layout_identity import OFFSETS, digest, write_json
 from .layout_policy import analyze, round_up, rows
 
 
-def qualify(seed, portfolio, held_out, formal=None, extensions=None):
+def qualify(seed, portfolio, held_out, formal=None, extensions=None, formal_extensions=None):
     data = rows(portfolio, seed['cases'], 30)
     from .held_out import opportunity_ids
     held = rows(held_out, opportunity_ids(), 30)
@@ -53,11 +53,19 @@ def qualify(seed, portfolio, held_out, formal=None, extensions=None):
         if set(formal) != set(seed['cases']):
             raise ValueError('canonical formal inventory mismatch')
         results['formal'] = {}
-        for name, ratios in formal.items():
+        precision['formal'] = {}
+        formal_extensions = formal_extensions or {}
+        if not set(formal_extensions) <= set(formal):
+            raise ValueError('unknown formal continuation case')
+        for name, original in formal.items():
+            ratios = formal_extensions.get(name,original)
             stats = analyze({name: ratios})
+            pilot = analyze({name:original}) if name in formal_extensions else stats
+            record = precision_record(pilot,stats,len(ratios),base_n=len(original))
+            precision['formal'][name] = record or {'pairs':len(ratios),'status':'incomplete'}
             results['formal'][name] = stats
-            if not stats['precise']:
-                failures.append(name + ': canonical formal A/A imprecise')
+            if record is None or record['status']=='needs cap continuation':
+                failures.append(name + ': canonical formal A/A automatic continuation incomplete')
         for lane in ('broad', 'sentinel', 'external', 'portfolio'):
             stats = analyze({n: ratios for n, ratios in formal.items()
                              if lane == 'portfolio' or n.startswith(lane + '/')})
@@ -171,6 +179,8 @@ def main():
     parser.add_argument('--formal-bundle', type=Path, required=True)
     parser.add_argument('--continuation',type=Path,action='append',default=[],
                         help='latest immutable power continuation per case (chains retain pilot)')
+    parser.add_argument('--formal-continuation',type=Path,action='append',default=[],
+                        help='latest automatic three-role subset continuation per formal case')
     parser.add_argument('--formal-load-log', type=Path, required=True,
                         help='sealed queue intruders.log; any heavy sample invalidates formal A/A')
     parser.add_argument('--host-attestation', type=Path, required=True,
@@ -217,7 +227,17 @@ def main():
             raise ValueError('power continuation host/recipe mismatch')
         extensions[name] = ratios
         paths['continuation/'+name] = path
-    policy = qualify(packets['a2'], packets['portfolio'], packets['held-out'], formal, extensions)
+    from .layout_formal_continuation import replay as replay_formal
+    formal_extensions = {}
+    for path in args.formal_continuation:
+        value=json.loads(path.read_text());name=value['case_id']
+        if name in formal_extensions:raise ValueError('duplicate formal continuation case')
+        ratios,extended_host=replay_formal(path.resolve(),folder.resolve(),name,pilot=formal[name])
+        if extended_host!=current or value.get('host_node')!=attestation['node']:
+            raise ValueError('formal continuation host/recipe mismatch')
+        formal_extensions[name]=ratios
+        paths['formal-continuation/'+name]=path
+    policy = qualify(packets['a2'], packets['portfolio'], packets['held-out'], formal, extensions, formal_extensions)
     paths['formal-summary'] = folder / 'summary.json' 
     policy['screen_host'] = recorded
     policy['host'] = current

@@ -12,6 +12,9 @@ from tools.benchmark import screen
 class PowerTests(unittest.TestCase):
     def test_formula_limits_and_fixed_cap_stage(self):
         self.assertEqual(required_pairs(.03),30)
+        self.assertEqual(required_pairs(.08134702043130693),221)
+        self.assertEqual(required_pairs(.04,60),107)
+        self.assertEqual(allocation({'relative_half_width':.04},60,False,base_n=60),107)
         self.assertEqual(required_pairs(.059945073264363824),120)
         self.assertEqual(required_pairs(.2),240)
         pilot={'relative_half_width':.059945073264363824}
@@ -92,6 +95,33 @@ class PowerTests(unittest.TestCase):
         self.assertTrue(out['qualified'])
         self.assertEqual(out['precision']['cases'][name]['pairs'],120)
         self.assertTrue(all(lens=={30} for count,lens in observed if count>1))
+
+    def test_formal_cap_fallback_qualifies_and_forces_panel_without_changing_lanes(self):
+        from tools.benchmark.layout_qualification import qualify
+        from tools.benchmark.layout_power import needs_panel,validate_precision
+        from tools.benchmark.tests.test_layout_rule import policy,packet
+        p=policy();data=packet(p);data.update(pairs=30,host=p['host'])
+        for c in data['cases']:c['ratios']={m:[1.]*30 for m in ('instructions','wall_ns')}
+        held={'pairs':30,'host':p['host'],'cases':[{'id':'held-out/lib/program','ratios':{m:[1.]*30 for m in ('instructions','wall_ns')}}]}
+        name='sentinel/recursive_call_tree'
+        formal={c['id']:[1.]*30 for c in data['cases']};formal[name]=[1.00001]*30
+        observed=[]
+        def analyze(values):
+            observed.append({len(v) for v in values.values()})
+            h=.04 if list(values)==[name] and values[name][0]==1.00001 else .01
+            return {'ratio':1.,'confidence_interval':{'lower':.999,'upper':1.001},
+                    'relative_half_width':h,'precise':h<=.03}
+        with patch('tools.benchmark.layout_qualification.analyze',side_effect=analyze), \
+             patch('tools.benchmark.held_out.opportunity_ids',return_value={'held-out/lib/program'}):
+            incomplete=qualify(p,data,held,formal)
+            self.assertFalse(incomplete['qualified'])
+            out=qualify(p,data,held,formal,formal_extensions={name:[1.00001]*240})
+        self.assertTrue(out['qualified'])
+        self.assertEqual(out['precision']['formal'][name]['status'],'imprecise on this host')
+        self.assertTrue(diagnostic_only(out,name));self.assertTrue(needs_panel(out))
+        self.assertEqual(out['lanes']['portfolio'],p['lanes']['portfolio'])
+        validate_precision(out)
+        self.assertEqual(out['cases'],p['cases'])
 
 
 class ContinuationTests(unittest.TestCase):

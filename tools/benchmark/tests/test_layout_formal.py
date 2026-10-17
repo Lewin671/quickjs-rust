@@ -66,6 +66,18 @@ class FormalTests(unittest.TestCase):
         self.assertEqual(verdict['label'], 'incomplete')
         self.assertTrue(any('imprecise' in s for s in missing))
 
+    def test_formal_cap_diagnostic_requires_six_and_keeps_payoff(self):
+        other='broad/method_call'
+        self.policy['precision']={'formal':{other:{'status':'imprecise on this host'}}}
+        def stats(values):
+            return {**self.analyze(values),'precise':list(values)!=[other]}
+        self.assertFalse(self.decide(analyzer=stats)[0]['passed'])
+        self.panels['panels']*=6
+        self.assertTrue(self.decide(analyzer=stats)[0]['passed'])
+        self.policy['precision']['formal'][self.target]={'status':'imprecise on this host'}
+        self.values[self.target]=[1.]*30
+        self.assertTrue(any('target payoff' in s for s in self.decide(analyzer=stats)[2]))
+
     def test_formal_wall_event_needs_panel_and_mixed_panel_resolves(self):
         self.values['broad/method_call'] = [1.04]*30
         verdict, missing, _, _ = self.decide()

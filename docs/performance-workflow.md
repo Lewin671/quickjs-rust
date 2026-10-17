@@ -156,12 +156,12 @@ extra `--case` remain diagnostic helpers.
 
 The standing rule is in [T022](../tasks/T022-performance-priority-controller.md#layout-robust-decisions).
 The policy's measured bands apply only on its host/toolchain/recipe; a mismatch
-requires recalibration. [Power/fallback rules](layout-policy-artifacts.md#precision-power-and-continuation) force K=6 for host-imprecise cases. Every screen
+requires recalibration. Every calibration/formal A/A automatically follows the
+[power/continuation procedure](layout-policy-artifacts.md#precision-power-and-continuation), including diagnostic bands/K=6 at the cap. Every screen
 covers all broad, sentinel and external cases, with every non-target a
-control. It reports `pass`, `control event`, `wall event`, `reject`, or
-`incomplete`, with per-case dual metrics and independent lane/portfolio gates.
+control. It reports `pass`, `control event`, `wall event`, `reject`, or `incomplete`,
+with per-case dual metrics and independent lane/portfolio gates.
 An event is incomplete evidence, not a rejection or a passing screen.
-
 For an explicit panel (both output paths must have equal-length names):
 
 ```sh
