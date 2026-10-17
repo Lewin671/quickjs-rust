@@ -1,4 +1,8 @@
-"""One frozen layout-rule attempt: build all variants, screen natural, finish K=6 if needed."""
+"""One frozen layout-rule attempt: build all variants, screen natural, finish K=6.
+
+Intermediate migration stages use cumulative regression budgets; final stages
+and leaf units must earn the frozen target payoff.
+"""
 from __future__ import annotations
 
 import argparse
@@ -12,6 +16,22 @@ from .layout_rule import evaluate
 from .layout_power import needs_panel
 from .layout_variants import build
 from .performance_decision import load_unit
+
+
+def evaluate_attempt(unit, policy, packets):
+    """Use cumulative regression gates until a migration reaches its payoff stage."""
+    gate = unit['layout_gate']
+    migration = unit.get('migration', {})
+    stage = (unit.get('unit_kind') == 'migration'
+             and migration['current_stage'] < migration['stages'])
+    targets = (migration['cumulative_target_ids'] if stage
+               else unit['fast_gate']['target_ids'])
+    return evaluate(policy, packets[0], targets,
+        unit['fast_gate']['target_max_candidate_over_base'],
+        panel=packets if len(packets) == 6 else None,
+        instruction_blind=gate['mechanism_class'] == 'instruction-blind',
+        memory_targets=gate['memory_wall_targets'], panel_required=gate['panel_required'],
+        stage=stage, stage_limit=migration.get('stage_max_candidate_over_base', 1.25))
 
 
 def main():
@@ -34,17 +54,11 @@ def main():
     base = out / 'base000/identity.json'
     candidate = out / 'cand000/identity.json'
     evidence = measure_panel(base, candidate, out / 'screen', natural=True)
-    def verdict(packets):
-        return evaluate(policy, packets[0], unit['fast_gate']['target_ids'],
-            unit['fast_gate']['target_max_candidate_over_base'],
-            panel=packets if len(packets) == 6 else None,
-            instruction_blind=gate['mechanism_class'] == 'instruction-blind',
-            memory_targets=gate['memory_wall_targets'], panel_required=gate['panel_required'])
-    result = verdict(evidence['panels'])
+    result = evaluate_attempt(unit, policy, evidence['panels'])
     mandatory = gate['panel_required'] or gate['mechanism_class'] == 'instruction-blind' or needs_panel(policy)
     if mandatory or (result['panel_required'] and not result['failures']):
         evidence = measure_panel(base, candidate, out / 'screen', complete=True)
-        result = verdict(evidence['panels'])
+        result = evaluate_attempt(unit, policy, evidence['panels'])
     write_json(out / 'verdict.json', {'unit_sha256': unit_hash, **result})
     print(json.dumps(result, indent=2))
     return 0 if result['passed'] else 3

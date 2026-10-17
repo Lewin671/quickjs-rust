@@ -1,18 +1,16 @@
 # T056: Interpreter core v2
 
-- Status: active; target design delivered, implementation not started.
-- Implementation: none in runtime; proposed architecture and ordered migration
-  are in [interpreter-core-v2](../docs/design/interpreter-core-v2.md).
-- Verified at: source base `6af6230036f917f6b8df4dc51aa6402a7ef367ce` plus
-  this design-only delta, 2026-10-16; source inspection, `check-context.py`,
-  staged `check-touched.sh --staged --explain` and diff whitespace checks passed.
-- Evidence: source-check findings and supplied measurement provenance below;
-  no new timing, runtime test or full Test262 result is claimed.
-- Unresolved: exact current cost attribution, numeric migration budgets,
-  header/provenance/ABI qualification, Rust enum-pattern API migration and
-  native/suspended-frame lifetime proof.
-- Next action: review target contracts, then execute unit 0 locally or on the
-  lead-approved measurement host; freeze/validate each plan before runtime edits.
+- Status: active; unit 0 part 1 collection in progress; runtime implementation not started.
+- Implementation: no runtime changes; migration-screen stage-budget plumbing is
+  fixed in the benchmark iteration wrapper.
+- Verified at: source base `b481894d351d933e94717a9c295c15fe4a466804`,
+  2026-10-17 UTC, plus this tooling delta; four focused screen regression tests pass.
+- Evidence: unit 0 progress below; the target design remains
+  [interpreter-core-v2](../docs/design/interpreter-core-v2.md).
+- Unresolved: queued held-out/attribution/resource results; exact event counters
+  absent from the existing diagnostic build; part 2 development-lane evidence.
+- Next action: finish queued collection, record durable results, draft and validate
+  M1 without implementing it; resolve the diagnostic boundary before freezing.
 
 ## Goal and scope
 
@@ -23,7 +21,7 @@ identity throughout. The target lives in the linked design; stage order and acce
 This design does not approve an implementation, reopen an exhausted leaf
 budget, establish a fresh performance priority, or claim a measured speedup.
 
-Design-only owner: `agent/interpreter-core-design/codex`, base above, worktree
+Original design-only owner: `agent/interpreter-core-design/codex`, base above, worktree
 `worktrees/quickjs-rust/interpreter-core-design`. Allowed changes are the new
 design, this task and its tasks/README row. No runtime, dependency, benchmark,
 third_party, other worktree or performance-plan changes; no iMac jobs, push
@@ -146,6 +144,28 @@ and computed-key code alongside literal fields. Held-out inputs stay distinct
 from the targets used to select the mechanism. Counter evidence must show that
 ordinary-path wins survive when accelerators decline, rather than a tier switch.
 
+## Unit 0 part 1 progress
+
+Owner: `agent/t056-unit0/codex`, brief base `b481894d`; no runtime, compiler
+recipe, order, manifest or benchmark changes. All engine measurements run
+through the shared iMac queue. Independent development programs belong to part 2.
+
+The fresh 30-block workers-4 comparison completed in queue job
+`20261017T061057Z-t056-unit0-baseline30`, 1454 seconds, all 76 cases complete,
+no measurement-health issue or heavy disturbance. Current executable SHA-256 is
+`c7f0f66a519181b214bdc5ca6404cf428f0d18cbd1ab1d0e26386097619b949e`.
+The official summary remains inconclusive on the interval for
+`external/sunspider-1.0/bitops-3bit-bits-in-byte`; no favorable rerun or waiver.
+Held-out, existing counters, RSS, exact-binary samples and v2 raw replay are queued.
+
+The schema-3 iteration wrapper omitted `stage`/`stage_limit` when calling the
+existing rule. A neutral full six-layout packet therefore failed the final
+0.97 payoff even during an intermediate migration. The wrapper now uses the
+cumulative stage budget before the final stage and retains the final/leaf payoff.
+Four focused tests cover neutrality, persistent over-budget cost, final payoff
+and the unchanged leaf gate. This changes neither collection nor policy bands;
+no runtime screen, optimization or promotion is claimed.
+
 ## Design acceptance and verification
 
 - [x] One target specifies flat frames, every ordinary named-property storage
@@ -156,7 +176,7 @@ ordinary-path wins survive when accelerators decline, rather than a tier switch.
 - [x] Documentation budgets, links and task index pass `check-context.py`.
 - [x] Staged documentation fast gate passes for the three allowed files.
 
-Only Markdown changes: no executable examples, scripts or Cargo inputs change.
-The repository's documentation-only gate skips Rust/Test262; this session does
-not claim full runtime verification. Every future runtime migration stage must
-run full configured Test262, `check.sh` and NG comparisons as the design requires.
+The original design changed only Markdown and did not claim runtime verification.
+Unit 0's tooling and measurement verification is recorded in its section above.
+Every future runtime migration stage must run full configured Test262,
+`check.sh` and NG comparisons as the design requires.
