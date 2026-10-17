@@ -122,6 +122,7 @@ qjs_check_stage "benchmark shell syntax" \
     "$ROOT_DIR/scripts/performance-policy-audit.sh" \
     "$ROOT_DIR/scripts/performance-preview.sh" \
     "$ROOT_DIR/scripts/performance-decision.sh" \
+    "$ROOT_DIR/scripts/development-performance-preview.sh" \
     "$ROOT_DIR/scripts/pre-push" "$ROOT_DIR/scripts/test-git-hooks.sh" \
     "$ROOT_DIR/scripts/check.sh" "$ROOT_DIR/scripts/check-touched.sh"
 qjs_check_stage "file-size guard" "$ROOT_DIR/scripts/check-file-size.sh"

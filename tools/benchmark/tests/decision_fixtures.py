@@ -80,6 +80,22 @@ def external(engines, target_base=0.9, complete=True, cycles=None):
             "suites": suites}
 
 
+def development(engines, host=None, ratio=3.0):
+    """A development preview report: the frozen corpus, measured by these engines."""
+    from tools.benchmark.development import corpus_inventory
+    suites = []
+    for suite_id, case_ids in sorted(corpus_inventory().items()):
+        suites.append({"id": suite_id, "cases": [
+            {"id": case_id, "capability": dict.fromkeys(engines, "ok"),
+             "candidate_over_base": 1.4, "candidate_over_quickjs_ng": ratio,
+             "paired_comparisons": {"base": effect(1.4), "quickjs-ng": effect(ratio)}}
+            for case_id in sorted(case_ids)]})
+    return {"schema_version": 3, "artifact_type": "quickjs-development-preview-report",
+            "host": HOST if host is None else host, "blocks": 30,
+            "binary_sha256": {role: engine["binary_sha256"] for role, engine in engines.items()},
+            "suites": suites}
+
+
 def profile(directory, revision):
     asset = directory / "profile.sample"
     asset.write_text("30 stack samples in generic VM\n")

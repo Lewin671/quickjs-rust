@@ -90,7 +90,7 @@
       "tools/benchmark/preview_sentinel.py",
       "tools/benchmark/preview_summary.py"
     ],
-    "aggregate_sha256": "8b64f84d1091b066582d42665f5efac806945cd6b248f8f141a5ee3a040e2694"
+    "aggregate_sha256": "600dcb91967b596eca0ada5f5c0dd23612f47919d46ce09cb8fe6ad999566521"
   },
   "hosted_pr": {
     "tier": "informational_preview",

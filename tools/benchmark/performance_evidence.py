@@ -184,7 +184,8 @@ def load_archived_manifest(path: Path, lane: str = "broad"):
             temporary.unlink(missing_ok=True)
 
 
-def replay_reports(broad_path: Path, external_path: Path, sentinel_path: Path | None) -> None:
+def replay_reports(broad_path: Path, external_path: Path, sentinel_path: Path | None,
+                   development_path: Path | None = None) -> None:
     """Reconstruct reports from colocated raw/manifest files before CLI decisions.
 
     Hashes alone only label a supplied file. Replay checks that the file was
@@ -212,3 +213,19 @@ def replay_reports(broad_path: Path, external_path: Path, sentinel_path: Path | 
         raise PerformanceDecisionError("external manifest is not the frozen corpus contract")
     if replay(external_path.parent / "external-raw.jsonl", manifest) != external:
         raise PerformanceDecisionError("external report differs from raw replay")
+    if development_path is None:
+        return
+    from .development import MANIFEST_PATH as development_manifest_path
+    from .development import development_report, load_development_manifest
+    from .npm_lane import npm_status
+    development, _ = _read_json(development_path, "development report")
+    development_manifest = load_development_manifest(
+        development_path.parent / "development-manifest.json"
+    )
+    if development_manifest.sha256 != load_development_manifest(development_manifest_path).sha256:
+        raise PerformanceDecisionError("development manifest is not the frozen corpus contract")
+    if replay(
+        development_path.parent / "development-raw.jsonl", development_manifest,
+        status=npm_status, report=development_report,
+    ) != development:
+        raise PerformanceDecisionError("development report differs from raw replay")

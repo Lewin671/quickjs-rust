@@ -19,6 +19,7 @@ are right.
 | Generic sentinels | `benchmarks/generic-sentinels-manifest.json`, workload `benchmarks/workloads/generic-sentinels.js` | wall ns per declared operation |
 | External | `benchmarks/external-preview.json` (sources fetched into a hash-checked cache) | whole-process wall time |
 | Held-out | `benchmarks/held-out-preview.json` (npm tarballs fetched into a hash-checked cache) | whole-process wall time |
+| Development | `benchmarks/development-preview.json` (npm tarballs, same protocol, selectable work) | whole-process wall time |
 | Resources | `benchmarks/resources.json`, `benchmarks/resource-analysis.json`, workload `benchmarks/workloads/resource-probe.js` | fresh-process latency, peak RSS, binary size |
 | Lifecycle | Criterion bench behind `scripts/lifecycle-bench.sh` | parse and compile time at the public Rust API |
 
@@ -43,18 +44,18 @@ QuickJS-NG's result; they are the controls for ordinary calls and property acces
 JetStream 3 subset. Results are never an official score and an incomplete suite
 has no suite score; the metric includes process start, parsing, execution and shutdown.
 
-**Held-out** has 9 cases: pinned, unmodified third-party npm libraries (parsing,
-templating, numerics, crypto) driven by first-party scripts. It is the
-independent generalization check, so nothing ever selects work from it; see
+**Held-out** (9 cases) and **development** (10) are pinned, unmodified
+third-party npm libraries driven by first-party scripts: acceptance, which
+nothing ever selects work from, and selectable work, which may be profiled and
+ranked. The shared loader refuses a program both lanes pin; see
 [performance-workflow.md](performance-workflow.md#terms).
 
-**Resources** are three independent lanes selected with
+**Resources** are three lanes selected with
 `scripts/resource-benchmark.sh --lane fresh|rss|size`: peak RSS is a single
 direct-process value, not a tree; binary size is the logical executable size.
 
-**Lifecycle** times `qjs_parser::parse_script` and
-`qjs_runtime::compile_script` on two repository fixtures. It is diagnostic
-and is never pooled with the lanes above.
+**Lifecycle** times `qjs_parser::parse_script` and `qjs_runtime::compile_script`
+on two repository fixtures; it is diagnostic and never pooled with the lanes above.
 
 ## Engines compared
 
@@ -68,20 +69,20 @@ The checked-in recipes are historical. `perf-compare.sh` derives current host
 recipes; it and `perf-loop.sh` build both revisions with `build_cache build-rust`,
 using hosted previews' target, agents, flags and release settings, with fresh caches.
 
-A build receipt binds an executable hash to a clean revision and recipe. `tools/benchmark/local_receipt.py` writes local receipts and
-refuses a toolchain that differs from the recipe or a reference checkout
-that is not clean at the pin. A run without clean, recipe-matching receipts
-still measures but is recorded as unverified and cannot be comparison
-input. The loader is `tools/benchmark/receipts.py`.
+A build receipt binds an executable hash to a clean revision and recipe.
+`tools/benchmark/local_receipt.py` writes local receipts and refuses a toolchain
+that differs from the recipe or a reference checkout that is not clean at the
+pin. A run without clean, recipe-matching receipts still measures but is
+recorded as unverified and cannot be comparison input. The loader is
+`tools/benchmark/receipts.py`.
 
 ## How a sample is taken
 
 Internal lanes (broad, sentinels):
 
-- The workload contains no clock. Python brackets one fresh engine process
-  with `perf_counter_ns`, so the metric is amortized black-box throughput:
-  startup, parsing, setup, execution and shutdown are all inside the
-  window.
+- The workload contains no clock. Python brackets one fresh engine process with
+  `perf_counter_ns`, so the metric is amortized black-box throughput: startup,
+  parsing, setup, execution and shutdown are all inside the window.
 - Per engine and case, the runner measures zero-iteration startup, then
   calibrates the iteration count so the window meets the case's minimum
   duration and startup stays under the case's allowed fraction. A sample
@@ -167,10 +168,9 @@ accidental mixing or replacement of files. It is not authentication.
 Before trusting a metric, both commands also rebuild each report from its
 raw file (`tools/benchmark/performance_evidence.py`).
 
-`decision_readiness` is `ready_for_unit_gates` or `inconclusive`. It is
-permission to evaluate a plan's gates, not a result. Every bundle, report
-and summary carries `claim_eligible: false`: nothing these tools emit is a
-fixed-hardware performance claim.
+`decision_readiness` is `ready_for_unit_gates` or `inconclusive`: permission to
+evaluate a plan's gates, not a result. Every bundle, report and summary carries
+`claim_eligible: false`, so nothing here is a fixed-hardware claim.
 
 Raw files hold one JSON record per line; `tools/benchmark/records.py` and
 `tools/benchmark/raw_validation.py` define and validate them. Report input
@@ -202,9 +202,10 @@ Schema 1 is a leaf plan; schema 2 adds `unit_kind` and optional `migration`
 bytes/hashes. Schema 3 adds the required layout contract for new units.
 
 The **opportunity queue** (`queue`) lists, per lane, the cases whose
-candidate/QuickJS-NG ratio exceeds `--target-ratio`, ranked by that ratio.
-It embeds the bundle's engine identities and evidence hashes. It is derived
-data and is not stored in the repository.
+candidate/QuickJS-NG ratio exceeds `--target-ratio`, ranked by that ratio; a
+queue carrying the development lane is schema 4. It embeds the bundle's
+engine identities and evidence hashes. It is derived data, never stored in
+the repository.
 
 A **profile receipt** hashes the raw profile, workload, sampler command and
 exact executable (`profile.py`). Validation binds it to the queue candidate.
@@ -331,13 +332,12 @@ exactly, not as a threshold.
 | `QJS_CF_TRACE=3` | also the bytecode of each `CFVM` body (`CFVMCODE`) |
 | `QJS_IC_TRACE` (any value) | `ICUPDATE` per named-property cache update: key, storage kind, occupied entries |
 
-`python3 -m tools.benchmark.tl_trace --binary <perf-counters qjs> --case
-<spec>` summarizes a `QJS_TL_TRACE=1` run as two histograms:
-deoptimization sites by frequency, and interpreted regions weighted by
-`TLEDGE` count and joined with their last give-up line.
-`scripts/perf-loop.sh --trace <spec>` builds the diagnostic binary and
-runs it. A histogram of `CFVM` lines ranks the callees that still pay for
-a full interpreter frame.
+`python3 -m tools.benchmark.tl_trace --binary <perf-counters qjs> --case <spec>`
+summarizes a `QJS_TL_TRACE=1` run as two histograms: deoptimization sites by
+frequency, and interpreted regions weighted by `TLEDGE` count and joined with
+their last give-up line. `scripts/perf-loop.sh --trace <spec>` builds the
+diagnostic binary and runs it. A histogram of `CFVM` lines ranks the callees
+that still pay for a full interpreter frame.
 
 ## Pinned code layout
 
@@ -456,17 +456,15 @@ sources without changing any registry decision.
 
 ## Measurement artifacts
 
-- **Startup dilution.** When a case does little more work than process
-  start, a one-run-per-binary ratio is mostly startup and is pulled toward
-  1.0. The internal lanes avoid this by calibrating the window; whole
-  process external ratios of short cases do not.
+- **Startup dilution.** A case doing little more than process start makes a
+  one-run-per-binary ratio mostly startup, pulled toward 1.0; the internal
+  lanes calibrate the window, whole-process external ratios do not.
 - **Amplification.** `scripts/external-corpus-ab.py BASE CAND` repeats each
-  cached SunSpider and Kraken source text until a process runs for
-  `--target` seconds, keeping every copy at top level because scope takes
-  part in tier selection. It needs `--base-adapter quickjs-ng` when the
-  base is QuickJS-NG. It has no receipts and no frozen inventory, so it
-  ranks cases and is never quoted as a result. A ratio whose range spans
-  1.0 is no evidence.
+  cached SunSpider and Kraken source text until a process runs for `--target`
+  seconds, keeping every copy at top level because scope takes part in tier
+  selection. It needs `--base-adapter quickjs-ng` when the base is QuickJS-NG.
+  It has no receipts and no frozen inventory, so it ranks cases and is never
+  quoted as a result; a ratio whose range spans 1.0 is no evidence.
 - **Path sensitivity.** The same script, or byte-identical binaries, can
   time differently from different filesystem paths. Compare only numbers
   taken through the same harness along the same paths.
