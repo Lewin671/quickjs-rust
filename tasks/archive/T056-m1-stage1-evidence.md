@@ -99,3 +99,40 @@ through `imac-bench.sh loop`, candidate `11c9fc08` against plan base `351004f3`.
   disabled on this host. (Job
   `20261017T181321Z` was cancelled before running: it had been submitted from a
   working tree with an uncommitted documentation change.)
+- The lead fixed the midnight decoding on main (`f6fdd25b`). Merge
+  `a8c533ef` (runtime again identical to `11c9fc08`) was screened once as job
+  `20261018T003151Z-t056-m1s1-screen-final`, output
+  `target/layout-attempts/t056-m1s1-attempt1-final`, exit 3 after 12,087 s,
+  complete, no DISTURBED report. `verdict.json` SHA-256
+  `ef41a810c3374cd7e7068a0069bfa26bea59ee2088031dc2705f2af6375f20f1`
+  (copy in workspace `outputs/t056-m1s1-screen/`).
+
+### Verdict: `reject` (policy v3, stage cap 1.025)
+
+All 86 cases pass their case rule after the K=6 panel (wall band 1.025 =
+the stage cap; 19 natural events, all resolved). The only failures are
+lane gates: `layout 0 development` and `layout 2 development: wall lane
+ceiling exceeded`.
+
+| Layout | broad | sentinel | external | development | portfolio |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| ceiling | 1.01295 | 1.01569 | 1.00738 | 1.00963 | 1.00725 |
+| 0 (natural) | 0.99089 | 0.99784 | 0.99601 | **1.01276** | 0.99658 |
+| 1 | 1.00954 | 1.00832 | 1.00112 | 1.00311 | 1.00429 |
+| 2 | 0.99000 | 0.99737 | 1.00088 | **1.01285** | 0.99884 |
+| 3 | 0.99191 | 1.00687 | 1.00013 | 1.00403 | 0.99865 |
+| 4 | 0.99263 | 0.99394 | 1.00040 | 1.00041 | 0.99768 |
+| 5 | 0.99286 | 1.01294 | 1.00408 | 1.00050 | 1.00100 |
+
+Targets (natural wall median / instruction median, candidate over base):
+moment/dates 0.9993 / 1.0088, diff/compare 1.0326 / 1.0051, meriyah/parse
+1.0282 / 1.0029. Instruction counts rise slightly, as expected for a stage
+that adds linking without yet removing name comparisons.
+
+Under the pending policy v4 lane-event rule (a natural lane excess triggers
+the panel and rejects only if the six-layout geomean exceeds the ceiling or
+every layout does), the development lane geomean is 1.00560 (ceiling
+1.00963) and only two of six layouts exceed it, so v4 would not reject on
+this lane, and no other failure is recorded. Under the frozen v3 rule this
+is a complete, valid failed screen; whether it consumes the plan's single
+attempt or is re-judged under v4 is a lead decision. No rerun was made.

@@ -1,7 +1,7 @@
 # T056: Interpreter core v2
 
 - Status: blocked; unit 0 complete; M1 stage 1 implemented on
-  `agent/t056-m1-atoms/claude`, its stage screen blocked by a tool error.
+  `agent/t056-m1-atoms/claude`; its screen rejected under v3 lane gates only.
 - Implementation: present on that branch (`11c9fc08`): atom domain, cached
   per-domain linking of named operands, Value facade. Not on main.
 - Verified at: `11c9fc08`, 2026-10-17: fast gate, curated Test262 5170/5170,
@@ -10,12 +10,14 @@
 - Evidence: [part 1](archive/T056-unit0-part1-evidence.md),
   [part 2](archive/T056-unit0-part2-evidence.md), [M1 stage 1](archive/T056-m1-stage1-evidence.md);
   plan [`interpreter-core-v2-atoms-layouts`](performance-units/interpreter-core-v2-atoms-layouts.json).
-- Unresolved: stage-1 screen blocked by tooling: two runs ended in the
-  settle guard (fixed in `f1dc1032`), the third (`5d47ea8b`) in the monitor's
-  midnight-crossing timestamp check; no verdict, attempt unspent; M2 stages/budgets must absorb the activation-environment
+- Unresolved: stage-1 screen (`a8c533ef`) is a complete v3 `reject` on the
+  development lane ceiling in layouts 0 and 2 only; every case passes the 1.025
+  stage cap. v4's lane-event rule would not reject (six-layout geomean
+  1.00560 < 1.00963). M2 stages/budgets must absorb the activation-environment
   scope; part 1's imprecise bitops-3bit-bits-in-byte interval.
-- Next action: fix the monitor's midnight handling, then screen stage 1 once
-  under the stage budget and, if it passes, start M1.2.
+- Next action: lead decides whether the v3 reject spends the single attempt
+  (closing this implementation shape) or is re-judged under qualified v4; no
+  rerun until then.
 
 ## Goal and scope
 
