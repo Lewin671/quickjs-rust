@@ -213,6 +213,31 @@ class HeldOutPolicyLoadingTests(unittest.TestCase):
                 with_held_out_successor(parent, 'p'*64, meta)
         self.assertEqual(with_held_out_successor(parent, 'p'*64), (parent, None))
 
+    def test_published_v4_is_qualified_and_succeeds_v2_v3_held_out_gates(self):
+        from tools.benchmark.layout_policy import HELD_OUT_SUCCESSOR
+        root = Path(__file__).resolve().parents[3] / 'benchmarks/policies'
+        v4_path = root / 'imac-x86_64-rust1.95-fat16-layout-v4.json'
+        self.assertEqual(digest(v4_path), HELD_OUT_SUCCESSOR['sha256'])
+        self.assertIn(HELD_OUT_SUCCESSOR['sha256'], (root / 'imac-x86_64-rust1.95-fat16-layout-v4.sha256').read_text())
+        published = load_policy(v4_path, digest(v4_path), live=False)
+        self.assertEqual(published['held_out_rule'], HELD_OUT_RULE)
+        for name in ('v2', 'v3'):
+            path = root / f'imac-x86_64-rust1.95-fat16-layout-{name}.json'
+            frozen = load_policy(path, digest(path), live=False)
+            merged, sha = with_held_out_successor(frozen, digest(path))
+            self.assertEqual(sha, HELD_OUT_SUCCESSOR['sha256'])
+            self.assertEqual(merged['held_out'], published['held_out'])
+            self.assertEqual(merged['lanes']['held-out'], published['lanes']['held-out'])
+            self.assertEqual(merged['cases'], frozen['cases'])
+            self.assertEqual({k: v for k, v in merged['lanes'].items() if k != 'held-out'},
+                             {k: v for k, v in frozen['lanes'].items() if k != 'held-out'})
+            self.assertNotIn('held_out_rule', frozen)
+        self.assertEqual(with_held_out_successor(published, HELD_OUT_SUCCESSOR['sha256']), (published, None))
+        v3 = load_policy(root / 'imac-x86_64-rust1.95-fat16-layout-v3.json', HELD_OUT_SUCCESSOR['parents'][1], live=False)
+        self.assertEqual({k: v for k, v in published.items() if k not in (
+            'held_out', 'held_out_rule', 'held_out_manifest_sha256', 'held_out_evidence', 'lanes',
+            'precision', 'qualification')}, {k: v for k, v in v3.items() if k not in ('held_out', 'lanes', 'precision', 'qualification')})
+
 
 class HeldOutFormalTests(formal_fixture.FormalTests):
     """Reuses the formal fixture with a v4 held-out policy."""

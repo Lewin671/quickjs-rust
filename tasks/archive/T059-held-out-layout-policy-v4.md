@@ -1,12 +1,19 @@
 # T059: Held-out layout persistence and candidate formal continuation (policy v4)
 
-- Status: active; calibration plan frozen, tooling landed, v4 timing queued.
-- Implementation: present on branch `agent/policy-v4/claude` (no runtime change).
-- Verified at: tooling commit, staged fast gate 629 tool tests passing.
-- Evidence: frozen plan below; raw job outputs will be workspace-local under
-  `outputs/imac-bench/<job>/`.
-- Unresolved: v4 not yet calibrated or qualified.
-- Next action: run the frozen jobs, then publish v4 and set `HELD_OUT_SUCCESSOR`.
+- Status: closed-landed; policy v4 qualified and published.
+- Implementation: present; tooling `1228aa64` + lane-event rule `a13d7004`,
+  [policy v4](../../benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v4.json),
+  SHA-256 `1eb7de462de0cb9f85c581716392d36dedc7c0c655afde1280c5c94c5052754b`,
+  bound as `HELD_OUT_SUCCESSOR` of v2/v3. No runtime code changed.
+- Verified at: iMac jobs `20261017T205859Z-t059-v4-heldout-a2`,
+  `20261017T223239Z-t059-v4-heldout-aa30-r2`, `20261017T223240Z-t059-v4-qualify-r2`
+  (all exit 0, no DISTURBED); qualification `qualified: true, failures: []`;
+  branch fast gate passing (see Outcome).
+- Evidence: plan, seed and outcome below; raw job outputs are workspace-local
+  under `outputs/imac-bench/<job>/`.
+- Unresolved: a candidate formal case still imprecise at 240 blocks stays
+  incomplete (no diagnostic fallback for candidate bundles).
+- Next action: none here; T057 stage 1 is re-measured fresh under v4 by its owner.
 
 ## Lead decision (2026-10-17, recorded verbatim before any timing)
 
@@ -148,3 +155,18 @@ were cancelled while queued, unmeasured, to pick up main's wall-clock settle
 fix (`f1dc1032`, merged as `7bc826bb`); replacements
 `20261017T223239Z-t059-v4-heldout-aa30-r2` (timed) and
 `20261017T223240Z-t059-v4-qualify-r2` (no timing) run at `7bc826bb`.
+
+## Outcome
+
+Qualification A/A `20261017T223239Z-t059-v4-heldout-aa30-r2` (c7f0f66a, 30
+pairs, exit 0 / 3193 s, no DISTURBED, no continuation needed): every program
+precise (half-widths 0.34%-0.93%), no instruction control event; lane 1.00032
+[0.99895, 1.00203] inside [1/1.005018, 1.005018]. Qualify job (no timing,
+6 s) replayed the A2, seed, reused v3 inputs and the A/A, and wrote v4 with
+the seed's bands unchanged (table above). All v3 case bands, selection-lane
+and portfolio ceilings, host and precision records are byte-equal in v4.
+
+The lane-event rule and the held-out rule are selected by v4's
+`held_out_rule`; v2/v3 plans keep their selection bands but, after this
+publication, every screen (`layout_iteration`) and decision (`decide`) uses
+v4's held-out gate and lane-event rule and records `held_out_policy_sha256`.

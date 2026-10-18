@@ -19,7 +19,12 @@ from .statistics import relative_half_width
 HELD_OUT_RULE = 'six-layout-persistence-v4'
 # Plans frozen on a parent policy keep its selection gates, but every decision
 # after the successor's publication uses the successor's held-out gate (T059).
-HELD_OUT_SUCCESSOR = None
+HELD_OUT_SUCCESSOR = {
+    'path': 'benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v4.json',
+    'sha256': '1eb7de462de0cb9f85c581716392d36dedc7c0c655afde1280c5c94c5052754b',
+    'parents': ('22a1907dae06eb963dcb25592a05973e3bd69153e3c23a70ddec08ef64f07ca6',   # v2
+                'f655f25a86f4933cfb11a097a7e109b493628bc1f9a9d320cd27bd7bf300ba33'),  # v3
+}
 
 
 def geomean(values):

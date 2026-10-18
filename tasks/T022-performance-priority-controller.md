@@ -2,7 +2,7 @@
 
 - Status: active; standing controller, schema-3 host policy qualified.
 - Implementation: present; qualified iMac [v2](../benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v2.json)/[v3 +development](../benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v3.json)
-  bind layout/held-out gates; all other hosts/recipes require recalibration.
+  bind layout gates; [v4](archive/T059-held-out-layout-policy-v4.md) supplies every later held-out/lane gate. Other hosts recalibrate.
 - Verified at: 3be0ba66, final full/branch gates; 552 tests, 5170 Test262,
   91 plans independently checked. Qualification/live load recorded in T055.
   Legacy retained decisions remain verified only at their recorded revisions.
