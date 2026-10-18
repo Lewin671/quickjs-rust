@@ -37,7 +37,8 @@ impl PropertyStorage {
             payload,
             layout: PropertyLayout::new(domain, Encoding::Small),
         };
-        storage.publish();
+        let order = (0..storage.len()).collect();
+        storage.publish_with_order(order);
         storage
     }
     pub(super) fn empty(capacity: usize) -> Self {
@@ -49,8 +50,9 @@ impl PropertyStorage {
         )
     }
     pub(super) fn relink(&mut self, domain: AtomDomain) {
-        self.layout = PropertyLayout::new(domain, Encoding::Small);
-        self.publish();
+        let order = self.layout.order().collect();
+        self.layout = PropertyLayout::new(domain, self.encoding());
+        self.publish_with_order(order);
     }
     pub(super) fn dynamic(
         mut properties: crate::value::name_hash::NameMap<Rc<str>, Property>,
@@ -107,6 +109,9 @@ impl PropertyStorage {
         }
     }
     pub(super) fn publish(&mut self) {
+        self.publish_with_order(self.layout.order().collect());
+    }
+    fn publish_with_order(&mut self, order: Vec<usize>) {
         let domain = self.layout.domain();
         let fields: Vec<Field> = match &self.payload {
             PropertyPayload::Small { entries } => entries
@@ -142,20 +147,6 @@ impl PropertyStorage {
                 })
                 .collect(),
         };
-        let order = if let PropertyPayload::Dynamic(dynamic) = &self.payload {
-            let slots: std::collections::HashMap<_, _> = fields
-                .iter()
-                .enumerate()
-                .map(|(slot, field)| (field.key.identity(), slot))
-                .collect();
-            dynamic
-                .order
-                .iter()
-                .filter_map(|key| slots.get(&domain.intern_key(key).identity()).copied())
-                .collect()
-        } else {
-            (0..fields.len()).collect()
-        };
         self.layout.publish(self.encoding(), fields, order);
     }
     pub(super) fn len(&self) -> usize {
@@ -190,6 +181,9 @@ impl PropertyStorage {
     }
     pub(super) fn get(&self, key: &str) -> Option<Property> {
         let slot = self.layout.lookup(key)?.slot;
+        self.get_slot(slot)
+    }
+    pub(super) fn get_slot(&self, slot: usize) -> Option<Property> {
         if let PropertyPayload::ShapedPair { values, .. } = &self.payload {
             Some(Property::enumerable(values.get(slot)?.clone()))
         } else {
@@ -280,15 +274,6 @@ impl PropertyStorage {
             _ => predicate(self.descriptor(slot).expect("layout slot")),
         })
     }
-    pub(super) fn order(&self) -> Option<&[Rc<str>]> {
-        match &self.payload {
-            PropertyPayload::Small { .. } => None,
-            PropertyPayload::Dynamic(dynamic) => Some(&dynamic.order),
-            PropertyPayload::Shaped { shape, .. } | PropertyPayload::ShapedPair { shape, .. } => {
-                Some(&shape.keys)
-            }
-        }
-    }
     fn ensure_dynamic(&mut self) {
         let entries = match &mut self.payload {
             PropertyPayload::Dynamic(_) => return,
@@ -307,11 +292,11 @@ impl PropertyStorage {
                 .collect(),
         };
         self.payload = PropertyPayload::Dynamic(Box::new(DynamicPropertyStorage::ordered(entries)));
-        self.publish();
+        self.layout.change_encoding(Encoding::Dynamic);
     }
     pub(super) fn insert(&mut self, key: Rc<str>, property: Property) -> Option<Property> {
         if let Some(entry) = self.layout.lookup(&key) {
-            let changed = entry.attributes != Attributes::of(&property);
+            let attributes = Attributes::of(&property);
             if matches!(&self.payload, PropertyPayload::ShapedPair { .. }) {
                 self.ensure_dynamic();
             }
@@ -319,9 +304,7 @@ impl PropertyStorage {
                 self.descriptor_mut(entry.slot).expect("layout slot"),
                 property,
             );
-            if changed {
-                self.publish();
-            }
+            self.layout.reconfigure(entry.slot, attributes);
             return Some(previous);
         }
         self.insert_new(key, property, true);
@@ -332,23 +315,22 @@ impl PropertyStorage {
             std::borrow::Cow::Borrowed(_) => key,
             std::borrow::Cow::Owned(canonical) => canonical.into(),
         };
+        let attributes = Attributes::of(&property);
         if ordered
             && let PropertyPayload::Small { entries } = &mut self.payload
             && entries.len() < Self::SMALL_LIMIT
         {
-            entries.push((key, property));
-            self.publish();
+            entries.push((key.clone(), property));
+            self.layout.append(&key, attributes, Encoding::Small, true);
             return;
         }
         self.ensure_dynamic();
         let PropertyPayload::Dynamic(dynamic) = &mut self.payload else {
             unreachable!()
         };
-        if ordered {
-            dynamic.order.push(key.clone());
-        }
-        dynamic.entries.push((key, property));
-        self.publish();
+        dynamic.entries.push((key.clone(), property));
+        self.layout
+            .append(&key, attributes, Encoding::Dynamic, ordered);
     }
     pub(super) fn insert_absent(&mut self, key: Rc<str>, property: Property) {
         // Conversion/interner boundaries can make differently encoded texts
@@ -368,6 +350,7 @@ impl PropertyStorage {
     }
     pub(super) fn remove(&mut self, key: &str) -> Option<Property> {
         let slot = self.layout.lookup(key)?.slot;
+        let small = matches!(self.payload, PropertyPayload::Small { .. });
         let removed = if let PropertyPayload::Small { entries } = &mut self.payload {
             entries.remove(slot).1
         } else {
@@ -375,11 +358,9 @@ impl PropertyStorage {
             let PropertyPayload::Dynamic(dynamic) = &mut self.payload else {
                 unreachable!()
             };
-            let (key, property) = dynamic.entries.swap_remove(slot);
-            dynamic.order.retain(|existing| existing != &key);
-            property
+            dynamic.entries.swap_remove(slot).1
         };
-        self.publish();
+        self.layout.remove(slot, !small);
         Some(removed)
     }
 }

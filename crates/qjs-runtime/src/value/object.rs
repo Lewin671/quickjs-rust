@@ -5,8 +5,8 @@
 //! payload adapters (small vector, dynamic slots, shared literal slots and
 //! inline pair). Structural edits publish layout and slots under one borrow;
 //! stable value writes leave the layout unchanged. `property/layout.rs` owns
-//! shared immutable shapes, bounded weak transitions and churn dictionaries. Code outside this module must
-//! not depend on which layout an object is in.
+//! shared immutable shapes, bounded weak transitions and churn dictionaries.
+//! Code outside this module must not depend on the payload encoding.
 //!
 //! Two counters back the VM's caches. `property_revision` changes whenever
 //! an own string property's descriptor or value changes; `layout_revision`

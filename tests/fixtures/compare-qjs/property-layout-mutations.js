@@ -72,5 +72,14 @@ var foreign = Function('return {x: 20, y: 0}')();
 check(foreign.x === 20 && eval('foreign.x') === 20, 'foreign code');
 for (var n = 0; n < 1000; n++) { foreign['temp' + n] = n; delete foreign['temp' + n]; }
 check(Object.keys(foreign).join() === 'x,y', 'churn keys');
+var boxed = new String('x'.repeat(2048));
+check(Object.keys(boxed).length === 2048 && boxed[2047] === 'x', 'large lazy string indices');
+check(!Reflect.set(boxed, '0', 'changed'), 'string index write rejection');
+Object.freeze(boxed);
+check(Object.isFrozen(boxed), 'large string freeze');
+var sparse = [];
+for (var s = 0; s < 80; s++) Object.defineProperty(sparse, String(1000000 + s), {value: s, configurable: true});
+sparse.b = 1; sparse.a = 2; sparse.length = 0;
+check(sparse[1000000] === undefined && Object.keys(sparse).join() === 'b,a', 'sparse deletion/moved named slots');
 return 'layout mutations ok';
 })()

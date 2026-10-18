@@ -4,13 +4,13 @@
 //! descriptor kind and attributes. Stable value writes do not edit it. Shapes
 //! are immutable and shared by content through a weak, swept domain cache;
 //! transition hints are weak and bounded. After repeated structural edits an
-//! object keeps a private dictionary/version instead. Callers publish payload
+//! object keeps a private dictionary/version with amortized constant-time edits. Callers publish payload
 //! and layout edits under the same storage borrow, before any JS re-entry.
 
 use super::atom::{Atom, AtomDomain, AtomKey, AtomKeyIdentity};
 use crate::Property;
+use crate::value::name_hash::NameMap as HashMap;
 use std::{
-    collections::HashMap,
     hash::{Hash, Hasher},
     rc::{Rc, Weak},
 };
@@ -138,15 +138,71 @@ fn make_index(fields: &[Field]) -> HashMap<AtomKeyIdentity, Entry> {
         .collect()
 }
 
+const NO_SLOT: usize = usize::MAX;
+
+pub(crate) struct OrderedSlots<'a>(std::slice::Iter<'a, usize>);
+impl Iterator for OrderedSlots<'_> {
+    type Item = usize;
+    fn next(&mut self) -> Option<usize> {
+        self.0.by_ref().copied().find(|&slot| slot != NO_SLOT)
+    }
+}
+
 struct Dictionary {
     fields: Vec<Field>,
+    // Tombstones make deletion and swap-slot remapping constant time. Compact
+    // at 2 * live + 64, so fixed-live churn cannot retain an unbounded order.
     order: Vec<usize>,
+    positions: Vec<usize>,
     index: HashMap<AtomKeyIdentity, Entry>,
     encoding: Encoding,
     version: u64,
-    // Owned identity: a token can never alias a dictionary at a recycled address.
     identity: Rc<()>,
 }
+fn order_positions(len: usize, order: &[usize]) -> Vec<usize> {
+    let mut positions = vec![NO_SLOT; len];
+    for (index, &slot) in order.iter().enumerate() {
+        if slot != NO_SLOT {
+            positions[slot] = index;
+        }
+    }
+    positions
+}
+impl Dictionary {
+    fn bump(&mut self) {
+        if let Some(version) = self.version.checked_add(1) {
+            self.version = version;
+        } else {
+            self.identity = Rc::new(());
+            self.version = 0;
+        }
+    }
+    fn compact_order(&mut self) {
+        if self.order.len() > self.fields.len().saturating_mul(2).saturating_add(64) {
+            self.order.retain(|&slot| slot != NO_SLOT);
+            for (position, &slot) in self.order.iter().enumerate() {
+                self.positions[slot] = position;
+            }
+        }
+    }
+}
+
+fn remove_order_slot(order: &mut Vec<usize>, slot: usize, last: usize, swap: bool) {
+    order.retain_mut(|entry| {
+        if *entry == slot {
+            return false;
+        }
+        if swap {
+            if *entry == last {
+                *entry = slot;
+            }
+        } else if *entry > slot {
+            *entry -= 1;
+        }
+        true
+    });
+}
+
 enum State {
     Shape(Rc<Shape>),
     Dictionary(Box<Dictionary>),
@@ -196,6 +252,148 @@ impl PropertyLayout {
             self.lookup(atom.as_str())
         }
     }
+    pub(crate) fn order(&self) -> OrderedSlots<'_> {
+        let order = match &self.state {
+            State::Shape(shape) => &shape.order,
+            State::Dictionary(dict) => &dict.order,
+        };
+        OrderedSlots(order.iter())
+    }
+    pub(crate) fn append(
+        &mut self,
+        text: &str,
+        attributes: Attributes,
+        encoding: Encoding,
+        ordered: bool,
+    ) {
+        let field = Field {
+            key: self.domain.intern_key(text),
+            attributes,
+        };
+        match &mut self.state {
+            State::Dictionary(dict) => {
+                dict.bump();
+                let slot = dict.fields.len();
+                dict.index
+                    .insert(field.key.identity(), Entry { slot, attributes });
+                dict.fields.push(field);
+                dict.positions
+                    .push(if ordered { dict.order.len() } else { NO_SLOT });
+                if ordered {
+                    dict.order.push(slot);
+                }
+                dict.encoding = encoding;
+            }
+            State::Shape(shape) => {
+                let mut fields = shape.fields.clone();
+                let mut order = shape.order.clone();
+                if ordered {
+                    order.push(fields.len());
+                }
+                fields.push(field);
+                self.publish(encoding, fields, order);
+            }
+        }
+    }
+    pub(crate) fn reconfigure(&mut self, slot: usize, attributes: Attributes) {
+        match &mut self.state {
+            State::Dictionary(dict) => {
+                if dict.fields[slot].attributes == attributes {
+                    return;
+                }
+                dict.bump();
+                dict.fields[slot].attributes = attributes;
+                dict.index
+                    .get_mut(&dict.fields[slot].key.identity())
+                    .expect("live layout key")
+                    .attributes = attributes;
+            }
+            State::Shape(shape) => {
+                if shape.fields[slot].attributes == attributes {
+                    return;
+                }
+                let encoding = shape.encoding;
+                let mut fields = shape.fields.clone();
+                let order = shape.order.clone();
+                fields[slot].attributes = attributes;
+                self.publish(encoding, fields, order);
+            }
+        }
+    }
+    pub(crate) fn change_encoding(&mut self, encoding: Encoding) {
+        match &mut self.state {
+            State::Dictionary(dict) => {
+                if dict.encoding != encoding {
+                    dict.bump();
+                    dict.encoding = encoding;
+                }
+            }
+            State::Shape(shape) => {
+                if shape.encoding == encoding {
+                    return;
+                }
+                let fields = shape.fields.clone();
+                let order = shape.order.clone();
+                self.publish(encoding, fields, order);
+            }
+        }
+    }
+    pub(crate) fn remove(&mut self, slot: usize, swap: bool) {
+        match &mut self.state {
+            State::Dictionary(dict) => {
+                dict.bump();
+                let position = dict.positions[slot];
+                if position != NO_SLOT {
+                    dict.order[position] = NO_SLOT;
+                }
+                let removed = if swap {
+                    dict.positions.swap_remove(slot);
+                    dict.fields.swap_remove(slot)
+                } else {
+                    dict.positions.remove(slot);
+                    dict.fields.remove(slot)
+                };
+                dict.index.remove(&removed.key.identity());
+                if swap {
+                    if let Some(moved) = dict.fields.get(slot) {
+                        dict.index
+                            .get_mut(&moved.key.identity())
+                            .expect("moved layout key")
+                            .slot = slot;
+                        let position = dict.positions[slot];
+                        if position != NO_SLOT {
+                            dict.order[position] = slot;
+                        }
+                    }
+                } else {
+                    for (index, field) in dict.fields.iter().enumerate().skip(slot) {
+                        dict.index
+                            .get_mut(&field.key.identity())
+                            .expect("shifted layout key")
+                            .slot = index;
+                        let position = dict.positions[index];
+                        if position != NO_SLOT {
+                            dict.order[position] = index;
+                        }
+                    }
+                }
+                dict.compact_order();
+            }
+            State::Shape(shape) => {
+                let encoding = shape.encoding;
+                let mut fields = shape.fields.clone();
+                let mut order = shape.order.clone();
+                let last = fields.len() - 1;
+                if swap {
+                    fields.swap_remove(slot);
+                } else {
+                    fields.remove(slot);
+                }
+                remove_order_slot(&mut order, slot, last, swap);
+                self.publish(encoding, fields, order);
+            }
+        }
+    }
     pub(crate) fn publish(&mut self, encoding: Encoding, fields: Vec<Field>, order: Vec<usize>) {
         match &mut self.state {
             State::Shape(old) if old.matches(encoding, &fields, &order) => return,
@@ -203,14 +401,9 @@ impl PropertyLayout {
                 if dict.encoding == encoding && dict.fields == fields && dict.order == order {
                     return;
                 }
-                // No version wraps into an old token: start a fresh identity.
-                if let Some(version) = dict.version.checked_add(1) {
-                    dict.version = version;
-                } else {
-                    dict.identity = Rc::new(());
-                    dict.version = 0;
-                }
+                dict.bump();
                 dict.index = make_index(&fields);
+                dict.positions = order_positions(fields.len(), &order);
                 dict.fields = fields;
                 dict.order = order;
                 dict.encoding = encoding;
@@ -222,6 +415,7 @@ impl PropertyLayout {
         if self.edits >= Self::DICTIONARY_AFTER {
             self.state = State::Dictionary(Box::new(Dictionary {
                 index: make_index(&fields),
+                positions: order_positions(fields.len(), &order),
                 fields,
                 order,
                 encoding,

@@ -10,7 +10,7 @@ use super::{
 use crate::Property;
 use std::{
     cell::{Ref, RefCell, RefMut},
-    ops::{Deref, DerefMut},
+    ops::Deref,
 };
 
 pub(crate) struct NamedPropertyMap {
@@ -51,40 +51,34 @@ impl NamedPropertyMap {
                 attributes: Attributes::of(property),
             })
             .collect();
-        self.layout.publish(
-            Encoding::NamedMap,
-            fields,
-            (0..self.entries.len()).collect(),
-        );
+        self.layout
+            .publish(Encoding::NamedMap, fields, self.layout.order().collect());
     }
     pub(crate) fn get(&self, key: &str) -> Option<&Property> {
         self.entries
             .get(self.layout.lookup(key)?.slot)
             .map(|(_, property)| property)
     }
-    pub(crate) fn get_mut(&mut self, key: &str) -> Option<&mut Property> {
-        self.entries
-            .get_mut(self.layout.lookup(key)?.slot)
-            .map(|(_, property)| property)
-    }
     pub(crate) fn contains_key(&self, key: &str) -> bool {
         self.layout.lookup(key).is_some()
     }
-    pub(crate) fn insert(&mut self, key: String, property: Property) -> Option<Property> {
+    fn insert(&mut self, key: String, property: Property) -> Option<Property> {
+        let attributes = Attributes::of(&property);
         if let Some(entry) = self.layout.lookup(&key) {
             let old = std::mem::replace(&mut self.entries[entry.slot].1, property);
-            self.publish();
+            self.layout.reconfigure(entry.slot, attributes);
             return Some(old);
         }
-        let key = self.layout.domain().intern_key(&key).text().to_string();
-        self.entries.push((key, property));
-        self.rebuild();
+        let key = super::atom::canonical_property_text(&key).into_owned();
+        self.entries.push((key.clone(), property));
+        self.layout
+            .append(&key, attributes, Encoding::NamedMap, true);
         None
     }
-    pub(crate) fn remove(&mut self, key: &str) -> Option<Property> {
+    fn remove(&mut self, key: &str) -> Option<Property> {
         let slot = self.layout.lookup(key)?.slot;
-        let removed = self.entries.remove(slot).1;
-        self.rebuild();
+        let removed = self.entries.swap_remove(slot).1;
+        self.layout.remove(slot, true);
         Some(removed)
     }
     #[cfg(test)]
@@ -95,7 +89,7 @@ impl NamedPropertyMap {
         self.entries.is_empty()
     }
     pub(crate) fn keys(&self) -> impl Iterator<Item = &String> {
-        self.entries.iter().map(|(key, _)| key)
+        self.layout.order().map(|slot| &self.entries[slot].0)
     }
     pub(crate) fn values(&self) -> impl Iterator<Item = &Property> {
         self.entries.iter().map(|(_, p)| p)
@@ -104,17 +98,33 @@ impl NamedPropertyMap {
         self.entries.iter_mut().map(|(_, p)| p)
     }
     pub(crate) fn iter(&self) -> impl Iterator<Item = (&String, &Property)> {
-        self.entries.iter().map(|(k, p)| (k, p))
+        self.layout.order().map(|slot| {
+            let (k, p) = &self.entries[slot];
+            (k, p)
+        })
     }
     pub(crate) fn iter_mut(&mut self) -> impl Iterator<Item = (&String, &mut Property)> {
         self.entries.iter_mut().map(|(k, p)| (&*k, p))
     }
 }
+pub(crate) struct NamedPropertyIter<'a> {
+    entries: &'a [(String, Property)],
+    order: super::layout::OrderedSlots<'a>,
+}
+impl<'a> Iterator for NamedPropertyIter<'a> {
+    type Item = &'a (String, Property);
+    fn next(&mut self) -> Option<Self::Item> {
+        self.order.next().map(|slot| &self.entries[slot])
+    }
+}
 impl<'a> IntoIterator for &'a NamedPropertyMap {
     type Item = &'a (String, Property);
-    type IntoIter = std::slice::Iter<'a, (String, Property)>;
+    type IntoIter = NamedPropertyIter<'a>;
     fn into_iter(self) -> Self::IntoIter {
-        self.entries.iter()
+        NamedPropertyIter {
+            entries: &self.entries,
+            order: self.layout.order(),
+        }
     }
 }
 
@@ -128,29 +138,88 @@ impl NamedPropertyCell {
         self.0.try_borrow()
     }
     pub(crate) fn borrow_mut(&self) -> PropertyMapEdit<'_> {
-        PropertyMapEdit(self.0.borrow_mut())
+        PropertyMapEdit::from_ref(self.0.borrow_mut())
     }
 }
-pub(crate) struct PropertyMapEdit<'a>(RefMut<'a, NamedPropertyMap>);
+#[derive(Default)]
+enum Dirty {
+    #[default]
+    None,
+    Slot(usize),
+    Many(Box<crate::value::name_hash::NameSet<usize>>),
+    All,
+}
+pub(crate) struct PropertyMapEdit<'a> {
+    map: RefMut<'a, NamedPropertyMap>,
+    dirty: Dirty,
+}
 impl PropertyMapEdit<'_> {
-    pub(crate) fn from_ref(value: RefMut<'_, NamedPropertyMap>) -> PropertyMapEdit<'_> {
-        PropertyMapEdit(value)
+    pub(crate) fn from_ref(map: RefMut<'_, NamedPropertyMap>) -> PropertyMapEdit<'_> {
+        PropertyMapEdit {
+            map,
+            dirty: Dirty::None,
+        }
+    }
+    fn publish_dirty(&mut self) {
+        match std::mem::take(&mut self.dirty) {
+            Dirty::None => {}
+            Dirty::Slot(slot) => {
+                let attributes = Attributes::of(&self.map.entries[slot].1);
+                self.map.layout.reconfigure(slot, attributes);
+            }
+            Dirty::Many(slots) => {
+                for slot in *slots {
+                    let attributes = Attributes::of(&self.map.entries[slot].1);
+                    self.map.layout.reconfigure(slot, attributes);
+                }
+            }
+            Dirty::All => self.map.publish(),
+        }
+    }
+    pub(crate) fn get_mut(&mut self, key: &str) -> Option<&mut Property> {
+        let slot = self.map.layout.lookup(key)?.slot;
+        match &mut self.dirty {
+            Dirty::None => self.dirty = Dirty::Slot(slot),
+            Dirty::Slot(previous) if *previous == slot => {}
+            Dirty::Slot(previous) => {
+                let mut slots = Box::new(crate::value::name_hash::NameSet::default());
+                slots.insert(*previous);
+                slots.insert(slot);
+                self.dirty = Dirty::Many(slots);
+            }
+            Dirty::Many(slots) => {
+                slots.insert(slot);
+            }
+            Dirty::All => {}
+        }
+        self.map.entries.get_mut(slot).map(|(_, property)| property)
+    }
+    pub(crate) fn insert(&mut self, key: String, property: Property) -> Option<Property> {
+        self.publish_dirty();
+        self.map.insert(key, property)
+    }
+    pub(crate) fn remove(&mut self, key: &str) -> Option<Property> {
+        self.publish_dirty();
+        self.map.remove(key)
+    }
+    pub(crate) fn values_mut(&mut self) -> impl Iterator<Item = &mut Property> {
+        self.dirty = Dirty::All;
+        self.map.values_mut()
+    }
+    pub(crate) fn iter_mut(&mut self) -> impl Iterator<Item = (&String, &mut Property)> {
+        self.dirty = Dirty::All;
+        self.map.iter_mut()
     }
 }
 impl Deref for PropertyMapEdit<'_> {
     type Target = NamedPropertyMap;
     fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-impl DerefMut for PropertyMapEdit<'_> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+        &self.map
     }
 }
 impl Drop for PropertyMapEdit<'_> {
     fn drop(&mut self) {
-        self.0.publish();
+        self.publish_dirty();
     }
 }
 
@@ -209,5 +278,82 @@ mod tests {
         assert_eq!(table.len(), 1);
         assert!(table.layout.is_dictionary());
         assert!(table.layout.domain().table_len() <= 66);
+    }
+}
+
+#[cfg(test)]
+mod mutation_batch_tests {
+    use super::*;
+    use crate::Value;
+    #[test]
+    fn pending_descriptor_edits_survive_slot_moves_and_bulk_freeze() {
+        let cell = NamedPropertyCell::default();
+        for i in 0..70 {
+            cell.borrow_mut()
+                .insert(format!("k{i}"), Property::enumerable(Value::Null));
+        }
+        {
+            let mut edit = cell.borrow_mut();
+            edit.get_mut("k1").unwrap().enumerable = false;
+            edit.remove("k0");
+            edit.get_mut("k2").unwrap().writable = false;
+            edit.insert("after".into(), Property::enumerable(Value::Null));
+            edit.get_mut("k10").unwrap().enumerable = false;
+            edit.get_mut("k20").unwrap().writable = false;
+        }
+        let names = cell.borrow().keys().cloned().collect::<Vec<_>>();
+        assert_eq!(
+            names,
+            (1..70)
+                .map(|i| format!("k{i}"))
+                .chain(["after".into()])
+                .collect::<Vec<_>>()
+        );
+        assert!(
+            !cell
+                .borrow()
+                .layout
+                .lookup("k1")
+                .unwrap()
+                .attributes
+                .enumerable
+        );
+        assert!(
+            !cell
+                .borrow()
+                .layout
+                .lookup("k2")
+                .unwrap()
+                .attributes
+                .writable
+        );
+        assert!(
+            !cell
+                .borrow()
+                .layout
+                .lookup("k10")
+                .unwrap()
+                .attributes
+                .enumerable
+        );
+        assert!(
+            !cell
+                .borrow()
+                .layout
+                .lookup("k20")
+                .unwrap()
+                .attributes
+                .writable
+        );
+        for property in cell.borrow_mut().values_mut() {
+            property.freeze_data();
+        }
+        assert_eq!(cell.borrow().keys().cloned().collect::<Vec<_>>(), names);
+        for (name, property) in &*cell.borrow() {
+            assert_eq!(
+                cell.borrow().layout.lookup(name).unwrap().attributes,
+                Attributes::of(property)
+            );
+        }
     }
 }

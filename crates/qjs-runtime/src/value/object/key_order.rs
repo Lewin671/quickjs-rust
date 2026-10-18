@@ -39,13 +39,9 @@ impl ObjectRef {
                 visit(key, property.enumerable);
             }
         } else {
-            let order = properties
-                .order()
-                .expect("non-small property storage has a separate order");
-            for key in order {
-                if let Some(enumerable) = properties.enumerable(key) {
-                    visit(key, enumerable);
-                }
+            for slot in properties.layout.order() {
+                let field = properties.layout.field(slot).expect("ordered layout field");
+                visit(field.key.text(), field.attributes.enumerable);
             }
         }
         if indices.is_empty() {
@@ -97,17 +93,16 @@ impl ObjectRef {
                 .collect();
         }
 
-        let order = properties
-            .order()
-            .expect("non-small property storage has a separate order");
         if self.0.index_property_count.get() == 0 {
-            return order
-                .iter()
-                .filter_map(|key| {
+            return properties
+                .layout
+                .order()
+                .filter_map(|slot| {
+                    let key = properties.layout.field(slot)?.key.text();
                     if is_internal_property_key(key) {
                         return None;
                     }
-                    let property = properties.get(key.as_ref())?;
+                    let property = properties.get_slot(slot)?;
                     include(&property).then(|| key.to_string())
                 })
                 .collect();
@@ -116,11 +111,17 @@ impl ObjectRef {
         let mut indices = Vec::new();
         let mut strings = Vec::new();
 
-        for key in order.iter() {
+        for slot in properties.layout.order() {
+            let key = properties
+                .layout
+                .field(slot)
+                .expect("ordered layout field")
+                .key
+                .text();
             if is_internal_property_key(key) {
                 continue;
             }
-            let Some(property) = properties.get(key.as_ref()) else {
+            let Some(property) = properties.get_slot(slot) else {
                 continue;
             };
             if !include(&property) {

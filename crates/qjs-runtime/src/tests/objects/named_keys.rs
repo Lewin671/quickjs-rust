@@ -132,6 +132,16 @@ fn layouts_preserve_reentry_descriptors_and_exotic_named_parts() {
         include_str!("../../../../../tests/fixtures/compare-qjs/property-layout-mutations.js")
             .replace("print('layout mutations ok');", "'layout mutations ok';");
     assert_eq!(eval(&source), Ok(string("layout mutations ok")));
+    // The pinned NG leaves phantom indices in getOwnPropertyNames after this
+    // shrink; keep the strict expected result here, outside the NG fixture.
+    assert_eq!(
+        eval(
+            "var a = []; for (var i = 0; i < 80; i++)
+        Object.defineProperty(a, String(1000000 + i), {value: i, configurable: true});
+        a.b = 1; a.a = 2; a.length = 0; Object.getOwnPropertyNames(a).join();"
+        ),
+        Ok(string("length,b,a"))
+    );
 }
 
 #[test]

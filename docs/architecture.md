@@ -161,8 +161,8 @@ Defined in `value/mod.rs`, `value/object.rs`, `value/property.rs` and
   (symbol-keyed properties, generator state, private names, ArrayBuffer and
   TypedArray slots) sits behind a lazily allocated `ObjectColdData` box.
 - String-keyed properties use one `property/layout.rs` atom-to-slot, descriptor
-  kind and attribute authority. `value/object/storage.rs` adapts four payloads:
-  `Small` (up to 12 entries), `Dynamic` (boxed slots and an order list), and
+  kind, attribute and ordering authority. `value/object/storage.rs` adapts four payloads:
+  `Small` (up to 12 entries), `Dynamic` (boxed slots), and
   literal `Shaped` / `ShapedPair` values. Immutable layouts share by content;
   weak shape/transition retention is bounded, and repeated structural edits
   switch to a private versioned dictionary. Layout and payload publish under

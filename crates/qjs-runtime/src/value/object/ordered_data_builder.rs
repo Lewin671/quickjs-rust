@@ -135,9 +135,9 @@ mod tests {
             &builder.properties.payload,
             PropertyPayload::Dynamic(dynamic)
                 if dynamic.entries.len() == unique_count
-                    && dynamic.order.len() == unique_count
+
                     && dynamic.entries.capacity() <= PropertyStorage::SMALL_LIMIT * 4
-                    && dynamic.order.capacity() <= PropertyStorage::SMALL_LIMIT * 4
+
         ));
         assert_eq!(builder.index_property_count, 0);
 

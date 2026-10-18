@@ -1,9 +1,9 @@
 # T056: Interpreter core v2
 
-- Status: active; M1 stage 1 integrated at `ab9c29b6`; M1.2 implementation
-  in progress on `agent/t056-m1-stage2/codex`; no stage-2 screen yet.
+- Status: active; M1 stage 1 integrated at `ab9c29b6`; M1.2 implemented on
+  `agent/t056-m1-stage2/codex`; incremental-dictionary follow-up verified, screen pending.
 - Implementation: stage 1 present; stage 2 adds uniform layouts for all four payloads and function/array named maps.
-- Verified at: pre-commit tree from `ab9c29b6`, 2026-10-18: full gate, 2,316 runtime tests, subset 5,170/5,170, NG 249/249.
+- Verified at: follow-up tree from `c5dfa1c6`, 2026-10-18 UTC: full gate, 2,320 runtime tests, subset 5,170/5,170, NG 249/249.
 - Evidence: [part 1](archive/T056-unit0-part1-evidence.md), [part 2](archive/T056-unit0-part2-evidence.md),
   [M1 stage 1](archive/T056-m1-stage1-evidence.md); frozen plan
   [`interpreter-core-v2-atoms-layouts`](performance-units/interpreter-core-v2-atoms-layouts.json).

@@ -91,7 +91,7 @@ fn ordinary_small_object_promotes_only_after_the_compact_limit() {
         &object.0.properties.borrow().payload,
         PropertyPayload::Dynamic(dynamic)
             if dynamic.entries.len() == PropertyStorage::SMALL_LIMIT + 1
-                && dynamic.order.len() == PropertyStorage::SMALL_LIMIT + 1
+
     ));
     assert_eq!(
         object.own_property_names(),
