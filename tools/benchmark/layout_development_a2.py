@@ -1,4 +1,4 @@
-"""Extend the measured placement envelope to an npm lane (development or held-out).
+"""Measure placement envelopes for the portfolio, development or held-out lane.
 
 Compare every placement with natural; matching-layout optimization screens are
 a different experiment. All paths are immutable, with raw/load conservation.
