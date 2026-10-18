@@ -1,8 +1,8 @@
 # T060: Case-sharded layout collection and schedule-bound policy v5
 
 - Status: active; calibration plan frozen before timing.
-- Implementation: tooling committed at f83cfe11; v5 not published.
-- Verified at: f83cfe11, staged fast gate (645 tests), context and size gates; full gate queued on iMac.
+- Implementation: tooling committed through 76e456e8; v5 not published.
+- Verified at: 76e456e8, staged fast gate (646 tests), context and size gates; prepare job passed on iMac; full gate queued.
 - Evidence: frozen protocol below; job receipts and results will be recorded here.
 - Unresolved: workers-4 bands, qualification and screen/panel elapsed speedup unmeasured.
 - Next action: monitor queued jobs; freeze the seed before qualification timing, then record qualification and speed results.
@@ -100,7 +100,7 @@ No other owner job was cancelled. Raw artifacts stay in the queue/fetch output.
 
 | Job | Purpose | Result |
 | --- | --- | --- |
-| `20261018T044114Z-t060-prepare` | Reproduce/audit band sources and prepare equal-length role matrices | queued |
+| `20261018T044114Z-t060-prepare` | Reproduce/audit band sources and prepare equal-length role matrices | exit 0 / 362 s; no DISTURBED |
 | `20261018T044128Z-t060-full-gate` | Superseded by current-tooling gate before execution | cancelled queued, unmeasured |
 | `20261018T044128Z-t060-a2-portfolio` | Six 76-case A2 placements, workers=4 | queued |
 | `20261018T044128Z-t060-a2-development` | Six development A2 placements, workers=4 | queued |
@@ -113,7 +113,7 @@ to start before the immutable seed exists and binds the frozen plan hash.
 
 | Job | Purpose | Result |
 | --- | --- | --- |
-| `20261018T044638Z-t060-full-gate-current` | Full check.sh at current tooling (no timing) | queued |
+| `20261018T044638Z-t060-full-gate-current` | Superseded before execution by wrapper-inclusive full gate | cancelled queued, unmeasured |
 | `20261018T044640Z-t060-pilot-portfolio` | Fresh 76-case screen qualification A/A | queued |
 | `20261018T044642Z-t060-pilot-development` | Fresh development qualification A/A | queued |
 | `20261018T044644Z-t060-pilot-held-out` | Fresh held-out qualification A/A | queued |
@@ -122,3 +122,10 @@ to start before the immutable seed exists and binds the frozen plan hash.
 | `20261018T044649Z-t060-qualify` | Replay qualification and v4/v5 band comparison | queued |
 | `20261018T044651Z-t060-speed-serial` | Serial natural screen plus K=6 elapsed measurement | queued |
 | `20261018T044653Z-t060-speed-parall` | Workers-4 natural screen plus K=6 elapsed measurement | queued |
+
+| `20261018T050252Z-t060-full-gate-final` | Full check.sh at 76e456e8 (no timing) | queued |
+
+Prepare reproduced the frozen 926ee634 natural image and passed all six
+original-source audits; the c7f0f66a npm matrix and equal-length role copies
+were verified. Only two light background samples, below disturbance threshold.
+Portfolio A2 started at 08:15:13 UTC on 2026-10-18, with four case-owned forks.
