@@ -14,7 +14,7 @@ it to `archive/` with `git mv` and move its row below.
 | Task | Status | What it is |
 | --- | --- | --- |
 | [T057](T057-string-code-units.md) string code units | active | Policy v3 qualified (development targets eligible); stage-1 plan next. |
-| [T056](T056-interpreter-core-v2.md) interpreter core v2 | blocked | Target design for names, frames and values; unit 0 complete, M1 stage 1 implemented on its branch, screen: v3 lane-gate reject, v4 would not reject; awaiting lead decision. |
+| [T056](T056-interpreter-core-v2.md) interpreter core v2 | active | Target design for names, frames and values; unit 0 and M2 re-plan complete; M1 stage 1 complete on its branch (v4 screen pass), integration next. |
 | [T018](T018-broad-performance.md) broad performance | active | The performance campaign contract and its targets against QuickJS-NG. Start performance work here, then follow [the workflow](../docs/performance-workflow.md). |
 | [T040](T040-imac-general-performance.md) x86_64 general optimization | active | Fresh current-main comparison and exact-binary profiles, followed by independent general runtime units. |
 | [T045](T045-typed-loop-boxed-demand-provenance.md) boxed demand provenance | active | Ordinary identity-flow joins lose boxed demand; exact profiles and seed diagnosis precede a compiler-only unit. |
@@ -28,8 +28,7 @@ it to `archive/` with `git mv` and move its row below.
 
 The last recorded full scan passes every configured case (see
 [conformance records](../docs/conformance/README.md)); [T043 history](archive/T043-derived-constructor-eval-context.md) records
-two remaining baseline programs outside that standing. Take broader conformance work from
-`./scripts/find-qjsng-gaps.sh`.
+two remaining baseline programs outside that standing. Take broader conformance work from `./scripts/find-qjsng-gaps.sh`.
 
 Performance entries record scope and outcomes, not priority. Priority comes
 from a freshly generated opportunity queue. Reopening a closed proposal needs
@@ -43,6 +42,7 @@ outcome column says what happened, not what to do next.
 
 | Task | Outcome |
 | --- | --- |
+| `T059-held-out-layout-policy-v4.md` | Policy v4 qualified (SHA-256 `1eb7de46...`): six-layout held-out bands, held-out and lane events resolved by K=6, candidate formal continuation. |
 | `T054-execution-layout-regions.md` | Original page residues all preserved, but one control and sentinel lane failed sole neutrality screen; no production build change retained. |
 | `T052-general-performance-command-code.md` | Structural symbol matching/raw audit, canonical scan recipe and byte-identical natural order; full gates pass, no runtime optimization retained. |
 | `T053-ordinary-own-slot-hot-read-fat-lto.md` | Target -8.3% but six controls failed; sole budget exhausted, runtime restored and exact original binary rebuilt. |

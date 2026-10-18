@@ -17,61 +17,63 @@ PropertyLayout   = atom -> (slot, descriptor kind, attributes), ordering, storag
 Value            = owning opaque word; payload access through typed methods
 ```
 
-Frame/shape/context types stay private. Replace public Value enum patterns with documented typed views; migrate CLI
-and embedding callers before changing the backend. This is an explicit Rust API migration, with unchanged JS behavior.
-Frame, property and tier code adopt those views first. `CallEnv` retains per-activation context; shared services do not
-globalize realm state. Independent runtime instances share no mutable process state.
+Frame/shape/context types stay private. Replace public Value enum patterns with documented typed views; migrate CLI and
+embedding callers before backend changes (explicit Rust API migration, unchanged JS). Frame/property/tier code adopt those
+views first. Typed activation context replaces hot `CallEnv` copies; shared services preserve realm isolation and no mutable process state.
 
-## Frames: change ownership before routing calls
+## Frames: storage, activation context and lazy names
 
-`FrameStore` uses reusable slots in reference-counted boxed chunks, with per-slot checked borrows released at every
-driver boundary. Growing its chunk directory moves pointers, not live frames. Initialize a reserved slot's fields
-directly; never return a complete `FrameState`, queue one in an `Option`, or swap it into a `current` field. Slot reuse
-clears all live values, cells and pending completions before its generation advances. Retained empty buffer capacity is
-not a GC root.
+M2 removes both nested Vms and ordinary per-call environment assembly. It preserves one authoritative slot/cell per binding; an ordinary call, including one creating closures or invoking natives,
+installs **no name-keyed entries**. General admission uses callable kind and execution state, never a benchmark identity or direct-leaf prerequisite. No unsafe is required.
 
-Each slot owns zero-based locals and operands; the executor binds their slices once per activation. There is no shared
-value vector with a base addition on each access. The hot header holds code ownership, IP, buffer handles and authority
-masks; try, with, disposal and suspension state remain cold. Reuse existing cold-state splitting rather than claiming it
-as new. Measure chunk capacity/retained memory, initialization stores, allocations and emitted frame copies; safe Rust
-alone does not prove cheap code.
+Source paths are relative to `crates/qjs-runtime/src/`. `function/call.rs::function_env` inserts general-call parameters, this, arguments and internal context into `CallEnv.frame_bindings`;
+`initial_slots`/`initial_local_upvalues` in `bytecode/vm_bindings.rs` import them. `FrameBindings` is a name-keyed **vector**. `vm_frame_init.rs::frame_call_env` forks entries as values, exports live slots,
+then overlays cells, catch/conflict sets and private state; `frame_deopt_bindings` overlays the dynamic cell map. `vm_call_env.rs::callee_env` selects this view for direct-eval/with/deopt callers **or
+closure creators**: a native may invoke a passed closure whose eval needs outer names absent from static upvalues. Legacy APIs take only `CallEnv`; `apply_env` reconciles values/declarations and
+`apply_call_env` scans realm fallbacks. This compatibility view is not binding authority. `vm_call.rs` already sends ordinary native Call opcodes a realm-only env; helper calls through
+`callee_env`/`current_env` still export it. Deleting the closure predicate or pooling the vector neither migrates consumers nor removes the work.
 
-Dispatch borrows an active slot and disjoint execution services, not an entire `Vm` plus aliases into it. Helpers return
-`Enter(CallSeed)`, `Return`, `Throw`, `Suspend` or `NativeRequest`; a seed carries arguments/context, never a
-constructed frame. Publish the resume IP and continuation, release frame/buffer borrows and the current
-`FrameProgramView`, then let the driver act. Code is owned by a retained handle; no self-referential code slice survives
-a switch, re-entry or stream reselection.
+Owned code gets an immutable `BindingPlan`: parameter/input slot indices, received-cell order, call-context indices, scope parent/ranges, declaration kind/mutability and parameter/body/catch
+relationships. Runtime scope-instance tokens distinguish shadowing, TDZ, exited scopes and fresh loop iterations; source names live in code metadata, never copied at entry. `CallSeed` carries owned
+arguments (or a slice consumed before switching), this/new.target, callee/code/cells and realm handles. Initialize slots by index; compiled default/destructuring/rest prologues retain their order.
+Mapped arguments uses those same parameter cells, including duplicate-parameter rules. `ActivationContext` stores typed home/super/active-constructor, derived-this cell, function/field/eval flags,
+immutable-self identity, private environment, module/host/agent handles and realm. Lexical arrows retain the declaring context/cells, never inherit these from whichever native happens to invoke them.
 
-Ordinary calls push a `FrameId` and a typed continuation. Return transfers an owned result, drops the callee in place
-and resumes the caller. Continuations also encode discarded results, construction/new.target/derived-this completion,
-eval completion and native boundary results. Preparation is shared with today's callable dispatch: bound argument/this
-forwarding, Proxy traps, parameter initialization, class fields and caller completion policy must run once, in their
-specified order.
+A dynamic request resolves `(scope instance, name)` through code metadata to a slot/cell, then parent scopes and realm. Promoting a slot moves authority to its existing/new cell and clears its
+authority bit; it never copies into a second binding. Direct eval creates its own lexical scope; strict vars stay there, sloppy vars enter the correct caller variable scope, and parameter-eval vars
+remain distinct from body vars. Only genuinely new eval names need a lazy name-to-cell extension. Conflict/deletability checks use scope metadata. With-object lookup preserves own-local precedence,
+unscopables and Proxy effects. Lookup caches include scope-instance/mapping generations; addition, deletion, remapping and iteration invalidate bypasses.
 
-Throw unwinds one frame at a time through its existing catch/finally/disposal machinery. A pending return/throw/jump
-belongs to that frame; finally may replace it. Never pop a frame before its cleanup finishes. Preserve thrown-value
-identity, call-site spans and realm context. Account for JS depth and native bridge depth; exceeding configured limits
-produces a catchable engine error before Rust stack exhaustion.
+An eval-capable closure must retain arbitrary visible names, even absent from static free-name lists. Propagate that capability through nested closures/eval-created functions. At creation, retain an
+owned `ScopeLease` of code + positional cells + parent scope descriptors (including TDZ locations and with objects); promote potentially observable locals by slot plan, with no name installation.
+Static closures capture only their indexed cells. Escaping leases retain lexical scopes, never a caller frame; future initialization/writes hit the promoted cells. A dynamic consumer may build a lazy
+cell index on first request, never a value snapshot. Leases share a variable-scope extension holder before eval adds names, never reference reusable FrameIds, and retain escaped cells across scope exit.
 
-Natives receive an execution context capability after dispatch releases borrows. A synchronous callback uses `call_sync`
-to drive **this same Vm** until an explicit boundary token completes; it cannot unwind through a waiting Rust native.
-Rust re-entry may still nest driver invocations, but never constructs another Vm. No `RefCell`/slot/tier borrow spans
-that boundary. Builtins that need suspension use explicit native continuation state; arbitrary Rust stacks cannot be
-suspended. Per-activation environment state (today's `CallEnv`, its name-keyed frame-cell layer and write-back) is frame
-work: the slot owns it, and a native call gets the capability, which resolves names against the slot's code metadata
-only when a dynamic-scope consumer (direct eval, `with`) asks, never by eager per-call name-keyed installation.
+| Current consumer / source | Target service |
+| --- | --- |
+| General entry and closure capture: `function/call.rs`, `function/arguments.rs`, `vm_bindings.rs`, `vm_capture.rs`, `vm/rare_ops.rs`, `vm_class.rs`, `vm_private.rs` | Indexed seeds/received cells and typed context above; mapped arguments and immutable class/self cells share identity. Ordinary closure creation exports no names. |
+| Direct eval: `vm_call.rs` cached/selected/full views; `global.rs` parse context, declaration checks, written-name reconciliation and captured-function repair | Resolve against the eval caller's scope lease; existing writes hit cells, new declarations extend only its variable scope. Parameter/body separation and strict lexical isolation replace repair/write-back, not syntax caching. Indirect eval/Function stay realm-only. |
+| With and retained dynamic scope: `vm_with.rs`, deopt overlays and `closure_scope_use` in `vm_frame_init.rs` | Ordered object/scope descriptors plus generation-checked lazy name resolution; no eager overlays at every call/closure. Preserve bypass invalidation. |
+| Native forwarding/callbacks (call/apply/bind), accessors, Proxy traps, coercion, iterators and disposal: `vm_call_env.rs`, `vm_props.rs`, `vm_set.rs`, `vm_iter.rs`, `vm_ops.rs`, `vm_literals.rs`, `vm_dispose.rs`, `vm_string_append.rs` | Realm/services capability and same-context callback boundary; each JS callback uses its own lexical lease/upvalues. Helper `current_env` calls for heritage/private/import paths use typed context too. Native invocation alone requests no caller names. |
+| Coercion filtering/sync: `conversion.rs::to_primitive_method_env` / `sync_to_primitive_method_env` | Method's own captures/native context and shared realm cells; remove name filtering/value write-back once reads/writes use those authorities. Explicit native payloads remain function-owned. |
+| Call completion, derived this/super, realm overrides: `function/call_frame.rs`, `vm_result.rs`, `vm_call.rs` marked-realm save/restore | Typed continuation and shared derived-this cell; isolated self binding cannot mutate caller names, so no restore-by-name. Callee realm/intrinsics selected by handle; preserve explicit cross-realm override semantics without global-value snapshots. |
+| Realm/global/module refresh: `apply_env`, `refresh_realm_backed_locals_from_realm`, `vm_props.rs`, `vm_module.rs`, `module/link.rs` | Slot source is local/cell/realm reference; imports/exports use canonical cells. Global delete/accessor/recreate publishes a shared invalidation marker/generation; loads re-resolve through full property semantics, never a post-call scan. Eval shadowing retargets the affected slot to its new local cell. |
+| Result enumeration / diagnostics: `module/link.rs::binding_snapshot`, `vm_jobs.rs`, `vm_import.rs`, `CallEnv` Debug | Export/result handles retain requested cells and services after frame release; enumerate only at explicit result/diagnostic request. An owned value snapshot is output only, never execution storage. `debugger` currently compiles as an empty statement (`compiler.rs`); no debugger-reflection API is assumed. |
 
-A generator/async activation owns a detachable frame lease plus its code/cells; suspension removes it from the active
-chain without retaining its caller. The lease retains its store allocation after the originating call/context returns
-and can be attached to another compatible invocation. Ordinary synchronous callees finish before their parent suspends.
-Preserve prologue timing, Executing/reentrant-next rejection, yield* injection, finally state, async-generator FIFO and
-promise job ordering. Await returns control to the job driver, never drains jobs at each frame return.
+`FrameStore` has reusable slots in reference-counted boxed chunks with checked borrows. Directory growth moves pointers, never frames. Initialize fields in place; never return/queue/swap a FrameState.
+Reuse clears values/cells/completions before advancing generation; empty capacity is not a GC root. Keep existing cold try/with/disposal state. Bind each slot's zero-based buffers once per activation;
+no shared-vector base arithmetic per op. Measure allocations, retained capacity, initialization stores and emitted copies; stable addresses alone do not prove cheap code.
 
-Eval/with initially use the existing semantic preparation adapter at an explicit boundary; they share live
-cells, never a locals value map. Final routing puts their prepared frames on this store too. Cross-realm calls select
-the callee's realm/intrinsics and compatible atom linkage. A host starting an independent root may own a new context; a
-callback from an active context must use its capability. Admission is callable kind and execution state, with no
-direct-leaf prerequisite in the final interpreter route. Frames/services require **no unsafe**.
+Dispatch borrows a slot and disjoint services. Helpers yield `Enter(CallSeed)`, `Return`, `Throw`, `Suspend` or `NativeRequest`. Publish IP/typed continuation and release slot, buffer, tier and
+`FrameProgramView` borrows before switching/re-entry; retain owned code handles and reacquire views after stream selection. Calls push IDs; return moves only the result and drops in place.
+Continuations cover discarded results, construction/new.target, derived completion, eval and native boundary results. Preparation preserves bound/Proxy forwarding, parameter and class-field effects
+exactly once. Throw unwinds catch/finally/using before popping; pending completions stay frame-local and finally may replace them. Preserve thrown identity, spans and realm.
+
+Natives receive a capability, not a borrowed frame. `call_sync` drives **this same Vm** to a boundary token; throws return to the waiting Rust native rather than unwinding through it. Rust driver
+re-entry may nest, never another Vm. Enforce JS/native depth limits before Rust stack exhaustion. Suspending builtins need explicit native continuations, never suspended Rust stacks. A generator/async
+body detaches a lease retaining its store/code/cells after its creator returns, without retaining its caller; reattach to a compatible invocation. Preserve synchronous prologues, Executing rejection,
+yield*, finally, async-generator FIFO and promise job order. Await yields to the job driver; ordinary returns do not drain jobs. Host independent roots may create contexts; callbacks from active
+contexts must reuse them. Cross-realm frames choose callee intrinsics and compatible atom linkage.
 
 ## Properties: atoms and layouts are the ordinary lookup authority
 

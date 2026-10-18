@@ -10,11 +10,11 @@ verify the live host. An unqualified policy is never usable.
 
 `cases` maps the 76 legacy selection cases (86 with development) to `wall_band` B_i and
 `instruction_band` I_i; `held_out` maps all nine acceptance programs to their
-A/A wall bands. `lanes` holds broad, sentinel, external, optional development, equal-case portfolio
+wall bands (v4 adds per-program I_i; see [held-out policy v4](#held-out-policy-v4)). `lanes` holds broad, sentinel, external, optional development, equal-case portfolio
 and held-out ceilings. Qualification retains joint pilot intervals, extended case intervals and source
 hashes. B_i covers A2's two observed layout estimators and global A/A median
-bias; I_i covers its rounded A/A instruction envelope. Held-out bands use
-rounded reciprocal 95% A/A interval endpoints. These empirical envelopes do
+bias; I_i covers its rounded A/A instruction envelope. v2/v3 held-out bands use
+only rounded reciprocal 95% A/A interval endpoints. These empirical envelopes do
 not substitute for confidence intervals. The rule itself is owned by T022.
 
 `layout_gate` freezes `mechanism_class` (`cpu-work` or `instruction-blind`),
@@ -36,7 +36,7 @@ Any drift refuses timing. Only x86_64 macOS release builds are supported.
 all binary hashes/audits, exact paths, host, preflight and raw case hashes.
 Path lengths are compared as filesystem bytes, including non-ASCII names.
 `panels` contains natural only or exactly six ordered matching-layout screens;
-held-out has one natural screen of 30 pairs. Raw case packets retain every
+held-out has one natural screen of 30 pairs, or (v4) six after `--held-out --complete`. Raw case packets retain every
 sample, separate calibration, per-role costs and paired ratios. Replay
 recomputes all ratios, validates complete inventories and binds natural
 binary hashes/revisions to the sealed formal bundle. It refuses missing,
@@ -87,8 +87,9 @@ and its adjacent SHA-256 sidecar preserve the original unqualified outcome.
 remains valid for plans that name no development case.
 [Qualified iMac v3](../benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v3.json)
 adds the development lane (86 cases) and is required for any plan that names
-a development case; v1 remains frozen. [T057](../tasks/T057-string-code-units.md)
-owns the v3 qualification record.
+a development case; v1 remains frozen. [T057](../tasks/archive/T057-development-policy.md)
+owns the v3 qualification record. [Qualified iMac v4](../benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v4.json)
+replaces only v3's held-out gate and lane rule; [T059](../tasks/archive/T059-held-out-layout-policy-v4.md) owns its record.
 [T055](../tasks/archive/T055-layout-noise-control.md) owns qualification evidence.
 Screen/held-out A/A binds the frozen band-source executable; canonical
 formal A/A binds its own declared revision and byte-identical two roles.
@@ -173,20 +174,24 @@ measuring that case requires K=6, even when the natural target fails.
 Full-portfolio units therefore always complete the panel if such a case exists.
 This band alone cannot reject/promote or tighten target payoff by inverse band.
 Target payoff/all-pairs, instruction hard caps, stage budgets, lane/portfolio precision and correctness gates remain binding.
-A held-out fallback requires all six held-out layouts (`--held-out-panel`
-with `--held-out --pairs 30`); precise program bands and every lane still bind.
+Under v2/v3 a held-out fallback requires all six held-out layouts (`--held-out-panel`
+with `--held-out --pairs 30`), each passing; under v4 the persistence rule applies.
 No 3% precision limit or adopted A2 envelope is widened.
 
 
 `layout_formal_continuation --bundle <sealed-dir> --output <new-dir>`
-automatically continues all deficient formal A/A cases; `--case <id>` limits
-it to a subset and `--previous <continuation.json>` resumes that case. It
-requires byte-identical base/candidate source/images. Three-role argv, per-role
+automatically continues all deficient cases of a formal A/A or candidate/base
+bundle; `--case <id>` limits it to a subset and `--previous <continuation.json>`
+resumes that case. A chain records `comparison: candidate-base` unless both
+roles share source and image; replay refuses the other kind, so A/A
+qualification never accepts a candidate chain. Three-role argv, per-role
 N/startup eligibility, timeout, workload/image hashes and seeded rotation at
 absolute block indexes come from the sealed bundle, without re-calibration.
 Removed transient assets are restored at the original argv paths only from
 matching pinned bytes; existing files are never replaced. Original sealed
-files remain immutable. Each segment seals raw process windows/results, load,
+files remain immutable. `decide --formal-continuation <continuation.json>`
+(latest chain per case) extends that case's formal statistic; lanes keep the
+sealed joint blocks, and a still-imprecise case at 240 stays incomplete. Each segment seals raw process windows/results, load,
 source/predecessor hashes and exact retained ratios; replay refuses role/order,
 count, correctness, counter, timer or identity drift. Formal load invalidates
 an entire appended segment; retained failed segments allow at most three whole
@@ -211,3 +216,24 @@ and automatic continuation. `layout_development_qualification` replays both
 and the four-lane sealed formal A/A, deriving no wider bands from qualification.
 The pre-timing contract and publication standing are owned by
 [T057 development policy](../tasks/archive/T057-development-policy.md).
+
+
+## Held-out policy v4
+
+A policy with `held_out_rule: six-layout-persistence-v4` (iMac v4) gives each
+held-out program B_i and I_i, and the lane a ceiling, by the development A2
+estimators over six placements of the band-source image (five pairs each),
+maxed with the parent's 30-pair A/A band and ceiling; a fresh 30-pair A/A
+qualifies them (`layout_held_out_policy a2|qualify`). Every selection band,
+ceiling and precision record is the parent's. The same `held_out_rule` marker
+also selects v4's lane-event rule for every lane and the portfolio. The decision rule is owned by
+[T022](../tasks/T022-performance-priority-controller.md#layout-robust-decisions).
+
+Complete a held-out event with `layout_panel --held-out --complete --pairs 30`
+on the natural output: it appends variants 1..5 at the natural pair count and
+writes `complete.json`; pass that file as `--held-out-panel`. v2/v3 stay valid
+for plans frozen against them, but after v4's publication every decision
+evaluates held-out with v4's bands, ceiling, precision and rule
+(`HELD_OUT_SUCCESSOR` in `layout_policy.py` binds its path, hash and parents);
+the decision records `held_out_policy_sha256`. Promotion still requires the
+held-out gate.

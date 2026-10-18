@@ -1,7 +1,8 @@
 """Measure the fixed six-layout candidate/base panel, or held-out acceptance.
 
 All variants are built/audited before timing. Paths are distinct, equal-length
-and created once; variant k is compared only to baseline variant k.
+and created once; variant k is compared only to baseline variant k. Completion
+appends variants 1..5 to an immutable natural screen, selection or held-out.
 """
 from __future__ import annotations
 
@@ -53,11 +54,13 @@ def measure_panel(base_path, candidate_path, output, pairs=5, held=False, natura
     if complete:
         previous = json.loads((output / 'panel.json').read_text())
         if (previous['base'] != base or previous['candidate'] != candidate
-                or previous['pairs'] != pairs or len(previous['panels']) != 1 or previous['held_out']
+                or previous['pairs'] != pairs or len(previous['panels']) != 1 or previous['held_out'] != held
                 or previous.get('development', False) != development):
             raise ValueError('completion must preserve the exact natural screen')
         from .layout_evidence import replay
-        replay(output / 'panel.json', {'host': host, 'host_node': platform.node(), 'cases': {c['id']: {} for c in previous['panels'][0]['cases']}})
+        ids = {c['id']: {} for c in previous['panels'][0]['cases']}
+        replay(output / 'panel.json', {'host': host, 'host_node': platform.node(),
+               'held_out' if held else 'cases': ids}, held=held)
     tool = screen.counter_tool()
     with screen.measurement_lock('layout-panel'):
         if screen.wait_for_builds(300):
@@ -105,11 +108,13 @@ def main():
     parser.add_argument('--held-out-panel', action='store_true', help='all six held-out layouts for host precision fallback')
     parser.add_argument('--pairs', type=int, default=5)
     parser.add_argument('--development', action='store_true', help='include the selectable npm lane (v3 policy)')
+    parser.add_argument('--held-out', action='store_true', help='held-out acceptance; with --complete, the v4 K=6 held-out panel')
     modes = parser.add_mutually_exclusive_group()
-    modes.add_argument('--held-out', action='store_true')
     modes.add_argument('--natural', action='store_true')
     modes.add_argument('--complete', action='store_true', help='append variants 1..5 to an immutable natural screen')
     args = parser.parse_args()
+    if args.held_out and args.natural:
+        parser.error('--held-out measures natural placement already')
     if args.pairs < (30 if args.held_out else 5):
         raise ValueError('need >=5 panel pairs or >=30 held-out promotion pairs')
     measure_panel(args.base_matrix, args.candidate_matrix, args.output, args.pairs, args.held_out, args.natural, args.complete, args.held_out_panel, args.development)

@@ -129,10 +129,36 @@ moment/dates 0.9993 / 1.0088, diff/compare 1.0326 / 1.0051, meriyah/parse
 1.0282 / 1.0029. Instruction counts rise slightly, as expected for a stage
 that adds linking without yet removing name comparisons.
 
-Under the pending policy v4 lane-event rule (a natural lane excess triggers
-the panel and rejects only if the six-layout geomean exceeds the ceiling or
-every layout does), the development lane geomean is 1.00560 (ceiling
-1.00963) and only two of six layouts exceed it, so v4 would not reject on
-this lane, and no other failure is recorded. Under the frozen v3 rule this
-is a complete, valid failed screen; whether it consumes the plan's single
-attempt or is re-judged under v4 is a lead decision. No rerun was made.
+### Governing verdict: v4 replay `pass` (lead decision, 2026-10-18)
+
+Main `290e3f51` publishes qualified policy v4 and binds it, through
+`tools/benchmark/layout_policy.py::HELD_OUT_SUCCESSOR`, as the successor of
+this plan's frozen v3 policy (`f655f25a`): v4's held-out bands/rule and its
+lane-event rule now govern v2/v3 plans, whose selection bands stay unchanged.
+`layout_iteration` applies the successor on every new screen of this plan, so
+the same packets judged today are judged under v4. The packets were complete
+(six layouts x 86 cases, 2,580 pairs, 0 invalid, 0 heavy samples), so after
+merging main (`a8c533ef` is the screened head; the merge commit adds main's
+tooling) they were re-judged without new timing by
+`evaluate_attempt` on `complete.json`
+(SHA-256 `16735eee8c268524bf51ca2a118e886c488930a4394d83973e46a03520e79e96`,
+every case-file digest re-verified). This is the plan's single attempt, not a
+rerun.
+
+| Rule | Label | Failures | Event resolution |
+| --- | --- | --- | --- |
+| v3 raw (frozen policy alone) | `reject` | development lane, layouts 0 and 2 | none |
+| v4 successor (governing) | `pass` | none | `nonpersistent` |
+
+The v3 replay reproduces the iMac `verdict.json` byte-for-byte in content.
+Under v4 the natural-layout development excess is a `development lane` lane
+event: the six-layout development geomean is 1.00560 against the 1.00963
+ceiling and only two of six layouts exceed it, so it does not persist. The
+three development wall events (meriyah, diff, js-yaml) also resolve within the
+stage cap. Replay output: workspace `outputs/t056-m1s1-screen/replay.json`
+(SHA-256 `23dcc2def9294987068afc154b7721885dc26ef499c465906ade05b70f3aae14`),
+script `tmp/t056_m1s1_replay.py`.
+
+Stage 1 is complete at its screen gate. The formal three-engine run and
+`decide --mode stage` that the migration workflow names for an intermediate
+stage have not been run; `migration.current_stage` is unchanged (1).

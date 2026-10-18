@@ -1,4 +1,4 @@
-"""Extend the measured placement envelope to the selectable npm lane.
+"""Extend the measured placement envelope to an npm lane (development or held-out).
 
 Compare every placement with natural; matching-layout optimization screens are
 a different experiment. All paths are immutable, with raw/load conservation.
@@ -21,8 +21,28 @@ from .pair_disturbance import Monitor, quieting_preflight, verify_run
 from .pair_recording import measure
 from .screen_replay import replay_case
 
+LANES = {'development': ('quickjs-development-layout-a2', 'development_manifest_sha256'),
+         'held-out': ('quickjs-held-out-layout-a2', 'held_out_manifest_sha256')}
 
-def collect(matrix_path, output, expected_hash):
+
+def lane_inputs(lane):
+    """Artifact type, manifest binding, manifest path and frozen ids of one lane."""
+    if lane == 'held-out':
+        from .held_out import MANIFEST_PATH as path, opportunity_ids as ids
+    else:
+        path, ids = MANIFEST_PATH, opportunity_ids
+    return (*LANES[lane], path, ids())
+
+
+def lane_cases(lane, work):
+    if lane == 'held-out':
+        from .screen_recording import held_out_cases
+        return held_out_cases(screen.DEFAULT_CACHE, work)
+    return screen.resolve_cases(['development'], screen.DEFAULT_CACHE, work)
+
+
+def collect(matrix_path, output, expected_hash, lane='development'):
+    artifact, key, manifest, _ = lane_inputs(lane)
     quieting = quieting_preflight()
     monitor = Monitor.from_queue()
     source = matrix(matrix_path)
@@ -48,13 +68,13 @@ def collect(matrix_path, output, expected_hash):
             raise ValueError('competing builds remain')
         screen.check_load(8, True, 300)
         preflight = screen.launch_preflight([Path(p) for pair in binaries.values() for p in pair.values()], 120)
-        cases = screen.resolve_cases(['development'], screen.DEFAULT_CACHE, out / 'work')
+        cases = lane_cases(lane, out / 'work')
         for k in range(6):
             folder = out / f'variant{k}'
             folder.mkdir()
             results = []
             for case in cases:
-                print('DEVELOPMENT A2', k, case.id, flush=True)
+                print(lane.upper(), 'A2', k, case.id, flush=True)
                 value = measure(case, Path(binaries[k]['candidate']), Path(binaries[k]['base']),
                                 5, screen.counter_tool(), 120,
                                 folder / (case.id.replace('/', '--') + '.json'), monitor)
@@ -64,21 +84,22 @@ def collect(matrix_path, output, expected_hash):
     files = {str(p.relative_to(out)): digest(p) for p in out.glob('variant*/*.json')}
     load = monitor.snapshot()
     counts = verify_run([json.loads((out / p).read_text()) for p in files], load)
-    value = {'schema_version': 1, 'artifact_type': 'quickjs-development-layout-a2',
+    value = {'schema_version': 1, 'artifact_type': artifact,
              'host': host, 'host_node': platform.node(), 'source': source,
-             'development_manifest_sha256': digest(MANIFEST_PATH),
+             key: digest(manifest),
              'binaries': binaries, 'panels': packets, 'case_files': files,
              'quieting': quieting, 'launch_preflight': preflight, 'load': load, 'counts': counts}
     write_json(out / 'a2.json', value)
-    replay(out / 'a2.json', expected_hash)
+    replay(out / 'a2.json', expected_hash, lane)
     return out / 'a2.json'
 
 
-def replay(path, expected_hash):
+def replay(path, expected_hash, lane='development'):
+    artifact, key, manifest, ids = lane_inputs(lane)
     value = json.loads(path.read_text())
-    if (value.get('artifact_type') != 'quickjs-development-layout-a2' or value.get('schema_version') != 1
-            or value['development_manifest_sha256'] != digest(MANIFEST_PATH)):
-        raise ValueError('development A2 contract mismatch')
+    if (value.get('artifact_type') != artifact or value.get('schema_version') != 1
+            or value.get(key) != digest(manifest)):
+        raise ValueError(lane + ' A2 contract mismatch')
     source = value['source']
     if (not source['static_pass'] or source['offsets'] != list(OFFSETS)
             or source['variants'][0]['sha256'] != expected_hash or len(value['panels']) != 6
@@ -86,7 +107,7 @@ def replay(path, expected_hash):
         raise ValueError('development A2 matrix mismatch')
     files, raw = set(), {}
     for k, packet in enumerate(value['panels']):
-        rows(packet, opportunity_ids(), 5)
+        rows(packet, ids, 5)
         binaries = value['binaries'][str(k)]
         if len({len(str(p).encode()) for p in binaries.values()}) != 1 or len(set(binaries.values())) != 2:
             raise ValueError('A2 paths must be distinct/equal-length')
