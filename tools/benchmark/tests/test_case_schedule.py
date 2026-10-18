@@ -136,6 +136,32 @@ class ScheduleTests(unittest.TestCase):
                 path.write_text(json.dumps(e))
                 with self.assertRaisesRegex(ValueError,'process identity'): replay(path,p)
 
+    def test_npm_workers_conserve_three_role_case_order_and_replay_shards(self):
+        from types import SimpleNamespace as Obj
+        from tools.benchmark.npm_workers import measure as npm_measure, replay_schedule
+        from tools.benchmark.planning import role_orders
+        class Run:
+            cases=[(Obj(id='suite'),Obj(id='c'+str(i)),0,Path('/work')) for i in range(7)]
+            def capability(self,index):
+                return [{'suite_id':'suite','case_id':'c'+str(index),'phase':'capability','role':r,'block':None}
+                        for r in role_orders(['candidate','base','quickjs-ng'],1,100+index)[0]]
+            def measurement(self,index,capability):
+                return [{'suite_id':'suite','case_id':'c'+str(index),'phase':'measurement','role':r,'block':b}
+                        for b,roles in enumerate(role_orders(['candidate','base','quickjs-ng'],2,200+index)) for r in roles]
+        run=Run()
+        with tempfile.TemporaryDirectory() as tmp:
+            records=npm_measure(run,Path(tmp),4)
+            expected=[row for i in range(7) for row in run.capability(i)+run.measurement(i,run.capability(i))]
+            plain=[{k:v for k,v in row.items() if k not in ('measurement_schedule','case_shard','worker_pid')} for row in records]
+            self.assertEqual(plain,expected)
+            self.assertEqual(len(records),7*3*3)
+            manifest=Obj(suites=[Obj(id='suite',cases=[Obj(id='c'+str(i)) for i in range(7)])])
+            scheduling=replay_schedule(manifest,records)
+            self.assertEqual(scheduling['measurement_schedule'],binding(4))
+            self.assertEqual(len({r['worker_pid'] for r in records}),4)
+            self.assertEqual({r['worker_pid'] for r in records if r['case_id']=='c0'},
+                             {r['worker_pid'] for r in records if r['case_id']=='c4'})
+
     def test_npm_report_schedule_replays_ownership(self):
         from types import SimpleNamespace as Obj
         from tools.benchmark.npm_workers import replay_schedule
