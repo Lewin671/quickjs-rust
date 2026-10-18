@@ -1,21 +1,23 @@
 # T058: RegExp lazy quantifiers and pattern-template removal
 
-- Status: active; screen attempt 1 of 2 labelled `reject` (broad wall lane);
-  lead decision pending.
-- Implementation: present (`0dc5d6a1`, `1b8c2159`, `cec613d2`; screened at
-  merge `392ca717`, runtime-identical to them).
+- Status: active; screen 1 passes under v4 (K=6 complete); formal 30,
+  held-out 30 and exact Test262 jobs queued on the iMac.
+- Implementation: present (`0dc5d6a1`, `1b8c2159`, `cec613d2`; screened
+  candidate merge `392ca717`, runtime-identical to them).
 - Verified at: `cec613d2`, 2026-10-17, local M1 Pro: full `check.sh` ok
   (2737 Rust tests, Test262 subset 5170), compare-qjs 250/250 including the
   two new fixtures, exact zero-gap slices `test/built-ins/RegExp` (1573 both
   pass), `test/language/literals/regexp` (155), String `replace` (54),
   `match` (48), `split` (120), Date `toString`/`toDateString`/`toUTCString`
   (8/7/9); `staging/sm/String/replace-math.js` passes directly.
-- Evidence: this file; screen job `20261017T222653Z-t058-screen1`; raw
-  samples and verdict at workspace `outputs/t058-screen1/`.
-- Unresolved: whether the broad failure is a host timing shift (flat
-  instructions, bimodal pairs) or a layout effect; RGI_Emoji template.
-- Next action: lead decides between attempt 2 (complete K=6) and treating
-  attempt 1 as an event; formal/promotion only under policy v4 (T059).
+- Evidence: this file; screen jobs `20261017T222653Z-t058-screen1` (natural)
+  and `20261018T013229Z-t058-screen1-complete` (layouts 1-5); raw natural
+  samples at workspace `outputs/t058-screen1/`.
+- Unresolved: formal/held-out/promotion decision; RGI_Emoji template.
+- Next action: when `20261018T080835Z-t058-formal30`,
+  `20261018T080836Z-t058-heldout30` and `20261018T080837Z-t058-test262-exact`
+  finish, run `decide --mode promotion` under the plan (held-out K=6 if an
+  event occurs) and record it.
 
 ## Goal
 
@@ -154,5 +156,30 @@ Target `development/papaparse/csv`: wall 0.1862, instructions 0.1146
 1.432 with instructions 1.0001-1.0002 throughout: a step change between
 pairs 2 and 3 on a 9 ms workload, which code that only changed the RegExp
 matcher cannot explain by instructions. No other case regressed in
-instructions beyond 1.0002. The attempt counts against the budget under the
-written rule unless the lead classifies it otherwise.
+instructions beyond 1.0002. 
+### Completion under policy v4 (lead decision 2026-10-17)
+
+Policy v4 (`tasks/archive/T059-held-out-layout-policy-v4.md`) makes a
+natural lane excess a lane event that needs the complete K=6 panel. The
+v3-bound plan is evaluated with v4's successor rule; re-evaluated, the
+natural packet is `wall event` with `broad lane: lane event`, no failures.
+This completes attempt 1; attempt 2 is unspent. Job
+`20261018T013229Z-t058-screen1-complete` (exit 0, 8795 s) first re-hashed
+all twelve audited binaries (base natural `c7f0f66a...`, candidate natural
+`d2bc9b8d...`, revisions `351004f3`/`392ca717`), then appended layouts 1-5
+to the same `screen/` directory. Verdict `pass`, complete, event resolution
+`nonpersistent`. SHA-256: verdict `ce385522...abd9ae`, `complete.json`
+`fff35cfc...0cdb`, natural-v4 verdict `83005b47...4455`.
+
+| Lane | layouts 0-5 | geomean | ceiling |
+| --- | --- | --- | --- |
+| broad | 1.0172 1.0028 1.0021 1.0006 1.0068 0.9973 | 1.0044 | 1.0129 |
+| sentinel | 0.9693 1.0123 0.9869 0.9965 0.9929 0.9980 | 0.9926 | 1.0157 |
+| external | 0.9974 0.9967 1.0016 0.9978 0.9987 0.9998 | 0.9987 | 1.0074 |
+| development | 0.8541 0.8470 0.8570 0.8513 0.8435 0.8455 | 0.8497 | 1.0096 |
+| portfolio | 0.9832 0.9808 0.9827 0.9803 0.9812 0.9796 | 0.9813 | 1.0072 |
+
+Wall-event cases, median per layout: `top_level_function_call` 1.4316
+1.0354 1.0113 1.0112 1.0413 1.0189; `string_slice` 1.0407 1.0212 0.9950
+1.0170 1.0194 1.0390; `cdjs` 1.0336 1.0127 1.0175 0.9985 1.0168 1.0099.
+Target papaparse 0.1862 0.1857 0.1862 0.1853 0.1858 0.1836.
