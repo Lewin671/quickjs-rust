@@ -102,10 +102,10 @@ No other owner job was cancelled. Raw artifacts stay in the queue/fetch output.
 | --- | --- | --- |
 | `20261018T044114Z-t060-prepare` | Reproduce/audit band sources and prepare equal-length role matrices | exit 0 / 362 s; no DISTURBED |
 | `20261018T044128Z-t060-full-gate` | Superseded by current-tooling gate before execution | cancelled queued, unmeasured |
-| `20261018T044128Z-t060-a2-portfolio` | Six 76-case A2 placements, workers=4 | queued |
-| `20261018T044128Z-t060-a2-development` | Six development A2 placements, workers=4 | queued |
-| `20261018T044129Z-t060-a2-heldout` | Six held-out A2 placements, workers=4 | queued |
-| `20261018T044210Z-t060-heldout-estimator` | Independent 30-pair held-out envelope estimator and power allocation | queued |
+| `20261018T044128Z-t060-a2-portfolio` | Six 76-case A2 placements, workers=4 | exit 0 / 2110 s; no DISTURBED |
+| `20261018T044128Z-t060-a2-development` | Six development A2 placements, workers=4 | exit 0 / 2424 s; no DISTURBED |
+| `20261018T044129Z-t060-a2-heldout` | Six held-out A2 placements, workers=4 | exit 0 / 1127 s; no DISTURBED |
+| `20261018T044210Z-t060-heldout-estimator` | Independent 30-pair held-out envelope estimator and power allocation | exit 0 / 1018 s; no DISTURBED |
 | `20261018T044315Z-t060-seed` | Replay A2/estimator and freeze v5 bands | queued |
 
 Qualification/speed jobs use f83cfe11. Every qualification collector refuses
@@ -129,3 +129,30 @@ Prepare reproduced the frozen 926ee634 natural image and passed all six
 original-source audits; the c7f0f66a npm matrix and equal-length role copies
 were verified. Only two light background samples, below disturbance threshold.
 Portfolio A2 started at 08:15:13 UTC on 2026-10-18, with four case-owned forks.
+
+## Frozen seed (before qualification results)
+
+Seed job `20261018T044315Z-t060-seed`: exit 0. SHA-256
+`d9f25f111d2c49fcf897fcc2932a0b8d6613bcfed972bd5fca417a4cf3585391`.
+All 570 A2 packets replayed: 2,850 valid attempts, zero invalid/heavy samples
+(portfolio 2,280, development 300, held-out 270). No observations pooled.
+
+All 95 B_i increased versus v4. Selection B_i min/median/max:
+1.050127 / 1.050127 / 1.113165; held-out: 1.050127 / 1.050127 / 1.067810.
+The global reciprocal natural median floor is 1.0501274307821105, from
+`broad/dynamic_method_call`. The instruction median floor is 1.0068368339681264
+from `external/kraken-1.1/audio-beat-detection`, rounded to 1.0069. Both maxima
+are in the original 76 cases: using the v3/v4 successive floor scopes gives
+these same floors. Selection I_i: 84 increased / 2 decreased; held-out:
+8 increased / 1 decreased. Thresholds remain frozen even if qualification fails.
+
+| Lane ceiling | v4 | workers-4 v5 seed |
+| --- | ---: | ---: |
+| broad | 1.012949330 | 1.016805577 |
+| sentinel | 1.015687002 | 1.018672233 |
+| external | 1.007380238 | 1.005804468 |
+| development | 1.009630314 | 1.009347089 |
+| portfolio | 1.007249456 | 1.006849231 |
+| held-out | 1.005018254 | 1.018685972 |
+
+Portfolio qualification A/A started at 10:11:37 UTC, after the seed was sealed.
