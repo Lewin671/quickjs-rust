@@ -19,6 +19,8 @@ def evaluate_formal(unit, summary, broad, external, sentinel, mode, panel_path, 
     gate = unit['layout_gate']
     policy = load_policy(ROOT / gate['policy_path'], gate['policy_sha256'], live=False)
     policy, held_policy_sha = with_held_out_successor(policy, gate['policy_sha256'])
+    if 'formal_lane_schedule' in policy and summary.get('lane_schedule') != policy['formal_lane_schedule']:
+        raise ValueError('formal measurement schedule mismatch')
     missing, failed = [], []
     if panel_path is None:
         return {'label': 'incomplete', 'passed': False, 'failures': [],

@@ -14,13 +14,11 @@ from .layout_identity import digest, host_identity, write_json
 from .screen_recording import held_out_cases, measure
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--binary', type=Path, required=True)
-    parser.add_argument('--sha256', required=True)
-    parser.add_argument('--lane', choices=('portfolio', 'held-out', 'development'), required=True)
-    parser.add_argument('--output', type=Path, required=True)
-    args = parser.parse_args()
+def collect(binary, sha256, lane, output, workers=1):
+    from types import SimpleNamespace
+    args = SimpleNamespace(binary=binary, sha256=sha256, lane=lane, output=output, workers=workers)
+    from .case_schedule import binding, collect
+    schedule = binding(args.workers)
     from .pair_disturbance import Monitor, quieting_preflight, verify_run
     quieting = quieting_preflight()
     monitor = Monitor.from_queue()
@@ -40,9 +38,8 @@ def main():
         from .development import MANIFEST_PATH
         binding['development_manifest_sha256'] = digest(MANIFEST_PATH)
     write_json(out / 'identity.json', {'host': identity, 'sha256': args.sha256,
-        'binaries': list(map(str, binaries)), 'pairs': 30, 'lane': args.lane, **binding})
+        'binaries': list(map(str, binaries)), 'measurement_schedule': schedule, 'pairs': 30, 'lane': args.lane, **binding})
     tool = screen.counter_tool()
-    (out / 'cases').mkdir()
     (out / 'work').mkdir()
     with screen.measurement_lock('layout-calibration'):
         if screen.wait_for_builds(300):
@@ -52,17 +49,15 @@ def main():
         cases = (held_out_cases(screen.DEFAULT_CACHE, out / 'work') if args.lane == 'held-out'
                  else screen.resolve_cases(['development'] if args.lane == 'development' else
                     ['broad', 'sentinel', 'external'], screen.DEFAULT_CACHE, out / 'work'))
-        results = []
-        for case in cases:
-            print('CALIBRATE', case.id, flush=True)
-            result = measure(case, binaries[1], binaries[0], 30, tool, 120,
-                             out / 'cases' / (case.id.replace('/', '--') + '.json'), monitor)
-            results.append(dataclasses_asdict(result))
+        packets, scheduling = collect(cases, [0], {0: {'base': binaries[0], 'candidate': binaries[1]}},
+                                       30, tool, 120, out, monitor, args.workers)
+        results = packets[0]['cases']
+        (out / 'variant0').rename(out / 'cases')
     import json
     disturbance = monitor.snapshot()
     conservation = verify_run([json.loads(p.read_text()) for p in (out / 'cases').glob('*.json')], disturbance)
     write_json(out / 'screen.json', {'artifact_type': 'quickjs-layout-calibration',
-        'pairs': 30, 'cases': results, 'disturbance': disturbance,
+        'pairs': 30, 'cases': results, **scheduling, 'disturbance': disturbance,
         'disturbance_counts': conservation, 'quieting': quieting, 'launch_preflight': preflight, 'host': identity, **binding})
 
     # The pilot stays sealed. Each deficient case gets a separate immutable
@@ -71,18 +66,33 @@ def main():
     from .layout_policy import analyze
     from .layout_identity import command
     context=command(['git','rev-parse','HEAD'])
+    deficient = [r['id'] for r in results if analyze({r['id']:r['ratios']['wall_ns']})['relative_half_width']>.03]
+    if args.workers == 1:
+        for name in deficient:
+            complete(out/'screen.json', name, context, out/'power'/name.replace('/','--'))
+    elif deficient:
+        from functools import partial
+        from .worker_pool import Task, run_tasks
+        with screen.measurement_lock('layout-power-allocation'):
+            run_tasks([Task('power ' + name, partial(complete, out/'screen.json', name,
+                      context, out/'power'/name.replace('/','--'), locked=False)) for name in deficient], args.workers)
     continuations=[]
-    for result in results:
-        if analyze({result['id']:result['ratios']['wall_ns']})['relative_half_width']>.03:
-            path=complete(out/'screen.json',result['id'],context,
-                          out/'power'/result['id'].replace('/','--'))
-            continuations.append({'path':str(path),'sha256':digest(path)})
+    for name in deficient:
+        path=out/'power'/name.replace('/','--')/'continuation.json'
+        continuations.append({'path':str(path),'sha256':digest(path)})
     write_json(out/'power.json',{'continuations':continuations})
+    return out/'screen.json'
 
 
-def dataclasses_asdict(value):
-    import dataclasses
-    return dataclasses.asdict(value)
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--binary', type=Path, required=True)
+    parser.add_argument('--sha256', required=True)
+    parser.add_argument('--lane', choices=('portfolio', 'held-out', 'development'), required=True)
+    parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--workers', type=int, choices=range(1, 9), default=1)
+    args = parser.parse_args()
+    collect(args.binary, args.sha256, args.lane, args.output, args.workers)
 
 
 if __name__ == '__main__':

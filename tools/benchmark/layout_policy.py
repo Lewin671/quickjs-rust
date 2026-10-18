@@ -118,6 +118,8 @@ def load_policy(path: Path, sha256: str, *, live=True):
         raise ValueError('invalid layout lane inventory')
     if any(not math.isfinite(v) or v < 1 for v in policy['lanes'].values()):
         raise ValueError('invalid layout lane ceiling')
+    from .case_schedule import identity
+    identity(policy)
     from .layout_power import validate_precision
     validate_precision(policy)
     return policy
@@ -133,6 +135,8 @@ def with_held_out_successor(policy, sha256, successor=None):
     if (value.get('held_out_rule') != HELD_OUT_RULE or value['host'] != policy['host']
             or value.get('host_node') != policy.get('host_node') or set(value['held_out']) != set(policy['held_out'])):
         raise ValueError('held-out successor policy does not match the frozen parent host/inventory')
+    from .case_schedule import require_same
+    require_same(policy, value)
     merged = dict(policy, held_out=value['held_out'], held_out_rule=HELD_OUT_RULE,
                   lanes={**policy['lanes'], 'held-out': value['lanes']['held-out']})
     if 'precision' in policy:

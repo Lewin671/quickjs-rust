@@ -29,6 +29,8 @@ def verify_seed_binding(seed, a2, parent_sha, qualified_engine, *, a2_sha, origi
 
 
 def qualify(parent, seed, pilot, formal, extensions=None, formal_extensions=None):
+    from .case_schedule import require_same
+    require_same(parent, seed, pilot)
     ids = opportunity_ids()
     data = rows(pilot, ids, 30)
     if (set(seed['cases']) != set(parent['cases']) | ids or set(formal) != set(seed['cases'])
@@ -104,6 +106,8 @@ def main():
     seed = json.loads(args.seed.read_text())
     from .layout_development_a2 import replay, bands
     a2, raw = replay(args.a2, seed['calibration_binary_sha256'])
+    from .case_schedule import require_same
+    require_same(parent, seed, a2)
     parent_summary = parent['evidence']['formal-summary']
     parent_path = Path(parent_summary['path'])
     if digest(parent_path) != parent_summary['sha256']:

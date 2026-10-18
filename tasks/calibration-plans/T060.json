@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "measurement_schedule": {"kind": "case-shards-v1", "workers": 4},
+  "parent_policy": "benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v4.json",
+  "parent_sha256": "1eb7de462de0cb9f85c581716392d36dedc7c0c655afde1280c5c94c5052754b",
+  "portfolio_source_revision": "153c1fe5e1ec2315d1ccb68a9aea0ca83843af64",
+  "portfolio_image": "926ee634ca3901b89c778478702a4fe993288ef7e8e69cd93c238c694595aa85",
+  "npm_source_revision": "4c9f959e4ae3f508a10828a46cf59ec042d7ec13",
+  "npm_image": "c7f0f66a519181b214bdc5ca6404cf428f0d18cbd1ab1d0e26386097619b949e",
+  "npm_matrix": "20261017T080252Z-t057-development-qualified-matrix/out/matrix/identity.json",
+  "formal_revision": "351004f386f4c2c1d870467ae6e1e481952a330c",
+  "formal_lane_schedule": "workers-4",
+  "max_load_replacements": 3
+}

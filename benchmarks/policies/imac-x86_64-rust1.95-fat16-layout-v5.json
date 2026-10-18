@@ -1,0 +1,3723 @@
+{
+  "artifact_type": "quickjs-layout-policy",
+  "cases": {
+    "broad/array_allocation": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "broad/array_dynamic_read": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "broad/array_index_of": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "broad/array_read": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "broad/array_write": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0537144236489662
+    },
+    "broad/branch_arithmetic": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "broad/captured_read": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "broad/captured_write": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "broad/closure_allocation_call": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "broad/dynamic_method_call": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.1124430413801016
+    },
+    "broad/empty_loop": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.1117226183903322
+    },
+    "broad/function_call_reordered": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "broad/function_call_two_args": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0582418565836376
+    },
+    "broad/global_read": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.1131654120394188
+    },
+    "broad/local_read": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0869808129252558
+    },
+    "broad/many_locals_call": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "broad/math_abs": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "broad/method_call": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "broad/object_allocation": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "broad/plain_function_call": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "broad/property_dynamic_read": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0880207723285373
+    },
+    "broad/property_read": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "broad/property_write": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "broad/string_slice": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0816584182338898
+    },
+    "broad/top_level_function_call": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "development/big.js/arith": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "development/diff/compare": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0991099041376808
+    },
+    "development/graphlib/paths": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "development/immutable/persistent": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.076242822605886
+    },
+    "development/js-yaml/document": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "development/lodash/transform": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0677281691676783
+    },
+    "development/matter-js/simulate": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "development/meriyah/parse": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0718949238841748
+    },
+    "development/moment/dates": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "development/papaparse/csv": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "external/jetstream3-js-subset/cdjs": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "external/jetstream3-js-subset/gaussian-blur": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "external/jetstream3-js-subset/hash-map": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "external/jetstream3-js-subset/raytrace-public-class-fields": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "external/jetstream3-js-subset/stanford-crypto-aes": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "external/kraken-1.1/ai-astar": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0629603642460599
+    },
+    "external/kraken-1.1/audio-beat-detection": {
+      "instruction_band": 1.0121,
+      "wall_band": 1.0501274307821105
+    },
+    "external/kraken-1.1/audio-dft": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.1117040530377793
+    },
+    "external/kraken-1.1/audio-fft": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0720965324794016
+    },
+    "external/kraken-1.1/audio-oscillator": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "external/kraken-1.1/imaging-darkroom": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.070312265730521
+    },
+    "external/kraken-1.1/imaging-desaturate": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0643389881563874
+    },
+    "external/kraken-1.1/imaging-gaussian-blur": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0507099376923927
+    },
+    "external/kraken-1.1/json-parse-financial": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "external/kraken-1.1/json-stringify-tinderbox": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "external/kraken-1.1/stanford-crypto-aes": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "external/kraken-1.1/stanford-crypto-ccm": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "external/kraken-1.1/stanford-crypto-pbkdf2": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "external/kraken-1.1/stanford-crypto-sha256-iterative": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "external/sunspider-1.0/3d-cube": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "external/sunspider-1.0/3d-morph": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "external/sunspider-1.0/3d-raytrace": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "external/sunspider-1.0/access-binary-trees": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "external/sunspider-1.0/access-fannkuch": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "external/sunspider-1.0/access-nbody": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "external/sunspider-1.0/access-nsieve": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "external/sunspider-1.0/bitops-3bit-bits-in-byte": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "external/sunspider-1.0/bitops-bits-in-byte": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "external/sunspider-1.0/bitops-bitwise-and": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "external/sunspider-1.0/bitops-nsieve-bits": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "external/sunspider-1.0/controlflow-recursive": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "external/sunspider-1.0/crypto-aes": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "external/sunspider-1.0/crypto-md5": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "external/sunspider-1.0/crypto-sha1": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "external/sunspider-1.0/date-format-tofte": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "external/sunspider-1.0/date-format-xparb": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "external/sunspider-1.0/math-cordic": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "external/sunspider-1.0/math-partial-sums": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "external/sunspider-1.0/math-spectral-norm": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "external/sunspider-1.0/regexp-dna": {
+      "instruction_band": 1.0163,
+      "wall_band": 1.0501274307821105
+    },
+    "external/sunspider-1.0/string-base64": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "external/sunspider-1.0/string-fasta": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "external/sunspider-1.0/string-tagcloud": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "external/sunspider-1.0/string-unpack-code": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "external/sunspider-1.0/string-validate-input": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "sentinel/capturing_closure_call": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "sentinel/heterogeneous_property_read": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "sentinel/polymorphic_call_site": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "sentinel/prototype_method_call": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "sentinel/recursive_call_tree": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "sentinel/string_key_map_churn": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0822386259497374
+    }
+  },
+  "development_manifest_sha256": "2f35fddc49930a43644cfe9452a6c994da2059bc59e2fc855f706f602076fd13",
+  "evidence": {
+    "development-a2": {
+      "path": "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261018T044128Z-t060-a2-development/out/attempt0/a2.json",
+      "sha256": "d3991747b33f259b75bea18c67759c8a8e2e260ff222437544b7798db0384e4f"
+    },
+    "formal-load": {
+      "path": "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261018T044646Z-t060-formal-aa/out/attempt0/load.json",
+      "sha256": "1e320adfe1f1dfbf29e8808e0e85e884af95498737acc1e9bdcd30df950cce46"
+    },
+    "formal-power/external/sunspider-1.0/bitops-3bit-bits-in-byte": {
+      "path": "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261018T044647Z-t060-formal-power/out/power/external--sunspider-1.0--bitops-3bit-bits-in-byte/continuation.json",
+      "sha256": "2ee3ca86bf33ce9d3cc2c7ee41e699730708c0055d50fb1e6ad7845e7aab6a4c"
+    },
+    "formal-summary": {
+      "path": "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261018T044646Z-t060-formal-aa/out/attempt0/bundle/summary.json",
+      "sha256": "80a1a4d0d0d65c17121a8a476d2add944f00d974fab547a02e042a84434b06a9"
+    },
+    "held-out-a2": {
+      "path": "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261018T044129Z-t060-a2-heldout/out/attempt0/a2.json",
+      "sha256": "93c3af98cd88dfafddbf5f52fcb2f7c2377a99e92485f4402991f0ec2b7c3a6c"
+    },
+    "held-out-estimator-aa": {
+      "path": "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261018T044210Z-t060-heldout-estimator/out/attempt0/screen.json",
+      "sha256": "5f3202f5e0517da4ec1fd4208abac50ceac539817e9d3e34fc93c9338f242f1d"
+    },
+    "host-attestation": {
+      "path": "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261018T044646Z-t060-formal-aa/out/attempt0/host-attestation.json",
+      "sha256": "92701ebb47b0a8d229fb1bee3cdaa368737b48e11915f5ff7f4e8741a44657d4"
+    },
+    "pilot/development": {
+      "path": "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261018T044642Z-t060-pilot-development/out/attempt0/screen.json",
+      "sha256": "4cd003152021005d6c41960c1fbaac9bcc1abcd991a3dae66e93990e3b98af9f"
+    },
+    "pilot/held-out": {
+      "path": "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261018T044644Z-t060-pilot-held-out/out/attempt0/screen.json",
+      "sha256": "faaa6b686b6e6fbf8e1a6a84cbc129db33f71b2d01ac335771e5322ba2e1556a"
+    },
+    "pilot/portfolio": {
+      "path": "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261018T044640Z-t060-pilot-portfolio/out/attempt0/screen.json",
+      "sha256": "e5b0323c6419239576d213d578d9271db00d6bc52114db26dfbbd02d0d0ef7b5"
+    },
+    "plan": {
+      "path": "tasks/calibration-plans/T060.json",
+      "sha256": "4eb5d4c780c27384ee1b00b9c3201edb9edaf35d259ffad86aef5d1cff7d99e5"
+    },
+    "portfolio-a2": {
+      "path": "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261018T044128Z-t060-a2-portfolio/out/attempt0/a2.json",
+      "sha256": "78fdf018aa47bc3fa50176799fdc5480eea7354d7da1a862ae2672d78bf14331"
+    },
+    "screen-power/broad/dynamic_method_call": {
+      "path": "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261018T044640Z-t060-pilot-portfolio/out/attempt0/power/broad--dynamic_method_call/continuation.json",
+      "sha256": "d351536c370ed1bfae130a13bd9d84c1c20f53080a81c4aa06807cb24cdc9fdf"
+    },
+    "screen-power/sentinel/string_key_map_churn": {
+      "path": "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261018T044640Z-t060-pilot-portfolio/out/attempt0/power/sentinel--string_key_map_churn/continuation.json",
+      "sha256": "fa379bee74733a8c82b0e0d11feea1ba8815a088bf78635533a4c77391541932"
+    },
+    "seed": {
+      "path": "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261018T044315Z-t060-seed/out/seed.json",
+      "sha256": "d9f25f111d2c49fcf897fcc2932a0b8d6613bcfed972bd5fca417a4cf3585391"
+    }
+  },
+  "failures": [],
+  "formal_lane_schedule": "workers-4",
+  "held_out": {
+    "held-out/acorn/parse": {
+      "instruction_band": 1.0082,
+      "wall_band": 1.0501274307821105
+    },
+    "held-out/crypto-js/hash": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "held-out/d3-array/aggregate": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "held-out/decimal.js/arith": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "held-out/esprima/parse": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0571072233170353
+    },
+    "held-out/handlebars/render": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0664995306500085
+    },
+    "held-out/marked/render": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    },
+    "held-out/mustache/render": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0678103451504715
+    },
+    "held-out/ramda/pipeline": {
+      "instruction_band": 1.0069,
+      "wall_band": 1.0501274307821105
+    }
+  },
+  "held_out_manifest_sha256": "276e5b5e8b8359a46e6949079fcb05d7a996e38f8ef9934b708e6321562c6451",
+  "held_out_rule": "six-layout-persistence-v4",
+  "host": {
+    "build_environment": {},
+    "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+    "cargo_configuration": {
+      "cargo_home": "/Users/qingyingliu/.cargo",
+      "configs": []
+    },
+    "cpu": "Intel(R) Core(TM) i7-10700 CPU @ 2.90GHz",
+    "hardware": "iMac20,1",
+    "linker": "Apple clang version 14.0.0 (clang-1400.0.29.202)\nTarget: x86_64-apple-darwin21.6.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin",
+    "machine": "x86_64",
+    "manifests": {
+      "benchmarks/external-preview.json": "740f0ca71bb11fc550f244f8f4ae4f3b91eca276920bce0bd31c81b64d060219",
+      "benchmarks/generic-sentinels-manifest.json": "ff3132906d183565fcf2c01f0e495a0cfb3c1ba1157e5af39e42b4567be3fc26",
+      "benchmarks/held-out-preview.json": "276e5b5e8b8359a46e6949079fcb05d7a996e38f8ef9934b708e6321562c6451",
+      "benchmarks/manifest.json": "73cf9d522ba668e3d00b10170875d22a60f43212dd71bb4d290ff599884247c6",
+      "rust-toolchain.toml": "80fd9457547f340dddb065165021df33dc8aa4a4bbf79a068dc189c5947d9e9d"
+    },
+    "memory": "34359738368",
+    "os": "12.6",
+    "recipe": {
+      "binary": "qjs",
+      "cargo_args": [
+        "--locked",
+        "--release",
+        "-p",
+        "qjs-cli",
+        "--features",
+        "agents",
+        "--config=profile.release.opt-level=3",
+        "--config=profile.release.lto=\"fat\"",
+        "--config=profile.release.codegen-units=16",
+        "--config=profile.release.panic=\"abort\""
+      ],
+      "environment": {
+        "CARGO_ENCODED_RUSTFLAGS": "-Csymbol-mangling-version=v0\u001f-Cllvm-args=-align-all-functions=4",
+        "CARGO_INCREMENTAL": "0"
+      }
+    },
+    "rustc": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: x86_64-apple-darwin\nrelease: 1.95.0\nLLVM version: 22.1.2",
+    "system": "Darwin"
+  },
+  "host_node": "iMac.local",
+  "lanes": {
+    "broad": 1.0168055768076618,
+    "development": 1.0093470890377252,
+    "external": 1.0058044684360443,
+    "held-out": 1.0186859720383867,
+    "portfolio": 1.0068492308023842,
+    "sentinel": 1.0186722331290212
+  },
+  "measurement_schedule": {
+    "kind": "case-shards-v1",
+    "workers": 4
+  },
+  "offsets": [
+    0,
+    16,
+    64,
+    240,
+    512,
+    1008
+  ],
+  "parent_policy_sha256": "1eb7de462de0cb9f85c581716392d36dedc7c0c655afde1280c5c94c5052754b",
+  "precision": {
+    "cases": {
+      "broad/array_allocation": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.012142108880750513,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/array_dynamic_read": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.0067630611432816234,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/array_index_of": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.00849914608275193,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/array_read": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.010031017733363568,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/array_write": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.013940581229915372,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/branch_arithmetic": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.00908395842661247,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/captured_read": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.005926624295050642,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/captured_write": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.010269659442155854,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/closure_allocation_call": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.010971230256455966,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/dynamic_method_call": {
+        "pairs": 38,
+        "precise": true,
+        "relative_half_width": 0.01973468748599405,
+        "required_pairs": 38,
+        "status": "precise"
+      },
+      "broad/empty_loop": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.01441915425478224,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/function_call_reordered": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.007813066531910495,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/function_call_two_args": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.008069555644373061,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/global_read": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.006853043962384842,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/local_read": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.009015507513719268,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/many_locals_call": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.015389977533838195,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/math_abs": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.010891758850563704,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/method_call": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.007051195272701705,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/object_allocation": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.007822949129780987,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/plain_function_call": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.004968762699165463,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/property_dynamic_read": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.014216595889566364,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/property_read": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.011368286551705964,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/property_write": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.0055675110665014405,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/string_slice": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.021603010865737016,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/top_level_function_call": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.0202474160236239,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "development/big.js/arith": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.003389849886403118,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "development/diff/compare": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.008649935449254631,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "development/graphlib/paths": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.008619883850952359,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "development/immutable/persistent": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.009238292262889303,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "development/js-yaml/document": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.004989577783756749,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "development/lodash/transform": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.003932361970452547,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "development/matter-js/simulate": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.004341905222649212,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "development/meriyah/parse": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.005729027637163764,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "development/moment/dates": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.005016718228159078,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "development/papaparse/csv": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.0029653290653766096,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/jetstream3-js-subset/cdjs": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.0064478023381100424,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/jetstream3-js-subset/gaussian-blur": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.004510541849158889,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/jetstream3-js-subset/hash-map": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.011255057870892538,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/jetstream3-js-subset/raytrace-public-class-fields": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.00837739259209358,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/jetstream3-js-subset/stanford-crypto-aes": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.009888903659812875,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/kraken-1.1/ai-astar": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.0095365079099341,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/kraken-1.1/audio-beat-detection": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.0026343350877511273,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/kraken-1.1/audio-dft": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.019281273385972186,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/kraken-1.1/audio-fft": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.005906705574268534,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/kraken-1.1/audio-oscillator": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.0038548933668463015,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/kraken-1.1/imaging-darkroom": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.01063091891569612,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/kraken-1.1/imaging-desaturate": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.008038865703248188,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/kraken-1.1/imaging-gaussian-blur": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.002739891808556383,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/kraken-1.1/json-parse-financial": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.0049157017051648655,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/kraken-1.1/json-stringify-tinderbox": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.006521418880879759,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/kraken-1.1/stanford-crypto-aes": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.006273598707151606,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/kraken-1.1/stanford-crypto-ccm": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.0068406188179548355,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/kraken-1.1/stanford-crypto-pbkdf2": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.005679057643671603,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/kraken-1.1/stanford-crypto-sha256-iterative": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.0039050291082640687,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/3d-cube": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.0037019699724123445,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/3d-morph": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.002981569847392951,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/3d-raytrace": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.0063762836552647695,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/access-binary-trees": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.008783173952696455,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/access-fannkuch": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.0026584441406740655,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/access-nbody": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.005033727082449424,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/access-nsieve": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.005850214748901239,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/bitops-3bit-bits-in-byte": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.013726197670746343,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/bitops-bits-in-byte": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.008043983901188545,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/bitops-bitwise-and": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.004134097387724633,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/bitops-nsieve-bits": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.004293280669927402,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/controlflow-recursive": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.004888988068010081,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/crypto-aes": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.005100592563037409,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/crypto-md5": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.0037537631819277717,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/crypto-sha1": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.004618993382556225,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/date-format-tofte": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.006331655085282772,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/date-format-xparb": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.0060423486233431856,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/math-cordic": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.0072210170705153676,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/math-partial-sums": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.008325461835597237,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/math-spectral-norm": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.007141645592762869,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/regexp-dna": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.013246422276668612,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/string-base64": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.008455288709074305,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/string-fasta": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.007525274808230176,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/string-tagcloud": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.007199295847511777,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/string-unpack-code": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.00915657935786851,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/string-validate-input": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.004888224167069355,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "sentinel/capturing_closure_call": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.014152379957843797,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "sentinel/heterogeneous_property_read": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.012600708749082035,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "sentinel/polymorphic_call_site": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.009879917625247314,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "sentinel/prototype_method_call": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.023479911938072195,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "sentinel/recursive_call_tree": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.012099895825692597,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "sentinel/string_key_map_churn": {
+        "pairs": 39,
+        "precise": true,
+        "relative_half_width": 0.023907724477835846,
+        "required_pairs": 39,
+        "status": "precise"
+      }
+    },
+    "formal": {
+      "broad/array_allocation": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.003173945174070214,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/array_dynamic_read": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.0022650592086512766,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/array_index_of": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.004293466616386077,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/array_read": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.0033233683727618146,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/array_write": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.003572150364121285,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/branch_arithmetic": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.003719939075664147,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/captured_read": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.0031485912138802252,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/captured_write": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.0031783946504997385,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/closure_allocation_call": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.0025737509171719353,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/dynamic_method_call": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.006675702819380902,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/empty_loop": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.0038016499779549573,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/function_call_reordered": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.009554540508067921,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/function_call_two_args": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.005280551957289825,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/global_read": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.002854248206007437,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/local_read": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.004229525951500168,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/many_locals_call": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.005730158848265221,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/math_abs": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.005664538265348407,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/method_call": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.004224960918202347,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/object_allocation": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.003814915314967804,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/plain_function_call": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.006519168941245601,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/property_dynamic_read": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.010834338217224682,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/property_read": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.0037567493546284414,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/property_write": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.003841467480273808,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/string_slice": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.00605287776863106,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "broad/top_level_function_call": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.008156025220823038,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "development/big.js/arith": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.005086551515535387,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "development/diff/compare": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.006713765603422406,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "development/graphlib/paths": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.008767221865074726,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "development/immutable/persistent": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.0072296366914694765,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "development/js-yaml/document": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.007040957124042846,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "development/lodash/transform": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.003305619950837446,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "development/matter-js/simulate": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.0022874991363155406,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "development/meriyah/parse": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.006306288316233255,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "development/moment/dates": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.008181028225589415,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "development/papaparse/csv": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.0024216222669168896,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/jetstream3-js-subset/cdjs": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.003825992055294991,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/jetstream3-js-subset/gaussian-blur": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.005286208043021601,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/jetstream3-js-subset/hash-map": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.008513645749135268,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/jetstream3-js-subset/raytrace-public-class-fields": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.007262060288174332,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/jetstream3-js-subset/stanford-crypto-aes": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.0061238914870505035,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/kraken-1.1/ai-astar": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.0044359778869136335,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/kraken-1.1/audio-beat-detection": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.004452188115391165,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/kraken-1.1/audio-dft": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.016995959295345697,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/kraken-1.1/audio-fft": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.0040200338417897274,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/kraken-1.1/audio-oscillator": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.00381523162176034,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/kraken-1.1/imaging-darkroom": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.015577897570290489,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/kraken-1.1/imaging-desaturate": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.008346293064751542,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/kraken-1.1/imaging-gaussian-blur": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.013312277180021814,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/kraken-1.1/json-parse-financial": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.007134267176161169,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/kraken-1.1/json-stringify-tinderbox": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.007805621421185682,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/kraken-1.1/stanford-crypto-aes": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.004046118696118262,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/kraken-1.1/stanford-crypto-ccm": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.004319355343638254,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/kraken-1.1/stanford-crypto-pbkdf2": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.0034201365501045355,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/kraken-1.1/stanford-crypto-sha256-iterative": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.004225749028611281,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/3d-cube": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.0064819293457145655,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/3d-morph": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.005732820285907492,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/3d-raytrace": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.0077304071439463495,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/access-binary-trees": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.0026199238658917157,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/access-fannkuch": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.006572808713683376,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/access-nbody": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.004159969116984907,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/access-nsieve": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.0066958285414735474,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/bitops-3bit-bits-in-byte": {
+        "pairs": 44,
+        "precise": true,
+        "relative_half_width": 0.014285203817743675,
+        "required_pairs": 44,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/bitops-bits-in-byte": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.009740300851680983,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/bitops-bitwise-and": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.011319700026458657,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/bitops-nsieve-bits": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.007349225875575405,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/controlflow-recursive": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.008589761377107763,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/crypto-aes": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.00413099181683485,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/crypto-md5": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.013085098226408576,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/crypto-sha1": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.012100176699170184,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/date-format-tofte": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.009211728803477648,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/date-format-xparb": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.01187188746545309,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/math-cordic": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.004897453791361084,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/math-partial-sums": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.009115114139826686,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/math-spectral-norm": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.00743124430689579,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/regexp-dna": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.0152296879760776,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/string-base64": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.005825393504345744,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/string-fasta": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.006323576959692989,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/string-tagcloud": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.008264906619227741,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/string-unpack-code": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.008264575079904857,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "external/sunspider-1.0/string-validate-input": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.008086358208411193,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "sentinel/capturing_closure_call": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.005907065823537838,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "sentinel/heterogeneous_property_read": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.010240213244961494,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "sentinel/polymorphic_call_site": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.004385021650167964,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "sentinel/prototype_method_call": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.0053681041857196465,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "sentinel/recursive_call_tree": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.002798085441846343,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "sentinel/string_key_map_churn": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.008061439363549416,
+        "required_pairs": 30,
+        "status": "precise"
+      }
+    },
+    "held_out": {
+      "held-out/acorn/parse": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.009621213740534484,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "held-out/crypto-js/hash": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.0029158063118992494,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "held-out/d3-array/aggregate": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.0050288638080855375,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "held-out/decimal.js/arith": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.004623470848176048,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "held-out/esprima/parse": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.00833096337367012,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "held-out/handlebars/render": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.0073799708327597635,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "held-out/marked/render": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.004884662717956401,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "held-out/mustache/render": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.008856344454217124,
+        "required_pairs": 30,
+        "status": "precise"
+      },
+      "held-out/ramda/pipeline": {
+        "pairs": 30,
+        "precise": true,
+        "relative_half_width": 0.004365754716688208,
+        "required_pairs": 30,
+        "status": "precise"
+      }
+    }
+  },
+  "qualification": {
+    "cases": {
+      "broad/array_allocation": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9888744847873043,
+          "upper": 1.0081181473125373
+        },
+        "precise": true,
+        "ratio": 0.9960243116723373,
+        "relative_half_width": 0.012142108880750513
+      },
+      "broad/array_dynamic_read": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.995126787701608,
+          "upper": 1.0058462456460706
+        },
+        "precise": true,
+        "ratio": 1.0018568910121515,
+        "relative_half_width": 0.0067630611432816234
+      },
+      "broad/array_index_of": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9951376453342577,
+          "upper": 1.0091534238406368
+        },
+        "precise": true,
+        "ratio": 1.0035954655543995,
+        "relative_half_width": 0.00849914608275193
+      },
+      "broad/array_read": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9925160394475571,
+          "upper": 1.0076022378528504
+        },
+        "precise": true,
+        "ratio": 1.0024719854399033,
+        "relative_half_width": 0.010031017733363568
+      },
+      "broad/array_write": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9809194569455666,
+          "upper": 1.0047110348962356
+        },
+        "precise": true,
+        "ratio": 0.9945940443151207,
+        "relative_half_width": 0.013940581229915372
+      },
+      "broad/branch_arithmetic": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9968305541753578,
+          "upper": 1.0121197009177914
+        },
+        "precise": true,
+        "ratio": 1.0030084141818212,
+        "relative_half_width": 0.00908395842661247
+      },
+      "broad/captured_read": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9961311917086892,
+          "upper": 1.005651043297254
+        },
+        "precise": true,
+        "ratio": 1.0020348870305278,
+        "relative_half_width": 0.005926624295050642
+      },
+      "broad/captured_write": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.990198968206793,
+          "upper": 1.0075357263675382
+        },
+        "precise": true,
+        "ratio": 0.9972938580812896,
+        "relative_half_width": 0.010269659442155854
+      },
+      "broad/closure_allocation_call": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9871639500503568,
+          "upper": 1.0050926995335507
+        },
+        "precise": true,
+        "ratio": 0.9941852640837128,
+        "relative_half_width": 0.010971230256455966
+      },
+      "broad/dynamic_method_call": {
+        "blocks": 38,
+        "confidence_interval": {
+          "lower": 0.9754872379681162,
+          "upper": 1.0032810943626642
+        },
+        "precise": true,
+        "ratio": 0.9947381737559924,
+        "relative_half_width": 0.01973468748599405
+      },
+      "broad/empty_loop": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9823991793776837,
+          "upper": 1.0061282218005365
+        },
+        "precise": true,
+        "ratio": 0.9965645446849021,
+        "relative_half_width": 0.01441915425478224
+      },
+      "broad/function_call_reordered": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9952102188097014,
+          "upper": 1.0087545877750992
+        },
+        "precise": true,
+        "ratio": 1.0009342221037367,
+        "relative_half_width": 0.007813066531910495
+      },
+      "broad/function_call_two_args": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9901173589020082,
+          "upper": 1.0059344310920244
+        },
+        "precise": true,
+        "ratio": 0.9981071660241276,
+        "relative_half_width": 0.008069555644373061
+      },
+      "broad/global_read": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9926639023900237,
+          "upper": 1.0031798496805124
+        },
+        "precise": true,
+        "ratio": 0.999466671752975,
+        "relative_half_width": 0.006853043962384842
+      },
+      "broad/local_read": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.993489973823888,
+          "upper": 1.0073279353378073
+        },
+        "precise": true,
+        "ratio": 0.9983275062044683,
+        "relative_half_width": 0.009015507513719268
+      },
+      "broad/many_locals_call": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9952597058694754,
+          "upper": 1.0144481495980493
+        },
+        "precise": true,
+        "ratio": 0.9990724470827688,
+        "relative_half_width": 0.015389977533838195
+      },
+      "broad/math_abs": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 1.0048945318473557,
+          "upper": 1.0196597221025914
+        },
+        "precise": true,
+        "ratio": 1.0086734936507913,
+        "relative_half_width": 0.010891758850563704
+      },
+      "broad/method_call": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9945236749930668,
+          "upper": 1.0079982467521602
+        },
+        "precise": true,
+        "ratio": 1.0009404203916386,
+        "relative_half_width": 0.007051195272701705
+      },
+      "broad/object_allocation": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9912814931067837,
+          "upper": 1.0061806853895527
+        },
+        "precise": true,
+        "ratio": 0.9990362378006514,
+        "relative_half_width": 0.007822949129780987
+      },
+      "broad/plain_function_call": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9994216856760282,
+          "upper": 1.0067959899979648
+        },
+        "precise": true,
+        "ratio": 1.001818193128602,
+        "relative_half_width": 0.004968762699165463
+      },
+      "broad/property_dynamic_read": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9882936899124317,
+          "upper": 1.012605980782113
+        },
+        "precise": true,
+        "ratio": 0.9984119613956418,
+        "relative_half_width": 0.014216595889566364
+      },
+      "broad/property_read": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9866690091835603,
+          "upper": 1.0086375667778409
+        },
+        "precise": true,
+        "ratio": 0.9972999748853352,
+        "relative_half_width": 0.011368286551705964
+      },
+      "broad/property_write": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9953141230877831,
+          "upper": 1.0038668798486778
+        },
+        "precise": true,
+        "ratio": 1.0008555454827195,
+        "relative_half_width": 0.0055675110665014405
+      },
+      "broad/string_slice": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9785467215205104,
+          "upper": 1.0177157849909524
+        },
+        "precise": true,
+        "ratio": 0.9996862769781494,
+        "relative_half_width": 0.021603010865737016
+      },
+      "broad/top_level_function_call": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9748845647278671,
+          "upper": 1.0102275298714323
+        },
+        "precise": true,
+        "ratio": 0.9946234580849218,
+        "relative_half_width": 0.0202474160236239
+      },
+      "development/big.js/arith": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9961750629591584,
+          "upper": 1.0018900683271603
+        },
+        "precise": true,
+        "ratio": 0.9995519468831682,
+        "relative_half_width": 0.003389849886403118
+      },
+      "development/diff/compare": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9912702729783349,
+          "upper": 1.0041395475577604
+        },
+        "precise": true,
+        "ratio": 0.9998446968523624,
+        "relative_half_width": 0.008649935449254631
+      },
+      "development/graphlib/paths": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9920321638890612,
+          "upper": 1.0076049268336282
+        },
+        "precise": true,
+        "ratio": 0.9989937170250411,
+        "relative_half_width": 0.008619883850952359
+      },
+      "development/immutable/persistent": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9911324978766669,
+          "upper": 1.0090987709703854
+        },
+        "precise": true,
+        "ratio": 1.000288869563299,
+        "relative_half_width": 0.009238292262889303
+      },
+      "development/js-yaml/document": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9895307246691011,
+          "upper": 0.9992317541152587
+        },
+        "precise": true,
+        "ratio": 0.9944680651892547,
+        "relative_half_width": 0.004989577783756749
+      },
+      "development/lodash/transform": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9978013155379896,
+          "upper": 1.0044084407620895
+        },
+        "precise": true,
+        "ratio": 1.000474214010496,
+        "relative_half_width": 0.003932361970452547
+      },
+      "development/matter-js/simulate": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9901194418999288,
+          "upper": 0.9985560580876569
+        },
+        "precise": true,
+        "ratio": 0.9944184466757606,
+        "relative_half_width": 0.004341905222649212
+      },
+      "development/meriyah/parse": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9957356295841404,
+          "upper": 1.005573889408645
+        },
+        "precise": true,
+        "ratio": 1.0014402265253366,
+        "relative_half_width": 0.005729027637163764
+      },
+      "development/moment/dates": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9934916165794518,
+          "upper": 1.0001570469684955
+        },
+        "precise": true,
+        "ratio": 0.9984756840818692,
+        "relative_half_width": 0.005016718228159078
+      },
+      "development/papaparse/csv": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9976591040636876,
+          "upper": 1.0013785446068701
+        },
+        "precise": true,
+        "ratio": 1.0006174916023052,
+        "relative_half_width": 0.0029653290653766096
+      },
+      "external/jetstream3-js-subset/cdjs": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9910359994538036,
+          "upper": 1.002403472208296
+        },
+        "precise": true,
+        "ratio": 0.997426003688233,
+        "relative_half_width": 0.0064478023381100424
+      },
+      "external/jetstream3-js-subset/gaussian-blur": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9995608501638408,
+          "upper": 1.0070898215875466
+        },
+        "precise": true,
+        "ratio": 1.002567698028972,
+        "relative_half_width": 0.004510541849158889
+      },
+      "external/jetstream3-js-subset/hash-map": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9931678237688232,
+          "upper": 1.0102146085392736
+        },
+        "precise": true,
+        "ratio": 0.9989711306524296,
+        "relative_half_width": 0.011255057870892538
+      },
+      "external/jetstream3-js-subset/raytrace-public-class-fields": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9904985775544042,
+          "upper": 1.006781910767491
+        },
+        "precise": true,
+        "ratio": 0.9984177731112145,
+        "relative_half_width": 0.00837739259209358
+      },
+      "external/jetstream3-js-subset/stanford-crypto-aes": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9876667405251811,
+          "upper": 1.0015036563849486
+        },
+        "precise": true,
+        "ratio": 0.9974336817702361,
+        "relative_half_width": 0.009888903659812875
+      },
+      "external/kraken-1.1/ai-astar": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9890824903325497,
+          "upper": 1.0070542471140498
+        },
+        "precise": true,
+        "ratio": 0.9975411876871859,
+        "relative_half_width": 0.0095365079099341
+      },
+      "external/kraken-1.1/audio-beat-detection": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9978776155787843,
+          "upper": 1.002375693448037
+        },
+        "precise": true,
+        "ratio": 1.000506359594785,
+        "relative_half_width": 0.0026343350877511273
+      },
+      "external/kraken-1.1/audio-dft": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9857725661511132,
+          "upper": 1.017723074818455
+        },
+        "precise": true,
+        "ratio": 1.0047795164954643,
+        "relative_half_width": 0.019281273385972186
+      },
+      "external/kraken-1.1/audio-fft": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9953751650572986,
+          "upper": 1.005806870442238
+        },
+        "precise": true,
+        "ratio": 1.001254553093231,
+        "relative_half_width": 0.005906705574268534
+      },
+      "external/kraken-1.1/audio-oscillator": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9957206397421685,
+          "upper": 1.003223617057917
+        },
+        "precise": true,
+        "ratio": 0.9995590366315426,
+        "relative_half_width": 0.0038548933668463015
+      },
+      "external/kraken-1.1/imaging-darkroom": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9928730984578029,
+          "upper": 1.0093633100815103
+        },
+        "precise": true,
+        "ratio": 0.9987457252588849,
+        "relative_half_width": 0.01063091891569612
+      },
+      "external/kraken-1.1/imaging-desaturate": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9910759680361944,
+          "upper": 1.0040952744916911
+        },
+        "precise": true,
+        "ratio": 0.999043094644954,
+        "relative_half_width": 0.008038865703248188
+      },
+      "external/kraken-1.1/imaging-gaussian-blur": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9961380079748757,
+          "upper": 1.0009036813956382
+        },
+        "precise": true,
+        "ratio": 0.9988673183431178,
+        "relative_half_width": 0.002739891808556383
+      },
+      "external/kraken-1.1/json-parse-financial": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9968128096622229,
+          "upper": 1.0054608947257164
+        },
+        "precise": true,
+        "ratio": 1.0017128440904097,
+        "relative_half_width": 0.0049157017051648655
+      },
+      "external/kraken-1.1/json-stringify-tinderbox": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9925720144756819,
+          "upper": 1.005187986934688
+        },
+        "precise": true,
+        "ratio": 0.9986752075801086,
+        "relative_half_width": 0.006521418880879759
+      },
+      "external/kraken-1.1/stanford-crypto-aes": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9900433168331519,
+          "upper": 1.0024025331236466
+        },
+        "precise": true,
+        "ratio": 0.9961530685208492,
+        "relative_half_width": 0.006273598707151606
+      },
+      "external/kraken-1.1/stanford-crypto-ccm": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9982573603473344,
+          "upper": 1.0083677640048863
+        },
+        "precise": true,
+        "ratio": 1.0050860584316883,
+        "relative_half_width": 0.0068406188179548355
+      },
+      "external/kraken-1.1/stanford-crypto-pbkdf2": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9983004694746604,
+          "upper": 1.0079402708896925
+        },
+        "precise": true,
+        "ratio": 1.0039698753865114,
+        "relative_half_width": 0.005679057643671603
+      },
+      "external/kraken-1.1/stanford-crypto-sha256-iterative": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9968505858083238,
+          "upper": 1.0025417797808025
+        },
+        "precise": true,
+        "ratio": 1.0007433163624952,
+        "relative_half_width": 0.0039050291082640687
+      },
+      "external/sunspider-1.0/3d-cube": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9991334576008232,
+          "upper": 1.006041817027083
+        },
+        "precise": true,
+        "ratio": 1.0023312169594876,
+        "relative_half_width": 0.0037019699724123445
+      },
+      "external/sunspider-1.0/3d-morph": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9954586014901916,
+          "upper": 1.000692110075327
+        },
+        "precise": true,
+        "ratio": 0.9984266308407228,
+        "relative_half_width": 0.002981569847392951
+      },
+      "external/sunspider-1.0/3d-raytrace": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9917376564840529,
+          "upper": 1.0034805935783886
+        },
+        "precise": true,
+        "ratio": 0.9980612570934027,
+        "relative_half_width": 0.0063762836552647695
+      },
+      "external/sunspider-1.0/access-binary-trees": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9938550591235701,
+          "upper": 1.0102727058971293
+        },
+        "precise": true,
+        "ratio": 1.001476563034449,
+        "relative_half_width": 0.008783173952696455
+      },
+      "external/sunspider-1.0/access-fannkuch": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9977593288746913,
+          "upper": 1.0020455358347968
+        },
+        "precise": true,
+        "ratio": 1.0004118163163411,
+        "relative_half_width": 0.0026584441406740655
+      },
+      "external/sunspider-1.0/access-nbody": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9902023640878315,
+          "upper": 0.9992618263285974
+        },
+        "precise": true,
+        "ratio": 0.9942570079010109,
+        "relative_half_width": 0.005033727082449424
+      },
+      "external/sunspider-1.0/access-nsieve": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9929936486001605,
+          "upper": 1.0018672182920325
+        },
+        "precise": true,
+        "ratio": 0.9988028746887665,
+        "relative_half_width": 0.005850214748901239
+      },
+      "external/sunspider-1.0/bitops-3bit-bits-in-byte": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9841473065021209,
+          "upper": 1.0042888671631185
+        },
+        "precise": true,
+        "ratio": 0.9976559069683015,
+        "relative_half_width": 0.013726197670746343
+      },
+      "external/sunspider-1.0/bitops-bits-in-byte": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9932001692959365,
+          "upper": 1.004517010428399
+        },
+        "precise": true,
+        "ratio": 1.0011894554684106,
+        "relative_half_width": 0.008043983901188545
+      },
+      "external/sunspider-1.0/bitops-bitwise-and": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9976782303005121,
+          "upper": 1.0041364053483204
+        },
+        "precise": true,
+        "ratio": 1.001802729266187,
+        "relative_half_width": 0.004134097387724633
+      },
+      "external/sunspider-1.0/bitops-nsieve-bits": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9976777007526796,
+          "upper": 1.0060398720977166
+        },
+        "precise": true,
+        "ratio": 1.0019610111401387,
+        "relative_half_width": 0.004293280669927402
+      },
+      "external/sunspider-1.0/controlflow-recursive": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9969849127246391,
+          "upper": 1.0059987037823168
+        },
+        "precise": true,
+        "ratio": 1.0011043167230245,
+        "relative_half_width": 0.004888988068010081
+      },
+      "external/sunspider-1.0/crypto-aes": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.997780191167944,
+          "upper": 1.0056338159705402
+        },
+        "precise": true,
+        "ratio": 1.0028694613905613,
+        "relative_half_width": 0.005100592563037409
+      },
+      "external/sunspider-1.0/crypto-md5": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9952920195007433,
+          "upper": 1.0014080428426855
+        },
+        "precise": true,
+        "ratio": 0.9990281100388116,
+        "relative_half_width": 0.0037537631819277717
+      },
+      "external/sunspider-1.0/crypto-sha1": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 1.001112212823211,
+          "upper": 1.007006264790827
+        },
+        "precise": true,
+        "ratio": 1.0023762953159316,
+        "relative_half_width": 0.004618993382556225
+      },
+      "external/sunspider-1.0/date-format-tofte": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9919407981408608,
+          "upper": 1.0028236888020234
+        },
+        "precise": true,
+        "ratio": 0.9982214251397088,
+        "relative_half_width": 0.006331655085282772
+      },
+      "external/sunspider-1.0/date-format-xparb": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9913434737323045,
+          "upper": 1.0025912533972738
+        },
+        "precise": true,
+        "ratio": 0.9965696322517716,
+        "relative_half_width": 0.0060423486233431856
+      },
+      "external/sunspider-1.0/math-cordic": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9924987722682166,
+          "upper": 1.005094362759101
+        },
+        "precise": true,
+        "ratio": 0.9978885922003496,
+        "relative_half_width": 0.0072210170705153676
+      },
+      "external/sunspider-1.0/math-partial-sums": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9892698240818492,
+          "upper": 1.0020443490009372
+        },
+        "precise": true,
+        "ratio": 0.9975059522473505,
+        "relative_half_width": 0.008325461835597237
+      },
+      "external/sunspider-1.0/math-spectral-norm": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9965664990388057,
+          "upper": 1.0066507413712016
+        },
+        "precise": true,
+        "ratio": 0.9995125767823132,
+        "relative_half_width": 0.007141645592762869
+      },
+      "external/sunspider-1.0/regexp-dna": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9928247027573173,
+          "upper": 1.0117312691905682
+        },
+        "precise": true,
+        "ratio": 1.0059760780167486,
+        "relative_half_width": 0.013246422276668612
+      },
+      "external/sunspider-1.0/string-base64": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9920177765943743,
+          "upper": 1.0049728146541073
+        },
+        "precise": true,
+        "ratio": 0.99654672438733,
+        "relative_half_width": 0.008455288709074305
+      },
+      "external/sunspider-1.0/string-fasta": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.991950946789995,
+          "upper": 1.0046933564252094
+        },
+        "precise": true,
+        "ratio": 0.9971892334080057,
+        "relative_half_width": 0.007525274808230176
+      },
+      "external/sunspider-1.0/string-tagcloud": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9905940772647722,
+          "upper": 1.0024436256454492
+        },
+        "precise": true,
+        "ratio": 0.9952783225507909,
+        "relative_half_width": 0.007199295847511777
+      },
+      "external/sunspider-1.0/string-unpack-code": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9946756397718239,
+          "upper": 1.0066508738847622
+        },
+        "precise": true,
+        "ratio": 1.0037834662027332,
+        "relative_half_width": 0.00915657935786851
+      },
+      "external/sunspider-1.0/string-validate-input": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9966033788031661,
+          "upper": 1.005944533831988
+        },
+        "precise": true,
+        "ratio": 1.0014749995244148,
+        "relative_half_width": 0.004888224167069355
+      },
+      "sentinel/capturing_closure_call": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9860770299379238,
+          "upper": 1.0108329502655196
+        },
+        "precise": true,
+        "ratio": 1.0000323667333073,
+        "relative_half_width": 0.014152379957843797
+      },
+      "sentinel/heterogeneous_property_read": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9737764092595942,
+          "upper": 0.9977189073671675
+        },
+        "precise": true,
+        "ratio": 0.9853033863660843,
+        "relative_half_width": 0.012600708749082035
+      },
+      "sentinel/polymorphic_call_site": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9986597668909424,
+          "upper": 1.0118449271784336
+        },
+        "precise": true,
+        "ratio": 1.0019457853541707,
+        "relative_half_width": 0.009879917625247314
+      },
+      "sentinel/prototype_method_call": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9706676776008649,
+          "upper": 1.0067956347020912
+        },
+        "precise": true,
+        "ratio": 0.9836984809947198,
+        "relative_half_width": 0.023479911938072195
+      },
+      "sentinel/recursive_call_tree": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.989140796528151,
+          "upper": 1.007982224076187
+        },
+        "precise": true,
+        "ratio": 1.0011092971230842,
+        "relative_half_width": 0.012099895825692597
+      },
+      "sentinel/string_key_map_churn": {
+        "blocks": 39,
+        "confidence_interval": {
+          "lower": 0.993965460627217,
+          "upper": 1.0334569407980343
+        },
+        "precise": true,
+        "ratio": 1.0093262469770587,
+        "relative_half_width": 0.023907724477835846
+      }
+    },
+    "formal": {
+      "broad/array_allocation": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9968503203697536,
+          "upper": 1.0031145598076956
+        },
+        "precise": true,
+        "ratio": 1.0000142686333615,
+        "relative_half_width": 0.003173945174070214
+      },
+      "broad/array_dynamic_read": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9960611829862102,
+          "upper": 1.0001517364332857
+        },
+        "precise": true,
+        "ratio": 0.9983173205411131,
+        "relative_half_width": 0.0022650592086512766
+      },
+      "broad/array_index_of": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9959604313210508,
+          "upper": 1.001772507547999
+        },
+        "precise": true,
+        "ratio": 0.9974898183128877,
+        "relative_half_width": 0.004293466616386077
+      },
+      "broad/array_read": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9966992096758331,
+          "upper": 1.0024224527674268
+        },
+        "precise": true,
+        "ratio": 1.0000116083064265,
+        "relative_half_width": 0.0033233683727618146
+      },
+      "broad/array_write": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9997788006203638,
+          "upper": 1.0057783722101221
+        },
+        "precise": true,
+        "ratio": 1.0021983689415856,
+        "relative_half_width": 0.003572150364121285
+      },
+      "broad/branch_arithmetic": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9958085076233394,
+          "upper": 1.0015317432947888
+        },
+        "precise": true,
+        "ratio": 0.9978199140062012,
+        "relative_half_width": 0.003719939075664147
+      },
+      "broad/captured_read": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9965276016064641,
+          "upper": 1.001979153679164
+        },
+        "precise": true,
+        "ratio": 0.9988342329890518,
+        "relative_half_width": 0.0031485912138802252
+      },
+      "broad/captured_write": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9979252877524979,
+          "upper": 1.0026902458235682
+        },
+        "precise": true,
+        "ratio": 0.9995133977869395,
+        "relative_half_width": 0.0031783946504997385
+      },
+      "broad/closure_allocation_call": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9983375442021033,
+          "upper": 1.0032946540392447
+        },
+        "precise": true,
+        "ratio": 1.0009070163721407,
+        "relative_half_width": 0.0025737509171719353
+      },
+      "broad/dynamic_method_call": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9963411271283041,
+          "upper": 1.0056618248924245
+        },
+        "precise": true,
+        "ratio": 0.9989928455369324,
+        "relative_half_width": 0.006675702819380902
+      },
+      "broad/empty_loop": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9975494652252744,
+          "upper": 1.004244932314624
+        },
+        "precise": true,
+        "ratio": 1.0004416035146773,
+        "relative_half_width": 0.0038016499779549573
+      },
+      "broad/function_call_reordered": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9918990826360141,
+          "upper": 1.0079881398785737
+        },
+        "precise": true,
+        "ratio": 0.9984484239665685,
+        "relative_half_width": 0.009554540508067921
+      },
+      "broad/function_call_two_args": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9996209518813159,
+          "upper": 1.0073793491713354
+        },
+        "precise": true,
+        "ratio": 1.0020877726222388,
+        "relative_half_width": 0.005280551957289825
+      },
+      "broad/global_read": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9984011711730153,
+          "upper": 1.004084193169859
+        },
+        "precise": true,
+        "ratio": 1.0012508559247115,
+        "relative_half_width": 0.002854248206007437
+      },
+      "broad/local_read": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9957903017174516,
+          "upper": 1.003826687029584
+        },
+        "precise": true,
+        "ratio": 0.9995988577197683,
+        "relative_half_width": 0.004229525951500168
+      },
+      "broad/many_locals_call": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9946156636741723,
+          "upper": 1.002331018408912
+        },
+        "precise": true,
+        "ratio": 1.000314969419998,
+        "relative_half_width": 0.005730158848265221
+      },
+      "broad/math_abs": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9944035290856028,
+          "upper": 1.0031915854784166
+        },
+        "precise": true,
+        "ratio": 1.0000363659273057,
+        "relative_half_width": 0.005664538265348407
+      },
+      "broad/method_call": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9932065188244275,
+          "upper": 0.9998297032850638
+        },
+        "precise": true,
+        "ratio": 0.9956232340320244,
+        "relative_half_width": 0.004224960918202347
+      },
+      "broad/object_allocation": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9963341958624508,
+          "upper": 1.001364120660921
+        },
+        "precise": true,
+        "ratio": 1.0001351264450726,
+        "relative_half_width": 0.003814915314967804
+      },
+      "broad/plain_function_call": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9931072660603458,
+          "upper": 1.0037202216751095
+        },
+        "precise": true,
+        "ratio": 0.9995815001045718,
+        "relative_half_width": 0.006519168941245601
+      },
+      "broad/property_dynamic_read": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9975371646628464,
+          "upper": 1.0130975107532318
+        },
+        "precise": true,
+        "ratio": 1.0022389153696527,
+        "relative_half_width": 0.010834338217224682
+      },
+      "broad/property_read": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9954925375628565,
+          "upper": 1.0024171615287478
+        },
+        "precise": true,
+        "ratio": 0.9992323535108831,
+        "relative_half_width": 0.0037567493546284414
+      },
+      "broad/property_write": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9972048133348238,
+          "upper": 1.0029458739522905
+        },
+        "precise": true,
+        "ratio": 0.9991078336998458,
+        "relative_half_width": 0.003841467480273808
+      },
+      "broad/string_slice": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9900202593638694,
+          "upper": 1.0001639508060716
+        },
+        "precise": true,
+        "ratio": 0.9941465035360559,
+        "relative_half_width": 0.00605287776863106
+      },
+      "broad/top_level_function_call": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9905522077304861,
+          "upper": 1.0044400036774854
+        },
+        "precise": true,
+        "ratio": 0.9963140412293587,
+        "relative_half_width": 0.008156025220823038
+      },
+      "development/big.js/arith": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9975457768302657,
+          "upper": 1.0056280473535493
+        },
+        "precise": true,
+        "ratio": 1.000538755430761,
+        "relative_half_width": 0.005086551515535387
+      },
+      "development/diff/compare": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9949254991295642,
+          "upper": 1.0070386813065744
+        },
+        "precise": true,
+        "ratio": 1.001605195723588,
+        "relative_half_width": 0.006713765603422406
+      },
+      "development/graphlib/paths": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.993912290712214,
+          "upper": 1.0052414743707765
+        },
+        "precise": true,
+        "ratio": 0.9965048948678371,
+        "relative_half_width": 0.008767221865074726
+      },
+      "development/immutable/persistent": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9924097980495484,
+          "upper": 1.0043085358476227
+        },
+        "precise": true,
+        "ratio": 0.9995845603385012,
+        "relative_half_width": 0.0072296366914694765
+      },
+      "development/js-yaml/document": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9926780964360056,
+          "upper": 1.0011173476565798
+        },
+        "precise": true,
+        "ratio": 0.9996675003509881,
+        "relative_half_width": 0.007040957124042846
+      },
+      "development/lodash/transform": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9963820821702458,
+          "upper": 1.0026395282922849
+        },
+        "precise": true,
+        "ratio": 0.9996757426597247,
+        "relative_half_width": 0.003305619950837446
+      },
+      "development/matter-js/simulate": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9992221732211153,
+          "upper": 1.0034980763516748
+        },
+        "precise": true,
+        "ratio": 1.0012078143410972,
+        "relative_half_width": 0.0022874991363155406
+      },
+      "development/meriyah/parse": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9949880237807578,
+          "upper": 1.0067048646480918
+        },
+        "precise": true,
+        "ratio": 1.0012627051299183,
+        "relative_half_width": 0.006306288316233255
+      },
+      "development/moment/dates": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.991007179885929,
+          "upper": 1.0026704983431527
+        },
+        "precise": true,
+        "ratio": 0.9991146375963377,
+        "relative_half_width": 0.008181028225589415
+      },
+      "development/papaparse/csv": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.998381401775168,
+          "upper": 1.001971219176196
+        },
+        "precise": true,
+        "ratio": 0.9995506849805351,
+        "relative_half_width": 0.0024216222669168896
+      },
+      "external/jetstream3-js-subset/cdjs": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.994552760498044,
+          "upper": 1.001300391121589
+        },
+        "precise": true,
+        "ratio": 0.9983579114582812,
+        "relative_half_width": 0.003825992055294991
+      },
+      "external/jetstream3-js-subset/gaussian-blur": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9970527113638261,
+          "upper": 1.0060109173835865
+        },
+        "precise": true,
+        "ratio": 1.000720898521005,
+        "relative_half_width": 0.005286208043021601
+      },
+      "external/jetstream3-js-subset/hash-map": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9957506542114312,
+          "upper": 1.0062311774170714
+        },
+        "precise": true,
+        "ratio": 0.9977367997530976,
+        "relative_half_width": 0.008513645749135268
+      },
+      "external/jetstream3-js-subset/raytrace-public-class-fields": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9921017301247466,
+          "upper": 1.0027483072940655
+        },
+        "precise": true,
+        "ratio": 0.9993064327009145,
+        "relative_half_width": 0.007262060288174332
+      },
+      "external/jetstream3-js-subset/stanford-crypto-aes": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9951206511072621,
+          "upper": 1.0048657476682843
+        },
+        "precise": true,
+        "ratio": 0.9987495140216711,
+        "relative_half_width": 0.0061238914870505035
+      },
+      "external/kraken-1.1/ai-astar": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.996943545188016,
+          "upper": 1.005017072925863
+        },
+        "precise": true,
+        "ratio": 1.0013659647089712,
+        "relative_half_width": 0.0044359778869136335
+      },
+      "external/kraken-1.1/audio-beat-detection": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9953072215489673,
+          "upper": 1.0023225464429286
+        },
+        "precise": true,
+        "ratio": 0.9978797978662794,
+        "relative_half_width": 0.004452188115391165
+      },
+      "external/kraken-1.1/audio-dft": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9828005729717895,
+          "upper": 1.0072152943605075
+        },
+        "precise": true,
+        "ratio": 0.9903827887953311,
+        "relative_half_width": 0.016995959295345697
+      },
+      "external/kraken-1.1/audio-fft": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9958664694955444,
+          "upper": 1.0020172982648206
+        },
+        "precise": true,
+        "ratio": 0.99986988640482,
+        "relative_half_width": 0.0040200338417897274
+      },
+      "external/kraken-1.1/audio-oscillator": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9960648097691209,
+          "upper": 1.0033983364796883
+        },
+        "precise": true,
+        "ratio": 0.9998650277286747,
+        "relative_half_width": 0.00381523162176034
+      },
+      "external/kraken-1.1/imaging-darkroom": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9774146576099912,
+          "upper": 1.004294459848896
+        },
+        "precise": true,
+        "ratio": 0.9926407230299402,
+        "relative_half_width": 0.015577897570290489
+      },
+      "external/kraken-1.1/imaging-desaturate": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9893858881709892,
+          "upper": 1.0056886574522692
+        },
+        "precise": true,
+        "ratio": 0.9973643621930668,
+        "relative_half_width": 0.008346293064751542
+      },
+      "external/kraken-1.1/imaging-gaussian-blur": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9846062886686363,
+          "upper": 1.0013058082803834
+        },
+        "precise": true,
+        "ratio": 0.9977136404965858,
+        "relative_half_width": 0.013312277180021814
+      },
+      "external/kraken-1.1/json-parse-financial": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9946551046820249,
+          "upper": 1.005745032717913
+        },
+        "precise": true,
+        "ratio": 0.9986206065034968,
+        "relative_half_width": 0.007134267176161169
+      },
+      "external/kraken-1.1/json-stringify-tinderbox": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9914412077647274,
+          "upper": 1.006410278757251
+        },
+        "precise": true,
+        "ratio": 0.9986154644960533,
+        "relative_half_width": 0.007805621421185682
+      },
+      "external/kraken-1.1/stanford-crypto-aes": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9948970602976341,
+          "upper": 1.0026286845416617
+        },
+        "precise": true,
+        "ratio": 0.9989225318940176,
+        "relative_half_width": 0.004046118696118262
+      },
+      "external/kraken-1.1/stanford-crypto-ccm": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9977232273297074,
+          "upper": 1.0038086251082634
+        },
+        "precise": true,
+        "ratio": 1.002032748483146,
+        "relative_half_width": 0.004319355343638254
+      },
+      "external/kraken-1.1/stanford-crypto-pbkdf2": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9946544140588316,
+          "upper": 1.0013715621838397
+        },
+        "precise": true,
+        "ratio": 0.9980562679750771,
+        "relative_half_width": 0.0034201365501045355
+      },
+      "external/kraken-1.1/stanford-crypto-sha256-iterative": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9962977410329736,
+          "upper": 1.0027342272688946
+        },
+        "precise": true,
+        "ratio": 0.9985147545149491,
+        "relative_half_width": 0.004225749028611281
+      },
+      "external/sunspider-1.0/3d-cube": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9994658376784751,
+          "upper": 1.0098540611146976
+        },
+        "precise": true,
+        "ratio": 1.0033504146181493,
+        "relative_half_width": 0.0064819293457145655
+      },
+      "external/sunspider-1.0/3d-morph": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9945430676633698,
+          "upper": 1.0049051605020582
+        },
+        "precise": true,
+        "ratio": 1.000244604336879,
+        "relative_half_width": 0.005732820285907492
+      },
+      "external/sunspider-1.0/3d-raytrace": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9959100601330269,
+          "upper": 1.007894587878045
+        },
+        "precise": true,
+        "ratio": 1.0001629212862237,
+        "relative_half_width": 0.0077304071439463495
+      },
+      "external/sunspider-1.0/access-binary-trees": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9992769922159823,
+          "upper": 1.0045185371546839
+        },
+        "precise": true,
+        "ratio": 1.0018936520645545,
+        "relative_half_width": 0.0026199238658917157
+      },
+      "external/sunspider-1.0/access-fannkuch": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9954793440133186,
+          "upper": 1.0080849000278644
+        },
+        "precise": true,
+        "ratio": 1.002022439319941,
+        "relative_half_width": 0.006572808713683376
+      },
+      "external/sunspider-1.0/access-nbody": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9987603385083417,
+          "upper": 1.0062033878776795
+        },
+        "precise": true,
+        "ratio": 1.002034953417324,
+        "relative_half_width": 0.004159969116984907
+      },
+      "external/sunspider-1.0/access-nsieve": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9828180721749992,
+          "upper": 0.9951650128872129
+        },
+        "precise": true,
+        "ratio": 0.9885458791748778,
+        "relative_half_width": 0.0066958285414735474
+      },
+      "external/sunspider-1.0/bitops-3bit-bits-in-byte": {
+        "blocks": 44,
+        "confidence_interval": {
+          "lower": 0.991835028030048,
+          "upper": 1.0162037182594208
+        },
+        "precise": true,
+        "ratio": 1.0018914940634605,
+        "relative_half_width": 0.014285203817743675
+      },
+      "external/sunspider-1.0/bitops-bits-in-byte": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9961385892820213,
+          "upper": 1.014549341144183
+        },
+        "precise": true,
+        "ratio": 1.0058412788315971,
+        "relative_half_width": 0.009740300851680983
+      },
+      "external/sunspider-1.0/bitops-bitwise-and": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9869822597172324,
+          "upper": 1.004265130368029
+        },
+        "precise": true,
+        "ratio": 0.9930243921301591,
+        "relative_half_width": 0.011319700026458657
+      },
+      "external/sunspider-1.0/bitops-nsieve-bits": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9932518584540063,
+          "upper": 1.0041332370927254
+        },
+        "precise": true,
+        "ratio": 0.9968074738132104,
+        "relative_half_width": 0.007349225875575405
+      },
+      "external/sunspider-1.0/controlflow-recursive": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9879698451526169,
+          "upper": 1.0037600472021733
+        },
+        "precise": true,
+        "ratio": 0.996456270370256,
+        "relative_half_width": 0.008589761377107763
+      },
+      "external/sunspider-1.0/crypto-aes": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9969754159009255,
+          "upper": 1.0048925752961275
+        },
+        "precise": true,
+        "ratio": 1.0010939131855978,
+        "relative_half_width": 0.00413099181683485
+      },
+      "external/sunspider-1.0/crypto-md5": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9885837930604949,
+          "upper": 1.0083984079375083
+        },
+        "precise": true,
+        "ratio": 1.0015195090977271,
+        "relative_half_width": 0.013085098226408576
+      },
+      "external/sunspider-1.0/crypto-sha1": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9875924879210292,
+          "upper": 1.0044081327599494
+        },
+        "precise": true,
+        "ratio": 0.9995425315316466,
+        "relative_half_width": 0.012100176699170184
+      },
+      "external/sunspider-1.0/date-format-tofte": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9948093162198579,
+          "upper": 1.006154331887356
+        },
+        "precise": true,
+        "ratio": 0.9969705099248634,
+        "relative_half_width": 0.009211728803477648
+      },
+      "external/sunspider-1.0/date-format-xparb": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 1.0005966294517197,
+          "upper": 1.0191486835971917
+        },
+        "precise": true,
+        "ratio": 1.007191420398056,
+        "relative_half_width": 0.01187188746545309
+      },
+      "external/sunspider-1.0/math-cordic": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9938457241972928,
+          "upper": 1.0028656393701332
+        },
+        "precise": true,
+        "ratio": 0.9987130377072908,
+        "relative_half_width": 0.004897453791361084
+      },
+      "external/sunspider-1.0/math-partial-sums": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9981632977907813,
+          "upper": 1.0121451974886309
+        },
+        "precise": true,
+        "ratio": 1.0030027132745771,
+        "relative_half_width": 0.009115114139826686
+      },
+      "external/sunspider-1.0/math-spectral-norm": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9945499667984383,
+          "upper": 1.0073050960949006
+        },
+        "precise": true,
+        "ratio": 1.0019407105771325,
+        "relative_half_width": 0.00743124430689579
+      },
+      "external/sunspider-1.0/regexp-dna": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9923523547586616,
+          "upper": 1.0176333770659372
+        },
+        "precise": true,
+        "ratio": 1.00236763081136,
+        "relative_half_width": 0.0152296879760776
+      },
+      "external/sunspider-1.0/string-base64": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9963595757869392,
+          "upper": 1.0066649539280041
+        },
+        "precise": true,
+        "ratio": 1.002163762387721,
+        "relative_half_width": 0.005825393504345744
+      },
+      "external/sunspider-1.0/string-fasta": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9884519755813637,
+          "upper": 0.9973214530359233
+        },
+        "precise": true,
+        "ratio": 0.9947025277199131,
+        "relative_half_width": 0.006323576959692989
+      },
+      "external/sunspider-1.0/string-tagcloud": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9947219738030175,
+          "upper": 1.0107050975473495
+        },
+        "precise": true,
+        "ratio": 1.0024201882978392,
+        "relative_half_width": 0.008264906619227741
+      },
+      "external/sunspider-1.0/string-unpack-code": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.991646956147362,
+          "upper": 1.002845691539151
+        },
+        "precise": true,
+        "ratio": 0.999842496869201,
+        "relative_half_width": 0.008264575079904857
+      },
+      "external/sunspider-1.0/string-validate-input": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9980281546042495,
+          "upper": 1.0136317776864843
+        },
+        "precise": true,
+        "ratio": 1.0055009369315626,
+        "relative_half_width": 0.008086358208411193
+      },
+      "sentinel/capturing_closure_call": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9946925289381983,
+          "upper": 1.0029350977182485
+        },
+        "precise": true,
+        "ratio": 1.0005682431808176,
+        "relative_half_width": 0.005907065823537838
+      },
+      "sentinel/heterogeneous_property_read": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9938357598101037,
+          "upper": 1.006321981318224
+        },
+        "precise": true,
+        "ratio": 1.0040128499210275,
+        "relative_half_width": 0.010240213244961494
+      },
+      "sentinel/polymorphic_call_site": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9932325464431071,
+          "upper": 1.000742366758872
+        },
+        "precise": true,
+        "ratio": 0.9975878926629116,
+        "relative_half_width": 0.004385021650167964
+      },
+      "sentinel/prototype_method_call": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9955671479043405,
+          "upper": 1.0031444498864994
+        },
+        "precise": true,
+        "ratio": 0.9977882187728431,
+        "relative_half_width": 0.0053681041857196465
+      },
+      "sentinel/recursive_call_tree": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9964834413992697,
+          "upper": 1.0018950173860306
+        },
+        "precise": true,
+        "ratio": 0.9992716872096898,
+        "relative_half_width": 0.002798085441846343
+      },
+      "sentinel/string_key_map_churn": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9929170190865162,
+          "upper": 1.0070664298428595
+        },
+        "precise": true,
+        "ratio": 0.9990129475428422,
+        "relative_half_width": 0.008061439363549416
+      }
+    },
+    "formal/broad": {
+      "blocks": 30,
+      "confidence_interval": {
+        "lower": 0.9981171981974135,
+        "upper": 1.0007353509587746
+      },
+      "precise": true,
+      "ratio": 0.999304432699778,
+      "relative_half_width": 0.0014319142517269512
+    },
+    "formal/development": {
+      "blocks": 30,
+      "confidence_interval": {
+        "lower": 0.9980858022384002,
+        "upper": 1.0014669710370174
+      },
+      "precise": true,
+      "ratio": 0.9998702808694813,
+      "relative_half_width": 0.0017879010272254803
+    },
+    "formal/external": {
+      "blocks": 30,
+      "confidence_interval": {
+        "lower": 0.9984574277108725,
+        "upper": 1.000776931860978
+      },
+      "precise": true,
+      "ratio": 0.9995382051881134,
+      "relative_half_width": 0.0012392989747014305
+    },
+    "formal/portfolio": {
+      "blocks": 30,
+      "confidence_interval": {
+        "lower": 0.9987698594235846,
+        "upper": 1.0003462475855365
+      },
+      "precise": true,
+      "ratio": 0.9995204575405103,
+      "relative_half_width": 0.0008261862364058459
+    },
+    "formal/sentinel": {
+      "blocks": 30,
+      "confidence_interval": {
+        "lower": 0.9968295381818996,
+        "upper": 1.001833297281655
+      },
+      "precise": true,
+      "ratio": 0.9997046322413051,
+      "relative_half_width": 0.0028842384272134147
+    },
+    "held_out": {
+      "held-out/acorn/parse": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9929730820093767,
+          "upper": 1.0104811910186742
+        },
+        "precise": true,
+        "ratio": 1.0008517821004905,
+        "relative_half_width": 0.009621213740534484
+      },
+      "held-out/crypto-js/hash": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9962426325518761,
+          "upper": 1.0018880897950053
+        },
+        "precise": true,
+        "ratio": 0.9989752713932456,
+        "relative_half_width": 0.0029158063118992494
+      },
+      "held-out/d3-array/aggregate": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9978578851875413,
+          "upper": 1.0077902351789731
+        },
+        "precise": true,
+        "ratio": 1.0028759765919737,
+        "relative_half_width": 0.0050288638080855375
+      },
+      "held-out/decimal.js/arith": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9915798736175019,
+          "upper": 0.999755840534801
+        },
+        "precise": true,
+        "ratio": 0.9961644142568105,
+        "relative_half_width": 0.004623470848176048
+      },
+      "held-out/esprima/parse": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9947332769631477,
+          "upper": 1.0083540944191978
+        },
+        "precise": true,
+        "ratio": 1.0000229399337794,
+        "relative_half_width": 0.00833096337367012
+      },
+      "held-out/handlebars/render": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9959550558784949,
+          "upper": 1.0088736033265393
+        },
+        "precise": true,
+        "ratio": 1.001482690282739,
+        "relative_half_width": 0.0073799708327597635
+      },
+      "held-out/marked/render": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9943524491588254,
+          "upper": 1.0027291484026242
+        },
+        "precise": true,
+        "ratio": 0.9978549634646605,
+        "relative_half_width": 0.004884662717956401
+      },
+      "held-out/mustache/render": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.995949533894483,
+          "upper": 1.0110808841757666
+        },
+        "precise": true,
+        "ratio": 1.0047700060256697,
+        "relative_half_width": 0.008856344454217124
+      },
+      "held-out/ramda/pipeline": {
+        "blocks": 30,
+        "confidence_interval": {
+          "lower": 0.9951536212817194,
+          "upper": 1.0023485852627967
+        },
+        "precise": true,
+        "ratio": 0.9994982178976595,
+        "relative_half_width": 0.004365754716688208
+      }
+    },
+    "screen/broad": {
+      "blocks": 30,
+      "confidence_interval": {
+        "lower": 0.9976448012519546,
+        "upper": 1.001049338269368
+      },
+      "precise": true,
+      "ratio": 0.9993392816305974,
+      "relative_half_width": 0.0017111872516211157
+    },
+    "screen/development": {
+      "blocks": 30,
+      "confidence_interval": {
+        "lower": 0.9969067394163414,
+        "upper": 1.000323604315618
+      },
+      "precise": true,
+      "ratio": 0.9988545767623014,
+      "relative_half_width": 0.0019538812096910885
+    },
+    "screen/external": {
+      "blocks": 30,
+      "confidence_interval": {
+        "lower": 0.9985063999548105,
+        "upper": 1.0006665212360346
+      },
+      "precise": true,
+      "ratio": 0.9998443665171571,
+      "relative_half_width": 0.0013399679385202035
+    },
+    "screen/held-out": {
+      "blocks": 30,
+      "confidence_interval": {
+        "lower": 0.9982402836851815,
+        "upper": 1.0023169132838876
+      },
+      "precise": true,
+      "ratio": 1.0002743712937883,
+      "relative_half_width": 0.002041981728930553
+    },
+    "screen/portfolio-76": {
+      "blocks": 30,
+      "confidence_interval": {
+        "lower": 0.9982966751382104,
+        "upper": 1.0003243746745483
+      },
+      "precise": true,
+      "ratio": 0.9993305250840315,
+      "relative_half_width": 0.0010356139327800662
+    },
+    "screen/sentinel": {
+      "blocks": 30,
+      "confidence_interval": {
+        "lower": 0.9902202504376134,
+        "upper": 1.0033957799316255
+      },
+      "precise": true,
+      "ratio": 0.9954487779398625,
+      "relative_half_width": 0.00798333592634437
+    }
+  },
+  "qualified": true,
+  "schema_version": 1
+}

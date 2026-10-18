@@ -14,6 +14,9 @@ from .layout_power import diagnostic_only, needs_panel
 
 def evaluate(policy, screen, targets, payoff, *, panel=None, held_out=None, held_out_panel=None,
              instruction_blind=False, memory_targets=(), promotion=False, panel_required=False, stage=False, stage_limit=1.25):
+    from .case_schedule import require_same
+    require_same(policy, screen, *(panel or []), *([held_out] if held_out else []),
+                 *(held_out_panel or []))
     data = rows(screen, policy['cases'])
     if screen['pairs'] < 5:
         raise ValueError('layout verdict needs at least five pairs')

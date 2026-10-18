@@ -74,10 +74,12 @@ def inputs(parent, parent_sha, a2, original, development_a2, aa, image):
             or digest(aa) != parent['evidence']['held-out']['sha256']):
         raise ValueError('held-out estimator input differs from the parent policy evidence')
     held, raw = replay(a2, image, 'held-out')
-    _, development_raw = replay(development_a2, image)
+    development, development_raw = replay(development_a2, image)
     if held['host'] != parent['host'] or held['host_node'] != parent['host_node']:
         raise ValueError('held-out A2 host differs from parent policy')
     packet = replay_calibration(aa, fixture['calibration_binary_sha256'])
+    from .case_schedule import require_same
+    require_same(parent, held, development, packet)
     seed = bands(parent, json.loads(original.read_text()), development_raw, raw, packet)
     seed.update(artifact_type='quickjs-held-out-a2-bands', schema_version=1, parent_policy_sha256=parent_sha,
                 calibration_binary_sha256=image, source_revision=held['source']['revision'],
@@ -87,6 +89,8 @@ def inputs(parent, parent_sha, a2, original, development_a2, aa, image):
 
 
 def qualify(parent, seed, pilot, extensions=None):
+    from .case_schedule import require_same
+    require_same(parent, seed, pilot)
     ids = opportunity_ids()
     data = rows(pilot, ids, 30)
     if set(seed['held_out']) != ids or pilot['host'] != parent['host']:

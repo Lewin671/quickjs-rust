@@ -105,10 +105,11 @@ def run_development_preview(
     *,
     blocks: int | None = None,
     timeout_seconds: int | None = None,
+    workers: int = 1,
 ) -> dict[str, Any]:
     return run_npm_preview(
         SPEC, manifest, cache_root, work_root, output_dir, candidate_path, base_path,
-        quickjs_path, blocks=blocks, timeout_seconds=timeout_seconds,
+        quickjs_path, blocks=blocks, timeout_seconds=timeout_seconds, workers=workers,
     )
 
 

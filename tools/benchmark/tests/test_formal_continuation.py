@@ -148,7 +148,7 @@ class FormalContinuationTests(unittest.TestCase):
                 with self.subTest(module=module.__name__,first_precise=first_precise,first_count=first_count):
                     with tempfile.TemporaryDirectory() as tmp:
                         root=Path(tmp)/'out';calls=[]
-                        def collect(*args):
+                        def collect(*args, locked=True):
                             out=args[-2];previous=args[-1];out.mkdir()
                             path=out/'continuation.json';path.write_text(json.dumps({'host':{},'host_node':'host'}))
                             calls.append(previous)

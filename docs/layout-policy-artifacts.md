@@ -90,11 +90,40 @@ adds the development lane (86 cases) and is required for any plan that names
 a development case; v1 remains frozen. [T057](../tasks/archive/T057-development-policy.md)
 owns the v3 qualification record. [Qualified iMac v4](../benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v4.json)
 replaces only v3's held-out gate and lane rule; [T059](../tasks/archive/T059-held-out-layout-policy-v4.md) owns its record.
+[Qualified iMac v5](../benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v5.json)
+recalibrates every gate for case-sharded workers-4 collection;
+[T060](../tasks/archive/T060-parallel-layout-policy-v5.md) owns its evidence and v4 comparison.
 [T055](../tasks/archive/T055-layout-noise-control.md) owns qualification evidence.
 Screen/held-out A/A binds the frozen band-source executable; canonical
 formal A/A binds its own declared revision and byte-identical two roles.
 A different source revision is not required to have the old binary hash.
 
+
+## Case-owned collection schedules
+
+`perf-loop.sh --plan` (schema 3), `layout_iteration`, `layout_panel`, `layout_development_a2`,
+`layout_calibration`, and npm lane `run` accept `--workers N` (1..8, default 1).
+One is the historical serial schedule; more than one uses deterministic
+round-robin case shards. Each fork completes all roles, pairs, load-only
+replacement rounds and requested layouts of its cases. Assets/preflight and
+final load sealing belong to the parent. Pair eligibility and caps below apply
+unchanged, including simultaneous disturbance of several shards.
+
+Artifacts bind `measurement_schedule` (`kind`: `serial` or `case-shards-v1`,
+`workers`: N), deterministic `case_shards`, and raw `case_shard`/`worker_pid` ownership.
+Panel packets also bind the schedule. Replay conserves the inventory and
+rejects missing/changed ownership or a policy/evidence schedule mismatch;
+absent historical metadata denotes serial. Completion preserves its natural
+screen's schedule. Precision continuations retain the pilot schedule and
+case shard. `collection_seconds` times collection including settling/recovery,
+excluding preparation/preflight; panel run records preserve natural/completion
+durations. npm reports reconstruct their schedule from hashed raw rows.
+
+Policies qualify for one collection schedule; `formal_lane_schedule` separately
+binds the canonical formal schedule. A serial policy cannot authorize parallel
+screens. [T060](../tasks/archive/T060-parallel-layout-policy-v5.md) owns workers-4
+recalibration, qualification, v4 comparison and measured speedup; support for
+other N is tooling capability, not a qualification claim.
 
 ## Load-only pair recovery
 

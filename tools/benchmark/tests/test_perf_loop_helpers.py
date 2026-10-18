@@ -65,6 +65,29 @@ class PlanGateTests(unittest.TestCase):
                 screen.load_plan_gate(plan)
 
 
+class WrapperScheduleTests(unittest.TestCase):
+    def test_layout_wrapper_forwards_workers_and_refuses_unimplemented_legacy_schedule(self):
+        import os
+        import subprocess
+        from tools.benchmark.layout_identity import ROOT
+        with tempfile.TemporaryDirectory() as tmp:
+            stub=Path(tmp)/'python3'
+            stub.write_text('#!/bin/sh\nif [ "$1" = -c ]; then echo 3; else printf "%s\\n" "$@"; fi\n')
+            stub.chmod(0o755)
+            env={**os.environ,'PATH':tmp+os.pathsep+os.environ['PATH']}
+            command=[str(ROOT/'scripts/perf-loop.sh')]
+            for args,expected in (([], '1'),(['--workers','4'], '4')):
+                result=subprocess.run([*command,'--plan','frozen.json','--output','out',*args],
+                                      env=env,text=True,capture_output=True)
+                self.assertEqual(result.returncode,0,result.stderr)
+                self.assertEqual(result.stdout.splitlines()[-2:],['--workers',expected])
+            for args in (['--plan','frozen.json','--output','out','--workers','9'],
+                         ['--base','HEAD','--workers','4']):
+                result=subprocess.run([*command,*args],env=env,text=True,capture_output=True)
+                self.assertEqual(result.returncode,2)
+                self.assertIn('--workers',result.stderr)
+
+
 class SymbolTests(unittest.TestCase):
     def test_sizes_come_from_address_gaps_and_sum_duplicate_names(self):
         output = (

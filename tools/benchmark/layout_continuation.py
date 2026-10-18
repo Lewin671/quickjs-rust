@@ -28,6 +28,8 @@ def load_case(pilot, name):
     raw = json.loads((pilot.parent/'cases'/(name.replace('/','--')+'.json')).read_text())
     replay_case(raw,PILOT,binaries)
     packet = json.loads(pilot.read_text())
+    from .case_schedule import require_same
+    require_same(identity, packet, raw)
     if raw['ratios'] != next(c['ratios'] for c in packet['cases'] if c['id']==name):
         raise ValueError('continuation pilot report/raw mismatch')
     if 'attempts' not in raw:
@@ -41,9 +43,13 @@ def replay(path, pilot, name):
     identity, binaries, original = load_case(pilot,name)
     value = json.loads(path.read_text())
     if value.get('artifact_type')=='quickjs-layout-continuation-set':
+        from .case_schedule import require_same
+        require_same(identity, value)
         latest=Path(value['latest']['path'])
         if digest(latest)!=value['latest']['sha256']:raise ValueError('continuation set hash mismatch')
         return replay(latest,pilot,name)
+    from .case_schedule import require_same
+    require_same(identity, value)
     if value['pilot'] != {'path':str(pilot), 'sha256':digest(pilot)} or value['case_id'] != name:
         raise ValueError('continuation pilot binding mismatch')
     if value['previous']:
@@ -65,6 +71,9 @@ def replay(path, pilot, name):
     raw = json.loads(raw_path.read_text())
     if raw.get('pair_index_offset') != offset or raw['iterations'] != original['iterations'] or raw['id'] != name:
         raise ValueError('continuation order/iteration identity mismatch')
+    require_same(identity, raw)
+    if raw.get('case_shard', 0) != original.get('case_shard', 0):
+        raise ValueError('continuation case shard changed')
     appended = replay_case(raw,expected-current,binaries)
     if verify_run([raw],value['disturbance']) != value['disturbance_counts']:
         raise ValueError('continuation disturbance mismatch')
@@ -74,7 +83,7 @@ def replay(path, pilot, name):
     return merged,offset+len(raw['attempts']),value['host']
 
 
-def collect(pilot, name, context, out, previous=None):
+def collect(pilot, name, context, out, previous=None, *, locked=True):
     pilot=pilot.resolve()
     from .layout_qualification import replay_calibration, verify_host_inputs
     identity,binaries,original=load_case(pilot,name)
@@ -97,19 +106,26 @@ def collect(pilot, name, context, out, previous=None):
            __import__('tools.benchmark.screen_recording',fromlist=['held_out_cases']).held_out_cases(screen.DEFAULT_CACHE,out/'work'))
     case=next(c for c in cases if c.id==name)
     monitor=Monitor.from_queue()
-    with screen.measurement_lock('layout-power-continuation'):
+    from contextlib import nullcontext
+    from .case_schedule import identity as schedule_identity
+    schedule = schedule_identity(identity)
+    if schedule['workers'] > 1 and locked:
+        raise ValueError('parallel pilot continuation requires its workers dispatcher')
+    with screen.measurement_lock('layout-power-continuation') if locked else nullcontext():
         if screen.wait_for_builds(300):raise ValueError('competing builds remain')
         screen.check_load(8,True,300)
         preflight=screen.launch_preflight([Path(p) for p in binaries.values()],120)
         measure(case,Path(binaries['candidate']),Path(binaries['base']),needed-count,
                 screen.counter_tool(),120,out/'case.json',monitor,
-                iterations=original['iterations'],pair_offset=offset)
+                iterations=original['iterations'],pair_offset=offset,
+                schedule=schedule, case_shard=original.get('case_shard', 0))
     raw=json.loads((out/'case.json').read_text())
     disturbance=monitor.snapshot()
     appended=raw['ratios']
     for binary in binaries.values():
         if digest(Path(binary))!=identity['sha256']:raise ValueError('continuation binary changed')
     value={'artifact_type':'quickjs-layout-continuation','schema_version':1,'case_id':name,
+        'measurement_schedule':schedule,
         'pilot':{'path':str(pilot),'sha256':digest(pilot)},
         'previous':{'path':str(previous.resolve()),'sha256':digest(previous)} if previous else None,
         'host':host,'host_node':platform.node(),'launch_preflight':preflight,'pilot_context':context,'quieting':quieting,'sha256':identity['sha256'],'previous_pairs':count,'required_pairs':needed,
@@ -121,17 +137,18 @@ def collect(pilot, name, context, out, previous=None):
     return out/'continuation.json',analyze({name:value['ratios']['wall_ns']})
 
 
-def complete(pilot, name, context, root, previous=None):
+def complete(pilot, name, context, root, previous=None, *, locked=True):
     """Finish the predicted stage and, if necessary, cap without a precision stop."""
     root.mkdir(parents=True,exist_ok=False)
     for stage in range(2):
-        latest,stats=collect(pilot,name,context,root/f'stage{stage}',previous)
+        latest,stats=collect(pilot,name,context,root/f'stage{stage}',previous,locked=locked)
         if stats['precise'] or stats['blocks']==CAP:break
         previous=latest
     meta=json.loads(latest.read_text())
     path=root/'continuation.json'
     write_json(path,{'artifact_type':'quickjs-layout-continuation-set',
         'case_id':name,'host':meta['host'],'host_node':meta['host_node'],
+        'measurement_schedule':meta.get('measurement_schedule', {'kind':'serial','workers':1}),
         'latest':{'path':str(latest),'sha256':digest(latest)},'precision':stats})
     return path
 

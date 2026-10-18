@@ -13,6 +13,8 @@ from .layout_policy import analyze, round_up, rows
 
 
 def qualify(seed, portfolio, held_out, formal=None, extensions=None, formal_extensions=None):
+    from .case_schedule import require_same
+    require_same(seed, portfolio, held_out)
     data = rows(portfolio, seed['cases'], 30)
     from .held_out import opportunity_ids
     held = rows(held_out, opportunity_ids(), 30)
@@ -115,6 +117,8 @@ def replay_calibration(path, binary_sha256):
         if digest(folder / role / 'qjs') != identity['sha256']:
             raise ValueError('calibration binary hash changed')
     packet = json.loads(path.read_text())
+    from .case_schedule import require_same, verify
+    require_same(identity, packet)
     if identity.get('lane') == 'development':
         from .development import MANIFEST_PATH
         if any(obj.get('development_manifest_sha256') != digest(MANIFEST_PATH) for obj in (identity, packet)):
@@ -129,6 +133,7 @@ def replay_calibration(path, binary_sha256):
             raise ValueError('calibration raw/report mismatch')
         replay_case(raw, 30, dict(zip(('base', 'candidate'), binaries)))
         raws.append(raw)
+    verify(packet, [c['id'] for c in packet['cases']], raws)
     if {p.name for p in (folder / 'cases').glob('*.json')} != expected_files:
         raise ValueError('calibration raw inventory mismatch')
     if packet['host'] != identity['host'] or packet['pairs'] != 30:
