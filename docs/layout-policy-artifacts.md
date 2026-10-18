@@ -90,6 +90,9 @@ adds the development lane (86 cases) and is required for any plan that names
 a development case; v1 remains frozen. [T057](../tasks/archive/T057-development-policy.md)
 owns the v3 qualification record. [Qualified iMac v4](../benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v4.json)
 replaces only v3's held-out gate and lane rule; [T059](../tasks/archive/T059-held-out-layout-policy-v4.md) owns its record.
+[Qualified iMac v5](../benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v5.json)
+recalibrates every gate for case-sharded workers-4 collection;
+[T060](../tasks/T060-parallel-layout-policy-v5.md) owns its evidence and v4 comparison.
 [T055](../tasks/archive/T055-layout-noise-control.md) owns qualification evidence.
 Screen/held-out A/A binds the frozen band-source executable; canonical
 formal A/A binds its own declared revision and byte-identical two roles.

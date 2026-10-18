@@ -1,11 +1,11 @@
 # T060: Case-sharded layout collection and schedule-bound policy v5
 
 - Status: active; calibration plan frozen before timing.
-- Implementation: tooling committed through 76e456e8; v5 not published.
+- Implementation: tooling present; qualified workers-4 v5 artifact published on this branch; no engine change.
 - Verified at: 76e456e8, staged fast gate (646 tests), context and size gates; prepare job passed on iMac; full gate queued.
 - Evidence: frozen protocol below; job receipts and results will be recorded here.
-- Unresolved: qualification and screen/panel elapsed speedup pending; seed bands are frozen below.
-- Next action: finish queued qualification and speed jobs; publish only a qualifying replay, without changing the seed.
+- Unresolved: screen/panel elapsed speedup and full handoff gate pending.
+- Next action: finish speed jobs and final full gate, record their results, then hand off this branch without push/merge.
 
 ## Scope and architecture
 
@@ -86,7 +86,7 @@ Use these as speed measurements, never as seed or qualification samples.
 
 - [x] Case sharding, conservation, schedule mismatch, replay, load recovery tests.
 - [x] Screen/panel/A2/calibration/npm lane worker CLI and immutable artifacts.
-- [ ] Frozen seed and full qualification; v5 only if qualified.
+- [x] Frozen seed and full qualification; v5 published only after a qualifying replay.
 - [ ] Compare v5/v4 bands and measured screen/panel speedup.
 - [ ] Update T022, task index and owning artifact documentation.
 - [ ] Hosted implementation aggregate updated; focused benchmark tests,
@@ -156,3 +156,25 @@ these same floors. Selection I_i: 84 increased / 2 decreased; held-out:
 | held-out | 1.005018254 | 1.018685972 |
 
 Portfolio qualification A/A started at 10:11:37 UTC, after the seed was sealed.
+
+## Qualification outcome (tooling f83cfe11)
+
+Job `20261018T044649Z-t060-qualify`: exit 0 / 127 s, `qualified: true`,
+`failures: []`. Published policy SHA-256
+`f3e8ef40b8b45601b5b86edaf4b47c2d9d904d0045eb024e837f1c447a52bec4`.
+All seed bands/ceilings are unchanged in the policy; exact per-case differences
+are reproducible from committed v4/v5 policies with `compare_bands`.
+
+All 86 screen, 86 formal and 9 held-out precision records are precise. Screen
+power allocation extended `broad/dynamic_method_call` to 38 pairs and
+`sentinel/string_key_map_churn` to 39; formal
+`external/sunspider-1.0/bitops-3bit-bits-in-byte` needed 44 blocks. No cap-240
+fallback. Every instruction guard passed; every original 30-block lane
+interval is precise and inside its frozen reciprocal envelope. Formal portfolio
+0.999520 [0.998770, 1.000346]; held-out 1.000274 [0.998240, 1.002317].
+
+Formal job `20261018T044646Z-t060-formal-aa`: exit 0 / 3,524 s, no DISTURBED;
+both Rust roles reproduce c7f0f66a, source 351004f3, with `workers-4`. Formal
+power job `20261018T044647Z-t060-formal-power`: exit 0 / 29 s. Qualification
+replayed all raw files, identities, guards, continuations and unchanged seed.
+Speed serial began at 12:37:20 UTC on 2026-10-18; no speed result claimed yet.

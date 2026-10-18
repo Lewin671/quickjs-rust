@@ -1,16 +1,16 @@
 # T022: Evidence-bound performance priority controller
 
-- Status: active; standing controller, schema-3 host policy qualified.
+- Status: active; standing controller, serial and workers-4 schema-3 host policies qualified.
 - Implementation: present; qualified iMac [v2](../benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v2.json)/[v3 +development](../benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v3.json)
-  bind layout gates; [v4](archive/T059-held-out-layout-policy-v4.md) supplies every later held-out/lane gate. Other hosts recalibrate.
+  bind serial layout gates; [v4](archive/T059-held-out-layout-policy-v4.md) supplies serial held-out/lane gates. [v5](../benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v5.json) binds workers-4 collection; qualification is in [T060](T060-parallel-layout-policy-v5.md). Other hosts recalibrate.
 - Verified at: 3be0ba66, final full/branch gates; 552 tests, 5170 Test262,
   91 plans independently checked. Qualification/live load recorded in T055.
+  V5 qualification at f83cfe11 is recorded in T060; its final handoff gate is pending.
   Legacy retained decisions remain verified only at their recorded revisions.
 - Evidence: [T055](archive/T055-layout-noise-control.md) owns B calibration and hashes;
   [T037](T037-integration-batch-1.md) owns historical unstable-base decisions.
-- Unresolved: ruleset check unconfigured; [T060](T060-parallel-layout-policy-v5.md) is recalibrating workers-4 collection; v4 still binds serial screens.
-- Next action: freeze fresh schema-3 queue/unit plans against qualified v2;
-  preserve the independent promotion gates below.
+- Unresolved: ruleset check unconfigured; T060 speed comparison and final handoff checks pending.
+- Next action: freeze fresh schema-3 queue/unit plans against the qualified policy for their collection schedule; preserve the independent promotion gates below.
 
 Commands and their interpretation are in
 [the performance workflow](../docs/performance-workflow.md); schemas and
@@ -100,7 +100,7 @@ are historical and never acquire an extra attempt from this rule change.
 - Held-out is mandatory promotion acceptance and never selects work. Under v4
   a program above B_i with every instruction pair above max(1.01,I_i) rejects;
   a wall-only program or lane excess needs the K=6 held-out panel and rejects
-  only if all six exceed. Every decision after v4 uses v4's held-out gate.
+  only if all six exceed. Serial v2/v3 plans inherit v4's held-out gate; v5 uses its own workers-4 bands.
 - Every calibration/formal A/A automatically uses frozen precision allocation
   n=min(240,ceil(base_n*(h/.03)^2)); pilot retained; predicted stage then cap.
   At240 imprecise bands are diagnostic, mandatory K=6, including held-out
