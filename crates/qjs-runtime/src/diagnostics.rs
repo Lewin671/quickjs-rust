@@ -75,6 +75,13 @@ declare_counters! {
     /// Statically named property reads and writes.
     named_property_reads,
     named_property_writes,
+    /// Property-name atoms created by an interning domain. Steady-state
+    /// named access must add none: linked code reuses its atoms.
+    property_atoms_created,
+    /// Bodies whose named operands were linked to an atom domain. One per
+    /// body and domain; a count that grows with executed operations means
+    /// linking is not cached.
+    named_operand_links,
     /// Computed (bracket) property reads and writes.
     computed_property_reads,
     computed_property_writes,

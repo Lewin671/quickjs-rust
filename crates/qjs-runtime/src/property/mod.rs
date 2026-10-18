@@ -2,6 +2,7 @@ use crate::CallEnv;
 use crate::{Property, RuntimeError, Value, call_function};
 
 mod array;
+pub(crate) mod atom;
 mod function;
 mod key;
 mod prototype;

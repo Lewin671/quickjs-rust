@@ -1484,7 +1484,7 @@ impl<'a> Builder<'a> {
                 }
                 self.push_boxed(dst, Origin::Computed);
             }
-            Op::GetPropNamed { key, cache } => {
+            Op::GetPropNamed { key, cache, .. } => {
                 let (object, _) = match cache.local_slot() {
                     Some(slot) => (self.boxed_receiver(slot)?, Origin::Local(0)),
                     None => self.pop_boxed()?,

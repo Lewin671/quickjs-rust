@@ -479,6 +479,8 @@ struct LexicalBindings {
 }
 
 struct UserFunctionOptions {
+    /// The atom domain of the realm whose scope `env` snapshots.
+    atoms: crate::property::atom::AtomDomain,
     bytecode: Option<Rc<Bytecode>>,
     constructable: bool,
     source_text: Rc<str>,
@@ -528,9 +530,10 @@ impl Function {
         params: FunctionParams,
         body: Vec<Stmt>,
         env: HashMap<String, Value>,
+        atoms: crate::property::atom::AtomDomain,
         source_text: Rc<str>,
     ) -> Result<Self, crate::RuntimeError> {
-        Self::new_user_with_constructable(name, params, body, env, true, source_text)
+        Self::new_user_with_constructable(name, params, body, env, atoms, true, source_text)
     }
 
     pub(crate) fn new_user_with_constructable(
@@ -538,17 +541,29 @@ impl Function {
         params: FunctionParams,
         body: Vec<Stmt>,
         env: HashMap<String, Value>,
+        atoms: crate::property::atom::AtomDomain,
         constructable: bool,
         source_text: Rc<str>,
     ) -> Result<Self, crate::RuntimeError> {
-        Self::new_user_with_bytecode(name, params, body, env, None, constructable, source_text)
+        Self::new_user_with_bytecode(
+            name,
+            params,
+            body,
+            env,
+            atoms,
+            None,
+            constructable,
+            source_text,
+        )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new_user_with_bytecode(
         name: Option<String>,
         params: FunctionParams,
         body: Vec<Stmt>,
         env: HashMap<String, Value>,
+        atoms: crate::property::atom::AtomDomain,
         bytecode: Option<Rc<Bytecode>>,
         constructable: bool,
         source_text: Rc<str>,
@@ -559,6 +574,7 @@ impl Function {
             body,
             env,
             UserFunctionOptions {
+                atoms,
                 bytecode,
                 constructable,
                 source_text,
@@ -578,12 +594,13 @@ impl Function {
         options: UserFunctionOptions,
     ) -> Result<Self, crate::RuntimeError> {
         let UserFunctionOptions {
+            atoms,
             bytecode,
             constructable,
             source_text,
             lexical_bindings,
         } = options;
-        let realm = super::env::new_realm(env);
+        let realm = super::env::new_realm_sharing_atoms(env, atoms);
         let has_dynamic_function_realm = realm.has_dynamic_function_realm_global();
         let prototype = ObjectRef::with_prototype(
             HashMap::new(),

@@ -621,11 +621,11 @@ impl<'a> Vm<'a> {
                     pc = self.current.ip;
                     continue;
                 }
-                Op::GetPropNamed { key, cache } => {
+                Op::GetPropNamed { name, cache, .. } => {
                     crate::diagnostics::count!(dispatched_named_property_ops);
                     crate::diagnostics::count!(named_property_reads);
                     self.current.ip = pc;
-                    self.op_get_prop_named(key, cache)?;
+                    self.op_get_prop_named(program.bytecode, *name, cache)?;
                     pc = self.current.ip;
                     continue;
                 }
@@ -662,14 +662,15 @@ impl<'a> Vm<'a> {
                     continue;
                 }
                 Op::SetPropNamed {
-                    key,
+                    name,
                     cache,
                     is_strict,
+                    ..
                 } => {
                     crate::diagnostics::count!(dispatched_named_property_ops);
                     crate::diagnostics::count!(named_property_writes);
                     self.current.ip = pc;
-                    self.op_set_prop_named(key, cache.as_ref(), *is_strict)?;
+                    self.op_set_prop_named(program.bytecode, *name, cache.as_ref(), *is_strict)?;
                     pc = self.current.ip;
                     continue;
                 }
@@ -851,8 +852,8 @@ impl<'a> Vm<'a> {
     fn get_prop(&mut self) -> Result<(), RuntimeError> {
         let key_value = self.pop()?;
         let object = self.pop()?;
-        if matches!(object, Value::Null | Value::Undefined) {
-            let object_name = if matches!(object, Value::Null) {
+        if object.is_nullish() {
+            let object_name = if object.is_null() {
                 "null"
             } else {
                 "undefined"

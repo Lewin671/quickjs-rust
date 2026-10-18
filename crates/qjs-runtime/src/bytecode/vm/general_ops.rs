@@ -24,12 +24,12 @@
 //! calls, throws or suspends behaves exactly as it did inline.
 
 use super::{FrameExit, FrameProgramView, Vm};
+use crate::Bytecode;
 use crate::bytecode::ir::NamedPropertyCache;
-use crate::bytecode::ir::Op;
+use crate::bytecode::ir::{Op, PropertyNameId};
 use crate::bytecode::util::{stack_underflow, typeof_value};
 use crate::{RuntimeError, Value, is_truthy};
 use qjs_ast::{BinaryOp, UnaryOp, UpdateOp};
-use std::rc::Rc;
 
 impl Vm<'_> {
     /// Runs one opcode the dispatch loop did not answer inline.
@@ -312,15 +312,19 @@ impl Vm<'_> {
         Ok(())
     }
 
-    /// `obj.key`, through the site's inline cache.
+    /// `obj.key`, through the site's inline cache. The key is the operand's
+    /// atom in this frame's domain, linked once per body and domain.
     #[inline(never)]
     pub(super) fn op_get_prop_named(
         &mut self,
-        key: &Rc<str>,
+        code: &Bytecode,
+        name: PropertyNameId,
         cache: &NamedPropertyCache,
     ) -> Result<(), RuntimeError> {
         crate::diagnostics::count!(named_property_reads);
-        let result = self.get_named_prop(key, cache);
+        let result = code
+            .linked_property_name(self.current.realm.atoms(), name)
+            .and_then(|atom| self.get_named_prop(atom.as_str(), cache));
         self.handle_runtime_result(result)?;
         Ok(())
     }
@@ -365,16 +369,20 @@ impl Vm<'_> {
         Ok(())
     }
 
-    /// `obj.key = value`, through the site's inline cache.
+    /// `obj.key = value`, through the site's inline cache, keyed like
+    /// [`Self::op_get_prop_named`].
     #[inline(never)]
     pub(super) fn op_set_prop_named(
         &mut self,
-        key: &Rc<str>,
+        code: &Bytecode,
+        name: PropertyNameId,
         cache: Option<&NamedPropertyCache>,
         is_strict: bool,
     ) -> Result<(), RuntimeError> {
         crate::diagnostics::count!(named_property_writes);
-        let result = self.set_named_prop(key, cache, is_strict);
+        let result = code
+            .linked_property_name(self.current.realm.atoms(), name)
+            .and_then(|atom| self.set_named_prop(atom.text(), cache, is_strict));
         self.handle_runtime_result(result)?;
         Ok(())
     }

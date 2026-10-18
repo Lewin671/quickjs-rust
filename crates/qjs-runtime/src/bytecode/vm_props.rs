@@ -38,8 +38,7 @@ impl Vm<'_> {
         let value = self.pop()?;
         let object = self.pop()?;
         if !self.is_global_object(&object)
-            && let Value::Object(object_ref) = &object
-            && !crate::symbol::is_symbol_primitive(object_ref)
+            && let Some(object_ref) = object.as_ordinary_object()
         {
             let cached = cache.and_then(|cache| cache.write(object_ref, key, &value));
             let cached_hit = cached.is_some();

@@ -3,7 +3,8 @@
 //! - Compiler (`compiler*.rs`): AST to `Bytecode`. `upvalue_resolver.rs`
 //!   decides which locals a frame boxes into shared cells.
 //! - IR (`ir*.rs`): the `Op` set and `Bytecode`, which also caches every
-//!   tier's compiled program in a `OnceCell`.
+//!   tier's compiled program in a `OnceCell`. `linked_code.rs` owns a body's
+//!   property-name pool and its cached per-domain atom links.
 //! - Interpreter (`vm.rs`, `vm/`): `Vm`, `FrameState`, the dispatch loop.
 //!   The `vm_*.rs` files are its opcode-family handlers and frame plumbing,
 //!   except the tiers named below. `frame_program.rs` selects the stream an
@@ -62,6 +63,7 @@ mod ir;
 mod ir_class;
 mod ir_names;
 mod ir_pools;
+mod linked_code;
 mod named_property_cache;
 mod operand_stack;
 mod typed_loop;

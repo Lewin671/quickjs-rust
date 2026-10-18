@@ -8,7 +8,7 @@ use std::{
 };
 
 use qjs_runtime::{
-    EvalError, EvalErrorKind, ModuleResolveError, ModuleResolver, ResolvedModule, Value,
+    EvalError, EvalErrorKind, ModuleResolveError, ModuleResolver, ResolvedModule, Value, ValueKind,
     eval_classified_with_resolver, eval_module_with_prelude, module_specifier_code_units,
     module_specifier_to_utf8_lossy,
 };
@@ -627,15 +627,15 @@ fn format_value(value: &Value, raw_output: bool) -> String {
     if !raw_output {
         return format!("{value:?}");
     }
-    match value {
-        Value::String(_) => value
+    match value.kind() {
+        ValueKind::String => value
             .string_to_utf8_lossy()
-            .expect("string variant must expose host UTF-8"),
-        Value::Number(value) => value.to_string(),
-        Value::Boolean(value) => value.to_string(),
-        Value::Null => "null".to_owned(),
-        Value::Undefined => "undefined".to_owned(),
-        _ => format!("{value:?}"),
+            .expect("a String exposes host UTF-8"),
+        ValueKind::Number => value.as_number().expect("a Number").to_string(),
+        ValueKind::Boolean => value.as_boolean().expect("a Boolean").to_string(),
+        ValueKind::Null => "null".to_owned(),
+        ValueKind::Undefined => "undefined".to_owned(),
+        ValueKind::Symbol | ValueKind::BigInt | ValueKind::Object => format!("{value:?}"),
     }
 }
 
@@ -747,14 +747,12 @@ mod tests {
 
     #[test]
     fn filesystem_resolver_rejects_isolated_surrogate_specifier() {
-        let Value::String(specifier) = qjs_runtime::eval("String.fromCharCode(0xD800) + '.mjs'")
-            .expect("build canonical lone-surrogate specifier")
-        else {
-            panic!("expected string specifier");
-        };
+        let value = qjs_runtime::eval("String.fromCharCode(0xD800) + '.mjs'")
+            .expect("build canonical lone-surrogate specifier");
+        let specifier = value.as_js_string().expect("expected string specifier");
         let mut resolver = FsResolver;
         let error = resolver
-            .resolve(&specifier, "/tmp/quickjs-rust-root.mjs")
+            .resolve(specifier, "/tmp/quickjs-rust-root.mjs")
             .expect_err("isolated surrogate must not alias a host filename");
         assert!(error.message.contains("isolated UTF-16 surrogate U+D800"));
     }

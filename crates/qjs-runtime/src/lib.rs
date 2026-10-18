@@ -84,7 +84,7 @@ use value::{
     ArrayRef, MapRef, ModuleNamespaceBindings, ObjectRef, Property, Prototype, SetRef,
     array_index_property_key,
 };
-pub use value::{JsString, Value};
+pub use value::{JsString, Value, ValueKind};
 
 #[cfg(feature = "perf-counters")]
 pub use diagnostics::reset_counters;

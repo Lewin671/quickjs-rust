@@ -10,7 +10,7 @@ use qjs_ast::{AssignmentOp, AssignmentTarget, Expr, Literal, UpdateOp};
 use crate::{RuntimeError, Value};
 
 use super::compiler::Compiler;
-use super::ir::{NamedPropertyCache, Op};
+use super::ir::{NamedPropertyCache, Op, PropertyNameId};
 use super::util::{assignment_binary_op, parse_number_literal, unsupported_target};
 use super::vm_props::array_index_from_number;
 
@@ -149,6 +149,7 @@ impl Compiler {
                 self.compile_expr(value)?;
                 self.emit(Op::SetPropNamed {
                     key: name.as_str().into(),
+                    name: PropertyNameId::UNASSIGNED,
                     cache: Some(NamedPropertyCache::default()),
                     is_strict: self.strict,
                 });
@@ -542,6 +543,7 @@ impl Compiler {
         let cache = NamedPropertyCache::for_local(object_slot);
         self.emit(Op::GetPropNamed {
             key: name.into(),
+            name: PropertyNameId::UNASSIGNED,
             cache: cache.clone(),
         });
         match op {
@@ -716,6 +718,7 @@ impl Compiler {
         let cache = NamedPropertyCache::for_local(object_slot);
         self.emit(Op::GetPropNamed {
             key: name.into(),
+            name: PropertyNameId::UNASSIGNED,
             cache: cache.clone(),
         });
         self.emit(Op::ToNumeric);
@@ -740,6 +743,7 @@ impl Compiler {
         self.emit(Op::LoadLocal(value_slot));
         self.emit(Op::SetPropNamed {
             key: name.into(),
+            name: PropertyNameId::UNASSIGNED,
             cache,
             is_strict: self.strict,
         });

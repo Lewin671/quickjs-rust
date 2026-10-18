@@ -436,7 +436,7 @@ impl<'a> Analyzer<'a> {
                     .stack
                     .push(AbstractValue::virtual_candidate(candidate));
             }
-            Op::GetPropNamed { key, cache } => {
+            Op::GetPropNamed { key, cache, .. } => {
                 let receiver = if let Some(slot) = cache.local_slot() {
                     if self.authority.is_authoritative(slot) {
                         state.locals.get(slot).cloned()

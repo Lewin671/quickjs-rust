@@ -1,19 +1,17 @@
 # T056: Interpreter core v2
 
-- Status: active; M2 re-plan complete (design only); M1 stage 1 frozen, not started.
-- Implementation: no runtime optimization. The evidence-only counter overlay
-  (`84fee838`) is reverted; stage-budget plumbing from `ddca5bdf` remains.
-- Verified at: M2 source inventory at `290e3f51`, 2026-10-17; documentation gates below.
-  M1 plan validated against v3 queue `424a1e79` at its recorded head;
-  `check.sh` and NG fixtures passed on iMac at `84fee838` (5170 subset cases).
-- Evidence: [part 1](archive/T056-unit0-part1-evidence.md) and
-  [part 2](archive/T056-unit0-part2-evidence.md) records; plan
-  [`interpreter-core-v2-atoms-layouts`](performance-units/interpreter-core-v2-atoms-layouts.json).
-- Unresolved: M2 runtime plan/budgets need a fresh post-M1 queue and profiles;
-  part 1's imprecise bitops-3bit-bits-in-byte interval.
-  `docs/architecture.md`'s absolute no-snapshot wording omits the compatibility view; outside this two-file scope.
-- Next action: implement M1.1 (facade + atom linking) against the frozen plan, then
-  screen it with `perf-loop.sh` under the stage budget.
+- Status: active; unit 0 and the M2 re-plan (design) complete; M1 stage 1 complete
+  on `agent/t056-m1-atoms/claude`: its screen passes under the governing v4 rule.
+- Implementation: stage 1 on that branch (`11c9fc08`; runtime unchanged through
+  `a8c533ef`): atom domain, per-domain named-operand links, Value facade. Not on main.
+- Verified at: `11c9fc08`, 2026-10-17: fast gate, Test262 subset 5170/5170, exact
+  scan 0 Rust failures, NG 248/248 (local), iMac `check.sh`; screen replayed at merge head.
+- Evidence: [part 1](archive/T056-unit0-part1-evidence.md), [part 2](archive/T056-unit0-part2-evidence.md),
+  [M1 stage 1](archive/T056-m1-stage1-evidence.md); plan [`interpreter-core-v2-atoms-layouts`](performance-units/interpreter-core-v2-atoms-layouts.json).
+- Unresolved: no formal `decide --mode stage` run for stage 1 yet; M2 runtime plan
+  needs a fresh post-M1 queue/profiles; part 1's imprecise bitops-3bit interval;
+  `docs/architecture.md`'s no-snapshot wording omits the compatibility view.
+- Next action: integrate stage 1, then M1.2 (layout authority for every store).
 
 ## Goal and scope
 
@@ -195,6 +193,13 @@ meriyah/parse (stage cap 1.025, final 0.97 or 1/B_i, K=6, one attempt). Durable
 counters, when needed, become plain `cfg(feature = "perf-counters")` code
 admitted with a layout-rule neutrality screen, never text patches.
 
+## M1 stage 1 (value facade + atom linking)
+
+Owner `agent/t056-m1-atoms/claude` from `a0b6bb23`: realm-owned `AtomDomain`, named operands
+linked once per body and domain, Value facade; stores still key by text. Its single screen is a
+v3 `reject` (development lane, layouts 0 and 2) and a v4 `pass`; v4 governs as main's bound
+v2/v3 successor (`HELD_OUT_SUCCESSOR`). See the [stage 1 record](archive/T056-m1-stage1-evidence.md).
+
 ## Design acceptance and verification
 
 - [x] One target specifies flat frames, every ordinary named-property storage
@@ -205,10 +210,8 @@ admitted with a layout-rule neutrality screen, never text patches.
 - [x] Documentation budgets, links and task index pass `check-context.py`.
 - [x] Staged documentation fast gate passes for the three allowed files.
 
-The original design changed only Markdown and did not claim runtime verification.
-Unit 0's tooling and measurement verification is recorded in its archive records.
-Every future runtime migration stage must run full configured Test262,
-`check.sh` and NG comparisons as the design requires.
+The original design changed only Markdown; unit 0's verification is in its archive
+records. Every runtime stage runs full configured Test262, `check.sh` and NG comparisons.
 
 M2 re-plan verification on the documentation change over `290e3f51`:
 `./scripts/check-context.py` and

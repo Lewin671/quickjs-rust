@@ -881,7 +881,7 @@ pub(in crate::bytecode) fn field_initializer_member_read(
 ) -> Option<Result<Value, RuntimeError>> {
     let bytecode = thunk.bytecode.as_ref()?;
     let [
-        crate::bytecode::ir::Op::GetPropNamed { key, cache },
+        crate::bytecode::ir::Op::GetPropNamed { key, cache, .. },
         crate::bytecode::ir::Op::Return,
     ] = bytecode.code.as_slice()
     else {

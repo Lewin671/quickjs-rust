@@ -21,7 +21,8 @@ use crate::{
 
 use super::compiler::Compiler;
 use super::ir::{
-    ArrayElementKind, ComputedNameKind, ObjectPropertyMeta, Op, encode_index_receiver,
+    ArrayElementKind, ComputedNameKind, ObjectPropertyMeta, Op, PropertyNameId,
+    encode_index_receiver,
 };
 use super::util::{parse_number_literal, unsupported_stmt};
 use super::vm_props::array_index_from_number;
@@ -232,6 +233,7 @@ impl Compiler {
                 };
                 self.emit(Op::GetPropNamed {
                     key: Rc::from(name.as_str()),
+                    name: PropertyNameId::UNASSIGNED,
                     cache,
                 });
                 return Ok(());
@@ -850,7 +852,7 @@ mod tests {
                 .code
                 .iter()
                 .filter(|op| {
-                    matches!(op, Op::GetPropNamed { key, cache } if key.as_ref() == "value" && cache.local_slot().is_some())
+                    matches!(op, Op::GetPropNamed { key, cache, .. } if key.as_ref() == "value" && cache.local_slot().is_some())
                 })
                 .count(),
             1
@@ -860,7 +862,7 @@ mod tests {
                 .code
                 .iter()
                 .filter(|op| {
-                    matches!(op, Op::GetPropNamed { key, cache } if key.as_ref() == "value" && cache.local_slot().is_none())
+                    matches!(op, Op::GetPropNamed { key, cache, .. } if key.as_ref() == "value" && cache.local_slot().is_none())
                 })
                 .count(),
             1
