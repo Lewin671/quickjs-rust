@@ -1,8 +1,8 @@
 # T060: Case-sharded layout collection and schedule-bound policy v5
 
 - Status: active; calibration plan frozen before timing.
-- Implementation: tooling committed at 93ce2534; v5 not published.
-- Verified at: plan commit 91c97d64; tooling working tree passed staged fast gate (643 tests), context/size gates and the additional forked cap-propagation regression.
+- Implementation: tooling committed at f83cfe11; v5 not published.
+- Verified at: f83cfe11, staged fast gate (645 tests), context and size gates; full gate queued on iMac.
 - Evidence: frozen protocol below; job receipts and results will be recorded here.
 - Unresolved: workers-4 bands, qualification and screen/panel elapsed speedup unmeasured.
 - Next action: monitor queued jobs; freeze the seed before qualification timing, then record qualification and speed results.
@@ -101,9 +101,24 @@ No other owner job was cancelled. Raw artifacts stay in the queue/fetch output.
 | Job | Purpose | Result |
 | --- | --- | --- |
 | `20261018T044114Z-t060-prepare` | Reproduce/audit band sources and prepare equal-length role matrices | queued |
-| `20261018T044128Z-t060-full-gate` | Full correctness gate, no timing | queued |
+| `20261018T044128Z-t060-full-gate` | Superseded by current-tooling gate before execution | cancelled queued, unmeasured |
 | `20261018T044128Z-t060-a2-portfolio` | Six 76-case A2 placements, workers=4 | queued |
 | `20261018T044128Z-t060-a2-development` | Six development A2 placements, workers=4 | queued |
 | `20261018T044129Z-t060-a2-heldout` | Six held-out A2 placements, workers=4 | queued |
 | `20261018T044210Z-t060-heldout-estimator` | Independent 30-pair held-out envelope estimator and power allocation | queued |
 | `20261018T044315Z-t060-seed` | Replay A2/estimator and freeze v5 bands | queued |
+
+Qualification/speed jobs use f83cfe11. Every qualification collector refuses
+to start before the immutable seed exists and binds the frozen plan hash.
+
+| Job | Purpose | Result |
+| --- | --- | --- |
+| `20261018T044638Z-t060-full-gate-current` | Full check.sh at current tooling (no timing) | queued |
+| `20261018T044640Z-t060-pilot-portfolio` | Fresh 76-case screen qualification A/A | queued |
+| `20261018T044642Z-t060-pilot-development` | Fresh development qualification A/A | queued |
+| `20261018T044644Z-t060-pilot-held-out` | Fresh held-out qualification A/A | queued |
+| `20261018T044646Z-t060-formal-aa` | Canonical 86-case workers-4 formal A/A | queued |
+| `20261018T044647Z-t060-formal-power` | Automatic formal precision allocation | queued |
+| `20261018T044649Z-t060-qualify` | Replay qualification and v4/v5 band comparison | queued |
+| `20261018T044651Z-t060-speed-serial` | Serial natural screen plus K=6 elapsed measurement | queued |
+| `20261018T044653Z-t060-speed-parall` | Workers-4 natural screen plus K=6 elapsed measurement | queued |
