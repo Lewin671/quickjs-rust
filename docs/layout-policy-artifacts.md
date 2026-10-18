@@ -92,7 +92,7 @@ owns the v3 qualification record. [Qualified iMac v4](../benchmarks/policies/ima
 replaces only v3's held-out gate and lane rule; [T059](../tasks/archive/T059-held-out-layout-policy-v4.md) owns its record.
 [Qualified iMac v5](../benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v5.json)
 recalibrates every gate for case-sharded workers-4 collection;
-[T060](../tasks/T060-parallel-layout-policy-v5.md) owns its evidence and v4 comparison.
+[T060](../tasks/archive/T060-parallel-layout-policy-v5.md) owns its evidence and v4 comparison.
 [T055](../tasks/archive/T055-layout-noise-control.md) owns qualification evidence.
 Screen/held-out A/A binds the frozen band-source executable; canonical
 formal A/A binds its own declared revision and byte-identical two roles.
@@ -121,7 +121,7 @@ durations. npm reports reconstruct their schedule from hashed raw rows.
 
 Policies qualify for one collection schedule; `formal_lane_schedule` separately
 binds the canonical formal schedule. A serial policy cannot authorize parallel
-screens. [T060](../tasks/T060-parallel-layout-policy-v5.md) owns workers-4
+screens. [T060](../tasks/archive/T060-parallel-layout-policy-v5.md) owns workers-4
 recalibration, qualification, v4 comparison and measured speedup; support for
 other N is tooling capability, not a qualification claim.
 

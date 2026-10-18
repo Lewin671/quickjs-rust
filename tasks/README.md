@@ -10,8 +10,8 @@ update the resume block in the commit that lands it. When a task closes, move
 it to `archive/` with `git mv` and move its row below.
 
 ## Active
+
 | Task | Status | What it is |
-| [T060](T060-parallel-layout-policy-v5.md) parallel layout collection | active | Workers-4 v5 qualified; speed comparison and final checks pending. |
 | --- | --- | --- |
 | [T057](T057-string-code-units.md) string code units | active | Policy v3 qualified (development targets eligible); stage-1 plan next. |
 | [T056](T056-interpreter-core-v2.md) interpreter core v2 | active | Target design for names, frames and values; unit 0 complete, M1 stage-1 plan frozen, implementation not started. |
@@ -42,6 +42,7 @@ outcome column says what happened, not what to do next.
 
 | Task | Outcome |
 | --- | --- |
+| `T060-parallel-layout-policy-v5.md` | Workers-4 policy v5 qualified (SHA-256 `f3e8ef40...`): case-sharded collection, screens and K=6 panels 2.55x faster than serial. |
 | `T059-held-out-layout-policy-v4.md` | Policy v4 qualified (SHA-256 `1eb7de46...`): six-layout held-out bands, held-out and lane events resolved by K=6, candidate formal continuation. |
 | `T054-execution-layout-regions.md` | Original page residues all preserved, but one control and sentinel lane failed sole neutrality screen; no production build change retained. |
 | `T052-general-performance-command-code.md` | Structural symbol matching/raw audit, canonical scan recipe and byte-identical natural order; full gates pass, no runtime optimization retained. |
@@ -89,7 +90,6 @@ outcome column says what happened, not what to do next.
 
 - T057: [preliminary development baseline](archive/T057-development-baseline.md) and [policy v3 qualification](archive/T057-development-policy.md).
 - T056: [unit 0 part 1 evidence](archive/T056-unit0-part1-evidence.md) (standing, attribution limits, RSS, ABI probes) and [part 2](archive/T056-unit0-part2-evidence.md) (mechanism counters, development profiles, first-unit ranking and plan binding).
-
 - T055: [qualified policy adoption](archive/T055-layout-noise-control.md), [feedback-2 record](archive/T055-feedback-2-qualification.md), [feedback-1 record](archive/T055-feedback-1-qualification.md), [complete A2 data](archive/T055-phase-a2-data.md) and [B frozen plans/blocked qualification log](archive/T055-phase-b-plan-and-log.md).
 
 - T055 phase A: [superseded frozen plan](archive/T055-phase-a-plan.md) and [results](archive/T055-phase-a-log.md); static/correctness pass, invalid retired-sampler timing.

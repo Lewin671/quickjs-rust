@@ -1,11 +1,11 @@
 # T060: Case-sharded layout collection and schedule-bound policy v5
 
-- Status: active; calibration plan frozen before timing.
-- Implementation: tooling present; qualified workers-4 v5 artifact published on this branch; no engine change.
-- Verified at: 76e456e8, staged fast gate (646 tests), context and size gates; prepare job passed on iMac; full gate queued.
-- Evidence: frozen protocol below; job receipts and results will be recorded here.
-- Unresolved: screen/panel elapsed speedup and full handoff gate pending.
-- Next action: finish speed jobs and final full gate, record their results, then hand off this branch without push/merge.
+- Status: closed-landed.
+- Implementation: present; tooling plus the qualified workers-4 v5 policy, no engine change.
+- Verified at: 76e456e8, iMac full gate `20261018T050252Z-t060-full-gate-final` (exit 0, 315 s, 5,170 Test262 subset cases); 5a40d1ed adds one test and one ownership string; local full gate after integration into main.
+- Evidence: this file; job outputs under `outputs/imac-bench/<job>/` (local artifact, not retained).
+- Unresolved: none.
+- Next action: none. Screens and panels on the iMac use `--workers 4` under v5.
 
 ## Scope and architecture
 
@@ -87,9 +87,9 @@ Use these as speed measurements, never as seed or qualification samples.
 - [x] Case sharding, conservation, schedule mismatch, replay, load recovery tests.
 - [x] Screen/panel/A2/calibration/npm lane worker CLI and immutable artifacts.
 - [x] Frozen seed and full qualification; v5 published only after a qualifying replay.
-- [ ] Compare v5/v4 bands and measured screen/panel speedup.
-- [ ] Update T022, task index and owning artifact documentation.
-- [ ] Hosted implementation aggregate updated; focused benchmark tests,
+- [x] Compare v5/v4 bands and measured screen/panel speedup.
+- [x] Update T022, task index and owning artifact documentation.
+- [x] Hosted implementation aggregate updated; focused benchmark tests,
   `PYTHONDONTWRITEBYTECODE=1 ./scripts/check-touched.sh --base main --explain`,
   `./scripts/check-context.py`, and full gate before handoff.
 
@@ -177,4 +177,19 @@ Formal job `20261018T044646Z-t060-formal-aa`: exit 0 / 3,524 s, no DISTURBED;
 both Rust roles reproduce c7f0f66a, source 351004f3, with `workers-4`. Formal
 power job `20261018T044647Z-t060-formal-power`: exit 0 / 29 s. Qualification
 replayed all raw files, identities, guards, continuations and unchanged seed.
-Speed serial began at 12:37:20 UTC on 2026-10-18; no speed result claimed yet.
+Speed serial began at 12:37:20 UTC on 2026-10-18.
+
+## Speed outcome
+
+Same c7f0f66a matrices, 86 cases, 5 pairs, matching-layout A/A; elapsed
+excludes builds and preflight. Neither job was DISTURBED (light background
+activity in 19 and 8 samples, below the threshold).
+
+| Job | Workers | Natural screen | K=6 panel |
+| --- | ---: | ---: | ---: |
+| `20261018T044651Z-t060-speed-serial` | 1 | 1,891 s | 11,376 s |
+| `20261018T044653Z-t060-speed-parall` | 4 | 742 s | 4,457 s |
+| Speedup | | 2.55x | 2.55x |
+
+A screen falls from about 32 to 12 minutes and a six-layout panel from about
+3.2 to 1.2 hours.

@@ -2,15 +2,15 @@
 
 - Status: active; standing controller, serial and workers-4 schema-3 host policies qualified.
 - Implementation: present; qualified iMac [v2](../benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v2.json)/[v3 +development](../benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v3.json)
-  bind serial layout gates; [v4](archive/T059-held-out-layout-policy-v4.md) supplies serial held-out/lane gates. [v5](../benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v5.json) binds workers-4 collection; qualification is in [T060](T060-parallel-layout-policy-v5.md). Other hosts recalibrate.
+  bind serial layout gates; [v4](archive/T059-held-out-layout-policy-v4.md) supplies serial held-out/lane gates. [v5](../benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v5.json) binds workers-4 collection; qualification is in [T060](archive/T060-parallel-layout-policy-v5.md). Other hosts recalibrate.
 - Verified at: 3be0ba66, final full/branch gates; 552 tests, 5170 Test262,
   91 plans independently checked. Qualification/live load recorded in T055.
-  V5 qualification at f83cfe11 is recorded in T060; its final handoff gate is pending.
+  V5 qualification at f83cfe11 and its full gate at 76e456e8 are recorded in T060.
   Legacy retained decisions remain verified only at their recorded revisions.
 - Evidence: [T055](archive/T055-layout-noise-control.md) owns B calibration and hashes;
   [T037](T037-integration-batch-1.md) owns historical unstable-base decisions.
-- Unresolved: ruleset check unconfigured; T060 speed comparison and final handoff checks pending.
-- Next action: freeze fresh schema-3 queue/unit plans against the qualified policy for their collection schedule; preserve the independent promotion gates below.
+- Unresolved: ruleset check unconfigured.
+- Next action: freeze fresh schema-3 queue/unit plans against the qualified policy for their collection schedule (workers-4 v5 screens and panels are 2.55x faster than serial, T060); preserve the independent promotion gates below.
 
 Commands and their interpretation are in
 [the performance workflow](../docs/performance-workflow.md); schemas and
