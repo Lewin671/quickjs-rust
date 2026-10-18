@@ -1,5 +1,9 @@
+//! Function payloads and implicit standard properties. Installed named fields
+//! delegate to `property_storage`; semantic hooks materialize defaults before
+//! table observation, preserving receiver and insertion-order behavior.
+
 use std::{
-    cell::{Cell, Ref, RefCell, RefMut},
+    cell::{Cell, RefCell},
     collections::HashMap,
     fmt,
     ops::Deref,
@@ -8,6 +12,7 @@ use std::{
 
 use qjs_ast::{FunctionParams, Stmt};
 
+use super::property_storage::LazyFunctionProperties;
 use crate::CallEnv;
 use crate::function::{DynamicBindings, ModuleImports, Realm, Upvalue};
 use crate::module::ModuleHostRef;
@@ -328,59 +333,6 @@ impl NativeContext {
     #[cfg(test)]
     fn is_allocated(&self) -> bool {
         self.0.is_some()
-    }
-}
-
-/// Compact property storage for functions that have not materialized an own
-/// property table.
-///
-/// The standard `length`, `name`, and ordinary-function `prototype` slots are
-/// already represented implicitly. Most short-lived closures therefore never
-/// need a general map at all. Explicit property observation or mutation keeps
-/// the existing `RefCell<HashMap<...>>` borrowing behavior while moving the
-/// much larger empty map header out of every function allocation.
-#[derive(Default)]
-// The indirection is deliberate: it removes the 56-byte empty map header from
-// every short-lived closure and is allocated only on explicit property access.
-#[allow(clippy::box_collection)]
-/// A function's string-keyed own properties, allocated on first use. Keyed
-/// with the object tables' fast name hasher: `Date.prototype`,
-/// `String.fromCharCode` and every other read of a constructor's property
-/// hashes the name here.
-pub(crate) struct LazyFunctionProperties(
-    RefCell<Option<Box<crate::value::name_hash::NameMap<String, Property>>>>,
-);
-
-impl LazyFunctionProperties {
-    pub(crate) fn borrow(&self) -> Ref<'_, crate::value::name_hash::NameMap<String, Property>> {
-        self.ensure_allocated();
-        Ref::map(self.0.borrow(), |properties| {
-            properties
-                .as_deref()
-                .expect("function properties initialized before borrowing")
-        })
-    }
-
-    pub(crate) fn borrow_mut(
-        &self,
-    ) -> RefMut<'_, crate::value::name_hash::NameMap<String, Property>> {
-        self.ensure_allocated();
-        RefMut::map(self.0.borrow_mut(), |properties| {
-            properties
-                .as_deref_mut()
-                .expect("function properties initialized before borrowing")
-        })
-    }
-
-    fn ensure_allocated(&self) {
-        if self.0.borrow().is_none() {
-            *self.0.borrow_mut() = Some(Box::default());
-        }
-    }
-
-    #[cfg(test)]
-    fn is_allocated(&self) -> bool {
-        self.0.borrow().is_some()
     }
 }
 
@@ -1015,16 +967,16 @@ impl Function {
         self.auxiliary.with_cold_mut(|cold| {
             let mut insert_at = 0;
             if had_length {
-                properties
-                    .entry("length".to_owned())
-                    .or_insert_with(|| self.default_length_property());
+                if !properties.contains_key("length") {
+                    properties.insert("length".to_owned(), self.default_length_property());
+                }
                 cold.property_order.insert(insert_at, "length".to_owned());
                 insert_at += 1;
             }
             if had_name {
-                properties
-                    .entry("name".to_owned())
-                    .or_insert_with(|| self.default_name_property());
+                if !properties.contains_key("name") {
+                    properties.insert("name".to_owned(), self.default_name_property());
+                }
                 cold.property_order.insert(insert_at, "name".to_owned());
             }
         });

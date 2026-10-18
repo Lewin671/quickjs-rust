@@ -64,7 +64,7 @@
   ],
   "migration": {
     "stages": 3,
-    "current_stage": 1,
+    "current_stage": 2,
     "cumulative_target_ids": [
       "development/moment/dates",
       "development/diff/compare",

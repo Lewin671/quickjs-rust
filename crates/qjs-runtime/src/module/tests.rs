@@ -1633,3 +1633,18 @@ fn await_as_binding_is_a_module_error() {
         EvalErrorKind::Parse | EvalErrorKind::Early
     ));
 }
+
+#[test]
+fn namespace_surrogate_pair_keys_keep_live_export_cells() {
+    let namespace = run(
+        "import * as ns from 'dep';
+         var key = '\\uD83D' + '\\uDE00';
+         var before = ns[key]; ns.bump();
+         export const result = before + ':' + ns[key] + ':' + Object.getOwnPropertyDescriptor(ns, key).value;",
+        &[("dep", "let value = 1; export { value as '\\uD83D\\uDE00' }; export function bump() { value = 2; }")],
+    ).unwrap();
+    assert_eq!(
+        export(&namespace, "result"),
+        Value::string_from_utf8("1:2:2")
+    );
+}

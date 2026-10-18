@@ -18,9 +18,7 @@ pub(crate) struct OrderedDataPropertyBuilder {
 impl OrderedDataPropertyBuilder {
     pub(crate) fn new() -> Self {
         Self {
-            properties: PropertyStorage::Small {
-                entries: Vec::new(),
-            },
+            properties: PropertyStorage::empty(0),
             index_property_count: 0,
         }
     }
@@ -28,9 +26,7 @@ impl OrderedDataPropertyBuilder {
     /// A builder whose storage has room for `capacity` properties.
     pub(crate) fn with_capacity(capacity: usize) -> Self {
         Self {
-            properties: PropertyStorage::Small {
-                entries: Vec::with_capacity(capacity),
-            },
+            properties: PropertyStorage::empty(capacity),
             index_property_count: 0,
         }
     }
@@ -60,7 +56,10 @@ impl OrderedDataPropertyBuilder {
         }
     }
 
-    pub(crate) fn finish(self, prototype: Option<ObjectRef>) -> ObjectRef {
+    pub(crate) fn finish(mut self, prototype: Option<ObjectRef>) -> ObjectRef {
+        if let Some(prototype) = &prototype {
+            self.properties.relink(prototype.atom_domain());
+        }
         ObjectRef(Rc::new(ObjectData {
             properties: RefCell::new(self.properties),
             property_revision: Cell::new(0),
@@ -86,6 +85,7 @@ mod tests {
 
     use super::{ObjectRef, OrderedDataPropertyBuilder, PropertyStorage};
     use crate::Value;
+    use crate::value::object::PropertyPayload;
 
     #[test]
     fn duplicate_heavy_builder_stays_small_and_bounded_by_unique_keys() {
@@ -98,8 +98,8 @@ mod tests {
         }
 
         assert!(matches!(
-            &builder.properties,
-            PropertyStorage::Small { entries }
+            &builder.properties.payload,
+            PropertyPayload::Small { entries }
                 if entries.len() == 8 && entries.capacity() <= PropertyStorage::SMALL_LIMIT
         ));
         assert_eq!(builder.index_property_count, 0);
@@ -132,8 +132,8 @@ mod tests {
         }
 
         assert!(matches!(
-            &builder.properties,
-            PropertyStorage::Dynamic(dynamic)
+            &builder.properties.payload,
+            PropertyPayload::Dynamic(dynamic)
                 if dynamic.entries.len() == unique_count
                     && dynamic.order.len() == unique_count
                     && dynamic.entries.capacity() <= PropertyStorage::SMALL_LIMIT * 4
@@ -171,8 +171,8 @@ mod tests {
         }
 
         assert!(matches!(
-            &builder.properties,
-            PropertyStorage::Small { entries }
+            &builder.properties.payload,
+            PropertyPayload::Small { entries }
                 if entries.len() == 1 && entries.capacity() <= PropertyStorage::SMALL_LIMIT
         ));
         assert_eq!(builder.index_property_count, 1);

@@ -140,6 +140,7 @@ impl RealmState {
     }
 
     pub(crate) fn initialize_object_prototype(&self, prototype: ObjectRef) {
+        prototype.relink_property_domain(self.atoms.clone());
         assert!(
             self.object_prototype.set(prototype).is_ok(),
             "realm Object.prototype intrinsic initialized twice"

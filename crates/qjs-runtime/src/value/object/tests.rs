@@ -7,7 +7,10 @@
 
 use std::{collections::HashMap, mem, rc::Rc};
 
-use super::{ObjectData, ObjectLiteralShape, ObjectRef, OwnDataPropertyWrite, PropertyStorage};
+use super::{
+    ObjectData, ObjectLiteralShape, ObjectRef, OwnDataPropertyWrite, PropertyPayload,
+    PropertyStorage,
+};
 use crate::{Property, Value};
 
 #[test]
@@ -57,10 +60,14 @@ fn ordinary_object_keeps_cold_state_unallocated() {
     assert!(object.own_property_symbols().is_empty());
     assert!(object.to_string_tag().is_none());
     assert!(object.0.cold.get().is_none());
-    // Boxing the cold `Dynamic` property-storage payload (HashMap + Vec)
-    // keeps this at 104 bytes instead of the 136 it cost when that
-    // payload sized the whole `PropertyStorage` enum for every object.
-    assert!(mem::size_of::<ObjectData>() <= 112);
+    // The uniform layout adds a domain/state/edit header to the existing
+    // payload adapter. Dictionary metadata stays boxed rather than sizing
+    // every ordinary object for the cold high-churn path.
+    assert!(
+        mem::size_of::<ObjectData>() <= 144,
+        "ObjectData: {}",
+        mem::size_of::<ObjectData>()
+    );
 }
 
 #[test]
@@ -71,8 +78,8 @@ fn ordinary_small_object_promotes_only_after_the_compact_limit() {
         object.set(format!("field{index}"), Value::Number(index as f64));
     }
     assert!(matches!(
-        &*object.0.properties.borrow(),
-        PropertyStorage::Small { entries } if entries.len() == PropertyStorage::SMALL_LIMIT
+        &object.0.properties.borrow().payload,
+        PropertyPayload::Small { entries } if entries.len() == PropertyStorage::SMALL_LIMIT
     ));
 
     let dynamic_index = PropertyStorage::SMALL_LIMIT;
@@ -81,8 +88,8 @@ fn ordinary_small_object_promotes_only_after_the_compact_limit() {
         Value::Number(dynamic_index as f64),
     );
     assert!(matches!(
-        &*object.0.properties.borrow(),
-        PropertyStorage::Dynamic(dynamic)
+        &object.0.properties.borrow().payload,
+        PropertyPayload::Dynamic(dynamic)
             if dynamic.entries.len() == PropertyStorage::SMALL_LIMIT + 1
                 && dynamic.order.len() == PropertyStorage::SMALL_LIMIT + 1
     ));
@@ -102,8 +109,8 @@ fn ordinary_object_retains_shared_static_property_key() {
     object.set_shared_key(Rc::clone(&key), Value::Number(1.0));
 
     assert!(matches!(
-        &*object.0.properties.borrow(),
-        PropertyStorage::Small { entries }
+        &object.0.properties.borrow().payload,
+        PropertyPayload::Small { entries }
             if entries.len() == 1 && Rc::ptr_eq(&entries[0].0, &key)
     ));
     assert_eq!(object.get("field"), Some(Value::Number(1.0)));
@@ -121,8 +128,8 @@ fn small_object_removal_preserves_property_order() {
 
     assert_eq!(object.own_property_names(), ["first", "third", "second"]);
     assert!(matches!(
-        &*object.0.properties.borrow(),
-        PropertyStorage::Small { entries } if entries.len() == 3
+        &object.0.properties.borrow().payload,
+        PropertyPayload::Small { entries } if entries.len() == 3
     ));
 }
 
@@ -135,8 +142,8 @@ fn small_object_enumerates_indices_before_strings() {
 
     assert_eq!(object.own_property_names(), ["2", "10", "label"]);
     assert!(matches!(
-        &*object.0.properties.borrow(),
-        PropertyStorage::Small { entries } if entries.len() == 3
+        &object.0.properties.borrow().payload,
+        PropertyPayload::Small { entries } if entries.len() == 3
     ));
 }
 
@@ -171,8 +178,8 @@ fn literal_pair_keeps_inline_values_until_descriptor_mutation() {
         ObjectRef::with_literal_pair(shape, [Value::Number(1.0), Value::Number(2.0)], None);
 
     assert!(matches!(
-        &*object.0.properties.borrow(),
-        PropertyStorage::ShapedPair { .. }
+        &object.0.properties.borrow().payload,
+        PropertyPayload::ShapedPair { .. }
     ));
     assert!(matches!(
         object.write_existing_own_data_property("a", &Value::Number(3.0)),
@@ -180,8 +187,8 @@ fn literal_pair_keeps_inline_values_until_descriptor_mutation() {
     ));
     assert_eq!(object.get("a"), Some(Value::Number(3.0)));
     assert!(matches!(
-        &*object.0.properties.borrow(),
-        PropertyStorage::ShapedPair { .. }
+        &object.0.properties.borrow().payload,
+        PropertyPayload::ShapedPair { .. }
     ));
 
     object.define_property(
@@ -189,8 +196,8 @@ fn literal_pair_keeps_inline_values_until_descriptor_mutation() {
         Property::data(Value::Number(4.0), false, false, true),
     );
     assert!(matches!(
-        &*object.0.properties.borrow(),
-        PropertyStorage::Dynamic(_)
+        &object.0.properties.borrow().payload,
+        PropertyPayload::Dynamic(_)
     ));
     let descriptor = object.own_property("a").expect("defined property");
     assert_eq!(descriptor.value, Value::Number(4.0));

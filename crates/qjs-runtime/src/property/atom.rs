@@ -22,15 +22,20 @@
 //!   it never interprets a foreign domain's ids.
 //! - **Ids are never reused.** Ids come from a per-domain monotonic counter.
 //!   An atom that every owner dropped is reclaimed; interning its text again
-//!   allocates a fresh id. Exhaustion is an error ([`AtomDomainExhausted`]),
-//!   never a wrap.
+//!   allocates a fresh id when a numbered operand requests it. Exhaustion is an
+//!   error ([`AtomDomainExhausted`]), never a wrap. Storage owns [`AtomKey`]
+//!   identities from the same entries without requesting finite relocation ids;
+//!   this keeps infallible host storage APIs free of hidden limit panics. An
+//!   owned/weak entry pins its allocation, so its identity cannot be recycled
+//!   while any layout or operand can observe it.
 //! - **Bounded retention.** The domain holds only weak references. Dead table
 //!   entries are swept whenever the table doubles past its live size, so key
 //!   churn costs memory proportional to the live atoms only.
 
 use std::borrow::Cow;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::fmt;
+use std::hash::{Hash, Hasher};
 use std::num::NonZeroU32;
 use std::rc::{Rc, Weak};
 
@@ -72,7 +77,7 @@ impl AtomDomainExhausted {
 }
 
 struct AtomEntry {
-    id: AtomId,
+    id: Cell<Option<AtomId>>,
     /// Canonical text: the table key for this entry while it is live.
     text: Rc<str>,
     /// The canonical array index this key denotes, or [`NO_ARRAY_INDEX`].
@@ -90,9 +95,9 @@ struct AtomEntry {
 pub(crate) struct Atom(Rc<AtomEntry>);
 
 impl Atom {
-    #[allow(dead_code)] // Keyed on by the layout authority (T056 M1.2); tested here.
+    #[allow(dead_code)] // Numeric relocation identity; storage owns the entry itself.
     pub(crate) fn id(&self) -> AtomId {
-        self.0.id
+        self.0.id.get().expect("numbered atom handle")
     }
 
     /// The canonical stored text of this key.
@@ -117,6 +122,52 @@ impl Atom {
     }
 }
 
+/// An exact key identity held by ordinary layouts. Its allocation cannot be
+/// recycled while a layout or weak observer owns it. Numbered operands and
+/// storage keys share the same entry; only numbered operands consume `AtomId`s.
+#[derive(Clone)]
+pub(crate) struct AtomKey(Rc<AtomEntry>);
+
+/// Borrowed allocation identity. Only index together with owned `AtomKey`
+/// fields (or a live `Atom`); those owners prevent allocation reuse.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct AtomKeyIdentity(usize);
+
+impl AtomKey {
+    pub(crate) fn identity(&self) -> AtomKeyIdentity {
+        AtomKeyIdentity(Rc::as_ptr(&self.0) as usize)
+    }
+    pub(crate) fn text(&self) -> &Rc<str> {
+        &self.0.text
+    }
+}
+impl PartialEq for AtomKey {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
+    }
+}
+impl Eq for AtomKey {}
+impl Hash for AtomKey {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        Rc::as_ptr(&self.0).hash(state);
+    }
+}
+impl fmt::Debug for AtomKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.text.fmt(f)
+    }
+}
+
+impl Atom {
+    pub(crate) fn key_identity(&self) -> AtomKeyIdentity {
+        AtomKeyIdentity(Rc::as_ptr(&self.0) as usize)
+    }
+    #[cfg(test)]
+    pub(crate) fn key(&self) -> AtomKey {
+        AtomKey(self.0.clone())
+    }
+}
+
 impl PartialEq for Atom {
     fn eq(&self, other: &Self) -> bool {
         Rc::ptr_eq(&self.0, &other.0)
@@ -129,7 +180,7 @@ impl fmt::Debug for Atom {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_tuple("Atom")
-            .field(&self.0.id.get())
+            .field(&self.id().get())
             .field(&crate::string::string_to_utf8_lossy(&self.0.text))
             .finish()
     }
@@ -161,6 +212,7 @@ impl AtomTable {
 
 struct DomainState {
     table: RefCell<AtomTable>,
+    shapes: RefCell<super::layout::ShapeCache>,
 }
 
 /// An owned atom interning domain. Cloning shares the domain.
@@ -180,12 +232,26 @@ impl AtomDomain {
                 sweep_at: MIN_SWEEP_LEN,
                 created: 0,
             }),
+            shapes: RefCell::default(),
         }))
     }
 
     /// Interns the key `text` (stored runtime form), returning the domain's
     /// live atom for its code units or a new one.
     pub(crate) fn intern(&self, text: &str) -> Result<Atom, AtomDomainExhausted> {
+        let key = self.intern_key(text);
+        if key.0.id.get().is_none() {
+            let id = self.0.table.borrow_mut().allocate_id()?;
+            key.0.id.set(Some(id));
+        }
+        Ok(Atom(key.0))
+    }
+
+    /// Interns an owned key identity without allocating a bytecode relocation id.
+    /// Storage APIs are infallible: they hash this pinned allocation identity,
+    /// never a finite integer. A numbered `intern` of the same key still checks
+    /// id exhaustion before producing an `Atom`.
+    pub(crate) fn intern_key(&self, text: &str) -> AtomKey {
         let canonical = canonical_property_text(text);
         let mut table = self.0.table.borrow_mut();
         if let Some(entry) = table
@@ -193,27 +259,48 @@ impl AtomDomain {
             .get(canonical.as_ref())
             .and_then(Weak::upgrade)
         {
-            return Ok(Atom(entry));
+            return AtomKey(entry);
         }
-        let id = table.allocate_id()?;
         let text: Rc<str> = Rc::from(canonical.as_ref());
         let array_index = array_index_property_key(&text)
             .and_then(|index| u32::try_from(index).ok())
             .unwrap_or(NO_ARRAY_INDEX);
         let entry = Rc::new(AtomEntry {
-            id,
-            text: Rc::clone(&text),
+            id: Cell::new(None),
+            text: text.clone(),
             array_index,
             domain: Rc::downgrade(&self.0),
         });
-        // A dead entry for the same text keeps its old key allocation on a
-        // plain insert; replace the pair so the key shares the new text.
         table.entries.remove(text.as_ref());
         table.sweep_if_due();
         table.entries.insert(text, Rc::downgrade(&entry));
         table.created += 1;
         crate::diagnostics::count!(property_atoms_created);
-        Ok(Atom(entry))
+        AtomKey(entry)
+    }
+
+    /// Looks up a live key without allocating either an identity or an id.
+    #[cfg(test)]
+    pub(crate) fn key(&self, text: &str) -> Option<AtomKey> {
+        let canonical = canonical_property_text(text);
+        self.0
+            .table
+            .borrow()
+            .entries
+            .get(canonical.as_ref())
+            .and_then(Weak::upgrade)
+            .map(AtomKey)
+    }
+
+    pub(crate) fn key_identity(&self, text: &str) -> Option<AtomKeyIdentity> {
+        let canonical = canonical_property_text(text);
+        let table = self.0.table.borrow();
+        let entry = table.entries.get(canonical.as_ref())?;
+        (entry.strong_count() > 0).then_some(AtomKeyIdentity(entry.as_ptr() as usize))
+    }
+
+    pub(crate) fn shapes(&self) -> &RefCell<super::layout::ShapeCache> {
+        &self.0.shapes
     }
 
     /// A non-owning handle that identifies this domain while it lives.

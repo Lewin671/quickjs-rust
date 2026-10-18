@@ -10,7 +10,8 @@
 use std::rc::Rc;
 
 use super::{
-    ObjectLiteralShape, ObjectRef, OwnDataPropertyRead, OwnDataPropertyWrite, PropertyStorage,
+    ObjectLiteralShape, ObjectRef, OwnDataPropertyRead, OwnDataPropertyWrite, PropertyPayload,
+    PropertyStorage,
 };
 use crate::{Property, Value};
 
@@ -22,19 +23,19 @@ use crate::{Property, Value};
 /// a handful of receivers thrash.
 #[inline(always)]
 fn named_entries(storage: &PropertyStorage) -> Option<&[(Rc<str>, Property)]> {
-    match storage {
-        PropertyStorage::Small { entries } => Some(entries),
-        PropertyStorage::Dynamic(dynamic) => Some(&dynamic.entries),
-        PropertyStorage::Shaped { .. } | PropertyStorage::ShapedPair { .. } => None,
+    match &storage.payload {
+        PropertyPayload::Small { entries } => Some(entries),
+        PropertyPayload::Dynamic(dynamic) => Some(&dynamic.entries),
+        PropertyPayload::Shaped { .. } | PropertyPayload::ShapedPair { .. } => None,
     }
 }
 
 #[inline(always)]
 fn named_entries_mut(storage: &mut PropertyStorage) -> Option<&mut [(Rc<str>, Property)]> {
-    match storage {
-        PropertyStorage::Small { entries } => Some(entries),
-        PropertyStorage::Dynamic(dynamic) => Some(&mut dynamic.entries),
-        PropertyStorage::Shaped { .. } | PropertyStorage::ShapedPair { .. } => None,
+    match &mut storage.payload {
+        PropertyPayload::Small { entries } => Some(entries),
+        PropertyPayload::Dynamic(dynamic) => Some(&mut dynamic.entries),
+        PropertyPayload::Shaped { .. } | PropertyPayload::ShapedPair { .. } => None,
     }
 }
 
@@ -46,6 +47,23 @@ impl ObjectRef {
         self.properties_for(key).borrow().own_data_read(key)
     }
 
+    #[allow(dead_code)] // Staged atom contract; VM routing is M1.3.
+    pub(crate) fn own_data_property_atom_read(
+        &self,
+        atom: &crate::property::atom::Atom,
+    ) -> OwnDataPropertyRead {
+        if self.0.module_namespace_exotic.get() {
+            return OwnDataPropertyRead::NeedsSlowPath;
+        }
+        let storage = self.properties_for(atom.as_str()).borrow();
+        storage
+            .layout
+            .lookup_atom(atom)
+            .map_or(OwnDataPropertyRead::Missing, |entry| {
+                storage.read_entry(entry)
+            })
+    }
+
     /// Resolves `key` to a stable own-property slot in this object's compact
     /// storage. Callers pair the slot with [`Self::layout_revision`]: the pair
     /// stays valid across ordinary value assignment, so a monomorphic read
@@ -54,16 +72,12 @@ impl ObjectRef {
         if self.0.module_namespace_exotic.get() {
             return None;
         }
-        match &*self.properties_for(key).borrow() {
-            PropertyStorage::Small { entries } => {
-                entries.iter().position(|(candidate, property)| {
-                    candidate.as_ref() == key && !property.is_accessor()
-                })
-            }
-            PropertyStorage::Dynamic(_)
-            | PropertyStorage::Shaped { .. }
-            | PropertyStorage::ShapedPair { .. } => None,
+        let storage = self.properties_for(key).borrow();
+        if !matches!(storage.payload, PropertyPayload::Small { .. }) {
+            return None;
         }
+        let entry = storage.layout.lookup(key)?;
+        (!entry.attributes.accessor).then_some(entry.slot)
     }
 
     /// Resolves `key` to a data-property slot in small or dynamic storage,
@@ -75,17 +89,15 @@ impl ObjectRef {
         if self.0.module_namespace_exotic.get() {
             return None;
         }
-        match &*self.properties_for(key).borrow() {
-            PropertyStorage::Small { entries } => {
-                entries.iter().position(|(candidate, property)| {
-                    candidate.as_ref() == key && !property.is_accessor()
-                })
-            }
-            PropertyStorage::Dynamic(dynamic) => dynamic
-                .slot(key)
-                .filter(|&slot| !dynamic.entries[slot].1.is_accessor()),
-            PropertyStorage::Shaped { .. } | PropertyStorage::ShapedPair { .. } => None,
+        let storage = self.properties_for(key).borrow();
+        if !matches!(
+            storage.payload,
+            PropertyPayload::Small { .. } | PropertyPayload::Dynamic(_)
+        ) {
+            return None;
         }
+        let entry = storage.layout.lookup(key)?;
+        (!entry.attributes.accessor).then_some(entry.slot)
     }
 
     /// Writes a slot resolved by [`Self::any_storage_data_slot`] under an
@@ -98,16 +110,16 @@ impl ObjectRef {
         if self.0.module_namespace_exotic.get() {
             return None;
         }
-        let result = match &mut *self.0.properties.borrow_mut() {
-            PropertyStorage::Small { entries } => {
+        let result = match &mut self.0.properties.borrow_mut().payload {
+            PropertyPayload::Small { entries } => {
                 let (_, property) = entries.get_mut(slot)?;
                 super::write_existing_property(Some(property), value, |_| true)
             }
-            PropertyStorage::Dynamic(dynamic) => {
+            PropertyPayload::Dynamic(dynamic) => {
                 let (_, property) = dynamic.entries.get_mut(slot)?;
                 super::write_existing_property(Some(property), value, |_| true)
             }
-            PropertyStorage::Shaped { .. } | PropertyStorage::ShapedPair { .. } => return None,
+            PropertyPayload::Shaped { .. } | PropertyPayload::ShapedPair { .. } => return None,
         };
         if matches!(result, OwnDataPropertyWrite::Written) {
             self.bump_value_revision();
@@ -139,23 +151,10 @@ impl ObjectRef {
         if self.0.module_namespace_exotic.get() {
             return None;
         }
-        match &*self.properties_for(key).borrow() {
-            PropertyStorage::Small { entries } => {
-                entries
-                    .iter()
-                    .enumerate()
-                    .find_map(|(slot, (name, property))| {
-                        (name.as_ref() == key && !property.is_accessor())
-                            .then(|| (Rc::clone(name), slot))
-                    })
-            }
-            PropertyStorage::Dynamic(dynamic) => {
-                let slot = dynamic.slot(key)?;
-                let (name, property) = dynamic.entries.get(slot)?;
-                (!property.is_accessor()).then(|| (Rc::clone(name), slot))
-            }
-            PropertyStorage::Shaped { .. } | PropertyStorage::ShapedPair { .. } => None,
-        }
+        let storage = self.properties_for(key).borrow();
+        let entry = storage.layout.lookup(key)?;
+        let (name, _) = storage.entries()?.get(entry.slot)?;
+        (!entry.attributes.accessor).then(|| (name.clone(), entry.slot))
     }
 
     /// [`Self::shared_data_slot_value`] of a number: the typed loop tier's
@@ -170,8 +169,8 @@ impl ObjectRef {
         // executor, and a dynamic-storage case here grows that executor's
         // hot arm and changes its register allocation. A dynamic object
         // takes the executor's general read instead.
-        match &*self.0.properties.borrow() {
-            PropertyStorage::Small { entries } => {
+        match &self.0.properties.borrow().payload {
+            PropertyPayload::Small { entries } => {
                 let (name, property) = entries.get(slot)?;
                 match &property.value {
                     Value::Number(number) if Rc::ptr_eq(name, key) && !property.is_accessor() => {
@@ -180,9 +179,9 @@ impl ObjectRef {
                     _ => None,
                 }
             }
-            PropertyStorage::Dynamic(_)
-            | PropertyStorage::Shaped { .. }
-            | PropertyStorage::ShapedPair { .. } => None,
+            PropertyPayload::Dynamic(_)
+            | PropertyPayload::Shaped { .. }
+            | PropertyPayload::ShapedPair { .. } => None,
         }
     }
 
@@ -200,8 +199,8 @@ impl ObjectRef {
             return false;
         }
         // Small storage only, like `shared_data_slot_number`.
-        let written = match &mut *self.0.properties.borrow_mut() {
-            PropertyStorage::Small { entries } => match entries.get_mut(slot) {
+        let written = match &mut self.0.properties.borrow_mut().payload {
+            PropertyPayload::Small { entries } => match entries.get_mut(slot) {
                 Some((name, property))
                     if Rc::ptr_eq(name, key) && property.writable && !property.is_accessor() =>
                 {
@@ -210,9 +209,9 @@ impl ObjectRef {
                 }
                 _ => false,
             },
-            PropertyStorage::Dynamic(_)
-            | PropertyStorage::Shaped { .. }
-            | PropertyStorage::ShapedPair { .. } => false,
+            PropertyPayload::Dynamic(_)
+            | PropertyPayload::Shaped { .. }
+            | PropertyPayload::ShapedPair { .. } => false,
         };
         if written {
             self.bump_value_revision();
@@ -237,7 +236,7 @@ impl ObjectRef {
     /// check.
     pub(crate) fn shared_dynamic_slot_value(&self, key: &Rc<str>, slot: usize) -> Option<Value> {
         let storage = self.0.properties.borrow();
-        let PropertyStorage::Dynamic(dynamic) = &*storage else {
+        let PropertyPayload::Dynamic(dynamic) = &storage.payload else {
             return None;
         };
         if self.0.module_namespace_exotic.get() {
@@ -251,14 +250,14 @@ impl ObjectRef {
     /// kind is re-checked so a layout the revision counter cannot describe
     /// simply misses the cache instead of reading the wrong property.
     pub(crate) fn own_data_slot_value(&self, slot: usize) -> Option<Value> {
-        match &*self.0.properties.borrow() {
-            PropertyStorage::Small { entries } => {
+        match &self.0.properties.borrow().payload {
+            PropertyPayload::Small { entries } => {
                 let (_, property) = entries.get(slot)?;
                 (!property.is_accessor()).then(|| property.value.clone())
             }
-            PropertyStorage::Dynamic(_)
-            | PropertyStorage::Shaped { .. }
-            | PropertyStorage::ShapedPair { .. } => None,
+            PropertyPayload::Dynamic(_)
+            | PropertyPayload::Shaped { .. }
+            | PropertyPayload::ShapedPair { .. } => None,
         }
     }
 
@@ -272,17 +271,17 @@ impl ObjectRef {
 
     #[inline(never)]
     fn literal_prototype_data_slot_value(&self, slot: usize) -> Option<Value> {
-        match &*self.0.properties.borrow() {
-            PropertyStorage::Shaped { properties, .. } => {
+        match &self.0.properties.borrow().payload {
+            PropertyPayload::Shaped { properties, .. } => {
                 let property = properties.get(slot)?;
                 (!property.is_accessor()).then(|| property.value.clone())
             }
-            PropertyStorage::ShapedPair { values, .. } => values.get(slot).cloned(),
-            PropertyStorage::Dynamic(dynamic) => {
+            PropertyPayload::ShapedPair { values, .. } => values.get(slot).cloned(),
+            PropertyPayload::Dynamic(dynamic) => {
                 let (_, property) = dynamic.entries.get(slot)?;
                 (!property.is_accessor()).then(|| property.value.clone())
             }
-            PropertyStorage::Small { .. } => None,
+            PropertyPayload::Small { .. } => None,
         }
     }
 
@@ -297,14 +296,14 @@ impl ObjectRef {
         if self.0.module_namespace_exotic.get() {
             return None;
         }
-        let result = match &mut *self.0.properties.borrow_mut() {
-            PropertyStorage::Small { entries } => {
+        let result = match &mut self.0.properties.borrow_mut().payload {
+            PropertyPayload::Small { entries } => {
                 let (_, property) = entries.get_mut(slot)?;
                 super::write_existing_property(Some(property), value, |_| true)
             }
-            PropertyStorage::Dynamic(_)
-            | PropertyStorage::Shaped { .. }
-            | PropertyStorage::ShapedPair { .. } => return None,
+            PropertyPayload::Dynamic(_)
+            | PropertyPayload::Shaped { .. }
+            | PropertyPayload::ShapedPair { .. } => return None,
         };
         if matches!(result, OwnDataPropertyWrite::Written) {
             self.bump_value_revision();
@@ -351,16 +350,21 @@ impl ObjectRef {
             return None;
         }
         let properties = self.properties_for(key).borrow();
-        let (shape, slot) = match &*properties {
-            PropertyStorage::Shaped { shape, properties } => {
-                let slot = *shape.lookup.get(key)?;
-                if properties.get(slot)?.is_accessor() {
+        let (shape, slot) = match &properties.payload {
+            PropertyPayload::Shaped {
+                shape,
+                properties: descriptors,
+            } => {
+                let slot = properties.layout.lookup(key)?.slot;
+                if descriptors.get(slot)?.is_accessor() {
                     return None;
                 }
                 (shape, slot)
             }
-            PropertyStorage::ShapedPair { shape, .. } => (shape, *shape.lookup.get(key)?),
-            PropertyStorage::Small { .. } | PropertyStorage::Dynamic(_) => return None,
+            PropertyPayload::ShapedPair { shape, .. } => {
+                (shape, properties.layout.lookup(key)?.slot)
+            }
+            PropertyPayload::Small { .. } | PropertyPayload::Dynamic(_) => return None,
         };
         Some((shape.clone(), slot))
     }
@@ -376,12 +380,12 @@ impl ObjectRef {
         if self.0.module_namespace_exotic.get() {
             return None;
         }
-        match &*self.0.properties.borrow() {
-            PropertyStorage::Shaped { shape, properties } if Rc::ptr_eq(shape, expected_shape) => {
+        match &self.0.properties.borrow().payload {
+            PropertyPayload::Shaped { shape, properties } if Rc::ptr_eq(shape, expected_shape) => {
                 let property = properties.get(slot)?;
                 (!property.is_accessor()).then(|| property.value.clone())
             }
-            PropertyStorage::ShapedPair { shape, values } if Rc::ptr_eq(shape, expected_shape) => {
+            PropertyPayload::ShapedPair { shape, values } if Rc::ptr_eq(shape, expected_shape) => {
                 values.get(slot).cloned()
             }
             _ => None,
@@ -392,11 +396,11 @@ impl ObjectRef {
 impl ObjectRef {
     #[cfg(feature = "perf-counters")]
     pub(crate) fn storage_kind_for_trace(&self) -> &'static str {
-        match &*self.properties().borrow() {
-            PropertyStorage::Small { .. } => "small",
-            PropertyStorage::Dynamic(_) => "dynamic",
-            PropertyStorage::Shaped { .. } => "shaped",
-            PropertyStorage::ShapedPair { .. } => "pair",
+        match &self.properties().borrow().payload {
+            PropertyPayload::Small { .. } => "small",
+            PropertyPayload::Dynamic(_) => "dynamic",
+            PropertyPayload::Shaped { .. } => "shaped",
+            PropertyPayload::ShapedPair { .. } => "pair",
         }
     }
 }

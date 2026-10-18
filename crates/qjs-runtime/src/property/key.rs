@@ -46,7 +46,9 @@ pub(crate) fn to_property_key_value(
 /// Object-like values are returned unchanged for the caller's coercion path.
 pub(crate) fn try_to_property_key_without_coercion(value: Value) -> Result<PropertyKey, Value> {
     match value {
-        Value::String(value) => Ok(PropertyKey::String(value.to_string())),
+        Value::String(value) => Ok(PropertyKey::String(
+            super::atom::canonical_property_text(&value).into_owned(),
+        )),
         Value::Number(number) => Ok(PropertyKey::String(number::number_to_js_string(number))),
         Value::BigInt(value) => Ok(PropertyKey::String(value.to_string())),
         Value::Boolean(true) => Ok(PropertyKey::String("true".to_owned())),

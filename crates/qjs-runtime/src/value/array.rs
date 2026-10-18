@@ -1,15 +1,16 @@
 //! Array storage: `ArrayRef`.
 //!
 //! Indexed elements live in a dense `Vec<Value>`, and `length` is stored
-//! separately and may exceed it. Holes, other own properties, symbol
-//! properties and a prototype override live in `ArrayColdData`, allocated on
-//! first need, so a plain packed array is one allocation plus its elements.
+//! separately and may exceed it. Holes, symbol properties, a prototype override
+//! and other own properties live in `ArrayColdData`, allocated on first need.
+//! Ordinary named properties use the shared atom/layout adapter there; a plain
+//! packed array remains one allocation plus its elements.
 //! A fast path may treat `elements[i]` as the value of index `i` only after
 //! checking that `i` is not a hole.
 
 use std::{
     cell::{Cell, OnceCell, Ref, RefCell, RefMut},
-    collections::{BTreeSet, HashMap},
+    collections::BTreeSet,
     fmt,
     rc::Rc,
 };
@@ -91,7 +92,7 @@ impl Drop for ArrayData {
 #[derive(Default)]
 struct ArrayColdData {
     holes: RefCell<BTreeSet<usize>>,
-    properties: RefCell<HashMap<String, Property>>,
+    properties: crate::property::named_map::NamedPropertyCell,
     symbol_properties: RefCell<Vec<(ObjectRef, Property)>>,
     prototype: RefCell<Option<Option<Prototype>>>,
 }
@@ -960,7 +961,7 @@ impl ArrayRef {
     }
 
     pub(crate) fn property_keys(&self) -> Vec<String> {
-        let mut keys: Vec<_> = self.0.cold_if_present().map_or_else(Vec::new, |cold| {
+        let keys: Vec<_> = self.0.cold_if_present().map_or_else(Vec::new, |cold| {
             cold.properties
                 .borrow()
                 .iter()
@@ -968,15 +969,13 @@ impl ArrayRef {
                 .map(|(key, _)| key.clone())
                 .collect()
         });
-        keys.sort();
         keys
     }
 
     pub(crate) fn property_names(&self) -> Vec<String> {
-        let mut names: Vec<_> = self.0.cold_if_present().map_or_else(Vec::new, |cold| {
+        let names: Vec<_> = self.0.cold_if_present().map_or_else(Vec::new, |cold| {
             cold.properties.borrow().keys().cloned().collect()
         });
-        names.sort();
         names
     }
 

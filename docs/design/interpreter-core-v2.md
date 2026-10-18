@@ -77,8 +77,8 @@ contexts must reuse them. Cross-realm frames choose callee intrinsics and compat
 
 ## Properties: atoms and layouts are the ordinary lookup authority
 
-An owned `AtomDomain` interns exact JavaScript string code units (including lone surrogates) to non-reused IDs. IDs
-belong to that domain, not a realm; realms that exchange objects share it. Bytecode keeps a symbolic name pool and
+An owned `AtomDomain` interns exact JavaScript code units (including lone surrogates) to owned identities; storage pins entries.
+Linking requests checked, non-reused numeric IDs, with explicit exhaustion errors. Exchanging realms share a domain. Bytecode keeps a symbolic name pool and
 obtains a cached per-domain `LinkedCode` relocation, so reused eval/Function/module code cannot carry another domain's
 integers. Foreign inputs are re-interned by content at a boundary. Objects/layouts retain their domain; escaping values
 keep it alive. Reclaim unused atoms with owned atom references without reusing IDs; transitions/link caches must not

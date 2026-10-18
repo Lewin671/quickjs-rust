@@ -38,8 +38,6 @@ fn numeric_spellings_stay_distinct() {
 #[test]
 fn surrogate_keys_match_by_code_units() {
     // Lone halves are exact keys, distinct from each other and from U+FFFD.
-    // (A key built by joining two halves still misses the literal pair's key
-    // on the computed path: stores compare stored bytes until T056 M1.2.)
     assert_eq!(
         eval(
             "var o = {}; o['\\u{1F600}'] = 'pair'; o['\\uD83D'] = 'lone';
@@ -105,5 +103,45 @@ fn objects_cross_eval_function_and_module_code_by_key() {
              [shared.a, shared.b, shared.c, viaEval].join();"
         ),
         Ok(string("1,2,3,3"))
+    );
+}
+
+#[test]
+fn surrogate_pairs_reach_literal_constructor_array_and_function_stores() {
+    assert_eq!(
+        eval(
+            "function C() { this['\\u{1F600}'] = 1; }
+         var receivers = [{ '\\u{1F600}': 1, y: 2 }, new C(), [], function() {}];
+         var pair = '\\uD83D' + '\\uDE00';
+         var out = [];
+         for (var i = 0; i < receivers.length; i++) {
+             var o = receivers[i]; o['\\u{1F600}'] = 3;
+             out.push(o[pair]); o[pair] = 4; out.push(o['\\u{1F600}']);
+             delete o[pair]; out.push('\\u{1F600}' in o);
+         }
+         out.join();"
+        ),
+        Ok(string("3,4,false,3,4,false,3,4,false,3,4,false"))
+    );
+}
+#[test]
+fn layouts_preserve_reentry_descriptors_and_exotic_named_parts() {
+    // The same source is also a QuickJS-NG fixture. Its assertions cover
+    // construction, lazy properties, getters/Proxy re-entry and exotics.
+    let source =
+        include_str!("../../../../../tests/fixtures/compare-qjs/property-layout-mutations.js")
+            .replace("print('layout mutations ok');", "'layout mutations ok';");
+    assert_eq!(eval(&source), Ok(string("layout mutations ok")));
+}
+
+#[test]
+fn array_named_properties_keep_string_insertion_order() {
+    assert_eq!(
+        eval(
+            "var a = []; a.b = 1; a.a = 2;
+        var first = Object.keys(a).join(); delete a.b; a.b = 3;
+        first + '|' + Object.keys(a).join() + '|' + Object.getOwnPropertyNames(a).join();"
+        ),
+        Ok(string("b,a|a,b|length,a,b"))
     );
 }

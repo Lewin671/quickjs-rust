@@ -1,17 +1,15 @@
 # T056: Interpreter core v2
 
-- Status: active; unit 0 and the M2 re-plan (design) complete; M1 stage 1 complete
-  on `agent/t056-m1-atoms/claude`: its screen passes under the governing v4 rule.
-- Implementation: stage 1 on that branch (`11c9fc08`; runtime unchanged through
-  `a8c533ef`): atom domain, per-domain named-operand links, Value facade. Not on main.
-- Verified at: `11c9fc08`, 2026-10-17: fast gate, Test262 subset 5170/5170, exact
-  scan 0 Rust failures, NG 248/248 (local), iMac `check.sh`; screen replayed at merge head.
+- Status: active; M1 stage 1 integrated at `ab9c29b6`; M1.2 implementation
+  in progress on `agent/t056-m1-stage2/codex`; no stage-2 screen yet.
+- Implementation: stage 1 present; stage 2 adds uniform layouts for all four payloads and function/array named maps.
+- Verified at: pre-commit tree from `ab9c29b6`, 2026-10-18: full gate, 2,316 runtime tests, subset 5,170/5,170, NG 249/249.
 - Evidence: [part 1](archive/T056-unit0-part1-evidence.md), [part 2](archive/T056-unit0-part2-evidence.md),
-  [M1 stage 1](archive/T056-m1-stage1-evidence.md); plan [`interpreter-core-v2-atoms-layouts`](performance-units/interpreter-core-v2-atoms-layouts.json).
-- Unresolved: no formal `decide --mode stage` run for stage 1 yet; M2 runtime plan
-  needs a fresh post-M1 queue/profiles; part 1's imprecise bitops-3bit interval;
-  `docs/architecture.md`'s no-snapshot wording omits the compatibility view.
-- Next action: integrate stage 1, then M1.2 (layout authority for every store).
+  [M1 stage 1](archive/T056-m1-stage1-evidence.md); frozen plan
+  [`interpreter-core-v2-atoms-layouts`](performance-units/interpreter-core-v2-atoms-layouts.json).
+- Unresolved: stage-2 exact scan and iMac screen; stage 1 has no formal stage decision.
+  Carried forward: M2 evidence, unit-0 bitops precision, architecture binding compatibility-view wording.
+- Next action: verify/commit M1.2, run its sole screen, record the result and stop before M1.3.
 
 ## Goal and scope
 
@@ -218,3 +216,5 @@ M2 re-plan verification on the documentation change over `290e3f51`:
 `PYTHONDONTWRITEBYTECODE=1 ./scripts/check-touched.sh --staged --explain` passed.
 Runtime gates were not rerun for this design-only change. Next M2 action after
 M1: refresh the proposed targets' profiles and freeze the complete five-stage plan.
+
+M1.2 implementation and verification: [M1 stage 2](archive/T056-m1-stage2-evidence.md).

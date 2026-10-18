@@ -124,8 +124,8 @@ and immutable (`bytecode/vm_string_append.rs`).
 **Named operands.** A named property opcode indexes its body's name pool;
 the interpreter resolves it to an atom of the frame realm's `AtomDomain`
 (`property/atom.rs`), linking each body once per domain
-(`bytecode/linked_code.rs`). Stores still key by text; the atom-keyed layout
-authority is the staged target in [design/interpreter-core-v2.md](design/interpreter-core-v2.md).
+(`bytecode/linked_code.rs`). Every ordinary installed named store has an atom-keyed layout
+authority; the remaining Get/Set and cache migration is staged in [design/interpreter-core-v2.md](design/interpreter-core-v2.md).
 
 **Per-site caches.** `bytecode/named_property_cache.rs` caches named property
 reads and writes per instruction site, keyed by receiver layout.
@@ -160,11 +160,20 @@ Defined in `value/mod.rs`, `value/object.rs`, `value/property.rs` and
 - `ObjectData` holds the fields every object needs inline. Rare state
   (symbol-keyed properties, generator state, private names, ArrayBuffer and
   TypedArray slots) sits behind a lazily allocated `ObjectColdData` box.
-- String-keyed properties use one of four `PropertyStorage` forms: `Small`
-  (an insertion-ordered vector, up to 12 properties), `Dynamic` (a boxed
-  slot vector with a name index and an order list), and `Shaped` or
-  `ShapedPair` for object literals, which share one `ObjectLiteralShape` key
-  layout and store only values or descriptors per object.
+- String-keyed properties use one `property/layout.rs` atom-to-slot, descriptor
+  kind and attribute authority. `value/object/storage.rs` adapts four payloads:
+  `Small` (up to 12 entries), `Dynamic` (boxed slots and an order list), and
+  literal `Shaped` / `ShapedPair` values. Immutable layouts share by content;
+  weak shape/transition retention is bounded, and repeated structural edits
+  switch to a private versioned dictionary. Layout and payload publish under
+  one storage borrow. Function and array installed named descriptors use
+  `property/named_map.rs`; their implicit and exotic semantic hooks stay
+  receiver-owned. Host/null-root stores retain a domain; prototype-derived
+  objects inherit it, and foreign atom inputs resolve by canonical content.
+- Storage holds owned atom-entry identities without consuming relocation IDs;
+  `AtomDomain::intern` assigns checked, non-reused numeric IDs when bytecode
+  links an operand. Both handles name the same exact-code-unit entry. This
+  preserves infallible storage APIs and explicit numeric-ID exhaustion.
 - `Property` is 32 bytes: value and flags inline, the accessor pair behind an
   optional shared `Rc`.
 - Each object has two counters. `property_revision` advances on any own

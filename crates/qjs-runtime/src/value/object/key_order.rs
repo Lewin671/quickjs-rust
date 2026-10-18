@@ -3,7 +3,7 @@
 
 use std::rc::Rc;
 
-use super::{ObjectRef, PropertyStorage, array_index_property_key, is_internal_property_key};
+use super::{ObjectRef, PropertyPayload, array_index_property_key, is_internal_property_key};
 use crate::Property;
 
 impl ObjectRef {
@@ -34,7 +34,7 @@ impl ObjectRef {
                 strings.push((key.clone(), enumerable));
             }
         };
-        if let PropertyStorage::Small { entries } = &*properties {
+        if let PropertyPayload::Small { entries } = &properties.payload {
             for (key, property) in entries {
                 visit(key, property.enumerable);
             }
@@ -64,7 +64,7 @@ impl ObjectRef {
         include: impl Fn(&Property) -> bool,
     ) -> Vec<String> {
         let properties = self.properties().borrow();
-        if let PropertyStorage::Small { entries } = &*properties {
+        if let PropertyPayload::Small { entries } = &properties.payload {
             if self.0.index_property_count.get() == 0 {
                 return entries
                     .iter()

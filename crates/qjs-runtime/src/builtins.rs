@@ -8,6 +8,7 @@ use crate::{
 pub(crate) fn initialize_builtins(env: &mut CallEnv, global_this: &Value) {
     let object_prototype = object::install_object(env, global_this);
     if let Value::Object(global_object) = global_this {
+        global_object.relink_property_domain(env.realm().atoms().clone());
         let _ = global_object.set_prototype(Some(object_prototype.clone()));
     }
 

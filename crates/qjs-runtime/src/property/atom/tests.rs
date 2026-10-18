@@ -135,3 +135,16 @@ fn exhaustion_fails_instead_of_wrapping() {
     // Existing atoms are still found after exhaustion.
     assert_eq!(domain.intern("a").expect("intern"), penultimate);
 }
+
+#[test]
+fn storage_identity_and_numbered_operands_share_entries_without_hidden_exhaustion() {
+    let domain = AtomDomain::starting_at(NonZeroU32::new(u32::MAX).unwrap());
+    let storage = domain.intern_key("last");
+    let numbered = domain.intern("last").unwrap();
+    assert_eq!(numbered.key(), storage);
+    let unnumbered = domain.intern_key("after");
+    assert_eq!(domain.key("after"), Some(unnumbered.clone()));
+    assert_eq!(domain.intern("after"), Err(AtomDomainExhausted));
+    assert_eq!(domain.key("after"), Some(unnumbered));
+    assert_eq!(domain.intern("last").unwrap(), numbered);
+}

@@ -7,6 +7,7 @@ mod install;
 mod intrinsic_construct;
 mod local_names;
 mod native_kind;
+mod property_storage;
 mod prototype;
 mod strict;
 mod upvalue;
