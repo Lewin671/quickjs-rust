@@ -34,6 +34,14 @@ class LoadTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 heavy_samples(text, 1)
 
+    def test_case_started_after_midnight_keeps_earlier_evening_rows(self):
+        # A job log spanning midnight, read for a case anchored after it
+        # (20261017T222657Z-t056-m1s1-screen-fixed failed on this shape).
+        text = '23:46:38 200 a\n23:55:31 200 b\n00:21:32 200 c\n'
+        anchor = 86400 + 1800
+        self.assertEqual(heavy_samples(text, anchor), [85598, 86131, 87692])
+        self.assertEqual(heavy_samples(text, 86000), [85598, 86131, 87692])
+
     def test_cap_boundaries_and_cluster(self):
         check_cap([False]+[True]*4, [10,15,20,25,30,35,40,45,50,55,60,65])
         with self.assertRaisesRegex(ValueError, '20%'):
