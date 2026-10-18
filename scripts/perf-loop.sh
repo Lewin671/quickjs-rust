@@ -22,6 +22,7 @@ usage: scripts/perf-loop.sh (--plan <unit.json> | --base <git-ref>) [options]
   --pairs <n>          pairs (default 5; fixed at 5 for schema 3)
   --symbols <n>        legacy function-size list (default 15, 0 disables)
   --output <dir>      new layout-rule attempt directory (schema 3)
+  --workers <n>       schema-3 case shards (1..8, default 1); must match policy
   --trace <spec>       legacy: also summarize QJS_TL_TRACE=1 for one case on a
                        perf-counters build of the working tree
   --require-quiet      refuse to screen while the load average is high
@@ -37,6 +38,7 @@ EOF
 plan=""
 base_ref=""
 pairs=5
+workers=1
 symbols=15
 trace=""
 output=""
@@ -47,6 +49,7 @@ while [ $# -gt 0 ]; do
     --plan) plan="${2:?}"; shift 2 ;;
     --base) base_ref="${2:?}"; shift 2 ;;
     --case) cases+=(--case "${2:?}"); shift 2 ;;
+    --workers) workers="${2:?}"; shift 2 ;;
     --pairs) pairs="${2:?}"; shift 2 ;;
     --symbols) symbols="${2:?}"; shift 2 ;;
     --output) output="${2:?}"; shift 2 ;;
@@ -56,6 +59,10 @@ while [ $# -gt 0 ]; do
     *) echo "error: unknown argument $1" >&2; usage >&2; exit 2 ;;
   esac
 done
+case "$workers" in
+  [1-8]) ;;
+  *) echo "error: --workers must be 1..8" >&2; exit 2 ;;
+esac
 if [ -n "$plan" ] && [ -n "$base_ref" ]; then
   echo "error: --plan fixes the base; drop --base" >&2
   exit 2
@@ -77,9 +84,13 @@ if [ -n "$plan" ] && [ "$(python3 -c 'import json,sys; print(json.load(open(sys.
     echo "error: schema-3 attempts use the frozen full portfolio and five pairs" >&2
     exit 2
   fi
-  exec python3 -m tools.benchmark.layout_iteration --plan "$plan" --output "$output"
+  exec python3 -m tools.benchmark.layout_iteration --plan "$plan" --output "$output" --workers "$workers"
 fi
 
+if [ "$workers" != 1 ]; then
+  echo "error: --workers requires a schema-3 layout plan" >&2
+  exit 2
+fi
 if [ -n "$plan" ]; then
   base_ref="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["base_sha"])' "$plan")"
 fi

@@ -98,7 +98,7 @@ A different source revision is not required to have the old binary hash.
 
 ## Case-owned collection schedules
 
-`layout_iteration`, `layout_panel`, `layout_development_a2`,
+`perf-loop.sh --plan` (schema 3), `layout_iteration`, `layout_panel`, `layout_development_a2`,
 `layout_calibration`, and npm lane `run` accept `--workers N` (1..8, default 1).
 One is the historical serial schedule; more than one uses deterministic
 round-robin case shards. Each fork completes all roles, pairs, load-only
