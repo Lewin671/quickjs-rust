@@ -10,8 +10,8 @@ update the resume block in the commit that lands it. When a task closes, move
 it to `archive/` with `git mv` and move its row below.
 
 ## Active
-
 | Task | Status | What it is |
+| [T060](T060-parallel-layout-policy-v5.md) parallel layout collection | active | Frozen workers-4 calibration plan; schedule-bound v5 after qualification. |
 | --- | --- | --- |
 | [T057](T057-string-code-units.md) string code units | active | Policy v3 qualified (development targets eligible); stage-1 plan next. |
 | [T056](T056-interpreter-core-v2.md) interpreter core v2 | active | Target design for names, frames and values; unit 0 complete, M1 stage-1 plan frozen, implementation not started. |
