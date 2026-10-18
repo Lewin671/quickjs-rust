@@ -1,15 +1,15 @@
 # T056: Interpreter core v2
 
 - Status: active; M1 stage 1 integrated at `ab9c29b6`; M1.2 implemented on
-  `agent/t056-m1-stage2/codex`; incremental-dictionary follow-up verified, screen pending.
+  `agent/t056-m1-stage2/codex` at `873c9bc5`; screen queued behind correctness receipt.
 - Implementation: stage 1 present; stage 2 adds uniform layouts for all four payloads and function/array named maps.
-- Verified at: follow-up tree from `c5dfa1c6`, 2026-10-18 UTC: full gate, 2,320 runtime tests, subset 5,170/5,170, NG 249/249.
+- Verified at: `873c9bc5`, 2026-10-18 UTC: fast/full gates, 2,320 runtime tests, subset 5,170/5,170, NG 249/249, exact agents 42,672/42,672.
 - Evidence: [part 1](archive/T056-unit0-part1-evidence.md), [part 2](archive/T056-unit0-part2-evidence.md),
   [M1 stage 1](archive/T056-m1-stage1-evidence.md); frozen plan
   [`interpreter-core-v2-atoms-layouts`](performance-units/interpreter-core-v2-atoms-layouts.json).
-- Unresolved: stage-2 exact scan and iMac screen; stage 1 has no formal stage decision.
+- Unresolved: queued iMac screen (`20261018T055933Z-t056-m1s2-screen1`); no formal stage decision yet.
   Carried forward: M2 evidence, unit-0 bitops precision, architecture binding compatibility-view wording.
-- Next action: verify/commit M1.2, run its sole screen, record the result and stop before M1.3.
+- Next action: monitor the sole queued screen, record its verdict, and stop before M1.3.
 
 ## Goal and scope
 
