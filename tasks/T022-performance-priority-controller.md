@@ -2,7 +2,7 @@
 
 - Status: active; standing controller, schema-3 host policy qualified.
 - Implementation: present; qualified iMac [v2](../benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v2.json)/[v3 +development](../benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v3.json)
-  bind layout/held-out gates; all other hosts/recipes require recalibration.
+  bind layout gates; [v4](archive/T059-held-out-layout-policy-v4.md) supplies every later held-out/lane gate. Other hosts recalibrate.
 - Verified at: 3be0ba66, final full/branch gates; 552 tests, 5170 Test262,
   91 plans independently checked. Qualification/live load recorded in T055.
   Legacy retained decisions remain verified only at their recorded revisions.
@@ -87,18 +87,20 @@ are historical and never acquire an extra attempt from this rule change.
 - A single-layout wall median above B_i opens a wall event. Six medians
   above B_i reject, even with flat instructions; a complete mixed panel
   resolves the event as nonpersistent. An absent panel stays incomplete.
-- Every lane and the equal-case portfolio must fit their own wall ceilings;
-  a portfolio gain cannot hide a failed lane. Natural placement and every
-  measured panel layout must pass. Formal intervals stay mandatory.
+- Every lane and the equal-case portfolio have their own wall ceilings; a
+  portfolio gain cannot hide a failed lane. Under v4 a natural lane excess is
+  a lane event needing K=6; it rejects only if the six-layout geomean or every
+  layout exceeds the ceiling (v2/v3: any layout). Formal intervals stay mandatory.
   Development-enabled policies add all ten programs (non-targets are controls)
   and their own lane ceiling. V2 remains valid without development references.
 - Instruction-blind changes (Value, memory layout, allocation) predeclare
   memory-sensitive wall targets, always run K=6, retain resource evidence,
   and require longer formal wall evidence. Flat instructions do not waive
   costs. No post-failure target, offset or threshold selection.
-- Held-out is mandatory promotion acceptance: every program within its own
-  measured band and its lane within its measured ceiling, with formal
-  precision. It never selects work. Missing evidence is incomplete.
+- Held-out is mandatory promotion acceptance and never selects work. Under v4
+  a program above B_i with every instruction pair above max(1.01,I_i) rejects;
+  a wall-only program or lane excess needs the K=6 held-out panel and rejects
+  only if all six exceed. Every decision after v4 uses v4's held-out gate.
 - Every calibration/formal A/A automatically uses frozen precision allocation
   n=min(240,ceil(base_n*(h/.03)^2)); pilot retained; predicted stage then cap.
   At240 imprecise bands are diagnostic, mandatory K=6, including held-out
@@ -108,9 +110,7 @@ are historical and never acquire an extra attempt from this rule change.
   equal-length binary paths created once. Apply the [load-only recovery contract](../docs/layout-policy-artifacts.md#load-only-pair-recovery);
   cap failures/formal DISTURBED jobs replace whole. Valid failures spend attempts.
 
-The full K=6 panel is six screens total, not six independent attempts.
-Correctness, exact engine/profile identity, formal precision and the original
-migration/final-payoff requirements remain in force. Schema 1/2 keeps the
+K=6 is six screens, not six attempts; correctness, identity, formal precision and migration/payoff stay. Schema 1/2 keeps the
 previous cycles-first rule for replay; schema 3 uses wall plus instructions.
 Commands live in [the workflow](../docs/performance-workflow.md#screen-gate)
 and artifact contracts in [benchmarking](../docs/benchmarking.md#layout-policy-and-panel-artifacts).

@@ -28,8 +28,7 @@ it to `archive/` with `git mv` and move its row below.
 
 The last recorded full scan passes every configured case (see
 [conformance records](../docs/conformance/README.md)); [T043 history](archive/T043-derived-constructor-eval-context.md) records
-two remaining baseline programs outside that standing. Take broader conformance work from
-`./scripts/find-qjsng-gaps.sh`.
+two remaining baseline programs outside that standing. Take broader conformance work from `./scripts/find-qjsng-gaps.sh`.
 
 Performance entries record scope and outcomes, not priority. Priority comes
 from a freshly generated opportunity queue. Reopening a closed proposal needs
@@ -43,6 +42,7 @@ outcome column says what happened, not what to do next.
 
 | Task | Outcome |
 | --- | --- |
+| `T059-held-out-layout-policy-v4.md` | Policy v4 qualified (SHA-256 `1eb7de46...`): six-layout held-out bands, held-out and lane events resolved by K=6, candidate formal continuation. |
 | `T054-execution-layout-regions.md` | Original page residues all preserved, but one control and sentinel lane failed sole neutrality screen; no production build change retained. |
 | `T052-general-performance-command-code.md` | Structural symbol matching/raw audit, canonical scan recipe and byte-identical natural order; full gates pass, no runtime optimization retained. |
 | `T053-ordinary-own-slot-hot-read-fat-lto.md` | Target -8.3% but six controls failed; sole budget exhausted, runtime restored and exact original binary rebuilt. |
