@@ -5,10 +5,18 @@
 - Verified at: `026476d5` gates as below; v4 fresh held-out natural screen and
   candidate formal continuation complete (2026-10-18); merged main `9b1da2e9`.
 - Evidence: stage-1 records below; workspace `outputs/t057-stage1/`.
-- Unresolved: held-out lane event needs the K=6 held-out panel
-  (job `20261018T053942Z-t057-stage1-v4-heldout-complete`, queued).
-- Next action: after the panel, `decide --mode promotion` with the formal
-  continuation; record the decision.
+- Unresolved: the first K=6 held-out panel
+  `20261018T053942Z-t057-stage1-v4-heldout-complete` (exit 0) was DISTURBED
+  (3 heavy samples: `mediaanalysisd` 18:21Z, `triald`/`XProtectRemediator*`
+  19:12-19:17Z; panel `heavy_samples: 3`, `invalid: 2/1352`), so it and the
+  decision that consumed it (`20261018T054401Z-t057-stage1-v4-decide`, exit 0)
+  are inadmissible. Replacement pair queued 2026-10-18T22:16Z in order:
+  `20261018T221614Z-t057-stage1-v4-heldout-r2` (timed, `9b1da2e9`, new output
+  `target/layout/t057-stage1-v4-heldout-r2`) then
+  `20261018T221616Z-t057-stage1-v4-decide-r2` (no-timing, `2a0144a6`, reads
+  the new panel); both `queued`.
+- Next action: when both finish, fetch, confirm neither log says DISTURBED,
+  apply the v4 rule to the new panel, and record the verdict here.
 
 ## Goal and scope
 
@@ -166,3 +174,26 @@ Formal continuation job `20261018T013032Z-t057-stage1-formal-continuation`
 only imprecise case, bitops-3bit-bits-in-byte, needed the predicted 131 then
 the 240 cap; at 240 blocks it is 0.9825 [0.9608, 0.9891], precise
 (half-width 2.26%). Lane statistics keep the original 30 joint blocks.
+
+## Stage-1 v4 replacement panel (queued)
+
+The first K=6 held-out panel job
+`20261018T053942Z-t057-stage1-v4-heldout-complete` (timed, commit `9b1da2e9`,
+same `command.sh` as the recorded completion, exit 0 / 15971 s) is DISTURBED:
+the runner flagged 3 heavy samples, from `mediaanalysisd` at 18:21Z and
+`triald`/`XProtectRemediator*` at 19:12-19:17Z (`intruders.log`). Its
+`complete.json` records `heavy_samples: 3`, `invalid: 2` of 1352. The follow-on
+`20261018T054401Z-t057-stage1-v4-decide` (exit 0 / 107 s) consumed that panel,
+so its `retained` output is not evidence. A DISTURBED job is replaced whole;
+none of the disturbed completion's variants 1-5 is pooled.
+
+Replacement pair, submitted 2026-10-18T22:16Z and `queued` in this order:
+
+| Job | Commit | Timing | Scope |
+| --- | --- | --- | --- |
+| `20261018T221614Z-t057-stage1-v4-heldout-r2` | `9b1da2e9` | timed | seed the clean natural screen (`panel.json` + `variant0` from the completed decide job's `out/heldout-panel/` copy; natural job `20261018T013031Z-t057-stage1-v4-heldout30` had 0 heavy samples, 0 invalid, 270/270 valid) and run `--held-out --complete --pairs 30` into `target/layout/t057-stage1-v4-heldout-r2` |
+| `20261018T221616Z-t057-stage1-v4-decide-r2` | `2a0144a6` | no-timing | `decide --mode promotion` on the new `complete.json`, same queue, profiles, formal bundle, continuation and burndown as the original decide |
+
+`status` at submission: both `queued` in that order, behind the T056 screen and
+the three T058 jobs. Next: fetch both, require no DISTURBED, then apply the v4
+rule.
