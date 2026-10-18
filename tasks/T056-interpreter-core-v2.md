@@ -1,15 +1,17 @@
 # T056: Interpreter core v2
 
-- Status: active; unit 0 complete; first runtime unit (M1 stage 1) frozen, not started.
+- Status: active; M2 re-plan complete (design only); M1 stage 1 frozen, not started.
 - Implementation: no runtime optimization. The evidence-only counter overlay
   (`84fee838`) is reverted; stage-budget plumbing from `ddca5bdf` remains.
-- Verified at: plan validated against v3 queue `424a1e79` at branch head,
-  2026-10-17; `check.sh` and NG fixtures passed on iMac at `84fee838` (5170 subset cases).
+- Verified at: M2 source inventory at `290e3f51`, 2026-10-17; documentation gates below.
+  M1 plan validated against v3 queue `424a1e79` at its recorded head;
+  `check.sh` and NG fixtures passed on iMac at `84fee838` (5170 subset cases).
 - Evidence: [part 1](archive/T056-unit0-part1-evidence.md) and
   [part 2](archive/T056-unit0-part2-evidence.md) records; plan
   [`interpreter-core-v2-atoms-layouts`](performance-units/interpreter-core-v2-atoms-layouts.json).
-- Unresolved: M2 stages/budgets must absorb the activation-environment scope;
+- Unresolved: M2 runtime plan/budgets need a fresh post-M1 queue and profiles;
   part 1's imprecise bitops-3bit-bits-in-byte interval.
+  `docs/architecture.md`'s absolute no-snapshot wording omits the compatibility view; outside this two-file scope.
 - Next action: implement M1.1 (facade + atom linking) against the frozen plan, then
   screen it with `perf-loop.sh` under the stage budget.
 
@@ -29,6 +31,11 @@ design, this task and its tasks/README row. No runtime, dependency, benchmark,
 third_party, other worktree or performance-plan changes; no iMac jobs, push
 or merge. Future structural runtime work is serialized because APIs and
 ownership span execution, properties and values.
+
+M2 re-plan owner: `agent/t056-m2-replan/codex`, base `290e3f51`, worktree
+`worktrees/quickjs-rust/t056-m2-replan`. Only this task and the design changed;
+no runtime edits, iMac jobs, push or merge. The design's [frames section](../docs/design/interpreter-core-v2.md#frames-storage-activation-context-and-lazy-names)
+owns the source-grounded consumer inventory and target contracts; the M2 rows below own staging.
 
 ## Source checks and input limits
 
@@ -87,7 +94,7 @@ architecture. Read their full records before freezing a new unit.
 
 | Record | Constraint carried into v2 / difference |
 | --- | --- |
-| [T021](archive/T021-single-vm-frame-stack.md) and [log](archive/T021-single-vm-frame-stack-log.md) | July 31 moved-frame route: recursive 1.3848x, prototype calls 1.2769x; boxing worse. Also a distinct contiguous-buffer/hot-header prototype failed recursive 1.180476x and hash-map 1.150426x. V2 requires fieldwise initialization in persistent slots, zero-based per-frame buffers and no contiguous buffer transfer; verify emitted copies and borrow boundaries before routing. |
+| [T021](archive/T021-single-vm-frame-stack.md) and [log](archive/T021-single-vm-frame-stack-log.md) | July 31 moved-frame route: recursive 1.3848x, prototype calls 1.2769x; boxing worse. A contiguous-buffer/hot-header prototype failed recursive 1.180476x and hash-map 1.150426x; compact windowed registers lost at 1.2678x. V2 initializes persistent slots fieldwise, binds zero-based per-frame buffers, verifies emitted copies/borrows before routing, and removes general activation/name assembly beyond the direct-leaf cohort. |
 | [T024](archive/T024-general-register-core.md) | Dispatch-preamble change delivered external 0.9906x, sentinels 0.9989x; scalar whole-body replacement lost to existing typed loops. V2 retains bytecode dispatch/scalar tiers and targets ownership, names/layouts and boxed transport together. |
 | [T027](archive/T027-frame-verified-direct-local-opcodes.md) | Hash-map 0.9841x missed 0.97 target despite direct-local mechanism success. V2 preserves authoritative slot/cell access, adds no direct-local opcode recognizer. |
 | [T019](archive/T019-object-layout-rewrite.md) | Cold Dynamic payload/accessors landed; pair boxing and lazy weak sidecars lost. V2 retains useful payload layouts, does not add pair allocations or lazy weak state, and separates metadata authority from payload packing. |
@@ -108,9 +115,11 @@ fixed base; numbered substeps are independently correct stage boundaries.
 | M1.1 — value access facade + atom linking | Named operands link once, with no per-dispatch atom interning; facade leaves size/ownership unchanged. | Per-op re-interning, stale foreign atoms or facade conversion temporaries. |
 | M1.2 — layout authority for all stores and mutations | Ordinary own hits take one atom-to-slot lookup across all four stores; no descriptor cloning for data reads. | A storage family bypasses invalidation, or churn memory grows without bound. |
 | M1.3 — route ordinary Get/Set, retire old probes | Fewer probes/comparisons on interpreter paths and independent external property workloads; final M1 payoff. | Coverage shifts only on a tier/literal path, or final payoff fails. |
-| M2.1 — reusable frame store + split helper borrows | No whole-frame transfer; slots own and reuse activation-environment state, with no eager per-call name-keyed frame-cell install; bounded slot/buffer allocations after warm-up, existing routing preserved. | Disassembly/counters show aggregate moves, per-call boxing or per-op window arithmetic. |
-| M2.2 — ordinary call/throw/return routing | JS-to-JS frame calls stop constructing nested Vms, including capturing/dynamic-cell calls. | Wrong unwind/cleanup or reduced construction fails to reduce measured call work. |
-| M2.3 — constructors, eval/with, native and suspension boundaries | Same-Vm callback/resume routes, detachable leases; zero nested Vms inside an active context; final M2 payoff. | Borrow survives re-entry, lifetime/job-order mismatch, or final payoff fails. |
+| M2.1 — reusable frame store + split borrows (migration) | Existing nested executors lease slots from one shared store; routing stays unchanged. Fieldwise initialization, zero whole-frame transfers; warm slot/buffer allocations plateau. Development immutable/persistent and graphlib/paths diagnose allocation/setup. | Emitted aggregate moves, per-call frame boxing, per-op window arithmetic, or retained memory beyond frozen ceiling; unchanged nested-Vm count is expected here. |
+| M2.2 — indexed entry + typed activation context (migration) | BindingPlan/CallSeed seeds general parameters, this, mapped arguments and captures by index; special metadata uses typed fields. Remove general `function_env` name inserts and `initial_slots` name import, including closure creators. Legacy accessors read typed fields; unconverted dynamic/helper consumers retain existing adapters until M2.3. Development lodash/transform and diff/compare diagnose env assembly. | Entry still allocates names/FrameBindings, changed prologue/TDZ/alias ordering, borrowed inputs survive a switch, or a new snapshot path is introduced. |
+| M2.3 — lexical scope leases + lazy dynamic consumers (migration) | Migrate every inventory row's name service, including helper/native callbacks, coercion, eval, with, results and realm fallback authority. Ordinary call/return has zero caller-slot export, name overlay, `apply_env` write-back or realm refresh scans. Development lodash/transform and diff/compare diagnose removed env work. | Any consumer needs caller value copies, escaping eval sees invocation scope, a realm mutation needs blanket refresh, scope leases retain caller frames, or ordinary calls still materialize names. Zero dynamic-name work does not mean zero required capture cells. |
+| M2.4 — ordinary call/throw/return driver (migration) | General JS-to-JS calls, including captures/dynamic cells, push FrameIds; no nested Vm for this cohort. Development immutable/persistent and graphlib/paths diagnose frame setup/call work; suite cdjs is a call-dispatch cross-check. | Unwind/cleanup mismatch, live view across switching, unexpected tier admission change, or setup cost merely moves into dispatcher self time. Other boundaries may still use the legacy executor. |
+| M2.5 — constructor/native/eval/suspension routing, retire adapters (final payoff) | Same-Vm synchronous callback and detachable resume leases; zero nested Vms within an active context, no hot CallEnv assembly or reconciliation. End-to-end payoff targets: development lodash/transform, diff/compare and immutable/persistent. | Re-entry borrow, detached lifetime, derived completion/job-order error, leftover hot compatibility path, or final payoff/portfolio controls fail. |
 | M3.1 — common heap headers under enum backend | One header allocation per heap payload; preserved weak/COW/escape behavior, counts quantified. | Extra wrapper allocation, unsafe proof failure or ownership/count overhead beyond budget. |
 | M3.2 — alternate 8-byte backend through same facade | Exactly 8-byte values/boxed banks/slots, fewer moved bytes, same tier coverage; test both backends. | ABI qualification, NaN/zero, TDZ, provenance or weak-reuse failure. |
 | M3.3 — select qualified backend, remove hot conversions | Lower boxed transport/clone/drop cost across property and call workloads; final M3 payoff. | Benefits are lost to tag/count cost, controls fail or required portability remains unresolved. |
@@ -132,12 +141,23 @@ Measure exact uninstrumented binaries, A/A noise and linked layout; counters dia
 only. Confirm ordinary-path reach separately from accelerated reach, use complete
 portfolios and held-out applications selected by operations, and serialize timing.
 
+M2.1–M2.4 use the **stage budget**, cumulatively against M2's fixed base, even
+when an individual stage removes real work; only M2.5 claims the final payoff.
+The named cases are proposed development/suite targets and diagnostics, not a
+frozen plan or speed forecast. Refresh their exact-binary reach after M1; bind
+numeric stage cap, final per-case payoff, memory ceilings, K=6 and attempt limits
+in one validated migration plan before M2.1. Follow the current policy, not M1's
+v3 numbers. No held-out case selects targets, scope or profiles; held-out stays
+acceptance-only. Compare per-stage and cumulative allocations/env work/frame
+entries plus uninstrumented CPU/wall time; counters must confirm ordinary-path
+reach. All rows inherit the full correctness gates above, with no stage waiver.
+
 Focused coverage before each full gate:
 
 | Migration | Required discriminators |
 | --- | --- |
 | M1 | All four stores; constructor/literal/native receivers; computed/lone-surrogate keys; delete/reinsert, descriptor and prototype edits; getters/Proxy re-entry; arrays/strings/functions/exotics; cross-realm/foreign code linkage; atom/shape churn memory. |
-| M2 | Deep and mutual recursion; live sibling captures, mapped arguments, per-iteration cells and TDZ; nested finally/using; native callback throws; eval/with and derived-this/super; generator prologue/yield*/re-entry; await/FIFO/job order; suspended frames outliving their creator. |
+| M2 | Deep/mutual recursion; sibling/loop cells, TDZ, duplicate mapped parameters, defaults/rest/destructuring; nested finally/using; callback eval through native/accessor/Proxy/coercion/iterator after creator return and with caller-name collisions; nested eval/with/unscopables, new/deleted eval vars and parameter/body conflicts; immutable self, module live cells, global delete/accessor/recreate and cross-realm calls; derived-this/super/field errors; generator prologue/yield*/re-entry, await/FIFO/jobs and leases outliving creator. |
 | M3 | Bit-pattern round trips for finite/NaN/infinity/signed zero; raw buffer aliasing; every heap kind; count overflow, weak upgrade and address reuse; COW uniqueness; long drops/cycles/escaping values; both backends and agents/perf-counters builds. |
 
 At least two independent real programs must exercise each claimed cost class;
@@ -165,7 +185,8 @@ canonical image with the feature off) and sampled it on the canonical image:
   diff make 31.1M/13.2M VM-path attempts with 4.0/5.7 name comparisons per attempt.
 - Call/activation work is as large (mean 18.3%), but nested-Vm construction is only
   3.5%; `CallEnv` construction, its name-keyed frame-cell layer and write-back take
-  11.3%. The design's frame section now assigns that state to M2.
+  11.3% (lodash 25.5%, diff 19.3%). These owner groups include non-removable
+  semantic work; they bound reach, not an 11.3% promised win. The design assigns that state to M2.
 - Value clone/drop glue is 7.8–15.5% everywhere; virtual-field work is at most 1.1%.
 
 Order stays M1, M2, M3, with M2's scope widened; virtual-field admission stays an L4
@@ -188,3 +209,9 @@ The original design changed only Markdown and did not claim runtime verification
 Unit 0's tooling and measurement verification is recorded in its archive records.
 Every future runtime migration stage must run full configured Test262,
 `check.sh` and NG comparisons as the design requires.
+
+M2 re-plan verification on the documentation change over `290e3f51`:
+`./scripts/check-context.py` and
+`PYTHONDONTWRITEBYTECODE=1 ./scripts/check-touched.sh --staged --explain` passed.
+Runtime gates were not rerun for this design-only change. Next M2 action after
+M1: refresh the proposed targets' profiles and freeze the complete five-stage plan.
