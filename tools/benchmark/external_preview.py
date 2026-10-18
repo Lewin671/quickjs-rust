@@ -708,17 +708,22 @@ def run_preview(
     blocks: int | None = None,
     timeout_seconds: int | None = None,
     lane: Lane | None = None,
+    workers: int = 1,
 ) -> dict[str, Any]:
     run = PreviewRun(
         manifest, cache_root, work_root, candidate_path, base_path, quickjs_path,
         blocks=blocks, timeout_seconds=timeout_seconds, lane=lane,
     )
     try:
-        records: list[dict[str, Any]] = []
-        for index in range(len(run.cases)):
-            capability = run.capability(index)
-            records += capability
-            records += run.measurement(index, capability)
+        if workers == 1:
+            records: list[dict[str, Any]] = []
+            for index in range(len(run.cases)):
+                capability = run.capability(index)
+                records += capability
+                records += run.measurement(index, capability)
+        else:
+            from .npm_workers import measure
+            records = measure(run, output_dir, workers)
         return run.finish(records, output_dir)
     finally:
         run.close()

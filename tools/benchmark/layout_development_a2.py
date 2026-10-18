@@ -21,12 +21,18 @@ from .pair_disturbance import Monitor, quieting_preflight, verify_run
 from .pair_recording import measure
 from .screen_replay import replay_case
 
-LANES = {'development': ('quickjs-development-layout-a2', 'development_manifest_sha256'),
+LANES = {'portfolio': ('quickjs-portfolio-layout-a2', 'portfolio_manifests_sha256'),
+         'development': ('quickjs-development-layout-a2', 'development_manifest_sha256'),
          'held-out': ('quickjs-held-out-layout-a2', 'held_out_manifest_sha256')}
 
 
 def lane_inputs(lane):
     """Artifact type, manifest binding, manifest path and frozen ids of one lane."""
+    if lane == 'portfolio':
+        from .layout_identity import ROOT
+        # Public inventories are frozen by the same manifest hashes as host_identity.
+        paths = [ROOT / 'benchmarks' / n for n in ('manifest.json', 'generic-sentinels-manifest.json', 'external-preview.json')]
+        return (*LANES[lane], paths, portfolio_ids())
     if lane == 'held-out':
         from .held_out import MANIFEST_PATH as path, opportunity_ids as ids
     else:
@@ -34,14 +40,28 @@ def lane_inputs(lane):
     return (*LANES[lane], path, ids())
 
 
+def portfolio_ids():
+    from .layout_identity import ROOT
+    from .schema import load_manifest
+    from .external_preview import load_manifest as external_manifest
+    ids = {lane + '/' + c.id for lane, name in (('broad','manifest.json'), ('sentinel','generic-sentinels-manifest.json'))
+           for c in load_manifest(ROOT/'benchmarks'/name).cases}
+    external = external_manifest(ROOT/'benchmarks/external-preview.json')
+    return ids | {'external/' + s.id + '/' + c.id for s in external.suites for c in s.cases}
+
+
+def manifest_digest(manifest):
+    return {str(p.name): digest(p) for p in manifest} if isinstance(manifest, list) else digest(manifest)
+
+
 def lane_cases(lane, work):
     if lane == 'held-out':
         from .screen_recording import held_out_cases
         return held_out_cases(screen.DEFAULT_CACHE, work)
-    return screen.resolve_cases(['development'], screen.DEFAULT_CACHE, work)
+    return screen.resolve_cases(['broad', 'sentinel', 'external'] if lane == 'portfolio' else ['development'], screen.DEFAULT_CACHE, work)
 
 
-def collect(matrix_path, output, expected_hash, lane='development'):
+def collect(matrix_path, output, expected_hash, lane='development', workers=1):
     artifact, key, manifest, _ = lane_inputs(lane)
     quieting = quieting_preflight()
     monitor = Monitor.from_queue()
@@ -69,24 +89,16 @@ def collect(matrix_path, output, expected_hash, lane='development'):
         screen.check_load(8, True, 300)
         preflight = screen.launch_preflight([Path(p) for pair in binaries.values() for p in pair.values()], 120)
         cases = lane_cases(lane, out / 'work')
-        for k in range(6):
-            folder = out / f'variant{k}'
-            folder.mkdir()
-            results = []
-            for case in cases:
-                print(lane.upper(), 'A2', k, case.id, flush=True)
-                value = measure(case, Path(binaries[k]['candidate']), Path(binaries[k]['base']),
-                                5, screen.counter_tool(), 120,
-                                folder / (case.id.replace('/', '--') + '.json'), monitor)
-                import dataclasses
-                results.append(dataclasses.asdict(value))
-            packets.append({'pairs': 5, 'cases': results})
+        from .case_schedule import collect as collect_cases
+        packets, scheduling = collect_cases(cases, list(range(6)),
+            {k: {r: Path(p) for r, p in pair.items()} for k, pair in binaries.items()},
+            5, screen.counter_tool(), 120, out, monitor, workers, measure=measure)
     files = {str(p.relative_to(out)): digest(p) for p in out.glob('variant*/*.json')}
     load = monitor.snapshot()
     counts = verify_run([json.loads((out / p).read_text()) for p in files], load)
     value = {'schema_version': 1, 'artifact_type': artifact,
              'host': host, 'host_node': platform.node(), 'source': source,
-             key: digest(manifest),
+             key: manifest_digest(manifest), **scheduling,
              'binaries': binaries, 'panels': packets, 'case_files': files,
              'quieting': quieting, 'launch_preflight': preflight, 'load': load, 'counts': counts}
     write_json(out / 'a2.json', value)
@@ -98,7 +110,7 @@ def replay(path, expected_hash, lane='development'):
     artifact, key, manifest, ids = lane_inputs(lane)
     value = json.loads(path.read_text())
     if (value.get('artifact_type') != artifact or value.get('schema_version') != 1
-            or value.get(key) != digest(manifest)):
+            or value.get(key) != manifest_digest(manifest)):
         raise ValueError(lane + ' A2 contract mismatch')
     source = value['source']
     if (not source['static_pass'] or source['offsets'] != list(OFFSETS)
@@ -124,6 +136,10 @@ def replay(path, expected_hash, lane='development'):
                 raise ValueError('A2 raw/report mismatch')
             replay_case(record, 5, binaries)
             raw[(k, case['id'])] = record
+    from .case_schedule import verify, require_same
+    case_ids = [c['id'] for c in value['panels'][0]['cases']]
+    verify(value, case_ids, raw.values())
+    require_same(value, *value['panels'])
     if files != set(value['case_files']) or verify_run(list(raw.values()), value['load']) != value['counts']:
         raise ValueError('A2 inventory/load conservation mismatch')
     return value, raw
@@ -161,8 +177,10 @@ def main():
     parser.add_argument('--matrix', type=Path, required=True)
     parser.add_argument('--sha256', required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--lane', choices=LANES, default='development')
+    parser.add_argument('--workers', type=int, choices=range(1, 9), default=1)
     args = parser.parse_args()
-    collect(args.matrix, args.output, args.sha256)
+    collect(args.matrix, args.output, args.sha256, args.lane, args.workers)
 
 
 if __name__ == '__main__':

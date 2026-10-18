@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import os
 import time
 
 from . import screen
@@ -10,15 +11,20 @@ from .layout_identity import write_json
 from .pair_disturbance import Monitor, eligibility
 
 
-def measure(case, candidate, base, pairs, tool, timeout, output, monitor=None, *, iterations=None, pair_offset=0):
+def measure(case, candidate, base, pairs, tool, timeout, output, monitor=None, *, iterations=None, pair_offset=0, schedule=None, case_shard=None):
     monitor = monitor or Monitor.from_queue()
     calibration, attempts, rounds = [], [], []
     contract = {}
+    if schedule is not None:
+        from .case_schedule import binding
+        if schedule != binding(schedule['workers']):
+            raise ValueError('invalid raw measurement schedule')
+        contract.update(measurement_schedule=schedule, case_shard=case_shard, worker_pid=os.getpid())
     if case.id.startswith('development/'):
         from .development import MANIFEST_PATH
         from .layout_identity import digest
-        contract = {'development_manifest_sha256': digest(MANIFEST_PATH),
-                    'workload_sha256': digest(case.workload), 'timeout_seconds': case.timeout_seconds}
+        contract.update({'development_manifest_sha256': digest(MANIFEST_PATH),
+                    'workload_sha256': digest(case.workload), 'timeout_seconds': case.timeout_seconds})
     with output.with_suffix('.jsonl').open('x', encoding='utf-8') as stream:
         def run(binary, count, target):
             argv = screen._argv(binary, case, count)
@@ -52,9 +58,9 @@ def measure(case, candidate, base, pairs, tool, timeout, output, monitor=None, *
         except Exception as error:
             write_json(output, {'id': case.id, 'kind': case.kind, 'iterations': iterations,
                 'calibration': calibration, 'attempts': attempts, 'rounds': rounds, 'pair_index_offset': pair_offset,
-                'complete': False, 'error': str(error)})
+                **contract, 'complete': False, 'error': str(error)})
             raise
-    if contract and digest(case.workload) != contract['workload_sha256']:
+    if case.id.startswith('development/') and digest(case.workload) != contract['workload_sha256']:
         raise ValueError('development workload changed during measurement')
     packet = {'id': case.id, 'kind': case.kind, 'iterations': iterations, **contract,
               'calibration': calibration, 'attempts': attempts, 'rounds': rounds, 'pair_index_offset': pair_offset,

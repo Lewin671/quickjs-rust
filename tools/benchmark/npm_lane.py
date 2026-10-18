@@ -563,10 +563,11 @@ def run_npm_preview(
     *,
     blocks: int | None = None,
     timeout_seconds: int | None = None,
+    workers: int = 1,
 ) -> dict[str, Any]:
     return run_preview(
         manifest, cache_root, work_root, output_dir, candidate_path, base_path, quickjs_path,
-        blocks=blocks, timeout_seconds=timeout_seconds, lane=lane(spec),
+        blocks=blocks, timeout_seconds=timeout_seconds, lane=lane(spec), workers=workers,
     )
 
 
@@ -584,6 +585,7 @@ def parser(spec: LaneSpec) -> argparse.ArgumentParser:
     run.add_argument("--candidate", type=Path, required=True)
     run.add_argument("--base", type=Path, required=True)
     run.add_argument("--quickjs-ng", type=Path, required=True)
+    run.add_argument("--workers", type=int, choices=range(1, 9), default=1)
     run.add_argument("--blocks", type=int)
     run.add_argument("--timeout-seconds", type=int)
     return parser
@@ -608,7 +610,7 @@ def cli(spec: LaneSpec, argv: list[str] | None = None) -> int:
             report = run_npm_preview(
                 spec, manifest, args.cache_root, args.work_root, args.output_dir,
                 args.candidate, args.base, args.quickjs_ng,
-                blocks=args.blocks, timeout_seconds=args.timeout_seconds,
+                blocks=args.blocks, timeout_seconds=args.timeout_seconds, workers=args.workers,
             )
             print(json.dumps({
                 "claim_eligible": False,

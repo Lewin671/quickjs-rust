@@ -39,6 +39,7 @@ def main():
     parser.add_argument('--plan', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--candidate', default='HEAD')
+    parser.add_argument('--workers', type=int, choices=range(1, 9), default=1)
     args = parser.parse_args()
     unit, unit_hash = load_unit(args.plan)
     gate = unit['layout_gate']
@@ -46,6 +47,8 @@ def main():
     # After v4 publication, frozen v2/v3 plans are screened with v4's held-out/lane rule.
     from .layout_policy import with_held_out_successor
     policy, _ = with_held_out_successor(policy, gate['policy_sha256'])
+    from .case_schedule import require_same, binding
+    require_same(policy, {'measurement_schedule': binding(args.workers)})
     # Candidate commits are required; do not silently omit working-tree code.
     from .layout_identity import command
     if command(['git', 'status', '--porcelain', '--untracked-files=no']):
@@ -57,11 +60,11 @@ def main():
     base = out / 'base000/identity.json'
     candidate = out / 'cand000/identity.json'
     development = 'development' in policy['lanes']
-    evidence = measure_panel(base, candidate, out / 'screen', natural=True, development=development)
+    evidence = measure_panel(base, candidate, out / 'screen', natural=True, development=development, workers=args.workers)
     result = evaluate_attempt(unit, policy, evidence['panels'])
     mandatory = gate['panel_required'] or gate['mechanism_class'] == 'instruction-blind' or needs_panel(policy)
     if mandatory or (result['panel_required'] and not result['failures']):
-        evidence = measure_panel(base, candidate, out / 'screen', complete=True, development=development)
+        evidence = measure_panel(base, candidate, out / 'screen', complete=True, development=development, workers=args.workers)
         result = evaluate_attempt(unit, policy, evidence['panels'])
     write_json(out / 'verdict.json', {'unit_sha256': unit_hash, **result})
     print(json.dumps(result, indent=2))

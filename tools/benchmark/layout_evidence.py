@@ -25,6 +25,8 @@ def replay(path: Path, policy, engines=None, *, held=False):
     if not held and 'development_manifest_sha256' in policy:
         if evidence.get('development_manifest_sha256') != policy['development_manifest_sha256']:
             raise ValueError('layout evidence development manifest mismatch')
+    from .case_schedule import require_same, verify
+    require_same(policy, evidence, *evidence['panels'])
     pairs = evidence['pairs']
     if type(pairs) is not int or pairs < (30 if held else 5):
         raise ValueError('invalid layout evidence pair count')
@@ -68,6 +70,8 @@ def replay(path: Path, policy, engines=None, *, held=False):
             raw_panels[k].append(raw)
             replay_case(raw, pairs, {role: evidence[role]['variants'][k]['path']
                                      for role in ('base', 'candidate')})
+    verify(evidence, [c['id'] for c in evidence['panels'][0]['cases']],
+           [r for panel in raw_panels.values() for r in panel])
     if expected_files != set(evidence['case_files']):
         raise ValueError('layout raw file inventory mismatch')
     if any('attempts' in r for panel in raw_panels.values() for r in panel):

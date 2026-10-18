@@ -8,7 +8,7 @@
   Legacy retained decisions remain verified only at their recorded revisions.
 - Evidence: [T055](archive/T055-layout-noise-control.md) owns B calibration and hashes;
   [T037](T037-integration-batch-1.md) owns historical unstable-base decisions.
-- Unresolved: ruleset check unconfigured.
+- Unresolved: ruleset check unconfigured; [T060](T060-parallel-layout-policy-v5.md) is recalibrating workers-4 collection; v4 still binds serial screens.
 - Next action: freeze fresh schema-3 queue/unit plans against qualified v2;
   preserve the independent promotion gates below.
 
@@ -105,7 +105,7 @@ are historical and never acquire an extra attempt from this rule change.
   n=min(240,ceil(base_n*(h/.03)^2)); pilot retained; predicted stage then cap.
   At240 imprecise bands are diagnostic, mandatory K=6, including held-out
   and canonical formal cases. Other payoff/budget/precision gates remain.
-- Policy data is versioned/hash-bound to the host and compiler recipe.
+- Policy data is versioned/hash-bound to the host, compiler recipe and collection schedule.
   A different host or recipe recalibrates. Measurements use distinct stable
   equal-length binary paths created once. Apply the [load-only recovery contract](../docs/layout-policy-artifacts.md#load-only-pair-recovery);
   cap failures/formal DISTURBED jobs replace whole. Valid failures spend attempts.

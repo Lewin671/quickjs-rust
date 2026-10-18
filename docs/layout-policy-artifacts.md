@@ -96,6 +96,32 @@ formal A/A binds its own declared revision and byte-identical two roles.
 A different source revision is not required to have the old binary hash.
 
 
+## Case-owned collection schedules
+
+`layout_iteration`, `layout_panel`, `layout_development_a2`,
+`layout_calibration`, and npm lane `run` accept `--workers N` (1..8, default 1).
+One is the historical serial schedule; more than one uses deterministic
+round-robin case shards. Each fork completes all roles, pairs, load-only
+replacement rounds and requested layouts of its cases. Assets/preflight and
+final load sealing belong to the parent. Pair eligibility and caps below apply
+unchanged, including simultaneous disturbance of several shards.
+
+Artifacts bind `measurement_schedule` (`kind`: `serial` or `case-shards-v1`,
+`workers`: N), deterministic `case_shards`, and raw `case_shard` ownership.
+Panel packets also bind the schedule. Replay conserves the inventory and
+rejects missing/changed ownership or a policy/evidence schedule mismatch;
+absent historical metadata denotes serial. Completion preserves its natural
+screen's schedule. Precision continuations retain the pilot schedule and
+case shard. `collection_seconds` times collection including settling/recovery,
+excluding preparation/preflight; panel run records preserve natural/completion
+durations. npm reports reconstruct their schedule from hashed raw rows.
+
+Policies qualify for one collection schedule; `formal_lane_schedule` separately
+binds the canonical formal schedule. A serial policy cannot authorize parallel
+screens. [T060](../tasks/T060-parallel-layout-policy-v5.md) owns workers-4
+recalibration, qualification, v4 comparison and measured speedup; support for
+other N is tooling capability, not a qualification claim.
+
 ## Load-only pair recovery
 
 New layout collectors require the serialized timing queue's `BENCH_OUT` and

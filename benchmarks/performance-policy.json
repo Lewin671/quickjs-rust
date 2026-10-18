@@ -51,6 +51,16 @@
       "scripts/external-performance-preview.sh",
       "scripts/performance-policy-audit.sh",
       "scripts/performance-preview.sh",
+      "tools/benchmark/case_schedule.py",
+      "tools/benchmark/npm_workers.py",
+      "tools/benchmark/held_out.py",
+      "tools/benchmark/worker_pool.py",
+      "tools/benchmark/layout_continuation.py",
+      "tools/benchmark/layout_held_out_policy.py",
+      "tools/benchmark/layout_schedule_bands.py",
+      "tools/benchmark/layout_schedule_qualification.py",
+      "tools/benchmark/layout_schedule_calibration.py",
+      "tools/benchmark/layout_schedule_publish.py",
       "tools/benchmark/base_aa.py",
       "tools/benchmark/base_aa_evidence.py",
       "tools/benchmark/build_cache.py",
@@ -100,7 +110,7 @@
       "tools/benchmark/preview_sentinel.py",
       "tools/benchmark/preview_summary.py"
     ],
-    "aggregate_sha256": "af772e7d18b0a20a7adbe5540a48bbf4f852cd14fe15c9a4ce1c621a29d4ea76"
+    "aggregate_sha256": "a7c96d3b9f85fbf0ecf43924041c74fbf83bf1670f174b024fabcb1ad1a65a8f"
   },
   "hosted_pr": {
     "tier": "informational_preview",

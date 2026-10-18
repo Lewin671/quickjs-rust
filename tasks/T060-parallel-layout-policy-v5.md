@@ -1,11 +1,11 @@
 # T060: Case-sharded layout collection and schedule-bound policy v5
 
 - Status: active; calibration plan frozen before timing.
-- Implementation: none at base 998dd5dd; tooling first, calibration second.
-- Verified at: 998dd5dd, 2026-10-17; clean branch and queue status inspected.
+- Implementation: tooling present in working tree; v5 not published.
+- Verified at: plan commit 91c97d64; tooling working tree passed staged fast gate (643 tests), context/size gates and the additional forked cap-propagation regression.
 - Evidence: frozen protocol below; job receipts and results will be recorded here.
 - Unresolved: workers-4 bands, qualification and screen/panel elapsed speedup unmeasured.
-- Next action: implement and test case ownership/replay, commit tooling, queue calibration behind existing owners.
+- Next action: commit tooling, queue calibration behind existing owners, and record all receipts/results.
 
 ## Scope and architecture
 
@@ -24,6 +24,8 @@ all cases, layouts, attempts, role order and the append-only load log.
 The existing disturbance protocol/caps are unchanged. Continuations preserve
 the pilot schedule. Policy/evidence schedule mismatches fail closed, including
 formal `workers-4` identity; old absent schedule means serial layout collection.
+
+Machine-readable inputs: [frozen plan](calibration-plans/T060.json).
 
 ## Frozen calibration contract (before timing)
 
@@ -82,8 +84,8 @@ Use these as speed measurements, never as seed or qualification samples.
 
 ## Acceptance and verification
 
-- [ ] Case sharding, conservation, schedule mismatch, replay, load recovery tests.
-- [ ] Screen/panel/A2/calibration/npm lane worker CLI and immutable artifacts.
+- [x] Case sharding, conservation, schedule mismatch, replay, load recovery tests.
+- [x] Screen/panel/A2/calibration/npm lane worker CLI and immutable artifacts.
 - [ ] Frozen seed and full qualification; v5 only if qualified.
 - [ ] Compare v5/v4 bands and measured screen/panel speedup.
 - [ ] Update T022, task index and owning artifact documentation.

@@ -54,6 +54,8 @@ def _report(
     *,
     artifact_type: str = "quickjs-external-preview-report",
 ) -> dict[str, Any]:
+    from .npm_workers import replay_schedule
+    scheduling = replay_schedule(manifest, records)
     samples: dict[tuple[str, str, str, str], list[dict[str, Any]]] = {}
     for record in records:
         key = (
@@ -163,6 +165,7 @@ def _report(
             }
         )
     return {
+        **scheduling,
         # Version 3 added `paired_cycle_comparisons` per case.
         "schema_version": 3,
         "artifact_type": artifact_type,
