@@ -4,3 +4,7 @@
 .DS_Store
 *.swp
 *.swo
+
+# Python bytecode caches
+__pycache__/
+*.pyc

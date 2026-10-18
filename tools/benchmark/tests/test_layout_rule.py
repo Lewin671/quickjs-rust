@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from tools.benchmark.layout_rule import evaluate
+from tools.benchmark.layout_iteration import evaluate_attempt
 from tools.benchmark.layout_policy import analyze, load_policy, rows
 from tools.benchmark.layout_identity import digest, host_identity, OFFSETS
 from tools.benchmark.layout_variant_audit import audit
@@ -37,6 +38,44 @@ def change(data, name, wall=None, instructions=None):
     if instructions is not None:
         row['ratios']['instructions'] = [instructions]*5 if isinstance(instructions, float) else instructions
     return result
+
+
+class MigrationIterationTests(unittest.TestCase):
+    def setUp(self):
+        self.policy = policy()
+        self.data = packet(self.policy)
+        self.target = 'external/jetstream3-js-subset/hash-map'
+        self.unit = {
+            'unit_kind': 'migration',
+            'migration': {'current_stage': 1, 'stages': 3,
+                          'cumulative_target_ids': [self.target],
+                          'stage_max_candidate_over_base': 1.01},
+            'fast_gate': {'target_ids': [self.target],
+                          'target_max_candidate_over_base': .97},
+            'layout_gate': {'mechanism_class': 'cpu-work', 'memory_wall_targets': [],
+                            'panel_required': True},
+        }
+
+    def verdict(self, data=None):
+        return evaluate_attempt(self.unit, self.policy, [data or self.data]*6)
+
+    def test_neutral_intermediate_stage_does_not_need_final_payoff(self):
+        self.assertTrue(self.verdict()['passed'])
+
+    def test_intermediate_stage_keeps_its_cumulative_regression_budget(self):
+        result = self.verdict(change(self.data, self.target, wall=1.02))
+        self.assertEqual(result['label'], 'reject')
+        self.assertIn(self.target + ': persistent six-layout wall cost', result['failures'])
+
+    def test_final_stage_requires_payoff_and_accepts_improvement(self):
+        self.unit['migration']['current_stage'] = 3
+        self.assertEqual(self.verdict()['label'], 'reject')
+        self.assertTrue(self.verdict(change(self.data, self.target, wall=.96))['passed'])
+
+    def test_leaf_still_requires_payoff(self):
+        self.unit['unit_kind'] = 'leaf'
+        self.unit.pop('migration')
+        self.assertEqual(self.verdict()['label'], 'reject')
 
 
 class VerdictTests(unittest.TestCase):

@@ -53,7 +53,8 @@ def _test262_zero_gap(report: dict[str, Any], candidate_sha: str) -> bool:
 
 def decide(unit, unit_sha, queue, queue_sha, summary, summary_sha, broad, broad_sha,
            external, external_sha, mode, test262, *, sentinel=None, sentinel_sha=None,
-           profile_root=None, unstable_base_checks=None, layout_panel_path=None, held_out_path=None, formal_bundle=None, resource_report=None, resource_raw=None) -> dict[str, Any]:
+           profile_root=None, unstable_base_checks=None, layout_panel_path=None, held_out_path=None, formal_bundle=None, resource_report=None, resource_raw=None,
+           formal_continuations=()) -> dict[str, Any]:
     from .performance_decision import validate_unit_against_queue, _summary_revisions, unit_kind
     validation = validate_unit_against_queue(unit, unit_sha, queue, queue_sha)
     candidate_sha, base_sha = _summary_revisions(summary)
@@ -115,7 +116,8 @@ def decide(unit, unit_sha, queue, queue_sha, summary, summary_sha, broad, broad_
     if unit.get('schema_version') == 3:
         from .layout_formal import evaluate_formal
         layout_verdict, layout_missing, failed, layout_hashes = evaluate_formal(
-            unit, summary, broad, external, sentinel, mode, layout_panel_path, held_out_path, formal_bundle, resource_report, resource_raw)
+            unit, summary, broad, external, sentinel, mode, layout_panel_path, held_out_path, formal_bundle, resource_report, resource_raw,
+            formal_continuations)
         reasons.extend(layout_missing)
         base_rows, excluded = {}, set()
     else:

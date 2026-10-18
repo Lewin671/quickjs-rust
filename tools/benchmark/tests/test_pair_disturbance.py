@@ -34,6 +34,14 @@ class LoadTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 heavy_samples(text, 1)
 
+    def test_case_started_after_midnight_keeps_earlier_evening_rows(self):
+        # A job log spanning midnight, read for a case anchored after it
+        # (20261017T222657Z-t056-m1s1-screen-fixed failed on this shape).
+        text = '23:46:38 200 a\n23:55:31 200 b\n00:21:32 200 c\n'
+        anchor = 86400 + 1800
+        self.assertEqual(heavy_samples(text, anchor), [85598, 86131, 87692])
+        self.assertEqual(heavy_samples(text, 86000), [85598, 86131, 87692])
+
     def test_cap_boundaries_and_cluster(self):
         check_cap([False]+[True]*4, [10,15,20,25,30,35,40,45,50,55,60,65])
         with self.assertRaisesRegex(ValueError, '20%'):
@@ -57,6 +65,26 @@ class LoadTests(unittest.TestCase):
         altered = snapshot(); altered['text'] = '00:00:10 200 x\n'
         with self.assertRaisesRegex(ValueError, 'hash'):
             eligibility(attempts, altered)
+
+    def test_snapshot_waits_for_wall_clock_despite_slew(self):
+        # A slewed host clock can advance less than the monotonic sleep; the
+        # seal must still cover the settle time in wall-clock terms.
+        from tools.benchmark.pair_disturbance import Monitor
+        with tempfile.TemporaryDirectory() as root:
+            log = Path(root) / 'intruders.log'
+            log.write_text('')
+            clock = {'now': 1000.0}
+
+            def slewed_sleep(seconds):
+                clock['now'] += seconds * 0.99
+
+            with patch('tools.benchmark.pair_disturbance.time.time', lambda: clock['now']), \
+                    patch('tools.benchmark.pair_disturbance.time.sleep', slewed_sleep):
+                monitor = Monitor(log)
+                ended = clock['now']
+                sealed = monitor.snapshot()
+            self.assertGreaterEqual(sealed['sealed_at'], ended + PROTOCOL['settle_seconds'])
+            eligibility([{'started_at': ended - 1, 'ended_at': ended}], sealed)
 
     def test_appended_recovery_conserves_all_attempts_and_order(self):
         class Monitor:

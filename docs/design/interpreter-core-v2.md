@@ -4,8 +4,7 @@ Proposed architecture, **not implemented or a frozen performance plan**. The ord
 even when every accelerator declines. Calls, names, layouts and values share the contracts below; none depends on a
 benchmark or a literal's source form. [T056](../../tasks/T056-interpreter-core-v2.md) owns evidence, source checks and
 next work; [architecture](../architecture.md) describes today's code. The protected [binding](env-model-rewrite.md) and
-[suspension](generator-suspension.md) invariants remain requirements. No new crate, dependency, FFI or Rust async is
-needed.
+[suspension](generator-suspension.md) invariants remain requirements. No new crate, dependency, FFI or Rust async.
 
 ## Contracts shared by the three changes
 
@@ -58,7 +57,9 @@ Natives receive an execution context capability after dispatch releases borrows.
 to drive **this same Vm** until an explicit boundary token completes; it cannot unwind through a waiting Rust native.
 Rust re-entry may still nest driver invocations, but never constructs another Vm. No `RefCell`/slot/tier borrow spans
 that boundary. Builtins that need suspension use explicit native continuation state; arbitrary Rust stacks cannot be
-suspended.
+suspended. Per-activation environment state (today's `CallEnv`, its name-keyed frame-cell layer and write-back) is frame
+work: the slot owns it, and a native call gets the capability, which resolves names against the slot's code metadata
+only when a dynamic-scope consumer (direct eval, `with`) asks, never by eager per-call name-keyed installation.
 
 A generator/async activation owns a detachable frame lease plus its code/cells; suspension removes it from the active
 chain without retaining its caller. The lease retains its store allocation after the originating call/context returns
@@ -153,7 +154,5 @@ Publish them before a generic call/re-entry; reacquire views after it. Virtual o
 identity-flow proof; do not invent a heap receiver for a placeholder. Only a later tier unit maps proven virtual fields
 into registers or materializes at a proved escape. Any side exit reconstructs state once, without replaying effects.
 
-Stage order, per-stage effects/stops and mandatory correctness/performance gates live in
-[T056](../../tasks/T056-interpreter-core-v2.md#ordered-migration). Its [prior-attempt
-table](../../tasks/T056-interpreter-core-v2.md#prior-attempts) explains why this target differs from rejected
-experiments.
+Stage order, effects, stops and gates: [T056](../../tasks/T056-interpreter-core-v2.md#ordered-migration); its
+[prior attempts](../../tasks/T056-interpreter-core-v2.md#prior-attempts) explain how this differs from rejected work.
