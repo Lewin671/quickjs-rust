@@ -10,12 +10,12 @@
 - Evidence: [part 1](archive/T056-unit0-part1-evidence.md),
   [part 2](archive/T056-unit0-part2-evidence.md), [M1 stage 1](archive/T056-m1-stage1-evidence.md);
   plan [`interpreter-core-v2-atoms-layouts`](performance-units/interpreter-core-v2-atoms-layouts.json).
-- Unresolved: stage-1 screen blocked: both the screen and its whole
-  replacement ended in the load-monitor settle guard (host wall clock ran
-  short of `sleep(8)`), no verdict; M2 stages/budgets must absorb the activation-environment
+- Unresolved: stage-1 screen blocked by tooling: two runs ended in the
+  settle guard (fixed in `f1dc1032`), the third (`5d47ea8b`) in the monitor's
+  midnight-crossing timestamp check; no verdict, attempt unspent; M2 stages/budgets must absorb the activation-environment
   scope; part 1's imprecise bitops-3bit-bits-in-byte interval.
-- Next action: lead decides the settle-guard fix or a third whole run; then
-  screen `11c9fc08` under the stage budget and, if it passes, start M1.2.
+- Next action: fix the monitor's midnight handling, then screen stage 1 once
+  under the stage budget and, if it passes, start M1.2.
 
 ## Goal and scope
 

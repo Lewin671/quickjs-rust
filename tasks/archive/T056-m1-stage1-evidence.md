@@ -82,6 +82,20 @@ through `imac-bench.sh loop`, candidate `11c9fc08` against plan base `351004f3`.
   surrounded (by 1.5 ms and 49 ms), so the guard fails on host clock
   adjustment rather than on load. Repeating the whole screen is a gamble of
   about 2.5 h per try; the screen waits for a lead decision on the tool
-  (for example a monotonic settle measurement) before a third run. (Job
+  (for example a monotonic settle measurement) before a third run.
+- The lead fixed the settle guard on main (`f1dc1032`); merge `5d47ea8b`
+  (runtime identical to `11c9fc08`, only tools changed) was screened as job
+  `20261017T222657Z-t056-m1s1-screen-fixed`, output
+  `target/layout-attempts/t056-m1s1-attempt1-fixed`. It exited 1 after
+  2,639 s: natural placement complete (86 cases), then the first variant-1
+  case `broad/plain_function_call` raised `load monitor timestamps out of
+  range/order` in `pair_disturbance.heavy_samples`. The job crossed UTC
+  midnight; the monitor log holds `23:46:38`..`23:55:31` rows and then
+  `00:21:32`.. rows, and a case anchored after midnight places the
+  pre-midnight rows on its own day (only rows more than 12 h before the anchor
+  are moved), so they appear out of order. A second tooling defect, again no
+  verdict; stopped as instructed, samples not read. The same log shows
+  `mediaanalysisd` at about 100% CPU from 00:21, although it is recorded as
+  disabled on this host. (Job
   `20261017T181321Z` was cancelled before running: it had been submitted from a
   working tree with an uncommitted documentation change.)
