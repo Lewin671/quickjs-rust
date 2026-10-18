@@ -16,8 +16,12 @@
 - Unresolved: formal/held-out/promotion decision; RGI_Emoji template.
 - Next action: when `20261018T080835Z-t058-formal30`,
   `20261018T080836Z-t058-heldout30` and `20261018T080837Z-t058-test262-exact`
-  finish, run `decide --mode promotion` under the plan (held-out K=6 if an
-  event occurs) and record it.
+  finish (queued 2026-10-18 behind the T060 calibration series), run
+  `decide --mode promotion` with the plan, the v3 queue, the papaparse
+  receipt, `screen/complete.json` and the held-out panel (completing the v4
+  held-out K=6 with `layout_panel --held-out --complete` first if a held-out
+  event occurs), then record it. Workspace `tmp/t058-probes/decide.sh` holds
+  the exact invocation.
 
 ## Goal
 
