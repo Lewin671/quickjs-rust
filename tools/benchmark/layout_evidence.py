@@ -70,8 +70,9 @@ def replay(path: Path, policy, engines=None, *, held=False):
             raw_panels[k].append(raw)
             replay_case(raw, pairs, {role: evidence[role]['variants'][k]['path']
                                      for role in ('base', 'candidate')})
-    verify(evidence, [c['id'] for c in evidence['panels'][0]['cases']],
-           [r for panel in raw_panels.values() for r in panel])
+    case_ids = [c['id'] for c in evidence['panels'][0]['cases']]
+    verify(evidence, case_ids)
+    all_raw = [r for panel in raw_panels.values() for r in panel]
     if expected_files != set(evidence['case_files']):
         raise ValueError('layout raw file inventory mismatch')
     if any('attempts' in r for panel in raw_panels.values() for r in panel):
@@ -80,8 +81,11 @@ def replay(path: Path, policy, engines=None, *, held=False):
         for run in evidence['disturbance_runs']:
             covered.extend(run['variants'])
             raws = [r for k in run['variants'] for r in raw_panels[k]]
+            verify(evidence, case_ids, raws)
             if verify_run(raws, run['load']) != run['counts']:
                 raise ValueError('panel disturbance count mismatch')
         if sorted(covered) != list(raw_panels):
             raise ValueError('panel disturbance run inventory mismatch')
+    else:
+        verify(evidence, case_ids, all_raw)
     return evidence

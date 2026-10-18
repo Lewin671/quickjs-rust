@@ -107,7 +107,7 @@ final load sealing belong to the parent. Pair eligibility and caps below apply
 unchanged, including simultaneous disturbance of several shards.
 
 Artifacts bind `measurement_schedule` (`kind`: `serial` or `case-shards-v1`,
-`workers`: N), deterministic `case_shards`, and raw `case_shard` ownership.
+`workers`: N), deterministic `case_shards`, and raw `case_shard`/`worker_pid` ownership.
 Panel packets also bind the schedule. Replay conserves the inventory and
 rejects missing/changed ownership or a policy/evidence schedule mismatch;
 absent historical metadata denotes serial. Completion preserves its natural

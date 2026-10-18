@@ -110,6 +110,32 @@ class ScheduleTests(unittest.TestCase):
             e['case_files'][str(f.relative_to(root))]=digest(f);path.write_text(json.dumps(e))
             with self.assertRaisesRegex(ValueError,'schedule mismatch'): replay(path,p)
 
+    def test_completion_allows_new_processes_only_at_a_sealed_run_boundary(self):
+        from tools.benchmark.tests.test_layout_evidence import fixture
+        from tools.benchmark.layout_evidence import replay
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);e,p,r,f=fixture(root)
+            sch=binding(4);ids=[r['id']]
+            e.update(measurement_schedule=sch,case_shards=plan(ids,4))
+            p['measurement_schedule']=sch
+            e['panels']=[copy.deepcopy(e['panels'][0]) for _ in range(6)]
+            e['case_files']={}
+            for k,packet in enumerate(e['panels']):
+                packet['measurement_schedule']=sch
+                raw=copy.deepcopy(r)
+                raw.update(measurement_schedule=sch,case_shard=0,worker_pid=42 if k==0 else 43,attempts=[])
+                path=root/f'variant{k}'/f.name;path.parent.mkdir(exist_ok=True)
+                path.write_text(json.dumps(raw));e['case_files'][str(path.relative_to(root))]=digest(path)
+            e['disturbance_runs']=[{'variants':[0],'load':{},'counts':{}},
+                                    {'variants':list(range(1,6)),'load':{},'counts':{}}]
+            path=root/'complete.json';path.write_text(json.dumps(e))
+            with patch('tools.benchmark.layout_evidence.replay_case'), \
+                    patch('tools.benchmark.pair_disturbance.verify_run',return_value={}):
+                replay(path,p)
+                e['disturbance_runs']=[{'variants':list(range(6)),'load':{},'counts':{}}]
+                path.write_text(json.dumps(e))
+                with self.assertRaisesRegex(ValueError,'process identity'): replay(path,p)
+
     def test_npm_report_schedule_replays_ownership(self):
         from types import SimpleNamespace as Obj
         from tools.benchmark.npm_workers import replay_schedule

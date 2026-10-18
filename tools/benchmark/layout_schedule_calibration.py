@@ -79,6 +79,12 @@ def main():
     out = Path(os.environ['BENCH_OUT'])
     queue = Path(os.environ['BENCH_QUEUE'])
     stage = args.stage
+    if stage in ('pilot', 'formal', 'formal-power', 'qualify'):
+        if args.seed is None:
+            raise ValueError('qualification timing requires the frozen seed')
+        seed = load(args.seed)
+        if seed['calibration_plan'] != {'path': str(args.plan), 'sha256': digest(args.plan)}:
+            raise ValueError('seed is not bound to this frozen calibration plan')
     if stage == 'prepare':
         from .layout_variants import build
         matrix = build(plan['portfolio_source_revision'], out/'portfolio-matrix')

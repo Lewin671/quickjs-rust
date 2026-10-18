@@ -1,11 +1,11 @@
 # T060: Case-sharded layout collection and schedule-bound policy v5
 
 - Status: active; calibration plan frozen before timing.
-- Implementation: tooling present in working tree; v5 not published.
+- Implementation: tooling committed at 93ce2534; v5 not published.
 - Verified at: plan commit 91c97d64; tooling working tree passed staged fast gate (643 tests), context/size gates and the additional forked cap-propagation regression.
 - Evidence: frozen protocol below; job receipts and results will be recorded here.
 - Unresolved: workers-4 bands, qualification and screen/panel elapsed speedup unmeasured.
-- Next action: commit tooling, queue calibration behind existing owners, and record all receipts/results.
+- Next action: monitor queued jobs; freeze the seed before qualification timing, then record qualification and speed results.
 
 ## Scope and architecture
 
@@ -92,3 +92,18 @@ Use these as speed measurements, never as seed or qualification samples.
 - [ ] Hosted implementation aggregate updated; focused benchmark tests,
   `PYTHONDONTWRITEBYTECODE=1 ./scripts/check-touched.sh --base main --explain`,
   `./scripts/check-context.py`, and full gate before handoff.
+
+## Queue dispatch (tooling 93ce2534)
+
+All timing jobs use `run --timing`; queued after the three pre-existing owners.
+No other owner job was cancelled. Raw artifacts stay in the queue/fetch output.
+
+| Job | Purpose | Result |
+| --- | --- | --- |
+| `20261018T044114Z-t060-prepare` | Reproduce/audit band sources and prepare equal-length role matrices | queued |
+| `20261018T044128Z-t060-full-gate` | Full correctness gate, no timing | queued |
+| `20261018T044128Z-t060-a2-portfolio` | Six 76-case A2 placements, workers=4 | queued |
+| `20261018T044128Z-t060-a2-development` | Six development A2 placements, workers=4 | queued |
+| `20261018T044129Z-t060-a2-heldout` | Six held-out A2 placements, workers=4 | queued |
+| `20261018T044210Z-t060-heldout-estimator` | Independent 30-pair held-out envelope estimator and power allocation | queued |
+| `20261018T044315Z-t060-seed` | Replay A2/estimator and freeze v5 bands | queued |
