@@ -18,18 +18,26 @@ PROTOCOL = {'version': 1, 'guard_seconds': 2, 'timestamp_bucket_seconds': 1,
 
 def heavy_samples(text, anchor):
     """Decode UTC-second buckets, including midnight, summing all intruders."""
+    # Rows carry only a UTC time of day and are appended in order. Place the
+    # first row on the day nearest the anchor, then follow the log forward:
+    # a time of day earlier than its predecessor has crossed midnight.
     day = int(anchor // 86400) * 86400
     totals = {}
-    previous = anchor - 86400
+    previous = None
     for line in text.splitlines():
         fields = line.split()
         if len(fields) != 3:
             raise ValueError('malformed load monitor row')
         clock = datetime.time.fromisoformat(fields[0])
-        stamp = day + clock.hour * 3600 + clock.minute * 60 + clock.second
-        if stamp < anchor - 43200:
-            stamp += 86400
-        if stamp > anchor + 86400 or stamp < previous:
+        seconds = clock.hour * 3600 + clock.minute * 60 + clock.second
+        if previous is None:
+            stamp = min((day + seconds + shift for shift in (-86400, 0, 86400)),
+                        key=lambda candidate: abs(candidate - anchor))
+        else:
+            stamp = previous - previous % 86400 + seconds
+            if stamp < previous:
+                stamp += 86400
+        if stamp > anchor + 86400 or stamp < anchor - 86400:
             raise ValueError('load monitor timestamps out of range/order')
         cpu = float(fields[1])
         if not 30 <= cpu < float('inf'):
