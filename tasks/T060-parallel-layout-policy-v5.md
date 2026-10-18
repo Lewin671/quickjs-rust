@@ -4,8 +4,8 @@
 - Implementation: tooling committed through 76e456e8; v5 not published.
 - Verified at: 76e456e8, staged fast gate (646 tests), context and size gates; prepare job passed on iMac; full gate queued.
 - Evidence: frozen protocol below; job receipts and results will be recorded here.
-- Unresolved: workers-4 bands, qualification and screen/panel elapsed speedup unmeasured.
-- Next action: monitor queued jobs; freeze the seed before qualification timing, then record qualification and speed results.
+- Unresolved: qualification and screen/panel elapsed speedup pending; seed bands are frozen below.
+- Next action: finish queued qualification and speed jobs; publish only a qualifying replay, without changing the seed.
 
 ## Scope and architecture
 
