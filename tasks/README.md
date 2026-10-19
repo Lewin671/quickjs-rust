@@ -13,7 +13,7 @@ it to `archive/` with `git mv` and move its row below.
 
 | Task | Status | What it is |
 | --- | --- | --- |
-| [T058](T058-regexp-lazy-quantifiers.md) RegExp lazy quantifiers | active | Attempt 1 incomplete at formal cap; single remaining v5 workers-4 K=6 attempt queued. |
+| [T058](T058-regexp-lazy-quantifiers.md) RegExp lazy quantifiers | active | Attempts 1/2 closed incomplete/inconclusive; fresh current-base v6 proposal requires new queue/profile and acceptance. |
 | [T057](T057-string-code-units.md) string code units | active | Stage-1 PROMOTE under v4; integrated into main; stages 2 onward require new plans. |
 | [T056](T056-interpreter-core-v2.md) interpreter core v2 | active | Target design for names, frames and values; unit 0 and M2 re-plan complete; M1 stage 1 complete on its branch (v4 screen pass), integration next. |
 | [T018](T018-broad-performance.md) broad performance | active | The performance campaign contract and its targets against QuickJS-NG. Start performance work here, then follow [the workflow](../docs/performance-workflow.md). |
@@ -91,7 +91,7 @@ outcome column says what happened, not what to do next.
 
 ## Other Records In `archive/`
 
-- T058: [attempt 1 incomplete closure](archive/T058-attempt1-incomplete.md).
+- T058: [attempt 1 incomplete closure](archive/T058-attempt1-incomplete.md), [attempt 2 inconclusive](archive/T058-attempt2-inconclusive.md).
 - T057: [preliminary development baseline](archive/T057-development-baseline.md) [policy v3 qualification](archive/T057-development-policy.md) and [pre-stage-1 log](archive/T057-log.md).
 - T056: [unit 0 part 1 evidence](archive/T056-unit0-part1-evidence.md) (standing, attribution limits, RSS, ABI probes), [part 2](archive/T056-unit0-part2-evidence.md) (mechanism counters, development profiles, first-unit ranking and plan binding) and [M1 stage 1](archive/T056-m1-stage1-evidence.md) (atom linking and Value facade).
 - T055: [qualified policy adoption](archive/T055-layout-noise-control.md), [feedback-2 record](archive/T055-feedback-2-qualification.md), [feedback-1 record](archive/T055-feedback-1-qualification.md), [complete A2 data](archive/T055-phase-a2-data.md) and [B frozen plans/blocked qualification log](archive/T055-phase-b-plan-and-log.md).
@@ -100,7 +100,6 @@ outcome column says what happened, not what to do next.
 - First batch-1 formal decisions: `T037-first-formal-decision.md`.
 - Audio DFT one-factor diagnostics: `T038-audio-dft-diagnostic-data.md`; [Gaussian engine tails](archive/T038-gaussian-wall-tail-data.md).
 - Executable launch controls: `T017-launch-preflight-diagnostic.md`.
-
 - Design measurement record: [T036-mixed-call-execution-measurements.md](archive/T036-mixed-call-execution-measurements.md).
 - Case-level formal standing: `T018-af4d0d3c-case-standing.md`.
 - Prior formal standing: `T018-e54e33eb-standing.md`.

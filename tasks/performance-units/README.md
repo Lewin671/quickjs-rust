@@ -35,7 +35,7 @@ nothing about whether the code exists.
 
 | Plan (`<name>.json`) | Task | Base | Recorded outcome |
 | --- | --- | --- | --- |
-| `regexp-lazy-quantifier-steps-v5-remeasure` | T058 | `351004f3` 2026-10-19 | single remaining attempt frozen at `2ee8f8ad`; v5 workers-4 K=6, same candidate/target/payoff; five jobs queued, no result yet (T058) |
+| `regexp-lazy-quantifier-steps-v5-remeasure` | T058 | `351004f3` 2026-10-19 | closed inconclusive: sole bitops formal width 3.7343% at 240; all jobs clean, decision exit 1; old unit exhausted, no v6 re-decision |
 | `regexp-lazy-quantifier-steps` | T058 | `351004f3` 2026-10-17 | attempt 1 closed incomplete: formal cap half-width 3.5433%, no promotion; r2 held-out/decision cancelled; original plan unchanged, one remaining attempt bound below |
 | `string-handles-ascii-search-boundaries` | T057 | `351004f3` 2026-10-17 | attempt 1: PROMOTE under v4 after clean replacement K=6 held-out panel and precise formal continuation; candidate `026476d5`, integrated into main; [T057](../T057-string-code-units.md) |
 | `interpreter-core-v2-atoms-layouts` | T056 | `351004f3` 2026-10-17 | stage 1 single screen (`a8c533ef`): v3 raw `reject` (development lane, layouts 0 and 2); governing v4-successor replay `pass` (lane event nonpersistent); no formal stage decision yet |

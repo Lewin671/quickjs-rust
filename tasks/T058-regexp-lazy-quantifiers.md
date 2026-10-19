@@ -1,211 +1,92 @@
-# T058: RegExp lazy quantifiers and pattern-template removal
+# T058: Current-base RegExp lazy-quantifier proposal under v6
 
-- Status: active; attempt 1 closed incomplete, no promotion; final v5 remeasurement queued.
-- Implementation: present; original measured candidate `392ca717`; rebased branch `0da2f4e1` includes main's T057, so it is not substituted into this experiment.
-- Verified at: rebase onto `89a13699` at `0da2f4e1`; runtime/plan `2ee8f8ad` plus dispatch documentation passed full `check.sh` on 2026-10-19 UTC; staged fast gate covers the handoff record.
-- Evidence: [attempt 1 closure](archive/T058-attempt1-incomplete.md); [original plan](performance-units/regexp-lazy-quantifier-steps.json); [v5 remeasurement plan](performance-units/regexp-lazy-quantifier-steps-v5-remeasure.json).
-- Unresolved: fresh v5 acceptance pending; original formal case was imprecise at 240; RGI_Emoji template remains separate work.
-- Next action: coordinator fetches the five queued jobs below and reads the decision with all prerequisite statuses; no automatic favorable retry or promotion of the rebased tip.
+- Status: active; old attempts 1/2 closed incomplete/inconclusive; fresh current-base proposal, not a third retry.
+- Implementation: present on rebased candidate `9e415ff4`; its runtime diff from current main is T058 alone. No new runtime edits.
+- Verified at: clean rebase onto `a68a9f46` at `9e415ff4`; attempt-2 hashes/logs verified on 2026-10-19. Full and staged gates recorded before handoff.
+- Evidence: [attempt 1](archive/T058-attempt1-incomplete.md), [attempt 2](archive/T058-attempt2-inconclusive.md), [prospective contract](proposals/T058-current-base-v6.json).
+- Unresolved: genuinely fresh queue/profile, schema-3 materialization/commit and all current-base acceptance are pending the chained jobs. Neither old decision is changed.
+- Next action: fetch the new freeze/decision jobs below; import the frozen-plan bundle, verify its bindings and read acceptance at the new base/candidate only.
 
-## Goal
+## Goal and attribution
 
-Make first-match RegExp traversal of lazy quantifiers do work proportional to the match it returns.
-Remove matcher/replace admission by literal pattern source; use parsed atom and quantifier structure.
-Preserve backtracking order, captures, lookaround, backreferences and the `u`, `v`, `y`, `g` flags.
+Keep lazy single-code-point RegExp repetition incremental and remove the
+literal-source replace/Date shortcuts; the original implementation, semantic
+risks and correctness history live in the attempt-2 archive. RGI_Emoji
+property-of-strings support remains separate work.
 
-## Scope
+[T062](archive/T062-formal-precision-rule.md#prospective-scope-and-t058)
+allows a fresh proposal only with a new current-base comparison, opportunity
+queue, exact-image profile and newly validated/frozen plan. Existing plans
+remain immutable and both old outcomes remain inconclusive. This proposal
+uses current main `a68a9f469a1c36c8080b71e1546851a30f448da6` as its base and
+rebased `9e415ff45cb909e41d182dc3d6f03d3c1007b3f9` as candidate. Both include
+T057 and T062; only T058's RegExp implementation/tests differ in engine
+paths. No improvement from T057 is credited to T058. No old timing, profile,
+queue or exact-candidate correctness entry can verify this source pair.
 
-- Allowed paths: `crates/qjs-runtime/src/regexp/matcher/**`,
-  `crates/qjs-runtime/src/regexp/matcher.rs`,
-  `crates/qjs-runtime/src/regexp/symbol_replace.rs`, their focused tests,
-  `tests/fixtures/compare-qjs/` RegExp fixtures, this file, its index rows,
-  the original and v5 remeasurement plans, and the attempt-1 archive.
-- Forbidden paths: interpreter core, property and value code, String
-  search code (owned by `agent/t057-string-units/codex`), `symbol_match.rs`
-  subject sharing (also T057), dependencies, `third_party/`.
-- Owner boundary: `agent/t058-regexp-lazy/claude`; commit only on this branch; no push or merge.
-- Original base/worktree: `a0b6bb23`, `worktrees/quickjs-rust/t058-regexp-lazy`; branch above.
+## Prospective choices
 
-## Root causes (confirmed 2026-10-17, local M1 Pro, release build of `a0b6bb23`)
+The committed contract is a proposal, not a schema-3 unit with fabricated
+future hashes. A chained job fills only measured queue/profile bindings,
+records actual sampled branch counts, validates the schema-3 unit and
+commits it on an isolated iMac `agent/t058-regexp-lazy/claude` worktree.
+Acceptance refuses to start without that commit, its exact plan bytes and
+successful validation. The commit is also exported as a small Git bundle for
+the coordinator to import; neither origin nor this local branch is pushed.
+If fresh evidence does not justify this proposal, all dependent jobs stop.
 
-Probe at n=4000 and 4n: ratio near 4 is linear, near 16 is quadratic; `tmp/t058-probes/scaling.js`.
-
-| Case | ours n / 4n ms | ratio | NG ratio |
-| --- | --- | --- | --- |
-| `"([^]*?)"` replace `g` | 135 / 1623 | 12.0 | 3.5 |
-| `"([^]*?)"` replace `gu` | 214 / 3301 | 15.4 | 4.0 |
-| `x[\s\S]*?y` match `g` | 507 / 8115 | 16.0 | 4.0 |
-| `a.*?,` match `g` | 67 / 1062 | 15.9 | 3.9 |
-| `([^x]*?);` exec `y` loop | 176 / 2782 | 15.8 | 4.0 |
-| `a.{2,}?;` match `g` | 109 / 1669 | 15.3 | 4.0 |
-| greedy `"([^"]*)"` replace `g` | 2 / 8 | 4.0 | 4.0 |
-
-1. `FirstMatcher::match_atom_and_continuation` (`matcher/first.rs`) answers a quantified
-   single-code-point atom by scanning its longest run first (`simple_atom_max_count`, or
-   `simple_atom_boundaries_into` when steps can be two units wide) and only then trying counts from
-   the minimum for a lazy quantifier. Every lazy match therefore scans to the end of the atom's run,
-   which for `[^]`, `[\s\S]` or a negated class is the rest of the subject.
-2. `dot_plus_global_fast_path` (`symbol_replace.rs`) compares the RegExp source with the literal
-   `"(.+)"`. It was added for the `staging/sm/String/replace-math.js` stress case before T025's
-   allocation-free matcher.
-3. The audit found two more source-text recognitions: `matcher/normalization.rs` rewrites one
-   literal Date-format pattern into a different pattern before compilation (observable: the compact
-   pattern then requires spaces), and `matches_rgi_emoji_repetition` in `matcher.rs` compares the
-   whole pattern with `^\p{RGI_Emoji}+$` and answers it with an approximate code-point range test.
-
-At the original task base, `String.prototype.match` with `g` was also quadratic for every pattern because `symbol_match.rs`
-passes a fresh subject copy to each `exec`; T057 stage 1 owns that fix and it is not part of this
-unit.
-
-## Acceptance
-
-- [x] Frozen plan validated and committed before runtime edits.
-- [x] Lazy simple-atom steps extend one repetition at a time.
-- [x] Literal-source recognizers removed (`(.+)`, Date rewrite); RGI_Emoji template open.
-- [x] Focused tests, NG fixtures, RegExp Test262 slices, fast and full gates.
-- [x] Original qualified screen recorded; attempt 1 closed incomplete.
-- [ ] Fresh v5 attempt passes all promotion gates.
-
-## Verification
-
-At `cec613d2` (2026-10-17, local M1 Pro): full `check.sh` passed (2737 Rust tests,
-5170 Test262 subset), compare-qjs 250/250 including two new fixtures; exact zero-gap slices:
-RegExp 1573, regexp literals 155, String replace/match/split 54/48/120,
-Date toString/toDateString/toUTCString 8/7/9; staging/sm/String/replace-math.js passed directly.
-
-Handoff at `2ee8f8ad` plus dispatch documentation (2026-10-19 UTC):
-`PYTHONDONTWRITEBYTECODE=1 ./scripts/check.sh` passed in full, including
-2,312 runtime tests, 21 agents / 24 perf-counter tests, 651 benchmark-tool
-tests, 35 script tests, all plan/context/size/hook/syntax checks and all
-5,170 curated Test262 cases. Other workspace crates and all clippy/format
-checks passed. New plan `validate-unit` passed against the original queue
-and exact-image profile; original plan hash remains `3fa32ec4...83622`.
-Staged fast gates select context and plan validation; these two recording
-commits change no engine source, so no focused semantic slice matches.
-The full curated semantic subset still ran. No measurement result was
-awaited. Removed 3.9 GiB of disposable local incremental build output;
-canonical images and all queue evidence remain intact. Handoff data-volume
-free space: approximately 90 GiB.
-
-## Original plan
-
-Frozen leaf plan [regexp-lazy-quantifier-steps](performance-units/regexp-lazy-quantifier-steps.json), validated
-(`validate-unit` status `valid`, plan SHA-256
-`3fa32ec4280395a6e6b393fc0e928e0e8e876424e1abc2f43c992ad4e5683622`) against the v3 queue
-`20261017T095818Z-t057-v3-qualify` (SHA-256 `424a1e79...ea56`, candidate `351004f3`) with the
-papaparse receipt `bd02ec4a...e672aec` from profile root
-`outputs/imac-bench/20261017T135712Z-t057-stage1-v3-profiles/out/profiles`. Development target
-`development/papaparse/csv` (queue rank 1, 34.06x NG); policy v3 controls; two attempts.
-
-## Original implementation (`0dc5d6a1`, `1b8c2159`, `cec613d2`)
-
-- `0dc5d6a1`: `FirstMatcher::match_lazy_simple_atom` steps the minimum,
-  tries the continuation, then extends one repetition per failure, bounded by
-  `max` and the first failed atom step. Greedy keeps the longest-run scans.
-- `1b8c2159`: `dot_plus_global_fast_path` removed; the prepared global loop
-  answers `(.+)` linearly (local M1 Pro, 1M-char replace: 4.8 ms vs NG 5.05).
-- `cec613d2`: `matcher/normalization.rs` removed; sources compile as written.
-- Not changed: `matches_rgi_emoji_repetition`. The general matcher has no
-  property-of-strings support (`/^(?:\p{RGI_Emoji})+$/v` fails), so
-  removing the template needs real RGI_Emoji sequence data; separate unit.
-
-After `0dc5d6a1`+`1b8c2159` (local, `tmp/t058-probes/scaling-replace.js`, n=16000 / 4n, ms):
-`"([^]*?)"` g 9/30 (NG 15/57, base 1816/29135), `x[\s\S]*?y` 4/16 (NG 10/38, base 8755/139111),
-`a.*?,` 3/14, `([^x]*?);` y 15/54 (NG 7/29), `(\w+?)=\1;` 8/32: all linear. At that revision, still quadratic and
-outside this unit: `String.prototype.match` `g` (subject copy per exec) and empty-match advancement
-(both changed on the T057 branch), and `u`-mode replace (O(n) code-unit/scalar index conversion in
-`regexp.rs` per match, T057 code-unit design).
-
-## Prospective v5 remeasurement (attempt 2 of 2)
-
-The original attempt is closed as incomplete, not promoted. T022 permits
-at most two attempts and the [screen-1 record](archive/T058-attempt1-incomplete.md)
-explicitly left attempt 2 unspent. The new plan caps it at **one** remaining
-attempt; policy adoption and triage grant no extra attempts. A valid failed
-screen closes this leaf's budget. A second cap-imprecise formal result stays
-incomplete and stops; do not start another acceptance run to seek precision.
-No committed original-plan field or historical sample is changed.
-
-This is a measurement-only successor, not a new optimization selected from
-a stale queue. Preserve the original queue/profile, base and unchanged
-implementation; validate their hashes again before timing. Freeze candidate
-`392ca717f13fd97ca1bc8361fefb2c1900186602`, base
-`351004f386f4c2c1d870467ae6e1e481952a330c`. Using the rebased branch tip would
-also measure T057, obscuring attribution and invalidating the original image
-and correctness bindings. Any later performance claim about a combined main
-integration needs its own evidence.
-
-| Frozen choice | Value and reason |
+| Choice | Frozen value and reason |
 | --- | --- |
-| Schema/policy | Schema 3, qualified iMac workers-4 v5; policy SHA-256 `f3e8ef40b8b45601b5b86edaf4b47c2d9d904d0045eb024e837f1c447a52bec4`. T060 qualifies this schedule independently; no hand-tuned bands. |
-| Target/payoff | Only `development/papaparse/csv`, rank 1 in the original queue, <=0.70 as originally frozen; also reciprocal B_i and every-pair improvement. No result-based target/threshold selection. |
-| Controls/mechanism | All other 85 selection cases, all six sentinels and all lane/portfolio gates; `cpu-work`, empty memory targets, unchanged atom traversal. |
-| Layouts | Mandatory K=6, offsets 0/16/64/240/512/1008; five pairs per selection case/layout. Complete natural plus five appended layouts regardless of the natural verdict; no winning placement selection. |
-| Held-out | All nine programs, 30 pairs at all six matching layouts, frozen before new results; v5 persistence and precision gates remain binding. |
-| Formal | One fresh 30-block, 86-case, three-engine workers-4 bundle after a passing screen. Same original budget, not 60 chosen from the observed variance. |
-| Power | Every deficient formal case follows min(240,ceil(30*(h/.03)^2)), predicted stage then cap; retain pilot and original lane cohort. No pooling with attempt 1, no widened 3% precision limit. |
-| Stop/recovery | One remaining attempt. Pair recovery only under the existing 20%/60 s load caps; cap-invalid panels or DISTURBED formal jobs replace whole, at most three load-only replacements. Non-load errors stop; no rerun after a valid failure or cap-imprecision. |
-| Correctness | Reuse exact-candidate zero-gap entry from `20261018T080837Z-t058-test262-exact`, SHA-256 below; all promotion completeness gates stay enabled. Local full gate checks the rebased branch separately. |
+| New priority | Fresh formal30 current-main queue, compared with preceding `89a13699`; identical runtime here is acceptable for queue generation. Papaparse must still rank 1 in development; no override or replacement target if it does not. |
+| Profile | Exact current-main queue image; two complete papaparse passes, macOS sample 60 s at 1 ms. Keep stdout/raw/receipt; require lazy-scan atom and RegExp replace frames. This diagnostic sampling is never acceptance timing. |
+| Plan/policy | New schema-3 `regexp-lazy-quantifier-current-base-v6`; policy v6 SHA-256 `be123f7c5cfd46aa863467256eb8bf6947ff64f72541efc371f05a36c5535a31`, the newly required prospective policy. V5 bands/schedule remain unchanged. |
+| Target/payoff | Only `development/papaparse/csv`, <=0.70 plus reciprocal B_i and all-pair improvement. These original choices stay fixed; fresh evidence may stop the proposal, never loosen them. |
+| Mechanism/controls | Same general `cpu-work` traversal, no memory-wall targets; all other 85 selection cases, six sentinels and all lane/portfolio/instruction gates. No resource waiver is introduced. |
+| Layouts | Fresh audited base/candidate K=6 at 0/16/64/240/512/1008, workers-4, selection 5 pairs/layout. Mandatory full panel avoids post-result layout selection. |
+| Held-out | All nine programs, fresh 30 pairs at every layout, workers-4; unchanged persistence and bootstrap precision gates, never priority input. |
+| Formal/power | One fresh 30-block workers-4 bundle after a passing screen; v6 exact median >=97.5% interval at fixed looks 30 and 240. Extend only unresolved cases directly to 240 via `--plan`; crossing intervals at cap remain incomplete. Joint lanes/held-out keep their original rules. |
+| Budget | One fixed current-base candidate, `max_attempts: 1`; no implementation variation or favorable rerun. This is a new evidence-bound proposal allowed by T062, not an extension/reset of the exhausted old unit. |
+| Recovery | Existing load-only pair recovery/caps; whole disturbed formal/cap-invalid jobs can be replaced at most three times, never pooled. No non-load retry. This dispatch does not auto-submit whole-job replacements. |
+| Correctness | Fresh exact-candidate zero-gap Test262 scan for `9e415ff4`, separate from local full checks; original `392ca717` entry is inadmissible for the new pair. |
 
-Reuse only the original immutable audited **executables**, never their timing.
-Matrix paths are `target/layout-attempts/t058-attempt1/{base000,cand000}/identity.json`.
-SHA-256: base `a323746e4ad6e41d8e6a9cf7141c1eac1bf82c0546ab45826bd644b277b9d8e7`,
-candidate `76427b2286c72c9289656636540da6bfe646ab0c870d3601d4c3a27037c48521`.
-Natural images must reproduce `c7f0f66a519181b214bdc5ca6404cf428f0d18cbd1ab1d0e26386097619b949e`
-and `d2bc9b8d755bcb70ebb02d8a3e0bde21d30d89add36dd66cbea64cebae72b7c8`.
-Preflight re-hashes all twelve binaries and checks static audits, identities,
-host, equal-length paths and plan/queue/profile bindings; missing/drifted inputs
-stop rather than silently rebuilding another image. New output directories
-are exclusive. Plan is committed before dispatch; runtime is unchanged.
+Queue/profile hashes are necessarily unknown before those jobs run. The
+materializer has no discretion over targets, thresholds, offsets, rule,
+source pair or budgets. It records a lower-bound inclusive fraction from
+the largest sampled replace branch divided by main-thread samples; overlapping
+frames are not summed. Guard failure blocks acceptance and preserves output.
 
-The reverted queue wrapper has no STOP/CONT hook. At 13:45 UTC on 2026-10-19,
-iMac Spotlight was disabled, photo/media launchctl disable flags were true,
-and listed daemons were in S/Ss state (none T/stopped). Each timed job records
-quieting again without altering services. Local free disk 88 GiB, iMac 101 GiB.
+## Jobs and result reading
 
-New plan `validate-unit`: status `valid`, SHA-256
-`957f29f056bb65ea3b556e177b8117e0d303ea95643bed5ca3f070f1376c7b94`.
-Exact-candidate Test262 entry SHA-256
-`9b24e29adcef679290473002a6fa3bf16140434a9569cdd4111524afe67641f7`.
+Pending submission after this prospective contract is committed. All jobs
+use workspace `scripts/imac-bench.sh`, status first; timing jobs use `--timing`.
+New queue/profile and all acceptance output paths are exclusive. Spotlight/
+photo/media disable flags and daemon states are recorded without STOP/CONT
+or service changes. No completion is awaited.
 
-## Dispatch and coordinator contract
+Allow about 5-6 hours of iMac occupancy: fresh queue comparison 45-60 min,
+profiling/freezing a few minutes, build/audit overhead, selection K=6 about
+61-74 min, formal about 45-60 min, held-out K=6 about 101-125 min, exact
+correctness about 28-30 min, power/decision several minutes. The lower panel
+figures are attempt-2 observations (3673/6061 s), not a promise for new images;
+upper figures come from T060/T061. Queue waiting, quieting, precision work
+and load-only replacements are additional.
 
-Submitted at 13:49 UTC on 2026-10-19 after queue status showed idle.
-Tooling/plan commit `2ee8f8ad`; exact base/candidate additionally transferred
-via runner-only `refs/bench/`. No origin push or merge. Every timing job uses
-workspace `scripts/imac-bench.sh run --timing`; jobs check successful prior
-statuses, and formal disturbance blocks power/acceptance. Selection/held-out
-replay uses the qualified pair-recovery contract, not a blanket log filter.
+Coordinator: fetch all new jobs, first verify fresh queue/profile priority,
+base/candidate and the freeze job's validation, `unit.json`, commit/hash and
+`frozen-plan.bundle`. Fetch its owner branch into a temporary ref and
+cherry-pick only the plan/index commit onto this branch; preserve its frozen
+bytes. Then inspect every prerequisite's status and the decision job's
+`out/decision.json`: `decision`, `decision_readiness`, reasons and bound hashes.
+Only complete clean `retained` evidence can support the new source pair.
+A failed priority/profile/freeze guard, valid rejection or inconclusive result
+stops this proposal. No old attempt is re-decided under v6 or pooled.
 
-| Job ID | Purpose / output under its `out/` |
-| --- | --- |
-| `20261019T134950Z-t058-v5-attempt2-selection-k6` | Full K=6 selection; `selection/complete.json`, `verdict.json`, `validation.json` |
-| `20261019T134951Z-t058-v5-attempt2-formal30` | Fresh formal30; `bundle/summary.json` and sealed lane reports/raw |
-| `20261019T134951Z-t058-v5-attempt2-formal-power` | Automatic precision allocation; `power/power.json` references latest chains |
-| `20261019T134952Z-t058-v5-attempt2-heldout-k6` | Full K=6 held-out; `heldout/panel.json` |
-| `20261019T134952Z-t058-v5-attempt2-decide` | Original-host promotion replay; `decision.json`, `decision.stdout`; `--require-retained` |
+## Scope and checks
 
-Jobs were queued without waiting for measurement completion. Only the first
-four are timed; the decision is non-timing. A valid failed screen prevents
-formal spending. Missing prerequisites stop subsequent jobs; they do not
-silently substitute an older attempt. No load-only whole-job replacement
-is auto-submitted by this dispatch; the coordinator records any permitted
-replacement and re-chains dependent jobs before reading a final decision.
-
-Estimate: selection K=6 ~74 min (T060 measured 4,457 s); held-out K=6
-~125 min (T061 extrapolates the measured 2.55x speedup, not yet a direct
-held-out measurement); formal ~46-58 min; power/replay a few minutes.
-Total ~4.1-4.3 h plus validation, quieting, queue delay, precision work and
-any permitted load-only replacement. Reusing audited matrices avoids builds.
-
-Fetch every job after completion. A zero collector exit proves collection,
-not acceptance. The decision replays exact raw evidence on the original iMac,
-including the frozen queue/profile, new complete selection and held-out panels,
-new sealed formal bundle and latest power chains, plus exact-candidate Test262.
-Read `decision.json` (`decision`, `decision_readiness`, `reasons`) and policy/
-unit/evidence hashes. Only `retained` with complete clean evidence can support
-promotion of the original candidate. `inconclusive`, a >3% interval at 240,
-missing evidence, failed guards or disturbance require an incomplete record;
-a valid rejection is retained as negative evidence. Do not pool old timing,
-choose between runs, drop cases, apply a schema-1/2 unstable-base waiver, or
-report the rebased main+T057 tip as performance-verified by this decision.
+Own this task, its two index entries, new attempt-2 archive and prospective
+contract; the queued freeze adds only its new performance-unit plan/index.
+No engine/dependency/third_party/benchmark-tool implementation changes.
+The local full `check.sh` and staged fast gate must pass before handoff;
+plan-specific `validate-unit` runs on the fresh original-host artifacts
+before its remote commit. Exact scan writes a burndown entry for coordinator
+recording after completion; no current full-scan count is claimed early.
