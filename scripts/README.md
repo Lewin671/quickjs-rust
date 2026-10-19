@@ -57,6 +57,8 @@ artifacts mean.
 
 - `perf-loop.sh`: inner loop for one unit: builds, runs the counter screen,
   lists symbol-size changes, optional trace. Diagnostic only. Workflow.
+- `quick-triage.sh`: queue-only fixed-subset v5 diagnostic, prospective request,
+  cached committed builds and exploratory verdict. Never acceptance. Workflow.
 - `perf-compare.sh`: formal three-engine comparison of two commits on this
   host. Workflow.
 - `performance-decision.sh`: builds the opportunity queue, validates a frozen

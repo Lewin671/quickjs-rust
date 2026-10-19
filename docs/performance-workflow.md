@@ -1,11 +1,8 @@
 # Performance workflow
 
-How to select, measure and decide one performance unit. This is the only
-procedural document for performance work. Tool and artifact meanings are in
-[benchmarking.md](benchmarking.md), rules that hold across revisions in
-[performance-knowledge.md](performance-knowledge.md), campaign targets in
-T018 and T022. Priority comes from an opportunity queue that is generated
-from a fresh formal run and is not stored in the repository (step 1).
+How to select, measure and decide one performance unit. This is the only procedural document for performance work. Tool and artifact meanings are in
+[benchmarking.md](benchmarking.md), rules that hold across revisions in [performance-knowledge.md](performance-knowledge.md), campaign targets in
+T018 and T022. Priority comes from an opportunity queue that is generated from a fresh formal run and is not stored in the repository (step 1).
 
 ## Terms
 | Lane | Inventory | What a run measures |
@@ -16,12 +13,9 @@ from a fresh formal run and is not stored in the repository (step 1).
 | Held-out | 9 cases, `benchmarks/held-out-preview.json` | whole-process wall time of pinned third-party npm libraries that never select work |
 | Development | 10 cases, `benchmarks/development-preview.json` | whole-process wall time of pinned third-party npm libraries that may select work |
 
-Broad cases are answered by whichever tier admits each loop, and that
-changes with the engine: do not assume a tier until its
-[execution counters](benchmarking.md#execution-counters) show it runs the
-path under test. The six sentinels are mandatory controls for every unit.
-External and both npm lanes' times include startup, parsing and shutdown;
-held-out is acceptance only, while development cases may be profiled and ranked.
+Broad cases are answered by whichever tier admits each loop, and that changes with the engine: do not assume a tier until its
+[execution counters](benchmarking.md#execution-counters) show it runs the path under test. The six sentinels are mandatory controls for every unit.
+External and both npm lanes' times include startup, parsing and shutdown; held-out is acceptance only, while development cases may be profiled and ranked.
 
 - A **diagnostic screen** reports dual metrics and a screening verdict;
   retaining a unit still requires a complete formal decision.
@@ -73,6 +67,27 @@ held-out is acceptance only, while development cases may be profiled and ranked.
   qualification of that schedule; a queue and the decisions made from it
   use one schedule.
 
+## Quick triage (diagnostic only)
+
+Before expensive acceptance, submit `scripts/quick-triage.sh --base <ref>
+--candidate <ref> --target <selection-case-id> --output "$BENCH_OUT/triage"`
+through `imac-bench.sh run --timing --ref <tooling-ref> --with <base>
+--with <candidate> --name <unique-name> -- '<command above>'`, after checking
+queue status. Targets repeat; held-out is forbidden. The command builds clean commits with canonical
+cached builds, then collects five natural-layout pairs on the qualified v5 workers-4 schedule. Its
+fixed controls and heuristic are versioned in `tools/benchmark/quick_triage.py`; no optional case
+removal. `request.json` seals refs, targets, inventory, host, policy, heuristic and budget before
+builds. New output directories are exclusive; retain every run, including errors/unclear/over-budget
+runs. Record job ID, request/result hashes, revisions, verdict and stage times in the owning task
+before handoff; retries stay separate. The 30-minute goal includes builds and queue quieting,
+excludes queued waiting; a budget miss reports unclear. Cold builds or a large target set can miss
+it. Triage may abandon an engineering idea or prioritize unchanged full acceptance. It cannot
+promote, consume/reset a frozen attempt budget, waive any mandatory
+screen/panel/formal/precision/correctness gate, reopen a closed unit, choose an acceptance run to
+keep, or tune targets/thresholds from results. It cannot undo an already-started attempt's
+obligations. Likely win/loss/unclear and five-pair exploratory 95% intervals are diagnostic, with no
+complete-portfolio or layout robustness claim. Existing plans keep their frozen schedule and budgets.
+
 ## 1. Regenerate the opportunity queue
 
 Build the opportunity queue from a formal bundle at the starting revision:
@@ -89,20 +104,16 @@ Build the opportunity queue from a formal bundle at the starting revision:
   --output target/comparison/<run>-queue.json
 ```
 
-If no bundle exists for the starting revision, run the comparison first;
-`--base` is then any earlier commit, normally the previous formal base.
+If no bundle exists for the starting revision, run the comparison first; `--base` is then any earlier commit, normally the previous formal base.
 Use new output paths and reports from the summary's sealed directory. The queue
-ranks, per lane, cases whose candidate/QuickJS-NG ratio exceeds `--target-ratio`
-(default 0.5) and names workloads to profile, not tactics; a
+ranks, per lane, cases whose candidate/QuickJS-NG ratio exceeds `--target-ratio` (default 0.5) and names workloads to profile, not tactics; a
 `--development-report` from the same host and executables, beside its own raw and
-manifest files, adds the development channel for legacy bundles. New bundles
-seal this lane automatically; a separate report is refused.
+manifest files, adds the development channel for legacy bundles. New bundles seal this lane automatically; a separate report is refused.
 
 ## 2. Profile, then freeze the plan
 
 Profile the queue's candidate executable (`target/perf-loop/compiler-fat16-abort-v1/rev-<sha>/qjs`)
-on a ranked workload (`python3 -m tools.benchmark.bundles` writes each
-external case to `target/bundles/<suite>--<case>.js` as a run executes it),
+on a ranked workload (`python3 -m tools.benchmark.bundles` writes each external case to `target/bundles/<suite>--<case>.js` as a run executes it),
 then import the sampler output into a receipt:
 
 ```sh
@@ -115,15 +126,10 @@ python3 -m tools.benchmark.profile \
   --output-dir target/profiles/<run>/<case>
 ```
 
-A profile of an instrumented build is supplemental; the receipt must
-describe the exact queue candidate binary. Write
-`tasks/performance-units/<unit>.json`
-([field reference](benchmarking.md#unit-plans-and-decisions)) with
-`base_sha` equal to the queue's candidate, the queue file's SHA-256, each
-receipt's path relative to `--profile-root` and its SHA-256, the target and
-control cases, both thresholds and `max_attempts`. Validate before writing
-runtime code, commit the plan, and add its row to
-[the plan index](../tasks/performance-units/README.md):
+A profile of an instrumented build is supplemental; the receipt must describe the exact queue candidate binary. Write `tasks/performance-units/<unit>.json`
+([field reference](benchmarking.md#unit-plans-and-decisions)) with `base_sha` equal to the queue's candidate, the queue file's SHA-256, each
+receipt's path relative to `--profile-root` and its SHA-256, the target and control cases, both thresholds and `max_attempts`. Validate before writing
+runtime code, commit the plan, and add its row to [the plan index](../tasks/performance-units/README.md):
 
 ```sh
 ./scripts/performance-decision.sh validate-unit \
@@ -136,8 +142,7 @@ runtime code, commit the plan, and add its row to
 
 ## 3. Implement and screen
 
-New units use schema 3 and freeze `layout_gate`: policy path and SHA-256,
-mechanism class, memory-sensitive wall targets, K=6 and measurement budget.
+New units use schema 3 and freeze `layout_gate`: policy path and SHA-256, mechanism class, memory-sensitive wall targets, K=6 and measurement budget.
 Schema 1/2 plans stay readable for historical decisions, never for a new unit.
 
 ```sh
@@ -145,12 +150,9 @@ Schema 1/2 plans stay readable for historical decisions, never for a new unit.
   --output target/layout-attempts/<new-attempt>
 ```
 
-This requires a committed clean candidate. It builds/audits both revisions'
-six variants before timing, screens natural placement, and completes the
-remaining five matching placements when the rule requires a panel. Natural
-samples are reused unchanged; completion never reruns variant zero. The
-output preserves raw samples, binary identities and the verdict. Run this
-through the site's serialized timing queue. Legacy `--base`, `--trace` and
+This requires a committed clean candidate. It builds/audits both revisions' six variants before timing, screens natural placement, and completes the
+remaining five matching placements when the rule requires a panel. Natural samples are reused unchanged; completion never reruns variant zero. The
+output preserves raw samples, binary identities and the verdict. Run this through the site's serialized timing queue. Legacy `--base`, `--trace` and
 extra `--case` remain diagnostic helpers.
 
 ### Screen gate
@@ -160,10 +162,8 @@ The policy's bands bind its host/toolchain/recipe; a mismatch requires recalibra
 [power/continuation procedure](layout-policy-artifacts.md#precision-power-and-continuation), including diagnostic bands/K=6 at the cap. Every screen
 covers every policy case; every non-target is a control. Development-enabled policies
 add ten cases and an independent lane ceiling; legacy policies cannot admit development targets.
-It reports `pass`, `control event`, `wall event`, `reject`, or `incomplete`,
-with per-case dual metrics and independent lane/portfolio gates.
-An event is incomplete evidence, not a rejection or a passing screen.
-For an explicit panel (both output paths must have equal-length names):
+It reports `pass`, `control event`, `wall event`, `reject`, or `incomplete`, with per-case dual metrics and independent lane/portfolio gates.
+An event is incomplete evidence, not a rejection or a passing screen. For an explicit panel (both output paths must have equal-length names):
 
 ```sh
 python3 -m tools.benchmark.layout_variants --revision <base> --output target/layout/base000
