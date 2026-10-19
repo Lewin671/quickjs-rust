@@ -13,7 +13,7 @@ it to `archive/` with `git mv` and move its row below.
 
 | Task | Status | What it is |
 | --- | --- | --- |
-| [T058](T058-regexp-lazy-quantifiers.md) RegExp lazy quantifiers | active | Attempts 1/2 closed incomplete/inconclusive; fresh current-base v6 queue/profile, plan freeze and acceptance chain queued. |
+| [T058](T058-regexp-lazy-quantifiers.md) RegExp lazy quantifiers | active | Attempts 1/2 closed incomplete/inconclusive; v6 plan frozen; first selection DISTURBED, downstream unmeasured; whole-run r2 chain queued. |
 | [T057](T057-string-code-units.md) string code units | active | Stage-1 PROMOTE under v4; integrated into main; stages 2 onward require new plans. |
 | [T056](T056-interpreter-core-v2.md) interpreter core v2 | active | Target design for names, frames and values; unit 0 and M2 re-plan complete; M1 stage 1 complete on its branch (v4 screen pass), integration next. |
 | [T018](T018-broad-performance.md) broad performance | active | The performance campaign contract and its targets against QuickJS-NG. Start performance work here, then follow [the workflow](../docs/performance-workflow.md). |
