@@ -219,8 +219,8 @@ time off-CPU. A precise wall-time regression beyond the control ceiling
 that cycles do not show therefore makes the decision `inconclusive` and is
 listed in `wall_time_divergence`.
 
-A watched comparison is precise when it has at least 30 valid blocks and a
-relative half-width of at most 3%. `decide` requires the bundle's base
+Legacy watched comparisons require at least 30 blocks and <=3% relative half-width.
+V6 formal cases use the [prospective threshold rule](layout-policy-artifacts.md#prospective-formal-precision-v2); lane and held-out gates retain their statistics. `decide` requires the bundle's base
 revision to equal the plan's `base_sha` and its base executable to equal
 the queue's candidate executable.
 

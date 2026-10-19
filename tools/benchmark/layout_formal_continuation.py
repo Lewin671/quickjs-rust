@@ -22,6 +22,9 @@ from .process import ProcessResult, run_process
 from .pair_disturbance import Monitor, quieting_preflight, verify_formal_load
 
 
+from . import formal_precision
+
+
 COMPARISONS=('aa','candidate-base')
 
 
@@ -42,13 +45,15 @@ def source_hashes(bundle, comparison='aa'):
     return {n:digest(bundle/n) for n in ('summary.json',*summary['bundle']['artifacts'])}
 
 
-def replay(path, bundle, name, *, pilot=None, comparison='aa'):
+def replay(path, bundle, name, *, pilot=None, comparison='aa', precision_rule=None):
     from .layout_formal_raw import extract
     value=json.loads(path.read_text())
     if value['artifact_type']=='quickjs-formal-continuation-set':
         latest=Path(value['latest']['path'])
         if digest(latest)!=value['latest']['sha256']:raise ValueError('formal continuation set hash mismatch')
-        return replay(latest,bundle,name,pilot=pilot,comparison=comparison)
+        return replay(latest,bundle,name,pilot=pilot,comparison=comparison,precision_rule=precision_rule)
+    if value.get('formal_precision_rule') != precision_rule:
+        raise ValueError('formal continuation precision rule mismatch')
     if value.get('comparison','aa')!=comparison:
         raise ValueError('formal continuation comparison kind mismatch')
     ctx=context(bundle,name)
@@ -63,11 +68,12 @@ def replay(path, bundle, name, *, pilot=None, comparison='aa'):
     if value['previous']:
         prev=Path(value['previous']['path'])
         if digest(prev)!=value['previous']['sha256']:raise ValueError('formal continuation predecessor hash mismatch')
-        ratios,prior_host=replay(prev,bundle,name,pilot=pilot,comparison=comparison)
+        ratios,prior_host=replay(prev,bundle,name,pilot=pilot,comparison=comparison,precision_rule=precision_rule)
         if prior_host!=value['host']:raise ValueError('formal continuation host changed')
     else:ratios=list(pilot)
     before=len(ratios)
-    needed=allocation(analyze({name:pilot}),before,analyze({name:ratios})['precise'],base_n=len(pilot))
+    needed=(formal_precision.next_count(len(pilot),before) if precision_rule == formal_precision.RULE else
+            allocation(analyze({name:pilot}),before,analyze({name:ratios})['precise'],base_n=len(pilot)))
     if needed<=before or (value['previous_blocks'],value['required_blocks'])!=(before,needed):
         raise ValueError('formal continuation power/count mismatch')
     raw=path.parent/value['raw_file']
@@ -98,7 +104,7 @@ def replay(path, bundle, name, *, pilot=None, comparison='aa'):
     return merged,value['host']
 
 
-def collect(bundle, name, out, previous=None):
+def collect(bundle, name, out, previous=None, precision_rule=None):
     from .layout_formal_raw import extract
     from .screen import measurement_lock, wait_for_builds, check_load, DEFAULT_CACHE
     quiet=quieting_preflight();host=host_identity();node=platform.node()
@@ -110,9 +116,10 @@ def collect(bundle, name, out, previous=None):
     pilot=extract(bundle,node)[name]
     ratios=list(pilot)
     if previous is not None:
-        ratios,prior_host=replay(previous,bundle,name,pilot=pilot,comparison=comparison)
+        ratios,prior_host=replay(previous,bundle,name,pilot=pilot,comparison=comparison,precision_rule=precision_rule)
         if prior_host!=host:raise ValueError('formal continuation host/recipe changed')
-    target=allocation(analyze({name:pilot}),len(ratios),analyze({name:ratios})['precise'],base_n=len(pilot))
+    target=(formal_precision.next_count(len(pilot),len(ratios)) if precision_rule == formal_precision.RULE else
+            allocation(analyze({name:pilot}),len(ratios),analyze({name:ratios})['precise'],base_n=len(pilot)))
     if target<=len(ratios):raise ValueError('formal continuation is not required')
     out.mkdir(parents=True,exist_ok=False)
     monitor=Monitor.from_queue()
@@ -138,22 +145,24 @@ def collect(bundle, name, out, previous=None):
     if source_hashes(bundle,comparison)!=hashes:raise ValueError('formal source bundle changed')
     value={'artifact_type':'quickjs-formal-case-continuation','schema_version':1,
         **({'comparison':comparison} if comparison!='aa' else {}),
+        **({'formal_precision_rule':precision_rule} if precision_rule else {}),
         'bundle':str(bundle),'source_hashes':hashes,'case_id':name,'host':host,'host_node':node,
         'previous':{'path':str(previous),'sha256':digest(previous)} if previous else None,
         'previous_blocks':len(ratios),'required_blocks':target,'raw_file':'samples.jsonl',
         'raw_sha256':digest(out/'samples.jsonl'),'quieting':quiet,'launch_preflight':preflight,'load':load,
         'ratios':ratios+[costs[('candidate',b)]/costs[('base',b)] for b in range(len(ratios),target)]}
     write_json(out/'continuation.json',value)
-    replay(out/'continuation.json',bundle,name,pilot=pilot,comparison=comparison)
-    return out/'continuation.json',analyze({name:value['ratios']})
+    replay(out/'continuation.json',bundle,name,pilot=pilot,comparison=comparison,precision_rule=precision_rule)
+    return out/'continuation.json',(formal_precision.analyze_case(value['ratios']) if precision_rule else analyze({name:value['ratios']}))
 
 
-def complete(bundle, name, root, previous=None):
+def complete(bundle, name, root, previous=None, precision_rule=None):
     root.mkdir(parents=True,exist_ok=False)
     for stage in range(2):
         for attempt in range(4):
             try:
-                latest,stats=collect(bundle,name,root/f'stage{stage}-attempt{attempt}',previous)
+                latest,stats=collect(bundle,name,root/f'stage{stage}-attempt{attempt}',previous,
+                                     **({'precision_rule':precision_rule} if precision_rule else {}))
                 break
             except ValueError as error:
                 if not str(error).startswith('DISTURBED:') or attempt==3:raise
@@ -165,6 +174,7 @@ def complete(bundle, name, root, previous=None):
     write_json(root/'continuation.json',{'artifact_type':'quickjs-formal-continuation-set',
         'case_id':name,'host':meta['host'],'host_node':meta['host_node'],
         **({'comparison':meta['comparison']} if 'comparison' in meta else {}),
+        **({'formal_precision_rule':precision_rule} if precision_rule else {}),
         'latest':{'path':str(latest),'sha256':digest(latest)},'precision':stats})
     return root/'continuation.json'
 
@@ -174,11 +184,37 @@ def main():
     p.add_argument('--bundle',type=Path,required=True);p.add_argument('--case',
         help='optional subset; default continues every deficient case of the sealed A/A or candidate/base bundle')
     p.add_argument('--output',type=Path,required=True);p.add_argument('--previous',type=Path)
+    p.add_argument('--plan',type=Path,help='frozen plan; required to opt into prospective precision v2')
+    p.add_argument('--mode',choices=('promotion','stage'),default='promotion')
     args=p.parse_args()
     bundle=args.bundle.resolve()
+    unit=policy=None
+    precision_rule=None
+    if args.plan:
+        from .performance_decision import load_unit
+        from .layout_policy import load_policy
+        from .performance_evidence import ROOT
+        unit,_=load_unit(args.plan)
+        gate=unit['layout_gate']
+        policy=load_policy(ROOT/gate['policy_path'],gate['policy_sha256'])
+        summary=json.loads((bundle/'summary.json').read_text())
+        if (summary['engines']['base']['source_revision'] != unit['base_sha']
+                or summary.get('lane_schedule') != policy.get('formal_lane_schedule')):
+            raise ValueError('continuation plan base/schedule mismatch')
+        precision_rule=policy.get('formal_precision_rule')
+        if precision_rule and comparison_kind(bundle) != 'candidate-base':
+            raise ValueError('prospective precision is not a qualification A/A rule')
+    if args.case and precision_rule:
+        from .layout_formal_raw import extract
+        pilot=extract(bundle,platform.node())[args.case]
+        if len(pilot) != unit['layout_gate']['formal_blocks']:
+            raise ValueError('continuation pilot differs from frozen block budget')
+        if formal_precision.ready(formal_precision.analyze_case(pilot),
+                                  formal_precision.threshold(unit,policy,args.case,args.mode)):
+            raise ValueError('case already resolved; prospective continuation is not required')
     if args.case:
         path=complete(bundle,args.case,args.output.resolve(),
-                      args.previous.resolve() if args.previous else None)
+                      args.previous.resolve() if args.previous else None, precision_rule)
         print(json.dumps({'continuation':str(path),'precision':json.loads(path.read_text())['precision']}))
     else:
         if args.previous:p.error('--previous requires --case')
@@ -186,8 +222,13 @@ def main():
         args.output.mkdir(parents=True,exist_ok=False)
         paths=[]
         for name,ratios in extract(bundle,platform.node()).items():
-            if analyze({name:ratios})['relative_half_width']>.03:
-                path=complete(bundle,name,args.output.resolve()/name.replace('/','--'))
+            if precision_rule and len(ratios) != unit['layout_gate']['formal_blocks']:
+                raise ValueError('continuation pilot differs from frozen block budget')
+            stats=formal_precision.analyze_case(ratios) if precision_rule else analyze({name:ratios})
+            deficient=(not formal_precision.ready(stats,formal_precision.threshold(unit,policy,name,args.mode))
+                       if precision_rule else stats['relative_half_width']>.03)
+            if deficient:
+                path=complete(bundle,name,args.output.resolve()/name.replace('/','--'),precision_rule=precision_rule)
                 paths.append({'path':str(path),'sha256':digest(path)})
         write_json(args.output/'power.json',{'continuations':paths})
 

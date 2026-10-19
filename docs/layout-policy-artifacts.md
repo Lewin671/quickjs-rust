@@ -47,7 +47,7 @@ Decision schema 5 carries `layout_verdict`, raw-replayed formal statistics
 and policy/panel/held-out SHA-256 bindings. Case effects are paired-ratio
 medians; lanes/portfolio are equal-case geomeans. Their 95% intervals jointly
 resample block IDs with 20,000 draws, seed 0, and require >=30 blocks and
-<=3% relative half-width. Promotion checks held-out upper intervals against
+<=3% relative half-width, except [v6 formal cases](#prospective-formal-precision-v2). Promotion checks held-out upper intervals against
 its program/lane bands as well as point estimates. Legacy decisions retain
 their own schema and statistics. Shared formal snapshots use equal-length role/hash
 prefixes that preserve the role-dash, and exclusive creation; measurement protocols are
@@ -178,7 +178,7 @@ This bounds hangs without hiding an engine's long tail or waiving precision.
 
 ## Precision power and continuation
 
-Every calibration and formal A/A automatically applies this standing rule.
+Calibration, formal A/A and pre-v6 candidate plans apply this standing rule.
 For frozen base_n observations (30 formal blocks) and valid relative CI
 half-width h>3%, n=min(240,ceil(base_n*(h/.03)^2)). Retain every pilot
 observation and append only the deficit using the original
@@ -229,6 +229,49 @@ load-only replacements. All other errors stop. Qualification accepts latest
 joint lane blocks. Formal cap-imprecise cases also set the policy's diagnostic
 band/K=6 status; precision alone cannot block qualification. Payoff, stage,
 instruction, precise-case, lane/portfolio and correctness gates still bind.
+
+## Prospective formal precision v2
+
+[iMac v6](../benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v6.json)
+freezes `formal_precision_rule: threshold-median-v2`. It inherits v5's qualified
+measurement schedule, bands and qualification data unchanged; only new plans
+frozen after publication may bind it. No automatic successor applies to old
+selection gates. Existing plans, T058 attempts 1-2 and closed decisions keep
+their rule, timing and budgets. [T062](../tasks/archive/T062-formal-precision-rule.md)
+records independent A/A diagnosis, alternatives and CPU-only validation.
+
+For candidate/base **selection cases only**, the two possible looks are the
+frozen 30/60-block pilot and 240 blocks. Each uses a central exact binomial
+order-statistic median interval at >=97.5% coverage, with <=1.25% per tail.
+Union bound over two fixed looks gives >=95% simultaneous per-case coverage
+(<=2.5% erroneous favorable-side crossings). This assumes independent paired
+blocks from a stationary distribution; no claim of coverage under host drift.
+There is no adaptive middle-N decision look. Cases whose interval is precise
+(<=3%) or entirely on one side of the relevant threshold need no extension;
+other cases append directly to 240. At cap, a wide crossing interval remains
+incomplete. The relevant limit is min(payoff, reciprocal B_i) for targets,
+B_i for controls, or min(B_i, stage budget) in a migration. Existing diagnostic
+bands retain their separate K=6 contract. Clear unfavorable intervals continue
+through the existing rejection/persistence gates; they do not become passes.
+
+`layout_formal_continuation --plan <plan>` loads its exact policy and uses this
+schedule. Continuation segments record the rule; raw replay refuses old-rule
+chains in v6 decisions and v2 chains in historical decisions. The point
+estimator remains the paired-ratio median. No sample is discarded or redrawn.
+The formal statistics record interval method, coverage and maximum looks.
+The pilot or cap may decide a case, never both as independent attempts.
+
+No regression tolerance is widened. Every mandatory formal requirement must
+pass along with the unchanged layout, instruction, lane/portfolio, held-out,
+resource and correctness gates. Requiring all mandatory gates is an
+intersection-union test: one false mandatory directional assertion suffices
+to bound an erroneous promotion by its own <=2.5% tail budget; this is not a
+95% simultaneous interval claim over the entire inventory or over attempts.
+At most two attempts give a <=5% directional union bound for a fixed violating case; no budget reset is granted.
+Existing layout-persistence gates are empirical, not new statistical guarantees.
+Calibration/A/A, held-out and joint lanes keep their bootstrap precision rule;
+their measurement protocol is unchanged, so measurement requalification is
+not needed. Increasing in-process work would require it.
 
 ## Development policy extension
 

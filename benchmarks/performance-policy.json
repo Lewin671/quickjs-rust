@@ -91,6 +91,7 @@
       "tools/benchmark/layout_identity.py",
       "tools/benchmark/layout_plan.py",
       "tools/benchmark/layout_policy.py",
+      "tools/benchmark/formal_precision.py",
       "tools/benchmark/layout_power.py",
       "tools/benchmark/layout_rule.py",
       "tools/benchmark/layout_resources.py",
@@ -110,7 +111,7 @@
       "tools/benchmark/preview_sentinel.py",
       "tools/benchmark/preview_summary.py"
     ],
-    "aggregate_sha256": "1fcb8a6de77e96f890d8cff268148b5c0666507b21d20f7e43e3b340dcba9a9a"
+    "aggregate_sha256": "b50e4ad18438295676c77d351727d577e342ba4a5d53ba299f9084f78a007ebe"
   },
   "hosted_pr": {
     "tier": "informational_preview",

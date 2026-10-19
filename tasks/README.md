@@ -42,6 +42,7 @@ outcome column says what happened, not what to do next.
 
 | Task | Outcome |
 | --- | --- |
+| `T062-formal-precision-rule.md` | Prospective v6 two-look exact-median formal gates; v5 measurement/bands retained; historical attempts unchanged. |
 | `T061-quick-triage.md` | Queue-only v5 fixed-subset diagnostics; T058 validation took 9.01 min, verdict unclear, no acceptance changes. |
 | `T060-parallel-layout-policy-v5.md` | Workers-4 policy v5 qualified (SHA-256 `f3e8ef40...`): case-sharded collection, screens and K=6 panels 2.55x faster than serial. |
 | `T059-held-out-layout-policy-v4.md` | Policy v4 qualified (SHA-256 `1eb7de46...`): six-layout held-out bands, held-out and lane events resolved by K=6, candidate formal continuation. |
@@ -93,7 +94,6 @@ outcome column says what happened, not what to do next.
 - T056: [unit 0 part 1 evidence](archive/T056-unit0-part1-evidence.md) (standing, attribution limits, RSS, ABI probes), [part 2](archive/T056-unit0-part2-evidence.md) (mechanism counters, development profiles, first-unit ranking and plan binding) and [M1 stage 1](archive/T056-m1-stage1-evidence.md) (atom linking and Value facade).
 - T055: [qualified policy adoption](archive/T055-layout-noise-control.md), [feedback-2 record](archive/T055-feedback-2-qualification.md), [feedback-1 record](archive/T055-feedback-1-qualification.md), [complete A2 data](archive/T055-phase-a2-data.md) and [B frozen plans/blocked qualification log](archive/T055-phase-b-plan-and-log.md).
 - T055 phase A: [superseded frozen plan](archive/T055-phase-a-plan.md) and [results](archive/T055-phase-a-log.md); static/correctness pass, invalid retired-sampler timing.
-
 - [T050 complete diagnostic tables](archive/T050-vm-layout-diagnostic-data.md), including the unattributed dynamic-read regression.
 
 - First batch-1 formal decisions: `T037-first-formal-decision.md`.

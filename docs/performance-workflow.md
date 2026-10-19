@@ -142,7 +142,7 @@ runtime code, commit the plan, and add its row to [the plan index](../tasks/perf
 
 ## 3. Implement and screen
 
-New units use schema 3 and freeze `layout_gate`: policy path and SHA-256, mechanism class, memory-sensitive wall targets, K=6 and measurement budget.
+New units use schema 3 and freeze `layout_gate`: policy path/hash, mechanism class, memory targets, K=6 and budget; new workers-4 plans use v6 (existing plans keep their policy).
 Schema 1/2 plans stay readable for historical decisions, never for a new unit.
 
 ```sh
@@ -212,9 +212,8 @@ The base is the plan's frozen `base_sha`, not the commit preceding the candidate
 requires held-out evidence, complete QuickJS-NG comparisons and the candidate's
 zero-gap Test262 burndown. Panel and held-out raw samples are replayed and
 bound to the formal bundle's exact natural binary hashes and source revisions.
-The canonical formal bundle keeps all precision/health/linearity requirements; an imprecise case is
-completed by `layout_formal_continuation --bundle <run2>` under the [power rule](layout-policy-artifacts.md#precision-power-and-continuation), passed per case.
-Its raw paired ratios use the same case-median/lane statistic as qualification. Do not rerun until a favorable
+Canonical health/linearity and joint lane gates remain. Complete deficient cases with
+`layout_formal_continuation --bundle <run2> --plan <frozen-plan> --output <new-dir>` (`--mode stage` for migrations); pass each chain to decide. V6 uses the [two-look threshold rule](layout-policy-artifacts.md#prospective-formal-precision-v2), older policies keep width-only power allocation. Do not rerun until a favorable
 interval appears, drop outliers, or pool runs; `--blocks 3` bundles are
 diagnostic. Decision states are defined in [benchmarking.md](benchmarking.md#unit-plans-and-decisions). Record the
 result in the owning task and in the plan index. `rejected` is evidence to

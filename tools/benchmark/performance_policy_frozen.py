@@ -94,6 +94,7 @@ PREVIEW_IMPLEMENTATION_FILES = (
     "tools/benchmark/layout_identity.py",
     "tools/benchmark/layout_plan.py",
     "tools/benchmark/layout_policy.py",
+    "tools/benchmark/formal_precision.py",
     "tools/benchmark/layout_power.py",
     "tools/benchmark/layout_rule.py",
     "tools/benchmark/layout_resources.py",

@@ -13,6 +13,7 @@ from .layout_policy import HELD_OUT_RULE, load_policy, analyze, rows, selection_
 from .layout_rule import evaluate
 from .layout_power import diagnostic_only, needs_panel
 from .performance_evidence import ROOT
+from . import formal_precision
 
 
 def evaluate_formal(unit, summary, broad, external, sentinel, mode, panel_path, held_path, formal_bundle=None, resource_report=None, resource_raw=None, formal_continuations=()):
@@ -75,18 +76,18 @@ def evaluate_formal(unit, summary, broad, external, sentinel, mode, panel_path, 
     for case, band in policy['cases'].items():
         if case not in wall:
             continue
-        stats = analyze({case: extended.get(case, wall[case])})
+        values = extended.get(case, wall[case])
+        stats = formal_precision.analyze_case(values) if formal_precision.enabled(policy) else analyze({case: values})
         formal_stats[case] = stats
         lower, upper = stats['confidence_interval']['lower'], stats['confidence_interval']['upper']
         diagnostic=diagnostic_only(policy,case)
         if diagnostic and len(panels)!=6:
             missing.append(case + ': diagnostic-only case requires K=6')
-        if not stats['precise'] and not diagnostic:
+        limit = formal_precision.threshold(unit, policy, case, mode)
+        sufficient = formal_precision.ready(stats, limit) if formal_precision.enabled(policy) else stats['precise']
+        if not sufficient and not diagnostic:
             missing.append(case + ': formal interval imprecise')
             continue
-        limit = (payoff if diagnostic_only(policy,case) else min(payoff, 1 / band['wall_band'])) if case in target_ids and mode != 'stage' else band['wall_band']
-        if mode == 'stage':
-            limit = min(limit, unit['migration']['stage_max_candidate_over_base'])
         if diagnostic_only(policy,case) and (case not in target_ids or mode == 'stage'):
             if len(panels) != 6:missing.append(case + ': diagnostic-only case requires K=6')
             if mode == 'stage':
@@ -171,7 +172,9 @@ def continued_cases(policy, bundle, wall, paths):
         if name in extended or name not in wall:
             raise ValueError('duplicate or unknown formal continuation case: ' + name)
         ratios, host = replay_formal(Path(path).resolve(), Path(bundle).resolve(), name,
-                                     pilot=wall[name], comparison='candidate-base')
+                                     pilot=wall[name], comparison='candidate-base',
+                                     **({'precision_rule':policy['formal_precision_rule']}
+                                        if formal_precision.enabled(policy) else {}))
         if host != policy['host']:
             raise ValueError('formal continuation host/recipe differs from policy')
         extended[name], hashes[name] = ratios, digest(Path(path))

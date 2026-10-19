@@ -120,6 +120,8 @@ def load_policy(path: Path, sha256: str, *, live=True):
         raise ValueError('invalid layout lane ceiling')
     from .case_schedule import identity
     identity(policy)
+    from .formal_precision import enabled
+    enabled(policy)
     from .layout_power import validate_precision
     validate_precision(policy)
     return policy
