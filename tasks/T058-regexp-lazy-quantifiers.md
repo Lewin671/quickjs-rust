@@ -1,34 +1,40 @@
 # T058: RegExp lazy quantifiers and pattern-template removal
 
 - Status: active; INCONCLUSIVE, no PROMOTE/REJECT verdict yet: the frozen
-  rule requires follow-up measurements, which were not queued.
+  rule requires follow-up measurements, now queued with lead approval.
 - Implementation: present (`0dc5d6a1`, `1b8c2159`, `cec613d2`; measured
   candidate `392ca717`, runtime-identical to them); no runtime edits in this review.
-- Verified at: review checkout `5503cfff`; measured base/candidate
-  `351004f3`/`392ca717`. All three fetched jobs exit 0, no DISTURBED.
+- Verified at: review `1fbf83a1`; queue status confirmed 2026-10-19 03:39 UTC.
+  Original review `5503cfff`: base/candidate `351004f3`/`392ca717`; all three jobs exit 0, no DISTURBED.
 - Evidence: deciding numbers and rule retained here; local artifacts, not
-  retained: workspace `outputs/imac-bench/<job>/`, `outputs/t058-screen1/`,
-  `outputs/t058-heldout30/`, `outputs/t058-promotion-review/`.
+  retained: `outputs/imac-bench/<job>/`, `outputs/t058-screen1/`, `outputs/t058-heldout30/`,
+  `outputs/t058-promotion-review/` under the workspace root.
   SHA-256: formal summary `ee2d0c2f...cc8d9f`, held-out `panel.json`
   `d5f5f461...6c0cf02`, screen `complete.json` `fff35cfc...0cdb`,
   Test262 entry `9b24e29a...641f7`. Sealed bundle, both panels' raw packets,
   identities and frozen unit/profile validation checked locally.
-- Unresolved: held-out completion and formal precision continuation; RGI_Emoji
-  template. Local promotion CLI on Python 3.14.2 and 3.13.4 exits 2:
-  `error: report.json: report differs from raw replay`. Broad
-  `property_dynamic_read` ratio / half-width differ by about 2.22e-16 from
-  the sealed x86 report; no artifacts rewritten and no CLI verdict produced.
-  Independent raw/panel rule evaluation finds a held-out wall event, no failures;
-  it cannot establish promotion. Replay must succeed before the final decision.
-- Next action: after separate scheduling authorization, run these exact commands
-  in serialized iMac timing jobs at `5503cfff` (not run or queued here), then
-  replay promotion on the measurement host with screen `complete.json`, held-out
-  `complete.json`, the formal continuation and the exact Test262 entry.
+- Unresolved: promotion pending; RGI_Emoji template. Local Python 3.14.2/3.13.4
+  replay exits 2: `error: report.json: report differs from raw replay`;
+  `property_dynamic_read` ratio/half-width differ by about 2.22e-16 from x86.
+  Fix for this decision: strict replay on the original iMac/Python environment,
+  not edited evidence or relaxed thresholds. If host replay fails, verdict stays blocked.
+- Next action: fetch the three follow-up jobs below after completion; verify exit,
+  disturbance, final precision and promotion verdict; record results before integration.
 - Jobs: `20261018T080835Z-t058-formal30` (2759 s, 3 light background samples),
   `20261018T080836Z-t058-heldout30` (3204 s, 6 light samples), and
   `20261018T080837Z-t058-test262-exact` (1688 s, no timing monitor).
-- Results: formal papaparse ratio 0.1865569292, 95% CI [0.1854727456, 0.1874598998],
-  below frozen 0.70; SunSpider `bitops-3bit-bits-in-byte` ratio 0.9282498417,
+- Follow-up jobs: all queued in this order behind T057, exit/disturbance pending:
+  `20261019T033833Z-t058-formal-bitops-continuation` (timing, checkout `392ca717`),
+  `20261019T033847Z-t058-heldout-k6-complete` (timing, checkout `766a3431`),
+  `20261019T033909Z-t058-promotion-decide-followup` (non-timing, `766a3431`).
+  Original formal checkout has only an A/A collector: job 1 separately loads
+  the published candidate/base collector from `766a3431`; binaries/argv stay sealed.
+  Job 2 seeds a fresh output from clean natural SHA-256 `d5f5f461...6c0cf02`,
+  replaying raw packets first; original job `out/` is empty, so recover from
+  `target/layout/t058-heldout`. Natural pairs are never rerun.
+  Job 3 requires both jobs exit 0 without DISTURBED and consumes their immutable outputs.
+- Results: papaparse 0.1865569292, 95% CI [0.1854727456, 0.1874598998] < frozen 0.70;
+  SunSpider `bitops-3bit-bits-in-byte` ratio 0.9282498417,
   CI [0.9167765124, 0.9863025702], relative half-width 6.253998% > 3%:
   power rule allocates 131 total blocks (101 appended), then 240 if needed.
   Held-out lane 1.0086606337, CI [1.0066319824, 1.0103259991], exceeds
@@ -43,15 +49,11 @@
   n=min(240,ceil(30*(h/.03)^2)), retaining the pilot; a candidate still
   imprecise at 240 stays incomplete. No threshold or attempt budget changed.
 
-```sh
-python3 -m tools.benchmark.layout_formal_continuation \
-  --bundle "$BENCH_QUEUE/20261018T080835Z-t058-formal30/out/bundle" \
-  --case external/sunspider-1.0/bitops-3bit-bits-in-byte --output "$BENCH_OUT/bitops-power"
-python3 -m tools.benchmark.layout_panel \
-  --base-matrix target/layout-attempts/t058-attempt1/base000/identity.json \
-  --candidate-matrix target/layout-attempts/t058-attempt1/cand000/identity.json \
-  --held-out --complete --pairs 30 --output target/layout/t058-heldout
-```
+The continuation automatically advances from 131 to 240 in the same timing job if
+still imprecise (>3%); no second job is queued. Expected execution:
+continuation/decision a few minutes, held-out about 4.45 h (5 x original 3204 s),
+plus T057 queue wait and quieting/load recovery. Runner commands and artifacts:
+`tmp/bench-queue/<job>/`.
 
 ## Goal
 
@@ -163,8 +165,6 @@ iMac job `20261017T222653Z-t058-screen1` (`perf-loop.sh`, policy v3, natural lay
 exit 3; light background activity in 6 samples, below the disturbance threshold). Verdict SHA-256
 `9489c3e9...c9c807`: label `reject`, failure `layout 0 broad: wall lane ceiling exceeded`, K=6 not
 run because the natural layout already failed and the gate is not mandatory-panel.
-
-Natural lane ratios and ceilings are retained in the complete panel table below.
 
 Target `development/papaparse/csv`: wall 0.1862, instructions 0.1146 (frozen threshold 0.70). Wall
 events: `broad/top_level_function_call` 1.4316 (band 1.0250, instructions 1.0002),
