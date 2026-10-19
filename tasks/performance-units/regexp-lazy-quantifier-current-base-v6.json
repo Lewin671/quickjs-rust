@@ -1,0 +1,65 @@
+{
+  "schema_version": 3,
+  "unit_kind": "leaf",
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "regexp-lazy-quantifier-current-base-v6",
+  "base_sha": "a68a9f469a1c36c8080b71e1546851a30f448da6",
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "development/papaparse/csv"
+    ],
+    "rank_ceiling": 1,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "T058: first-match traversal of a lazily quantified single-code-point atom (literal, class, dot, escape, property) tries the quantifier minimum first and steps the atom one repetition at a time only after the continuation fails, instead of scanning the atom's longest run before the first attempt. Greedy quantifiers keep the existing longest-run scan. The replace builtin's literal-source '(.+)' shortcut is removed; the general prepared global loop answers that program.",
+    "generality": "Admission depends only on the parsed atom kind and the quantifier's laziness, bounds and width in the compiled pattern: every lazy quantifier over any single-code-point atom, in every flag combination and every API (exec, test, match, matchAll, replace, split, search). No pattern source, library or benchmark shape is recognized; the change removes a source-text comparison.",
+    "semantic_risks": [
+      "Lazy priority order: count min first, then min+1, ..., bounded by max and by the first atom failure",
+      "Minimum repetitions must all succeed before the first continuation attempt; a short run fails without trying the continuation",
+      "Unicode and v modes advance by code point (surrogate pairs) and legacy \\u escapes can consume two units without u",
+      "Captures and backreferences inside the continuation must see the same state as before; failed attempts restore the index",
+      "Sticky and global lastIndex results and empty-match advancement must be unchanged",
+      "Removing the '(.+)' shortcut must keep replace results and lastIndex identical, including the replace-math stress case's length/OOM behavior"
+    ]
+  },
+  "fast_gate": {
+    "target_ids": [
+      "development/papaparse/csv"
+    ],
+    "target_max_candidate_over_base": 0.7,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  },
+  "layout_gate": {
+    "policy_path": "benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v6.json",
+    "policy_sha256": "be123f7c5cfd46aa863467256eb8bf6947ff64f72541efc371f05a36c5535a31",
+    "mechanism_class": "cpu-work",
+    "memory_wall_targets": [],
+    "panel_required": true,
+    "panel_pairs": 5,
+    "held_out_pairs": 30,
+    "formal_blocks": 30
+  },
+  "queue": {
+    "candidate_sha": "a68a9f469a1c36c8080b71e1546851a30f448da6",
+    "sha256": "8adb73f995b3bc3cf1e83098cfe48799f14618ea23200e251fca69b1a7bea258"
+  },
+  "profile_evidence": [
+    {
+      "source": "papaparse--csv/receipt.json",
+      "sha256": "6ba549699da84ac3d84a359a83136845e58e16bf824a2ba50e0f34c68f97ada7",
+      "base_sha": "a68a9f469a1c36c8080b71e1546851a30f448da6",
+      "opportunity_ids": [
+        "development/papaparse/csv"
+      ],
+      "shared_cost": "Fresh current-main exact-image profile: 49950 main-thread samples; largest inclusive RegExp replace branch 46182, largest SimpleAtom step branch 28910. Two full papaparse passes; max branch counts are not summed. Current-base matcher still scans a lazy atom maximum before its minimum continuation; candidate changes only the T058 RegExp implementation relative to this base.",
+      "inclusive_fraction": 0.9245645645645646
+    }
+  ]
+}

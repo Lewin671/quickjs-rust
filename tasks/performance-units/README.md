@@ -35,6 +35,7 @@ nothing about whether the code exists.
 
 | Plan (`<name>.json`) | Task | Base | Recorded outcome |
 | --- | --- | --- | --- |
+| `regexp-lazy-quantifier-current-base-v6` | T058 | `a68a9f46` 2026-10-19 | fresh current-base queue/profile validated; v6 one-attempt K=6 plan frozen, candidate `9e415ff4`; all acceptance pending |
 | `regexp-lazy-quantifier-steps-v5-remeasure` | T058 | `351004f3` 2026-10-19 | closed inconclusive: sole bitops formal width 3.7343% at 240; all jobs clean, decision exit 1; old unit exhausted, no v6 re-decision |
 | `regexp-lazy-quantifier-steps` | T058 | `351004f3` 2026-10-17 | attempt 1 closed incomplete: formal cap half-width 3.5433%, no promotion; r2 held-out/decision cancelled; original plan unchanged, one remaining attempt bound below |
 | `string-handles-ascii-search-boundaries` | T057 | `351004f3` 2026-10-17 | attempt 1: PROMOTE under v4 after clean replacement K=6 held-out panel and precise formal continuation; candidate `026476d5`, integrated into main; [T057](../T057-string-code-units.md) |
