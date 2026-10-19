@@ -1,69 +1,11 @@
 # T058: RegExp lazy quantifiers and pattern-template removal
 
-- Status: active; INCONCLUSIVE, no PROMOTE/REJECT verdict yet: formal precision
-  fails at the 240-block cap; disturbed held-out completion replaced.
-- Implementation: present (`0dc5d6a1`, `1b8c2159`, `cec613d2`; measured
-  candidate `392ca717`, runtime-identical to them); no runtime edits in this review.
-- Verified at: review `06cb0f35`; raw continuation checked locally; queue status
-  confirmed 2026-10-19 12:34 UTC: replacement running, decision queued after it.
-  Original review `5503cfff`: base/candidate `351004f3`/`392ca717`; all three jobs exit 0, no DISTURBED.
-- Evidence: deciding numbers and rule retained here; local artifacts, not
-  retained: `outputs/imac-bench/<job>/`, `outputs/t058-screen1/`, `outputs/t058-heldout30/`,
-  `outputs/t058-promotion-review/` under the workspace root.
-  SHA-256: formal summary `ee2d0c2f...cc8d9f`, held-out `panel.json`
-  `d5f5f461...6c0cf02`, screen `complete.json` `fff35cfc...0cdb`,
-  Test262 entry `9b24e29a...641f7`. Sealed bundle, both panels' raw packets,
-  identities and frozen unit/profile validation checked locally.
-- Unresolved: formal precision still >3% at 240 blocks, so promotion remains
-  incomplete under the frozen rule; held-out replacement pending; RGI_Emoji template.
-  Local replay's 2.22e-16 mismatch still requires strict original-host replay;
-  the previous decision stopped at its disturbance guard, before report replay.
-- Next action: fetch replacement and decision below, check exit/DISTURBED and
-  record the canonical verdict. No further formal blocks beyond the frozen cap.
-- Jobs: `20261018T080835Z-t058-formal30` (2759 s, 3 light background samples),
-  `20261018T080836Z-t058-heldout30` (3204 s, 6 light samples), and
-  `20261018T080837Z-t058-test262-exact` (1688 s, no timing monitor).
-- Follow-up results: `20261019T033833Z-t058-formal-bitops-continuation`
-  exit 0, 36 s, no DISTURBED; checkout `392ca717`, published v4 collector
-  separately loaded from `766a3431`. Sealed pilot/images/argv preserved.
-  `20261019T033847Z-t058-heldout-k6-complete`: exit 0, 15972 s, DISTURBED
-  (one >=200% sample, mediaanalysisd/photoanalysisd); whole completion discarded.
-  `20261019T033909Z-t058-promotion-decide-followup`: exit 2, 0 s;
-  correctly refused the disturbed prerequisite; no decision artifact.
-- Replacement jobs: `20261019T123407Z-t058-heldout-k6-complete-r2`
-  (timing, running), then `20261019T123416Z-t058-promotion-decide-r2` (non-timing, queued);
-  both checkout `766a3431`, submitted only via imac-bench.sh.
-  Same clean natural seed hash `d5f5f461...6c0cf02`, raw-replayed before copying;
-  original job `out/` is empty, so recover from `target/layout/t058-heldout`.
-  Fresh `$BENCH_OUT/heldout-panel-r2`; rerun every layout 1-5, no disturbed samples
-  pooled. Decision requires clean exit 0 and consumes this panel plus the retained
-  continuation at the cap. Original seed and all frozen evidence remain unchanged.
-- Continuation evidence: 30 retained pilot + 101 + 109 new blocks = 240;
-  630 fresh processes (303 + 327), 9.527132 s measured process time.
-  131 blocks: ratio 0.9336393833, CI [0.9224241286, 0.9765210847], half-width 4.592962%.
-  240 blocks: ratio 0.9439697640, CI [0.9299819376, 0.9774174438], half-width 3.543300%.
-  Both fail 3%; exit 0 establishes collection success, not precision. Raw hashes,
-  order, original argv, retained-ratio conservation, source bindings and clean
-  load seals checked; 36 s is legitimate for this one ~15 ms case plus overhead.
-  Continuation-set SHA-256 `1304eb6d...2341d3`; no formal remeasurement queued.
-- Results: papaparse 0.1865569292, 95% CI [0.1854727456, 0.1874598998] < frozen 0.70;
-  SunSpider `bitops-3bit-bits-in-byte` ratio 0.9282498417,
-  CI [0.9167765124, 0.9863025702], relative half-width 6.253998% > 3%:
-  pilot power rule allocated 131 blocks, then 240; completed outcome recorded above.
-  Held-out lane 1.0086606337, CI [1.0066319824, 1.0103259991], exceeds
-  ceiling 1.0050182542. Esprima upper CI 1.0273564277 > band 1.0250249555
-  (median 1.0209777832, instructions median 0.9939391379). Both need K=6.
-  Exact Test262: 42672/42672 Rust passes; NG 42602 passes / 70 failures;
-  actionable gaps 0, Rust failures/timeouts/not-run 0 (entry dated 2026-10-19).
-- Rule: plan requires complete broad/external evidence and zero Test262 gap;
-  target <= min(0.70, reciprocal wall band), every screen pair improves.
-  T022: "a wall-only program or lane excess needs the K=6 held-out panel and
-  rejects only if all six exceed." Formal precision uses
-  n=min(240,ceil(30*(h/.03)^2)), retaining the pilot; a candidate still
-  imprecise at 240 stays incomplete. No threshold or attempt budget changed.
-
-Expected replacement: about 4.44 h plus quieting/load recovery; decision a few minutes.
-Commands/artifacts: runner `tmp/bench-queue/<job>/`, workspace `outputs/imac-bench/<job>/`.
+- Status: active; attempt 1 closed incomplete, no promotion; one v5 remeasurement frozen prospectively.
+- Implementation: present; original measured candidate `392ca717`; rebased branch `0da2f4e1` includes main's T057, so it is not substituted into this experiment.
+- Verified at: rebase onto `89a13699` completed at `0da2f4e1` (2026-10-19 UTC); full/fast gate results recorded below before handoff.
+- Evidence: [attempt 1 closure](archive/T058-attempt1-incomplete.md); [original plan](performance-units/regexp-lazy-quantifier-steps.json); [v5 remeasurement plan](performance-units/regexp-lazy-quantifier-steps-v5-remeasure.json).
+- Unresolved: fresh v5 acceptance pending; original formal case was imprecise at 240; RGI_Emoji template remains separate work.
+- Next action: coordinator reads the queued decision and all prerequisite statuses using the contract below; no automatic favorable retry or promotion of the rebased tip.
 
 ## Goal
 
@@ -76,13 +18,13 @@ Preserve backtracking order, captures, lookaround, backreferences and the `u`, `
 - Allowed paths: `crates/qjs-runtime/src/regexp/matcher/**`,
   `crates/qjs-runtime/src/regexp/matcher.rs`,
   `crates/qjs-runtime/src/regexp/symbol_replace.rs`, their focused tests,
-  `tests/fixtures/compare-qjs/` RegExp fixtures, this file, its index rows
-  and `tasks/performance-units/regexp-lazy-quantifier-steps.json`.
+  `tests/fixtures/compare-qjs/` RegExp fixtures, this file, its index rows,
+  the original and v5 remeasurement plans, and the attempt-1 archive.
 - Forbidden paths: interpreter core, property and value code, String
   search code (owned by `agent/t057-string-units/codex`), `symbol_match.rs`
   subject sharing (also T057), dependencies, `third_party/`.
 - Owner boundary: `agent/t058-regexp-lazy/claude`; commit only on this branch; no push or merge.
-- Base/worktree: `a0b6bb23`, `worktrees/quickjs-rust/t058-regexp-lazy`; branch above.
+- Original base/worktree: `a0b6bb23`, `worktrees/quickjs-rust/t058-regexp-lazy`; branch above.
 
 ## Root causes (confirmed 2026-10-17, local M1 Pro, release build of `a0b6bb23`)
 
@@ -111,7 +53,7 @@ Probe at n=4000 and 4n: ratio near 4 is linear, near 16 is quadratic; `tmp/t058-
    pattern then requires spaces), and `matches_rgi_emoji_repetition` in `matcher.rs` compares the
    whole pattern with `^\p{RGI_Emoji}+$` and answers it with an approximate code-point range test.
 
-`String.prototype.match` with `g` is also quadratic for every pattern because `symbol_match.rs`
+At the original task base, `String.prototype.match` with `g` was also quadratic for every pattern because `symbol_match.rs`
 passes a fresh subject copy to each `exec`; T057 stage 1 owns that fix and it is not part of this
 unit.
 
@@ -121,7 +63,8 @@ unit.
 - [x] Lazy simple-atom steps extend one repetition at a time.
 - [x] Literal-source recognizers removed (`(.+)`, Date rewrite); RGI_Emoji template open.
 - [x] Focused tests, NG fixtures, RegExp Test262 slices, fast and full gates.
-- [x] Qualified screen recorded; formal decision left to policy v4.
+- [x] Original qualified screen recorded; attempt 1 closed incomplete.
+- [ ] Fresh v5 attempt passes all promotion gates.
 
 ## Verification
 
@@ -130,7 +73,7 @@ At `cec613d2` (2026-10-17, local M1 Pro): full `check.sh` passed (2737 Rust test
 RegExp 1573, regexp literals 155, String replace/match/split 54/48/120,
 Date toString/toDateString/toUTCString 8/7/9; staging/sm/String/replace-math.js passed directly.
 
-## Plan
+## Original plan
 
 Frozen leaf plan [regexp-lazy-quantifier-steps](performance-units/regexp-lazy-quantifier-steps.json), validated
 (`validate-unit` status `valid`, plan SHA-256
@@ -140,7 +83,7 @@ papaparse receipt `bd02ec4a...e672aec` from profile root
 `outputs/imac-bench/20261017T135712Z-t057-stage1-v3-profiles/out/profiles`. Development target
 `development/papaparse/csv` (queue rank 1, 34.06x NG); policy v3 controls; two attempts.
 
-## Implementation (`0dc5d6a1`, `1b8c2159`, `cec613d2`)
+## Original implementation (`0dc5d6a1`, `1b8c2159`, `cec613d2`)
 
 - `0dc5d6a1`: `FirstMatcher::match_lazy_simple_atom` steps the minimum,
   tries the continuation, then extends one repetition per failure, bounded by
@@ -154,46 +97,83 @@ papaparse receipt `bd02ec4a...e672aec` from profile root
 
 After `0dc5d6a1`+`1b8c2159` (local, `tmp/t058-probes/scaling-replace.js`, n=16000 / 4n, ms):
 `"([^]*?)"` g 9/30 (NG 15/57, base 1816/29135), `x[\s\S]*?y` 4/16 (NG 10/38, base 8755/139111),
-`a.*?,` 3/14, `([^x]*?);` y 15/54 (NG 7/29), `(\w+?)=\1;` 8/32: all linear. Still quadratic and
+`a.*?,` 3/14, `([^x]*?);` y 15/54 (NG 7/29), `(\w+?)=\1;` 8/32: all linear. At that revision, still quadratic and
 outside this unit: `String.prototype.match` `g` (subject copy per exec) and empty-match advancement
 (both changed on the T057 branch), and `u`-mode replace (O(n) code-unit/scalar index conversion in
 `regexp.rs` per match, T057 code-unit design).
 
-## Screen attempt 1
+## Prospective v5 remeasurement (attempt 2 of 2)
 
-iMac job `20261017T222653Z-t058-screen1` (`perf-loop.sh`, policy v3, natural layout only, 2490 s,
-exit 3; light background activity in 6 samples, below the disturbance threshold). Verdict SHA-256
-`9489c3e9...c9c807`: label `reject`, failure `layout 0 broad: wall lane ceiling exceeded`, K=6 not
-run because the natural layout already failed and the gate is not mandatory-panel.
+The original attempt is closed as incomplete, not promoted. T022 permits
+at most two attempts and the [screen-1 record](archive/T058-attempt1-incomplete.md)
+explicitly left attempt 2 unspent. The new plan caps it at **one** remaining
+attempt; policy adoption and triage grant no extra attempts. A valid failed
+screen closes this leaf's budget. A second cap-imprecise formal result stays
+incomplete and stops; do not start another acceptance run to seek precision.
+No committed original-plan field or historical sample is changed.
 
-Target `development/papaparse/csv`: wall 0.1862, instructions 0.1146 (frozen threshold 0.70). Wall
-events: `broad/top_level_function_call` 1.4316 (band 1.0250, instructions 1.0002),
-`broad/string_slice` 1.0407 (band 1.0319, instructions 1.0000), `external/jetstream3-js-subset/cdjs`
-1.0336 (band 1.0250, instructions 0.9885). The broad lane failure comes from
-`top_level_function_call`, whose five pairs are 1.046, 1.018, 1.491, 1.526, 1.432 with instructions
-1.0001-1.0002 throughout: a step change between pairs 2 and 3 on a 9 ms workload, which code that
-only changed the RegExp matcher cannot explain by instructions. No other case regressed in
-instructions beyond 1.0002.
+This is a measurement-only successor, not a new optimization selected from
+a stale queue. Preserve the original queue/profile, base and unchanged
+implementation; validate their hashes again before timing. Freeze candidate
+`392ca717f13fd97ca1bc8361fefb2c1900186602`, base
+`351004f386f4c2c1d870467ae6e1e481952a330c`. Using the rebased branch tip would
+also measure T057, obscuring attribution and invalidating the original image
+and correctness bindings. Any later performance claim about a combined main
+integration needs its own evidence.
 
-### Completion under policy v4 (lead decision 2026-10-17)
+| Frozen choice | Value and reason |
+| --- | --- |
+| Schema/policy | Schema 3, qualified iMac workers-4 v5; policy SHA-256 `f3e8ef40b8b45601b5b86edaf4b47c2d9d904d0045eb024e837f1c447a52bec4`. T060 qualifies this schedule independently; no hand-tuned bands. |
+| Target/payoff | Only `development/papaparse/csv`, rank 1 in the original queue, <=0.70 as originally frozen; also reciprocal B_i and every-pair improvement. No result-based target/threshold selection. |
+| Controls/mechanism | All other 85 selection cases, all six sentinels and all lane/portfolio gates; `cpu-work`, empty memory targets, unchanged atom traversal. |
+| Layouts | Mandatory K=6, offsets 0/16/64/240/512/1008; five pairs per selection case/layout. Complete natural plus five appended layouts regardless of the natural verdict; no winning placement selection. |
+| Held-out | All nine programs, 30 pairs at all six matching layouts, frozen before new results; v5 persistence and precision gates remain binding. |
+| Formal | One fresh 30-block, 86-case, three-engine workers-4 bundle after a passing screen. Same original budget, not 60 chosen from the observed variance. |
+| Power | Every deficient formal case follows min(240,ceil(30*(h/.03)^2)), predicted stage then cap; retain pilot and original lane cohort. No pooling with attempt 1, no widened 3% precision limit. |
+| Stop/recovery | One remaining attempt. Pair recovery only under the existing 20%/60 s load caps; cap-invalid panels or DISTURBED formal jobs replace whole, at most three load-only replacements. Non-load errors stop; no rerun after a valid failure or cap-imprecision. |
+| Correctness | Reuse exact-candidate zero-gap entry from `20261018T080837Z-t058-test262-exact`, SHA-256 below; all promotion completeness gates stay enabled. Local full gate checks the rebased branch separately. |
 
-Policy v4 (`tasks/archive/T059-held-out-layout-policy-v4.md`) makes a natural lane excess a lane
-event that needs the complete K=6 panel. The v3-bound plan is evaluated with v4's successor rule;
-re-evaluated, the natural packet is `wall event` with `broad lane: lane event`, no failures. This
-completes attempt 1; attempt 2 is unspent. Job `20261018T013229Z-t058-screen1-complete` (exit 0,
-8795 s) first re-hashed all twelve audited binaries (base natural `c7f0f66a...`, candidate natural
-`d2bc9b8d...`, revisions `351004f3`/`392ca717`), then appended layouts 1-5 to the same `screen/`
-directory. Verdict `pass`, complete, event resolution `nonpersistent`. SHA-256: verdict
-`ce385522...abd9ae`, `complete.json` `fff35cfc...0cdb`, natural-v4 verdict `83005b47...4455`.
+Reuse only the original immutable audited **executables**, never their timing.
+Matrix paths are `target/layout-attempts/t058-attempt1/{base000,cand000}/identity.json`.
+SHA-256: base `a323746e4ad6e41d8e6a9cf7141c1eac1bf82c0546ab45826bd644b277b9d8e7`,
+candidate `76427b2286c72c9289656636540da6bfe646ab0c870d3601d4c3a27037c48521`.
+Natural images must reproduce `c7f0f66a519181b214bdc5ca6404cf428f0d18cbd1ab1d0e26386097619b949e`
+and `d2bc9b8d755bcb70ebb02d8a3e0bde21d30d89add36dd66cbea64cebae72b7c8`.
+Preflight re-hashes all twelve binaries and checks static audits, identities,
+host, equal-length paths and plan/queue/profile bindings; missing/drifted inputs
+stop rather than silently rebuilding another image. New output directories
+are exclusive. Plan is committed before dispatch; runtime is unchanged.
 
-| Lane | layouts 0-5 | geomean | ceiling |
-| --- | --- | --- | --- |
-| broad | 1.0172 1.0028 1.0021 1.0006 1.0068 0.9973 | 1.0044 | 1.0129 |
-| sentinel | 0.9693 1.0123 0.9869 0.9965 0.9929 0.9980 | 0.9926 | 1.0157 |
-| external | 0.9974 0.9967 1.0016 0.9978 0.9987 0.9998 | 0.9987 | 1.0074 |
-| development | 0.8541 0.8470 0.8570 0.8513 0.8435 0.8455 | 0.8497 | 1.0096 |
-| portfolio | 0.9832 0.9808 0.9827 0.9803 0.9812 0.9796 | 0.9813 | 1.0072 |
+The reverted queue wrapper has no STOP/CONT hook. At 13:45 UTC on 2026-10-19,
+iMac Spotlight was disabled, photo/media launchctl disable flags were true,
+and listed daemons were in S/Ss state (none T/stopped). Each timed job records
+quieting again without altering services. Local free disk 88 GiB, iMac 101 GiB.
 
-Wall-event cases, median per layout: `top_level_function_call` 1.4316 1.0354 1.0113 1.0112 1.0413
-1.0189; `string_slice` 1.0407 1.0212 0.9950 1.0170 1.0194 1.0390; `cdjs` 1.0336 1.0127 1.0175 0.9985
-1.0168 1.0099. Target papaparse 0.1862 0.1857 0.1862 0.1853 0.1858 0.1836.
+New plan `validate-unit`: status `valid`, SHA-256
+`957f29f056bb65ea3b556e177b8117e0d303ea95643bed5ca3f070f1376c7b94`.
+Exact-candidate Test262 entry SHA-256
+`9b24e29adcef679290473002a6fa3bf16140434a9569cdd4111524afe67641f7`.
+
+## Dispatch and coordinator contract
+
+Pending dispatch after plan validation/commit. All timed jobs use workspace
+`scripts/imac-bench.sh run --timing`; decision is chained after measurement.
+Only runner `refs/bench/` transport is authorized; no origin push or merge.
+
+Estimate: selection K=6 ~74 min (T060 measured 4,457 s); held-out K=6
+~125 min (T061 extrapolates the measured 2.55x speedup, not yet a direct
+held-out measurement); formal ~46-58 min; power/replay a few minutes.
+Total ~4.1-4.3 h plus validation, quieting, queue delay, precision work and
+any permitted load-only replacement. Reusing audited matrices avoids builds.
+
+Fetch every job after completion. A zero collector exit proves collection,
+not acceptance. The decision replays exact raw evidence on the original iMac,
+including the frozen queue/profile, new complete selection and held-out panels,
+new sealed formal bundle and latest power chains, plus exact-candidate Test262.
+Read `decision.json` (`decision`, `decision_readiness`, `reasons`) and policy/
+unit/evidence hashes. Only `retained` with complete clean evidence can support
+promotion of the original candidate. `inconclusive`, a >3% interval at 240,
+missing evidence, failed guards or disturbance require an incomplete record;
+a valid rejection is retained as negative evidence. Do not pool old timing,
+choose between runs, drop cases, apply a schema-1/2 unstable-base waiver, or
+report the rebased main+T057 tip as performance-verified by this decision.
