@@ -1,11 +1,11 @@
 # T058: RegExp lazy quantifiers and pattern-template removal
 
-- Status: active; attempt 1 closed incomplete, no promotion; one v5 remeasurement frozen prospectively.
+- Status: active; attempt 1 closed incomplete, no promotion; final v5 remeasurement queued.
 - Implementation: present; original measured candidate `392ca717`; rebased branch `0da2f4e1` includes main's T057, so it is not substituted into this experiment.
-- Verified at: rebase onto `89a13699` completed at `0da2f4e1` (2026-10-19 UTC); full/fast gate results recorded below before handoff.
+- Verified at: rebase onto `89a13699` at `0da2f4e1`; runtime/plan `2ee8f8ad` plus dispatch documentation passed full `check.sh` on 2026-10-19 UTC; staged fast gate covers the handoff record.
 - Evidence: [attempt 1 closure](archive/T058-attempt1-incomplete.md); [original plan](performance-units/regexp-lazy-quantifier-steps.json); [v5 remeasurement plan](performance-units/regexp-lazy-quantifier-steps-v5-remeasure.json).
 - Unresolved: fresh v5 acceptance pending; original formal case was imprecise at 240; RGI_Emoji template remains separate work.
-- Next action: coordinator reads the queued decision and all prerequisite statuses using the contract below; no automatic favorable retry or promotion of the rebased tip.
+- Next action: coordinator fetches the five queued jobs below and reads the decision with all prerequisite statuses; no automatic favorable retry or promotion of the rebased tip.
 
 ## Goal
 
@@ -72,6 +72,20 @@ At `cec613d2` (2026-10-17, local M1 Pro): full `check.sh` passed (2737 Rust test
 5170 Test262 subset), compare-qjs 250/250 including two new fixtures; exact zero-gap slices:
 RegExp 1573, regexp literals 155, String replace/match/split 54/48/120,
 Date toString/toDateString/toUTCString 8/7/9; staging/sm/String/replace-math.js passed directly.
+
+Handoff at `2ee8f8ad` plus dispatch documentation (2026-10-19 UTC):
+`PYTHONDONTWRITEBYTECODE=1 ./scripts/check.sh` passed in full, including
+2,312 runtime tests, 21 agents / 24 perf-counter tests, 651 benchmark-tool
+tests, 35 script tests, all plan/context/size/hook/syntax checks and all
+5,170 curated Test262 cases. Other workspace crates and all clippy/format
+checks passed. New plan `validate-unit` passed against the original queue
+and exact-image profile; original plan hash remains `3fa32ec4...83622`.
+Staged fast gates select context and plan validation; these two recording
+commits change no engine source, so no focused semantic slice matches.
+The full curated semantic subset still ran. No measurement result was
+awaited. Removed 3.9 GiB of disposable local incremental build output;
+canonical images and all queue evidence remain intact. Handoff data-volume
+free space: approximately 90 GiB.
 
 ## Original plan
 
@@ -156,9 +170,27 @@ Exact-candidate Test262 entry SHA-256
 
 ## Dispatch and coordinator contract
 
-Pending dispatch after plan validation/commit. All timed jobs use workspace
-`scripts/imac-bench.sh run --timing`; decision is chained after measurement.
-Only runner `refs/bench/` transport is authorized; no origin push or merge.
+Submitted at 13:49 UTC on 2026-10-19 after queue status showed idle.
+Tooling/plan commit `2ee8f8ad`; exact base/candidate additionally transferred
+via runner-only `refs/bench/`. No origin push or merge. Every timing job uses
+workspace `scripts/imac-bench.sh run --timing`; jobs check successful prior
+statuses, and formal disturbance blocks power/acceptance. Selection/held-out
+replay uses the qualified pair-recovery contract, not a blanket log filter.
+
+| Job ID | Purpose / output under its `out/` |
+| --- | --- |
+| `20261019T134950Z-t058-v5-attempt2-selection-k6` | Full K=6 selection; `selection/complete.json`, `verdict.json`, `validation.json` |
+| `20261019T134951Z-t058-v5-attempt2-formal30` | Fresh formal30; `bundle/summary.json` and sealed lane reports/raw |
+| `20261019T134951Z-t058-v5-attempt2-formal-power` | Automatic precision allocation; `power/power.json` references latest chains |
+| `20261019T134952Z-t058-v5-attempt2-heldout-k6` | Full K=6 held-out; `heldout/panel.json` |
+| `20261019T134952Z-t058-v5-attempt2-decide` | Original-host promotion replay; `decision.json`, `decision.stdout`; `--require-retained` |
+
+Jobs were queued without waiting for measurement completion. Only the first
+four are timed; the decision is non-timing. A valid failed screen prevents
+formal spending. Missing prerequisites stop subsequent jobs; they do not
+silently substitute an older attempt. No load-only whole-job replacement
+is auto-submitted by this dispatch; the coordinator records any permitted
+replacement and re-chains dependent jobs before reading a final decision.
 
 Estimate: selection K=6 ~74 min (T060 measured 4,457 s); held-out K=6
 ~125 min (T061 extrapolates the measured 2.55x speedup, not yet a direct
