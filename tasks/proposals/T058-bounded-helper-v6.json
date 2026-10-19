@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-prospective-unit-contract",
+  "base_sha": "a68a9f469a1c36c8080b71e1546851a30f448da6",
+  "candidate_sha": "736200aaf49202dcfb6adf4169cc60d52d719c06",
+  "comparison_base_sha": "89a13699d7b5bd62bc1242d9c58b900ab4368755",
+  "unit_parameters": {
+    "schema_version": 3,
+    "unit_kind": "leaf",
+    "artifact_type": "quickjs-performance-unit",
+    "unit_id": "regexp-lazy-quantifier-bounded-helper-v6",
+    "base_sha": "a68a9f469a1c36c8080b71e1546851a30f448da6",
+    "priority": {
+      "mode": "queue",
+      "opportunity_ids": [
+        "development/papaparse/csv"
+      ],
+      "rank_ceiling": 1,
+      "override_reason": null
+    },
+    "mechanism": {
+      "summary": "T058: first-match traversal of a lazily quantified single-code-point atom (literal, class, dot, escape, property) tries the quantifier minimum first and steps the atom one repetition at a time only after the continuation fails, instead of scanning the atom's longest run before the first attempt. Greedy quantifiers keep the existing longest-run scan. The replace builtin's literal-source '(.+)' shortcut is removed; the general prepared global loop answers that program. The fixed candidate also initializes the numeric helper register file with scalar copies for its existing bounded arities 0 through 4, avoiding a dynamic-length library copy whose code generation changed when T058 was compiled with T057.",
+      "generality": "Admission depends only on the parsed atom kind and the quantifier's laziness, bounds and width in the compiled pattern: every lazy quantifier over any single-code-point atom, in every flag combination and every API (exec, test, match, matchAll, replace, split, search). No pattern source, library or benchmark shape is recognized; the change removes a source-text comparison. Numeric helper admission and the MAX_HELPER_ARITY=4 limit are unchanged; explicit copies apply to every admitted helper, independent of program names, source text, recursion shape or benchmark identity.",
+      "semantic_risks": [
+        "Lazy priority order: count min first, then min+1, ..., bounded by max and by the first atom failure",
+        "Minimum repetitions must all succeed before the first continuation attempt; a short run fails without trying the continuation",
+        "Unicode and v modes advance by code point (surrogate pairs) and legacy \\u escapes can consume two units without u",
+        "Captures and backreferences inside the continuation must see the same state as before; failed attempts restore the index",
+        "Sticky and global lastIndex results and empty-match advancement must be unchanged",
+        "Removing the '(.+)' shortcut must keep replace results and lastIndex identical, including the replace-math stress case's length/OOM behavior",
+        "Bounded helper setup preserves argument order and exact f64 bits, including negative zero, NaN payloads and infinities; untouched local registers keep the existing undefined encoding",
+        "Unsupported internal helper arities return None; a compile-time assertion binds the explicit cases to the existing arity limit; call dispatch and shared upvalue/binding semantics are unchanged"
+      ]
+    },
+    "fast_gate": {
+      "target_ids": [
+        "development/papaparse/csv"
+      ],
+      "target_max_candidate_over_base": 0.7,
+      "max_attempts": 1
+    },
+    "promotion_gate": {
+      "require_complete_broad": true,
+      "require_complete_external": true,
+      "require_test262_zero_gap": true
+    },
+    "layout_gate": {
+      "policy_path": "benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v6.json",
+      "policy_sha256": "be123f7c5cfd46aa863467256eb8bf6947ff64f72541efc371f05a36c5535a31",
+      "mechanism_class": "cpu-work",
+      "memory_wall_targets": [],
+      "panel_required": true,
+      "panel_pairs": 5,
+      "held_out_pairs": 30,
+      "formal_blocks": 30
+    }
+  },
+  "profile_protocol": {
+    "passes": 2,
+    "sample_seconds": 60,
+    "interval_ms": 1,
+    "target": "development/papaparse/csv",
+    "require_rank": 1,
+    "require_symbols": [
+      "SimpleAtom",
+      "native_regexp_prototype_replace"
+    ]
+  },
+  "materialization": "Fill only queue binding and profile receipt/observed inclusive branch counts from the new current-base jobs. Validate and commit the schema-3 unit and its index on the unique isolated runner plan branch before any acceptance sampling of the already fixed 736200aa candidate. If priority, profile, identity, deadline or validation guards fail, stop; do not substitute targets, thresholds, candidates, hashes or older data.",
+  "authorization": "Coordinator accepted 736200aa as a general bounded-helper fix and authorized this distinct single-candidate unit. The rejected current-base-v6 unit remains closed, its sole attempt is not reset or re-decided, and no old diagnostic or timing evidence is acceptance evidence for this unit.",
+  "supplemental_diagnosis": "tasks/archive/T058-instruction-diagnosis.md (exact x86 instruction counts, counters, assembly, T057 counterfactual and diagnostic-only quick triage; not a replacement for the new queue/profile or any acceptance gate)",
+  "submission_protocol": {
+    "workers": 4,
+    "layout_offsets": [
+      0,
+      16,
+      64,
+      240,
+      512,
+      1008
+    ],
+    "fixed_candidate": "736200aaf49202dcfb6adf4169cc60d52d719c06",
+    "expected_hours": [
+      5,
+      6
+    ],
+    "planning_allowance_hours": 8,
+    "imac_timezone": "UTC+08:00",
+    "timing_command_deadline": "2026-10-21T02:45:00+08:00",
+    "prerequisites": "Every required job must have status done 0; every timed prerequisite log must contain no DISTURBED. Reject the entire disturbed job and its dependent evidence, never recover pairs from a queue-reported disturbed job. No automatic retries or candidate changes.",
+    "deadline_behavior": "All submitted command bodies run in a separate process group with an absolute 02:45 local deadline; expiration terminates the whole command group and exits 124, preserving partial outputs as incomplete, never eligible evidence. No command starts after the deadline. Queue quieting may wait outside the command; after quieting the same deadline guard still applies.",
+    "preceding_job_allowance": {
+      "job_id": "20261019T232925Z-t057-stage2-fresh-evidence",
+      "maximum_wait_minutes": 35,
+      "basis": "Only current queued/running predecessor at resubmission check; two sample passes, each workload has a 900-second timeout. Recheck immediately before submission and stop for any unassessed predecessor."
+    }
+  }
+}
