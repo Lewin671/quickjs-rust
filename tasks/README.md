@@ -13,7 +13,7 @@ it to `archive/` with `git mv` and move its row below.
 
 | Task | Status | What it is |
 | --- | --- | --- |
-| [T057](T057-string-code-units.md) string code units | active | Stage-1 screen passed; v4 held-out re-measure and promotion decision in progress. |
+| [T057](T057-string-code-units.md) string code units | active | Stage-1 PROMOTE under v4; clean replacement held-out panel and complete decision passed; integration pending. |
 | [T056](T056-interpreter-core-v2.md) interpreter core v2 | active | Target design for names, frames and values; unit 0 complete, M1 stage-1 plan frozen, implementation not started. |
 | [T018](T018-broad-performance.md) broad performance | active | The performance campaign contract and its targets against QuickJS-NG. Start performance work here, then follow [the workflow](../docs/performance-workflow.md). |
 | [T040](T040-imac-general-performance.md) x86_64 general optimization | active | Fresh current-main comparison and exact-binary profiles, followed by independent general runtime units. |

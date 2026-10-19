@@ -1,29 +1,32 @@
 # T057: String code-unit migration
 
-- Status: active; stage-1 promotion re-decision under policy v4 in progress.
-- Implementation: present on this branch (`026476d5`), not promoted.
-- Verified at: `026476d5` gates as below; v4 fresh held-out natural screen and
-  candidate formal continuation complete (2026-10-18); merged main `9b1da2e9`.
-- Evidence: stage-1 records below; workspace `outputs/t057-stage1/`.
-- Unresolved: the first K=6 held-out panel
-  `20261018T053942Z-t057-stage1-v4-heldout-complete` (exit 0) was DISTURBED
-  (3 heavy samples: `mediaanalysisd` 18:21Z, `triald`/`XProtectRemediator*`
-  19:12-19:17Z; panel `heavy_samples: 3`, `invalid: 2/1352`), so it and the
-  decision that consumed it (`20261018T054401Z-t057-stage1-v4-decide`, exit 0)
-  are inadmissible. Replacement pair queued 2026-10-18T22:16Z in order:
-  `20261018T221614Z-t057-stage1-v4-heldout-r2` (timed, `9b1da2e9`, new output
-  `target/layout/t057-stage1-v4-heldout-r2`) then
-  `20261018T221616Z-t057-stage1-v4-decide-r2` (no-timing, `2a0144a6`, reads
-  the new panel); both `queued`.
-- Next action: when both finish, fetch, confirm neither log says DISTURBED,
-  apply the v4 rule to the new panel, and record the verdict here.
+- Status: active; stage-1 verdict **PROMOTE** under policy v4; integration pending.
+- Implementation: present on this branch (`026476d5`); promotion gates passed.
+- Verified at: `026476d5` gates below; replacement jobs fetched and checked
+  at `71297d27` (2026-10-19), after merging main `9b1da2e9`.
+- Evidence: stage-1 records below; workspace `outputs/imac-bench/<job>/`:
+  `20261018T221614Z-t057-stage1-v4-heldout-r2` (timed, runner `9b1da2e9`,
+  exit 0 / 15898 s) and `20261018T221616Z-t057-stage1-v4-decide-r2`
+  (no-timing, runner `2a0144a6`, exit 0 / 111 s); neither log says DISTURBED.
+  Panel: 0 heavy samples, 0 invalid, 1620/1620 valid including the clean seed.
+  Decision: `retained`, `ready_for_unit_gates`, no reasons/failures/missing.
+  Targets papaparse/regexp-dna: screen 0.880093/0.788864; formal
+  0.882045/0.790023. Held-out lane v0..5: 1.007679, 1.002841, 1.007556,
+  0.998333, 1.003894, 0.993394; geomean 1.002269943 < ceiling 1.005018254.
+  All nine programs fit their bands on all six layouts; no instruction event.
+  Rule: targets must be at most 0.95 and below 1/B_i, every pair improving;
+  v4 lane events reject only if the six-layout geomean exceeds the ceiling,
+  or every layout exceeds it. Held-out programs reject if all six wall medians
+  exceed B_i, or any layout has wall above B_i and every instruction pair
+  above max(1.01,I_i). Correctness, control and precision gates passed.
+- Unresolved: main integration pending; earlier DISTURBED evidence inadmissible (below).
+- Next action: hand off the accepted stage-1 branch for separate integration.
 
 ## Goal and scope
 
-Remove repeated whole-subject work through the staged
-[code-unit authority design](../docs/design/string-code-units.md), starting
-with handle preservation and cached ASCII search boundaries. General
-operations/types/data flow determine admission; no program recognition.
+Remove repeated whole-subject work through the [code-unit authority design](../docs/design/string-code-units.md),
+starting with handle preservation and cached ASCII search boundaries.
+General operations/types/data flow determine admission; no program recognition.
 Stage 5 coordinates primary storage with T056 M1 code-unit atom keys;
 stages 1–4 remain String/RegExp-local.
 
@@ -34,18 +37,17 @@ task/design/index rows and the stage-1 performance plan. Forbidden:
 interpreter core, property storage, value-word code, dependencies and
 third_party edits. No project push or merge; queue transport refs only.
 
-Pre-stage-1 coordination, the registration handoff and the current-main
-baseline checkpoint are in [the T057 log](archive/T057-log.md).
+Pre-stage-1 coordination, registration and baseline are in [the T057 log](archive/T057-log.md).
 
 ## Acceptance
 
 - [x] Register staged design, invariants, memory policy and five base differences.
-- [ ] Fresh accepted queue plus development lane and exact-binary profiles.
-- [ ] Stage-1 plan validated and committed before runtime edits.
-- [ ] Focused semantic/work-count tests, String/RegExp Test262 and NG fixtures.
-- [ ] Fast/full gates and full configured promotion conformance record.
-- [ ] Budgeted qualified screen, required K=6, formal and held-out decision.
-- [ ] Durable attempt results and requested external report completed.
+- [x] Fresh accepted queue plus development lane and exact-binary profiles.
+- [x] Stage-1 plan validated and committed before runtime edits.
+- [x] Focused semantic/work-count tests, String/RegExp Test262 and NG fixtures.
+- [x] Fast/full gates and full configured promotion conformance record.
+- [x] Budgeted qualified screen, required K=6, formal and held-out decision.
+- [x] Durable attempt results and requested external report completed.
 
 ## Stage-1 plan (frozen before runtime edits)
 
@@ -175,7 +177,7 @@ only imprecise case, bitops-3bit-bits-in-byte, needed the predicted 131 then
 the 240 cap; at 240 blocks it is 0.9825 [0.9608, 0.9891], precise
 (half-width 2.26%). Lane statistics keep the original 30 joint blocks.
 
-## Stage-1 v4 replacement panel (queued)
+## Stage-1 v4 replacement panel and final decision
 
 The first K=6 held-out panel job
 `20261018T053942Z-t057-stage1-v4-heldout-complete` (timed, commit `9b1da2e9`,
@@ -187,13 +189,11 @@ the runner flagged 3 heavy samples, from `mediaanalysisd` at 18:21Z and
 so its `retained` output is not evidence. A DISTURBED job is replaced whole;
 none of the disturbed completion's variants 1-5 is pooled.
 
-Replacement pair, submitted 2026-10-18T22:16Z and `queued` in this order:
-
-| Job | Commit | Timing | Scope |
-| --- | --- | --- | --- |
-| `20261018T221614Z-t057-stage1-v4-heldout-r2` | `9b1da2e9` | timed | seed the clean natural screen (`panel.json` + `variant0` from the completed decide job's `out/heldout-panel/` copy; natural job `20261018T013031Z-t057-stage1-v4-heldout30` had 0 heavy samples, 0 invalid, 270/270 valid) and run `--held-out --complete --pairs 30` into `target/layout/t057-stage1-v4-heldout-r2` |
-| `20261018T221616Z-t057-stage1-v4-decide-r2` | `2a0144a6` | no-timing | `decide --mode promotion` on the new `complete.json`, same queue, profiles, formal bundle, continuation and burndown as the original decide |
-
-`status` at submission: both `queued` in that order, behind the T056 screen and
-the three T058 jobs. Next: fetch both, require no DISTURBED, then apply the v4
-rule.
+The clean natural screen was seeded (270 pairs); variants 1-5 were replaced whole
+(1350 pairs). Light activity in 31 runner samples was below threshold. Panel SHA-256:
+`2dc50b87ef9b1576866aafdab4d6780de90322b38af49b5bff78b803752d4e14`.
+Decision SHA-256 (unchanged queue, profiles, screen, formal, continuation and burndown):
+`aeec273db6870be03fa47e56591abd10def703994c0762173f8c79db34a41e0b`.
+Its `out/heldout-panel/` holds raw data. **PROMOTE**: `026476d5` vs `351004f3`,
+attempt 1/2; lane event nonpersistent, continuation precise (240 blocks, 2.2613%),
+zero Test262 gaps. Integration is separate.
