@@ -1,10 +1,11 @@
 # T058: RegExp lazy quantifiers and pattern-template removal
 
-- Status: active; INCONCLUSIVE, no PROMOTE/REJECT verdict yet: the frozen
-  rule requires follow-up measurements, now queued with lead approval.
+- Status: active; INCONCLUSIVE, no PROMOTE/REJECT verdict yet: formal precision
+  fails at the 240-block cap; disturbed held-out completion replaced.
 - Implementation: present (`0dc5d6a1`, `1b8c2159`, `cec613d2`; measured
   candidate `392ca717`, runtime-identical to them); no runtime edits in this review.
-- Verified at: review `1fbf83a1`; queue status confirmed 2026-10-19 03:39 UTC.
+- Verified at: review `06cb0f35`; raw continuation checked locally; queue status
+  confirmed 2026-10-19 12:34 UTC: replacement running, decision queued after it.
   Original review `5503cfff`: base/candidate `351004f3`/`392ca717`; all three jobs exit 0, no DISTURBED.
 - Evidence: deciding numbers and rule retained here; local artifacts, not
   retained: `outputs/imac-bench/<job>/`, `outputs/t058-screen1/`, `outputs/t058-heldout30/`,
@@ -13,30 +14,42 @@
   `d5f5f461...6c0cf02`, screen `complete.json` `fff35cfc...0cdb`,
   Test262 entry `9b24e29a...641f7`. Sealed bundle, both panels' raw packets,
   identities and frozen unit/profile validation checked locally.
-- Unresolved: promotion pending; RGI_Emoji template. Local Python 3.14.2/3.13.4
-  replay exits 2: `error: report.json: report differs from raw replay`;
-  `property_dynamic_read` ratio/half-width differ by about 2.22e-16 from x86.
-  Fix for this decision: strict replay on the original iMac/Python environment,
-  not edited evidence or relaxed thresholds. If host replay fails, verdict stays blocked.
-- Next action: fetch the three follow-up jobs below after completion; verify exit,
-  disturbance, final precision and promotion verdict; record results before integration.
+- Unresolved: formal precision still >3% at 240 blocks, so promotion remains
+  incomplete under the frozen rule; held-out replacement pending; RGI_Emoji template.
+  Local replay's 2.22e-16 mismatch still requires strict original-host replay;
+  the previous decision stopped at its disturbance guard, before report replay.
+- Next action: fetch replacement and decision below, check exit/DISTURBED and
+  record the canonical verdict. No further formal blocks beyond the frozen cap.
 - Jobs: `20261018T080835Z-t058-formal30` (2759 s, 3 light background samples),
   `20261018T080836Z-t058-heldout30` (3204 s, 6 light samples), and
   `20261018T080837Z-t058-test262-exact` (1688 s, no timing monitor).
-- Follow-up jobs: all queued in this order behind T057, exit/disturbance pending:
-  `20261019T033833Z-t058-formal-bitops-continuation` (timing, checkout `392ca717`),
-  `20261019T033847Z-t058-heldout-k6-complete` (timing, checkout `766a3431`),
-  `20261019T033909Z-t058-promotion-decide-followup` (non-timing, `766a3431`).
-  Original formal checkout has only an A/A collector: job 1 separately loads
-  the published candidate/base collector from `766a3431`; binaries/argv stay sealed.
-  Job 2 seeds a fresh output from clean natural SHA-256 `d5f5f461...6c0cf02`,
-  replaying raw packets first; original job `out/` is empty, so recover from
-  `target/layout/t058-heldout`. Natural pairs are never rerun.
-  Job 3 requires both jobs exit 0 without DISTURBED and consumes their immutable outputs.
+- Follow-up results: `20261019T033833Z-t058-formal-bitops-continuation`
+  exit 0, 36 s, no DISTURBED; checkout `392ca717`, published v4 collector
+  separately loaded from `766a3431`. Sealed pilot/images/argv preserved.
+  `20261019T033847Z-t058-heldout-k6-complete`: exit 0, 15972 s, DISTURBED
+  (one >=200% sample, mediaanalysisd/photoanalysisd); whole completion discarded.
+  `20261019T033909Z-t058-promotion-decide-followup`: exit 2, 0 s;
+  correctly refused the disturbed prerequisite; no decision artifact.
+- Replacement jobs: `20261019T123407Z-t058-heldout-k6-complete-r2`
+  (timing, running), then `20261019T123416Z-t058-promotion-decide-r2` (non-timing, queued);
+  both checkout `766a3431`, submitted only via imac-bench.sh.
+  Same clean natural seed hash `d5f5f461...6c0cf02`, raw-replayed before copying;
+  original job `out/` is empty, so recover from `target/layout/t058-heldout`.
+  Fresh `$BENCH_OUT/heldout-panel-r2`; rerun every layout 1-5, no disturbed samples
+  pooled. Decision requires clean exit 0 and consumes this panel plus the retained
+  continuation at the cap. Original seed and all frozen evidence remain unchanged.
+- Continuation evidence: 30 retained pilot + 101 + 109 new blocks = 240;
+  630 fresh processes (303 + 327), 9.527132 s measured process time.
+  131 blocks: ratio 0.9336393833, CI [0.9224241286, 0.9765210847], half-width 4.592962%.
+  240 blocks: ratio 0.9439697640, CI [0.9299819376, 0.9774174438], half-width 3.543300%.
+  Both fail 3%; exit 0 establishes collection success, not precision. Raw hashes,
+  order, original argv, retained-ratio conservation, source bindings and clean
+  load seals checked; 36 s is legitimate for this one ~15 ms case plus overhead.
+  Continuation-set SHA-256 `1304eb6d...2341d3`; no formal remeasurement queued.
 - Results: papaparse 0.1865569292, 95% CI [0.1854727456, 0.1874598998] < frozen 0.70;
   SunSpider `bitops-3bit-bits-in-byte` ratio 0.9282498417,
   CI [0.9167765124, 0.9863025702], relative half-width 6.253998% > 3%:
-  power rule allocates 131 total blocks (101 appended), then 240 if needed.
+  pilot power rule allocated 131 blocks, then 240; completed outcome recorded above.
   Held-out lane 1.0086606337, CI [1.0066319824, 1.0103259991], exceeds
   ceiling 1.0050182542. Esprima upper CI 1.0273564277 > band 1.0250249555
   (median 1.0209777832, instructions median 0.9939391379). Both need K=6.
@@ -49,11 +62,8 @@
   n=min(240,ceil(30*(h/.03)^2)), retaining the pilot; a candidate still
   imprecise at 240 stays incomplete. No threshold or attempt budget changed.
 
-The continuation automatically advances from 131 to 240 in the same timing job if
-still imprecise (>3%); no second job is queued. Expected execution:
-continuation/decision a few minutes, held-out about 4.45 h (5 x original 3204 s),
-plus T057 queue wait and quieting/load recovery. Runner commands and artifacts:
-`tmp/bench-queue/<job>/`.
+Expected replacement: about 4.44 h plus quieting/load recovery; decision a few minutes.
+Commands/artifacts: runner `tmp/bench-queue/<job>/`, workspace `outputs/imac-bench/<job>/`.
 
 ## Goal
 
@@ -72,13 +82,11 @@ Preserve backtracking order, captures, lookaround, backreferences and the `u`, `
   search code (owned by `agent/t057-string-units/codex`), `symbol_match.rs`
   subject sharing (also T057), dependencies, `third_party/`.
 - Owner boundary: `agent/t058-regexp-lazy/claude`; commit only on this branch; no push or merge.
-- Base sha, branch and worktree: `a0b6bb23`,
-  `agent/t058-regexp-lazy/claude`, `worktrees/quickjs-rust/t058-regexp-lazy`.
+- Base/worktree: `a0b6bb23`, `worktrees/quickjs-rust/t058-regexp-lazy`; branch above.
 
 ## Root causes (confirmed 2026-10-17, local M1 Pro, release build of `a0b6bb23`)
 
-Probe: each case at n=4000 and 4n; ratio near 4 is linear, near 16 is quadratic. Script kept at
-workspace `tmp/t058-probes/scaling.js`.
+Probe at n=4000 and 4n: ratio near 4 is linear, near 16 is quadratic; `tmp/t058-probes/scaling.js`.
 
 | Case | ours n / 4n ms | ratio | NG ratio |
 | --- | --- | --- | --- |
@@ -122,17 +130,9 @@ At `cec613d2` (2026-10-17, local M1 Pro): full `check.sh` passed (2737 Rust test
 RegExp 1573, regexp literals 155, String replace/match/split 54/48/120,
 Date toString/toDateString/toUTCString 8/7/9; staging/sm/String/replace-math.js passed directly.
 
-```sh
-./scripts/check-touched.sh --staged --explain
-./scripts/find-qjsng-gaps.sh --filter test/built-ins/RegExp --all
-./scripts/find-qjsng-gaps.sh --filter test/language/literals/regexp --all
-./scripts/check.sh
-```
-
 ## Plan
 
-Frozen leaf plan
-[regexp-lazy-quantifier-steps](performance-units/regexp-lazy-quantifier-steps.json), validated
+Frozen leaf plan [regexp-lazy-quantifier-steps](performance-units/regexp-lazy-quantifier-steps.json), validated
 (`validate-unit` status `valid`, plan SHA-256
 `3fa32ec4280395a6e6b393fc0e928e0e8e876424e1abc2f43c992ad4e5683622`) against the v3 queue
 `20261017T095818Z-t057-v3-qualify` (SHA-256 `424a1e79...ea56`, candidate `351004f3`) with the
