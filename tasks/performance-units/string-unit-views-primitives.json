@@ -1,0 +1,65 @@
+{
+  "schema_version": 3,
+  "unit_kind": "leaf",
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "string-unit-views-primitives",
+  "base_sha": "a68a9f469a1c36c8080b71e1546851a30f448da6",
+  "queue": {
+    "candidate_sha": "a68a9f469a1c36c8080b71e1546851a30f448da6",
+    "sha256": "8adb73f995b3bc3cf1e83098cfe48799f14618ea23200e251fca69b1a7bea258"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "development/diff/compare"
+    ],
+    "rank_ceiling": 5,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "T057 stage 2: lazy mode-independent Latin-1/UTF-16 unit views over the shared UTF-8 backing; preserve borrowed ASCII bytes. Move at/char/index properties, slices, forward/reverse search, string split, substitution ranges and String iterator cursors to code units. Share receivers and cached one-unit ASCII outputs instead of per-step subject copies and full-input vectors. A single tagged cache holds either the compact String view or the legacy matcher view, preventing permanent dense duplicates until stage 3 removes matcher-coordinate adapters. Stream view construction and encode only selected output; invalidate on copy-on-write mutation.",
+    "generality": "Any string receiver/needle/separator admitted by its value type and the String operation. ASCII uses bytes, non-ASCII uses one compact view for arbitrary unit accesses, including half-surrogates. No workload, source, pattern, iteration count or bytecode recognition. Existing observable coercion, symbol dispatch and callback order remain.",
+    "semantic_risks": [
+      "Sentinel halves and real sentinel-range scalars must decode to the correct unit sequences and selected outputs must round-trip",
+      "Indices, lengths, empty separators, half-pair search/slices and replacement prefix/suffix ranges use UTF-16 units",
+      "Copy-on-write aliases retain old caches; a mutation invalidates all metadata; no permanent compact-plus-matcher duplicate",
+      "ASCII operations must keep their allocation-free subject view and native byte search path",
+      "Iterator next must advance by a pair only for adjacent high/low units and share its source",
+      "RegExp coordinates stay unchanged; only replacement output ranges may borrow the compact view; every custom exec, species, lastIndex and callback observation remains"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "diff--compare/receipt.json",
+      "sha256": "e27dab34ce39cb4abe18939fe76f032897711464234f917f728ad8f53bef87b0",
+      "base_sha": "a68a9f469a1c36c8080b71e1546851a30f448da6",
+      "opportunity_ids": [
+        "development/diff/compare"
+      ],
+      "shared_cost": "iMac job 20261019T232925Z-t057-stage2-fresh-evidence: 20-second exact-image sample, 16635 main-thread samples. Largest split branch 179 inclusive (1.076% lower bound); split appears across distinct call paths (727 inclusive counts), iterator-next largest branch 91 (0.547%, 193 across paths). Existing string split copies its receiver and creates a fresh allocation for every empty-separator element; iterator-next copies the retained source and rebuilds all units each step. The profile establishes exercised operations, not a predicted 5% gain; js-yaml and external ASCII indexing remain controls.",
+      "inclusive_fraction": 0.01076044484520589
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "development/diff/compare"
+    ],
+    "target_max_candidate_over_base": 0.95,
+    "max_attempts": 2
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  },
+  "layout_gate": {
+    "policy_path": "benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v6.json",
+    "policy_sha256": "be123f7c5cfd46aa863467256eb8bf6947ff64f72541efc371f05a36c5535a31",
+    "mechanism_class": "cpu-work",
+    "memory_wall_targets": [],
+    "panel_required": true,
+    "panel_pairs": 5,
+    "held_out_pairs": 30,
+    "formal_blocks": 30
+  }
+}

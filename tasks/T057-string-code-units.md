@@ -1,204 +1,74 @@
 # T057: String code-unit migration
 
-- Status: active; stage-1 verdict **PROMOTE** under policy v4; integrated into main.
-- Implementation: present on main (implementation `026476d5`, branch tip `794ff333`);
-  promotion gates passed before integration.
-- Verified at: `026476d5` gates below; replacement jobs fetched and checked
-  at `71297d27` (2026-10-19), after merging main `9b1da2e9`.
-- Evidence: stage-1 records below; workspace `outputs/imac-bench/<job>/`:
-  `20261018T221614Z-t057-stage1-v4-heldout-r2` (timed, runner `9b1da2e9`,
-  exit 0 / 15898 s) and `20261018T221616Z-t057-stage1-v4-decide-r2`
-  (no-timing, runner `2a0144a6`, exit 0 / 111 s); neither log says DISTURBED.
-  Panel: 0 heavy samples, 0 invalid, 1620/1620 valid including the clean seed.
-  Decision: `retained`, `ready_for_unit_gates`, no reasons/failures/missing.
-  Targets papaparse/regexp-dna: screen 0.880093/0.788864; formal
-  0.882045/0.790023. Held-out lane v0..5: 1.007679, 1.002841, 1.007556,
-  0.998333, 1.003894, 0.993394; geomean 1.002269943 < ceiling 1.005018254.
-  All nine programs fit their bands on all six layouts; no instruction event.
-  Rule: targets must be at most 0.95 and below 1/B_i, every pair improving;
-  v4 lane events reject only if the six-layout geomean exceeds the ceiling,
-  or every layout exceeds it. Held-out programs reject if all six wall medians
-  exceed B_i, or any layout has wall above B_i and every instruction pair
-  above max(1.01,I_i). Correctness, control and precision gates passed.
-- Unresolved: stages 2 onward remain unimplemented; earlier DISTURBED evidence
-  is inadmissible (below). Integration adds no new performance measurement.
-- Next action: stage 2 requires fresh evidence and a separately frozen plan;
-  coordinate primary string storage with T056 as the design requires.
+- Status: active; stage 1 promoted and integrated; stage-2 plan frozen before runtime edits.
+- Implementation: stage 1 present on main; stage 2 not implemented.
+- Verified at: base `a68a9f46`, 2026-10-19; 45 String unit tests and the
+  exhaustive String Test262 slice passed (zero actionable gaps).
+- Evidence: [stage-1 record](archive/T057-stage1-evidence.md); stage-2 baseline
+  and profiles below. Raw workspace artifacts are not retained in Git.
+- Unresolved: stage-2 implementation and acceptance pending.
+- Next action: implement the frozen stage-2 plan, then correctness gates and triage.
 
 ## Goal and scope
 
-Remove repeated whole-subject work through the [code-unit authority design](../docs/design/string-code-units.md),
-starting with handle preservation and cached ASCII search boundaries.
-General operations/types/data flow determine admission; no program recognition.
-Stage 5 coordinates primary storage with T056 M1 code-unit atom keys;
-stages 1–4 remain String/RegExp-local.
+Implement stage 2 of the [code-unit authority design](../docs/design/string-code-units.md):
+one lazy compact unit view for String primitives, code-unit positions and
+selected-output encoding. Admission uses operations, types and data flow.
+RegExp matcher coordinates remain stage 3; builders are stage 4; primary
+storage must coordinate with T056 M1 in stage 5.
 
-Owner: `agent/t057-string-units/codex`; worktree
-`worktrees/quickjs-rust/t057-string-units`, base above. Allowed: String/RegExp
-modules, narrowly required coercion helpers, focused tests/fixtures, this
-task/design/index rows and the stage-1 performance plan. Forbidden:
-interpreter core, property storage, value-word code, dependencies and
-third_party edits. No project push or merge; queue transport refs only.
+Owner: `agent/t057-stage2/codex`, worktree `worktrees/quickjs-rust/t057-stage2`,
+base `a68a9f469a1c36c8080b71e1546851a30f448da6`. Allowed: String/RegExp,
+shared string view/cache helpers, focused tests/fixtures, this task/design/index
+rows and the stage-2 performance plan. No interpreter, property-storage,
+value-word, dependency or third_party changes. No project push or merge;
+queue transport refs only.
 
-Pre-stage-1 coordination, registration and baseline are in [the T057 log](archive/T057-log.md).
+## Stage-2 evidence
 
-## Acceptance
+The existing formal bundle at the exact starting revision is reusable under
+workflow step 1: job `20261019T174302Z-t058-v6-current-base-formal30`, 30 blocks,
+workers-4, exit 0 / 3347 s, no DISTURBED, no measurement issues or imprecise
+cases. Candidate `a68a9f46` and base `89a13699` share image
+`897eaa88f9b10fb684ce9b65e63e842113ae7ef82fac0e6e58fc6b337c2204a9`;
+NG image `919f7235...`, pinned `f7830186`. A new queue is replayed from that
+sealed bundle, without a redundant timing run.
 
-- [x] Register staged design, invariants, memory policy and five base differences.
-- [x] Fresh accepted queue plus development lane and exact-binary profiles.
-- [x] Stage-1 plan validated and committed before runtime edits.
-- [x] Focused semantic/work-count tests, String/RegExp Test262 and NG fixtures.
-- [x] Fast/full gates and full configured promotion conformance record.
-- [x] Budgeted qualified screen, required K=6, formal and held-out decision.
-- [x] Durable attempt results and requested external report completed.
+Fresh queue/profile job `20261019T232925Z-t057-stage2-fresh-evidence` profiles
+js-yaml (rank 2) and diff (rank 5). Follow-up
+`20261019T233209Z-t057-stage2-external-profiles` profiles ranked string-base64
+and string-fasta. Neither job profiles held-out programs. Jobs use the iMac
+queue; submission checked host local time (07:28 CST) and an empty queue,
+well outside the excluded 03:00-05:00 window.
 
-## Stage-1 plan (frozen before runtime edits)
+The four documented String differences reproduce at the base as
+`[1,false,false,[55357]]`, where NG returns `[2,true,true,[55357,56832]]`.
+The exhaustive base String slice passes 1221 Rust cases and 1216 NG cases
+with zero actionable gaps; these differences need focused coverage beyond
+that upstream slice. Base RegExp slice passes 1579 Rust / 1573 NG cases with zero actionable gaps.
 
-Plan [`string-handles-ascii-search-boundaries`](performance-units/string-handles-ascii-search-boundaries.json):
-leaf, schema 3, base/queue candidate 351004f3 (image c7f0f66a), queue SHA-256
-`424a1e79...`, policy v3 `f655f25a...`, `cpu-work`, natural screen
-(no imprecise v3 case forces K=6), 2 attempts, both targets at most 0.95 and
-beyond their reciprocal bands (papaparse 1.0250, regexp-dna 1.0335); all
-other 84 policy cases are controls. Profile root (workspace-local):
-`outputs/t057-stage1/profiles/`.
+## Stage-1 standing
 
-| Receipt | Exact-image profile | Stage-1 cost (inclusive) |
-| --- | --- | --- |
-| papaparse `bd02ec4a` | job `20261017T135712Z-t057-stage1-v3-profiles`, 60 s over two passes, 50158 samples | indexOf 4746 (9.46%), of which uncached ASCII scan in `byte_offset_for_char_index` 4556 |
-| regexp-dna `5fe9402e` | job `20261017T082306Z-...-development30`, 10 s of 100 passes, 8331 samples | per-exec subject copy rebuilds matcher view: `prepare_input` 1582 (19%) |
+**PROMOTE** under v4, candidate `026476d5` vs `351004f3`, attempt 1/2;
+implementation integrated into main. All details, rejected/disturbed
+observations, hashes and exact-revision gates are preserved in the
+[stage-1 record](archive/T057-stage1-evidence.md).
+Pre-stage-1 coordination is in [the log](archive/T057-log.md).
 
-js-yaml was also profiled (receipt `51f88495`, 16646 samples): String/RegExp
-handle or boundary costs are below 1%; it stays a control. The papaparse
-profile's dominant cost is outside stage 1: the lazy `[^]*?` RegExp replace is
-42710 inclusive (85%), 38165 in `SimpleAtom::step`, because
-`match_atom_and_continuation` measures the maximal fixed-width run with
-`simple_atom_max_count` before trying the lazy minimum, so each match scans
-to the end of the subject. That is a separate general matcher unit.
+## Stage-2 frozen plan
 
-## Stage-1 implementation
+Plan [string-unit-views-primitives](performance-units/string-unit-views-primitives.json)
+is a separate schema-3 leaf unit, bound to the fresh queue and exact diff
+receipt above: v6, workers-4, mandatory K=6 (5 pairs), formal 30 blocks,
+held-out 30 pairs, two attempts, diff <=0.95 and below reciprocal B_i;
+every other policy case is a control. V6 formal continuations use the two
+fixed looks (30/240), never an adaptive middle look. Held-out is acceptance
+only. The profile supports the operation family, not a promised speedup;
+the payoff hypothesis may fail. Triage is diagnostic and spends no attempt.
 
-Typed ToString `to_js_string_value_with_env` returns the shared `JsString`
-(string arguments and strings an object's ToPrimitive returns), with the
-same hook order. `this_js_string_value` shares primitive and wrapper data;
-`String.prototype.toString/valueOf` return the wrapper's handle and
-`is_string_object` no longer copies. Search helpers take the receiver
-handle: `byte_offset_for_char_index` answers ASCII from the memoized flag,
-`indexOf` returns the ASCII offset directly, needles are not copied.
-RegExp `exec`/`test`/`[Symbol.match|matchAll|search|replace|split]`,
-the matchAll iterator, the legacy global match and string-needle replace
-pass one subject handle to every exec and callback. Generic custom-exec
-replace clamps with the memoized UTF-16 length; empty-match advance is
-`index + 1` without a subject view in non-Unicode or ASCII text. String
-replacement counts the subject once (`substitution_length` takes its
-length). Non-ASCII search keeps legacy scalar coordinates; none of the five
-base differences is on a changed path, so all remain stage 2/3 work.
-
-Tests: `tests/strings/subject_sharing.rs` (7: hook order, boxed sharing,
-matchAll subject across next, one subject view per protocol, every
-exec/lastIndex lookup, callback input sharing/substitutions, one ASCII
-classification across a cursor search loop); four sharing tests fail on the
-base and pass here, the others pin unchanged semantics. The ASCII count test
-pins classify-once, not the absence of raw `str` scans. NG fixture
-`string-regexp-subject-protocols.js` matches NG. Exhaustive
-`find-qjsng-gaps --filter ... --all` (release CLI): String 1221,
-RegExp/prototype 485, StringIteratorPrototype 7,
-RegExpStringIteratorPrototype 17 cases, zero gaps. Runtime lib: 2278 pass.
-Implementation commit `026476d5`: full `check.sh` on the iMac (job
-`20261017T141818Z-t057-stage1-full-check`, no-timing) exit 0 / 258 s,
-runtime lib 2278 tests, 5170 Test262 subset cases; local `compare-qjs.sh`
-249/249 fixtures match NG.
-
-## Stage-1 attempts
-
-| Attempt | Job | Candidate | Result |
-| --- | --- | --- | --- |
-| 1 | `20261017T142313Z-t057-stage1-screen1` | `026476d5` | **pass**, complete K=6 (exit 0 / 11977 s, no DISTURBED) |
-
-Attempt 1 natural screen: papaparse wall 0.8801 (instructions 0.9298),
-regexp-dna 0.7889 (0.8735); every target pair improved, both below 0.95 and
-their reciprocal bands. Events opened the full panel: wall events
-broad/method_call 1.0558 and broad/property_dynamic_read 1.0760 (instructions
-1.0000), and a control instruction event on string-validate-input (every
-pair above 1.01, median 1.0118 below the 1.03 hard cap; wall 1.0137 inside
-B 1.0300). The six-layout completion resolved all three as nonpersistent;
-every lane and the portfolio fit their ceilings on all six layouts (natural:
-broad 1.0086, sentinel 1.0091, external 0.9924, development 0.9851,
-portfolio 0.9974). Verdict copy: workspace `outputs/t057-stage1/screen1-verdict.json`;
-raw panel stays in the iMac runner's `target/layout-attempts/t057-stage1-attempt1/`.
-
-## Stage-1 decision (attempt 1)
-
-Formal job `20261017T174818Z-t057-stage1-formal30` (workers-4, 30 blocks,
-exit 0 / 3465 s, no DISTURBED): candidate image `4dffe000...`, base
-c7f0f66a. Targets: papaparse 0.8820 [0.8814, 0.8839], regexp-dna 0.7900
-[0.7840, 0.7946] (regexp-dna/NG now 0.993). Lanes: broad 1.0085 [1.0076,
-1.0095], sentinel 1.0011, external 0.9961, development 0.9882, portfolio
-0.9991, all inside ceilings. string-validate-input 1.0164 [1.0120, 1.0227]
-(inside B 1.0300). Control `bitops-3bit-bits-in-byte` 0.9974 [0.9387,
-1.0072] is imprecise (half-width 6.2%); candidate formals have no
-continuation tool (A/A only), so it stays a missing-evidence reason.
-
-Held-out job `20261017T174847Z-t057-stage1-heldout30` (natural, 30 pairs,
-exit 0 / 3207 s), acceptance only and not used to shape work: handlebars
-1.0233 (band 1.0066, instructions 1.0000), esprima 1.0087 (1.0030,
-instructions 0.9994), ramda 1.0090 (1.0065, 0.9996); lane 1.0050 above its
-1.0029 ceiling; the other six within bands. Exact-candidate burndown job
-`20261017T174848Z-t057-stage1-test262-exact`: 53572 total, 42672
-configured, Rust 42672 pass, zero actionable gap (SHA-256 `638cc0eb...`).
-
-`decide --mode promotion` (decision SHA-256 `45a6ec04...`): **rejected**
-on the held-out programs and lane; readiness inconclusive for the
-imprecise control. The held-out excesses are wall-only (flat or lower
-instructions in code the unit does not touch), consistent with code
-placement of a new binary; held-out acceptance is single natural layout,
-so it has no six-layout persistence test. Not a favorable-rerun or
-held-out-shaped attempt 2; outcome goes to the lead.
-
-## Policy correction and v4 re-decision
-
-The attempt-1 held-out rejection exposed a structural defect: held-out bands
-and lane ceiling came only from same-binary A/A and had no layout-persistence
-check, so code placement of any new binary could fail it. The lead corrected
-this in [policy v4](archive/T059-held-out-layout-policy-v4.md) (main
-`290e3f51`, SHA-256 `1eb7de46...`), triggered by this unit. The plan keeps
-its v3 selection bands; v4 is its held-out successor. Attempt accounting:
-no new implementation attempt; the attempt-1 screen and formal bundle stand
-(1 of 2 attempts used). The rejected v3 held-out run is neither reused nor
-pooled; held-out was re-measured fresh for the same candidate `026476d5`
-(the audited exact-commit matrices of the attempt-1 screen).
-
-Fresh held-out job `20261018T013031Z-t057-stage1-v4-heldout30` (natural,
-30 pairs, exit 0 / 3203 s): every program inside its v4 band including the
-upper interval (largest handlebars 1.0203 [1.0133, 1.0278], B 1.0357;
-others 0.9972-1.0117); no instruction excess (medians 0.9907-1.0000). Lane
-1.0077 [1.0058, 1.0090] is above the 1.005018 ceiling: a lane event, so the
-K=6 held-out panel was queued (`--held-out --complete`, same output).
-
-Formal continuation job `20261018T013032Z-t057-stage1-formal-continuation`
-(candidate/base chain on the sealed attempt-1 bundle, exit 0 / 53 s): the
-only imprecise case, bitops-3bit-bits-in-byte, needed the predicted 131 then
-the 240 cap; at 240 blocks it is 0.9825 [0.9608, 0.9891], precise
-(half-width 2.26%). Lane statistics keep the original 30 joint blocks.
-
-## Stage-1 v4 replacement panel and final decision
-
-The first K=6 held-out panel job
-`20261018T053942Z-t057-stage1-v4-heldout-complete` (timed, commit `9b1da2e9`,
-same `command.sh` as the recorded completion, exit 0 / 15971 s) is DISTURBED:
-the runner flagged 3 heavy samples, from `mediaanalysisd` at 18:21Z and
-`triald`/`XProtectRemediator*` at 19:12-19:17Z (`intruders.log`). Its
-`complete.json` records `heavy_samples: 3`, `invalid: 2` of 1352. The follow-on
-`20261018T054401Z-t057-stage1-v4-decide` (exit 0 / 107 s) consumed that panel,
-so its `retained` output is not evidence. A DISTURBED job is replaced whole;
-none of the disturbed completion's variants 1-5 is pooled.
-
-The clean natural screen was seeded (270 pairs); variants 1-5 were replaced whole
-(1350 pairs). Light activity in 31 runner samples was below threshold. Panel SHA-256:
-`2dc50b87ef9b1576866aafdab4d6780de90322b38af49b5bff78b803752d4e14`.
-Decision SHA-256 (unchanged queue, profiles, screen, formal, continuation and burndown):
-`aeec273db6870be03fa47e56591abd10def703994c0762173f8c79db34a41e0b`.
-Its `out/heldout-panel/` holds raw data. **PROMOTE**: `026476d5` vs `351004f3`,
-attempt 1/2; lane event nonpersistent, continuation precise (240 blocks, 2.2613%),
-zero Test262 gaps. Branch tip `794ff333` is integrated into main; the merge
-retains main's newer T056 records in both task indexes. Integration correctness
-gates run locally; no iMac measurement or later-stage implementation is added.
+The compact view and legacy matcher occupy alternative cache states; existing
+matcher coordinates and their mode-keying stay until stage 3. This avoids
+permanent duplicate dense storage without pulling matcher coordinates into
+stage 2. Alternating String and RegExp use can replace the cache; stage 3
+must remove that transitional eviction. No T056 change is needed before
+primary storage (stage 5).
