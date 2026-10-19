@@ -1,15 +1,15 @@
 # T056: Interpreter core v2
 
 - Status: active; M1 stage 1 integrated at `ab9c29b6`; M1.2 implemented on
-  `agent/t056-m1-stage2/codex` at `873c9bc5`; screen queued behind correctness receipt.
-- Implementation: stage 1 present; stage 2 adds uniform layouts for all four payloads and function/array named maps.
-- Verified at: `873c9bc5`, 2026-10-18 UTC: fast/full gates, 2,320 runtime tests, subset 5,170/5,170, NG 249/249, exact agents 42,672/42,672.
+  `agent/t056-m1-stage2/codex` at `873c9bc5`, screen `reject`, not merged; M1.3 not started.
+- Implementation: stage 1 present; stage 2 uniform layouts for all four payloads and function/array named maps, only on that branch.
+- Verified at: `873c9bc5`, 2026-10-18 UTC: fast/full gates, 2,320 runtime tests, subset 5,170/5,170, NG 249/249, exact agents 42,672/42,672; sole screen failed performance.
 - Evidence: [part 1](archive/T056-unit0-part1-evidence.md), [part 2](archive/T056-unit0-part2-evidence.md),
-  [M1 stage 1](archive/T056-m1-stage1-evidence.md); frozen plan
+  [M1 stage 1](archive/T056-m1-stage1-evidence.md), [M1 stage 2](archive/T056-m1-stage2-evidence.md) (screen record); frozen plan
   [`interpreter-core-v2-atoms-layouts`](performance-units/interpreter-core-v2-atoms-layouts.json).
-- Unresolved: queued iMac screen (`20261018T055933Z-t056-m1s2-screen1`); no formal stage decision yet.
+- Unresolved: job `20261018T055933Z-t056-m1s2-screen1` exit 3, complete K=6, not DISTURBED; portfolio 1.1082-1.1136 over 1.00725, stage cap 1.025; attempt spent.
   Carried forward: M2 evidence, unit-0 bitops precision, architecture binding compatibility-view wording.
-- Next action: monitor the sole queued screen, record its verdict, and stop before M1.3.
+- Next action: do not merge M1.2 or start M1.3; the stage-2 shape is closed and needs a new profile and implementation shape.
 
 ## Goal and scope
 

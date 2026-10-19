@@ -100,7 +100,7 @@ been released after the complete exact scan passed (see below). Output is the qu
 The fixed base remains `351004f3`; current stage is 2/3, cumulative cap 1.025,
 one valid screen, K=6. The collector loads the governing v4 successor from the
 frozen v3 plan. No formal continuation, promotion or M1.3 is started here.
-There is no performance verdict yet.
+The screen result and verdict follow in "Sole screen: reject" below.
 
 ## Complete exact scan and receipt
 
@@ -119,3 +119,95 @@ The receipt was atomically uploaded to this job's `out/correctness-ready.json`
 on 2026-10-18 UTC, after source-to-candidate diff and exact-image identity checks.
 The job is allowed to start its sole screen when the host queue reaches it.
 No source change follows the candidate; later commits record evidence only.
+
+## Sole screen: reject (job `20261018T055933Z-t056-m1s2-screen1`)
+
+The frozen plan (`tasks/performance-units/interpreter-core-v2-atoms-layouts.json`,
+SHA-256 `5f951b8e46b17ff2eaa855ad7e3025bb94e018e205cfb5f19200416e5acf679d`,
+matching the verdict's `unit_sha256`) was screened through
+`perf-loop.sh --plan ... --output "$BENCH_OUT/stage2"` on the iMac queue, candidate
+`873c9bc54545dc7488e309cb7712cce5b1a303c0` against base `351004f3`. The job first
+waited for and accepted `out/correctness-ready.json` (candidate, full gate, 249 NG
+fixtures, 5,170 subset, 42,672/42,672 exact), then measured. `layout_iteration`
+applied the bound v4 successor (`HELD_OUT_SUCCESSOR`) before evaluating, so this
+verdict is already the governing v4 result; unlike stage 1, no replay is needed.
+
+- Exit `3` after 12,385 s (`status` `done 3`). Exit 3 is the screen's measured
+  fail verdict, not a tool error: `tools/benchmark/screen.py` returns `3` only
+  when a verdict exists and `not verdict["passed"]`, while tool/preview/value/OS
+  errors return `1`; `layout_iteration.main` likewise returns `3` for a failed
+  layout rule. The log ends with the complete verdict JSON, not a traceback.
+- Not `DISTURBED`: the log's closing note is "light background activity in 29
+  samples (intruders.log), below the disturbance threshold", and the six panel
+  packets record 0 heavy samples and 0 invalid pairs (430 + 2,150 attempts).
+  The intruders were single daemons (`mediaanalysisd`, `photoanalysisd`) below
+  105% each, never two cores at once.
+- Evidence is complete: `label` `reject`, `passed` false, `complete` true,
+  `missing` `[]`, `panel_required` true, `event_resolution` null. Six matching
+  layouts x 86 cases x 5 pairs; 42 of 86 cases reject, 44 pass, 116 failure lines.
+- Workspace copy: `outputs/imac-bench/20261018T055933Z-t056-m1s2-screen1/`.
+  `verdict.json` SHA-256 `f3fbf9d76842600f6016cd2ad4cdc03193ba09205a80d57a6c34f3dc342ad713`;
+  `screen/complete.json` `5cf250373abaf3f1bc7109e0f51fd44f39691fd6756ce37484651bf37879acd5`;
+  `screen/panel.json` `8d92098fea5eb693fe2f85c162d04368fccd7b7195134cafb220df8fa08a47a4`;
+  `log` `877286e77f258f7b81718dcd96dda465bb027b4c877d6fe4141a7180f7fba4c7`.
+
+### Deciding lanes and rule
+
+Frozen plan: migration `current_stage` 2/3, cumulative
+`stage_max_candidate_over_base` 1.025, one screen attempt, `panel_required` true.
+The governing v4 lane rule (`tools/benchmark/layout_rule.py::lane_event`: "lane
+rejects only if its six-layout geomean or every layout exceeds it"; T022: "Under
+v4 a natural lane excess is a lane event needing K=6; it rejects only if the
+six-layout geomean or every layout exceeds the ceiling") decides as follows.
+
+| Lane | Ceiling | Layouts 0..5 | Six-layout geomean | Above ceiling |
+| --- | ---: | --- | ---: | --- |
+| broad | 1.012949 | 1.017445, 1.010724, 1.012763, 0.993484, 1.014494, 0.996732 | 1.007566 | 2/6, event nonpersistent |
+| sentinel | 1.015687 | 1.023974, 1.023736, 1.017195, 1.023511, 1.018930, 1.032280 | 1.023260 | 6/6 |
+| external | 1.007380 | 1.178263, 1.176930, 1.175771, 1.182171, 1.180231, 1.178769 | 1.178687 | 6/6 |
+| development | 1.009630 | 1.138085, 1.139866, 1.150726, 1.145285, 1.141198, 1.141656 | 1.142795 | 6/6 |
+| portfolio | 1.007249 | 1.113554, 1.110936, 1.111743, 1.108561, 1.113556, 1.108192 | 1.111088 | 6/6 |
+
+Four lanes fail both branches. The broad natural excess is the only lane event
+the panel dissolves (2 of 6 above, geomean under the ceiling). In addition,
+42 cases fail their case rule: 38 carry "persistent six-layout wall cost" (all
+six wall medians above B_i; T022: "Six medians above B_i reject, even with flat
+instructions"), 37 carry "consistent instruction excess exceeds median hard cap"
+(min above the band and median above 1.03; T022: "A consistent excess with median
+above 1.03 rejects at the hard cap"), and 37 carry "panel instruction hard cap
+exceeded".
+
+Verdict: the K=6 panel was mandatory and this job completed it, so the rule calls
+for no follow-up measurement or panel command. `event_resolution` is null because
+the panel confirmed the events instead of dissolving them; the screen is a final
+`reject`. It consumes the plan's single attempt. Under the migration rule (T022:
+"an aborted stage closes an implementation rather than a mechanism family")
+stage 2's implementation shape is closed: `migration.current_stage` stays 2, the
+plan JSON is unchanged, and M1.3 is not started. No formal three-engine run
+exists: "Only a passing screen spends a formal run", so no `decide --mode stage`
+bundle could be produced.
+
+### Where the cost is (top 5 by wall ratio)
+
+Natural wall median (candidate/base) and six-layout wall geomean; both rankings
+select the same five programs. The instruction median shows whether the cost is
+executed work or placement.
+
+| Program | Wall | Six-layout wall | Instructions |
+| --- | ---: | ---: | ---: |
+| external/kraken-1.1/json-parse-financial | 5.2138 | 5.2313 | 5.6513 |
+| external/jetstream3-js-subset/raytrace-public-class-fields | 3.5125 | 3.5266 | 3.7667 |
+| external/sunspider-1.0/access-binary-trees | 3.0675 | 3.0790 | 3.3218 |
+| external/sunspider-1.0/date-format-xparb | 2.2308 | 2.2071 | 2.3245 |
+| external/jetstream3-js-subset/cdjs | 1.6238 | 1.6285 | 1.5652 |
+
+All five are external workloads, and instruction ratios track wall ratios, so
+the excess is additional executed work in the layout path, not a placement
+accident. The next tier is hash-map (1.4502 wall / 1.3556 instructions),
+broad/property_dynamic_read (1.3309 / 1.1966) and
+sentinel/string_key_map_churn (1.2455 / 1.2098). Static broad/property_read
+passes at 1.0162, while both dynamic keys and key churn fail, so the next
+attempt should start from a fresh profile of per-access layout work on bulk
+object/key churn, not from another variation of this shape. The three predeclared
+development targets all regress: moment/dates 1.2444 wall / 1.3715 instructions,
+diff/compare 1.3031 / 1.2856, meriyah/parse 1.2208 / 1.2442.

@@ -35,7 +35,7 @@ nothing about whether the code exists.
 
 | Plan (`<name>.json`) | Task | Base | Recorded outcome |
 | --- | --- | --- | --- |
-| `interpreter-core-v2-atoms-layouts` | T056 | `351004f3` 2026-10-17 | stage 1 governing v4 screen pass, integrated at `ab9c29b6`; stage 2 `873c9bc5` full/exact gates pass; sole cumulative-budget screen queued; no formal stage decision yet |
+| `interpreter-core-v2-atoms-layouts` | T056 | `351004f3` 2026-10-17 | stage 1 governing v4 screen pass, integrated at `ab9c29b6`; stage 2 `873c9bc5` full/exact gates pass but its sole cumulative-budget screen rejected (complete K=6; portfolio lane 1.1082-1.1136 over 1.00725); attempt spent, stage 2 implementation shape closed, not merged |
 | `compact-named-read-single-hot-probe` | T049 | `21e55fe2` 2026-10-16 | one screen failed: target 0.9822 and four controls exceeded 1.03; budget exhausted, runtime reverted, no formal run |
 | `own-data-cache-hot-answers-x86` | T041 | `06f0ecd3` 2026-10-12 | rejected on its single wall-time screen; runtime reverted |
 | `typed-loop-boxed-demand-provenance` | T045 | `27ca5140` 2026-10-13 | candidate `dae07218` correctness/review/CI and zero-gap coverage pass; first screen pending, no retention |
