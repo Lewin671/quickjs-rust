@@ -36,6 +36,32 @@ pub(crate) fn to_js_string_with_env(
     }
 }
 
+/// ToString returning the shared string value. A string argument, or a string
+/// an object's ToPrimitive produces, is the same handle (a refcount bump),
+/// so its memoized metadata and matcher view stay with the subject. Every
+/// observable step is that of [`to_js_string_with_env`].
+pub(crate) fn to_js_string_value_with_env(
+    value: Value,
+    env: &mut CallEnv,
+) -> Result<crate::JsString, RuntimeError> {
+    match value {
+        Value::String(value) => Ok(value),
+        Value::Object(object) if symbol::is_symbol_primitive(&object) => {
+            Err(symbol_to_string_error())
+        }
+        value @ (Value::Object(_)
+        | Value::Array(_)
+        | Value::Function(_)
+        | Value::Map(_)
+        | Value::Set(_)
+        | Value::Proxy(_)) => {
+            let primitive = to_primitive_with_hint(value, PreferredType::String, env)?;
+            to_js_string_value_with_env(primitive, env)
+        }
+        value => to_js_string_with_env(value, env).map(crate::JsString::from),
+    }
+}
+
 fn symbol_to_string_error() -> RuntimeError {
     RuntimeError {
         thrown: None,

@@ -1,4 +1,4 @@
-use crate::{RuntimeError, Value, string_object_value};
+use crate::{RuntimeError, Value};
 
 use super::super::indexing::this_string_value;
 use crate::CallEnv;
@@ -34,13 +34,14 @@ pub(crate) fn native_string_prototype_to_string(
     this_value: Value,
     _env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    Ok(Value::String(strict_this_string_value(this_value)?.into()))
+    Ok(Value::String(strict_this_string_value(this_value)?))
 }
 
-fn strict_this_string_value(value: Value) -> Result<String, RuntimeError> {
+/// thisStringValue: the primitive or the wrapper's string data, shared.
+fn strict_this_string_value(value: Value) -> Result<crate::JsString, RuntimeError> {
     match value {
-        Value::String(value) => Ok(value.to_string()),
-        Value::Object(object) => string_object_value(&object).ok_or_else(string_receiver_error),
+        Value::String(value) => Ok(value),
+        Value::Object(object) => object.string_data().ok_or_else(string_receiver_error),
         _ => Err(string_receiver_error()),
     }
 }

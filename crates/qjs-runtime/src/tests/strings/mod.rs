@@ -6,3 +6,4 @@ mod objects;
 mod padding;
 mod search;
 mod sequence;
+mod subject_sharing;

@@ -255,6 +255,17 @@ pub(crate) fn surrogate_escape_code_unit(character: char) -> Option<u16> {
     }
 }
 
+/// AdvanceStringIndex over a shared subject. Without Unicode mode, or in
+/// ASCII text, the next index is always `index + 1`, so no view of the subject
+/// is built; otherwise this is [`advance_string_index`] over its characters.
+pub(crate) fn advance_js_string_index(input: &JsString, index: usize, unicode: bool) -> usize {
+    if !unicode || input.is_ascii() {
+        return index + 1;
+    }
+    let characters: Vec<_> = input.chars().collect();
+    advance_string_index(&characters, index, unicode)
+}
+
 pub(crate) fn advance_string_index(characters: &[char], index: usize, unicode: bool) -> usize {
     if unicode
         && matches!(

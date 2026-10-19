@@ -2,8 +2,9 @@ use std::collections::HashMap;
 
 use crate::CallEnv;
 use crate::{
-    Function, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value, call_function,
-    construct_function, property_value, reflect, symbol, to_js_string_with_env, to_length_with_env,
+    Function, JsString, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value,
+    call_function, construct_function, property_value, reflect, symbol,
+    to_js_string_value_with_env, to_js_string_with_env, to_length_with_env,
 };
 
 const REGEXP_STRING_ITERATOR_REGEXP: &str = "\0regexp_string_iterator_regexp";
@@ -38,7 +39,9 @@ pub(crate) fn native_regexp_prototype_match_all(
         });
     }
 
-    let input = to_js_string_with_env(
+    // The iterator keeps this shared subject and passes the same handle to
+    // every exec, so the matcher view is built once per subject.
+    let input = to_js_string_value_with_env(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
         env,
     )?;
@@ -67,7 +70,7 @@ pub(crate) fn native_regexp_prototype_match_all(
     iterator.define_non_enumerable(REGEXP_STRING_ITERATOR_REGEXP.to_owned(), matcher);
     iterator.define_non_enumerable(
         REGEXP_STRING_ITERATOR_STRING.to_owned(),
-        Value::String(input.into()),
+        Value::String(input),
     );
     iterator.define_non_enumerable(
         REGEXP_STRING_ITERATOR_GLOBAL.to_owned(),
@@ -128,22 +131,12 @@ pub(crate) fn native_regexp_string_iterator_next(
     Ok(iterator_result(match_result, false))
 }
 
-fn regexp_exec(regexp: Value, input: &str, env: &mut CallEnv) -> Result<Value, RuntimeError> {
+fn regexp_exec(regexp: Value, input: &JsString, env: &mut CallEnv) -> Result<Value, RuntimeError> {
     let exec = property_value(regexp.clone(), "exec", env)?;
     if !matches!(exec, Value::Function(_)) {
-        return super::native_regexp_prototype_exec(
-            regexp,
-            &[Value::String(input.to_owned().into())],
-            env,
-        );
+        return super::native_regexp_prototype_exec(regexp, &[Value::String(input.clone())], env);
     }
-    call_function(
-        exec,
-        regexp,
-        vec![Value::String(input.to_owned().into())],
-        env,
-        false,
-    )
+    call_function(exec, regexp, vec![Value::String(input.clone())], env, false)
 }
 
 fn ensure_exec_result_object(value: Value) -> Result<Value, RuntimeError> {
@@ -159,8 +152,8 @@ fn ensure_exec_result_object(value: Value) -> Result<Value, RuntimeError> {
     }
 }
 
-fn match_result_value(value: Value, env: &mut CallEnv) -> Result<String, RuntimeError> {
-    to_js_string_with_env(property_value(value, "0", env)?, env)
+fn match_result_value(value: Value, env: &mut CallEnv) -> Result<JsString, RuntimeError> {
+    to_js_string_value_with_env(property_value(value, "0", env)?, env)
 }
 
 fn set_last_index(receiver: Value, value: Value, env: &mut CallEnv) -> Result<(), RuntimeError> {
@@ -180,9 +173,8 @@ fn set_last_index(receiver: Value, value: Value, env: &mut CallEnv) -> Result<()
     }
 }
 
-fn advance_string_index(input: &str, index: usize, unicode: bool) -> usize {
-    let chars: Vec<_> = input.chars().collect();
-    crate::string::advance_string_index(&chars, index, unicode)
+fn advance_string_index(input: &JsString, index: usize, unicode: bool) -> usize {
+    crate::string::advance_js_string_index(input, index, unicode)
 }
 
 fn iterator_done(iterator: &ObjectRef) -> bool {
@@ -194,9 +186,9 @@ fn iterator_done(iterator: &ObjectRef) -> bool {
     )
 }
 
-fn iterator_string(iterator: &ObjectRef) -> Result<String, RuntimeError> {
+fn iterator_string(iterator: &ObjectRef) -> Result<JsString, RuntimeError> {
     match iterator_slot(iterator, REGEXP_STRING_ITERATOR_STRING)? {
-        Value::String(value) => Ok(value.to_string()),
+        Value::String(value) => Ok(value),
         _ => Err(RuntimeError {
             thrown: None,
             message: "RegExp String iterator source is invalid".to_owned(),
