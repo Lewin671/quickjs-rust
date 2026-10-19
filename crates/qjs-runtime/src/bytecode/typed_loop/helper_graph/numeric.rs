@@ -398,8 +398,29 @@ impl NumProgram {
         // operand is masked into range rather than bounds-checked.
         let mut file = RegisterFile([f64::NAN; FILE]);
         let r = &mut file.0;
-        for (register, argument) in r.iter_mut().zip(args) {
-            *register = *argument;
+        // Admission bounds every helper call to four arguments. Keep those
+        // small copies explicit: a variable-length loop can become an external
+        // memcpy on every recursive call after unrelated code changes.
+        const { assert!(super::MAX_HELPER_ARITY == 4) };
+        match args {
+            [] => {}
+            [a] => r[0] = *a,
+            [a, b] => {
+                r[0] = *a;
+                r[1] = *b;
+            }
+            [a, b, c] => {
+                r[0] = *a;
+                r[1] = *b;
+                r[2] = *c;
+            }
+            [a, b, c, d] => {
+                r[0] = *a;
+                r[1] = *b;
+                r[2] = *c;
+                r[3] = *d;
+            }
+            _ => return None,
         }
         for &(register, value) in &*self.constants {
             r[usize::from(register) & (FILE - 1)] = value;
@@ -1110,6 +1131,44 @@ mod tests {
     use super::NumProgram;
     use crate::bytecode::typed_loop::Typed;
     use qjs_ast::BinaryOp;
+
+    #[test]
+    fn helper_arguments_preserve_order_and_number_bits_at_every_admitted_arity() {
+        let arguments = [
+            -0.0,
+            f64::from_bits(0x7ff8_0000_0000_0042),
+            f64::INFINITY,
+            -3.5,
+        ];
+        for arity in 0..=super::super::MAX_HELPER_ARITY {
+            for (slot, expected) in arguments[..arity].iter().enumerate() {
+                let program = NumProgram::lower(
+                    &[HelperOp::Return {
+                        src: u16::try_from(slot).unwrap(),
+                    }],
+                    u8::try_from(arity).unwrap(),
+                )
+                .unwrap();
+                let Some(Typed::Number(actual)) = program.run(&[], &arguments[..arity], 0) else {
+                    panic!("numeric argument must be returned unchanged");
+                };
+                assert_eq!(actual.to_bits(), expected.to_bits());
+            }
+            // Argument initialization must leave the first local undefined,
+            // including the zero-argument and widest admitted calls.
+            let program = NumProgram::lower(
+                &[HelperOp::Return {
+                    src: u16::try_from(arity).unwrap(),
+                }],
+                u8::try_from(arity).unwrap(),
+            )
+            .unwrap();
+            assert!(matches!(
+                program.run(&[], &arguments[..arity], 0),
+                Some(Typed::Undefined)
+            ));
+        }
+    }
 
     /// `function (n) { var s = 0; while (n > 0) { s = s + n; n = n - 1; } return s; }`
     /// in the stack-shaped form flattening produces.
