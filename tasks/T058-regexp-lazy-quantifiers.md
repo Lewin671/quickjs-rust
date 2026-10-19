@@ -1,8 +1,8 @@
 # T058: Current-base RegExp lazy-quantifier proposal under v6
 
-- Status: active; old attempts 1/2 closed incomplete/inconclusive; fresh current-base proposal, not a third retry.
+- Status: active; old attempts 1/2 closed incomplete/inconclusive; fresh current-base v6 evidence/freeze/acceptance chain queued.
 - Implementation: present on rebased candidate `9e415ff4`; its runtime diff from current main is T058 alone. No new runtime edits.
-- Verified at: clean rebase onto `a68a9f46` at `9e415ff4`; attempt-2 hashes/logs verified on 2026-10-19. Full and staged gates recorded before handoff.
+- Verified at: clean rebase onto `a68a9f46` at `9e415ff4`; runtime/proposal at `c7c43e05` plus dispatch documentation passed full `check.sh` on 2026-10-19. Attempt-2 hashes/logs checked; final staged fast gate covers handoff metadata.
 - Evidence: [attempt 1](archive/T058-attempt1-incomplete.md), [attempt 2](archive/T058-attempt2-inconclusive.md), [prospective contract](proposals/T058-current-base-v6.json).
 - Unresolved: genuinely fresh queue/profile, schema-3 materialization/commit and all current-base acceptance are pending the chained jobs. Neither old decision is changed.
 - Next action: fetch the new freeze/decision jobs below; import the frozen-plan bundle, verify its bindings and read acceptance at the new base/candidate only.
@@ -57,8 +57,32 @@ frames are not summed. Guard failure blocks acceptance and preserves output.
 
 ## Jobs and result reading
 
-Pending submission after this prospective contract is committed. All jobs
-use workspace `scripts/imac-bench.sh`, status first; timing jobs use `--timing`.
+Submitted on 2026-10-19 at 17:43 UTC after status showed idle. Tooling and
+prospective contract commit: `c7c43e05`; contract SHA-256
+`d9f61ce3f3a66816faf7643fbd4954721aced28876b4ada44b317bbc17552aa8`.
+All jobs use workspace `scripts/imac-bench.sh`; timing jobs use `--timing`.
+
+| Job ID | Purpose / output under its `out/` |
+| --- | --- |
+| `20261019T174302Z-t058-v6-current-base-formal30` | Fresh current-base comparison; `bundle/summary.json` and sealed raw |
+| `20261019T174303Z-t058-v6-fresh-queue-profile` | Fresh `queue.json`, raw sample, `profile-summary.json`, `profiles/papaparse--csv/receipt.json` |
+| `20261019T174304Z-t058-v6-validate-freeze-plan` | Validate and commit new schema-3 plan; `unit.json`, `validation.json`, `frozen-plan.json`, `frozen-plan.bundle` |
+| `20261019T174305Z-t058-v6-selection-k6` | Build/audit fresh six-layout matrices and screen; `attempt/screen/complete.json`, `attempt/verdict.json` |
+| `20261019T174305Z-t058-v6-acceptance-formal30` | New candidate/base acceptance; `bundle/summary.json` |
+| `20261019T174306Z-t058-v6-formal-power` | V6 fixed-look continuation with `--plan`; `power/power.json` |
+| `20261019T174307Z-t058-v6-heldout-k6` | Fresh full K=6 held-out; `heldout/panel.json` |
+| `20261019T174308Z-t058-v6-test262-exact` | Fresh exact-candidate scan; `test262/`, `burndown-entry.json` |
+| `20261019T174309Z-t058-v6-promotion-decide` | New-unit replay only; `decision.json`, `decision.stdout`, `--require-retained` |
+
+Baseline, profiling, selection, formal, power and held-out are timed. Freeze,
+correctness and decision are non-timing and still serialized by the queue.
+Every job checks its prerequisites; canonical formal DISTURBED logs stop the
+chain, while layout recovery is validated by its own packet contract.
+Fresh queue generation keeps the standard 0.5 NG opportunity ratio. The freeze
+job never changes choices from its contract, and acceptance verifies its
+Git-committed plan bytes, proposal ancestry, queue/profile hashes and validation.
+The pending plan path is `tasks/performance-units/regexp-lazy-quantifier-current-base-v6.json`;
+it is deliberately not an unbound placeholder checked into this branch.
 New queue/profile and all acceptance output paths are exclusive. Spotlight/
 photo/media disable flags and daemon states are recorded without STOP/CONT
 or service changes. No completion is awaited.
@@ -90,3 +114,21 @@ The local full `check.sh` and staged fast gate must pass before handoff;
 plan-specific `validate-unit` runs on the fresh original-host artifacts
 before its remote commit. Exact scan writes a burndown entry for coordinator
 recording after completion; no current full-scan count is claimed early.
+
+Handoff verification (2026-10-19 UTC):
+`PYTHONDONTWRITEBYTECODE=1 CARGO_INCREMENTAL=0 ./scripts/check.sh` passed:
+2,312 runtime tests, feature lint/tests (21 agents, 24 counters), all other
+workspace crates, 659 benchmark-tool tests, 35 script tests, all committed
+unit-plan/context/size/hook/syntax gates, and all 5,170 curated Test262 cases.
+The recording/proposal commits change no engine source, so the staged fast
+gate selects context checks rather than a new semantic slice; the full
+curated semantic subset still ran. Every dispatched shell command and Python
+heredoc passed syntax checks before submission. New evidence-dependent
+plan validation and acceptance remain pending their queue jobs.
+
+Local disposable `target/debug` (2.4 GiB) was removed after checks; canonical
+performance images and all measurement evidence remain. Initial free data
+volume: local 86 GiB, iMac 101 GiB. No origin push or merge. After the new
+exact scan completes, record its retained full-scan entry with
+`scripts/test262-burndown.sh --entry <fetched-burndown-entry.json>`; partial
+scans are never recorded as complete. Do not use the old candidate entry.
