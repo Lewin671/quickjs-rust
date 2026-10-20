@@ -169,6 +169,29 @@ stored strings keep valid surrogate pairs as scalars, so typed keys need no cano
 It needs a new queue/profile-bound plan (the closed shape's data is not reused) and the
 work-count obligations listed in that design before any screen.
 
+Decided plan parameters (frozen only with the fresh queue/receipts): migration, stages A (layout replacement)
+and B (routing, final); cumulative 1.025; payoff 0.97 or 1/B_i; rank ceiling 5; `max_attempts` 2; a frozen,
+block-only non-timing instruction pre-gate over all 86 policy cases before each screen, recorded here.
+
+### New-shape work-count obligations (perf-counters, before any timed screen)
+
+- Repeated construction (constructor, class fields, JSON shape, literal, host map) creates O(1) shapes, field
+  copies and atoms after the first object, also when the previous object is dead; an add probes once.
+- `JSON.parse`, wrapper, function and array creation create no atom domain and do no re-link; an append edge hit
+  interns nothing and compares no field vector; a small-shape lookup hashes nothing, a large one hashes once.
+- Repeated `Small`→`Dynamic` growth follows a re-encoding edge; bulk freeze/seal interns no keys; payload-side
+  name indexes are gone (A replaces, not overlays); `ObjectData` size test asserts at most 120 bytes.
+- Retention: `dictionary_order_tombstones_stay_bounded_under_fixed_live_churn` asserts
+  `live_count() <= 1 + 16`, `table_len()` within the sweep bound of that count, the dictionary's own
+  order/positions/index exactly as today, and `live_count() == 0` after the layout and roots drop.
+- Budget: a test keeps 5000 objects alive, each with one distinct key (each leaf is held by its object even after
+  its root edge is evicted), asserts the live counter reaches 4096 and that misses at or above it record no edge,
+  then drops the objects and asserts the counter falls below 4096 and new misses record edges again.
+- Semantics (differential and unit): deleting/observing initializers, base constructors returning another
+  object, equal keys with different attributes, delete/re-add order, more than 32 and 128 properties, freezing
+  one literal instance, literals across realms and `eval`, null-prototype and host-map objects, lone-surrogate
+  and halves-built keys.
+
 ## Design acceptance and verification
 
 - [x] One target specifies flat frames, every ordinary named-property storage

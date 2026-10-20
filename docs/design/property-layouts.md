@@ -2,7 +2,8 @@
 
 How an ordinary named-property store keeps its layout authority current without rebuilding it; refines
 [interpreter-core-v2](interpreter-core-v2.md#properties-atoms-and-layouts-are-the-ordinary-lookup-authority).
-[T056](../../tasks/T056-interpreter-core-v2.md) owns status, evidence and plans; no performance result here.
+[T056](../../tasks/T056-interpreter-core-v2.md) owns status, evidence, plans and the work-count tests that
+check these rules; no performance result here.
 
 ## Why the first M1.2 shape was closed
 
@@ -11,150 +12,119 @@ shapes only weakly, gave builders and function tables private domains and hashed
 tracked wall time (up to 5.6x). The [diagnosis record](../../tasks/archive/T056-m1-stage2-diagnosis.md) owns the
 mechanisms, ablations and jobs. The rules below remove each mechanism as a new implementation shape.
 
-## Dependency: canonical string storage
+## Dependency and replacement
 
-T063 (branch `agent/string-canonical/codex`, not yet on main) makes a stored string
-keeps every valid surrogate pair as its scalar. Equal code units then have equal
-bytes. Keys that come from `JsString` values or linked atoms are canonical by
-construction, so layout probes compare and hash their bytes directly, with a
-debug assertion instead of a canonicalization scan. Untyped host `&str` entry
-points (atom interning, host property APIs) canonicalize once at entry. Until
-T063 is on main, probes must keep the scan.
+T063 (branch `agent/string-canonical/codex`, not yet on main) keeps every valid surrogate pair of a stored
+string as its scalar, so equal code units have equal bytes. Keys from `JsString` values or linked atoms are then
+canonical by construction: probes compare and hash their bytes directly, behind a debug assertion. Untyped host
+`&str` entry points (atom interning, host property APIs) canonicalize once at entry.
+
+The layout **replaces** payload lookup authority in the same stage; it is not layered on top:
+- an add probes once, and the miss result (canonical key, current shape) feeds the append;
+- the payload-side indexes go in the same stage: `Dynamic`'s name map and `ObjectLiteralShape.lookup`;
+- payloads keep slots and values only.
 
 ## Store ownership
 
-- **Domain.** A store resolves its atom domain once, when it is created: from
-  the prototype for ordinary objects, and from the receiver realm for the
-  ordinary named parts of functions, arrays, wrappers and builders. No store
-  creates a private domain, and no store re-links after construction.
-  Ordered-data builders (JSON, RegExp and String wrappers) receive the target
-  domain before their first insert.
-- **Lazy tables.** A function or array named table has no layout until its
-  first ordinary named install. Semantic hooks (`length`, `name`, `prototype`,
-  indices) need none.
-- **One pointer.** The layout is one `Rc<LayoutNode>`.
-  - `LayoutNode` is either a shared immutable `Shape` or a private
-    `Dictionary`.
-  - The dictionary node is uniquely owned and edited in place through its cell.
-    No weak reference to it exists, so it never becomes shared.
-  - The non-append edit counter is a `u8` in the object's existing flag padding.
+- **Domain.** A store resolves its atom domain once, at creation. No store creates a private domain or
+  re-links later.
+  - Ordinary objects take it from the prototype. Objects with a null prototype (and `PropertyStorage::dynamic`
+    hosts without one) take it from the current realm.
+  - Function, array and wrapper named parts take it from the receiver realm.
+  - Ordered-data builders (JSON, RegExp/String wrappers) receive it before their first insert.
+  - `PropertyStorage::dynamic` (objects built from a host map) builds its layout by appending the ordered keys
+    through edges from the domain root. It does not publish a whole field list.
+- **Lazy tables.** A function or array named table has no layout until its first ordinary named install;
+  semantic hooks (`length`, `name`, `prototype`, indices) need none.
+- **One pointer.** The layout is one `Rc<LayoutNode>`: a shared immutable `Shape` or a private `Dictionary`.
+  The dictionary node is uniquely owned and edited in place through its cell.
+- **Dictionary identity.** A dictionary keeps an independent `identity: Rc<()>` beside its `u64` version. An IC
+  may hold a `Weak` of it, so a dead identity can never match a later dictionary at a reused address.
+  - The alternative is a monotonic `u64` id per domain. It was rejected because it needs either a domain
+    lookup or a stored domain to compare ids across domains.
+  - The `Rc<()>` is one allocation per dictionary, which only exists after heavy churn.
 
 ## Transitions are edges
 
-A published shape never changes; an object moves to another shape, so a shape
-pointer stays a valid cache token. The `token` semantics in `layout/tests.rs`
-are unchanged.
+A published shape never changes; an object moves to another shape, so a shape pointer stays a valid cache
+token (the `token` semantics in `layout/tests.rs` are unchanged).
 
 | Edit | Rule |
 | --- | --- |
-| Append | Edge label `(owned key, attributes, ordered, payload encoding)`. A hit compares key bytes (pointer first) and allocates nothing; no field vector is copied or compared. A miss copies the parent's fields once, interns the key, creates the child and records the edge. |
+| Append | Edge label `(owned key, attributes, ordered, payload encoding)`. A hit compares key bytes (pointer first), allocates nothing and copies or compares no field vector. A miss copies the parent's fields once, interns the key, creates the child and records the edge. |
 | Payload re-encoding | `Small`→`Dynamic` and `Pair`→`Dynamic` are edges from the current shape. They are not structural edits and are not counted. |
-| Delete, reconfigure, reorder | A content-hash cache keyed by an incremental 64-bit hash of `(key, attributes)` per slot. A full compare runs only on a hash match. |
+| Delete, reconfigure, reorder | Content-hash cache. The incremental 64-bit hash folds the payload encoding, then `(key, attributes)` per slot, then the order sequence. A full compare runs only on a hash match and also compares encoding, fields and order. |
 | Bulk freeze/seal and descriptor batches | Reconfigure only slots whose attributes changed; never re-intern every key. |
 | Dictionary switch | After 32 non-append edits, or when an append would exceed 128 fields. Appends never count as edits. |
 
-A missing-own probe that precedes an insert carries its canonical key and the
-current shape into the append, so an add probes once. During an operation that
-reuses a key identity, it holds a strong `AtomKey`, so a freed key allocation
-cannot alias another key (no ABA).
+An operation that reuses a key identity holds a strong `AtomKey` while it does, so a freed key allocation cannot
+alias another key (no ABA).
 
 ## Edge ownership and the retention bound
 
-- **Ownership.** Parents own their edges strongly. Children hold no reference to
-  their parent, so there is no cycle. Without strong edges, every intermediate
-  shape dies with the object that last used it, and the next object rebuilds the
-  whole chain.
-- **Roots.** One empty root per payload encoding is owned by a `DomainRoots`
-  value, which realms sharing a domain hold. The atom domain itself does not own
-  it; see the cycle section below.
-- **Bounds.** Each shape holds at most 16 append edges and one edge per
-  encoding. When full, the oldest edge is evicted. Each domain caps the shapes
-  created through edges at 4096. A miss beyond the cap still creates the shape
-  but records no edge, so the object keeps working without growing the tree.
-- **What edges retain.** Edges keep their keys' atoms alive. Edges and roots
-  therefore retain at most `16 + 5` children per live shape and 4096 shapes per
-  domain, plus the atoms named on those edges.
-- **Reconciling with the churn rule.** This replaces the rule "transitions are
-  weakly retained". It still meets the design rule that link and transition
-  caches never retain arbitrary churn forever:
-  - retention is a fixed function of the bounds above, not of how many distinct
-    keys a program has used;
-  - eviction drops a subtree and its atoms immediately;
+- **Ownership.** Parents own their edges strongly; children hold no parent reference, so there is no cycle. With
+  weak edges, intermediate shapes die with the object that last used them and every object rebuilds the chain.
+- **Roots.** One empty root per payload encoding lives in a `DomainRoots` value.
+  - `new_realm` creates one `Rc<DomainRoots>` with the domain.
+  - `new_realm_sharing_atoms` passes the same `Rc` on, so every realm of one domain shares one set of roots.
+  - The atom domain does not own the roots; see the cycle section.
+- **Edge bound.** Each shape holds at most 16 append edges plus one edge per encoding. When full, the oldest edge
+  is evicted: its parent stops holding it, and the child is freed with its subtree and their atoms once no object
+  uses them.
+  - After eviction, a later miss can create a shape with the same content as a live evicted one but a different
+    token. That only adds a form an IC may see; it does not affect correctness.
+- **Domain budget.** The 4096-shape budget counts *live* shapes created by append or re-encoding misses. The
+  counter lives in the domain (shared by all its realms), not in `DomainRoots`. Each shape holds its domain, so
+  its `Drop` can decrement the counter.
+  - A miss while the counter is at or above the budget still creates the shape, which is counted, but records no
+    edge. The object keeps working and the tree does not grow.
+- **What is retained.** At most 16 + 5 children per live shape and 4096 live edge-created shapes per domain, plus
+  the atoms named on their edges.
+- **Churn rule.** This replaces "transitions are weakly retained" and still satisfies "link and transition
+  caches never retain arbitrary churn forever":
+  - retention is a fixed function of these bounds, not of how many keys a program has used;
+  - evicted subtrees are released when unused;
   - dictionaries, which absorb high churn, record no edges.
-- **Test expectation.** The fixed-live-churn test
-  (`dictionary_order_tombstones_stay_bounded_under_fixed_live_churn`) appends
-  and removes 10,000 distinct keys after an anchor. It must now assert:
-  - `domain.live_count() <= 1 + 16`: the anchor shape's edges may retain the
-    first evicted-window temporaries;
-  - `table_len()` stays within the sweep bound of that live count;
-  - the dictionary's own order, positions and index stay exactly as today
-    (one live entry);
-  - after the layout and the roots are dropped, `live_count() == 0`.
-  A second test churns 10,000 distinct keys across fresh objects and asserts
-  that the domain's edge-created shape count never exceeds 4096.
 
 ## Literal and constructor sites
 
-`ObjectLiteralShape` keeps one `(WeakAtomDomain, shape)` slot, replaced when a
-different live domain uses the literal. It is never keyed by an address.
-Creating a literal clones one pointer.
+`ObjectLiteralShape` keeps one `(WeakAtomDomain, shape)` slot, replaced when a different live domain uses the
+literal; it is never keyed by an address. Creating a literal clones one pointer.
 
-Class fields and constructor stores cache **no** final shape:
-- field initializers can delete or observe properties;
-- a base constructor can return another object.
-
-They reach shared shapes through append edges, one hit per field.
+Class fields and constructor stores cache **no** final shape. Field initializers can delete or observe
+properties, and a base constructor can return another object. They reach shared shapes through append edges, one
+hit per field.
 
 ## Lookup by text
 
-- Shapes with up to 12 fields compare field text linearly: pointer first, then
-  bytes. There is no domain probe and no per-shape hash index.
-- Larger shapes and dictionaries keep one index keyed by atom text, so a probe
-  hashes the key once.
+- Shapes with up to 12 fields compare field text linearly, pointer first and then bytes. There is no domain probe
+  and no per-shape index.
+- Larger shapes and dictionaries keep one index keyed by atom text, so a probe hashes once.
 - Bytecode-linked named operations (M1.3) carry atoms and skip text entirely.
-- An identity is reused along a prototype chain only while every store shares
-  the domain and the operation holds the key.
+- An identity is reused along a prototype chain only while every store shares the domain and the operation holds
+  the key.
 
 ## Object size and the domain–root cycle
 
-Stage 2 grew `ObjectData` from 112 to 144 bytes by adding a domain pointer, a
-two-word state enum and an edit counter. The target is at most 120 bytes,
-enforced by the size test. It is reached with:
-- the one-pointer `LayoutNode`;
-- the counter in existing padding;
-- the domain moved into the shape and dictionary nodes, as the strong owner.
+**Layout today.** On main `ObjectData` is 112 bytes:
+- `RefCell<PropertyStorage>`: 48 bytes;
+- three `u64`/`usize` cells: 24 bytes;
+- `RefCell<Option<Prototype>>`: 24 bytes;
+- the cold `OnceCell<Box<_>>`: 8 bytes;
+- eight one-byte cells: 8 bytes. Seven are `Cell<bool>` (`extensible`, `raw_json`, `array_prototype_exotic`,
+  `typed_array_exotic`, `immutable_prototype_exotic`, `module_namespace_exotic`, `string_indices_pending`) and
+  one is `Cell<SymbolBrand>`.
 
-Moving the domain into shapes creates a cycle if the domain owns the roots: the
-root owns its children, a child owns the domain, and the domain owns the root.
-Roots therefore live in `DomainRoots`, held strongly by each realm that uses the
-domain. The domain keeps only its weak caches and atom table. A shape that
-outlives its realm keeps the domain alive through its own pointer, as the design
-requires for escaping values, and later appends from it still intern correctly.
-Nothing on the domain side points back to a shape strongly.
+Stage 2 added a domain, a two-word state and a counter to `PropertyStorage`, which made it 144 bytes.
 
-## Work-count obligations (perf-counters)
+**Target: at most 120 bytes**, locked by the size test. It is reached with:
+- the one-pointer `LayoutNode`, which adds 8 bytes to `PropertyStorage`;
+- the eight flags packed into one `Cell<u8>` bit set (7 bools plus 2 bits of brand). This frees 7 bytes;
+- the `u8` edit counter placed in the freed space;
+- the domain moved into the shape and dictionary nodes.
 
-These are checked before any timed screen. They are counts, not timing:
-
-- **Repeated construction.** Building N objects through the same constructor,
-  class-field list, JSON shape or literal creates O(1) shapes, field copies and
-  atoms after the first object, including when the previous object is dead.
-- **No private domains.** `JSON.parse`, wrapper construction and function or
-  array creation create no atom domain and perform no re-link.
-- **Append hits.** An append edge hit performs no interning and no field-vector
-  comparison. Each add probes once.
-- **Lookups.** A small-shape text lookup performs no hash; a large-store lookup
-  performs one.
-- **Edges.** A repeated `Small`→`Dynamic` growth follows a re-encoding edge.
-  Bulk freeze/seal interns no keys.
-- **Bounds.** The retention bounds above hold under key churn, per shape and
-  per domain.
-- **Semantics.** Differential and unit coverage:
-  - initializers that delete or observe the instance;
-  - base constructors that return another object;
-  - equal keys with different attributes;
-  - delete then re-add order;
-  - more than 32 and more than 128 properties;
-  - freezing one literal instance;
-  - literals across realms and `eval`;
-  - lone-surrogate keys and keys built from separate halves.
+**The cycle.** Moving the domain into shapes creates a cycle if the domain owned the roots: root → child →
+domain → root. `DomainRoots` therefore sits outside the domain, held by its realms. The domain keeps only its
+weak caches, its atom table and the live-shape counter. A shape that outlives its realm keeps the domain alive
+through its own pointer, as escaping values require, and later appends from it still intern correctly. Nothing on
+the domain side points back to a shape strongly.
