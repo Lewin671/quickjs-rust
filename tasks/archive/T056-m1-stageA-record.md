@@ -3,7 +3,8 @@
 Stage A of plan [`interpreter-core-v2-layout-edges`](../performance-units/interpreter-core-v2-layout-edges.json)
 (plan commit `50b42547`), implemented on `agent/t056-m1-stage-a/claude` per
 [property layouts](../../docs/design/property-layouts.md). Owner of status and next action:
-[T056](../T056-interpreter-core-v2.md). Numbers here are local diagnostics, not decision evidence.
+[T056](../T056-interpreter-core-v2.md). Non-timing instruction counts diagnose cost; the frozen pre-gate only admits or blocks a timed screen.
+No timing acceptance is claimed.
 
 ## Branch content
 
@@ -82,6 +83,9 @@ Job `20261020T171937Z-t056-m1a-pregate1`, image `38af1bc3` versus base `f58c696e
 release builds, one instruction pair over all 86 policy cases, cutoff `max(1.03, I_i)`. This image still used
 the removed thread-local fallback and is diagnostic only, never the screen image. No timed attempt was spent.
 Raw job files: workspace `outputs/imac-bench/20261020T171937Z-t056-m1a-pregate1/out/`.
+Binary SHA-256: base `b0dfc65d0c026d62aa64ef3d69a089eb73b51088c84af75b44617ea2a1737f0e`,
+candidate `b558c7be06fd5bd0b08a55f39c8223bf2e60bd93573c7330a83467a6ebe75a3f`.
+The script's `cases 172` metadata counts argument words (`--case` plus each id), not cases; JSON/verdict covers 86.
 
 | Case | Candidate/base instructions |
 | --- | ---: |
@@ -97,4 +101,258 @@ Raw job files: workspace `outputs/imac-bench/20261020T171937Z-t056-m1a-pregate1/
 | development/diff/compare (target) | 0.9746 |
 | development/meriyah/parse (target) | 0.9819 |
 
-Final committed-image pre-gate remains pending.
+Final committed-image results are recorded at the end of this file.
+
+
+## Explicit-domain continuation diagnostics
+
+`20261020T180640Z-t056-m1a-codegen-diagnose` built canonical `ff850af8` and the base and captured x86
+symbols/assembly plus agents/perf-counters binaries. Its collection failed because the temporary bundle directory
+was absent; no timing or pre-gate verdict resulted. `20261020T181103Z-t056-m1a-codegen-counts` reused those exact
+binaries and completed the counters and an eight-case diagnostic. This is not a complete pre-gate.
+
+- `captured_write`: 1.0311; subtracting the 1000-iteration events from 2000 iterations gives identical base and
+  candidate events. The added layout startup events do not scale with iterations. Wide `run` is 25,264 bytes
+  on the base and 23,984 on `ff850af8`; a smaller body alone does not rule out register spills.
+- The existing execution events of string-unpack-code, string-base64 and string-validate-input match exactly;
+  instruction ratios are 1.0329, 1.0173 and 1.0174. New layout hashes are 108,954 / 16,453 / 36,039, respectively;
+  these counters did not exist in the base and cannot by themselves establish extra work versus its old maps.
+  No tier-coverage shift is observed. Added atoms/shape work and code generation both require accounting.
+- Raytrace fields: 1.0460; graphlib: 1.0326; hash-map: 1.0196; js-yaml: 1.0161.
+
+`bd5c340b` makes the constructor's realm-domain lookup lazy and splits property insertion into a small edge-hit
+path and an out-of-line replacement/new-edge path. The hit keeps the payload encoding already known: append edges
+cannot re-encode. Test coverage checks inherited-domain creation and null-prototype fallback; every field still
+follows one edge, with no site replay or final-shape cache.
+
+Job `20261020T181515Z-t056-m1a-edge-instructions` (13 diagnostic cases, not a complete pre-gate) at `bd5c340b`:
+raytrace 1.0359, captured-write 1.0310, unpack-code 1.0307, graphlib 1.0341, hash-map 1.0198, base64 1.0169,
+validate-input 1.0164, js-yaml 1.0158; controls dynamic-read 0.9995 and recursive-call-tree 1.0000; targets
+moment 0.9811, diff 0.9751, meriyah 0.9766. Wide `run` remains 23,984 bytes. None of these jobs spends a
+screen attempt or establishes timing performance.
+
+
+At `55ac897e`, insertion's edge-hit wrapper is forced inline and guarded prototype-slot payload reads are
+out of line. Job `20261020T181842Z-t056-m1a-inline-instructions` still gave captured-write 1.0310 and
+raytrace 1.0361, so that boundary did not fix either blocked case. Unpack-code 1.0360, graphlib 1.0313,
+hash-map 1.0245, base64 1.0168, validate-input 1.0167, js-yaml 1.0131; targets moment/diff/meriyah
+0.9805 / 0.9752 / 0.9764. Wide `run` shrank to 23,328 bytes with no captured-write instruction change.
+
+`20261020T182153Z-t056-m1a-callee-assembly` compared the exact base and `55ac897e` admission helpers.
+The hot `inline_entry` grew from 368 to 400 bytes, saving two more registers/stack words and retaining the
+program-cache pointer through its cold initializer. `1244c8dd` separates cached wide-program reads from
+an out-of-line `initialize_program`, leaving compilation, cached declines and admission unchanged. It also
+forces the existing per-field append-edge probe inline: x86 still called that 320-byte helper from the constant
+field loop after the insertion wrapper was inlined. These are general cache-hit/code-generation boundaries;
+no operation, receiver, field sequence, function or benchmark is newly admitted.
+
+
+At `1244c8dd`, job `20261020T182416Z-t056-m1a-program-instructions` reduced captured-write to 1.0124,
+raytrace to 1.0262, graphlib to 1.0279, base64 to 1.0012, validate-input to 1.0126, hash-map to 1.0132 and
+js-yaml to 1.0078. Unpack-code remained above the cutoff at 1.0349. Dynamic-read was 0.9802, recursive tree
+1.0000; targets moment/diff/meriyah 0.9768 / 0.9721 / 0.9725. Wide `run`: 22,928 bytes. The cached-program
+boundary fixes real executed admission/code-generation overhead, rather than relying on body size alone.
+
+
+`36570fbf` carries the existing admitted-call facts word through `InlineCallee` as `NonZeroU64`, instead of
+expanding it into a register count and four booleans and returning a separate class flag. It uses exactly the
+same cached facts, caller-dependent checks, exit-admission counter and class/call distinction. The change removes
+aggregate construction/return work for every eligible wide call and constructor, without adding a cache or a
+recognizer. The 78 focused wide-tier tests and the fast gate (2341 runtime tests plus 65 selected Test262 cases)
+passed. Arm64 diagnostic instructions: captured-write 0.9929, raytrace 1.0263, unpack-code 1.0235 against the
+existing base binary; only instructions are used under concurrent build load.
+
+
+Job `20261020T182911Z-t056-m1a-facts-instructions` at `36570fbf`: captured-write 0.9903, raytrace 1.0231,
+base64 0.9992, validate-input 1.0080, hash-map 0.9950, js-yaml 1.0044; dynamic-read 0.9973, recursive tree
+1.0001. Unpack-code 1.0322 and graphlib 1.0308 remained just above the pre-gate cutoff. Targets moment/diff/
+meriyah 0.9730 / 0.9733 / 0.9721. This remains a 13-case diagnostic, not the complete pre-gate.
+
+The continuation then applies the ordinary store's existing edge-as-absence proof to `NamedTable::insert_in`
+(function/array named descriptors): a matching append edge inserts directly, instead of searching the parent's
+fields before following that same edge. Replacement/new-edge logic stays out of line; the table still takes its
+realm domain only at its first named install. The four perf-counter layout tests pass, including named-table
+probe/retention obligations. It adds no per-site replay, cached final shape or specialized property name.
+
+
+`5d3e04bd`, job `20261020T183455Z-t056-m1a-table-instructions`: unpack-code 1.0337 and graphlib 1.0325
+still blocked. Captured-write 0.9903, raytrace 1.0235, base64 0.9992, validate-input 1.0079, hash-map 0.9959,
+js-yaml 1.0060; targets moment/diff/meriyah 0.9759 / 0.9745 / 0.9734; dynamic-read 0.9972, recursive tree
+1.0000. Wide `run` was 23,504 bytes. The edge-first named table did not alone improve those instruction costs.
+Its complete insertion boundary is kept out of line in the following revision to contain caller code growth.
+
+The next probe change compares short layout keys with bounded, overlapping head/tail byte slices (2, 4 or 8 bytes)
+after the existing length/pointer/first-byte tests. These safe fixed-width comparisons avoid general byte-comparison
+calls for keys shorter than 16 bytes; longer keys retain the old comparison. All bytes participate, with no hash,
+new key identity or semantic shortcut. The focused boundary test changes each byte at lengths 0–40 and covers
+multibyte UTF-8. All 11 layout tests passed; the complete gates follow below.
+
+
+## Final runtime candidate
+
+`72c2e5db` is the final runtime image of this continuation. Job
+`20261020T183933Z-t056-m1a-keys-instructions` passed all 13 diagnostic cases below 1.03: raytrace 1.0230,
+unpack-code 1.0210, graphlib 1.0205, captured-write 0.9903, base64 0.9955, validate-input 1.0030,
+hash-map 0.9999, js-yaml 1.0021, dynamic-read 0.9876, recursive tree 0.9999; targets moment/diff/meriyah
+0.9784 / 0.9782 / 0.9716. This is still diagnostic, not the mandatory 86-case pre-gate.
+
+Wide `activation::run`: base **25,264 bytes**, candidate **23,504 bytes**. Named direct Rust callees (compiler
+suffixes removed) change from 61 to 64. `inline_entry` and the OnceCell `try_init` closure leave the direct-call
+set; `initialize_program` and `compute_fixed_inline_facts` enter it. The original literal-prototype reader is
+replaced by `prototype_data_slot_value`; `shared_data_slot_value`, `prototype_is_weak`, `Upvalue::get` and
+`DynamicBindings::cell` become out-of-line calls, while the old dynamic-binding HashMap `get` is no longer a
+direct callee. `shared_data_slot_write` remains a callee under a changed impl symbol. This records named-call
+boundaries, not an attribution of executed cost from size or static call counts alone.
+
+Final arm64 diagnostics against the handed-off base binary: captured-write 0.9907, unpack-code 1.0288,
+raytrace 1.0374. The class workload still has an arm64 instruction regression; x86 is this unit's frozen gate,
+and these local counts establish no timing acceptance.
+
+Candidate isolation: `git merge-base 50b42547 72c2e5db` is `50b42547`; `git rev-list --merges
+50b42547..72c2e5db` is empty. `git diff f58c696e 72c2e5db -- crates` changes only **122 files in
+`crates/qjs-runtime`**, covering this M1 layout/domain migration and its code-generation repairs. No main merge,
+diagnostic-branch cherry-pick, parser/AST change or saved-out add replay was introduced. The exact diff is
+reproducible from these repository revisions.
+
+At `72c2e5db`, the pre-commit fast gate passed (2342 runtime tests; no focused Test262 filter matches these
+property-module paths), all 255 `compare-qjs.sh` fixtures passed, and the pre-push `check.sh` passed including
+default/agents/perf-counters checks and 5170 Test262 subset cases. Concurrent background pushes caused the first
+push to lose the remote-ref compare-and-swap race; a serialized normal push succeeded after the full gate.
+Runtime source is frozen here; final configured Test262/counter verification and the complete pre-gate follow.
+
+
+Final event job `20261020T184243Z-t056-m1a-final-correctness` built agents/perf-counters at `72c2e5db` and
+compared captured-write (1000 and 2000 iterations), raytrace fields, graphlib, unpack-code, base64 and
+validate-input with the exact base's counter build. Every original non-`property_*` event matches, including
+compact/direct/native calls, opcode counts and tier entries. Each final script records exactly one production
+atom domain; the removed fallback no longer adds another startup domain. The new layout counters have no matching base instrumentation;
+atom-creation counts grow because layouts now intern their keys. This rules out a counted tier/route shift; it does not
+separately attribute byte-comparison and register costs that these counters do not count.
+
+The job's unsharded exact scan was cancelled during serial metadata enumeration (no complete scan and no
+burndown entry). Replacement `20261020T184826Z-t056-m1a-final-test262-shards` runs all eight disjoint `--all
+--engine both --shard I/8` slices with one worker each, agents enabled, the canonical candidate, 20-second timeouts
+and one timeout retry, then the standard burndown aggregation. No case exclusion or acceptance rule changes.
+The final pre-gate job `20261020T184945Z-t056-m1a-pregate2-final` runs after that scan and checks its
+complete passing entry for the same commit before executing the unchanged pre-gate-1 script.
+
+Remote CI for `72c2e5db`: run `39477362030` **success** (2026-10-20), in addition to the local gates above.
+
+
+The complete eight-shard scan passed at `72c2e5db`: **42,672 / 42,672 configured Rust cases**, no failures,
+timeouts or not-run cases; 53,572 total, 10,900 skipped by the pinned QuickJS-NG configuration. QuickJS-NG:
+42,602 pass, 70 fail, zero timeouts; actionable gaps zero. The union of the eight per-case JSONL files equals
+the pinned corpus's 53,572 paths exactly once, with no duplicates or omissions. The standard complete-scan entry
+was appended to `docs/conformance/burndown.jsonl` as `local-imac`; no partial scan was recorded.
+
+
+## Final pre-gate 2: PASS
+
+Job **`20261020T184945Z-t056-m1a-pregate2-final`**, candidate **`72c2e5db2f041dcbc4e798cbfa63c36c7f3ec6f9`**
+versus base **`f58c696e8379261ed726f0cea1051ed6d34f431a`**, x86_64 canonical uninstrumented agents/release
+images. It ran the unchanged pre-gate-1 script after verifying the same commit's complete passing conformance
+entry. **86/86 present, all pass** against `max(1.03, I_i)`; every current policy band is below 1.03, so every
+cutoff is 1.03. Worst ratio 1.02425836 (unpack-code), instruction geomean 0.99080427. The <=1.02 engineering aim
+was not reached on unpack-code, prototype-method-call and class-fields, but all have margin to the frozen cutoff.
+No timed screen or attempt was submitted; both frozen screen attempts remain available.
+
+Binary SHA-256:
+- Base: `b0dfc65d0c026d62aa64ef3d69a089eb73b51088c84af75b44617ea2a1737f0e`.
+- Candidate: **`bb422adc4f733ae29565f37dbe36c4ff22a95fd2b86167bcbf8fee2591200e33`**.
+
+Raw receipt: workspace `outputs/imac-bench/20261020T184945Z-t056-m1a-pregate2-final/out/` (`images.txt`,
+`pregate.json`, `pregate.txt`, `verdict.txt`). As in pre-gate 1, `cases 172` counts argument words; the JSON and
+verdict cover exactly 86 unique case ids. The complete instruction ratios below preserve the result in the
+repository rather than depending on workspace artifacts. Ratios are candidate/base, lower is fewer instructions.
+
+| Case | Instruction ratio |
+| --- | ---: |
+| external/sunspider-1.0/string-unpack-code | 1.02425836 |
+| sentinel/prototype_method_call | 1.02273262 |
+| external/jetstream3-js-subset/raytrace-public-class-fields | 1.02124580 |
+| development/graphlib/paths | 1.01879811 |
+| external/sunspider-1.0/controlflow-recursive | 1.01114342 |
+| external/sunspider-1.0/bitops-bitwise-and | 1.00905352 |
+| external/sunspider-1.0/access-binary-trees | 1.00792380 |
+| external/jetstream3-js-subset/gaussian-blur | 1.00643163 |
+| external/sunspider-1.0/bitops-bits-in-byte | 1.00542755 |
+| external/sunspider-1.0/bitops-3bit-bits-in-byte | 1.00522402 |
+| development/js-yaml/document | 1.00488434 |
+| external/sunspider-1.0/crypto-sha1 | 1.00426088 |
+| external/jetstream3-js-subset/cdjs | 1.00330205 |
+| external/kraken-1.1/audio-dft | 1.00291469 |
+| external/sunspider-1.0/string-validate-input | 1.00288399 |
+| external/sunspider-1.0/bitops-nsieve-bits | 1.00251468 |
+| external/kraken-1.1/imaging-desaturate | 1.00197793 |
+| external/kraken-1.1/audio-beat-detection | 1.00175171 |
+| external/sunspider-1.0/access-nbody | 1.00161606 |
+| broad/array_allocation | 1.00149944 |
+| broad/object_allocation | 1.00091602 |
+| external/sunspider-1.0/3d-raytrace | 1.00090950 |
+| external/sunspider-1.0/regexp-dna | 1.00088530 |
+| external/kraken-1.1/audio-oscillator | 1.00048685 |
+| broad/array_dynamic_read | 1.00005021 |
+| broad/string_slice | 0.99998983 |
+| external/jetstream3-js-subset/hash-map | 0.99998724 |
+| sentinel/recursive_call_tree | 0.99985767 |
+| external/sunspider-1.0/crypto-md5 | 0.99972905 |
+| broad/array_read | 0.99766308 |
+| broad/property_read | 0.99752206 |
+| external/sunspider-1.0/math-spectral-norm | 0.99751942 |
+| broad/many_locals_call | 0.99749158 |
+| broad/closure_allocation_call | 0.99734040 |
+| external/kraken-1.1/audio-fft | 0.99606761 |
+| external/kraken-1.1/stanford-crypto-ccm | 0.99549549 |
+| external/sunspider-1.0/string-base64 | 0.99530641 |
+| broad/captured_read | 0.99481792 |
+| broad/function_call_two_args | 0.99468649 |
+| broad/plain_function_call | 0.99466345 |
+| broad/function_call_reordered | 0.99457557 |
+| broad/property_write | 0.99450810 |
+| external/sunspider-1.0/math-partial-sums | 0.99445462 |
+| broad/array_write | 0.99411920 |
+| external/sunspider-1.0/access-nsieve | 0.99330115 |
+| broad/dynamic_method_call | 0.99307369 |
+| external/sunspider-1.0/date-format-tofte | 0.99242772 |
+| development/immutable/persistent | 0.99152115 |
+| development/lodash/transform | 0.99092803 |
+| sentinel/string_key_map_churn | 0.99091787 |
+| development/papaparse/csv | 0.99043750 |
+| broad/captured_write | 0.99035041 |
+| external/kraken-1.1/ai-astar | 0.98901898 |
+| broad/math_abs | 0.98826949 |
+| broad/property_dynamic_read | 0.98745809 |
+| external/sunspider-1.0/3d-morph | 0.98660699 |
+| development/big.js/arith | 0.98599823 |
+| broad/top_level_function_call | 0.98591604 |
+| external/sunspider-1.0/access-fannkuch | 0.98508870 |
+| external/sunspider-1.0/string-fasta | 0.98452742 |
+| external/kraken-1.1/imaging-darkroom | 0.98415429 |
+| external/sunspider-1.0/crypto-aes | 0.98389663 |
+| sentinel/polymorphic_call_site | 0.98325264 |
+| external/sunspider-1.0/date-format-xparb | 0.98292501 |
+| sentinel/capturing_closure_call | 0.98192615 |
+| external/jetstream3-js-subset/stanford-crypto-aes | 0.98166170 |
+| external/kraken-1.1/json-stringify-tinderbox | 0.98151136 |
+| development/matter-js/simulate | 0.98137924 |
+| broad/empty_loop | 0.98128497 |
+| broad/method_call | 0.98025541 |
+| external/sunspider-1.0/math-cordic | 0.97950273 |
+| external/kraken-1.1/stanford-crypto-aes | 0.97897667 |
+| external/kraken-1.1/imaging-gaussian-blur | 0.97883913 |
+| development/diff/compare | 0.97814189 |
+| development/moment/dates | 0.97794027 |
+| external/kraken-1.1/stanford-crypto-sha256-iterative | 0.97664189 |
+| broad/branch_arithmetic | 0.97382774 |
+| external/kraken-1.1/stanford-crypto-pbkdf2 | 0.97382548 |
+| broad/global_read | 0.97374395 |
+| development/meriyah/parse | 0.97220056 |
+| broad/local_read | 0.96948555 |
+| external/sunspider-1.0/3d-cube | 0.96879410 |
+| broad/array_index_of | 0.96815281 |
+| external/sunspider-1.0/string-tagcloud | 0.95842634 |
+| external/kraken-1.1/json-parse-financial | 0.95102842 |
+| sentinel/heterogeneous_property_read | 0.89533304 |
+
+The lead's next action is the frozen stage A timed screen using this exact candidate image. The documentary
+successor changes no runtime source; it does not establish timing acceptance or integrate stage A into main.

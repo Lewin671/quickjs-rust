@@ -116,6 +116,10 @@ hit per field.
 - Larger shapes and dictionaries keep one index keyed by atom text, so a probe hashes once. A large shape builds
   its index after four linear probes: a shape an object only passes through while growing is probed once.
 - Append edges keep the appended field's text inline, so a hit compares the key without following the atom.
+  Objects and function/array named tables use a hit as proof that the key is absent from the parent: no field
+  probe precedes that hit. Misses and replacements retain the ordinary lookup path.
+- Short text comparisons use safe, overlapping fixed-width head/tail slices that cover every byte; long keys
+  use the general byte comparison. Both preserve exact byte equality of canonical stored keys.
 - A store keeps its layout's encoding beside the payload, and descriptor payload slots carry the layout field's
   attributes, so slot reads and writes admitted by encoding read no layout node.
 - Bytecode-linked named operations (M1.3) carry atoms and skip text entirely.
