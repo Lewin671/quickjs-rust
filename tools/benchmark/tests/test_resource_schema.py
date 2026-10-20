@@ -82,11 +82,11 @@ class ResourceSchemaTests(unittest.TestCase):
         )
         self.assertEqual(
             measurement.protocol_sha256,
-            "cf0624b2c3f748f90b18fbc48d83e514aea0184a3b1a9b5a719ca55f7307b0f8",
+            "5db4734bce20e322f03814065b9632c6e8099ee807e9f7be0a93e2da37ba9f7d",
         )
         self.assertEqual(
             analysis.protocol_sha256,
-            "4d28b20cd3090bdc74a4350774c1d12807458a957ebfe85ae03d286f4b59e14a",
+            "8bbfc9907719f10f49a9e014e2a43c6273922acd20a2a5d5fb72a4a937af2546",
         )
         self.assertNotIn("tools/benchmark/resource_runner.py", analysis.protocol_file_ids)
 

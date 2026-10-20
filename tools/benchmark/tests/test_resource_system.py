@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import io
 import json
@@ -101,9 +102,17 @@ class ResourceSystemTests(unittest.TestCase):
             stderr="", stdout_truncated=False, stderr_truncated=False,
         )
 
+    def _rss_result(self, argv: list[str]) -> ResourceProcessResult:
+        return ResourceProcessResult(
+            exit_code=0, timed_out=False, stdout=self._stdout(argv), stderr="",
+            stdout_truncated=False, stderr_truncated=False, duration_ns=500,
+            started_at="2026-07-13T00:00:00+00:00", peak_rss_raw=4096,
+            peak_rss_bytes=4096, descendants_detected=False,
+        )
+
     def _run(
         self, lane_id: str, engines: list[Engine], *, blocks: int | None = None,
-        wall_runner=None, rss_runner=None,
+        wall_runner=None, rss_runner=None, admission_runner=None,
     ) -> tuple[Path, list[dict]]:
         lane = self.manifest.lanes[lane_id]
         output = io.StringIO()
@@ -112,6 +121,8 @@ class ResourceSystemTests(unittest.TestCase):
             kwargs["wall_runner"] = wall_runner
         if rss_runner is not None:
             kwargs["rss_runner"] = rss_runner
+        if admission_runner is not None:
+            kwargs["admission_runner"] = admission_runner
         ResourceRun(
             self.manifest, lane, engines, blocks or lane.initial_blocks, lane.seed,
             ResourceJsonlWriter(output), ROOT,
@@ -151,6 +162,90 @@ class ResourceSystemTests(unittest.TestCase):
         self.assertFalse(validated.comparison_input_complete)
         self.assertEqual(validated.end["status"], "complete")
 
+    def test_executing_lanes_admit_each_snapshot_once_before_their_first_sample(self) -> None:
+        for lane_id in ("fresh_process_latency/wall_ns_per_process", "peak_rss/bytes"):
+            events = []
+
+            def admit(argv, timeout):
+                events.append(("admit", tuple(argv), timeout))
+                return self._wall_result(argv, duration=7, stdout="")
+
+            def wall(argv, timeout):
+                events.append(("sample", tuple(argv), timeout))
+                return self._wall_result(argv, duration=100)
+
+            def rss(argv, timeout, **_kwargs):
+                events.append(("sample", tuple(argv), timeout))
+                return self._rss_result(argv)
+
+            engines = [
+                self._engine(role, 128) for role in ("candidate", "base", "quickjs-ng")
+            ]
+            path, rows = self._run(
+                lane_id, engines, wall_runner=wall, rss_runner=rss, admission_runner=admit,
+            )
+            validate_resource_run(path, self.manifest)
+            self.assertEqual([kind for kind, _, _ in events[:3]], ["admit"] * 3, lane_id)
+            self.assertEqual(len([e for e in events if e[0] == "admit"]), 3)
+            self.assertEqual(len([e for e in events if e[0] == "sample"]), 90)
+            admission = rows[0]["exec_admission"]
+            self.assertEqual([entry["role"] for entry in admission],
+                             ["candidate", "base", "quickjs-ng"])
+            snapshots = {engine["role"]: engine for engine in rows[0]["engines"]}
+            for entry, (_kind, argv, timeout) in zip(admission, events[:3]):
+                self.assertEqual(timeout, 120)
+                self.assertEqual(entry["argv"], list(argv))
+                self.assertEqual(argv[0], snapshots[entry["role"]]["binary_snapshot_path"])
+                self.assertEqual(argv[-2:], ("-e", "0"))
+                self.assertEqual(entry["binary_sha256"], snapshots[entry["role"]]["binary_sha256"])
+            self.assertEqual({row["phase"] for row in rows[1:-1]}, {"measurement"})
+
+    def test_failed_launch_admission_stops_the_run_before_any_sample(self) -> None:
+        for failure in ({"exit_code": 1}, {"timed_out": True, "exit_code": None}):
+            samples = []
+
+            def admit(argv, timeout, failure=failure):
+                return dataclasses.replace(self._wall_result(argv, stdout=""), **failure)
+
+            def wall(argv, timeout):
+                samples.append(argv)
+                return self._wall_result(argv)
+
+            output = io.StringIO()
+            lane = self.manifest.lanes["fresh_process_latency/wall_ns_per_process"]
+            with self.assertRaisesRegex(ResourceRunError, "launch admission failed"):
+                ResourceRun(
+                    self.manifest, lane, [self._engine("candidate", 128)], lane.initial_blocks,
+                    lane.seed, ResourceJsonlWriter(output), ROOT,
+                    platform_name=self.manifest.profile.platform,
+                    machine_name=self.manifest.profile.machine,
+                    wall_runner=wall, admission_runner=admit,
+                ).execute()
+            self.assertEqual(samples, [])
+            self.assertEqual(output.getvalue(), "")
+
+    def test_exec_admission_is_validated_per_lane(self) -> None:
+        path, rows = self._run(
+            "fresh_process_latency/wall_ns_per_process",
+            [self._engine("candidate", 128)],
+            wall_runner=lambda argv, timeout: self._wall_result(argv, duration=100),
+            admission_runner=lambda argv, timeout: self._wall_result(argv, duration=5, stdout=""),
+        )
+        validate_resource_run(path, self.manifest)
+        entry = rows[0]["exec_admission"][0]
+        for tampered in (
+            None, [], [entry, entry], [dict(entry, exit_code=1)],
+            [dict(entry, binary_sha256="0" * 64)], [dict(entry, argv=["/elsewhere", "-e", "0"])],
+        ):
+            bad = [dict(rows[0], exec_admission=tampered), *rows[1:]]
+            with self.assertRaisesRegex(ResourceReportError, "exec_admission"):
+                validate_resource_run(self._write_rows("bad-admission.jsonl", bad), self.manifest)
+        size_path, size_rows = self._run("binary_size/bytes", [self._engine("candidate", 128)])
+        self.assertIsNone(size_rows[0]["exec_admission"])
+        bad = [dict(size_rows[0], exec_admission=rows[0]["exec_admission"]), *size_rows[1:]]
+        with self.assertRaisesRegex(ResourceReportError, "exec_admission"):
+            validate_resource_run(self._write_rows("bad-size-admission.jsonl", bad), self.manifest)
+
     def test_real_fresh_process_rejects_and_kills_redirected_descendants(self) -> None:
         binary = self.temp / "fresh-descendant-engine.sh"
         binary.write_text(
@@ -172,6 +267,15 @@ class ResourceSystemTests(unittest.TestCase):
         samples = rows[1:-1]
         self.assertEqual({row["status"] for row in samples}, {"invalid"})
         self.assertTrue(all(row["descendants_detected"] for row in samples))
+        # The snapshot was admitted (executed once, untimed) before the plan, so
+        # macOS's first-exec assessment of the new file is not in any sample.
+        # The snapshot was launched once, untimed and successfully, before the
+        # plan, so macOS's first-exec assessment of the new file is in no sample.
+        # Its descendant was contained there too; samples judge descendants.
+        admission = rows[0]["exec_admission"]
+        self.assertEqual([entry["role"] for entry in admission], ["candidate"])
+        self.assertEqual(admission[0]["exit_code"], 0)
+        self.assertTrue(admission[0]["descendants_detected"])
         self.assertTrue(all(row["duration_ns"] < 5_000_000_000 for row in samples))
         child_pids = [
             int(line.split()[1]) for row in samples for line in row["stdout"].splitlines()

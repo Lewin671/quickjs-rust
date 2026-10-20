@@ -19,6 +19,12 @@ from .resource_wall_process import ResourceWallResult, run_fresh_process
 from .snapshots import SnapshotStore
 
 
+# The untimed launch admission of each executed snapshot; see `_exec_admission`.
+# The same bound as the throughput tools' launch preflight.
+ADMISSION_TIMEOUT_SECONDS = 120
+ADMITTING_LANES = {"fresh_process_latency/wall_ns_per_process", "peak_rss/bytes"}
+
+
 class ResourceRunError(ValueError):
     """A resource run cannot produce evidence under the selected contract."""
 
@@ -73,6 +79,7 @@ class ResourceRun:
         machine_name: str | None = None,
         wall_runner: Callable[[list[str], int], ResourceWallResult] = run_fresh_process,
         rss_runner: Callable[..., ResourceProcessResult] = run_process_wait4,
+        admission_runner: Callable[[list[str], int], ResourceWallResult] = run_fresh_process,
     ):
         self.manifest = manifest
         self.lane = lane
@@ -114,6 +121,7 @@ class ResourceRun:
             raise ResourceRunError("binary-size lane requires exactly one sample per role")
         self.wall_runner = wall_runner
         self.rss_runner = rss_runner
+        self.admission_runner = admission_runner
         self.run_id = str(uuid4())
         self.host = _host(self.machine_name)
         self.runner_repo = _runner_repo(root)
@@ -319,9 +327,46 @@ class ResourceRun:
             )
         ]
 
+    def _exec_admission(self) -> list[dict[str, Any]] | None:
+        """Launch each executed engine snapshot once, untimed, before the plan.
+
+        macOS assesses a newly written executable on its first execve, and
+        every run executes fresh snapshots. Without this launch the one-time
+        cost (about 0.3 s for a new copy of qjs against 4 ms afterwards, and
+        seconds while other new executables launch) lands in each engine's
+        first sample, or times it out. Like the throughput tools' launch
+        preflight it runs a tiny expression once per snapshot, fails the run
+        on a nonzero exit, timeout or truncated output, and records the
+        executed binary's SHA-256. A descendant is left to the sample rules.
+        """
+        if self.lane.id not in ADMITTING_LANES:
+            return None
+        admitted = []
+        for role in ("candidate", "base", "quickjs-ng"):
+            engine = self.engines.get(role)
+            if engine is None:
+                continue
+            binary = self.engine_snapshots[role]
+            argv = [str(binary), *(["--raw"] if engine.adapter_id == "qjs-rust-raw" else []),
+                    "-e", "0"]
+            result = self.admission_runner(argv, ADMISSION_TIMEOUT_SECONDS)
+            if (result.exit_code != 0 or result.timed_out
+                    or result.stdout_truncated or result.stderr_truncated):
+                raise ResourceRunError(
+                    f"{role}: launch admission failed (exit {result.exit_code}, "
+                    f"timed out {result.timed_out}): {result.stderr[:512]}"
+                )
+            admitted.append({
+                "argv": argv, "binary_sha256": sha256_file(binary),
+                "descendants_detected": bool(getattr(result, "descendants_detected", False)),
+                "duration_ns": result.duration_ns, "exit_code": result.exit_code, "role": role,
+            })
+        return admitted
+
     def execute(self) -> bool:
         try:
             plan = self._plan()
+            admission = self._exec_admission()
             self.writer.write({
                 "blocks": self.blocks,
                 "build_recipes": {
@@ -335,6 +380,7 @@ class ResourceRun:
                     {"role": engine.role, **self._engine_fields(engine)}
                     for engine in self.engines.values()
                 ],
+                "exec_admission": admission,
                 "expected_samples": len(plan),
                 "host": self.host,
                 "lane_id": self.lane.id,

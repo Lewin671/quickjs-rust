@@ -98,7 +98,8 @@ ENGINE_FIELDS = {
 }
 START_FIELDS = {
     "blocks", "build_recipes", "claim_eligible", "comparison_input_complete",
-    "comparison_input_preconditions_met", "engines", "expected_samples", "host", "lane_id",
+    "comparison_input_preconditions_met", "engines", "exec_admission", "expected_samples",
+    "host", "lane_id",
     "manifest_sha256", "profile", "protocol_files", "protocol_id", "protocol_sha256",
     "record_type", "run_id", "runner_repo", "schema_version", "seed", "series_id",
     "snapshot_root", "suite_id",
@@ -118,6 +119,47 @@ END_FIELDS = {
     "claim_eligible", "comparison_input_complete", "coverage", "lane_id",
     "physical_plan_complete", "record_type", "run_id", "schema_version", "status",
 }
+
+
+ADMISSION_FIELDS = {"argv", "binary_sha256", "descendants_detected", "duration_ns", "exit_code", "role"}
+ADMITTING_LANES = {"fresh_process_latency/wall_ns_per_process", "peak_rss/bytes"}
+
+
+def _validate_exec_admission(start: dict[str, Any], lane_id: str) -> None:
+    """Every lane that executes engines admits each snapshot once before its plan."""
+    admission = start["exec_admission"]
+    if lane_id not in ADMITTING_LANES:
+        if admission is not None:
+            raise ResourceReportError("run_start.exec_admission: this lane executes no engine")
+        return
+    if not isinstance(admission, list) or not isinstance(start["engines"], list):
+        raise ResourceReportError("run_start.exec_admission: expected a list")
+    engines = {
+        engine.get("role"): engine for engine in start["engines"] if isinstance(engine, dict)
+    }
+    roles = []
+    for index, entry in enumerate(admission):
+        where = f"run_start.exec_admission[{index}]"
+        entry = _keys(entry, ADMISSION_FIELDS, where)
+        role = _string(entry["role"], f"{where}.role")
+        roles.append(role)
+        argv = entry["argv"]
+        if (not isinstance(argv, list) or not argv
+                or not all(isinstance(item, str) for item in argv)
+                or argv[-2:] != ["-e", "0"]):
+            raise ResourceReportError(f"{where}.argv: expected the launch expression")
+        engine = engines.get(role, {})
+        if argv[0] != engine.get("binary_snapshot_path"):
+            raise ResourceReportError(f"{where}.argv: must launch the measured snapshot")
+        if entry["binary_sha256"] != engine.get("binary_sha256"):
+            raise ResourceReportError(f"{where}.binary_sha256: must match the engine")
+        _integer(entry["duration_ns"], f"{where}.duration_ns")
+        if _integer(entry["exit_code"], f"{where}.exit_code") != 0:
+            raise ResourceReportError(f"{where}.exit_code: admission must succeed")
+        _boolean(entry["descendants_detected"], f"{where}.descendants_detected")
+    expected = [role for role in ("candidate", "base", "quickjs-ng") if role in engines]
+    if roles != expected:
+        raise ResourceReportError("run_start.exec_admission: must admit each engine once in role order")
 
 
 @dataclass(frozen=True)
@@ -484,6 +526,7 @@ def validate_resource_run(
     ):
         raise ResourceReportError("run_start.blocks: invalid cohort")
     _integer(start["expected_samples"], "run_start.expected_samples", 1)
+    _validate_exec_admission(start, lane_id)
     if lane.kind == "dynamic":
         _integer(start["seed"], "run_start.seed")
     elif start["seed"] is not None:

@@ -3,7 +3,7 @@
   "id": "quickjs-resource-analysis-v1",
   "compatible_measurement": {
     "schema_version": 1,
-    "protocol_id": "quickjs-resource-measurement-protocol-v3"
+    "protocol_id": "quickjs-resource-measurement-protocol-v4"
   },
   "protocol": {
     "id": "quickjs-resource-analysis-protocol-v1",
@@ -24,7 +24,7 @@
       "tools/benchmark/schema.py",
       "tools/benchmark/statistics.py"
     ],
-    "aggregate_sha256": "4d28b20cd3090bdc74a4350774c1d12807458a957ebfe85ae03d286f4b59e14a"
+    "aggregate_sha256": "8bbfc9907719f10f49a9e014e2a43c6273922acd20a2a5d5fb72a4a937af2546"
   },
   "bootstrap": {
     "samples": 20000,

@@ -35,7 +35,7 @@ PROTOCOL_SHAPES = {
         "quickjs-generic-sentinel-protocol-v3",
     ),
     "resource_measurement": (
-        "benchmarks/resources.json", "quickjs-resource-measurement-protocol-v3"
+        "benchmarks/resources.json", "quickjs-resource-measurement-protocol-v4"
     ),
     "resource_analysis": (
         "benchmarks/resource-analysis.json", "quickjs-resource-analysis-protocol-v1"
