@@ -13,7 +13,7 @@ it to `archive/` with `git mv` and move its row below.
 
 | Task | Status | What it is |
 | --- | --- | --- |
-| [T057](T057-string-code-units.md) string code units | active | Stage-1 PROMOTE under v4; integrated into main; stages 2 onward require new plans. |
+| [T057](T057-string-code-units.md) string code units | active | Stage 1 integrated; stage-2 performance unit abandoned (0 attempts); local UTF-16 correctness extraction. |
 | [T056](T056-interpreter-core-v2.md) interpreter core v2 | active | Target design for names, frames and values; M1 stage 1 on main; the first M1.2 shape was rejected and diagnosed; replacement layout design awaits T063 and a new frozen plan; M2 design revised against measured costs. |
 | [T018](T018-broad-performance.md) broad performance | active | The performance campaign contract and its targets against QuickJS-NG. Start performance work here, then follow [the workflow](../docs/performance-workflow.md). |
 | [T040](T040-imac-general-performance.md) x86_64 general optimization | active | Fresh current-main comparison and exact-binary profiles, followed by independent general runtime units. |
@@ -93,7 +93,7 @@ outcome column says what happened, not what to do next.
 ## Other Records In `archive/`
 
 - T058: [fixed-candidate v6 promotion](archive/T058-regexp-lazy-quantifiers.md), [attempt 1 incomplete closure](archive/T058-attempt1-incomplete.md), [attempt 2 inconclusive](archive/T058-attempt2-inconclusive.md), [v6 rejection](archive/T058-v6-rejection.md), [instruction diagnosis](archive/T058-instruction-diagnosis.md).
-- T057: [preliminary development baseline](archive/T057-development-baseline.md) [policy v3 qualification](archive/T057-development-policy.md) and [pre-stage-1 log](archive/T057-log.md).
+- T057: [stage-1 promotion evidence](archive/T057-stage1-evidence.md), [preliminary development baseline](archive/T057-development-baseline.md) [policy v3 qualification](archive/T057-development-policy.md) and [pre-stage-1 log](archive/T057-log.md).
 - T056: [unit 0 part 1 evidence](archive/T056-unit0-part1-evidence.md) (standing, attribution limits, RSS, ABI probes), [part 2](archive/T056-unit0-part2-evidence.md) (mechanism counters, development profiles, first-unit ranking and plan binding) [M1 stage 1](archive/T056-m1-stage1-evidence.md) (atom linking and Value facade), [M1.2 rejection](archive/T056-m1-stage2-evidence.md), [M1.2 diagnosis](archive/T056-m1-stage2-diagnosis.md) (rejected layout shape: mechanisms and ablations) [design inputs](archive/T056-design-inputs.md) [M2 design inputs](archive/T056-m2-design-inputs.md) (development-lane call/frame and compact-driver costs) and [task history](archive/T056-task-history.md) (owner notes, unit 0 summary, M1 stage 1, design checklist).
 - T055: [qualified policy adoption](archive/T055-layout-noise-control.md), [feedback-2 record](archive/T055-feedback-2-qualification.md), [feedback-1 record](archive/T055-feedback-1-qualification.md), [complete A2 data](archive/T055-phase-a2-data.md) and [B frozen plans/blocked qualification log](archive/T055-phase-b-plan-and-log.md).
 - T055 phase A: [superseded frozen plan](archive/T055-phase-a-plan.md) and [results](archive/T055-phase-a-log.md); static/correctness pass, invalid retired-sampler timing.

@@ -7,3 +7,5 @@ mod padding;
 mod search;
 mod sequence;
 mod subject_sharing;
+
+mod unit_search;
