@@ -170,38 +170,6 @@ fn wrapper_function_array_and_regexp_result_creation_create_no_domain() {
 }
 
 #[test]
-fn a_repeated_add_site_replays_its_transition_without_probing() {
-    let cases = [
-        (
-            "constructor",
-            "function P(a, b, c) { this.a = a; this.b = b; this.c = c; }",
-            "new P(i, i, i)",
-        ),
-        (
-            "class fields",
-            "class C { a = 1; b = 2; c = 3; }",
-            "new C()",
-        ),
-        (
-            "computed class fields",
-            "class D { a = this.constructor.name; b = [this.a]; }",
-            "new D()",
-        ),
-    ];
-    for (name, setup, body) in cases {
-        let (few, many) = repeated(|n| loop_of(n, setup, body));
-        assert_eq!(
-            few.property_add_probes, many.property_add_probes,
-            "{name}: a replayed add probed the store"
-        );
-        assert_eq!(
-            few.property_edge_hits, many.property_edge_hits,
-            "{name}: a replayed add searched edges"
-        );
-    }
-}
-
-#[test]
 fn an_add_probes_its_store_once() {
     // A null-prototype receiver has no inherited setter to look up, so every
     // probe counted here is the store's own.

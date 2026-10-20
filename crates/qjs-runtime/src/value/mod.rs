@@ -34,7 +34,7 @@ pub use map::MapRef;
 pub use object::ObjectRef;
 pub(crate) use object::Prototype;
 pub(crate) use object::{
-    AddCache, LiteralLayout, ObjectLiteralShape, OrderedDataPropertyBuilder, SharedSlot,
+    LiteralLayout, ObjectLiteralShape, OrderedDataPropertyBuilder, SharedSlot,
 };
 pub(crate) use object::{
     ModuleNamespaceBindings, ObjectWeakRef, OwnDataPropertyRead, OwnDataPropertyWrite,

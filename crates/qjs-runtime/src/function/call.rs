@@ -610,13 +610,8 @@ pub(crate) fn initialize_direct_instance_fields(
         let key = field
             .shared_string_key()
             .expect("direct construct admission requires string keys");
-        if field.add_cache().replay(receiver, &value) {
-            continue;
-        }
         if receiver.is_extensible() && !receiver.has_own_property(key) {
-            let source = receiver.add_source(key);
             receiver.set_shared_key(key.clone(), value);
-            field.add_cache().record(receiver, source, key);
         } else {
             let mut define_env = env.empty_frame();
             crate::bytecode::install_field_value(
@@ -717,7 +712,7 @@ pub(crate) fn initialize_instance_fields(
             let installed = segments.install(&elements, next, object);
             if installed != 0 {
                 for element in &elements[next..next + installed] {
-                    let (key, ..) =
+                    let (key, _) =
                         constant_public_field(element).expect("installed constant field");
                     env.sync_realm_global_object_property(object, key);
                 }
@@ -736,13 +731,6 @@ pub(crate) fn initialize_instance_fields(
                 if let Some(key) = field.shared_string_key()
                     && let Value::Object(object) = this_value
                     && is_ordinary_public_field_receiver(object)
-                    && field.add_cache().replay(object, &value)
-                {
-                    // The remembered layout proves the key absent.
-                    env.sync_realm_global_object_property(object, key);
-                } else if let Some(key) = field.shared_string_key()
-                    && let Value::Object(object) = this_value
-                    && is_ordinary_public_field_receiver(object)
                     && object.is_extensible()
                     && !object.has_own_property(key)
                 {
@@ -750,9 +738,7 @@ pub(crate) fn initialize_instance_fields(
                     // no interleaving point between them and this write. The
                     // existing shared-key helper creates exactly the default
                     // enumerable, writable, configurable data property.
-                    let source = object.add_source(key);
                     object.set_shared_key(key.clone(), value);
-                    field.add_cache().record(object, source, key);
                     env.sync_realm_global_object_property(object, key);
                 } else {
                     crate::bytecode::install_field_value(
@@ -775,9 +761,7 @@ pub(crate) fn initialize_instance_fields(
 
 /// Returns only a resolved public string key and a proven primitive constant.
 /// The existing bytecode proof excludes code execution and per-instance identity.
-fn constant_public_field(
-    element: &InstanceElementInitializer,
-) -> Option<(&Rc<str>, &Value, &crate::value::AddCache)> {
+fn constant_public_field(element: &InstanceElementInitializer) -> Option<(&Rc<str>, &Value)> {
     let InstanceElementInitializer::PublicField(field) = element else {
         return None;
     };
@@ -796,7 +780,7 @@ fn constant_public_field(
     ) {
         return None;
     }
-    Some((field.shared_string_key()?, value, field.add_cache()))
+    Some((field.shared_string_key()?, value))
 }
 
 /// Scans each observer-free segment once, including segments that decline.
@@ -1695,7 +1679,7 @@ mod tests {
         let mut segments = ConstantFieldSegments::default();
         for next in 0..elements.len() {
             assert_eq!(segments.install(&elements, next, &receiver), 0);
-            let (key, value, _) = constant_public_field(&elements[next]).unwrap();
+            let (key, value) = constant_public_field(&elements[next]).unwrap();
             receiver.set_shared_key(key.clone(), value.clone());
         }
         assert_eq!(segments.inspected, count);

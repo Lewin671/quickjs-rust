@@ -8,7 +8,7 @@ use std::rc::Rc;
 
 use crate::{Property, Value};
 
-use super::{AddCache, ObjectRef, is_array_index_key};
+use super::{ObjectRef, is_array_index_key};
 use crate::property::layout::{Attributes, Encoding, LINEAR_LOOKUP_LIMIT};
 
 impl ObjectRef {
@@ -18,7 +18,7 @@ impl ObjectRef {
     /// Returns false before mutation if ordinary default definitions might fail.
     pub(crate) fn install_constant_class_fields<'a>(
         &self,
-        fields: impl ExactSizeIterator<Item = (&'a Rc<str>, &'a Value, &'a AddCache)>,
+        fields: impl ExactSizeIterator<Item = (&'a Rc<str>, &'a Value)>,
     ) -> bool {
         if self.0.string_indices_pending.get()
             || !self.is_extensible()
@@ -38,16 +38,10 @@ impl ObjectRef {
         }
         properties.reserve(fields.len());
         let mut added_indices = 0;
-        for (key, value, add) in fields {
-            // A field's remembered add proves its key absent here.
-            if add.replay_in(&mut properties, value) {
-                continue;
-            }
-            let source = properties.add_source(key);
+        for (key, value) in fields {
             let property = Property::enumerable(value.clone());
             if properties.insert(key, property).is_none() {
                 added_indices += usize::from(is_array_index_key(key));
-                add.record_in(&properties, source, key);
             }
         }
         self.0
@@ -62,7 +56,6 @@ impl ObjectRef {
 mod tests {
     use std::{collections::HashMap, rc::Rc};
 
-    use crate::value::AddCache;
     use crate::{ObjectRef, Property, Value};
 
     #[test]
@@ -70,8 +63,7 @@ mod tests {
         let a: Rc<str> = "a".into();
         let b: Rc<str> = "b".into();
         let value = Value::Number(2.0);
-        let add = AddCache::default();
-        let fields = [(&a, &value, &add), (&b, &value, &add)];
+        let fields = [(&a, &value), (&b, &value)];
         let object = ObjectRef::new(HashMap::new());
         let mut fixed = Property::enumerable(Value::Number(1.0));
         fixed.configurable = false;
@@ -95,10 +87,7 @@ mod tests {
         let last = Value::Number(2.0);
         let revision = object.property_revision();
         let layout = object.layout_revision();
-        let add = AddCache::default();
-        assert!(object.install_constant_class_fields(
-            [(&key, &first, &add), (&key, &last, &add)].into_iter()
-        ));
+        assert!(object.install_constant_class_fields([(&key, &first), (&key, &last)].into_iter()));
         assert_eq!(object.get("0"), Some(last));
         assert_eq!(object.0.index_property_count.get(), 1);
         assert!(object.property_revision() > revision);
