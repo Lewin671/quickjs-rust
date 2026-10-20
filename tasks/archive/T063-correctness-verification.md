@@ -73,4 +73,3 @@ this owner. This change adds constant seam work on appends and code-unit
 emission; repeat retains Rust's bulk path when its seam cannot merge. Debug
 construction alone adds a full validation scan. Existing non-ASCII search
 coordinate and half-surrogate search differences remain later T057 work.
-
