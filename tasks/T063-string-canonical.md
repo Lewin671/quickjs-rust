@@ -168,6 +168,15 @@ Value-clone branch imported into the hot driver; it changes no ownership rule
 or string invariant. Verify forwarded locals and consumed temporaries, then
 repeat the original exact-recipe instruction cohort and corrected probes.
 
+The operand-call boundary `073cc2d1` also misses the goal (property ratio
+1.02030); a smaller function alone is insufficient. Revert that boundary.
+Disassembly shows register stores materialize the old payload on the stack
+before checking whether it owns a resource. Next test the discriminant first:
+non-owning slots publish the new value without keeping an old payload alive;
+a separate non-inlined owned-store helper preserves publish-before-drop for
+the remaining variants. This bounds the actual store lifetime, rather than
+adding calls to hot reads. Add a refcount/replacement regression test.
+
 ### Lead regression-screen decision (2026-10-20, before any formal result)
 
 Fixed before the formal run; quick triage `20261020T084226Z-t063-quick-triage`
