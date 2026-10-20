@@ -145,6 +145,16 @@ large rare branch from callers' inline graph. Confirm with the exact x86 build
 recipe and the same nine cases, then rerun correctness gates. No benchmark
 recognition, selection acceptance or timing job is authorized to this owner.
 
+The first cold-seam repair `cc68ea0d` preserves all nine focused tests, but
+no-timing job `20261020T092901Z-t063-cold-seam-instructions` (exit 0) does not
+meet the instruction goal: property_dynamic_read 1.01498, raytrace 1.01009,
+cdjs 1.01183, access-binary-trees 1.01930, base64 1.01272, lodash 1.01111,
+tagcloud 1.01484, unpack-code 1.00091, js-yaml 1.00782. Wide activation is
+25856 bytes, still above the baseline. These are diagnostic counts, no wall
+result or acceptance. Next isolate the whole canonical append, including its
+allocation/copy tail, behind a non-inlined shared call rather than importing
+that machinery into runtime callers. Keep the cold seam helper and tests.
+
 ### Lead regression-screen decision (2026-10-20, before any formal result)
 
 Fixed before the formal run; quick triage `20261020T084226Z-t063-quick-triage`

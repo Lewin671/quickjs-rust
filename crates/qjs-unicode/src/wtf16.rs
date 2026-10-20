@@ -47,7 +47,9 @@ pub fn is_canonical(text: &str) -> bool {
 
 /// Appends canonical stored text, checking at most the two seam scalars.
 /// The ASCII path inspects only the first suffix byte; no prefix scan occurs.
-#[inline(always)]
+// The allocation/copy tail also stays shared rather than enlarging each
+// runtime caller's inline graph. ASCII still needs no whole-string scan.
+#[inline(never)]
 pub fn push_js_str(output: &mut String, suffix: &str) {
     if suffix.as_bytes().first().is_some_and(|byte| *byte >= 0xF0) {
         push_wide_seam(output, suffix);
