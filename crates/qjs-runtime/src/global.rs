@@ -16,7 +16,8 @@ use crate::{
     function_delete_own_property, function_own_property_descriptor,
     object::define_property_on_value_key,
     string::{
-        push_code_point, string_code_units, string_from_code_unit, surrogate_escape_code_unit,
+        push_code_point, string_code_units, string_from_code_unit, string_to_utf8_lossy,
+        surrogate_escape_code_unit,
     },
     to_js_string_with_env, to_length_with_env, to_number_with_env,
 };
@@ -285,7 +286,11 @@ pub(super) fn native_global_print(
         }
         line.push_str(&to_js_string_with_env(value.clone(), env)?);
     }
-    println!("{line}");
+    // `line` is the runtime's internal string form, which may hold each half
+    // of a surrogate pair as a separate escape sentinel (for example after
+    // `replace` or concatenation). Stdout is a host boundary: recombine pairs
+    // and replace lone surrogates, as the CLI does for its result value.
+    println!("{}", string_to_utf8_lossy(&line));
     Ok(Value::Undefined)
 }
 
