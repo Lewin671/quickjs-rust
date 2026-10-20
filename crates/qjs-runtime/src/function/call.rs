@@ -469,7 +469,7 @@ pub(crate) fn try_construct_direct_leaf_function(
     crate::diagnostics::count!(ordinary_call_attempts);
     crate::diagnostics::count!(direct_leaf_frames);
     let receiver =
-        ObjectRef::with_prototype_slot(env.realm().atoms(), HashMap::new(), Some(prototype));
+        ObjectRef::empty_with_prototype_slot(Some(prototype), || env.realm().atoms().clone());
     // A base class initializes its instance fields before the body runs.
     if let Some(elements) = class_fields
         && let Err(error) = initialize_direct_instance_fields(

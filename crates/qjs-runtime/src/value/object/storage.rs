@@ -248,6 +248,7 @@ impl PropertyStorage {
 
     /// Defines `key`: replaces an existing descriptor in its slot or appends
     /// a new one. One probe either way.
+    #[inline]
     pub(super) fn insert(&mut self, key: &str, property: Property) -> Option<Property> {
         // An append edge from this shape proves `key` absent: its probe.
         if let Payload::Slots(properties) = &mut self.payload
@@ -257,9 +258,18 @@ impl PropertyStorage {
             crate::diagnostics::count!(property_add_probes);
             debug_assert_eq!(slot, properties.len());
             properties.push(property);
-            self.encoding = self.layout.encoding();
+            // Append edges preserve their parent's encoding. Re-encoding uses
+            // a separate edge, so this hit cannot change the payload kind.
+            debug_assert_eq!(self.encoding, self.layout.encoding());
             return None;
         }
+        self.insert_without_edge(key, property)
+    }
+
+    /// Replacements and unseen transitions stay out of the append-edge hit
+    /// path so callers can inline one small probe and payload push.
+    #[inline(never)]
+    fn insert_without_edge(&mut self, key: &str, property: Property) -> Option<Property> {
         match self.probe_for_edit(key) {
             Some(slot) => Some(self.replace(slot, property)),
             None => {

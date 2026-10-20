@@ -429,3 +429,21 @@ fn the_live_shape_budget_stops_recording_edges_until_objects_die() {
     let _after = object_with("after");
     assert!(root_edges().iter().any(|key| key == "after"));
 }
+
+#[test]
+fn empty_receivers_resolve_a_realm_only_without_a_prototype_domain() {
+    use super::Prototype;
+    use crate::property::atom::AtomDomain;
+
+    let domain = AtomDomain::new();
+    let _roots = domain.roots();
+    let prototype = ObjectRef::new_in(&domain, HashMap::new());
+    let object = ObjectRef::empty_with_prototype_slot(Some(Prototype::Object(prototype)), || {
+        panic!("prototype supplies the domain")
+    });
+    assert!(object.atom_domain().is_some_and(|own| own.ptr_eq(&domain)));
+    let null = ObjectRef::empty_with_prototype_slot(None, || domain.clone());
+    assert!(null.atom_domain().is_some_and(|own| own.ptr_eq(&domain)));
+    null.set("after_creation".into(), Value::Number(1.0));
+    assert_eq!(null.get("after_creation"), Some(Value::Number(1.0)));
+}

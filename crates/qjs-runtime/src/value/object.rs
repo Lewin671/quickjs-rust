@@ -790,8 +790,21 @@ impl ObjectRef {
         properties: HashMap<String, Value>,
         prototype: Option<Prototype>,
     ) -> Self {
-        if properties.is_empty()
-            && let Some(Prototype::Object(object)) = &prototype
+        if properties.is_empty() {
+            return Self::empty_with_prototype_slot(prototype, || realm.clone());
+        }
+        let domain = prototype.as_ref().and_then(Prototype::atom_domain);
+        Self::with_prototype_slot_in(domain.as_ref().unwrap_or(realm), properties, prototype)
+    }
+
+    /// Creates an empty receiver in its prototype's domain, resolving the
+    /// creating realm only if the prototype cannot supply a domain.
+    /// The callback runs after the prototype storage borrow is released.
+    pub(crate) fn empty_with_prototype_slot(
+        prototype: Option<Prototype>,
+        realm: impl FnOnce() -> AtomDomain,
+    ) -> Self {
+        if let Some(Prototype::Object(object)) = &prototype
             && let Some(storage) = object
                 .0
                 .properties
@@ -801,8 +814,11 @@ impl ObjectRef {
         {
             return Self::from_storage(storage, 0, prototype);
         }
-        let domain = prototype.as_ref().and_then(Prototype::atom_domain);
-        Self::with_prototype_slot_in(domain.as_ref().unwrap_or(realm), properties, prototype)
+        let domain = prototype
+            .as_ref()
+            .and_then(Prototype::atom_domain)
+            .unwrap_or_else(realm);
+        Self::from_storage(PropertyStorage::empty(&domain, 0), 0, prototype)
     }
 
     /// An empty ordinary object whose store takes its domain from
