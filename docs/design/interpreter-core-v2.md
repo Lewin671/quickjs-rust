@@ -81,8 +81,8 @@ An owned `AtomDomain` interns exact JavaScript string code units (including lone
 belong to that domain, not a realm; realms that exchange objects share it. Bytecode keeps a symbolic name pool and
 obtains a cached per-domain `LinkedCode` relocation, so reused eval/Function/module code cannot carry another domain's
 integers. Foreign inputs are re-interned by content at a boundary. Objects/layouts retain their domain; escaping values
-keep it alive. Reclaim unused atoms with owned atom references without reusing IDs; transitions/link caches must not
-retain arbitrary churn forever. Exhaustion fails explicitly, never wraps.
+keep it alive. Reclaim unused atoms with owned atom references without reusing IDs; transitions/link caches retain at
+most a fixed bound, never arbitrary churn. Exhaustion fails explicitly, never wraps.
 
 `ToPropertyKey` runs once, preserving effects; the result is StringAtom or Symbol identity. Numeric-index classification
 preserves distinctions such as `"01"` versus `"1"`. Symbols/private names are separate identities, not string interning
@@ -95,11 +95,11 @@ layout's storage encoding makes its slot interpretation unambiguous. Later conso
 measured; literals get no privileged lookup admission. Arrays, functions, Map/Set wrappers and boxed primitives use that
 contract for their ordinary named parts, including lazily installed properties after their semantic hook.
 
-Shared immutable shapes describe keys, slots, descriptor kinds and attributes. Structural edits publish a new shape;
-stable value assignment changes only the slot. High-churn objects use a dictionary layout with its own identity/version
-and atom index, avoiding an unbounded transition tree. Shape transitions are weakly retained; dictionary
-insert/delete/reconfigure/reorder changes its version before any observer. Enumeration retains numeric-index sorting and
-string/symbol insertion order; delete/reinsert and duplicate definitions preserve their language-defined order.
+Shared immutable shapes describe keys, slots, descriptor kinds and attributes; stable value assignment changes only the
+slot. Edits follow owned, bounded transition edges and never republish layouts by value; a store resolves its domain at
+creation. High-churn objects use a dictionary with its own identity/version, edited in place before any observer.
+[Property layouts](property-layouts.md) owns construction, edges, retention bounds and object size. Enumeration keeps
+numeric-index sorting and string/symbol insertion order; delete/reinsert and duplicates keep language-defined order.
 
 Baseline `Get` classifies the receiver, probes its layout once, then reads the live data slot or follows the prototype
 chain. Accessors retain the original receiver; clone the callable/descriptor and release all storage borrows before
