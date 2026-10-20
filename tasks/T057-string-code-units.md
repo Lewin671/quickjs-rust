@@ -1,16 +1,19 @@
 # T057: String code-unit migration
 
 - Status: active; stage 1 promoted/integrated; stage-2 performance unit abandoned.
-- Implementation: stage 1 present on main; minimal correctness extraction present
-  in this branch; stage-2 view/cache implementation `6000a9c1` is not imported.
+- Implementation: stage 1 present on main; the minimal UTF-16 search/split
+  correctness extraction (`b419d71e`) is integrated after its regression screen
+  passed; stage-2 view/cache implementation `6000a9c1` is not imported (tag
+  `t057-stage2-abandoned` keeps its plan commit reachable).
 - Verified at: base `ae45226e`, 2026-10-20; four requested differences reproduced;
   implementation `b419d71e`, 2026-10-20; fast/full gates, 255 NG fixtures,
   scoped upstream slices and instruction diagnostics below.
 - Evidence: [stage-1 retained evidence](archive/T057-stage1-evidence.md);
-  committed unit fixtures/tests; stage-2 closure and correctness record below.
-- Unresolved: lead's regression-screen decision; no wall-time acceptance claimed.
-- Next action: lead freezes the proposed screen, then measures the exact
-  candidate against `ae45226e` before integration.
+  committed unit fixtures/tests; stage-2 closure, correctness and screen below.
+- Unresolved: non-ASCII long-pattern search uses a windowed scan, O(n·m); the
+  base used `str::find`. Stages 3 onward need new plans.
+- Next action: restore linear search for sentinel-free patterns; later stages
+  need fresh evidence and frozen plans.
 
 ## Goal and scope
 
@@ -161,3 +164,12 @@ a placement effect and does not block; above 1.010 requires fixing the added
 work and repeating the comparison. The lead froze this rule unchanged before any result,
 with candidate `9df818ee85e7` (`9df818ee`; runtime as `b419d71e`).
 This owner submits no compare/loop/--timing job.
+
+Result (lead, 2026-10-20): pass. Formal `20261020T120629Z-t057-correctness-formal30`
+(base `ae45226e`, candidate `9df818ee`), exit 0 after 2262 s, not DISTURBED.
+Lane geomeans: broad 1.0012, sentinel 1.0023, external 0.9982 (45),
+development 1.0004 (10). Only broad `property_dynamic_read` exceeded the
+interval rule (1.0512, lower 1.0483); no-timing follow-up
+`20261020T124540Z-t057-dynamic-read-instr` on the exact compare binaries
+(`b0dfc65d...` base, `41a86320...` candidate) gives 1831.9 and 1831.0
+instructions per iteration, ratio 0.9995: placement, not blocking.
