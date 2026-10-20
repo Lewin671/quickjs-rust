@@ -1,37 +1,66 @@
 //! Non-ASCII search/split and replacement ranges in UTF-16 coordinates.
-//! Temporary unit buffers belong to one operation; no cached views or ASCII work.
+//! Sentinel-free needles use canonical byte search; only half-pair-capable needles
+//! decode temporary unit buffers. Repeated byte matches advance one unit cursor.
 
+use super::kmp::UnitPattern;
 use super::{CallEnv, JsString, Replacement, RuntimeError, StringMatch, Value};
-use crate::string::{code_units, string_code_units, string_from_code_unit, string_from_code_units};
+use crate::string::{
+    code_units, string_code_unit_len, string_code_units, string_from_code_unit,
+    string_from_code_units, surrogate_escape_code_unit,
+};
 
-pub(super) fn find(input: &str, search: &str, start: usize) -> Option<usize> {
-    let input = string_code_units(input);
-    let search = string_code_units(search);
-    find_in(&input, &search, start)
+// A sentinel-free needle cannot start/end at half a scalar. Canonical storage
+// therefore makes byte and unit matches identical, even in a sentinel-bearing
+// subject. Actual U+F0000..F07FF scalars contain sentinels and use unit search.
+fn byte_searchable(search: &str) -> bool {
+    !search
+        .chars()
+        .any(|ch| surrogate_escape_code_unit(ch).is_some())
 }
 
-fn find_in(input: &[u16], search: &[u16], start: usize) -> Option<usize> {
-    if search.is_empty() {
-        return (start <= input.len()).then_some(start);
+// Round a unit bound down to a stored character boundary. Forward search rounds
+// up when it lands inside a pair; reverse search bounds the match's end instead.
+fn byte_floor(input: &str, position: usize) -> (usize, usize) {
+    let mut units = 0;
+    for (byte, ch) in input.char_indices() {
+        let width = if surrogate_escape_code_unit(ch).is_some() {
+            1
+        } else {
+            ch.len_utf16()
+        };
+        if units + width > position {
+            return (byte, units);
+        }
+        units += width;
     }
-    input
-        .get(start..)?
-        .windows(search.len())
-        .position(|part| part == search)
-        .map(|offset| start + offset)
+    (input.len(), units)
+}
+
+pub(super) fn find(input: &str, search: &str, start: usize) -> Option<usize> {
+    if !search.is_empty() && byte_searchable(search) {
+        let (mut byte, mut units) = byte_floor(input, start);
+        if units < start {
+            let ch = input[byte..].chars().next()?;
+            byte += ch.len_utf8();
+            units += ch.len_utf16();
+        }
+        let offset = input[byte..].find(search)?;
+        return Some(units + string_code_unit_len(&input[byte..byte + offset]));
+    }
+    UnitPattern::new(search).find_in(&string_code_units(input), start, false)
 }
 
 pub(super) fn rfind(input: &str, search: &str, position: usize) -> Option<usize> {
-    let input = string_code_units(input);
-    let search = string_code_units(search);
-    if search.is_empty() {
-        return Some(position.min(input.len()));
+    if !search.is_empty() && byte_searchable(search) {
+        let end = position.saturating_add(string_code_unit_len(search));
+        let (byte, _) = byte_floor(input, end);
+        let offset = input[..byte].rfind(search)?;
+        return Some(string_code_unit_len(&input[..offset]));
     }
-    let last = position.min(input.len().checked_sub(search.len())?);
-    input
-        .windows(search.len())
-        .take(last + 1)
-        .rposition(|part| part == search)
+    let input = string_code_units(input);
+    let search = UnitPattern::new(search);
+    let end = position.saturating_add(search.units.len()).min(input.len());
+    search.find_in(&input[..end], 0, true)
 }
 
 pub(super) fn starts_with(input: &str, search: &str, start: usize) -> bool {
@@ -52,18 +81,25 @@ pub(in super::super) fn split_code_units(input: &str, separator: &str, limit: us
             .map(|unit| Value::String(string_from_code_unit(unit).into()))
             .collect();
     }
+    if byte_searchable(separator) {
+        return input
+            .split(separator)
+            .take(limit)
+            .map(|part| Value::String(part.to_owned().into()))
+            .collect();
+    }
     let input = string_code_units(input);
-    let separator = string_code_units(separator);
+    let separator = UnitPattern::new(separator);
     let mut parts = Vec::new();
     let mut start = 0;
     while parts.len() < limit {
-        let Some(position) = find_in(&input, &separator, start) else {
+        let Some(position) = separator.find_in(&input, start, false) else {
             break;
         };
         parts.push(Value::String(
             string_from_code_units(&input[start..position]).into(),
         ));
-        start = position + separator.len();
+        start = position + separator.units.len();
     }
     if parts.len() < limit {
         parts.push(Value::String(
@@ -74,12 +110,32 @@ pub(in super::super) fn split_code_units(input: &str, separator: &str, limit: us
 }
 
 pub(super) fn match_positions(input: &str, search: &str, first_only: bool) -> Vec<StringMatch> {
+    if !search.is_empty() && byte_searchable(search) {
+        let length = string_code_unit_len(search);
+        let mut byte_cursor = 0;
+        let mut unit_cursor = 0;
+        return input
+            .match_indices(search)
+            .take(if first_only { 1 } else { usize::MAX })
+            .map(|(byte, _)| {
+                let start = unit_cursor + string_code_unit_len(&input[byte_cursor..byte]);
+                byte_cursor = byte + search.len();
+                unit_cursor = start + length;
+                StringMatch {
+                    start,
+                    end: unit_cursor,
+                    matched: search.to_owned(),
+                    captures: Vec::new(),
+                }
+            })
+            .collect();
+    }
     let input = string_code_units(input);
-    let needle = string_code_units(search);
+    let needle = UnitPattern::new(search);
     let mut matches = Vec::new();
     let mut start = 0;
-    while let Some(position) = find_in(&input, &needle, start) {
-        let end = position + needle.len();
+    while let Some(position) = needle.find_in(&input, start, false) {
+        let end = position + needle.units.len();
         matches.push(StringMatch {
             start: position,
             end,
@@ -89,7 +145,11 @@ pub(super) fn match_positions(input: &str, search: &str, first_only: bool) -> Ve
         if first_only {
             break;
         }
-        start = if needle.is_empty() { end + 1 } else { end };
+        start = if needle.units.is_empty() {
+            end + 1
+        } else {
+            end
+        };
     }
     matches
 }
@@ -156,20 +216,5 @@ pub(super) fn replace_matches(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn search_ranges_include_interior_pair_boundaries() {
-        let low = string_from_code_unit(0xDE00);
-        let high = string_from_code_unit(0xD83D);
-        assert_eq!(find("😀x😀", &low, 0), Some(1));
-        assert_eq!(find("😀x😀", &low, 2), Some(4));
-        assert_eq!(rfind("😀x😀", &high, 2), Some(0));
-        assert_eq!(rfind("😀x😀", &low, 4), Some(4));
-        assert!(starts_with("😀x", &low, 1));
-        assert!(ends_with("😀x", &high, 1));
-        assert_eq!(find("😀", "", 2), Some(2));
-        assert_eq!(find("😀", "", 3), None);
-    }
-}
+#[path = "units_tests.rs"]
+mod tests;

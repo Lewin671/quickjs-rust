@@ -4,16 +4,19 @@
 - Implementation: stage 1 present on main; the minimal UTF-16 search/split
   correctness extraction (`b419d71e`) is integrated after its regression screen
   passed; stage-2 view/cache implementation `6000a9c1` is not imported (tag
-  `t057-stage2-abandoned` keeps its plan commit reachable).
+  `t057-stage2-abandoned` keeps its plan commit reachable). Linear-search
+  follow-up is present on this owner branch; lead screening is pending.
 - Verified at: base `ae45226e`, 2026-10-20; four requested differences reproduced;
   implementation `b419d71e`, 2026-10-20; fast/full gates, 255 NG fixtures,
-  scoped upstream slices and instruction diagnostics below.
+  scoped upstream slices and instruction diagnostics below. Linear-search
+  repair (the commit adding its record), 2026-10-20: checks and instruction evidence in
+  [the follow-up](archive/T057-search-linear.md).
 - Evidence: [stage-1 retained evidence](archive/T057-stage1-evidence.md);
   committed unit fixtures/tests; stage-2 closure, correctness and screen below.
-- Unresolved: non-ASCII long-pattern search uses a windowed scan, O(n·m); the
-  base used `str::find`. Stages 3 onward need new plans.
-- Next action: restore linear search for sentinel-free patterns; later stages
-  need fresh evidence and frozen plans.
+- Unresolved: linear-search follow-up awaits lead regression screening and
+  integration; stages 3 onward need new plans.
+- Next action: review/screen the [linear-search repair](archive/T057-search-linear.md);
+  later stages need fresh evidence and frozen plans.
 
 ## Goal and scope
 
@@ -22,7 +25,8 @@ This extraction fixes UTF-16 coordinates and half-pair matches locally in
 String search, literal split and replacement helpers. No UnitView, cache,
 primary storage, interpreter, parser, dependency or third-party change.
 ASCII retains byte search/copy and existing allocation paths. Non-ASCII
-operations use temporary per-operation unit buffers or streaming comparisons.
+operations use canonical byte search for sentinel-free needles and linear
+unit matching for sentinel-bearing needles, with local unit buffers where needed.
 
 Owner: `agent/t057-correctness/codex`, base `ae45226e`; worktree
 `worktrees/quickjs-rust/t057-correctness`. No merge, origin push or worktree removal.
