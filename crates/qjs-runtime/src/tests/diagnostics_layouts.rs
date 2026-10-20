@@ -21,6 +21,18 @@ fn counted(source: &str) -> Counters {
     counters().expect("perf-counters build exposes counters")
 }
 
+#[test]
+fn independent_script_and_module_realms_build_one_root_set_each() {
+    let script = counted("0;");
+    assert_eq!(script.property_domains_created, 1);
+    assert_eq!(script.property_root_sets_created, 1);
+    reset_counters();
+    let _realm = crate::bytecode::new_module_realm();
+    let module = counters().unwrap();
+    assert_eq!(module.property_domains_created, 1);
+    assert_eq!(module.property_root_sets_created, 1);
+}
+
 /// Counters of `workload(n)` for the two repetition counts.
 fn repeated(workload: impl Fn(u32) -> String) -> (Counters, Counters) {
     (counted(&workload(FEW)), counted(&workload(MANY)))

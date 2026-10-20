@@ -285,6 +285,7 @@ pub(crate) struct Dictionary {
 impl Dictionary {
     /// An independent copy with a fresh identity.
     fn copy(&self) -> Self {
+        crate::diagnostics::count!(property_dictionary_fields_copied, self.fields.len());
         Self {
             domain: self.domain.clone(),
             encoding: self.encoding,
@@ -347,7 +348,6 @@ impl Dictionary {
     }
 
     /// Identity of this dictionary for a cache that holds it weakly.
-    #[allow(dead_code)] // Read by the M1 stage B lookup caches.
     pub(crate) fn identity(&self) -> &Rc<()> {
         &self.identity
     }
@@ -385,6 +385,7 @@ pub(crate) struct DomainRoots {
 
 impl DomainRoots {
     pub(crate) fn new(domain: &AtomDomain) -> Self {
+        crate::diagnostics::count!(property_root_sets_created);
         let root = |encoding| {
             Rc::new(LayoutNode::Shape(Shape::new(
                 domain.clone(),
@@ -745,7 +746,6 @@ impl LayoutNode {
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn as_dictionary(&self) -> Option<&Dictionary> {
         match self {
             Self::Dictionary(dictionary) => Some(dictionary),

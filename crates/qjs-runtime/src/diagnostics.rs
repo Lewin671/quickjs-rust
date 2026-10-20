@@ -86,10 +86,16 @@ declare_counters! {
     /// take their domain from a realm or prototype, so this grows only with
     /// independent realms.
     property_domains_created,
+    /// Domain root sets constructed. An independent realm creates one set,
+    /// shared by its global object and subsequent stores.
+    property_root_sets_created,
     /// Property layout shapes constructed, by any transition kind.
     property_shapes_created,
     /// Fields copied into a newly constructed shape.
     property_shape_fields_copied,
+    /// Fields copied when a dictionary has multiple layout owners. Read
+    /// caches must not force these copies during structural edits.
+    property_dictionary_fields_copied,
     /// Appends that followed an existing transition edge, and appends that
     /// built a new child shape.
     property_edge_hits,

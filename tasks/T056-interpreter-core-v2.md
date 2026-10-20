@@ -3,12 +3,12 @@
 - Status: active; M1 stage 1 integrated into main (`ab9c29b6`); the M1.2 shape `873c9bc5`
   was rejected on its sole screen and is closed; its replacement is frozen as plan
   [`interpreter-core-v2-layout-edges`](performance-units/interpreter-core-v2-layout-edges.json); stage A is
-  implemented on `agent/t056-m1-stage-a/claude` (plan `50b42547`); final `72c2e5db` passes the 86-case
-  instruction pre-gate; the lead's timed stage A screen is pending.
+  implemented on `agent/t056-m1-stage-a/claude` (plan `50b42547`); review fixes pass local gates and NG fixtures.
+  A new-image exact scan and pre-gate are pending; the old `72c2e5db` image is superseded for timing.
 - Implementation: stage 1 on main. Stage A on its branch, not on main; the rejected M1.2 candidate stays on
   `agent/t056-m1-stage2/codex`; the write-site add replay removed from stage A stays on
   `agent/t056-add-transition-replay/claude`.
-- Verified at: stage A `72c2e5db`: fast/full gates, 255 NG fixtures, 42,672/42,672 configured Test262 cases,
+- Verified at: prior stage A `72c2e5db`: fast/full gates, 255 NG fixtures, 42,672/42,672 configured Test262 cases,
   matching events, CI success and 86/86 pre-gate (see its [record](archive/T056-m1-stageA-record.md)).
 - Evidence: [part 1](archive/T056-unit0-part1-evidence.md), [part 2](archive/T056-unit0-part2-evidence.md),
   [M1 stage 1](archive/T056-m1-stage1-evidence.md), [M1.2 rejection](archive/T056-m1-stage2-evidence.md),
@@ -18,8 +18,8 @@
   [`interpreter-core-v2-layout-edges`](performance-units/interpreter-core-v2-layout-edges.json).
 - Unresolved: stage A timing acceptance; arm64 raytrace-field diagnostic instructions remain 1.0374x.
   M2 (five cost-first stages) still needs fresh post-M1 profiles.
-- Next action: the lead submits the frozen stage A timed screen of `72c2e5db`, using the exact image hash
-  in its record for pre-gate job `20261020T184945Z-t056-m1a-pregate2-final`.
+- Next action: commit the verified review corrections, rerun the complete exact scan and 86-case
+  non-timing instruction pre-gate, then regenerate the lead's acceptance chain.
 
 ## Goal and scope
 

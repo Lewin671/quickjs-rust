@@ -1054,13 +1054,19 @@ impl Function {
         let domain = self.named_domain();
         let mut properties = self.properties.borrow_mut();
         let mut leading = self.auxiliary.leading_defaults.get();
-        if had_length && properties.probe("length").is_none() {
-            properties.insert_absent_at(domain, 0, "length", self.default_length_property());
+        if had_length {
+            let property = properties
+                .remove("length")
+                .unwrap_or_else(|| self.default_length_property());
+            properties.insert_absent_at(domain, 0, "length", property);
             leading += 1;
         }
-        if had_name && properties.probe("name").is_none() {
+        if had_name {
+            let property = properties
+                .remove("name")
+                .unwrap_or_else(|| self.default_name_property());
             let at = usize::from(leading > 0);
-            properties.insert_absent_at(domain, at, "name", self.default_name_property());
+            properties.insert_absent_at(domain, at, "name", property);
             leading += 1;
         }
         self.auxiliary.leading_defaults.set(leading);
@@ -1099,25 +1105,22 @@ impl Function {
         if !self.auxiliary.lazy_default_prototype.replace(false) {
             return;
         }
-        // An installer that wrote `prototype` straight into the table has
-        // replaced the default before anything observed it.
-        if self.properties.borrow().contains_key("prototype") {
-            return;
-        }
-        let prototype = ObjectRef::with_prototype(
-            self.named_domain(),
-            HashMap::new(),
-            object_prototype(&self.creation_env()),
-        );
-        prototype.define_non_enumerable("constructor".to_owned(), Value::Function(self.clone()));
+        // A native installer may have replaced the default directly, after
+        // adding statics. Keep its descriptor, but restore its reserved slot.
+        let installed = self.properties.borrow_mut().remove("prototype");
+        let property = installed.unwrap_or_else(|| {
+            let prototype = ObjectRef::with_prototype(
+                self.named_domain(),
+                HashMap::new(),
+                object_prototype(&self.creation_env()),
+            );
+            prototype
+                .define_non_enumerable("constructor".to_owned(), Value::Function(self.clone()));
+            Property::data(Value::Object(prototype), false, true, false)
+        });
         let mut properties = self.properties.borrow_mut();
         let at = self.default_prototype_position();
-        properties.insert_absent_at(
-            self.named_domain(),
-            at,
-            "prototype",
-            Property::data(Value::Object(prototype), false, true, false),
-        );
+        properties.insert_absent_at(self.named_domain(), at, "prototype", property);
     }
 
     pub(crate) fn is_extensible(&self) -> bool {
@@ -1253,6 +1256,7 @@ impl Function {
             // Replacing the unobserved default in its slot: no reference to
             // the default object can exist.
             let mut properties = self.properties.borrow_mut();
+            properties.remove(&key);
             let at = self.default_prototype_position();
             properties.insert_absent_at(self.named_domain(), at, &key, property);
             return;

@@ -8,7 +8,8 @@
 //! under the same `&mut` borrow, so no reader can see the two disagree: for
 //! every slot, the layout field's descriptor attributes equal those of the
 //! payload descriptor, and the store's encoding copy equals the layout's.
-//! Slot readers and writers rely on both, so they read no layout node.
+//! Slot readers and writers rely on both. Shape cache hits read no layout
+//! node; dictionary caches also validate its independent identity token.
 
 use std::rc::Rc;
 

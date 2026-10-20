@@ -23,6 +23,9 @@ impl<'a> Vm<'a> {
     pub(super) fn new(bytecode: &'a Bytecode) -> Result<Self, RuntimeError> {
         let mut globals = HashMap::new();
         let atoms = crate::property::atom::AtomDomain::new();
+        // Keep one root set alive until the realm takes ownership, including
+        // while constructing globalThis's first layout.
+        let _roots = atoms.roots();
         let global_this = Value::Object(ObjectRef::new_in(&atoms, HashMap::new()));
         globals.insert("this".to_owned(), global_this.clone());
         globals.insert(GLOBAL_THIS_BINDING.to_owned(), global_this.clone());

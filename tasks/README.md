@@ -14,7 +14,7 @@ it to `archive/` with `git mv` and move its row below.
 | Task | Status | What it is |
 | --- | --- | --- |
 | [T057](T057-string-code-units.md) string code units | active | Stage-1 PROMOTE under v4; integrated into main; stages 2 onward require new plans. |
-| [T056](T056-interpreter-core-v2.md) interpreter core v2 | active | Target design for names, frames and values; M1 stage 1 on main; the first M1.2 shape was rejected and diagnosed; its replacement (plan `interpreter-core-v2-layout-edges`) has stage A implemented on a branch, its 86-case instruction pre-gate passed and the lead's timed screen is pending; M2 design revised against measured costs. |
+| [T056](T056-interpreter-core-v2.md) interpreter core v2 | active | Target design for names, frames and values; M1 stage 1 on main; the first M1.2 shape was rejected and diagnosed; its replacement (plan `interpreter-core-v2-layout-edges`) has stage A review corrections on its branch with local gates passed; the new-image exact scan and instruction pre-gate are pending; timing belongs to the lead; M2 design revised against measured costs. |
 | [T018](T018-broad-performance.md) broad performance | active | The performance campaign contract and its targets against QuickJS-NG. Start performance work here, then follow [the workflow](../docs/performance-workflow.md). |
 | [T040](T040-imac-general-performance.md) x86_64 general optimization | active | Fresh current-main comparison and exact-binary profiles, followed by independent general runtime units. |
 | [T045](T045-typed-loop-boxed-demand-provenance.md) boxed demand provenance | active | Ordinary identity-flow joins lose boxed demand; exact profiles and seed diagnosis precede a compiler-only unit. |

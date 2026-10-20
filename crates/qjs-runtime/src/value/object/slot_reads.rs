@@ -15,7 +15,7 @@ use super::{ObjectRef, OwnDataPropertyRead, OwnDataPropertyWrite, own_data_read,
 use crate::Value;
 use std::rc::Weak;
 
-use crate::property::layout::{Encoding, Layout, LayoutNode};
+use crate::property::layout::{Encoding, Layout};
 
 /// A literal site's published layout, as a read cache records it.
 pub(crate) type LiteralLayout = Layout;
@@ -30,10 +30,10 @@ pub(crate) struct SharedSlot {
     small: bool,
     /// `None` for a dictionary, which a cache must not share.
     shape: Option<Layout>,
-    /// For a dictionary: its node, held weakly so the cache neither keeps
-    /// it alive nor lets its address be reused, and the owning object's
-    /// layout revision, which every in-place structural edit bumps.
-    dictionary: Option<(Weak<LayoutNode>, u64)>,
+    /// A weak independent dictionary identity plus the owner's layout
+    /// revision. Never borrow the node weakly: Rc::get_mut must remain able
+    /// to edit a uniquely owned dictionary in place after a cached read.
+    dictionary: Option<(Weak<()>, u64)>,
 }
 
 impl SharedSlot {
@@ -48,14 +48,19 @@ impl SharedSlot {
 
     /// [`Self::on_shape`], or still on the recorded dictionary unedited
     /// since: either fixes the slot's key and attributes as recorded, and
-    /// neither reads the layout node.
+    /// the dictionary's independent identity prevents address reuse (ABA).
     #[inline(always)]
     fn on_layout(&self, object: &ObjectRef, storage: &PropertyStorage) -> bool {
         self.on_shape(storage)
-            || self.dictionary.as_ref().is_some_and(|(node, revision)| {
-                std::ptr::eq(node.as_ptr(), Rc::as_ptr(&storage.layout))
-                    && object.layout_revision() == *revision
-            })
+            || self
+                .dictionary
+                .as_ref()
+                .is_some_and(|(identity, revision)| {
+                    object.layout_revision() == *revision
+                        && storage.layout.as_dictionary().is_some_and(|dictionary| {
+                            std::ptr::eq(identity.as_ptr(), Rc::as_ptr(dictionary.identity()))
+                        })
+                })
     }
 }
 
@@ -180,8 +185,8 @@ impl ObjectRef {
             shape: (!storage.layout.is_dictionary()).then(|| Rc::clone(&storage.layout)),
             dictionary: storage
                 .layout
-                .is_dictionary()
-                .then(|| (Rc::downgrade(&storage.layout), self.layout_revision())),
+                .as_dictionary()
+                .map(|dictionary| (Rc::downgrade(dictionary.identity()), self.layout_revision())),
         })
     }
 

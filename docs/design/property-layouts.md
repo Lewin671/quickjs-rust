@@ -45,16 +45,17 @@ The layout **replaces** payload lookup authority in the same stage; it is not la
   - The table's layout owns its key order; there is no second key list. A function's standard `length` and
     `name`, once materialized, are inserted in front, and an unobserved default `prototype` is inserted right
     after them when it is created, ahead of every later key. An add probes the table once.
-  - Built-in constructors enumerate their remaining keys in installation order. Only a compiled function's implicit
-    default prototype reserves an earlier position; explicitly installed native prototypes do not reorder keys.
+  - Built-in constructors reserve `prototype` immediately after `length` and `name`, even when their installer
+    replaces the lazy default after installing statics. Materializing an existing default moves its descriptor
+    into its reserved slot without changing observable key order; later statics retain installation order.
 - **One pointer.** The layout is one `Rc<LayoutNode>`: a shared immutable `Shape` or a private `Dictionary`.
   The dictionary node is uniquely owned and edited in place through its cell.
 - **Dictionary identity.** A dictionary keeps an independent `identity: Rc<()>` beside its `u64` version for
   caches that outlive their object.
-  - A shared-slot read/write cache instead holds a `Weak` of the dictionary node and the owning object's
-    `layout_revision`, which every in-place structural edit (including seal and freeze) bumps: a hit compares
-    the node pointer and the revision without reading the node. The `Weak` keeps the allocation, so a dead
-    dictionary's address is never reused while the cache can compare it.
+  - A shared-slot read/write cache holds a `Weak<()>` of that independent identity and the owning object's
+    `layout_revision`, which every in-place structural edit (including seal and freeze) bumps. It compares
+    identity and revision; the weak token prevents ABA while leaving the layout node uniquely owned
+    (`strong=1`, `weak=0`) and editable in place. A true dictionary copy receives a fresh identity.
   - A monotonic `u64` id per domain was rejected because it needs either a domain lookup or a stored domain to
     compare ids across domains.
 
@@ -79,7 +80,9 @@ alias another key (no ABA).
 - **Ownership.** Parents own their edges strongly; children hold no parent reference, so there is no cycle. With
   weak edges, intermediate shapes die with the object that last used them and every object rebuilds the chain.
 - **Roots.** One empty root per payload encoding lives in a `DomainRoots` value.
-  - `new_realm` creates one `Rc<DomainRoots>` with the domain.
+  - Independent script/module entry holds one `Rc<DomainRoots>` across global-object construction and realm
+    creation, so `globalThis` starts from the same roots as later stores. Detached helper realms create roots
+    with their domain on first use.
   - `new_realm_sharing_atoms` passes the same `Rc` on, so every realm of one domain shares one set of roots.
   - The atom domain does not own the roots; see the cycle section.
 - **Edge bound.** Each shape holds at most 16 append edges plus one edge per encoding. When full, the oldest edge

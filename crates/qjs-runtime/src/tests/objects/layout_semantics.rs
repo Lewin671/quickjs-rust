@@ -54,13 +54,10 @@ fn layout_semantics_survive_edges_dictionaries_and_reencoding() {
     assert_eq!(value, Value::String(expected.into()));
 }
 
-/// Built-in constructors enumerate their own keys in installation order:
-/// `length` and `name`, then the keys in the order their installer defined
-/// them. The specification leaves this order to the implementation; it
-/// changed from alphabetical when the layout took over key order, and this
-/// test keeps it from changing again unnoticed.
+/// Reserve the original default slots even when an installer replaces a
+/// lazy prototype after installing statics. Later statics retain their order.
 #[test]
-fn builtin_constructor_keys_enumerate_in_installation_order() {
+fn builtin_constructor_keys_keep_prototype_before_statics() {
     let expected = [
         ("Array", "length,name,prototype,from,fromAsync,isArray,of"),
         (
@@ -81,18 +78,18 @@ fn builtin_constructor_keys_enumerate_in_installation_order() {
         ),
         (
             "Symbol",
-            "length,name,asyncDispose,asyncIterator,dispose,hasInstance,isConcatSpreadable,iterator,match,matchAll,replace,search,species,split,toPrimitive,toStringTag,unscopables,for,keyFor,prototype",
+            "length,name,prototype,asyncDispose,asyncIterator,dispose,hasInstance,isConcatSpreadable,iterator,match,matchAll,replace,search,species,split,toPrimitive,toStringTag,unscopables,for,keyFor",
         ),
         ("Date", "length,name,prototype,now,parse,UTC"),
-        ("RegExp", "length,name,escape,prototype"),
-        ("Map", "length,name,groupBy,prototype"),
+        ("RegExp", "length,name,prototype,escape"),
+        ("Map", "length,name,prototype,groupBy"),
         ("Set", "length,name,prototype"),
-        ("BigInt", "length,name,asIntN,asUintN,prototype"),
-        ("Error", "length,name,isError,prototype"),
+        ("BigInt", "length,name,prototype,asIntN,asUintN"),
+        ("Error", "length,name,prototype,isError"),
         ("ArrayBuffer", "length,name,prototype,isView"),
         (
             "Uint8Array",
-            "length,name,fromBase64,fromHex,BYTES_PER_ELEMENT,prototype",
+            "length,name,prototype,fromBase64,fromHex,BYTES_PER_ELEMENT",
         ),
         ("Proxy", "length,name,revocable"),
     ];
@@ -103,5 +100,91 @@ fn builtin_constructor_keys_enumerate_in_installation_order() {
             Ok(Value::String(keys.to_owned().into())),
             "{name}"
         );
+    }
+}
+
+#[test]
+fn builtin_constructor_default_materialization_preserves_key_order() {
+    let constructors = [
+        "Error",
+        "TypeError",
+        "EvalError",
+        "RangeError",
+        "ReferenceError",
+        "SyntaxError",
+        "URIError",
+        "AggregateError",
+        "SuppressedError",
+        "Array",
+        "Object",
+        "RegExp",
+        "Map",
+        "BigInt",
+        "Symbol",
+        "Uint8Array",
+    ];
+    for constructor in constructors {
+        for operation in [
+            "Object.freeze(C)",
+            "Object.seal(C)",
+            "Object.defineProperty(C, 'name', {value: 'renamed'})",
+            "Object.defineProperty(C, 'length', {value: 7})",
+        ] {
+            let source = format!(
+                "var C = {constructor}; var before = Object.getOwnPropertyNames(C).join(',');
+                 {operation}; before === Object.getOwnPropertyNames(C).join(',');"
+            );
+            assert_eq!(
+                eval(&source),
+                Ok(Value::boolean(true)),
+                "{constructor}: {operation}"
+            );
+        }
+    }
+}
+
+#[test]
+fn directly_installed_native_defaults_keep_descriptors_and_leading_slots() {
+    use crate::{Function, NativeFunction, Property, property::atom::AtomDomain};
+
+    let domain = AtomDomain::new();
+    let _roots = domain.roots();
+    for operation in ["freeze", "seal", "define"] {
+        let function =
+            Function::new_native(&domain, Some("original"), 0, NativeFunction::Error, true);
+        // Model installers that replace defaults through the named table,
+        // including defaults whose value differs from the generic builder.
+        for (key, value) in [
+            ("static", Value::Number(1.0)),
+            ("prototype", Value::Null),
+            ("name", Value::String("installed".into())),
+            ("length", Value::Number(9.0)),
+        ] {
+            function.properties.borrow_mut().insert_in(
+                &domain,
+                key,
+                Property::data(value, false, false, true),
+            );
+        }
+        let before = function.own_property_names();
+        assert_eq!(before, ["length", "name", "prototype", "static"]);
+        match operation {
+            "freeze" => function.freeze(),
+            "seal" => function.seal(),
+            _ => {
+                function.define_property("name".to_owned(), function.own_property("name").unwrap())
+            }
+        }
+        assert_eq!(function.own_property_names(), before, "{operation}");
+        assert_eq!(
+            function.own_property("length").unwrap().value,
+            Value::Number(9.0)
+        );
+        assert_eq!(
+            function.own_property("name").unwrap().value,
+            Value::String("installed".into())
+        );
+        assert!(!function.own_property("length").unwrap().enumerable);
+        assert!(!function.own_property("name").unwrap().writable);
     }
 }

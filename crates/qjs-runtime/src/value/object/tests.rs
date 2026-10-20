@@ -114,6 +114,56 @@ fn objects_of_one_domain_share_each_interned_property_name() {
 }
 
 #[test]
+fn cached_dictionary_edits_stay_in_place_and_copy_no_fields() {
+    let object = ObjectRef::new(HashMap::new());
+    for index in 0..150 {
+        object.set(format!("p{index}"), Value::Number(index as f64));
+    }
+    assert!(object.0.properties.borrow().layout.is_dictionary());
+    let original = Rc::as_ptr(&object.0.properties.borrow().layout);
+    #[cfg(feature = "perf-counters")]
+    crate::reset_counters();
+    for index in 0..20 {
+        let cached = object.shared_data_slot("p0").expect("dictionary data slot");
+        assert_eq!(
+            object.shared_data_slot_value(&cached),
+            Some(Value::Number(0.0))
+        );
+        object.set("extra".to_owned(), Value::Number(index as f64));
+        assert!(object.delete_own_property("extra"));
+        object.define_property(
+            "p1".to_owned(),
+            Property::data(Value::Number(1.0), index % 2 == 0, true, true),
+        );
+        assert_eq!(
+            object.shared_data_slot_value(&cached),
+            Some(Value::Number(0.0))
+        );
+        let storage = object.0.properties.borrow();
+        assert_eq!(
+            Rc::as_ptr(&storage.layout),
+            original,
+            "cached edits copied the dictionary"
+        );
+        assert_eq!(Rc::strong_count(&storage.layout), 1);
+        assert_eq!(Rc::weak_count(&storage.layout), 0);
+    }
+    let cached = object.shared_data_slot("p0").unwrap();
+    object.seal();
+    object.freeze();
+    assert_eq!(
+        object.shared_data_slot_value(&cached),
+        Some(Value::Number(0.0))
+    );
+    assert_eq!(Rc::as_ptr(&object.0.properties.borrow().layout), original);
+    #[cfg(feature = "perf-counters")]
+    assert_eq!(
+        crate::counters().unwrap().property_dictionary_fields_copied,
+        0
+    );
+}
+
+#[test]
 fn small_object_removal_preserves_property_order() {
     let object = ObjectRef::new(HashMap::new());
     object.set("first".to_owned(), Value::Number(1.0));

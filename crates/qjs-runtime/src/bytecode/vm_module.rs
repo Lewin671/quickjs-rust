@@ -41,6 +41,8 @@ pub(super) fn eval_prelude_script(bytecode: &Bytecode, realm: &Realm) -> Result<
 pub(super) fn new_module_realm() -> Realm {
     let mut globals = HashMap::new();
     let atoms = crate::property::atom::AtomDomain::new();
+    // The global object and realm must descend from the same live roots.
+    let _roots = atoms.roots();
     let global_this = Value::Object(ObjectRef::new_in(&atoms, HashMap::new()));
     globals.insert("this".to_owned(), Value::Undefined);
     globals.insert(GLOBAL_THIS_BINDING.to_owned(), global_this.clone());

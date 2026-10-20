@@ -16,7 +16,7 @@ domain), `7d8f18db` (slot accesses without reading the layout node), `9049dfc6` 
 creation's only probe), then tests and documentation. `ff850af8` removes that fallback domain and threads the realm domain through
 all creation paths; its WIP formatting and temporary probe test are cleaned up in the continuation.
 
-Deviations from the design, with their reasons, are now stated in the design itself: the shared-slot dictionary
+At `72c2e5db`, deviations from the design, with their reasons, were stated in the design itself: the shared-slot dictionary
 token (a `Weak` of the node plus the owner's layout revision), edit edges capped at 8 with content-cache hits
 recording no edge, the lazy large-shape index, explicit realm domains on all creation paths, and unpacked flags (packing
 saves no bytes at 120). The domain-less lexical marker never accepts named properties. Built-in constructor key
@@ -356,3 +356,35 @@ repository rather than depending on workspace artifacts. Ratios are candidate/ba
 
 The lead's next action is the frozen stage A timed screen using this exact candidate image. The documentary
 successor changes no runtime source; it does not establish timing acceptance or integrate stage A into main.
+
+
+## Independent review corrections after `6f5eb651`
+
+All four findings were reproduced before the fixes: four focused tests failed on default-key reordering,
+prototype placement, dictionary copy-on-edit and two root sets per independent realm. The review correction
+working tree makes these changes:
+
+- Materializing implicit `length`/`name` moves an already installed descriptor into its leading slot and
+  counts it in `leading_defaults`, preserving its value and attributes. Error and eight native error subtypes,
+  other built-in constructors and a direct-table default replacement test cover freeze, seal and defineProperty.
+- Shared dictionary slots hold a `Weak<()>` of the independent dictionary identity plus the owner's layout
+  revision, not a weak layout-node reference. Structural edits retain a uniquely owned layout (strong=1, weak=0).
+  A work-count test holds a cached slot across append/delete/reconfigure/seal/freeze and checks zero dictionary
+  field copies and stable node identity; true copy-on-write is counted separately.
+- The earlier native constructor install-order change is **reverted**: the lazy default reserves `prototype`
+  immediately after `length`/`name`, including when installers replace it directly after statics. No unused
+  prototype object is created. The order-locking test now asserts prototype before statics; it no longer claims
+  the changed order is implementation-defined.
+- Script and module creation hold one DomainRoots across global-object construction and realm creation. A
+  counter test checks one domain and one root set for each independent entry path, rather than two root sets.
+
+These fixes change runtime source, so `72c2e5db`'s exact receipt/pre-gate cannot admit the corrected candidate.
+Fresh verification and the new final candidate are recorded below when complete. No timing job is authorized
+by this correction; the lead retains timing submission.
+
+The correction working tree passed all five focused regression tests with `perf-counters` (the four initial
+regressions were first observed failing), `./scripts/check.sh` (2345 runtime tests, agents, 29 diagnostic tests,
+662 benchmark-tool tests, 35 script tests, context/file guards and 5170 Test262 subset cases), and all
+255 `./scripts/compare-qjs.sh` fixtures. The pre-commit fast gate also verifies the staged correction; the
+committed-image exact and instruction pre-gate follow. New diagnostic counters count dictionary field copies
+and domain root-set creation; neither exists as executed counter work in the canonical uninstrumented build.
