@@ -20,6 +20,7 @@ pub(crate) fn native_json_parse(
         let node = parse_json_node(&source, env)?;
         let value = node.value.clone();
         let root = Value::Object(crate::ObjectRef::with_prototype(
+            env.realm().atoms(),
             std::collections::HashMap::new(),
             object_prototype(env),
         ));
@@ -188,7 +189,8 @@ fn empty_node(value: Value) -> JsonNode {
 }
 
 fn reviver_context(node: &JsonNode, env: &CallEnv) -> Value {
-    let context = ObjectRef::with_prototype(HashMap::new(), object_prototype(env));
+    let context =
+        ObjectRef::with_prototype(env.realm().atoms(), HashMap::new(), object_prototype(env));
     if let Some(source) = &node.source {
         context.define_property(
             "source".to_owned(),

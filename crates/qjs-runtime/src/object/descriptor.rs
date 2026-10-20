@@ -758,7 +758,7 @@ pub(crate) fn define_property_on_value_key(
                 && let Some(index) = array_index_key(&key)
                 && elements.dense_data_property_eligible(index)
             {
-                elements.set(index, descriptor.value);
+                elements.set(index, descriptor.value, &|| env.realm().atoms().clone());
             } else {
                 elements.define_property(env.realm().atoms(), key, descriptor);
             }

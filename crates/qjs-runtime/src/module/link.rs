@@ -842,7 +842,7 @@ impl ModuleGraph {
         let env = crate::CallEnv::new(self.realm.clone());
         let live_bindings =
             ModuleNamespaceBindings::new(self.modules[key].live_lexical.clone(), HashMap::new());
-        let namespace = empty_namespace(live_bindings);
+        let namespace = empty_namespace(env.realm().atoms(), live_bindings);
         self.modules.get_mut(key).expect("module exists").namespace =
             Some(Value::Object(namespace.clone()));
 

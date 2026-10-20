@@ -8,7 +8,13 @@ pub(crate) fn install_object(env: &mut CallEnv, global_this: &Value) -> ObjectRe
     object_prototype.mark_immutable_prototype_exotic();
     env.realm()
         .initialize_object_prototype(object_prototype.clone());
-    let object_function = Function::new_native(Some("Object"), 1, NativeFunction::Object, true);
+    let object_function = Function::new_native(
+        env.realm().atoms(),
+        Some("Object"),
+        1,
+        NativeFunction::Object,
+        true,
+    );
     object_prototype.define_non_enumerable(
         "constructor".to_owned(),
         Value::Function(object_function.clone()),
@@ -77,12 +83,14 @@ pub(crate) fn install_object(env: &mut CallEnv, global_this: &Value) -> ObjectRe
         "__proto__".to_owned(),
         Property::accessor(
             Some(Value::Function(Function::new_native(
+                env.realm().atoms(),
                 Some("get __proto__"),
                 0,
                 NativeFunction::ObjectPrototypeGetProto,
                 false,
             ))),
             Some(Value::Function(Function::new_native(
+                env.realm().atoms(),
                 Some("set __proto__"),
                 1,
                 NativeFunction::ObjectPrototypeSetProto,
@@ -274,7 +282,8 @@ fn define_object_prototype_function(
     length: usize,
     native: NativeFunction,
 ) -> Function {
-    let function = Function::new_native(Some(key), length, native, false);
+    let function =
+        Function::new_native(&prototype.store_domain(), Some(key), length, native, false);
     prototype.define_non_enumerable(key.to_owned(), Value::Function(function.clone()));
     function
 }
@@ -290,6 +299,7 @@ fn define_object_function(
         atoms,
         key,
         Property::non_enumerable(Value::Function(Function::new_native(
+            atoms,
             Some(key),
             length,
             native,

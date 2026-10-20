@@ -1085,7 +1085,7 @@ impl<'a> Vm<'a> {
                     .unwrap_or(true)
             {
                 self.pop()?;
-                elements.set(index, value.clone());
+                elements.set(index, value.clone(), &|| self.env.realm().atoms().clone());
                 self.stack.push(value);
                 return Ok(());
             }
@@ -1140,7 +1140,7 @@ impl<'a> Vm<'a> {
                     .array_prototype_chain_has_index_hazard()
                     .unwrap_or(true)
             {
-                elements.set(index, value.clone());
+                elements.set(index, value.clone(), &|| self.env.realm().atoms().clone());
                 self.stack.push(value);
                 return Ok(());
             }

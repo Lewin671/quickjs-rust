@@ -6,10 +6,17 @@ use super::NUMBER_DATA_PROPERTY;
 use crate::CallEnv;
 
 pub(crate) fn install_number(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
-    let number_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
+    let number_prototype =
+        ObjectRef::with_prototype(env.realm().atoms(), HashMap::new(), Some(object_prototype));
     env.realm()
         .initialize_number_prototype(number_prototype.clone());
-    let number_function = Function::new_native(Some("Number"), 1, NativeFunction::Number, true);
+    let number_function = Function::new_native(
+        env.realm().atoms(),
+        Some("Number"),
+        1,
+        NativeFunction::Number,
+        true,
+    );
     number_prototype.define_non_enumerable(NUMBER_DATA_PROPERTY.to_owned(), Value::Number(0.0));
     number_prototype.define_non_enumerable(
         "constructor".to_owned(),
@@ -18,6 +25,7 @@ pub(crate) fn install_number(env: &mut CallEnv, global_this: &Value, object_prot
     number_prototype.define_non_enumerable(
         "toExponential".to_owned(),
         Value::Function(Function::new_native(
+            env.realm().atoms(),
             Some("toExponential"),
             1,
             NativeFunction::NumberPrototypeToExponential,
@@ -27,6 +35,7 @@ pub(crate) fn install_number(env: &mut CallEnv, global_this: &Value, object_prot
     number_prototype.define_non_enumerable(
         "toFixed".to_owned(),
         Value::Function(Function::new_native(
+            env.realm().atoms(),
             Some("toFixed"),
             1,
             NativeFunction::NumberPrototypeToFixed,
@@ -36,6 +45,7 @@ pub(crate) fn install_number(env: &mut CallEnv, global_this: &Value, object_prot
     number_prototype.define_non_enumerable(
         "toPrecision".to_owned(),
         Value::Function(Function::new_native(
+            env.realm().atoms(),
             Some("toPrecision"),
             1,
             NativeFunction::NumberPrototypeToPrecision,
@@ -45,6 +55,7 @@ pub(crate) fn install_number(env: &mut CallEnv, global_this: &Value, object_prot
     number_prototype.define_non_enumerable(
         "toString".to_owned(),
         Value::Function(Function::new_native(
+            env.realm().atoms(),
             Some("toString"),
             1,
             NativeFunction::NumberPrototypeToString,
@@ -54,6 +65,7 @@ pub(crate) fn install_number(env: &mut CallEnv, global_this: &Value, object_prot
     number_prototype.define_non_enumerable(
         "toLocaleString".to_owned(),
         Value::Function(Function::new_native(
+            env.realm().atoms(),
             Some("toLocaleString"),
             0,
             NativeFunction::NumberPrototypeToLocaleString,
@@ -63,6 +75,7 @@ pub(crate) fn install_number(env: &mut CallEnv, global_this: &Value, object_prot
     number_prototype.define_non_enumerable(
         "valueOf".to_owned(),
         Value::Function(Function::new_native(
+            env.realm().atoms(),
             Some("valueOf"),
             0,
             NativeFunction::NumberPrototypeValueOf,
@@ -141,12 +154,14 @@ pub(crate) fn install_number(env: &mut CallEnv, global_this: &Value, object_prot
         NativeFunction::NumberIsSafeInteger,
     );
     let parse_float_value = Value::Function(Function::new_native(
+        env.realm().atoms(),
         Some("parseFloat"),
         1,
         NativeFunction::ParseFloat,
         false,
     ));
     let parse_int_value = Value::Function(Function::new_native(
+        env.realm().atoms(),
         Some("parseInt"),
         2,
         NativeFunction::ParseInt,
@@ -203,6 +218,7 @@ fn define_function_property(
         atoms,
         key,
         Property::non_enumerable(Value::Function(Function::new_native(
+            atoms,
             Some(key),
             length,
             native,

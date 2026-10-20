@@ -38,12 +38,18 @@ impl ElementHandler for AllHandler {
         env: &mut CallEnv,
     ) -> Result<(Value, Value), RuntimeError> {
         // Reserve the slot so out-of-order fulfilment writes the right index.
-        self.values.set(index, Value::Undefined);
+        self.values
+            .set(index, Value::Undefined, &|| env.realm().atoms().clone());
         perform::increment_remaining(&self.remaining);
 
         let already_called = ObjectRef::new_in(env.realm().atoms(), HashMap::new());
-        let mut on_fulfilled =
-            Function::new_native(None, 1, NativeFunction::PromiseAllResolveElement, false);
+        let mut on_fulfilled = Function::new_native(
+            env.realm().atoms(),
+            None,
+            1,
+            NativeFunction::PromiseAllResolveElement,
+            false,
+        );
         on_fulfilled.insert_native_context(
             PROMISE_ALL_CAPABILITY_RESOLVE.to_owned(),
             capability.resolve.clone(),
@@ -125,7 +131,7 @@ pub(crate) fn native_promise_all_resolve_element(
     };
 
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    values.set(index, value);
+    values.set(index, value, &|| env.realm().atoms().clone());
     if perform::decrement_remaining(&remaining) == 0.0 {
         let resolve = function
             .native_context

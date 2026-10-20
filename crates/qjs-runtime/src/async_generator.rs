@@ -83,12 +83,16 @@ pub(crate) fn install_async_generator(
     _global_this: &Value,
     object_prototype: ObjectRef,
 ) {
-    let async_iterator_prototype =
-        ObjectRef::with_prototype(HashMap::new(), Some(object_prototype.clone()));
+    let async_iterator_prototype = ObjectRef::with_prototype(
+        env.realm().atoms(),
+        HashMap::new(),
+        Some(object_prototype.clone()),
+    );
     if let Some(async_iterator) = symbol::async_iterator_symbol(env) {
         async_iterator_prototype.define_symbol_property(
             async_iterator,
             Property::non_enumerable(Value::Function(Function::new_native(
+                env.realm().atoms(),
                 Some("[Symbol.asyncIterator]"),
                 0,
                 NativeFunction::AsyncGeneratorPrototypeAsyncIterator,
@@ -100,6 +104,7 @@ pub(crate) fn install_async_generator(
         async_iterator_prototype.define_symbol_property(
             async_dispose,
             Property::non_enumerable(Value::Function(Function::new_native(
+                env.realm().atoms(),
                 Some("[Symbol.asyncDispose]"),
                 0,
                 NativeFunction::AsyncIteratorPrototypeAsyncDispose,
@@ -108,8 +113,11 @@ pub(crate) fn install_async_generator(
         );
     }
 
-    let async_generator_prototype =
-        ObjectRef::with_prototype(HashMap::new(), Some(async_iterator_prototype.clone()));
+    let async_generator_prototype = ObjectRef::with_prototype(
+        env.realm().atoms(),
+        HashMap::new(),
+        Some(async_iterator_prototype.clone()),
+    );
     for (name, native) in [
         ("next", NativeFunction::AsyncGeneratorPrototypeNext),
         ("return", NativeFunction::AsyncGeneratorPrototypeReturn),
@@ -117,13 +125,20 @@ pub(crate) fn install_async_generator(
     ] {
         async_generator_prototype.define_non_enumerable(
             name.to_owned(),
-            Value::Function(Function::new_native(Some(name), 1, native, false)),
+            Value::Function(Function::new_native(
+                env.realm().atoms(),
+                Some(name),
+                1,
+                native,
+                false,
+            )),
         );
     }
     if let Some(async_iterator) = symbol::async_iterator_symbol(env) {
         async_generator_prototype.define_symbol_property(
             async_iterator,
             Property::non_enumerable(Value::Function(Function::new_native(
+                env.realm().atoms(),
                 Some("[Symbol.asyncIterator]"),
                 0,
                 NativeFunction::AsyncGeneratorPrototypeAsyncIterator,
@@ -135,10 +150,12 @@ pub(crate) fn install_async_generator(
     symbol::define_well_known_to_string_tag(env, &async_generator_prototype, "AsyncGenerator");
 
     let async_generator_function_prototype = ObjectRef::with_prototype_slot(
+        env.realm().atoms(),
         HashMap::new(),
         function_intrinsic_prototype_slot(env).or(Some(crate::Prototype::Object(object_prototype))),
     );
     let async_generator_function = Function::new_native(
+        env.realm().atoms(),
         Some("AsyncGeneratorFunction"),
         1,
         NativeFunction::AsyncGeneratorFunction,
@@ -233,7 +250,7 @@ pub(crate) fn make_async_generator_object(
 ) -> Result<Value, RuntimeError> {
     let state = crate::bytecode::start_suspended_at_body(start, env)?;
     let prototype = async_generator_object_prototype(function, env);
-    let generator = ObjectRef::with_prototype(HashMap::new(), prototype);
+    let generator = ObjectRef::with_prototype(env.realm().atoms(), HashMap::new(), prototype);
     *generator.generator_state().borrow_mut() = Some(state);
     *generator.async_generator_state().borrow_mut() = Some(AsyncGeneratorInternal {
         queue: Vec::new(),
@@ -533,7 +550,7 @@ fn schedule_return_await(generator: &ObjectRef, value: Value, env: &mut CallEnv)
 
 /// Builds a reaction native carrying the async generator object.
 fn reaction(native: NativeFunction, generator: &ObjectRef) -> Value {
-    let mut function = Function::new_native(None, 1, native, false);
+    let mut function = Function::new_native(&generator.store_domain(), None, 1, native, false);
     function.insert_native_context(ASYNC_GEN.to_owned(), Value::Object(generator.clone()));
     Value::Function(function)
 }
@@ -685,7 +702,11 @@ pub(crate) fn wire_async_generator_function_intrinsics(function: &Function, env:
         let _ = function.set_internal_prototype_slot(Some(crate::Prototype::Object(prototype)));
     }
     if let Some(async_generator_prototype) = async_generator_prototype(env) {
-        let prototype = ObjectRef::with_prototype(HashMap::new(), Some(async_generator_prototype));
+        let prototype = ObjectRef::with_prototype(
+            env.realm().atoms(),
+            HashMap::new(),
+            Some(async_generator_prototype),
+        );
         function.define_property(
             "prototype".to_owned(),
             Property::data(Value::Object(prototype), false, true, false),
@@ -694,7 +715,8 @@ pub(crate) fn wire_async_generator_function_intrinsics(function: &Function, env:
 }
 
 fn iterator_result(value: Value, done: bool, env: &CallEnv) -> Value {
-    let object = ObjectRef::with_prototype(HashMap::new(), object_prototype(env));
+    let object =
+        ObjectRef::with_prototype(env.realm().atoms(), HashMap::new(), object_prototype(env));
     object.define_property("value".to_owned(), Property::enumerable(value));
     object.define_property(
         "done".to_owned(),
@@ -767,13 +789,14 @@ pub(crate) fn create_async_from_sync_iterator(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let next = property_value(sync_iterator.clone(), "next", env)?;
-    let wrapper = ObjectRef::with_prototype(HashMap::new(), object_prototype(env));
+    let wrapper =
+        ObjectRef::with_prototype(env.realm().atoms(), HashMap::new(), object_prototype(env));
     for (name, native) in [
         ("next", NativeFunction::AsyncFromSyncIteratorNext),
         ("return", NativeFunction::AsyncFromSyncIteratorReturn),
         ("throw", NativeFunction::AsyncFromSyncIteratorThrow),
     ] {
-        let mut method = Function::new_native(Some(name), 1, native, false);
+        let mut method = Function::new_native(env.realm().atoms(), Some(name), 1, native, false);
         method.insert_native_context(SYNC_ITERATOR.to_owned(), sync_iterator.clone());
         if matches!(native, NativeFunction::AsyncFromSyncIteratorNext) {
             method.insert_native_context(SYNC_ITERATOR_NEXT.to_owned(), next.clone());
@@ -995,7 +1018,7 @@ fn value_await_reaction(
     done: bool,
     close_sync: Option<&Value>,
 ) -> Value {
-    let mut function = Function::new_native(None, 1, native, false);
+    let mut function = Function::new_native(&capability.store_domain(), None, 1, native, false);
     function.insert_native_context(WRAP_PROMISE.to_owned(), Value::Object(capability.clone()));
     function.insert_native_context(WRAP_DONE.to_owned(), Value::Boolean(done));
     if let Some(sync_iterator) = close_sync {
@@ -1057,7 +1080,7 @@ pub(crate) fn call_async_generator_function(
                 .immutable_name_binding
                 .then(|| function.name.clone())
                 .flatten()
-                .or_else(|| function.immutable_env_binding.clone()),
+                .or_else(|| function.immutable_env_binding.as_deref().map(str::to_owned)),
         },
         env,
     )

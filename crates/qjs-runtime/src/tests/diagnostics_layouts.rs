@@ -21,11 +21,8 @@ fn counted(source: &str) -> Counters {
     counters().expect("perf-counters build exposes counters")
 }
 
-/// Counters of `workload(n)` for the two repetition counts, after one
-/// discarded run: the thread's shared fallback domain is created, and its
-/// shapes recorded, by whichever run comes first.
+/// Counters of `workload(n)` for the two repetition counts.
 fn repeated(workload: impl Fn(u32) -> String) -> (Counters, Counters) {
-    counted(&workload(FEW));
     (counted(&workload(FEW)), counted(&workload(MANY)))
 }
 

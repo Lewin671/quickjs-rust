@@ -6,12 +6,22 @@ pub(crate) fn install_function(
     global_this: &Value,
     object_prototype: ObjectRef,
 ) {
-    let function_prototype =
-        Function::new_native(Some(""), 0, NativeFunction::FunctionPrototype, false);
+    let function_prototype = Function::new_native(
+        env.realm().atoms(),
+        Some(""),
+        0,
+        NativeFunction::FunctionPrototype,
+        false,
+    );
     let _ =
         function_prototype.set_internal_prototype_slot(Some(Prototype::Object(object_prototype)));
-    let function_constructor =
-        Function::new_native(Some("Function"), 1, NativeFunction::Function, true);
+    let function_constructor = Function::new_native(
+        env.realm().atoms(),
+        Some("Function"),
+        1,
+        NativeFunction::Function,
+        true,
+    );
     function_prototype.define_property(
         "length".to_owned(),
         Property::data(Value::Number(0.0), false, false, true),
@@ -29,6 +39,7 @@ pub(crate) fn install_function(
     function_prototype.define_property(
         "apply".to_owned(),
         Property::non_enumerable(Value::Function(Function::new_native(
+            env.realm().atoms(),
             Some("apply"),
             2,
             NativeFunction::FunctionPrototypeApply,
@@ -38,6 +49,7 @@ pub(crate) fn install_function(
     function_prototype.define_property(
         "call".to_owned(),
         Property::non_enumerable(Value::Function(Function::new_native(
+            env.realm().atoms(),
             Some("call"),
             1,
             NativeFunction::FunctionPrototypeCall,
@@ -47,6 +59,7 @@ pub(crate) fn install_function(
     function_prototype.define_property(
         "bind".to_owned(),
         Property::non_enumerable(Value::Function(Function::new_native(
+            env.realm().atoms(),
             Some("bind"),
             1,
             NativeFunction::FunctionPrototypeBind,
@@ -56,6 +69,7 @@ pub(crate) fn install_function(
     function_prototype.define_property(
         "toString".to_owned(),
         Property::non_enumerable(Value::Function(Function::new_native(
+            env.realm().atoms(),
             Some("toString"),
             0,
             NativeFunction::FunctionPrototypeToString,
@@ -71,8 +85,13 @@ pub(crate) fn install_function(
     // (0) and `name` are non-configurable; the object itself is frozen and
     // non-extensible. `freeze` makes the eagerly-materialized `length`/`name`
     // data properties non-writable and non-configurable.
-    let throw_type_error_function =
-        Function::new_native(Some(""), 0, NativeFunction::ThrowTypeError, false);
+    let throw_type_error_function = Function::new_native(
+        env.realm().atoms(),
+        Some(""),
+        0,
+        NativeFunction::ThrowTypeError,
+        false,
+    );
     throw_type_error_function.freeze();
     let throw_type_error = Value::Function(throw_type_error_function);
     env.insert_realm(

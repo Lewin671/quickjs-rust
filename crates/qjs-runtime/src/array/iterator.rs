@@ -105,7 +105,7 @@ fn array_iterator_from_receiver(receiver: Value, env: &mut CallEnv, kind: &str) 
         env,
         crate::iterator::BuiltinIteratorKind::Array,
     );
-    let iterator = ObjectRef::with_prototype(HashMap::new(), prototype);
+    let iterator = ObjectRef::with_prototype(env.realm().atoms(), HashMap::new(), prototype);
     iterator.define_non_enumerable(ITERATED_OBJECT.to_owned(), receiver);
     iterator.define_non_enumerable(ITERATOR_NEXT_INDEX.to_owned(), Value::Number(0.0));
     iterator.define_non_enumerable(ITERATOR_DONE.to_owned(), Value::Boolean(false));

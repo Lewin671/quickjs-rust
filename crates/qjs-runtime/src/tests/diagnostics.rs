@@ -564,8 +564,6 @@ fn named_operands_link_once_per_body_and_domain() {
              o.count;"
         )
     };
-    // The thread's shared fallback domain interns its keys on first use.
-    counted(&source(3));
     let (value, few) = counted(&source(3));
     assert_eq!(value, Value::Number(3.0));
     let (value, many) = counted(&source(3000));

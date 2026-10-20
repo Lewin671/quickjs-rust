@@ -38,7 +38,8 @@ pub(crate) fn install_generator(
     // only if the iterator intrinsic is somehow unavailable.
     let generator_parent =
         crate::iterator::iterator_prototype(env).unwrap_or(object_prototype.clone());
-    let generator_prototype = ObjectRef::with_prototype(HashMap::new(), Some(generator_parent));
+    let generator_prototype =
+        ObjectRef::with_prototype(env.realm().atoms(), HashMap::new(), Some(generator_parent));
 
     for (name, native) in [
         ("next", NativeFunction::GeneratorPrototypeNext),
@@ -47,7 +48,13 @@ pub(crate) fn install_generator(
     ] {
         generator_prototype.define_non_enumerable(
             name.to_owned(),
-            Value::Function(Function::new_native(Some(name), 1, native, false)),
+            Value::Function(Function::new_native(
+                env.realm().atoms(),
+                Some(name),
+                1,
+                native,
+                false,
+            )),
         );
     }
 
@@ -56,6 +63,7 @@ pub(crate) fn install_generator(
         generator_prototype.define_symbol_property(
             iterator,
             Property::non_enumerable(Value::Function(Function::new_native(
+                env.realm().atoms(),
                 Some("[Symbol.iterator]"),
                 0,
                 NativeFunction::IteratorPrototypeIterator,
@@ -71,10 +79,12 @@ pub(crate) fn install_generator(
     // exposes `%GeneratorPrototype%` as its `prototype`, and carries the
     // "GeneratorFunction" toStringTag.
     let generator_function_prototype = ObjectRef::with_prototype_slot(
+        env.realm().atoms(),
         HashMap::new(),
         function_intrinsic_prototype_slot(env).or(Some(crate::Prototype::Object(object_prototype))),
     );
     let generator_function = Function::new_native(
+        env.realm().atoms(),
         Some("GeneratorFunction"),
         1,
         NativeFunction::GeneratorFunction,
@@ -169,7 +179,11 @@ pub(crate) fn wire_generator_function_intrinsics(function: &Function, env: &Call
         )));
     }
     if let Some(generator_prototype) = generator_prototype_intrinsic(env) {
-        let prototype = ObjectRef::with_prototype(HashMap::new(), Some(generator_prototype));
+        let prototype = ObjectRef::with_prototype(
+            env.realm().atoms(),
+            HashMap::new(),
+            Some(generator_prototype),
+        );
         function.define_property(
             "prototype".to_owned(),
             Property::data(Value::Object(prototype), false, true, false),
@@ -190,7 +204,7 @@ pub(crate) fn make_generator_object(
 ) -> Result<Value, RuntimeError> {
     let state = crate::bytecode::start_suspended_at_body(start, env)?;
     let prototype = generator_object_prototype(function, env);
-    let generator = ObjectRef::with_prototype(HashMap::new(), prototype);
+    let generator = ObjectRef::with_prototype(env.realm().atoms(), HashMap::new(), prototype);
     *generator.generator_state().borrow_mut() = Some(state);
     Ok(Value::Object(generator))
 }
@@ -259,7 +273,8 @@ pub(crate) fn call_generator_native(
 }
 
 fn iterator_result(value: Value, done: bool, env: &CallEnv) -> Value {
-    let object = ObjectRef::with_prototype(HashMap::new(), object_prototype(env));
+    let object =
+        ObjectRef::with_prototype(env.realm().atoms(), HashMap::new(), object_prototype(env));
     object.define_property("value".to_owned(), Property::enumerable(value));
     object.define_property(
         "done".to_owned(),

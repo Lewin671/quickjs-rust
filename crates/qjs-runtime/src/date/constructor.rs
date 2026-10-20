@@ -46,7 +46,7 @@ pub(crate) fn fast_construct_date_from_number(
         Value::Object(prototype) => Some(prototype),
         _ => object_prototype(env),
     };
-    let object = ObjectRef::with_prototype(HashMap::new(), prototype);
+    let object = ObjectRef::with_prototype(env.realm().atoms(), HashMap::new(), prototype);
     define_date_value(&object, time_clip(date_value));
     Ok(Value::Object(object))
 }

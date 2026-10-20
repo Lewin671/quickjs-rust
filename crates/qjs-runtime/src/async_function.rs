@@ -40,10 +40,12 @@ pub(crate) fn install_async_function(
     object_prototype: ObjectRef,
 ) {
     let async_function_prototype = ObjectRef::with_prototype_slot(
+        env.realm().atoms(),
         HashMap::new(),
         function_intrinsic_prototype_slot(env).or(Some(crate::Prototype::Object(object_prototype))),
     );
     let async_function = Function::new_native(
+        env.realm().atoms(),
         Some("AsyncFunction"),
         1,
         NativeFunction::AsyncFunction,
@@ -105,7 +107,7 @@ pub(crate) fn call_async_function(
                 .immutable_name_binding
                 .then(|| function.name.clone())
                 .flatten()
-                .or_else(|| function.immutable_env_binding.clone()),
+                .or_else(|| function.immutable_env_binding.as_deref().map(str::to_owned)),
         })));
 
     let result_promise = promise::new_pending_promise(env);
@@ -187,7 +189,7 @@ fn await_reaction(
     context: &ObjectRef,
     result_promise: &ObjectRef,
 ) -> Value {
-    let mut function = Function::new_native(None, 1, native, false);
+    let mut function = Function::new_native(&result_promise.store_domain(), None, 1, native, false);
     function.insert_native_context(ASYNC_CONTEXT.to_owned(), Value::Object(context.clone()));
     function.insert_native_context(
         ASYNC_RESULT_PROMISE.to_owned(),

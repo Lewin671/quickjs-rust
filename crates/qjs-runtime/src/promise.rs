@@ -62,18 +62,33 @@ const PROMISE_FULFILLED: &str = "fulfilled";
 const PROMISE_REJECTED: &str = "rejected";
 
 pub(crate) fn install_promise(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
-    let promise_prototype =
-        ObjectRef::with_prototype(HashMap::new(), Some(object_prototype.clone()));
+    let promise_prototype = ObjectRef::with_prototype(
+        env.realm().atoms(),
+        HashMap::new(),
+        Some(object_prototype.clone()),
+    );
     promise_prototype.set_to_string_tag("Promise");
     symbol::define_well_known_to_string_tag(env, &promise_prototype, "Promise");
-    let promise_function = Function::new_native(Some("Promise"), 1, NativeFunction::Promise, true);
-    let mut promise_then =
-        Function::new_native(Some("then"), 2, NativeFunction::PromisePrototypeThen, false);
+    let promise_function = Function::new_native(
+        env.realm().atoms(),
+        Some("Promise"),
+        1,
+        NativeFunction::Promise,
+        true,
+    );
+    let mut promise_then = Function::new_native(
+        env.realm().atoms(),
+        Some("then"),
+        2,
+        NativeFunction::PromisePrototypeThen,
+        false,
+    );
     promise_then.insert_native_context(
         PROMISE_PROTOTYPE.to_owned(),
         Value::Object(promise_prototype.clone()),
     );
     let mut promise_catch = Function::new_native(
+        env.realm().atoms(),
         Some("catch"),
         1,
         NativeFunction::PromisePrototypeCatch,
@@ -84,6 +99,7 @@ pub(crate) fn install_promise(env: &mut CallEnv, global_this: &Value, object_pro
         Value::Object(promise_prototype.clone()),
     );
     let mut promise_finally = Function::new_native(
+        env.realm().atoms(),
         Some("finally"),
         1,
         NativeFunction::PromisePrototypeFinally,
@@ -167,7 +183,13 @@ fn promise_static_function(
     promise_prototype: &ObjectRef,
     object_prototype: &ObjectRef,
 ) -> Function {
-    let mut function = Function::new_native(Some(name), length, native, false);
+    let mut function = Function::new_native(
+        &promise_prototype.store_domain(),
+        Some(name),
+        length,
+        native,
+        false,
+    );
     function.insert_native_context(
         PROMISE_OBJECT_PROTOTYPE.to_owned(),
         Value::Object(object_prototype.clone()),
@@ -180,10 +202,11 @@ fn promise_static_function(
 }
 
 fn define_promise_static(promise_function: &Function, name: &str, function: Function) {
-    promise_function
-        .properties
-        .borrow_mut()
-        .insert(name, Property::non_enumerable(Value::Function(function)));
+    promise_function.properties.borrow_mut().insert_in(
+        &function.realm_domain(),
+        name,
+        Property::non_enumerable(Value::Function(function)),
+    );
 }
 
 pub(crate) fn native_promise(
@@ -193,6 +216,7 @@ pub(crate) fn native_promise(
     is_construct: bool,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
+    let realm_atoms = env.realm().atoms().clone();
     if !is_construct {
         return Err(RuntimeError {
             thrown: None,
@@ -209,6 +233,7 @@ pub(crate) fn native_promise(
     let object = match this_value {
         Value::Object(object) => object,
         _ => ObjectRef::with_prototype_slot(
+            &realm_atoms,
             HashMap::new(),
             crate::native_construct_prototype_slot(function, env)?,
         ),
@@ -217,7 +242,7 @@ pub(crate) fn native_promise(
     let promise = Value::Object(object.clone());
     // The resolve/reject functions are anonymous built-in functions (name "")
     // sharing one alreadyResolved guard.
-    let (resolve, reject) = resolving_function_pair(promise);
+    let (resolve, reject) = resolving_function_pair(&realm_atoms, promise);
     if let Err(error) = call_function(
         executor,
         Value::Undefined,
@@ -298,8 +323,10 @@ pub(crate) fn native_promise_then(
     let species = species_constructor(&promise, function, env)?;
     let capability = capability::new_promise_capability(&species, env)?;
 
-    let fulfill_reaction = promise_reaction_for_capability(on_fulfilled, &capability, true);
-    let reject_reaction = promise_reaction_for_capability(on_rejected, &capability, false);
+    let fulfill_reaction =
+        promise_reaction_for_capability(env.realm().atoms(), on_fulfilled, &capability, true);
+    let reject_reaction =
+        promise_reaction_for_capability(env.realm().atoms(), on_rejected, &capability, false);
 
     match promise_state(&promise).as_deref() {
         Some(PROMISE_PENDING) => {
@@ -412,11 +439,13 @@ pub(crate) fn native_promise_finally(
     let (on_fulfilled, on_rejected) = if matches!(on_finally, Value::Function(_)) {
         (
             finally_reaction_function(
+                env.realm().atoms(),
                 NativeFunction::PromisePrototypeFinallyFulfilled,
                 on_finally.clone(),
                 constructor.clone(),
             ),
             finally_reaction_function(
+                env.realm().atoms(),
                 NativeFunction::PromisePrototypeFinallyRejected,
                 on_finally,
                 constructor,
@@ -441,7 +470,11 @@ pub(crate) fn native_promise_finally_fulfilled(
     let result = call_finally_handler(function, env)?;
     let constructor = finally_constructor(function);
     let promise = promise_resolve(&constructor, result, env)?;
-    let thunk = finally_thunk(NativeFunction::PromisePrototypeFinallyValueThunk, value);
+    let thunk = finally_thunk(
+        env.realm().atoms(),
+        NativeFunction::PromisePrototypeFinallyValueThunk,
+        value,
+    );
     call_promise_then(promise, vec![thunk], env)
 }
 
@@ -456,7 +489,11 @@ pub(crate) fn native_promise_finally_rejected(
     let result = call_finally_handler(function, env)?;
     let constructor = finally_constructor(function);
     let promise = promise_resolve(&constructor, result, env)?;
-    let thunk = finally_thunk(NativeFunction::PromisePrototypeFinallyThrowerThunk, reason);
+    let thunk = finally_thunk(
+        env.realm().atoms(),
+        NativeFunction::PromisePrototypeFinallyThrowerThunk,
+        reason,
+    );
     call_promise_then(promise, vec![thunk], env)
 }
 
@@ -522,7 +559,11 @@ pub(crate) fn is_promise_object(object: &ObjectRef) -> bool {
 /// `[[Prototype]]` is `%Promise.prototype%`. Used by the async-function driver
 /// for the promise it returns to the caller.
 pub(crate) fn new_pending_promise(env: &CallEnv) -> ObjectRef {
-    let promise = ObjectRef::with_prototype(HashMap::new(), promise_prototype_from_env(env));
+    let promise = ObjectRef::with_prototype(
+        env.realm().atoms(),
+        HashMap::new(),
+        promise_prototype_from_env(env),
+    );
     initialize_promise(&promise);
     promise
 }
@@ -535,7 +576,8 @@ pub(crate) fn new_pending_promise(env: &CallEnv) -> ObjectRef {
 /// or a load/link/evaluate error. Returns the capability's promise.
 pub(crate) fn dynamic_import(specifier: Value, options: Option<Value>, env: &mut CallEnv) -> Value {
     let promise = new_pending_promise(env);
-    let (resolve, reject) = resolving_function_pair(Value::Object(promise.clone()));
+    let (resolve, reject) =
+        resolving_function_pair(env.realm().atoms(), Value::Object(promise.clone()));
     let specifier_string = match crate::to_js_string_with_env(specifier, env) {
         Ok(string) => string,
         Err(error) => {
@@ -714,6 +756,7 @@ pub(crate) fn async_iterator_async_dispose(
     // yields undefined; the chained promise (undefined on fulfil, the reason on
     // reject) is adopted by the capability.
     let unwrap = Value::Function(Function::new_native(
+        env.realm().atoms(),
         Some(""),
         1,
         NativeFunction::AsyncDisposeReturnUndefined,
@@ -876,15 +919,26 @@ fn resolve_promise(object: &ObjectRef, value: Value, env: &mut CallEnv) {
 /// `alreadyResolved` cell, matching CreateResolvingFunctions (ES2023 27.2.1.3):
 /// only the first of resolve/reject to run settles the promise. Both are
 /// anonymous built-in functions (name "", length 1).
-fn resolving_function_pair(promise: Value) -> (Value, Value) {
-    let already_resolved = Value::Object(ObjectRef::new_like_value(&promise, HashMap::new()));
-    let mut resolve = Function::new_native(None, 1, NativeFunction::PromiseResolveFunction, false);
+fn resolving_function_pair(
+    realm: &crate::property::atom::AtomDomain,
+    promise: Value,
+) -> (Value, Value) {
+    let already_resolved =
+        Value::Object(ObjectRef::new_like_value(&promise, realm, HashMap::new()));
+    let mut resolve = Function::new_native(
+        realm,
+        None,
+        1,
+        NativeFunction::PromiseResolveFunction,
+        false,
+    );
     resolve.insert_native_context(PROMISE_TARGET.to_owned(), promise.clone());
     resolve.insert_native_context(
         PROMISE_ALREADY_RESOLVED.to_owned(),
         already_resolved.clone(),
     );
-    let mut reject = Function::new_native(None, 1, NativeFunction::PromiseRejectFunction, false);
+    let mut reject =
+        Function::new_native(realm, None, 1, NativeFunction::PromiseRejectFunction, false);
     reject.insert_native_context(PROMISE_TARGET.to_owned(), promise);
     reject.insert_native_context(PROMISE_ALREADY_RESOLVED.to_owned(), already_resolved);
     (Value::Function(resolve), Value::Function(reject))
@@ -905,16 +959,25 @@ fn resolving_function_already_resolved(function: &Function) -> bool {
 
 /// Builds an anonymous `thenFinally`/`catchFinally` function carrying the
 /// `onFinally` handler and the species constructor `C`.
-fn finally_reaction_function(native: NativeFunction, handler: Value, constructor: Value) -> Value {
-    let mut function = Function::new_native(None, 1, native, false);
+fn finally_reaction_function(
+    realm: &crate::property::atom::AtomDomain,
+    native: NativeFunction,
+    handler: Value,
+    constructor: Value,
+) -> Value {
+    let mut function = Function::new_native(realm, None, 1, native, false);
     function.insert_native_context(PROMISE_FINALLY_HANDLER.to_owned(), handler);
     function.insert_native_context(PROMISE_FINALLY_CONSTRUCTOR.to_owned(), constructor);
     Value::Function(function)
 }
 
 /// Builds an anonymous value/thrower thunk capturing the original outcome.
-fn finally_thunk(native: NativeFunction, value: Value) -> Value {
-    let mut function = Function::new_native(None, 0, native, false);
+fn finally_thunk(
+    realm: &crate::property::atom::AtomDomain,
+    native: NativeFunction,
+    value: Value,
+) -> Value {
+    let mut function = Function::new_native(realm, None, 0, native, false);
     function.insert_native_context(PROMISE_FINALLY_VALUE.to_owned(), value);
     Value::Function(function)
 }
@@ -1009,11 +1072,12 @@ fn promise_reaction(handler: Value, capability: ObjectRef, fulfill: bool) -> Obj
 /// promise: the resolve/reject functions are stored so the reaction job calls
 /// them directly instead of settling a native promise object.
 fn promise_reaction_for_capability(
+    realm: &crate::property::atom::AtomDomain,
     handler: Value,
     capability: &capability::PromiseCapability,
     fulfill: bool,
 ) -> ObjectRef {
-    let reaction = ObjectRef::new_like_value(&capability.promise, HashMap::new());
+    let reaction = ObjectRef::new_like_value(&capability.promise, realm, HashMap::new());
     reaction.define_non_enumerable(PROMISE_HANDLER.to_owned(), handler);
     reaction.define_non_enumerable(
         PROMISE_REACTION_RESOLVE.to_owned(),
@@ -1032,7 +1096,7 @@ fn add_promise_reaction(promise: &ObjectRef, reaction: Value) {
         .own_property(PROMISE_REACTIONS)
         .map(|property| property.value)
     {
-        reactions.set(reactions.len(), reaction);
+        reactions.set(reactions.len(), reaction, &|| promise.store_domain());
     }
 }
 

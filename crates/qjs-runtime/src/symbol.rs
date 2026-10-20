@@ -28,10 +28,17 @@ const WELL_KNOWN_SYMBOL_NAMES: &[&str] = &[
 ];
 
 pub(crate) fn install_symbol(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
-    let symbol_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
+    let symbol_prototype =
+        ObjectRef::with_prototype(env.realm().atoms(), HashMap::new(), Some(object_prototype));
     symbol_prototype.set_to_string_tag("Symbol");
 
-    let symbol_function = Function::new_native(Some("Symbol"), 0, NativeFunction::Symbol, true);
+    let symbol_function = Function::new_native(
+        env.realm().atoms(),
+        Some("Symbol"),
+        0,
+        NativeFunction::Symbol,
+        true,
+    );
     install_well_known_symbols(&symbol_function, &symbol_prototype);
     if let Some(symbols) = WELL_KNOWN_SYMBOL_NAMES
         .iter()
@@ -49,6 +56,7 @@ pub(crate) fn install_symbol(env: &mut CallEnv, global_this: &Value, object_prot
             to_primitive,
             Property::data(
                 Value::Function(Function::new_native(
+                    env.realm().atoms(),
                     Some("[Symbol.toPrimitive]"),
                     1,
                     NativeFunction::SymbolPrototypeToPrimitive,
@@ -64,6 +72,7 @@ pub(crate) fn install_symbol(env: &mut CallEnv, global_this: &Value, object_prot
         env.realm().atoms(),
         "for",
         Property::non_enumerable(Value::Function(Function::new_native(
+            env.realm().atoms(),
             Some("for"),
             1,
             NativeFunction::SymbolFor,
@@ -74,6 +83,7 @@ pub(crate) fn install_symbol(env: &mut CallEnv, global_this: &Value, object_prot
         env.realm().atoms(),
         "keyFor",
         Property::non_enumerable(Value::Function(Function::new_native(
+            env.realm().atoms(),
             Some("keyFor"),
             1,
             NativeFunction::SymbolKeyFor,
@@ -87,6 +97,7 @@ pub(crate) fn install_symbol(env: &mut CallEnv, global_this: &Value, object_prot
     symbol_prototype.define_non_enumerable(
         "toString".to_owned(),
         Value::Function(Function::new_native(
+            env.realm().atoms(),
             Some("toString"),
             0,
             NativeFunction::SymbolPrototypeToString,
@@ -96,6 +107,7 @@ pub(crate) fn install_symbol(env: &mut CallEnv, global_this: &Value, object_prot
     symbol_prototype.define_non_enumerable(
         "valueOf".to_owned(),
         Value::Function(Function::new_native(
+            env.realm().atoms(),
             Some("valueOf"),
             0,
             NativeFunction::SymbolPrototypeValueOf,
@@ -106,6 +118,7 @@ pub(crate) fn install_symbol(env: &mut CallEnv, global_this: &Value, object_prot
         "description".to_owned(),
         Property::accessor(
             Some(Value::Function(Function::new_native(
+                env.realm().atoms(),
                 Some("get description"),
                 0,
                 NativeFunction::SymbolPrototypeDescription,
@@ -133,10 +146,15 @@ fn install_well_known_symbols(symbol_function: &Function, symbol_prototype: &Obj
     let mut properties = symbol_function.properties.borrow_mut();
     for name in WELL_KNOWN_SYMBOL_NAMES {
         let symbol = Value::Object(symbol_object(
+            &symbol_prototype.store_domain(),
             Some(symbol_prototype.clone()),
             Value::String(format!("Symbol.{name}").into()),
         ));
-        properties.insert(name, Property::data(symbol, false, false, false));
+        properties.insert_in(
+            &symbol_prototype.store_domain(),
+            name,
+            Property::data(symbol, false, false, false),
+        );
     }
 }
 
@@ -158,6 +176,7 @@ pub(crate) fn native_symbol(
         value => Value::String(to_js_string_with_env(value, env)?.into()),
     };
     Ok(Value::Object(symbol_object(
+        env.realm().atoms(),
         function_prototype(function),
         description,
     )))
@@ -177,6 +196,7 @@ pub(crate) fn native_symbol_for(
     }
 
     let symbol = Value::Object(symbol_object(
+        env.realm().atoms(),
         symbol_prototype(env),
         Value::String(key.clone().into()),
     ));
@@ -230,7 +250,7 @@ pub(crate) fn is_registered_symbol(object: &ObjectRef, env: &CallEnv) -> bool {
 
 pub(crate) fn boxed_symbol(object: &ObjectRef, env: &CallEnv) -> Value {
     let description = symbol_description(object);
-    let boxed = symbol_object(symbol_prototype(env), description);
+    let boxed = symbol_object(env.realm().atoms(), symbol_prototype(env), description);
     boxed.mark_symbol_boxed();
     boxed.define_non_enumerable(
         SYMBOL_WRAPPED_PROPERTY.to_owned(),
@@ -350,6 +370,7 @@ fn install_function_has_instance(env: &CallEnv, symbol_function: &Function) {
     };
     let property = Property::data(
         Value::Function(Function::new_native(
+            env.realm().atoms(),
             Some("[Symbol.hasInstance]"),
             1,
             NativeFunction::FunctionPrototypeHasInstance,
@@ -393,6 +414,7 @@ pub(crate) fn define_species_accessor(env: &CallEnv, function: &Function) {
         symbol,
         Property::accessor(
             Some(Value::Function(Function::new_native(
+                env.realm().atoms(),
                 Some("get [Symbol.species]"),
                 0,
                 NativeFunction::SpeciesGetter,
@@ -493,8 +515,12 @@ fn symbol_method_error() -> RuntimeError {
     }
 }
 
-fn symbol_object(prototype: Option<ObjectRef>, description: Value) -> ObjectRef {
-    let object = ObjectRef::with_prototype(HashMap::new(), prototype);
+fn symbol_object(
+    realm: &crate::property::atom::AtomDomain,
+    prototype: Option<ObjectRef>,
+    description: Value,
+) -> ObjectRef {
+    let object = ObjectRef::with_prototype(realm, HashMap::new(), prototype);
     object.mark_symbol_primitive();
     object.define_non_enumerable(SYMBOL_DESCRIPTION_PROPERTY.to_owned(), description);
     object

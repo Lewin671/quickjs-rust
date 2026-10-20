@@ -97,13 +97,20 @@ impl ProxyRef {
 }
 
 pub(crate) fn install_proxy(env: &mut CallEnv, global_this: &Value, _object_prototype: ObjectRef) {
-    let proxy_function = Function::new_native(Some("Proxy"), 2, NativeFunction::Proxy, true);
+    let proxy_function = Function::new_native(
+        env.realm().atoms(),
+        Some("Proxy"),
+        2,
+        NativeFunction::Proxy,
+        true,
+    );
     // `Proxy` is constructable but exposes no own `prototype`; the generic
     // native builder adds a (now non-configurable) one, so remove it directly.
     proxy_function.remove_own_property_unchecked("prototype");
     proxy_function.define_property(
         "revocable".to_owned(),
         Property::non_enumerable(Value::Function(Function::new_native(
+            env.realm().atoms(),
             Some("revocable"),
             2,
             NativeFunction::ProxyRevocable,
@@ -138,7 +145,10 @@ pub(crate) fn native_proxy(
     Ok(Value::Proxy(ProxyRef::new(target, handler)))
 }
 
-pub(crate) fn native_proxy_revocable(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+pub(crate) fn native_proxy_revocable(
+    env: &crate::CallEnv,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let handler = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
     if !is_proxy_object_target(&target) || !is_proxy_object_target(&handler) {
@@ -151,16 +161,25 @@ pub(crate) fn native_proxy_revocable(argument_values: &[Value]) -> Result<Value,
     let proxy = ProxyRef::new(target, handler);
     // The revocation function is anonymous: its `name` is the empty string
     // (ECMA-262 28.2.2.1, CreateBuiltinFunction with name "").
-    let revoke = Function::new_native(Some(""), 0, NativeFunction::ProxyRevoke, false);
+    let revoke = Function::new_native(
+        env.realm().atoms(),
+        Some(""),
+        0,
+        NativeFunction::ProxyRevoke,
+        false,
+    );
     revoke.define_property(
         "[[RevocableProxy]]".to_owned(),
         Property::non_enumerable(Value::Proxy(proxy.clone())),
     );
 
-    Ok(Value::Object(ObjectRef::new(HashMap::from([
-        ("proxy".to_owned(), Value::Proxy(proxy)),
-        ("revoke".to_owned(), Value::Function(revoke)),
-    ]))))
+    Ok(Value::Object(ObjectRef::new_in(
+        env.realm().atoms(),
+        HashMap::from([
+            ("proxy".to_owned(), Value::Proxy(proxy)),
+            ("revoke".to_owned(), Value::Function(revoke)),
+        ]),
+    )))
 }
 
 pub(crate) fn native_proxy_revoke(function: &Function) -> Result<Value, RuntimeError> {

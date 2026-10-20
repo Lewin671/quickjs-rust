@@ -19,7 +19,8 @@ pub(crate) enum AtomicOp {
 }
 
 pub(crate) fn install_atomics(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
-    let atomics = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
+    let atomics =
+        ObjectRef::with_prototype(env.realm().atoms(), HashMap::new(), Some(object_prototype));
     atomics.set_to_string_tag("Atomics");
     symbol::define_well_known_to_string_tag(env, &atomics, "Atomics");
     for (name, length, native) in [
@@ -39,7 +40,13 @@ pub(crate) fn install_atomics(env: &mut CallEnv, global_this: &Value, object_pro
     ] {
         atomics.define_non_enumerable(
             name.to_owned(),
-            Value::Function(Function::new_native(Some(name), length, native, false)),
+            Value::Function(Function::new_native(
+                env.realm().atoms(),
+                Some(name),
+                length,
+                native,
+                false,
+            )),
         );
     }
 

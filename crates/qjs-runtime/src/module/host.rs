@@ -74,9 +74,9 @@ impl ModuleHost {
     }
 
     /// Returns this module's cached `import.meta` object.
-    pub(crate) fn import_meta(&mut self) -> ObjectRef {
+    pub(crate) fn import_meta(&mut self, realm: &crate::property::atom::AtomDomain) -> ObjectRef {
         self.import_meta
-            .get_or_insert_with(|| ObjectRef::with_prototype(HashMap::new(), None))
+            .get_or_insert_with(|| ObjectRef::with_prototype(realm, HashMap::new(), None))
             .clone()
     }
 

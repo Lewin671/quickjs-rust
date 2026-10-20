@@ -18,6 +18,7 @@ pub(crate) fn install_regexp_prototype_match_all(env: &CallEnv, prototype: &Obje
         prototype.define_symbol_property(
             symbol,
             Property::non_enumerable(Value::Function(Function::new_native(
+                env.realm().atoms(),
                 Some("[Symbol.matchAll]"),
                 1,
                 NativeFunction::RegExpPrototypeMatchAll,
@@ -66,7 +67,7 @@ pub(crate) fn native_regexp_prototype_match_all(
         env,
         crate::iterator::BuiltinIteratorKind::RegExpString,
     );
-    let iterator = ObjectRef::with_prototype(HashMap::new(), prototype);
+    let iterator = ObjectRef::with_prototype(env.realm().atoms(), HashMap::new(), prototype);
     iterator.define_non_enumerable(REGEXP_STRING_ITERATOR_REGEXP.to_owned(), matcher);
     iterator.define_non_enumerable(
         REGEXP_STRING_ITERATOR_STRING.to_owned(),

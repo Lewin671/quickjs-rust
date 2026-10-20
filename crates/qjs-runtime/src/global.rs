@@ -255,7 +255,13 @@ fn define_global_function(
     length: usize,
     native: NativeFunction,
 ) {
-    let value = Value::Function(Function::new_native(Some(key), length, native, false));
+    let value = Value::Function(Function::new_native(
+        env.realm().atoms(),
+        Some(key),
+        length,
+        native,
+        false,
+    ));
     env.insert_realm(key.to_owned(), value.clone());
     if let Value::Object(global_object) = global_this {
         global_object.define_non_enumerable(key.to_owned(), value);
@@ -264,7 +270,9 @@ fn define_global_function(
 
 fn define_is_html_dda(env: &mut CallEnv, global_this: &Value) {
     let key = "__quickjsRustIsHTMLDDA";
-    let value = Value::Function(crate::html_dda::new_is_html_dda_function());
+    let value = Value::Function(crate::html_dda::new_is_html_dda_function(
+        env.realm().atoms(),
+    ));
     env.insert_realm(key.to_owned(), value.clone());
     if let Value::Object(global_object) = global_this {
         global_object.define_non_enumerable(key.to_owned(), value);

@@ -4,7 +4,8 @@ use std::collections::HashMap;
 use crate::{Function, NativeFunction, ObjectRef, Value};
 
 pub(crate) fn install_reflect(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
-    let reflect_object = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
+    let reflect_object =
+        ObjectRef::with_prototype(env.realm().atoms(), HashMap::new(), Some(object_prototype));
     define_reflect_function(&reflect_object, "apply", 3, NativeFunction::ReflectApply);
     define_reflect_function(
         &reflect_object,
@@ -77,6 +78,12 @@ pub(crate) fn install_reflect(env: &mut CallEnv, global_this: &Value, object_pro
 fn define_reflect_function(object: &ObjectRef, key: &str, length: usize, native: NativeFunction) {
     object.define_non_enumerable(
         key.to_owned(),
-        Value::Function(Function::new_native(Some(key), length, native, false)),
+        Value::Function(Function::new_native(
+            &object.store_domain(),
+            Some(key),
+            length,
+            native,
+            false,
+        )),
     );
 }

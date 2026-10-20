@@ -30,7 +30,11 @@ pub(crate) fn native_string(
 
     let object = match this_value {
         Value::Object(object) => object,
-        _ => ObjectRef::with_prototype(HashMap::new(), function_prototype(function)),
+        _ => ObjectRef::with_prototype(
+            env.realm().atoms(),
+            HashMap::new(),
+            function_prototype(function),
+        ),
     };
     define_string_data(&object, &crate::JsString::from(value), env);
     Ok(Value::Object(object))

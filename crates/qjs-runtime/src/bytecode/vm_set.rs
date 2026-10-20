@@ -168,7 +168,7 @@ pub(crate) fn set_property(
                             return Ok(false);
                         }
                         if let Some(index) = crate::array_index_property_key(&key) {
-                            elements.set(index, value);
+                            elements.set(index, value, &|| env.realm().atoms().clone());
                         } else {
                             elements.set_property(env.realm().atoms(), key, value);
                         }

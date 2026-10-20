@@ -257,9 +257,13 @@ fn concat_spread_array(
     if new_length > MAX_SAFE_LENGTH {
         return Err(concat_length_error());
     }
-    if let Some(next_index) =
-        concat_spread_typed_array_fast_path(result.clone(), next_index, &value, length)?
-    {
+    if let Some(next_index) = concat_spread_typed_array_fast_path(
+        env.realm().atoms(),
+        result.clone(),
+        next_index,
+        &value,
+        length,
+    )? {
         return Ok(next_index);
     }
     // A dense source array appended to a plain dense result.
@@ -286,6 +290,7 @@ fn concat_spread_array(
 }
 
 fn concat_spread_typed_array_fast_path(
+    atoms: &crate::property::atom::AtomDomain,
     result: Value,
     next_index: usize,
     value: &Value,
@@ -312,7 +317,7 @@ fn concat_spread_typed_array_fast_path(
         .into_iter()
         .enumerate()
     {
-        array.set(next_index + offset, value);
+        array.set(next_index + offset, value, &|| atoms.clone());
     }
     Ok(Some(next_index + length))
 }

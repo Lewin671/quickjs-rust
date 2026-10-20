@@ -589,7 +589,11 @@ fn foreign_private_error(name: &str, type_error_prototype: Option<&ObjectRef>) -
          declare it"
     );
     if let Some(prototype) = type_error_prototype {
-        let error = ObjectRef::with_prototype(HashMap::new(), Some(prototype.clone()));
+        let error = ObjectRef::with_prototype(
+            &prototype.store_domain(),
+            HashMap::new(),
+            Some(prototype.clone()),
+        );
         return RuntimeError {
             thrown: Some(Box::new(Value::Object(error))),
             message,

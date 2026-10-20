@@ -192,11 +192,13 @@ fn a_sloppy_global_fallback_keeps_only_the_frame_independent_read_only_mask() {
 fn named_property_cache_reuses_literal_shape_across_objects() {
     let shape = ObjectLiteralShape::new(vec![Rc::from("a"), Rc::from("b")]);
     let first = ObjectRef::with_literal_pair(
+        &crate::property::atom::AtomDomain::test_domain(),
         shape.clone(),
         [Value::Number(1.0), Value::Number(2.0)],
         None,
     );
     let second = ObjectRef::with_literal_pair(
+        &crate::property::atom::AtomDomain::test_domain(),
         shape.clone(),
         [Value::Number(3.0), Value::Number(4.0)],
         None,
@@ -212,7 +214,12 @@ fn named_property_cache_reuses_literal_shape_across_objects() {
     );
     assert_eq!(cache.get(&second), None);
 
-    let third = ObjectRef::with_literal_pair(shape, [Value::Number(6.0), Value::Number(7.0)], None);
+    let third = ObjectRef::with_literal_pair(
+        &crate::property::atom::AtomDomain::test_domain(),
+        shape,
+        [Value::Number(6.0), Value::Number(7.0)],
+        None,
+    );
     assert_eq!(cache.get(&third), Some(Value::Number(6.0)));
 }
 

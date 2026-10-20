@@ -122,13 +122,21 @@ pub(crate) fn install_typed_arrays(
 ) {
     // %TypedArray% intrinsic: the shared [[Prototype]] of every concrete
     // constructor, and the holder of %TypedArray.prototype%.
-    let typed_array_prototype =
-        ObjectRef::with_prototype(HashMap::new(), Some(object_prototype.clone()));
+    let typed_array_prototype = ObjectRef::with_prototype(
+        env.realm().atoms(),
+        HashMap::new(),
+        Some(object_prototype.clone()),
+    );
     install_typed_array_prototype_accessors(env, &typed_array_prototype);
     install_typed_array_prototype_methods(env, &typed_array_prototype);
 
-    let typed_array_intrinsic =
-        Function::new_native(Some("TypedArray"), 0, NativeFunction::TypedArray, true);
+    let typed_array_intrinsic = Function::new_native(
+        env.realm().atoms(),
+        Some("TypedArray"),
+        0,
+        NativeFunction::TypedArray,
+        true,
+    );
     typed_array_intrinsic.properties.borrow_mut().insert_in(
         env.realm().atoms(),
         "prototype",
@@ -204,6 +212,7 @@ fn install_typed_array_static_methods(
             atoms,
             name,
             Property::non_enumerable(Value::Function(Function::new_native(
+                atoms,
                 Some(name),
                 length,
                 native,
@@ -226,6 +235,7 @@ fn install_typed_array_prototype_accessors(env: &CallEnv, prototype: &ObjectRef)
             name.to_owned(),
             Property::accessor(
                 Some(Value::Function(Function::new_native(
+                    env.realm().atoms(),
                     Some(&format!("get {name}")),
                     0,
                     native,
@@ -244,6 +254,7 @@ fn install_typed_array_prototype_accessors(env: &CallEnv, prototype: &ObjectRef)
             symbol,
             Property::accessor(
                 Some(Value::Function(Function::new_native(
+                    env.realm().atoms(),
                     Some("get [Symbol.toStringTag]"),
                     0,
                     NativeFunction::TypedArrayPrototypeToStringTag,
@@ -332,7 +343,13 @@ fn define_prototype_method(
 ) {
     prototype.define_non_enumerable(
         name.to_owned(),
-        Value::Function(Function::new_native(Some(name), length, native, false)),
+        Value::Function(Function::new_native(
+            &prototype.store_domain(),
+            Some(name),
+            length,
+            native,
+            false,
+        )),
     );
 }
 
@@ -345,15 +362,19 @@ fn install_typed_array_constructor(
     native: NativeFunction,
 ) {
     // Each concrete prototype inherits from %TypedArray.prototype%.
-    let prototype = ObjectRef::with_prototype(HashMap::new(), Some(typed_array_prototype));
+    let prototype = ObjectRef::with_prototype(
+        env.realm().atoms(),
+        HashMap::new(),
+        Some(typed_array_prototype),
+    );
     let bytes = bytes_per_element(native) as f64;
     if native == NativeFunction::Uint8Array {
         install_uint8_array_prototype_methods(&prototype);
     }
 
-    let constructor = Function::new_native(Some(name), 3, native, true);
+    let constructor = Function::new_native(env.realm().atoms(), Some(name), 3, native, true);
     if native == NativeFunction::Uint8Array {
-        install_uint8_array_static_methods(&constructor);
+        install_uint8_array_static_methods(env.realm().atoms(), &constructor);
     }
     // Concrete constructors inherit from %TypedArray% (a function prototype).
     let _ = constructor
@@ -411,20 +432,27 @@ fn install_uint8_array_prototype_methods(prototype: &ObjectRef) {
     );
 }
 
-fn install_uint8_array_static_methods(constructor: &Function) {
+fn install_uint8_array_static_methods(
+    atoms: &crate::property::atom::AtomDomain,
+    constructor: &Function,
+) {
     let mut properties = constructor.properties.borrow_mut();
-    properties.insert(
+    properties.insert_in(
+        atoms,
         "fromBase64",
         Property::non_enumerable(Value::Function(Function::new_native(
+            atoms,
             Some("fromBase64"),
             1,
             NativeFunction::Uint8ArrayFromBase64,
             false,
         ))),
     );
-    properties.insert(
+    properties.insert_in(
+        atoms,
         "fromHex",
         Property::non_enumerable(Value::Function(Function::new_native(
+            atoms,
             Some("fromHex"),
             1,
             NativeFunction::Uint8ArrayFromHex,

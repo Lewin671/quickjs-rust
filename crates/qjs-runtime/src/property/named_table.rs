@@ -4,9 +4,8 @@
 //! The receiver keeps its own semantic hooks (`length`, `name`, `prototype`,
 //! indices); this table holds the installed named descriptors and, through
 //! its layout, their order. It has no layout until its first install, which
-//! takes the domain the installing code supplies -- the receiver's realm, or
-//! the shared fallback domain for a creator with none -- so creating a
-//! function or array creates no layout and no domain. An add probes once:
+//! takes the domain the installing code supplies -- the receiver's realm --
+//! so creating a function or array creates no layout and no domain. An add probes once:
 //! [`NamedTable::probe`]'s miss feeds [`NamedTable::append_absent`].
 //!
 //! Invariant: for every slot, the layout field's descriptor attributes equal
@@ -113,28 +112,22 @@ impl NamedTable {
     }
 
     /// Appends `key`, which a [`Self::probe`] proved absent. A table without
-    /// a layout takes `domain` -- the receiver's realm domain -- or, from a
-    /// caller with no realm at hand, the shared fallback domain.
-    pub(crate) fn append_absent(
-        &mut self,
-        domain: Option<&AtomDomain>,
-        key: &str,
-        property: Property,
-    ) {
-        let layout = self.layout.get_or_insert_with(|| match domain {
-            Some(domain) => domain.root(Encoding::Small),
-            None => AtomDomain::shared_fallback().root(Encoding::Small),
-        });
+    /// a layout takes `domain`: the receiver's realm domain.
+    pub(crate) fn append_absent(&mut self, domain: &AtomDomain, key: &str, property: Property) {
+        let layout = self
+            .layout
+            .get_or_insert_with(|| domain.root(Encoding::Small));
         let slot = LayoutEdit::append(layout, key, Attributes::of(&property));
         debug_assert_eq!(slot, self.slots.len());
         self.slots.push(property);
     }
 
     /// Defines `key` with one probe: replaces an existing descriptor in its
-    /// slot or appends a new one. Returns the replaced descriptor.
-    pub(crate) fn insert_hinted(
+    /// slot or appends a new one. A table without a layout takes `domain`,
+    /// the receiver's realm domain. Returns the replaced descriptor.
+    pub(crate) fn insert_in(
         &mut self,
-        domain: Option<&AtomDomain>,
+        domain: &AtomDomain,
         key: impl AsRef<str>,
         property: Property,
     ) -> Option<Property> {
@@ -148,27 +141,12 @@ impl NamedTable {
         None
     }
 
-    /// [`Self::insert_hinted`] with the installer's realm domain.
-    pub(crate) fn insert_in(
-        &mut self,
-        domain: &AtomDomain,
-        key: impl AsRef<str>,
-        property: Property,
-    ) -> Option<Property> {
-        self.insert_hinted(Some(domain), key, property)
-    }
-
-    /// [`Self::insert_hinted`] for a caller with no realm at hand.
-    pub(crate) fn insert(&mut self, key: impl AsRef<str>, property: Property) -> Option<Property> {
-        self.insert_hinted(None, key, property)
-    }
-
     /// Inserts absent `key` at enumeration position `index`. A position
     /// before the end rebuilds the table in the new order, which only a
     /// lazily materialized default property needs.
     pub(crate) fn insert_absent_at(
         &mut self,
-        domain: Option<&AtomDomain>,
+        domain: &AtomDomain,
         index: usize,
         key: &str,
         property: Property,
@@ -178,7 +156,7 @@ impl NamedTable {
             return;
         }
         let own = self.domain().cloned();
-        let domain = own.as_ref().or(domain);
+        let domain = own.as_ref().unwrap_or(domain);
         let old = std::mem::take(self);
         let mut entries: Vec<(String, Property)> = old
             .iter()

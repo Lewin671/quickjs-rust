@@ -13,6 +13,7 @@ pub(crate) fn install_regexp_prototype_replace(env: &CallEnv, prototype: &Object
         prototype.define_symbol_property(
             symbol,
             Property::non_enumerable(Value::Function(Function::new_native(
+                env.realm().atoms(),
                 Some("[Symbol.replace]"),
                 2,
                 NativeFunction::RegExpPrototypeReplace,
@@ -181,6 +182,7 @@ fn prepared_native_global_matches(
             })
             .collect();
         let groups = super::regexp_groups_object_prepared(
+            env.realm().atoms(),
             &prepared_input,
             &match_result.captures,
             &group_names,

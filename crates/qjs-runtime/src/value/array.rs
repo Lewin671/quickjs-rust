@@ -800,20 +800,12 @@ impl ArrayRef {
         })
     }
 
-    pub(crate) fn set(&self, index: usize, value: Value) {
+    /// Writes element `index`. An index past the array-index or dense range
+    /// becomes a named property, whose table takes `domain()` -- the caller's
+    /// realm domain -- at its first install; the closure runs only then.
+    pub(crate) fn set(&self, index: usize, value: Value, domain: &dyn Fn() -> AtomDomain) {
         if index > MAX_ARRAY_INDEX {
-            let key = index.to_string();
-            let mut properties = self.0.cold().properties.borrow_mut();
-            if let Some(slot) = properties.probe(&key) {
-                let mut property = properties.slot_mut(slot);
-                if property.writable {
-                    property.value = value;
-                }
-                return;
-            }
-            if self.0.extensible.get() {
-                properties.append_absent(None, &key, Property::enumerable(value));
-            }
+            self.set_named_index(index, value, domain);
             return;
         }
         if index >= self.0.length.get() {
@@ -826,11 +818,7 @@ impl ArrayRef {
         if index >= elements.len() {
             if index >= MAX_DENSE_STORAGE_LENGTH {
                 drop(elements);
-                self.0
-                    .cold()
-                    .properties
-                    .borrow_mut()
-                    .insert(index.to_string(), Property::enumerable(value));
+                self.set_named_index(index, value, domain);
                 return;
             }
             let old_len = elements.len();
@@ -899,6 +887,25 @@ impl ArrayRef {
         None
     }
 
+    /// [`Self::set`] of an index kept as a named property.
+    #[cold]
+    #[inline(never)]
+    fn set_named_index(&self, index: usize, value: Value, domain: &dyn Fn() -> AtomDomain) {
+        let key = index.to_string();
+        let mut properties = self.0.cold().properties.borrow_mut();
+        if let Some(slot) = properties.probe(&key) {
+            let mut property = properties.slot_mut(slot);
+            if property.writable {
+                property.value = value;
+            }
+            return;
+        }
+        if self.0.extensible.get() {
+            let domain = properties.domain().cloned().unwrap_or_else(domain);
+            properties.append_absent(&domain, &key, Property::enumerable(value));
+        }
+    }
+
     /// Sets a named own property. `domain` is the realm domain the named
     /// table takes at its first install.
     pub(crate) fn set_property(&self, domain: &AtomDomain, key: String, value: Value) {
@@ -913,7 +920,7 @@ impl ArrayRef {
         if !self.0.extensible.get() {
             return;
         }
-        properties.append_absent(Some(domain), &key, Property::enumerable(value));
+        properties.append_absent(domain, &key, Property::enumerable(value));
     }
 
     /// Defines an own property; a named one takes `domain` at the table's
@@ -933,11 +940,11 @@ impl ArrayRef {
                 }
                 if index >= MAX_DENSE_STORAGE_LENGTH {
                     drop(elements);
-                    self.0.cold().properties.borrow_mut().insert_hinted(
-                        Some(domain),
-                        key,
-                        property,
-                    );
+                    self.0
+                        .cold()
+                        .properties
+                        .borrow_mut()
+                        .insert_in(domain, key, property);
                     return;
                 }
                 let old_len = elements.len();
@@ -951,7 +958,7 @@ impl ArrayRef {
             .cold()
             .properties
             .borrow_mut()
-            .insert_hinted(Some(domain), key, property);
+            .insert_in(domain, key, property);
     }
 
     pub(crate) fn define_symbol_property(&self, symbol: ObjectRef, property: Property) {
@@ -1355,7 +1362,11 @@ mod tests {
         );
         // Some generic mutation paths can materialize a dense value without
         // dropping the cold descriptor. The target-key guard must still win.
-        array.set(2, Value::Number(23.0));
+        array.set(
+            2,
+            Value::Number(23.0),
+            &crate::property::atom::AtomDomain::test_domain,
+        );
 
         assert_eq!(array.direct_dense_index_value(0), Some(Value::Number(11.0)));
         assert_eq!(array.direct_dense_index_value(1), None);
@@ -1421,8 +1432,16 @@ mod tests {
         assert!(array.dense_index_store_eligible(1));
         assert!(!array.dense_index_store_eligible(2));
 
-        array.set(0, Value::Number(7.0));
-        array.set(2, Value::Number(11.0));
+        array.set(
+            0,
+            Value::Number(7.0),
+            &crate::property::atom::AtomDomain::test_domain,
+        );
+        array.set(
+            2,
+            Value::Number(11.0),
+            &crate::property::atom::AtomDomain::test_domain,
+        );
         assert_eq!(array.len(), 2);
         assert_eq!(array.get(0), Some(Value::Number(7.0)));
         assert_eq!(array.get(2), None);
@@ -1506,7 +1525,11 @@ mod tests {
         assert_eq!(invoke(described, 1), (None, false));
 
         let wrong_start = ArrayRef::new_with_length(2);
-        wrong_start.set(0, Value::Number(1.0));
+        wrong_start.set(
+            0,
+            Value::Number(1.0),
+            &crate::property::atom::AtomDomain::test_domain,
+        );
         assert_eq!(invoke(wrong_start, 0), (None, false));
 
         let oversized = ArrayRef::new_with_length(MAX_DENSE_STORAGE_LENGTH + 1);

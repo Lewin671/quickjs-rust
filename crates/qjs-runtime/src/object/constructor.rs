@@ -81,6 +81,7 @@ pub(crate) fn native_object(
         Some(Value::String(value)) => Ok(boxed_string(value, env)),
         _ if is_construct => Ok(this_value),
         _ => Ok(Value::Object(ObjectRef::with_prototype(
+            env.realm().atoms(),
             HashMap::new(),
             function_prototype(function),
         ))),
@@ -101,25 +102,41 @@ pub(crate) fn boxed_primitive(value: Value, env: &CallEnv) -> Option<Value> {
 }
 
 fn boxed_bigint(value: num_bigint::BigInt, env: &CallEnv) -> Value {
-    let object = ObjectRef::with_prototype(HashMap::new(), constructor_prototype("BigInt", env));
+    let object = ObjectRef::with_prototype(
+        env.realm().atoms(),
+        HashMap::new(),
+        constructor_prototype("BigInt", env),
+    );
     object.define_non_enumerable(BIGINT_DATA_PROPERTY.to_owned(), Value::bigint(value));
     Value::Object(object)
 }
 
 fn boxed_boolean(value: bool, env: &CallEnv) -> Value {
-    let object = ObjectRef::with_prototype(HashMap::new(), constructor_prototype("Boolean", env));
+    let object = ObjectRef::with_prototype(
+        env.realm().atoms(),
+        HashMap::new(),
+        constructor_prototype("Boolean", env),
+    );
     object.define_non_enumerable(BOOLEAN_DATA_PROPERTY.to_owned(), Value::Boolean(value));
     Value::Object(object)
 }
 
 fn boxed_number(value: f64, env: &CallEnv) -> Value {
-    let object = ObjectRef::with_prototype(HashMap::new(), constructor_prototype("Number", env));
+    let object = ObjectRef::with_prototype(
+        env.realm().atoms(),
+        HashMap::new(),
+        constructor_prototype("Number", env),
+    );
     object.define_non_enumerable(NUMBER_DATA_PROPERTY.to_owned(), Value::Number(value));
     Value::Object(object)
 }
 
 fn boxed_string(value: &str, env: &CallEnv) -> Value {
-    let object = ObjectRef::with_prototype(HashMap::new(), constructor_prototype("String", env));
+    let object = ObjectRef::with_prototype(
+        env.realm().atoms(),
+        HashMap::new(),
+        constructor_prototype("String", env),
+    );
     string::define_string_data(&object, &crate::JsString::from(value), env);
     Value::Object(object)
 }
@@ -137,18 +154,22 @@ pub(crate) fn native_object_create(
 ) -> Result<Value, RuntimeError> {
     let object = match argument_values.first() {
         Some(Value::Object(prototype)) => Value::Object(ObjectRef::with_prototype_slot(
+            env.realm().atoms(),
             HashMap::new(),
             Some(crate::Prototype::Object(prototype.clone())),
         )),
         Some(Value::Function(prototype)) => Value::Object(ObjectRef::with_prototype_slot(
+            env.realm().atoms(),
             HashMap::new(),
             Some(crate::Prototype::Function(prototype.clone())),
         )),
         Some(Value::Proxy(prototype)) => Value::Object(ObjectRef::with_prototype_slot(
+            env.realm().atoms(),
             HashMap::new(),
             Some(crate::Prototype::Proxy(prototype.clone())),
         )),
         Some(Value::Array(prototype)) => Value::Object(ObjectRef::with_prototype_slot(
+            env.realm().atoms(),
             HashMap::new(),
             Some(crate::array_as_prototype_slot(prototype, env)),
         )),

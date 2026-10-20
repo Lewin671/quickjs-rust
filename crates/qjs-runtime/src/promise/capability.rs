@@ -45,7 +45,8 @@ pub(crate) fn new_promise_capability(
 
     if is_native_promise_constructor(c, env) {
         let promise = new_pending_promise(env);
-        let (resolve, reject) = resolving_function_pair(Value::Object(promise.clone()));
+        let (resolve, reject) =
+            resolving_function_pair(&promise.store_domain(), Value::Object(promise.clone()));
         return Ok(PromiseCapability {
             promise: Value::Object(promise),
             resolve,
@@ -57,6 +58,7 @@ pub(crate) fn new_promise_capability(
     // object that we read after Construct(C, «executor»).
     let record = ObjectRef::new_in(env.realm().atoms(), HashMap::new());
     let mut executor = Function::new_native(
+        env.realm().atoms(),
         None,
         2,
         NativeFunction::PromiseGetCapabilitiesExecutor,

@@ -11,6 +11,7 @@ pub(crate) fn install_regexp_prototype_split(env: &CallEnv, prototype: &ObjectRe
         prototype.define_symbol_property(
             symbol,
             Property::non_enumerable(Value::Function(Function::new_native(
+                env.realm().atoms(),
                 Some("[Symbol.split]"),
                 2,
                 NativeFunction::RegExpPrototypeSplit,

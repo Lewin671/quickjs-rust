@@ -36,11 +36,17 @@ pub(crate) fn install_array_buffer(
     global_this: &Value,
     object_prototype: ObjectRef,
 ) {
-    let array_buffer_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
+    let array_buffer_prototype =
+        ObjectRef::with_prototype(env.realm().atoms(), HashMap::new(), Some(object_prototype));
     array_buffer_prototype.set_to_string_tag("ArrayBuffer");
     symbol::define_well_known_to_string_tag(env, &array_buffer_prototype, "ArrayBuffer");
-    let array_buffer_function =
-        Function::new_native(Some("ArrayBuffer"), 1, NativeFunction::ArrayBuffer, true);
+    let array_buffer_function = Function::new_native(
+        env.realm().atoms(),
+        Some("ArrayBuffer"),
+        1,
+        NativeFunction::ArrayBuffer,
+        true,
+    );
     array_buffer_prototype.define_non_enumerable(
         "constructor".to_owned(),
         Value::Function(array_buffer_function.clone()),
@@ -49,6 +55,7 @@ pub(crate) fn install_array_buffer(
         "byteLength".to_owned(),
         Property::accessor(
             Some(Value::Function(Function::new_native(
+                env.realm().atoms(),
                 Some("get byteLength"),
                 0,
                 NativeFunction::ArrayBufferPrototypeByteLength,
@@ -72,6 +79,7 @@ pub(crate) fn install_array_buffer(
             name.to_owned(),
             Property::accessor(
                 Some(Value::Function(Function::new_native(
+                    env.realm().atoms(),
                     Some(&format!("get {name}")),
                     0,
                     native,
@@ -86,6 +94,7 @@ pub(crate) fn install_array_buffer(
     array_buffer_prototype.define_non_enumerable(
         "resize".to_owned(),
         Value::Function(Function::new_native(
+            env.realm().atoms(),
             Some("resize"),
             1,
             NativeFunction::ArrayBufferPrototypeResize,
@@ -95,6 +104,7 @@ pub(crate) fn install_array_buffer(
     array_buffer_prototype.define_non_enumerable(
         "slice".to_owned(),
         Value::Function(Function::new_native(
+            env.realm().atoms(),
             Some("slice"),
             2,
             NativeFunction::ArrayBufferPrototypeSlice,
@@ -104,6 +114,7 @@ pub(crate) fn install_array_buffer(
     array_buffer_prototype.define_non_enumerable(
         "sliceToImmutable".to_owned(),
         Value::Function(Function::new_native(
+            env.realm().atoms(),
             Some("sliceToImmutable"),
             2,
             NativeFunction::ArrayBufferPrototypeSliceToImmutable,
@@ -113,6 +124,7 @@ pub(crate) fn install_array_buffer(
     array_buffer_prototype.define_non_enumerable(
         "transfer".to_owned(),
         Value::Function(Function::new_native(
+            env.realm().atoms(),
             Some("transfer"),
             0,
             NativeFunction::ArrayBufferPrototypeTransfer,
@@ -122,6 +134,7 @@ pub(crate) fn install_array_buffer(
     array_buffer_prototype.define_non_enumerable(
         "transferToFixedLength".to_owned(),
         Value::Function(Function::new_native(
+            env.realm().atoms(),
             Some("transferToFixedLength"),
             0,
             NativeFunction::ArrayBufferPrototypeTransferToFixedLength,
@@ -131,6 +144,7 @@ pub(crate) fn install_array_buffer(
     array_buffer_prototype.define_non_enumerable(
         "transferToImmutable".to_owned(),
         Value::Function(Function::new_native(
+            env.realm().atoms(),
             Some("transferToImmutable"),
             0,
             NativeFunction::ArrayBufferPrototypeTransferToImmutable,
@@ -146,6 +160,7 @@ pub(crate) fn install_array_buffer(
         env.realm().atoms(),
         "isView",
         Property::non_enumerable(Value::Function(Function::new_native(
+            env.realm().atoms(),
             Some("isView"),
             1,
             NativeFunction::ArrayBufferIsView,
@@ -168,6 +183,7 @@ pub(crate) fn native_array_buffer(
     is_construct: bool,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
+    let realm_atoms = env.realm().atoms().clone();
     if !is_construct {
         return Err(RuntimeError {
             thrown: None,
@@ -188,6 +204,7 @@ pub(crate) fn native_array_buffer(
     let object = match this_value {
         Value::Object(object) => object,
         _ => ObjectRef::with_prototype_slot(
+            &realm_atoms,
             HashMap::new(),
             crate::native_construct_prototype_slot(function, env)?,
         ),
@@ -406,7 +423,7 @@ pub(crate) fn native_array_buffer_prototype_slice_to_immutable(
 
     let constructor = env.get("ArrayBuffer").unwrap_or(Value::Undefined);
     let prototype = crate::constructor_prototype(&constructor, env);
-    let result = ObjectRef::with_prototype_slot(HashMap::new(), prototype);
+    let result = ObjectRef::with_prototype_slot(env.realm().atoms(), HashMap::new(), prototype);
     define_array_buffer_data(&result, slice);
     define_array_buffer_immutable(&result);
     Ok(Value::Object(result))
@@ -474,7 +491,7 @@ fn array_buffer_copy_and_detach(
 
     let constructor = env.get("ArrayBuffer").unwrap_or(Value::Undefined);
     let prototype = crate::constructor_prototype(&constructor, env);
-    let result = ObjectRef::with_prototype_slot(HashMap::new(), prototype);
+    let result = ObjectRef::with_prototype_slot(env.realm().atoms(), HashMap::new(), prototype);
     define_array_buffer_data(&result, bytes);
     match kind {
         TransferKind::PreserveResizable => {
@@ -710,7 +727,7 @@ pub(crate) fn try_borrow_fixed_array_buffer_bytes_mut(
 pub(crate) fn new_array_buffer(env: &CallEnv, length: usize) -> ObjectRef {
     let constructor = env.get("ArrayBuffer").unwrap_or(Value::Undefined);
     let prototype = crate::constructor_prototype(&constructor, env);
-    let object = ObjectRef::with_prototype_slot(HashMap::new(), prototype);
+    let object = ObjectRef::with_prototype_slot(env.realm().atoms(), HashMap::new(), prototype);
     define_array_buffer_data(&object, vec![0; length]);
     object
 }

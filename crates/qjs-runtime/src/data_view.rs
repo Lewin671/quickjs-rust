@@ -54,9 +54,16 @@ pub(crate) fn install_data_view(
     global_this: &Value,
     object_prototype: ObjectRef,
 ) {
-    let prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
+    let prototype =
+        ObjectRef::with_prototype(env.realm().atoms(), HashMap::new(), Some(object_prototype));
 
-    let constructor = Function::new_native(Some("DataView"), 1, NativeFunction::DataView, true);
+    let constructor = Function::new_native(
+        env.realm().atoms(),
+        Some("DataView"),
+        1,
+        NativeFunction::DataView,
+        true,
+    );
     prototype.define_non_enumerable(
         "constructor".to_owned(),
         Value::Function(constructor.clone()),
@@ -72,6 +79,7 @@ pub(crate) fn install_data_view(
             name.to_owned(),
             Property::accessor(
                 Some(Value::Function(Function::new_native(
+                    env.realm().atoms(),
                     Some(&format!("get {name}")),
                     0,
                     native,
@@ -128,7 +136,13 @@ pub(crate) fn install_data_view(
     ] {
         prototype.define_non_enumerable(
             name.to_owned(),
-            Value::Function(Function::new_native(Some(name), length, native, false)),
+            Value::Function(Function::new_native(
+                env.realm().atoms(),
+                Some(name),
+                length,
+                native,
+                false,
+            )),
         );
     }
 
@@ -157,6 +171,7 @@ pub(crate) fn native_data_view(
     is_construct: bool,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
+    let realm_atoms = env.realm().atoms().clone();
     if !is_construct {
         return Err(type_error("Constructor DataView requires 'new'"));
     }
@@ -219,6 +234,7 @@ pub(crate) fn native_data_view(
     let object = match this_value {
         Value::Object(object) => object,
         _ => ObjectRef::with_prototype_slot(
+            &realm_atoms,
             HashMap::new(),
             crate::native_construct_prototype_slot(function, env)?,
         ),

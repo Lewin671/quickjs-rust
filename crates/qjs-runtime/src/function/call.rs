@@ -175,7 +175,7 @@ pub(crate) fn call_function(
                         .immutable_name_binding
                         .then(|| function.name.clone())
                         .flatten()
-                        .or_else(|| function.immutable_env_binding.clone()),
+                        .or_else(|| function.immutable_env_binding.as_deref().map(str::to_owned)),
                 },
                 env,
             );
@@ -468,7 +468,8 @@ pub(crate) fn try_construct_direct_leaf_function(
         .expect("direct leaf predicate requires bytecode");
     crate::diagnostics::count!(ordinary_call_attempts);
     crate::diagnostics::count!(direct_leaf_frames);
-    let receiver = ObjectRef::with_prototype_slot(HashMap::new(), Some(prototype));
+    let receiver =
+        ObjectRef::with_prototype_slot(env.realm().atoms(), HashMap::new(), Some(prototype));
     // A base class initializes its instance fields before the body runs.
     if let Some(elements) = class_fields
         && let Err(error) = initialize_direct_instance_fields(
@@ -675,7 +676,8 @@ fn class_constructor_call_error(function: &Function) -> RuntimeError {
         ..
     }) = function.own_property(CROSS_REALM_TYPE_ERROR_PROTOTYPE)
     {
-        let error = ObjectRef::with_prototype(HashMap::new(), Some(prototype));
+        let error =
+            ObjectRef::with_prototype(&prototype.store_domain(), HashMap::new(), Some(prototype));
         return RuntimeError {
             thrown: Some(Box::new(Value::Object(error))),
             message,
@@ -975,7 +977,11 @@ pub(crate) fn construct_function(
         Value::Undefined
     } else {
         let prototype = construct_prototype_slot(&target, &new_target, env)?;
-        Value::Object(ObjectRef::with_prototype_slot(HashMap::new(), prototype))
+        Value::Object(ObjectRef::with_prototype_slot(
+            env.realm().atoms(),
+            HashMap::new(),
+            prototype,
+        ))
     };
 
     let result = call_function(target, this_value.clone(), argument_values, env, true);
@@ -1359,7 +1365,7 @@ fn function_env<'a>(
         let captured_value = received_upvalue_value(function, bytecode, name)
             .or_else(|| function.immutable_env_value.as_ref().map(|cell| cell.get()));
         if let Some(value) = captured_value {
-            frame_env.insert(name.clone(), value);
+            frame_env.insert(name.to_string(), value);
         }
     }
     if function.immutable_name_binding
@@ -1367,7 +1373,7 @@ fn function_env<'a>(
     {
         frame_env.set_immutable_function_name(name.clone());
     } else if let Some(name) = &function.immutable_env_binding {
-        frame_env.set_immutable_function_name(name.clone());
+        frame_env.set_immutable_function_name(name.to_string());
     } else if function.lexical_this
         && let Some(name) = env.immutable_function_name()
     {

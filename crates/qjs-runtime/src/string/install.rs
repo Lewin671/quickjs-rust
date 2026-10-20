@@ -75,12 +75,21 @@ const STRING_PROTOTYPE_METHODS: &[(&str, usize, NativeFunction)] = &[
 ];
 
 pub(crate) fn install_string(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
-    let string_prototype =
-        ObjectRef::with_prototype(HashMap::new(), Some(object_prototype.clone()));
+    let string_prototype = ObjectRef::with_prototype(
+        env.realm().atoms(),
+        HashMap::new(),
+        Some(object_prototype.clone()),
+    );
     env.realm()
         .initialize_string_prototype(string_prototype.clone());
     super::constructor::define_string_data(&string_prototype, &crate::JsString::from(""), env);
-    let string_function = Function::new_native(Some("String"), 1, NativeFunction::String, true);
+    let string_function = Function::new_native(
+        env.realm().atoms(),
+        Some("String"),
+        1,
+        NativeFunction::String,
+        true,
+    );
     string_prototype.define_non_enumerable(
         "constructor".to_owned(),
         Value::Function(string_function.clone()),
@@ -133,6 +142,7 @@ pub(crate) fn install_string_well_known_symbols(env: &CallEnv) {
     prototype.define_symbol_property(
         iterator,
         Property::non_enumerable(Value::Function(Function::new_native(
+            env.realm().atoms(),
             Some("[Symbol.iterator]"),
             0,
             NativeFunction::StringPrototypeIterator,
@@ -144,7 +154,13 @@ pub(crate) fn install_string_well_known_symbols(env: &CallEnv) {
 fn define_object_method(object: &ObjectRef, key: &str, length: usize, native: NativeFunction) {
     object.define_non_enumerable(
         key.to_owned(),
-        Value::Function(Function::new_native(Some(key), length, native, false)),
+        Value::Function(Function::new_native(
+            &object.store_domain(),
+            Some(key),
+            length,
+            native,
+            false,
+        )),
     );
 }
 
@@ -165,6 +181,7 @@ fn define_function_property(
         atoms,
         key,
         Property::non_enumerable(Value::Function(Function::new_native(
+            atoms,
             Some(key),
             length,
             native,

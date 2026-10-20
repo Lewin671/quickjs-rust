@@ -88,9 +88,11 @@ fn typed_array_allocation_object(
     this_value: Value,
     env: &mut CallEnv,
 ) -> Result<ObjectRef, RuntimeError> {
+    let realm_atoms = env.realm().atoms().clone();
     match this_value {
         Value::Object(object) => Ok(object),
         _ => Ok(ObjectRef::with_prototype_slot(
+            &realm_atoms,
             HashMap::new(),
             crate::native_construct_prototype_slot(function, env)?,
         )),
@@ -276,7 +278,7 @@ pub(crate) fn create_with_values(
     env: &CallEnv,
 ) -> ObjectRef {
     let prototype = concrete_prototype(native, env);
-    let object = ObjectRef::with_prototype(HashMap::new(), prototype);
+    let object = ObjectRef::with_prototype(env.realm().atoms(), HashMap::new(), prototype);
     let length = values.len();
     let buffer = array_buffer_for(length * bytes_per_element(native), env);
     install_view(&object, native, buffer, 0, length, false, values);

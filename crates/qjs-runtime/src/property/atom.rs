@@ -178,28 +178,23 @@ struct DomainState {
 #[derive(Clone)]
 pub(crate) struct AtomDomain(Rc<DomainState>);
 
-thread_local! {
-    /// The domain of stores created by code with no realm at hand: a
-    /// null-prototype object built by a realm-less helper, the first named
-    /// property of a realm-less native function or array. It is created on
-    /// first use and keeps its roots like a realm does, so such stores share
-    /// edges instead of each creating a private domain. Its atoms and shapes
-    /// are released with their users, under the same bounds as any domain.
-    static SHARED_FALLBACK: (AtomDomain, Rc<DomainRoots>) = {
-        let domain = AtomDomain::new();
-        let roots = domain.roots();
-        (domain, roots)
-    };
-}
-
 impl AtomDomain {
     pub(crate) fn new() -> Self {
         Self::starting_at(NonZeroU32::MIN)
     }
 
-    /// The per-thread domain for stores whose creator has no realm.
-    pub(crate) fn shared_fallback() -> Self {
-        SHARED_FALLBACK.with(|(domain, _)| domain.clone())
+    /// One domain per test thread, with its roots held, for unit tests that
+    /// build stores without a realm.
+    #[cfg(test)]
+    pub(crate) fn test_domain() -> Self {
+        thread_local! {
+            static TEST_DOMAIN: (AtomDomain, Rc<DomainRoots>) = {
+                let domain = AtomDomain::new();
+                let roots = domain.roots();
+                (domain, roots)
+            };
+        }
+        TEST_DOMAIN.with(|(domain, _)| domain.clone())
     }
 
     fn starting_at(first_id: NonZeroU32) -> Self {

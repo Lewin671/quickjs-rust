@@ -16,10 +16,17 @@ const MAP_ITERATOR_KIND_VALUE: &str = "value";
 const MAP_ITERATOR_KIND_KEY_VALUE: &str = "key+value";
 
 pub(crate) fn install_map(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
-    let map_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
+    let map_prototype =
+        ObjectRef::with_prototype(env.realm().atoms(), HashMap::new(), Some(object_prototype));
     map_prototype.set_to_string_tag("Map");
     symbol::define_well_known_to_string_tag(env, &map_prototype, "Map");
-    let map_function = Function::new_native(Some("Map"), 0, NativeFunction::Map, true);
+    let map_function = Function::new_native(
+        env.realm().atoms(),
+        Some("Map"),
+        0,
+        NativeFunction::Map,
+        true,
+    );
     define_map_function(
         env.realm().atoms(),
         &map_function,
@@ -35,6 +42,7 @@ pub(crate) fn install_map(env: &mut CallEnv, global_this: &Value, object_prototy
         "size".to_owned(),
         Property::accessor(
             Some(Value::Function(Function::new_native(
+                env.realm().atoms(),
                 Some("get size"),
                 0,
                 NativeFunction::MapPrototypeSize,
@@ -118,7 +126,11 @@ pub(crate) fn native_map(
             message: "TypeError: Constructor Map requires 'new'".to_owned(),
         });
     }
-    let map = MapRef::with_prototype_slot(crate::native_construct_prototype_slot(function, env)?);
+    let realm_atoms = env.realm().atoms().clone();
+    let map = MapRef::with_prototype_slot(
+        &realm_atoms,
+        crate::native_construct_prototype_slot(function, env)?,
+    );
     let map_value = Value::Map(map);
     if let Some(iterable) = argument_values.first().cloned()
         && !matches!(iterable, Value::Undefined | Value::Null)
@@ -152,7 +164,7 @@ pub(crate) fn native_map_group_by(
         });
     }
 
-    let map = MapRef::new(map_prototype(env));
+    let map = MapRef::new(env.realm().atoms(), map_prototype(env));
     for (index, value) in iterable_values_with_env(items, "Map.groupBy", env)?
         .into_iter()
         .enumerate()
@@ -417,7 +429,7 @@ fn map_iterator(this_value: Value, env: &CallEnv, kind: &str) -> Result<Value, R
     this_map(this_value.clone())?;
     let prototype =
         crate::iterator::builtin_iterator_prototype(env, crate::iterator::BuiltinIteratorKind::Map);
-    let iterator = ObjectRef::with_prototype(HashMap::new(), prototype);
+    let iterator = ObjectRef::with_prototype(env.realm().atoms(), HashMap::new(), prototype);
     iterator.define_non_enumerable(MAP_ITERATOR.to_owned(), this_value);
     iterator.define_non_enumerable(MAP_ITERATOR_NEXT_INDEX.to_owned(), Value::Number(0.0));
     iterator.define_non_enumerable(MAP_ITERATOR_DONE.to_owned(), Value::Boolean(false));
@@ -484,7 +496,7 @@ fn canonical_map_key_value(key: Value) -> Value {
 
 fn append_map_group(map: &MapRef, key: Value, value: Value) {
     match map.get(&key) {
-        Some(Value::Array(group)) => group.set(group.len(), value),
+        Some(Value::Array(group)) => group.set(group.len(), value, &|| map.object().store_domain()),
         _ => map.set(key, Value::Array(ArrayRef::new(vec![value]))),
     }
 }
@@ -507,6 +519,7 @@ fn define_map_function(
         atoms,
         key,
         Property::non_enumerable(Value::Function(Function::new_native(
+            atoms,
             Some(key),
             length,
             native,
@@ -523,6 +536,12 @@ fn define_map_prototype_function(
 ) {
     prototype.define_non_enumerable(
         key.to_owned(),
-        Value::Function(Function::new_native(Some(key), length, native, false)),
+        Value::Function(Function::new_native(
+            &prototype.store_domain(),
+            Some(key),
+            length,
+            native,
+            false,
+        )),
     );
 }

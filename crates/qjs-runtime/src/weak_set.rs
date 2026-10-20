@@ -14,10 +14,17 @@ pub(crate) fn install_weak_set(
     global_this: &Value,
     object_prototype: ObjectRef,
 ) {
-    let weak_set_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
+    let weak_set_prototype =
+        ObjectRef::with_prototype(env.realm().atoms(), HashMap::new(), Some(object_prototype));
     weak_set_prototype.set_to_string_tag("WeakSet");
     symbol::define_well_known_to_string_tag(env, &weak_set_prototype, "WeakSet");
-    let weak_set_function = Function::new_native(Some("WeakSet"), 0, NativeFunction::WeakSet, true);
+    let weak_set_function = Function::new_native(
+        env.realm().atoms(),
+        Some("WeakSet"),
+        0,
+        NativeFunction::WeakSet,
+        true,
+    );
     weak_set_prototype.define_non_enumerable(
         "constructor".to_owned(),
         Value::Function(weak_set_function.clone()),
@@ -59,6 +66,7 @@ pub(crate) fn native_weak_set(
     is_construct: bool,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
+    let realm_atoms = env.realm().atoms().clone();
     if !is_construct {
         return Err(RuntimeError {
             thrown: None,
@@ -67,6 +75,7 @@ pub(crate) fn native_weak_set(
     }
 
     let object = ObjectRef::with_prototype_slot(
+        &realm_atoms,
         HashMap::new(),
         crate::native_construct_prototype_slot(function, env)?,
     );
@@ -78,7 +87,7 @@ pub(crate) fn native_weak_set(
 
     object.define_non_enumerable(
         WEAK_SET_ENTRIES.to_owned(),
-        Value::Set(crate::SetRef::new(None)),
+        Value::Set(crate::SetRef::new(&realm_atoms, None)),
     );
     let weak_set = Value::Object(object);
 
@@ -215,6 +224,12 @@ fn define_weak_set_prototype_function(
 ) {
     prototype.define_non_enumerable(
         key.to_owned(),
-        Value::Function(Function::new_native(Some(key), length, native, false)),
+        Value::Function(Function::new_native(
+            &prototype.store_domain(),
+            Some(key),
+            length,
+            native,
+            false,
+        )),
     );
 }

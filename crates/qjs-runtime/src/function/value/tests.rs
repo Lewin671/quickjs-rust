@@ -9,6 +9,7 @@ use crate::{NativeFunction, Value, eval};
 #[test]
 fn cloning_function_reuses_the_backing_allocation() {
     let function = Function::new_native(
+        &crate::property::atom::AtomDomain::test_domain(),
         Some("shared"),
         0,
         NativeFunction::UninitializedLexical,
@@ -64,6 +65,7 @@ fn user_functions_keep_empty_function_maps_unallocated() {
     assert!(!function.properties.is_allocated());
 
     let mut native = Function::new_native(
+        &crate::property::atom::AtomDomain::test_domain(),
         Some("capturing"),
         0,
         NativeFunction::UninitializedLexical,
@@ -86,6 +88,7 @@ fn user_functions_keep_empty_function_maps_unallocated() {
 #[test]
 fn cloned_function_handles_keep_identity_state_and_source_shared() {
     let function = Function::new_native(
+        &crate::property::atom::AtomDomain::test_domain(),
         Some("shared"),
         0,
         NativeFunction::UninitializedLexical,
@@ -121,6 +124,7 @@ fn cloned_function_handles_keep_identity_state_and_source_shared() {
 #[test]
 fn default_name_and_length_stay_implicit_until_descriptor_mutation() {
     let function = Function::new_native(
+        &crate::property::atom::AtomDomain::test_domain(),
         Some("shared"),
         2,
         NativeFunction::UninitializedLexical,
@@ -166,12 +170,14 @@ fn deleting_and_redefining_an_implicit_default_moves_it_to_the_end() {
 #[test]
 fn install_time_override_and_implicit_default_are_one_property_slot() {
     let function = Function::new_native(
+        &crate::property::atom::AtomDomain::test_domain(),
         Some("initial"),
         0,
         NativeFunction::UninitializedLexical,
         false,
     );
-    function.properties.borrow_mut().insert(
+    function.properties.borrow_mut().insert_in(
+        &crate::property::atom::AtomDomain::test_domain(),
         "name",
         crate::Property::data(
             Value::String("installed".to_owned().into()),
@@ -233,4 +239,11 @@ fn later_properties_follow_an_unobserved_default_prototype_slot() {
             "length|name|prototype|assigned|defined".to_owned().into()
         ))
     );
+}
+
+#[test]
+fn tmp_probe_table_after_prototype_read() {
+    let Value::Function(function) = eval("function N(v){} N.prototype; N").unwrap() else { panic!() };
+    let table = function.properties.borrow();
+    eprintln!("TMPPROBE len={} keys={:?} enc={:?}", table.len(), table.keys().collect::<Vec<_>>(), table.domain().is_some());
 }

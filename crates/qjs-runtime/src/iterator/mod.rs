@@ -116,8 +116,11 @@ pub(crate) fn install_iterator(
     global_this: &Value,
     object_prototype: ObjectRef,
 ) {
-    let iterator_prototype =
-        ObjectRef::with_prototype(HashMap::new(), Some(object_prototype.clone()));
+    let iterator_prototype = ObjectRef::with_prototype(
+        env.realm().atoms(),
+        HashMap::new(),
+        Some(object_prototype.clone()),
+    );
 
     // Lazy helper methods.
     for (name, length, native) in [
@@ -136,7 +139,13 @@ pub(crate) fn install_iterator(
     ] {
         iterator_prototype.define_non_enumerable(
             name.to_owned(),
-            Value::Function(Function::new_native(Some(name), length, native, false)),
+            Value::Function(Function::new_native(
+                env.realm().atoms(),
+                Some(name),
+                length,
+                native,
+                false,
+            )),
         );
     }
 
@@ -145,6 +154,7 @@ pub(crate) fn install_iterator(
         iterator_prototype.define_symbol_property(
             iterator_symbol,
             Property::non_enumerable(Value::Function(Function::new_native(
+                env.realm().atoms(),
                 Some("[Symbol.iterator]"),
                 0,
                 NativeFunction::IteratorPrototypeIterator,
@@ -156,6 +166,7 @@ pub(crate) fn install_iterator(
         iterator_prototype.define_symbol_property(
             dispose_symbol,
             Property::non_enumerable(Value::Function(Function::new_native(
+                env.realm().atoms(),
                 Some("[Symbol.dispose]"),
                 0,
                 NativeFunction::IteratorPrototypeDispose,
@@ -173,12 +184,14 @@ pub(crate) fn install_iterator(
             tag_symbol,
             Property::accessor(
                 Some(Value::Function(Function::new_native(
+                    env.realm().atoms(),
                     Some("get [Symbol.toStringTag]"),
                     0,
                     NativeFunction::IteratorPrototypeToStringTagGet,
                     false,
                 ))),
                 Some(Value::Function(Function::new_native(
+                    env.realm().atoms(),
                     Some("set [Symbol.toStringTag]"),
                     1,
                     NativeFunction::IteratorPrototypeToStringTagSet,
@@ -193,12 +206,14 @@ pub(crate) fn install_iterator(
         "constructor".to_owned(),
         Property::accessor(
             Some(Value::Function(Function::new_native(
+                env.realm().atoms(),
                 Some("get constructor"),
                 0,
                 NativeFunction::IteratorPrototypeConstructorGet,
                 false,
             ))),
             Some(Value::Function(Function::new_native(
+                env.realm().atoms(),
                 Some("set constructor"),
                 1,
                 NativeFunction::IteratorPrototypeConstructorSet,
@@ -211,11 +226,15 @@ pub(crate) fn install_iterator(
 
     // `%IteratorHelperPrototype%` inherits `%Iterator.prototype%`, exposes
     // `next`/`return`, and carries the "Iterator Helper" toStringTag.
-    let helper_prototype =
-        ObjectRef::with_prototype(HashMap::new(), Some(iterator_prototype.clone()));
+    let helper_prototype = ObjectRef::with_prototype(
+        env.realm().atoms(),
+        HashMap::new(),
+        Some(iterator_prototype.clone()),
+    );
     helper_prototype.define_non_enumerable(
         "next".to_owned(),
         Value::Function(Function::new_native(
+            env.realm().atoms(),
             Some("next"),
             0,
             NativeFunction::IteratorHelperPrototypeNext,
@@ -225,6 +244,7 @@ pub(crate) fn install_iterator(
     helper_prototype.define_non_enumerable(
         "return".to_owned(),
         Value::Function(Function::new_native(
+            env.realm().atoms(),
             Some("return"),
             0,
             NativeFunction::IteratorHelperPrototypeReturn,
@@ -244,8 +264,13 @@ pub(crate) fn install_iterator(
     }
 
     // The `Iterator` constructor: not directly constructable, subclassable.
-    let iterator_function =
-        Function::new_native(Some("Iterator"), 0, NativeFunction::Iterator, true);
+    let iterator_function = Function::new_native(
+        env.realm().atoms(),
+        Some("Iterator"),
+        0,
+        NativeFunction::Iterator,
+        true,
+    );
     iterator_function.properties.borrow_mut().insert_in(
         env.realm().atoms(),
         "prototype",
@@ -260,6 +285,7 @@ pub(crate) fn install_iterator(
         env.realm().atoms(),
         "from",
         Property::non_enumerable(Value::Function(Function::new_native(
+            env.realm().atoms(),
             Some("from"),
             1,
             NativeFunction::IteratorFrom,
@@ -270,6 +296,7 @@ pub(crate) fn install_iterator(
         env.realm().atoms(),
         "concat",
         Property::non_enumerable(Value::Function(Function::new_native(
+            env.realm().atoms(),
             Some("concat"),
             0,
             NativeFunction::IteratorConcat,
@@ -280,6 +307,7 @@ pub(crate) fn install_iterator(
         env.realm().atoms(),
         "zip",
         Property::non_enumerable(Value::Function(Function::new_native(
+            env.realm().atoms(),
             Some("zip"),
             1,
             NativeFunction::IteratorZip,
@@ -290,6 +318,7 @@ pub(crate) fn install_iterator(
         env.realm().atoms(),
         "zipKeyed",
         Property::non_enumerable(Value::Function(Function::new_native(
+            env.realm().atoms(),
             Some("zipKeyed"),
             1,
             NativeFunction::IteratorZipKeyed,
@@ -308,10 +337,15 @@ pub(crate) fn install_iterator(
         BuiltinIteratorKind::Set,
         BuiltinIteratorKind::RegExpString,
     ] {
-        let prototype = ObjectRef::with_prototype(HashMap::new(), Some(iterator_prototype.clone()));
+        let prototype = ObjectRef::with_prototype(
+            env.realm().atoms(),
+            HashMap::new(),
+            Some(iterator_prototype.clone()),
+        );
         prototype.define_non_enumerable(
             "next".to_owned(),
             Value::Function(Function::new_native(
+                env.realm().atoms(),
                 Some("next"),
                 0,
                 kind.next_native(),

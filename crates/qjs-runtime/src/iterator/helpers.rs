@@ -81,7 +81,11 @@ pub(super) fn native_iterator_concat(
     argument_values: &[Value],
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let helper = ObjectRef::with_prototype(HashMap::new(), super::iterator_helper_prototype(env));
+    let helper = ObjectRef::with_prototype(
+        env.realm().atoms(),
+        HashMap::new(),
+        super::iterator_helper_prototype(env),
+    );
     helper.define_non_enumerable(
         HELPER_KIND.to_owned(),
         Value::String(HelperKind::Concat.tag().to_owned().into()),
@@ -201,7 +205,11 @@ pub(super) fn native_lazy_helper(
         }
     };
 
-    let helper = ObjectRef::with_prototype(HashMap::new(), super::iterator_helper_prototype(env));
+    let helper = ObjectRef::with_prototype(
+        env.realm().atoms(),
+        HashMap::new(),
+        super::iterator_helper_prototype(env),
+    );
     helper.define_non_enumerable(
         HELPER_KIND.to_owned(),
         Value::String(kind.tag().to_owned().into()),
@@ -289,7 +297,8 @@ fn set_done(helper: &ObjectRef) {
 }
 
 fn iterator_result(value: Value, done: bool, env: &CallEnv) -> Value {
-    let object = ObjectRef::with_prototype(HashMap::new(), object_prototype(env));
+    let object =
+        ObjectRef::with_prototype(env.realm().atoms(), HashMap::new(), object_prototype(env));
     object.define_property("value".to_owned(), Property::enumerable(value));
     object.define_property(
         "done".to_owned(),

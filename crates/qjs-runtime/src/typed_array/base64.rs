@@ -566,7 +566,8 @@ fn number_byte(value: u8) -> Value {
 }
 
 fn set_from_base64_result(read: usize, written: usize, env: &CallEnv) -> Value {
-    let result = ObjectRef::with_prototype(HashMap::new(), object_prototype(env));
+    let result =
+        ObjectRef::with_prototype(env.realm().atoms(), HashMap::new(), object_prototype(env));
     result.define_property(
         "read".to_owned(),
         Property::enumerable(Value::Number(read as f64)),

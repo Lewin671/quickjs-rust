@@ -38,14 +38,22 @@ const REGEXP_FLAGS_PROPERTY: &str = "\0RegExpFlags";
 const REGEXP_PROTOTYPE_BINDING: &str = "\0RegExpPrototype";
 
 pub(crate) fn install_regexp(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
-    let regexp_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
+    let regexp_prototype =
+        ObjectRef::with_prototype(env.realm().atoms(), HashMap::new(), Some(object_prototype));
     regexp_prototype.set_to_string_tag("RegExp");
 
-    let regexp_function = Function::new_native(Some("RegExp"), 2, NativeFunction::RegExp, true);
+    let regexp_function = Function::new_native(
+        env.realm().atoms(),
+        Some("RegExp"),
+        2,
+        NativeFunction::RegExp,
+        true,
+    );
     regexp_function.properties.borrow_mut().insert_in(
         env.realm().atoms(),
         "escape",
         Property::non_enumerable(Value::Function(Function::new_native(
+            env.realm().atoms(),
             Some("escape"),
             1,
             NativeFunction::RegExpEscape,
@@ -63,6 +71,7 @@ pub(crate) fn install_regexp(env: &mut CallEnv, global_this: &Value, object_prot
     regexp_prototype.define_non_enumerable(
         "toString".to_owned(),
         Value::Function(Function::new_native(
+            env.realm().atoms(),
             Some("toString"),
             0,
             NativeFunction::RegExpPrototypeToString,
@@ -72,6 +81,7 @@ pub(crate) fn install_regexp(env: &mut CallEnv, global_this: &Value, object_prot
     regexp_prototype.define_non_enumerable(
         "compile".to_owned(),
         Value::Function(Function::new_native(
+            env.realm().atoms(),
             Some("compile"),
             2,
             NativeFunction::RegExpPrototypeCompile,
@@ -81,6 +91,7 @@ pub(crate) fn install_regexp(env: &mut CallEnv, global_this: &Value, object_prot
     regexp_prototype.define_non_enumerable(
         "exec".to_owned(),
         Value::Function(Function::new_native(
+            env.realm().atoms(),
             Some("exec"),
             1,
             NativeFunction::RegExpPrototypeExec,
@@ -90,6 +101,7 @@ pub(crate) fn install_regexp(env: &mut CallEnv, global_this: &Value, object_prot
     regexp_prototype.define_non_enumerable(
         "test".to_owned(),
         Value::Function(Function::new_native(
+            env.realm().atoms(),
             Some("test"),
             1,
             NativeFunction::RegExpPrototypeTest,
@@ -100,6 +112,7 @@ pub(crate) fn install_regexp(env: &mut CallEnv, global_this: &Value, object_prot
         regexp_prototype.define_symbol_property(
             symbol,
             Property::non_enumerable(Value::Function(Function::new_native(
+                env.realm().atoms(),
                 Some("[Symbol.search]"),
                 1,
                 NativeFunction::RegExpPrototypeSearch,
@@ -191,7 +204,13 @@ fn define_regexp_accessor(
     name: &str,
     native: NativeFunction,
 ) {
-    let mut getter = Function::new_native(Some(&format!("get {name}")), 0, native, false);
+    let mut getter = Function::new_native(
+        &prototype.store_domain(),
+        Some(&format!("get {name}")),
+        0,
+        native,
+        false,
+    );
     getter.insert_native_context(
         REGEXP_PROTOTYPE_BINDING.to_owned(),
         Value::Object(prototype.clone()),
@@ -225,7 +244,11 @@ pub(crate) fn native_regexp(
     validate_regexp_init_cached(&source, &flags, env)?;
 
     if !is_construct {
-        let object = ObjectRef::with_prototype(HashMap::new(), function_prototype(function));
+        let object = ObjectRef::with_prototype(
+            env.realm().atoms(),
+            HashMap::new(),
+            function_prototype(function),
+        );
         define_regexp_data(&object, &source, &flags);
         return Ok(Value::Object(object));
     }
@@ -307,7 +330,7 @@ pub(crate) fn regexp_literal_value(
         Some(Value::Object(prototype)) => Some(prototype),
         _ => None,
     };
-    let object = ObjectRef::with_prototype(HashMap::new(), prototype);
+    let object = ObjectRef::with_prototype(env.realm().atoms(), HashMap::new(), prototype);
     define_regexp_data(&object, source, flags);
     Ok(Value::Object(object))
 }
@@ -978,7 +1001,7 @@ fn regexp_match_array(
     result.set_property(
         domain,
         "groups".to_owned(),
-        regexp_groups_object(input, &captures, unicode, group_names),
+        regexp_groups_object(domain, input, &captures, unicode, group_names),
     );
     if has_indices {
         result.set_property(
@@ -1020,7 +1043,7 @@ fn regexp_indices_array(
     let groups = if group_names.is_empty() {
         Value::Undefined
     } else {
-        let object = ObjectRef::with_prototype(HashMap::new(), None);
+        let object = ObjectRef::with_prototype(domain, HashMap::new(), None);
         for (capture_index, name) in group_names.iter().enumerate() {
             let Some(name) = name else { continue };
             let value = index_pair_value(
@@ -1059,25 +1082,30 @@ fn index_pair_value(input: &str, range: Option<(usize, usize)>, unicode: bool) -
 /// has no named groups, otherwise a null-prototype object mapping each name to
 /// its captured substring (or `undefined` when the group did not participate).
 fn regexp_groups_object(
+    realm: &crate::property::atom::AtomDomain,
     input: &JsString,
     captures: &[Option<(usize, usize)>],
     unicode: bool,
     group_names: &[Option<String>],
 ) -> Value {
-    regexp_groups_object_with(captures, group_names, |start, end| {
+    regexp_groups_object_with(realm, captures, group_names, |start, end| {
         input_slice(input, start, end, unicode)
     })
 }
 
 fn regexp_groups_object_prepared(
+    realm: &crate::property::atom::AtomDomain,
     input: &matcher::PreparedInput,
     captures: &[Option<(usize, usize)>],
     group_names: &[Option<String>],
 ) -> Value {
-    regexp_groups_object_with(captures, group_names, |start, end| input.slice(start, end))
+    regexp_groups_object_with(realm, captures, group_names, |start, end| {
+        input.slice(start, end)
+    })
 }
 
 fn regexp_groups_object_with(
+    realm: &crate::property::atom::AtomDomain,
     captures: &[Option<(usize, usize)>],
     group_names: &[Option<String>],
     mut input_slice: impl FnMut(usize, usize) -> String,
@@ -1085,7 +1113,7 @@ fn regexp_groups_object_with(
     if group_names.is_empty() {
         return Value::Undefined;
     }
-    let groups = ObjectRef::with_prototype(HashMap::new(), None);
+    let groups = ObjectRef::with_prototype(realm, HashMap::new(), None);
     for (capture_index, name) in group_names.iter().enumerate() {
         let Some(name) = name else { continue };
         let value = captures

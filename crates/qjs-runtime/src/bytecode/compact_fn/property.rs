@@ -385,7 +385,7 @@ pub(super) fn try_plain_set_prop(
                     if elements.dense_index_store_eligible(index)
                         && array_access_is_plain(elements, env) =>
                 {
-                    elements.set(index, value.clone());
+                    elements.set(index, value.clone(), &|| env.realm().atoms().clone());
                     true
                 }
                 _ => false,
@@ -432,7 +432,7 @@ pub(super) fn try_plain_set_index(
     let stored = match (&registers[obj], &registers[value_register]) {
         (Value::Array(elements), value) => {
             elements.dense_index_store_eligible(index) && array_access_is_plain(elements, env) && {
-                elements.set(index, value.clone());
+                elements.set(index, value.clone(), &|| env.realm().atoms().clone());
                 true
             }
         }
@@ -487,12 +487,18 @@ pub(super) fn object_data_literal(
         && shape.unique_len() == 2
     {
         crate::ObjectRef::with_literal_pair(
+            env.realm().atoms(),
             Rc::clone(shape),
             [first.clone(), second.clone()],
             prototype,
         )
     } else {
-        crate::ObjectRef::with_literal_properties(Rc::clone(shape), values, prototype)
+        crate::ObjectRef::with_literal_properties(
+            env.realm().atoms(),
+            Rc::clone(shape),
+            values,
+            prototype,
+        )
     };
     for function in home_functions {
         function.set_home_object(Value::Object(object.clone()));

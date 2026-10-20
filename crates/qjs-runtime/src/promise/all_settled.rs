@@ -40,7 +40,8 @@ impl ElementHandler for AllSettledHandler {
         capability: &PromiseCapability,
         env: &mut CallEnv,
     ) -> Result<(Value, Value), RuntimeError> {
-        self.values.set(index, Value::Undefined);
+        self.values
+            .set(index, Value::Undefined, &|| env.realm().atoms().clone());
         perform::increment_remaining(&self.remaining);
 
         // A single alreadyCalled record is shared by the resolve and reject
@@ -107,7 +108,7 @@ fn element_function(
     already_called: &ObjectRef,
     capability: &PromiseCapability,
 ) -> Function {
-    let mut function = Function::new_native(None, 1, native, false);
+    let mut function = Function::new_native(&remaining.store_domain(), None, 1, native, false);
     function.insert_native_context(PROMISE_ALL_INDEX.to_owned(), Value::Number(index as f64));
     function.insert_native_context(PROMISE_ALL_VALUES.to_owned(), Value::Array(values.clone()));
     function.insert_native_context(
@@ -163,7 +164,8 @@ fn settle_element(
     };
 
     let settled_value = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    values.set(index, settled_result_object(state, settled_value, env));
+    let settled = settled_result_object(state, settled_value, env);
+    values.set(index, settled, &|| env.realm().atoms().clone());
     if perform::decrement_remaining(&remaining) == 0.0 {
         let resolve = function
             .native_context
@@ -185,7 +187,11 @@ fn settle_element(
 /// the spec property order, `%Object.prototype%`, and default data attributes
 /// (writable, enumerable, configurable).
 fn settled_result_object(state: &str, value: Value, env: &CallEnv) -> Value {
-    let object = ObjectRef::with_prototype(HashMap::new(), crate::object_prototype(env));
+    let object = ObjectRef::with_prototype(
+        env.realm().atoms(),
+        HashMap::new(),
+        crate::object_prototype(env),
+    );
     object.define_property(
         "status".to_owned(),
         Property::data(Value::String(state.to_owned().into()), true, true, true),

@@ -14,6 +14,7 @@ pub(crate) fn native_promise_with_resolvers(
 ) -> Result<Value, RuntimeError> {
     let capability = new_promise_capability(&this_value, env)?;
     let result = ObjectRef::with_prototype(
+        env.realm().atoms(),
         HashMap::from([
             ("promise".to_owned(), capability.promise),
             ("resolve".to_owned(), capability.resolve),

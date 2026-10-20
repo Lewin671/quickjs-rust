@@ -572,15 +572,10 @@ impl ObjectLiteralShape {
     }
 
     /// The layout for an object with `prototype`: in the prototype's domain,
-    /// or, for a null-prototype literal, in the domain the site last used.
+    /// or, for a null-prototype literal, in `realm`, the evaluating realm's.
     #[inline]
-    fn layout_for(&self, prototype: Option<&ObjectRef>) -> Layout {
-        if prototype.is_none()
-            && let Some((_, layout)) = &*self.site.borrow()
-        {
-            return Rc::clone(layout);
-        }
-        self.layout_in(&literal_domain(prototype))
+    fn layout_for(&self, prototype: Option<&ObjectRef>, realm: &AtomDomain) -> Layout {
+        self.layout_in(&literal_domain(prototype, realm))
     }
 
     /// Returns the input value that supplies `key` after duplicate literal
@@ -748,8 +743,10 @@ impl ObjectRef {
         }
     }
 
+    /// A null-prototype test object in the test thread's domain.
+    #[cfg(test)]
     pub(crate) fn new(properties: HashMap<String, Value>) -> Self {
-        Self::with_prototype_slot(properties, None)
+        Self::new_in(&AtomDomain::test_domain(), properties)
     }
 
     /// An object with no prototype whose store uses `domain`: a
@@ -759,30 +756,37 @@ impl ObjectRef {
     }
 
     /// [`Self::new_like`] of an object value; any other value has no domain.
-    pub(crate) fn new_like_value(like: &Value, properties: HashMap<String, Value>) -> Self {
+    pub(crate) fn new_like_value(
+        like: &Value,
+        realm: &AtomDomain,
+        properties: HashMap<String, Value>,
+    ) -> Self {
         match like {
             Value::Object(object) => Self::new_like(object, properties),
-            _ => Self::new(properties),
+            _ => Self::new_in(realm, properties),
         }
     }
 
     /// A null-prototype object in the domain of `like`, for an internal
     /// record created alongside an existing object.
     pub(crate) fn new_like(like: &ObjectRef, properties: HashMap<String, Value>) -> Self {
-        match like.atom_domain() {
-            Some(domain) => Self::new_in(&domain, properties),
-            None => Self::new(properties),
-        }
+        Self::new_in(&like.store_domain(), properties)
     }
 
+    /// An object with `prototype`, whose store takes the prototype's domain
+    /// or, when the prototype names none (null, a revoked proxy), `realm`:
+    /// the creating code's realm domain.
     pub(crate) fn with_prototype(
+        realm: &AtomDomain,
         properties: HashMap<String, Value>,
         prototype: Option<ObjectRef>,
     ) -> Self {
-        Self::with_prototype_slot(properties, prototype.map(Prototype::Object))
+        Self::with_prototype_slot(realm, properties, prototype.map(Prototype::Object))
     }
 
+    /// [`Self::with_prototype`] with any prototype kind.
     pub(crate) fn with_prototype_slot(
+        realm: &AtomDomain,
         properties: HashMap<String, Value>,
         prototype: Option<Prototype>,
     ) -> Self {
@@ -797,8 +801,8 @@ impl ObjectRef {
         {
             return Self::from_storage(storage, 0, prototype);
         }
-        let domain = store_domain(prototype.as_ref());
-        Self::with_prototype_slot_in(&domain, properties, prototype)
+        let domain = prototype.as_ref().and_then(Prototype::atom_domain);
+        Self::with_prototype_slot_in(domain.as_ref().unwrap_or(realm), properties, prototype)
     }
 
     /// An empty ordinary object whose store takes its domain from
@@ -807,7 +811,7 @@ impl ObjectRef {
     pub(crate) fn empty_with_prototype(prototype: ObjectRef) -> Self {
         let storage = match prototype.0.properties.try_borrow() {
             Ok(properties) => PropertyStorage::empty(properties.domain(), 0),
-            Err(_) => PropertyStorage::empty(&fallback_domain(), 0),
+            Err(_) => unreachable!("a test prototype is not borrowed"),
         };
         Self::from_storage(storage, 0, Some(Prototype::Object(prototype)))
     }
@@ -864,12 +868,13 @@ impl ObjectRef {
     /// every object. Duplicate keys retain their first insertion position and
     /// their last value, matching CreateDataProperty semantics.
     pub(crate) fn with_literal_properties(
+        realm: &AtomDomain,
         shape: Rc<ObjectLiteralShape>,
         values: Vec<Value>,
         prototype: Option<ObjectRef>,
     ) -> Self {
         debug_assert_eq!(shape.input_slots.len(), values.len());
-        let layout = shape.layout_for(prototype.as_ref());
+        let layout = shape.layout_for(prototype.as_ref(), realm);
         let payload = if shape.encoding() == Encoding::Pair {
             let mut pair = [Value::Undefined, Value::Undefined];
             for (slot, value) in shape.input_slots.iter().copied().zip(values) {
@@ -901,13 +906,14 @@ impl ObjectRef {
     /// descriptor vectors. The shape guard guarantees distinct source keys in
     /// first-insertion order, so operand-stack order is storage-slot order.
     pub(crate) fn with_literal_pair(
+        realm: &AtomDomain,
         shape: Rc<ObjectLiteralShape>,
         values: [Value; 2],
         prototype: Option<ObjectRef>,
     ) -> Self {
         debug_assert_eq!(shape.input_len(), 2);
         debug_assert_eq!(shape.unique_len(), 2);
-        let layout = shape.layout_for(prototype.as_ref());
+        let layout = shape.layout_for(prototype.as_ref(), realm);
         Self::from_storage(
             PropertyStorage::literal(layout, Payload::Pair(values)),
             shape.index_property_count,
@@ -980,6 +986,12 @@ impl ObjectRef {
             .try_borrow()
             .ok()
             .map(|properties| properties.domain().clone())
+    }
+
+    /// This object's store domain: its creation realm's for an object a
+    /// realm built. Natives created for this object use it.
+    pub(crate) fn store_domain(&self) -> AtomDomain {
+        self.0.properties.borrow().domain().clone()
     }
 
     /// Identity of the shared storage, for hashing this reference as a key.
@@ -1684,27 +1696,14 @@ fn same_prototype_slot(left: Option<&Prototype>, right: Option<&Prototype>) -> b
     }
 }
 
-/// The domain of a new store with `prototype`: the prototype's own, or a
-/// fresh one when the prototype names none.
-fn store_domain(prototype: Option<&Prototype>) -> AtomDomain {
-    prototype
-        .and_then(Prototype::atom_domain)
-        .unwrap_or_else(fallback_domain)
-}
-
+/// The domain of a literal with `prototype`: the prototype's own, or
+/// `realm` for a null prototype.
 #[inline]
-fn literal_domain(prototype: Option<&ObjectRef>) -> AtomDomain {
+fn literal_domain(prototype: Option<&ObjectRef>, realm: &AtomDomain) -> AtomDomain {
     match prototype.map(|prototype| prototype.0.properties.try_borrow()) {
         Some(Ok(properties)) => properties.domain().clone(),
-        _ => fallback_domain(),
+        _ => realm.clone(),
     }
-}
-
-/// The domain for a store created with no realm or prototype to take one
-/// from: the shared fallback, never a private one.
-#[cold]
-fn fallback_domain() -> AtomDomain {
-    AtomDomain::shared_fallback()
 }
 
 fn is_internal_property_key(key: &str) -> bool {

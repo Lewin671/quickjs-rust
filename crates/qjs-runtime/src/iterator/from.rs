@@ -37,7 +37,8 @@ pub(super) fn native_iterator_from(
 
     // Otherwise wrap it so the helpers apply.
     let next = property_value(iterator.clone(), "next", env)?;
-    let wrapper = ObjectRef::with_prototype(HashMap::new(), wrap_prototype(env));
+    let wrapper =
+        ObjectRef::with_prototype(env.realm().atoms(), HashMap::new(), wrap_prototype(env));
     wrapper.define_non_enumerable(WRAP_ITERATOR.to_owned(), iterator);
     wrapper.define_non_enumerable(WRAP_NEXT.to_owned(), next);
     Ok(Value::Object(wrapper))
@@ -131,10 +132,15 @@ fn iterator_inherits_iterator_prototype(
 /// forwards `next`/`return` to the wrapped iterator record.
 pub(super) fn build_wrap_prototype(env: &CallEnv, iterator_prototype: &ObjectRef) -> ObjectRef {
     let _ = env;
-    let prototype = ObjectRef::with_prototype(HashMap::new(), Some(iterator_prototype.clone()));
+    let prototype = ObjectRef::with_prototype(
+        env.realm().atoms(),
+        HashMap::new(),
+        Some(iterator_prototype.clone()),
+    );
     prototype.define_non_enumerable(
         "next".to_owned(),
         Value::Function(crate::Function::new_native(
+            env.realm().atoms(),
             Some("next"),
             0,
             NativeFunction::WrapForValidIteratorPrototypeNext,
@@ -144,6 +150,7 @@ pub(super) fn build_wrap_prototype(env: &CallEnv, iterator_prototype: &ObjectRef
     prototype.define_non_enumerable(
         "return".to_owned(),
         Value::Function(crate::Function::new_native(
+            env.realm().atoms(),
             Some("return"),
             0,
             NativeFunction::WrapForValidIteratorPrototypeReturn,
@@ -204,7 +211,8 @@ pub(super) fn native_wrap_return(
 }
 
 fn done_result(env: &CallEnv) -> Value {
-    let object = ObjectRef::with_prototype(HashMap::new(), object_prototype(env));
+    let object =
+        ObjectRef::with_prototype(env.realm().atoms(), HashMap::new(), object_prototype(env));
     object.define_property("value".to_owned(), Property::enumerable(Value::Undefined));
     object.define_property(
         "done".to_owned(),

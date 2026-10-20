@@ -45,12 +45,18 @@ impl ElementHandler for AnyHandler {
         capability: &PromiseCapability,
         env: &mut CallEnv,
     ) -> Result<(Value, Value), RuntimeError> {
-        self.errors.set(index, Value::Undefined);
+        self.errors
+            .set(index, Value::Undefined, &|| env.realm().atoms().clone());
         perform::increment_remaining(&self.remaining);
 
         let already_called = ObjectRef::new_in(env.realm().atoms(), HashMap::new());
-        let mut on_rejected =
-            Function::new_native(None, 1, NativeFunction::PromiseAnyRejectElement, false);
+        let mut on_rejected = Function::new_native(
+            env.realm().atoms(),
+            None,
+            1,
+            NativeFunction::PromiseAnyRejectElement,
+            false,
+        );
         on_rejected
             .insert_native_context(PROMISE_ALL_INDEX.to_owned(), Value::Number(index as f64));
         on_rejected.insert_native_context(
@@ -132,7 +138,7 @@ pub(crate) fn native_promise_any_reject_element(
     };
 
     let reason = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    errors.set(index, reason);
+    errors.set(index, reason, &|| env.realm().atoms().clone());
     if perform::decrement_remaining(&remaining) == 0.0 {
         let aggregate = function
             .native_context

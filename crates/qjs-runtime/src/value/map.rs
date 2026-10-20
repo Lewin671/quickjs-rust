@@ -20,12 +20,18 @@ struct MapData {
 }
 
 impl MapRef {
-    pub(crate) fn new(prototype: Option<ObjectRef>) -> Self {
-        Self::with_prototype_slot(prototype.map(Prototype::Object))
+    pub(crate) fn new(
+        realm: &crate::property::atom::AtomDomain,
+        prototype: Option<ObjectRef>,
+    ) -> Self {
+        Self::with_prototype_slot(realm, prototype.map(Prototype::Object))
     }
 
-    pub(crate) fn with_prototype_slot(prototype: Option<Prototype>) -> Self {
-        let object = ObjectRef::with_prototype_slot(HashMap::new(), prototype);
+    pub(crate) fn with_prototype_slot(
+        realm: &crate::property::atom::AtomDomain,
+        prototype: Option<Prototype>,
+    ) -> Self {
+        let object = ObjectRef::with_prototype_slot(realm, HashMap::new(), prototype);
         object.set_to_string_tag("Map");
         Self(Rc::new(MapData {
             entries: RefCell::new(Vec::new()),

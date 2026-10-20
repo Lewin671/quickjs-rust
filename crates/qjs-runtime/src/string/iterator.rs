@@ -18,7 +18,7 @@ pub(crate) fn native_string_prototype_iterator(
         env,
         crate::iterator::BuiltinIteratorKind::String,
     );
-    let iterator = ObjectRef::with_prototype(HashMap::new(), prototype);
+    let iterator = ObjectRef::with_prototype(env.realm().atoms(), HashMap::new(), prototype);
     iterator.define_non_enumerable(
         STRING_ITERATOR_STRING.to_owned(),
         Value::String(source.into()),

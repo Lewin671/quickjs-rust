@@ -151,7 +151,7 @@ pub struct FunctionData {
     pub(crate) immutable_name_binding: bool,
     /// An immutable binding supplied through the captured environment rather
     /// than the function's own name, currently used for class inner names.
-    pub(crate) immutable_env_binding: Option<String>,
+    pub(crate) immutable_env_binding: Option<Box<str>>,
     /// Value for the rare immutable outer name that is not represented by a
     /// compiler-generated received-upvalue slot (notably the self binding of a
     /// named function expression referenced only by a nested function).
@@ -170,6 +170,11 @@ pub struct FunctionData {
     /// The creation realm of a user bytecode function. Native functions keep
     /// `None` and receive their active realm through `CallEnv`.
     pub(crate) realm: Option<Realm>,
+    /// The atom domain of a native or bound function's creating realm, fixed
+    /// at creation: its named table's domain. `None` for a user function
+    /// (its realm's domain applies) and for the realm-less internal marker,
+    /// which never takes a named property.
+    native_atoms: Option<crate::property::atom::AtomDomain>,
     /// Whether this function was created while the host's temporary dynamic
     /// realm marker was active. The marker object remains live realm state;
     /// this bit only keeps ordinary calls off that cold lookup path.
@@ -375,11 +380,6 @@ impl LazyFunctionProperties {
                 .as_deref_mut()
                 .expect("function properties initialized before borrowing")
         })
-    }
-
-    /// The domain of the installed named table, if it has one.
-    fn domain(&self) -> Option<crate::property::atom::AtomDomain> {
-        self.0.try_borrow().ok()?.as_deref()?.domain().cloned()
     }
 
     fn ensure_allocated(&self) {
@@ -613,6 +613,7 @@ impl Function {
         let realm = super::env::new_realm_sharing_atoms(env, atoms);
         let has_dynamic_function_realm = realm.has_dynamic_function_realm_global();
         let prototype = ObjectRef::with_prototype(
+            realm.atoms(),
             HashMap::new(),
             object_prototype(&crate::CallEnv::new(Rc::clone(&realm))),
         );
@@ -637,6 +638,7 @@ impl Function {
             params: Rc::new(params),
             native_context: NativeContext::default(),
             realm: Some(realm),
+            native_atoms: None,
             has_dynamic_function_realm,
             has_dynamic_function_realm_override: Cell::new(false),
             direct_leaf_call_eligible: Cell::new(None),
@@ -732,12 +734,13 @@ impl Function {
         let function = Self(Rc::new(FunctionData {
             has_name_binding,
             immutable_name_binding,
-            immutable_env_binding,
+            immutable_env_binding: immutable_env_binding.map(Into::into),
             immutable_env_value,
             name,
             params,
             native_context: NativeContext::default(),
             realm: Some(realm),
+            native_atoms: None,
             has_dynamic_function_realm,
             has_dynamic_function_realm_override: Cell::new(false),
             direct_leaf_call_eligible: Cell::new(None),
@@ -798,12 +801,14 @@ impl Function {
     }
 
     pub(crate) fn new_native(
+        atoms: &crate::property::atom::AtomDomain,
         name: Option<&str>,
         length: usize,
         native: NativeFunction,
         constructable: bool,
     ) -> Self {
         Self::new(
+            Some(atoms),
             name.map(str::to_owned),
             vec![String::new(); length],
             HashMap::new(),
@@ -813,10 +818,12 @@ impl Function {
     }
 
     pub(crate) fn uninitialized_lexical_marker() -> Self {
-        Self::new_native(
-            Some("\u{0}\u{0}uninitialized_lexical"),
-            0,
-            NativeFunction::UninitializedLexical,
+        Self::new(
+            None,
+            Some("\u{0}\u{0}uninitialized_lexical".to_owned()),
+            Vec::new(),
+            HashMap::new(),
+            Some(NativeFunction::UninitializedLexical),
             false,
         )
     }
@@ -846,18 +853,29 @@ impl Function {
     }
 
     /// The domain this function's named table takes at its first install:
-    /// its creation realm's. A native function has none; its installer
-    /// supplies the realm's.
-    fn named_domain(&self) -> Option<&crate::property::atom::AtomDomain> {
-        self.realm.as_ref().map(|realm| realm.atoms())
+    /// its creation realm's, recorded at creation for a native or bound
+    /// function.
+    fn named_domain(&self) -> &crate::property::atom::AtomDomain {
+        match (&self.realm, &self.native_atoms) {
+            (_, Some(atoms)) => atoms,
+            (Some(realm), None) => realm.atoms(),
+            (None, None) => unreachable!("the realm-less marker function takes no named property"),
+        }
+    }
+
+    /// The creating realm's atom domain, for objects and natives made on
+    /// this function's behalf.
+    pub(crate) fn realm_domain(&self) -> crate::property::atom::AtomDomain {
+        self.named_domain().clone()
     }
 
     /// The atom domain a store created with this function as its
     /// prototype uses: its creation realm's.
     pub(crate) fn atom_domain(&self) -> Option<crate::property::atom::AtomDomain> {
-        match &self.realm {
-            Some(realm) => Some(realm.atoms().clone()),
-            None => self.properties.domain(),
+        match (&self.realm, &self.native_atoms) {
+            (_, Some(atoms)) => Some(atoms.clone()),
+            (Some(realm), None) => Some(realm.atoms().clone()),
+            (None, None) => None,
         }
     }
 
@@ -866,6 +884,7 @@ impl Function {
     }
 
     pub(crate) fn new_bound(
+        atoms: &crate::property::atom::AtomDomain,
         target: Value,
         this_value: Value,
         arguments: Vec<Value>,
@@ -889,6 +908,7 @@ impl Function {
                 Value::Function(function) => function.realm.clone(),
                 _ => None,
             },
+            native_atoms: Some(atoms.clone()),
             has_dynamic_function_realm: match &target {
                 Value::Function(function) => function.has_dynamic_function_realm,
                 _ => false,
@@ -934,6 +954,7 @@ impl Function {
     }
 
     fn new(
+        atoms: Option<&crate::property::atom::AtomDomain>,
         name: Option<String>,
         params: Vec<String>,
         env: HashMap<String, Value>,
@@ -950,6 +971,7 @@ impl Function {
             params: Rc::new(FunctionParams::positional(params)),
             native_context: NativeContext::from_map(env),
             realm: None,
+            native_atoms: atoms.cloned(),
             has_dynamic_function_realm: false,
             has_dynamic_function_realm_override: Cell::new(false),
             direct_leaf_call_eligible: Cell::new(None),
@@ -1082,8 +1104,11 @@ impl Function {
         if self.properties.borrow().contains_key("prototype") {
             return;
         }
-        let prototype =
-            ObjectRef::with_prototype(HashMap::new(), object_prototype(&self.creation_env()));
+        let prototype = ObjectRef::with_prototype(
+            self.named_domain(),
+            HashMap::new(),
+            object_prototype(&self.creation_env()),
+        );
         prototype.define_non_enumerable("constructor".to_owned(), Value::Function(self.clone()));
         let mut properties = self.properties.borrow_mut();
         let at = self.default_prototype_position();
@@ -1233,7 +1258,7 @@ impl Function {
             return;
         }
         let mut properties = self.properties.borrow_mut();
-        properties.insert_hinted(self.named_domain(), key.as_str(), property);
+        properties.insert_in(self.named_domain(), key.as_str(), property);
         drop(properties);
         self.refresh_dynamic_function_realm_override(&key);
     }

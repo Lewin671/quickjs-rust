@@ -8,8 +8,11 @@
 
 use crate::{CallEnv, ModuleNamespaceBindings, ObjectRef, Property, Value};
 
-pub(super) fn empty_namespace(live_bindings: ModuleNamespaceBindings) -> ObjectRef {
-    let namespace = ObjectRef::new(std::collections::HashMap::new());
+pub(super) fn empty_namespace(
+    realm: &crate::property::atom::AtomDomain,
+    live_bindings: ModuleNamespaceBindings,
+) -> ObjectRef {
+    let namespace = ObjectRef::new_in(realm, std::collections::HashMap::new());
     let _ = namespace.set_prototype(None);
     namespace.mark_module_namespace_exotic();
     namespace.set_module_namespace_bindings(live_bindings);

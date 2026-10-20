@@ -4,11 +4,18 @@ use crate::CallEnv;
 use crate::{Function, NativeFunction, ObjectRef, Property, Value, symbol};
 
 pub(crate) fn install_array(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
-    let array_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
+    let array_prototype =
+        ObjectRef::with_prototype(env.realm().atoms(), HashMap::new(), Some(object_prototype));
     array_prototype.mark_array_prototype_exotic();
     env.realm()
         .initialize_array_prototype(array_prototype.clone());
-    let array_function = Function::new_native(Some("Array"), 1, NativeFunction::Array, true);
+    let array_function = Function::new_native(
+        env.realm().atoms(),
+        Some("Array"),
+        1,
+        NativeFunction::Array,
+        true,
+    );
     array_prototype.define_property(
         "length".to_owned(),
         Property::data(Value::Number(0.0), false, true, false),
@@ -300,7 +307,13 @@ fn define_array_prototype_function(
 ) {
     prototype.define_non_enumerable(
         key.to_owned(),
-        Value::Function(Function::new_native(Some(key), length, native, false)),
+        Value::Function(Function::new_native(
+            &prototype.store_domain(),
+            Some(key),
+            length,
+            native,
+            false,
+        )),
     );
 }
 
@@ -315,6 +328,7 @@ fn define_array_function(
         atoms,
         key,
         Property::non_enumerable(Value::Function(Function::new_native(
+            atoms,
             Some(key),
             length,
             native,

@@ -165,8 +165,12 @@ fn existing_own_data_write_updates_or_rejects_without_slow_path() {
 #[test]
 fn literal_pair_keeps_inline_values_until_descriptor_mutation() {
     let shape = ObjectLiteralShape::new(vec![Rc::from("a"), Rc::from("b")]);
-    let object =
-        ObjectRef::with_literal_pair(shape, [Value::Number(1.0), Value::Number(2.0)], None);
+    let object = ObjectRef::with_literal_pair(
+        &crate::property::atom::AtomDomain::test_domain(),
+        shape,
+        [Value::Number(1.0), Value::Number(2.0)],
+        None,
+    );
 
     assert_eq!(encoding(&object), Encoding::Pair);
     assert!(matches!(
@@ -205,8 +209,12 @@ fn module_namespace_own_data_write_stays_on_slow_path() {
 #[test]
 fn literal_slot_survives_value_writes_and_misses_on_accessors() {
     let shape = ObjectLiteralShape::new(vec![Rc::from("a"), Rc::from("b")]);
-    let object =
-        ObjectRef::with_literal_pair(shape, [Value::Number(1.0), Value::Number(2.0)], None);
+    let object = ObjectRef::with_literal_pair(
+        &crate::property::atom::AtomDomain::test_domain(),
+        shape,
+        [Value::Number(1.0), Value::Number(2.0)],
+        None,
+    );
     let (cached_shape, slot) = object.literal_data_slot("b").expect("literal slot");
     assert_eq!(slot, 1);
     assert!(matches!(
@@ -229,7 +237,11 @@ fn literal_slot_survives_value_writes_and_misses_on_accessors() {
 
 #[test]
 fn dynamic_storage_keeps_order_values_and_slots_across_a_removal() {
-    let object = ObjectRef::with_prototype(HashMap::new(), None);
+    let object = ObjectRef::with_prototype(
+        &crate::property::atom::AtomDomain::test_domain(),
+        HashMap::new(),
+        None,
+    );
     let count = LINEAR_LOOKUP_LIMIT + 4;
     for index in 0..count {
         object.set(format!("k{index}"), Value::Number(index as f64));
@@ -266,11 +278,13 @@ fn all_property_storage_forms_share_surrogate_pair_key_bytes() {
         dynamic.set(format!("p{index}"), Value::Undefined);
     }
     let shaped = ObjectRef::with_literal_properties(
+        &crate::property::atom::AtomDomain::test_domain(),
         ObjectLiteralShape::new(vec![Rc::from(literal)]),
         vec![Value::Number(0.0)],
         None,
     );
     let pair = ObjectRef::with_literal_pair(
+        &crate::property::atom::AtomDomain::test_domain(),
         ObjectLiteralShape::new(vec![Rc::from(literal), Rc::from("other")]),
         [Value::Number(0.0), Value::Undefined],
         None,
@@ -311,6 +325,7 @@ fn a_literal_site_shared_by_two_realms_builds_in_each_prototypes_domain() {
     let shape = ObjectLiteralShape::new(vec![Rc::from("a"), Rc::from("b"), Rc::from("c")]);
     let build = |prototype: &ObjectRef, base: f64| {
         ObjectRef::with_literal_properties(
+            &crate::property::atom::AtomDomain::test_domain(),
             Rc::clone(&shape),
             vec![
                 Value::Number(base),

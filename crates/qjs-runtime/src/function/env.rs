@@ -145,6 +145,17 @@ impl RealmState {
     /// The property-name atom domain this realm's code links against.
     #[inline]
     pub(crate) fn atoms(&self) -> &AtomDomain {
+        match self.atoms.get() {
+            Some((atoms, _)) => atoms,
+            None => self.init_atoms(),
+        }
+    }
+
+    /// Creates the realm's domain on first use, out of line so every
+    /// caller of [`Self::atoms`] inlines only the check.
+    #[cold]
+    #[inline(never)]
+    fn init_atoms(&self) -> &AtomDomain {
         &self
             .atoms
             .get_or_init(|| {

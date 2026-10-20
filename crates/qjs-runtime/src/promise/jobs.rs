@@ -49,7 +49,9 @@ pub(super) fn enqueue_promise_reaction_job(
         Value::Boolean(reaction_is_fulfill(reaction)),
     );
     let jobs = promise_jobs(env);
-    jobs.set(jobs.len(), Value::Object(job));
+    jobs.set(jobs.len(), Value::Object(job), &|| {
+        env.realm().atoms().clone()
+    });
 }
 
 pub(super) fn enqueue_promise_thenable_job(
@@ -66,7 +68,9 @@ pub(super) fn enqueue_promise_thenable_job(
     job.define_non_enumerable(PROMISE_THENABLE.to_owned(), thenable);
     job.define_non_enumerable(PROMISE_THEN.to_owned(), then);
     let jobs = promise_jobs(env);
-    jobs.set(jobs.len(), Value::Object(job));
+    jobs.set(jobs.len(), Value::Object(job), &|| {
+        env.realm().atoms().clone()
+    });
 }
 
 /// Schedules a dynamic-`import()` load job. When drained it consults the
@@ -95,7 +99,9 @@ pub(super) fn enqueue_dynamic_import_job(
         );
     }
     let jobs = promise_jobs(env);
-    jobs.set(jobs.len(), Value::Object(job));
+    jobs.set(jobs.len(), Value::Object(job), &|| {
+        env.realm().atoms().clone()
+    });
 }
 
 pub(crate) fn enqueue_async_dispose_settle_job(
@@ -112,7 +118,9 @@ pub(crate) fn enqueue_async_dispose_settle_job(
         job.define_non_enumerable(PROMISE_ASYNC_DISPOSE_REJECTION.to_owned(), rejection);
     }
     let jobs = promise_jobs(env);
-    jobs.set(jobs.len(), Value::Object(job));
+    jobs.set(jobs.len(), Value::Object(job), &|| {
+        env.realm().atoms().clone()
+    });
 }
 
 enum DrainMode {
@@ -336,7 +344,8 @@ fn run_promise_thenable_job(job: &ObjectRef, env: &mut CallEnv) -> Result<(), Ru
         .own_property(PROMISE_THEN)
         .map_or(Value::Undefined, |property| property.value);
     // resolve/reject share one alreadyResolved guard (CreateResolvingFunctions).
-    let (resolve, reject) = resolving_function_pair(Value::Object(capability.clone()));
+    let (resolve, reject) =
+        resolving_function_pair(env.realm().atoms(), Value::Object(capability.clone()));
     if let Err(error) = call_function(then, thenable, vec![resolve, reject.clone()], env, false) {
         // A throw from `then` rejects through the reject function so its
         // alreadyResolved guard suppresses the rejection if the thenable already

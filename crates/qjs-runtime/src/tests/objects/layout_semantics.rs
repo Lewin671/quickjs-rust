@@ -53,3 +53,55 @@ fn layout_semantics_survive_edges_dictionaries_and_reencoding() {
                     b,c=! ; other,f ; a,g:2 ; 1:2:2 ; p,q,r:p,q";
     assert_eq!(value, Value::String(expected.into()));
 }
+
+/// Built-in constructors enumerate their own keys in installation order:
+/// `length` and `name`, then the keys in the order their installer defined
+/// them. The specification leaves this order to the implementation; it
+/// changed from alphabetical when the layout took over key order, and this
+/// test keeps it from changing again unnoticed.
+#[test]
+fn builtin_constructor_keys_enumerate_in_installation_order() {
+    let expected = [
+        ("Array", "length,name,prototype,from,fromAsync,isArray,of"),
+        (
+            "Object",
+            "length,name,prototype,assign,create,defineProperty,defineProperties,getPrototypeOf,getOwnPropertyDescriptor,getOwnPropertyDescriptors,getOwnPropertyNames,getOwnPropertySymbols,fromEntries,groupBy,freeze,hasOwn,is,isExtensible,isFrozen,isSealed,preventExtensions,seal,setPrototypeOf,entries,keys,values",
+        ),
+        (
+            "Promise",
+            "length,name,prototype,all,any,allSettled,race,try,withResolvers,resolve,reject",
+        ),
+        (
+            "Number",
+            "length,name,prototype,EPSILON,MAX_SAFE_INTEGER,MAX_VALUE,MIN_SAFE_INTEGER,MIN_VALUE,NaN,NEGATIVE_INFINITY,POSITIVE_INFINITY,isFinite,isInteger,isNaN,isSafeInteger,parseFloat,parseInt",
+        ),
+        (
+            "String",
+            "length,name,prototype,fromCharCode,fromCodePoint,raw",
+        ),
+        (
+            "Symbol",
+            "length,name,asyncDispose,asyncIterator,dispose,hasInstance,isConcatSpreadable,iterator,match,matchAll,replace,search,species,split,toPrimitive,toStringTag,unscopables,for,keyFor,prototype",
+        ),
+        ("Date", "length,name,prototype,now,parse,UTC"),
+        ("RegExp", "length,name,escape,prototype"),
+        ("Map", "length,name,groupBy,prototype"),
+        ("Set", "length,name,prototype"),
+        ("BigInt", "length,name,asIntN,asUintN,prototype"),
+        ("Error", "length,name,isError,prototype"),
+        ("ArrayBuffer", "length,name,prototype,isView"),
+        (
+            "Uint8Array",
+            "length,name,fromBase64,fromHex,BYTES_PER_ELEMENT,prototype",
+        ),
+        ("Proxy", "length,name,revocable"),
+    ];
+    for (name, keys) in expected {
+        let source = format!("Object.getOwnPropertyNames({name}).join(',')");
+        assert_eq!(
+            eval(&source),
+            Ok(Value::String(keys.to_owned().into())),
+            "{name}"
+        );
+    }
+}

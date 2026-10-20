@@ -1549,7 +1549,9 @@ fn fill_hole_or_grow_value<F: LoopFrame>(
     if !array.dense_index_store_eligible(index) || !vm.array_access_is_plain(array) {
         return false;
     }
-    array.set(index, value.clone());
+    array.set(index, value.clone(), &|| {
+        vm.loop_env().realm().atoms().clone()
+    });
     true
 }
 
@@ -1581,7 +1583,9 @@ fn fill_hole_or_grow<F: LoopFrame>(
     if !array.dense_index_store_eligible(index) || !vm.array_access_is_plain(array) {
         return false;
     }
-    array.set(index, value.to_value());
+    array.set(index, value.to_value(), &|| {
+        vm.loop_env().realm().atoms().clone()
+    });
     true
 }
 

@@ -12,8 +12,15 @@ use crate::{
 pub(crate) const BIGINT_DATA_PROPERTY: &str = "\0BigIntData";
 
 pub(crate) fn install_bigint(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
-    let bigint_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
-    let bigint_function = Function::new_native(Some("BigInt"), 1, NativeFunction::BigInt, true);
+    let bigint_prototype =
+        ObjectRef::with_prototype(env.realm().atoms(), HashMap::new(), Some(object_prototype));
+    let bigint_function = Function::new_native(
+        env.realm().atoms(),
+        Some("BigInt"),
+        1,
+        NativeFunction::BigInt,
+        true,
+    );
     bigint_prototype.set_to_string_tag("BigInt");
     bigint_prototype.define_non_enumerable(
         "constructor".to_owned(),
@@ -78,7 +85,13 @@ fn define_prototype_native(
 ) {
     prototype.define_non_enumerable(
         key.to_owned(),
-        Value::Function(Function::new_native(Some(key), length, native, false)),
+        Value::Function(Function::new_native(
+            &prototype.store_domain(),
+            Some(key),
+            length,
+            native,
+            false,
+        )),
     );
 }
 
@@ -93,6 +106,7 @@ fn define_static_native(
         atoms,
         key,
         Property::non_enumerable(Value::Function(Function::new_native(
+            atoms,
             Some(key),
             length,
             native,

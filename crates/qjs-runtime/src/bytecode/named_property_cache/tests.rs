@@ -13,11 +13,16 @@ fn prototype_cache_records_and_reads_both_literal_representations() {
         let keys: Vec<Rc<str>> = (0..count).map(|i| Rc::from(format!("field{i}"))).collect();
         let key = keys[count - 1].clone();
         let holder = ObjectRef::with_literal_properties(
+            &crate::property::atom::AtomDomain::test_domain(),
             ObjectLiteralShape::new(keys),
             (0..count).map(|i| Value::Number(i as f64)).collect(),
             None,
         );
-        let receiver = ObjectRef::with_prototype(HashMap::new(), Some(holder.clone()));
+        let receiver = ObjectRef::with_prototype(
+            &crate::property::atom::AtomDomain::test_domain(),
+            HashMap::new(),
+            Some(holder.clone()),
+        );
         assert!(holder.own_data_slot(&key).is_none());
         assert!(holder.own_data_slot_value(count - 1).is_none());
         let cache = NamedPropertyCache::default();
@@ -61,7 +66,11 @@ fn prototype_cache_records_and_reads_both_literal_representations() {
 
 #[test]
 fn a_value_with_no_by_value_entry_is_cached_by_slot() {
-    let object = ObjectRef::with_prototype(HashMap::new(), None);
+    let object = ObjectRef::with_prototype(
+        &crate::property::atom::AtomDomain::test_domain(),
+        HashMap::new(),
+        None,
+    );
     object.set("items".to_owned(), Value::String("first".into()));
     object.set("name".to_owned(), Value::String("n".into()));
     let cache = NamedPropertyCache::default();
@@ -83,11 +92,21 @@ fn a_value_with_no_by_value_entry_is_cached_by_slot() {
 #[test]
 fn a_function_on_slotless_storage_is_cached_by_value_and_revision() {
     // Enough properties to leave the small slot storage, as `Math` has.
-    let object = ObjectRef::with_prototype(HashMap::new(), None);
+    let object = ObjectRef::with_prototype(
+        &crate::property::atom::AtomDomain::test_domain(),
+        HashMap::new(),
+        None,
+    );
     for index in 0..20 {
         object.set(format!("p{index}"), Value::Number(index as f64));
     }
-    let function = crate::Function::new_native(Some("f"), 0, crate::NativeFunction::MathAbs, false);
+    let function = crate::Function::new_native(
+        &crate::property::atom::AtomDomain::test_domain(),
+        Some("f"),
+        0,
+        crate::NativeFunction::MathAbs,
+        false,
+    );
     object.set("f".to_owned(), Value::Function(function.clone()));
     assert!(object.own_data_slot("f").is_none());
     let cache = NamedPropertyCache::default();

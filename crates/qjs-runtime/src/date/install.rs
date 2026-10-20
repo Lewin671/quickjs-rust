@@ -4,9 +4,16 @@ use std::collections::HashMap;
 use crate::{Function, NativeFunction, ObjectRef, Property, Value, symbol};
 
 pub(crate) fn install_date(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
-    let date_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
+    let date_prototype =
+        ObjectRef::with_prototype(env.realm().atoms(), HashMap::new(), Some(object_prototype));
 
-    let date_function = Function::new_native(Some("Date"), 7, NativeFunction::Date, true);
+    let date_function = Function::new_native(
+        env.realm().atoms(),
+        Some("Date"),
+        7,
+        NativeFunction::Date,
+        true,
+    );
     date_prototype.define_non_enumerable(
         "constructor".to_owned(),
         Value::Function(date_function.clone()),
@@ -262,6 +269,7 @@ pub(crate) fn install_date(env: &mut CallEnv, global_this: &Value, object_protot
             to_primitive,
             Property::data(
                 Value::Function(Function::new_native(
+                    env.realm().atoms(),
                     Some("[Symbol.toPrimitive]"),
                     1,
                     NativeFunction::DatePrototypeToPrimitive,
@@ -286,6 +294,7 @@ pub(crate) fn install_date(env: &mut CallEnv, global_this: &Value, object_protot
         NativeFunction::DatePrototypeToTimeString,
     );
     let to_utc_string = Value::Function(Function::new_native(
+        env.realm().atoms(),
         Some("toUTCString"),
         0,
         NativeFunction::DatePrototypeToUtcString,
@@ -345,6 +354,7 @@ fn define_date_function(
         atoms,
         key,
         Property::non_enumerable(Value::Function(Function::new_native(
+            atoms,
             Some(key),
             length,
             native,
@@ -361,6 +371,12 @@ fn define_date_prototype_function(
 ) {
     prototype.define_non_enumerable(
         key.to_owned(),
-        Value::Function(Function::new_native(Some(key), length, native, false)),
+        Value::Function(Function::new_native(
+            &prototype.store_domain(),
+            Some(key),
+            length,
+            native,
+            false,
+        )),
     );
 }

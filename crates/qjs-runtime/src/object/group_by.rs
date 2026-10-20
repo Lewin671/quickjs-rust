@@ -19,7 +19,7 @@ pub(crate) fn native_object_group_by(
         });
     }
 
-    let result = ObjectRef::with_prototype(HashMap::new(), None);
+    let result = ObjectRef::with_prototype(env.realm().atoms(), HashMap::new(), None);
     for (index, value) in iterable_values_with_env(items, "Object.groupBy", env)?
         .into_iter()
         .enumerate()
@@ -41,7 +41,9 @@ fn append_group(result: &ObjectRef, key: PropertyKey, value: Value) {
     match key {
         PropertyKey::String(key) => {
             match result.own_property(&key).map(|property| property.value) {
-                Some(Value::Array(group)) => group.set(group.len(), value),
+                Some(Value::Array(group)) => {
+                    group.set(group.len(), value, &|| result.store_domain())
+                }
                 _ => result.define_property(key, Property::enumerable(group_array(value))),
             }
         }
@@ -50,7 +52,9 @@ fn append_group(result: &ObjectRef, key: PropertyKey, value: Value) {
                 .own_symbol_property(&symbol)
                 .map(|property| property.value)
             {
-                Some(Value::Array(group)) => group.set(group.len(), value),
+                Some(Value::Array(group)) => {
+                    group.set(group.len(), value, &|| result.store_domain())
+                }
                 _ => {
                     result.define_symbol_property(symbol, Property::enumerable(group_array(value)))
                 }

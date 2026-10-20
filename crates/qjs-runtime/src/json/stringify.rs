@@ -29,6 +29,7 @@ pub(crate) fn native_json_stringify(
         indent: String::new(),
     };
     let wrapper = ObjectRef::with_prototype(
+        env.realm().atoms(),
         HashMap::from([("".to_owned(), value)]),
         crate::object_prototype(env),
     );

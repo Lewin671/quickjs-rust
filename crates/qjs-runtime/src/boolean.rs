@@ -9,8 +9,15 @@ use crate::{
 pub(crate) const BOOLEAN_DATA_PROPERTY: &str = "\0BooleanData";
 
 pub(super) fn install_boolean(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
-    let boolean_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
-    let boolean_function = Function::new_native(Some("Boolean"), 1, NativeFunction::Boolean, true);
+    let boolean_prototype =
+        ObjectRef::with_prototype(env.realm().atoms(), HashMap::new(), Some(object_prototype));
+    let boolean_function = Function::new_native(
+        env.realm().atoms(),
+        Some("Boolean"),
+        1,
+        NativeFunction::Boolean,
+        true,
+    );
     boolean_prototype
         .define_non_enumerable(BOOLEAN_DATA_PROPERTY.to_owned(), Value::Boolean(false));
     boolean_prototype.define_non_enumerable(
@@ -20,6 +27,7 @@ pub(super) fn install_boolean(env: &mut CallEnv, global_this: &Value, object_pro
     boolean_prototype.define_non_enumerable(
         "toString".to_owned(),
         Value::Function(Function::new_native(
+            env.realm().atoms(),
             Some("toString"),
             0,
             NativeFunction::BooleanPrototypeToString,
@@ -29,6 +37,7 @@ pub(super) fn install_boolean(env: &mut CallEnv, global_this: &Value, object_pro
     boolean_prototype.define_non_enumerable(
         "valueOf".to_owned(),
         Value::Function(Function::new_native(
+            env.realm().atoms(),
             Some("valueOf"),
             0,
             NativeFunction::BooleanPrototypeValueOf,
@@ -60,7 +69,11 @@ pub(super) fn native_boolean(
 
     let object = match this_value {
         Value::Object(object) => object,
-        _ => ObjectRef::with_prototype(HashMap::new(), function_prototype(function)),
+        _ => ObjectRef::with_prototype(
+            &function.realm_domain(),
+            HashMap::new(),
+            function_prototype(function),
+        ),
     };
     object.define_non_enumerable(BOOLEAN_DATA_PROPERTY.to_owned(), Value::Boolean(value));
     Ok(Value::Object(object))

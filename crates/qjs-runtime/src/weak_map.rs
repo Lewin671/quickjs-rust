@@ -14,10 +14,17 @@ pub(crate) fn install_weak_map(
     global_this: &Value,
     object_prototype: ObjectRef,
 ) {
-    let weak_map_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
+    let weak_map_prototype =
+        ObjectRef::with_prototype(env.realm().atoms(), HashMap::new(), Some(object_prototype));
     weak_map_prototype.set_to_string_tag("WeakMap");
     symbol::define_well_known_to_string_tag(env, &weak_map_prototype, "WeakMap");
-    let weak_map_function = Function::new_native(Some("WeakMap"), 0, NativeFunction::WeakMap, true);
+    let weak_map_function = Function::new_native(
+        env.realm().atoms(),
+        Some("WeakMap"),
+        0,
+        NativeFunction::WeakMap,
+        true,
+    );
     weak_map_prototype.define_non_enumerable(
         "constructor".to_owned(),
         Value::Function(weak_map_function.clone()),
@@ -77,6 +84,7 @@ pub(crate) fn native_weak_map(
     is_construct: bool,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
+    let realm_atoms = env.realm().atoms().clone();
     if !is_construct {
         return Err(RuntimeError {
             thrown: None,
@@ -85,6 +93,7 @@ pub(crate) fn native_weak_map(
     }
 
     let object = ObjectRef::with_prototype_slot(
+        &realm_atoms,
         HashMap::new(),
         crate::native_construct_prototype_slot(function, env)?,
     );
@@ -94,7 +103,7 @@ pub(crate) fn native_weak_map(
     // is a hash probe instead of a scan over a copy of every pair.
     object.define_non_enumerable(
         WEAK_MAP_ENTRIES.to_owned(),
-        Value::Map(crate::MapRef::new(None)),
+        Value::Map(crate::MapRef::new(&realm_atoms, None)),
     );
     let weak_map = Value::Object(object);
 
@@ -340,6 +349,12 @@ fn define_weak_map_prototype_function(
 ) {
     prototype.define_non_enumerable(
         key.to_owned(),
-        Value::Function(Function::new_native(Some(key), length, native, false)),
+        Value::Function(Function::new_native(
+            &prototype.store_domain(),
+            Some(key),
+            length,
+            native,
+            false,
+        )),
     );
 }
