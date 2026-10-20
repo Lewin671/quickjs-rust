@@ -57,7 +57,7 @@ pub(super) fn get_substitution(
     let mut chars = replacement.chars().peekable();
     while let Some(character) = chars.next() {
         if character != '$' {
-            result.push(character);
+            crate::string::push_js_char(&mut result, character);
             continue;
         }
         let Some(next) = chars.next() else {
@@ -66,13 +66,12 @@ pub(super) fn get_substitution(
         };
         match next {
             '$' => result.push('$'),
-            '&' => result.push_str(matched),
-            '`' => result.push_str(&input_char_slice(input, 0, position)),
-            '\'' => result.push_str(&input_char_slice(
-                input,
-                position + matched.chars().count(),
-                input_len,
-            )),
+            '&' => crate::string::push_js_str(&mut result, matched),
+            '`' => crate::string::push_js_str(&mut result, &input_char_slice(input, 0, position)),
+            '\'' => crate::string::push_js_str(
+                &mut result,
+                &input_char_slice(input, position + matched.chars().count(), input_len),
+            ),
             '0'..='9' => substitute_capture(&mut result, &mut chars, captures, next),
             _ => {
                 result.push('$');
@@ -139,7 +138,7 @@ fn substitute_capture(
 
 fn push_capture(result: &mut String, captures: &[Value], index: usize) {
     if let Some(Value::String(capture)) = captures.get(index - 1) {
-        result.push_str(capture);
+        crate::string::push_js_str(result, capture);
     }
 }
 

@@ -1590,7 +1590,7 @@ impl ObjectRef {
         let Value::String(string) = &mut property.value else {
             return None;
         };
-        string.make_mut().push_str(suffix);
+        crate::string::push_js_str(string.make_mut(), suffix);
         self.bump_value_revision();
         Some(Value::String(string.clone()))
     }

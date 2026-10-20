@@ -19,7 +19,7 @@ pub(crate) fn native_string_prototype_concat(
 ) -> Result<Value, RuntimeError> {
     let mut result = this_string_value(this_value, env)?;
     for value in argument_values.iter().cloned() {
-        result.push_str(&to_js_string_with_env(value, env)?);
+        crate::string::push_js_str(&mut result, &to_js_string_with_env(value, env)?);
     }
     Ok(Value::String(result.into()))
 }
@@ -47,9 +47,7 @@ pub(crate) fn native_string_prototype_repeat(
     let count = count.trunc() as usize;
     // The result must not exceed the maximum string length, matching QuickJS-NG
     // (2^30 - 1); otherwise repeat would attempt a multi-gigabyte allocation.
-    let too_long = value
-        .chars()
-        .count()
+    let too_long = string_code_unit_len(&value)
         .checked_mul(count)
         .is_none_or(|len| len > MAX_STRING_LENGTH);
     if too_long {
@@ -58,7 +56,9 @@ pub(crate) fn native_string_prototype_repeat(
             message: "RangeError: invalid string length".to_owned(),
         });
     }
-    Ok(Value::String(value.repeat(count).into()))
+    Ok(Value::String(
+        crate::string::repeat_js_str(&value, count).into(),
+    ))
 }
 
 pub(crate) fn native_string_prototype_slice(

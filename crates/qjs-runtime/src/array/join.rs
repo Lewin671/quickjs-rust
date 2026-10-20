@@ -83,5 +83,14 @@ fn array_join_array_like(
         };
         parts.push(part);
     }
-    Ok(parts.join(separator))
+    let capacity = parts.iter().map(String::len).sum::<usize>()
+        + separator.len() * parts.len().saturating_sub(1);
+    let mut result = String::with_capacity(capacity);
+    for (index, part) in parts.iter().enumerate() {
+        if index != 0 {
+            crate::string::push_js_str(&mut result, separator);
+        }
+        crate::string::push_js_str(&mut result, part);
+    }
+    Ok(result)
 }

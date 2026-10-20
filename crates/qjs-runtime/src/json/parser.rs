@@ -606,7 +606,7 @@ impl<'a> JsonParser<'a> {
                 '\\' => crate::string::push_code_unit(&mut output, self.escape()?),
                 ch if ch <= '\u{1f}' => return Err(self.syntax_error()),
                 ch => match self.source_mode {
-                    JsonSourceMode::RuntimeWtf16 => output.push(ch),
+                    JsonSourceMode::RuntimeWtf16 => crate::string::push_js_char(&mut output, ch),
                     JsonSourceMode::HostUtf8 => {
                         crate::string::push_code_point(&mut output, ch as u32);
                     }

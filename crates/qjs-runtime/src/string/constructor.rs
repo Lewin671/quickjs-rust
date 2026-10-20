@@ -5,7 +5,7 @@ use crate::{
     to_js_string_with_env, to_length_with_env, to_number_with_env, to_uint16_with_env,
 };
 
-use super::{push_code_point, string_from_code_unit};
+use super::push_code_point;
 use crate::CallEnv;
 
 pub(crate) fn native_string(
@@ -69,7 +69,7 @@ pub(crate) fn native_string_from_char_code(
     let mut result = String::new();
     for value in argument_values.iter().cloned() {
         let code_unit = to_uint16_with_env(value, env)?;
-        result.push_str(&string_from_code_unit(code_unit));
+        super::push_code_unit(&mut result, code_unit);
     }
     Ok(Value::String(result.into()))
 }
@@ -132,11 +132,14 @@ pub(crate) fn native_string_raw(
     let mut result = String::new();
     for index in 0..raw_length {
         let raw_segment = property_value(raw.clone(), &index.to_string(), env)?;
-        result.push_str(&to_js_string_with_env(raw_segment, env)?);
+        crate::string::push_js_str(&mut result, &to_js_string_with_env(raw_segment, env)?);
         if index + 1 < raw_length {
             match argument_values.get(index + 1).cloned() {
-                Some(substitution) => result.push_str(&to_js_string_with_env(substitution, env)?),
-                None => result.push_str(""),
+                Some(substitution) => crate::string::push_js_str(
+                    &mut result,
+                    &to_js_string_with_env(substitution, env)?,
+                ),
+                None => crate::string::push_js_str(&mut result, ""),
             }
         }
     }

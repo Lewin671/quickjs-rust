@@ -20,7 +20,7 @@ pub(crate) fn native_string_prototype_pad(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
         env,
     )?;
-    let string_length = value.chars().count();
+    let string_length = super::super::string_code_unit_len(&value);
     if max_length <= string_length {
         return Ok(Value::String(value.into()));
     }
@@ -43,15 +43,25 @@ pub(crate) fn native_string_prototype_pad(
 
     let fill_length = max_length - string_length;
     let filler = repeated_prefix(&fill_string, fill_length);
-    Ok(Value::String(
-        match kind {
-            StringPadKind::Start => format!("{filler}{value}"),
-            StringPadKind::End => format!("{value}{filler}"),
+    let result = match kind {
+        StringPadKind::Start => {
+            let mut result = filler;
+            crate::string::push_js_str(&mut result, &value);
+            result
         }
-        .into(),
-    ))
+        StringPadKind::End => {
+            let mut result = value;
+            crate::string::push_js_str(&mut result, &filler);
+            result
+        }
+    };
+    Ok(Value::String(result.into()))
 }
 
 fn repeated_prefix(pattern: &str, length: usize) -> String {
-    pattern.chars().cycle().take(length).collect()
+    let mut result = String::new();
+    for unit in super::super::code_units(pattern).cycle().take(length) {
+        super::super::push_code_unit(&mut result, unit);
+    }
+    result
 }

@@ -1,7 +1,10 @@
 //! Shared JavaScript string storage with cached code-unit metadata.
 //!
 //! JavaScript strings are indexed by UTF-16 code unit while the runtime stores
-//! them as UTF-8 text. Answering `charCodeAt`, `length`, or an indexed read
+//! them as canonical UTF-8 sentinel text (see `qjs_unicode::wtf16`). A high
+//! sentinel followed by a low sentinel is merged unless it encodes a real
+//! U+F0000..F07FF scalar. Constructors debug-assert this invariant; mutable
+//! builders must preserve it with the shared seam helper. Answering `charCodeAt`, `length`, or an indexed read
 //! therefore needs to know whether the buffer is ASCII (where a byte index is a
 //! code-unit index) and, when it is not, how long the UTF-16 view is. Computing
 //! either answer is linear in the buffer, so a loop that walks a string one code
@@ -90,6 +93,10 @@ impl JsString {
     /// Wraps an owned buffer that already uses the runtime's canonical WTF-16
     /// sentinel representation.
     pub fn new(text: String) -> Self {
+        debug_assert!(
+            crate::string::is_canonical(&text),
+            "non-canonical JsString: {text:?}"
+        );
         Self(Rc::new(StringData::new(text)))
     }
 
@@ -176,7 +183,8 @@ impl JsString {
     }
 
     /// Borrows the buffer mutably, cloning it when it is shared. Any memoized
-    /// metadata is dropped because the buffer is about to change.
+    /// metadata is dropped because the buffer is about to change. The caller
+    /// must preserve canonical WTF-16 form with `qjs_unicode::wtf16` builders.
     pub fn make_mut(&mut self) -> &mut String {
         let data = Rc::make_mut(&mut self.0);
         data.invalidate();

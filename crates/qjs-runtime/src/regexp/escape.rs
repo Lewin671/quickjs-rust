@@ -1,6 +1,6 @@
 use crate::{
     RuntimeError, Value,
-    string::{string_code_units, string_from_code_unit},
+    string::{push_code_unit, string_code_units},
 };
 
 pub(crate) fn native_regexp_escape(argument_values: &[Value]) -> Result<Value, RuntimeError> {
@@ -30,7 +30,7 @@ fn regexp_escape(source: &str) -> String {
                 if index == 0 {
                     push_hex_escape(&mut escaped, code_unit);
                 } else {
-                    escaped.push_str(&string_from_code_unit(code_unit));
+                    push_code_unit(&mut escaped, code_unit);
                 }
             } else if is_regexp_escape_other_punctuator(code_unit) {
                 push_hex_escape(&mut escaped, code_unit);
@@ -38,7 +38,7 @@ fn regexp_escape(source: &str) -> String {
                 if code_unit != u16::from(b'_') {
                     escaped.push('\\');
                 }
-                escaped.push_str(&string_from_code_unit(code_unit));
+                push_code_unit(&mut escaped, code_unit);
             }
         } else if code_unit < 256 {
             push_hex_escape(&mut escaped, code_unit);
@@ -48,7 +48,7 @@ fn regexp_escape(source: &str) -> String {
         {
             push_unicode_escape(&mut escaped, code_unit);
         } else {
-            escaped.push_str(&string_from_code_unit(code_unit));
+            push_code_unit(&mut escaped, code_unit);
         }
     }
     escaped

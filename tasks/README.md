@@ -42,6 +42,7 @@ outcome column says what happened, not what to do next.
 
 | Task | Outcome |
 | --- | --- |
+| `T063-string-canonical.md` | Surrogate pairs stored canonically at construction; instruction repair; regression screen passed (lanes 0.998-1.008); integrated ([correctness](archive/T063-correctness-verification.md), [instructions](archive/T063-instruction-diagnosis.md)). |
 | `T058-regexp-lazy-quantifiers.md` | Fixed-candidate v6 unit retained: papaparse/csv 0.0806 at formal, 86/86 selection and 9/9 held-out pass, Test262 42,672/42,672; candidate `736200aa`, integration pending. |
 | `T062-formal-precision-rule.md` | Prospective v6 two-look exact-median formal gates; v5 measurement/bands retained; historical attempts unchanged. |
 | `T061-quick-triage.md` | Queue-only v5 fixed-subset diagnostics; T058 validation took 9.01 min, verdict unclear, no acceptance changes. |
@@ -116,5 +117,4 @@ outcome column says what happened, not what to do next.
   [performance-units/README.md](performance-units/README.md).
 
 Search before repeating an experiment:
-`grep -rn -i "<mechanism>" tasks/`. Records describe the revisions they name
-and never establish current priority.
+`grep -rn -i "<mechanism>" tasks/`. Records describe their named revisions and never establish current priority.

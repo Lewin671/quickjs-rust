@@ -50,9 +50,13 @@ fn lone_surrogates_are_exact_keys() {
 #[test]
 fn a_pair_stored_as_escaped_halves_is_the_whole_pair() {
     let domain = AtomDomain::new();
-    // Concatenating two lone halves stores two escaped sentinels; a literal
-    // stores the scalar. Both are the code units D83D DE00.
-    let halves = string_from_code_units(&[0xD83D, 0xDE00]);
+    // Exercise the defensive untyped intern boundary with raw escaped halves.
+    // Runtime builders now merge these before they become JsString values.
+    let halves = format!(
+        "{}{}",
+        string_from_code_units(&[0xD83D]),
+        string_from_code_units(&[0xDE00])
+    );
     assert_ne!(halves, "\u{1F600}");
     let from_halves = domain.intern(&halves).expect("intern");
     let from_scalar = domain.intern("\u{1F600}").expect("intern");

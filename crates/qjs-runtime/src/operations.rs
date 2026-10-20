@@ -74,7 +74,7 @@ pub(crate) fn eval_binary(
                 // `to_js_string_with_env` returns a `Value::String`'s backing
                 // buffer by move (no copy).
                 let mut accumulator = to_js_string_with_env(left, env)?;
-                accumulator.push_str(&to_js_string_with_env(right, env)?);
+                crate::string::push_js_str(&mut accumulator, &to_js_string_with_env(right, env)?);
                 return Ok(Value::String(accumulator.into()));
             }
             if matches!(left, Value::BigInt(_)) || matches!(right, Value::BigInt(_)) {

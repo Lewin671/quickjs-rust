@@ -331,8 +331,8 @@ fn fast_primitive_string_binary(left: &Value, op: BinaryOp, right: &Value) -> Op
             }
             BinaryOp::Add => {
                 let mut result = String::with_capacity(left.len().checked_add(right.len())?);
-                result.push_str(left);
-                result.push_str(right);
+                crate::string::push_js_str(&mut result, left);
+                crate::string::push_js_str(&mut result, right);
                 Value::String(result.into())
             }
             _ => return None,

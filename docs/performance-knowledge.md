@@ -105,6 +105,14 @@ tool and artifact meanings are in [benchmarking.md](benchmarking.md).
   can slow workloads that never reach the arm. Put new work behind one
   out-of-line call from the arm, and measure the aggregate even when the
   change only adds a case.
+- **The wide executor spills when its inlining graph moves.** Edits to
+  strings, `Value` or the compact tier have twice grown
+  `compact_fn::wide::activation::run` and added executed work with no
+  logic change (T058's `memcpy`, T063's register-store spill; 24,640 bytes
+  and about 612 instructions per `broad/property_dynamic_read` read at
+  T063, rustc 1.95). After such an edit, compare that function's size and
+  spills between release builds, and keep an instruction-sensitive control
+  such as `property_dynamic_read` or `recursive_call_tree` in triage.
 
 ## Correctness while optimizing
 

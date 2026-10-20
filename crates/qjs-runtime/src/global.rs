@@ -16,8 +16,8 @@ use crate::{
     function_delete_own_property, function_own_property_descriptor,
     object::define_property_on_value_key,
     string::{
-        push_code_point, string_code_units, string_from_code_unit, string_to_utf8_lossy,
-        surrogate_escape_code_unit,
+        push_code_point, push_code_unit, string_code_units, string_from_code_unit,
+        string_to_utf8_lossy, surrogate_escape_code_unit,
     },
     to_js_string_with_env, to_length_with_env, to_number_with_env,
 };
@@ -284,7 +284,7 @@ pub(super) fn native_global_print(
         if index > 0 {
             line.push(' ');
         }
-        line.push_str(&to_js_string_with_env(value.clone(), env)?);
+        crate::string::push_js_str(&mut line, &to_js_string_with_env(value.clone(), env)?);
     }
     // `line` is the runtime's internal string form, which may hold each half
     // of a surrogate pair as a separate escape sentinel (for example after
@@ -1707,7 +1707,7 @@ pub(super) fn native_global_escape(
     let mut escaped = String::new();
     for code_unit in string_code_units(&source) {
         if is_escape_unescaped(code_unit) {
-            escaped.push_str(&string_from_code_unit(code_unit));
+            crate::string::push_js_str(&mut escaped, &string_from_code_unit(code_unit));
         } else if code_unit <= 0xFF {
             escaped.push_str(&format!("%{code_unit:02X}"));
         } else {
@@ -1734,7 +1734,7 @@ pub(super) fn native_global_unescape(
     while index < code_units.len() {
         if code_units[index] == b'%' as u16 {
             if let Some(code_unit) = parse_hex_escape(&code_units, index) {
-                output.push_str(&string_from_code_unit(code_unit));
+                push_code_unit(&mut output, code_unit);
                 index += if code_units.get(index + 1) == Some(&(b'u' as u16)) {
                     6
                 } else {
@@ -1743,7 +1743,7 @@ pub(super) fn native_global_unescape(
                 continue;
             }
         }
-        output.push_str(&string_from_code_unit(code_units[index]));
+        push_code_unit(&mut output, code_units[index]);
         index += 1;
     }
     Ok(Value::String(output.into()))
@@ -1903,7 +1903,7 @@ fn decode_ascii_uri(source: &str, kind: UriDecodeKind) -> Result<String, Runtime
         let decoded =
             std::str::from_utf8(&decoded_bytes[..expected_len]).map_err(|_| uri_error())?;
         if matches!(kind, UriDecodeKind::Uri) && decoded.chars().all(is_uri_reserved) {
-            output.push_str(&source[escape_start..index]);
+            crate::string::push_js_str(&mut output, &source[escape_start..index]);
         } else {
             for character in decoded.chars() {
                 push_code_point(&mut output, character as u32);

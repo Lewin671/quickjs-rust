@@ -1,6 +1,17 @@
+//! UTF-16 code-unit semantics over canonical WTF-16 sentinel text.
+//! Builders merge ordinary surrogate pairs; sentinel-range scalars stay escaped.
+
 use crate::JsString;
 
 mod constructor;
+
+pub(crate) use qjs_unicode::wtf16::{
+    is_canonical, push_js_char, push_js_str, repeat_js_str, surrogate_escape_code_unit,
+};
+
+#[cfg(test)]
+#[path = "string/canonical/tests.rs"]
+mod canonical_tests;
 mod indexing;
 mod install;
 mod iterator;
@@ -44,7 +55,7 @@ pub(crate) const STRING_DATA_PROPERTY: &str = "\0StringData";
 const SURROGATE_ESCAPE_SENTINEL_BASE: u32 = 0xF0000;
 
 /// Iterates the UTF-16 code units of a stored string without allocating.
-pub(crate) fn code_units(value: &str) -> impl Iterator<Item = u16> + '_ {
+pub(crate) fn code_units(value: &str) -> impl Iterator<Item = u16> + Clone + '_ {
     value.chars().flat_map(|character| {
         let mut buffer = [0_u16; 2];
         let units: &[u16] = match surrogate_escape_code_unit(character) {
@@ -190,34 +201,15 @@ pub(crate) fn js_string_cmp(left: &JsString, right: &JsString) -> std::cmp::Orde
     string_code_units(left).cmp(&string_code_units(right))
 }
 
-/// Builds the runtime's canonical text for a code-unit sequence: a valid
-/// surrogate pair becomes the scalar value it encodes, while an unpaired
-/// surrogate keeps the sentinel encoding. `string_from_code_units` keeps every
-/// unit separate, which leaves a pair looking like two private-use scalars to
-/// anything that inspects the text.
+/// Builds canonical runtime text from UTF-16 code units.
 pub(crate) fn string_from_code_units_canonical(code_units: &[u16]) -> String {
-    let mut result = String::with_capacity(code_units.len());
-    let mut index = 0;
-    while index < code_units.len() {
-        let unit = code_units[index];
-        let next = code_units.get(index + 1).copied();
-        if let (0xD800..=0xDBFF, Some(0xDC00..=0xDFFF)) = (unit, next) {
-            let low = next.expect("matched a low surrogate");
-            let scalar = 0x1_0000 + ((u32::from(unit) - 0xD800) << 10) + (u32::from(low) - 0xDC00);
-            push_code_point(&mut result, scalar);
-            index += 2;
-            continue;
-        }
-        push_code_unit(&mut result, unit);
-        index += 1;
-    }
-    result
+    string_from_code_units(code_units)
 }
 
 pub(crate) fn string_from_code_units(code_units: &[u16]) -> String {
     let mut result = String::with_capacity(code_units.len());
-    for code_unit in code_units {
-        push_code_unit(&mut result, *code_unit);
+    for &code_unit in code_units {
+        push_code_unit(&mut result, code_unit);
     }
     result
 }
@@ -244,15 +236,6 @@ pub(crate) fn string_to_utf8_lossy(value: &str) -> String {
     char::decode_utf16(string_code_units(value))
         .map(|decoded| decoded.unwrap_or(char::REPLACEMENT_CHARACTER))
         .collect()
-}
-
-pub(crate) fn surrogate_escape_code_unit(character: char) -> Option<u16> {
-    let code = character as u32;
-    if (SURROGATE_ESCAPE_SENTINEL_BASE..SURROGATE_ESCAPE_SENTINEL_BASE + 0x800).contains(&code) {
-        Some((0xD800 + code - SURROGATE_ESCAPE_SENTINEL_BASE) as u16)
-    } else {
-        None
-    }
 }
 
 /// AdvanceStringIndex over a shared subject. Without Unicode mode, or in
@@ -321,8 +304,21 @@ pub(crate) fn char_from_code_unit(code_unit: u16) -> char {
     }
 }
 
+#[inline(always)]
 pub(crate) fn push_code_unit(result: &mut String, code_unit: u16) {
-    result.push(char_from_code_unit(code_unit));
+    if (0xD800..=0xDFFF).contains(&code_unit) {
+        push_surrogate_code_unit(result, code_unit);
+    } else {
+        // A non-surrogate BMP unit is already a scalar and cannot complete a
+        // seam pair. Keep its emission off the surrogate helper's call path.
+        result.push(char::from_u32(u32::from(code_unit)).expect("non-surrogate BMP unit"));
+    }
+}
+
+#[cold]
+#[inline(never)]
+fn push_surrogate_code_unit(result: &mut String, code_unit: u16) {
+    push_js_char(result, char_from_code_unit(code_unit));
 }
 
 /// Appends one validated Unicode code point using the runtime's WTF-16 string

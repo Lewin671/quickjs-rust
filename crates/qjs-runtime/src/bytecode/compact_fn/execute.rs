@@ -38,12 +38,37 @@ pub(super) enum Action {
 /// therefore costs a branch, never a leak.
 #[inline(always)]
 pub(super) fn store(slot: &mut Value, value: Value) {
-    let previous = std::mem::replace(slot, value);
     if matches!(
-        previous,
+        slot,
         Value::Number(_) | Value::Boolean(_) | Value::Null | Value::Undefined
     ) {
+        // Test the borrowed tag before replacement so the old scalar payload
+        // never needs to stay live across the new value's publication.
+        let previous = std::mem::replace(slot, value);
         std::mem::forget(previous);
+    } else {
+        store_owned(slot, value);
+    }
+}
+
+// Resource-owning values keep exactly the same publication/drop order, away
+// from the scalar dispatch path and its machine-register live ranges.
+#[inline(never)]
+fn store_owned(slot: &mut Value, value: Value) {
+    let previous = std::mem::replace(slot, value);
+    // Spell the bounded dispatch here instead of adding another out-of-line
+    // drop_in_place<Value> call and keeping an entire enum temporary on stack.
+    // Exhaustiveness makes a future resource variant an explicit choice.
+    match previous {
+        Value::Number(_) | Value::Boolean(_) | Value::Null | Value::Undefined => {}
+        Value::BigInt(value) => drop(value),
+        Value::String(value) => drop(value),
+        Value::Function(value) => drop(value),
+        Value::Array(value) => drop(value),
+        Value::Object(value) => drop(value),
+        Value::Proxy(value) => drop(value),
+        Value::Map(value) => drop(value),
+        Value::Set(value) => drop(value),
     }
 }
 
@@ -60,5 +85,32 @@ pub(super) fn uninitialized_local() -> RuntimeError {
     RuntimeError {
         thrown: None,
         message: "compact function read an uninitialized local slot".to_owned(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::store;
+    use crate::{JsString, Value};
+
+    #[test]
+    fn replacing_registers_releases_old_ownership_and_retains_new_aliases() {
+        let old = JsString::from("old");
+        let incoming = JsString::from("incoming");
+        let mut slot = Value::String(old.clone());
+        assert!(!old.is_unique());
+        store(&mut slot, Value::String(incoming.clone()));
+        assert!(old.is_unique());
+        assert!(!incoming.is_unique());
+        store(&mut slot, Value::Number(-0.0));
+        assert!(incoming.is_unique());
+        let Value::Number(number) = slot else {
+            panic!("number expected")
+        };
+        assert_eq!(number.to_bits(), (-0.0_f64).to_bits());
+        store(&mut slot, Value::String(old.clone()));
+        assert!(!old.is_unique());
+        store(&mut slot, Value::Undefined);
+        assert!(old.is_unique());
     }
 }

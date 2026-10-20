@@ -1,4 +1,5 @@
 use qjs_ast::Span;
+use qjs_unicode::wtf16::{push_js_char, surrogate_escape_code_unit};
 
 use crate::{LexError, LexOptions, Token, TokenKind};
 
@@ -26,15 +27,10 @@ pub(in crate::scanner) fn push_js_scalar(result: &mut String, character: char) {
             push_js_code_unit(result, *code_unit);
         }
     } else {
+        // This branch excludes every sentinel, so it cannot append a low
+        // surrogate or create a new pair at the existing tail.
         result.push(character);
     }
-}
-
-pub(in crate::scanner) fn surrogate_escape_code_unit(character: char) -> Option<u16> {
-    let code_point = character as u32;
-    (SURROGATE_ESCAPE_SENTINEL_BASE..SURROGATE_ESCAPE_SENTINEL_BASE + 0x800)
-        .contains(&code_point)
-        .then(|| (0xD800 + code_point - SURROGATE_ESCAPE_SENTINEL_BASE) as u16)
 }
 
 pub(in crate::scanner) fn push_js_code_unit(result: &mut String, code_unit: u16) {
@@ -42,7 +38,7 @@ pub(in crate::scanner) fn push_js_code_unit(result: &mut String, code_unit: u16)
         let character =
             char::from_u32(SURROGATE_ESCAPE_SENTINEL_BASE + u32::from(code_unit) - 0xD800)
                 .expect("surrogate sentinel is a valid scalar value");
-        result.push(character);
+        push_js_char(result, character);
     } else {
         result.push(char::from_u32(u32::from(code_unit)).expect("BMP code unit is a valid scalar"));
     }
@@ -189,7 +185,7 @@ impl<'src> Lexer<'src> {
 
     pub(in crate::scanner) fn push_source_character(&self, result: &mut String, character: char) {
         if self.options.wtf16_source && surrogate_escape_code_unit(character).is_some() {
-            result.push(character);
+            push_js_char(result, character);
         } else {
             push_js_scalar(result, character);
         }

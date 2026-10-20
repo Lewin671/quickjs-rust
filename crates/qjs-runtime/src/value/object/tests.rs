@@ -264,3 +264,58 @@ fn dynamic_storage_keeps_order_values_and_slots_across_a_removal() {
     ));
     assert_eq!(object.get(&last), Some(Value::Number(-1.0)));
 }
+
+#[test]
+fn all_property_storage_forms_share_surrogate_pair_key_bytes() {
+    use crate::string::{push_js_str, string_from_code_unit};
+    let literal = "😀";
+    let mut built = string_from_code_unit(0xD83D);
+    push_js_str(&mut built, &string_from_code_unit(0xDE00));
+    let small = ObjectRef::new(HashMap::new());
+    let dynamic = ObjectRef::new(HashMap::new());
+    for index in 0..13 {
+        dynamic.set(format!("p{index}"), Value::Undefined);
+    }
+    let shaped = ObjectRef::with_literal_properties(
+        ObjectLiteralShape::new(vec![Rc::from(literal)]),
+        vec![Value::Number(0.0)],
+        None,
+    );
+    let pair = ObjectRef::with_literal_pair(
+        ObjectLiteralShape::new(vec![Rc::from(literal), Rc::from("other")]),
+        [Value::Number(0.0), Value::Undefined],
+        None,
+    );
+    assert!(matches!(
+        &*small.0.properties.borrow(),
+        PropertyStorage::Small { .. }
+    ));
+    assert!(matches!(
+        &*dynamic.0.properties.borrow(),
+        PropertyStorage::Dynamic(_)
+    ));
+    assert!(matches!(
+        &*shaped.0.properties.borrow(),
+        PropertyStorage::Shaped { .. }
+    ));
+    assert!(matches!(
+        &*pair.0.properties.borrow(),
+        PropertyStorage::ShapedPair { .. }
+    ));
+    for object in [small, dynamic, shaped, pair] {
+        for (stored, queried) in [(literal, built.as_str()), (built.as_str(), literal)] {
+            object.set(stored.to_owned(), Value::Number(1.0));
+            assert_eq!(object.get(queried), Some(Value::Number(1.0)));
+            object.set(queried.to_owned(), Value::Number(2.0));
+            assert_eq!(object.get(stored), Some(Value::Number(2.0)));
+            assert_eq!(
+                object
+                    .own_property_names()
+                    .iter()
+                    .filter(|key| key.as_str() == literal)
+                    .count(),
+                1
+            );
+        }
+    }
+}

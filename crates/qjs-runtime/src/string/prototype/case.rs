@@ -5,7 +5,9 @@ use crate::{RuntimeError, Value, to_js_string_with_env};
 use unicode_normalization::UnicodeNormalization;
 
 use super::super::indexing::this_string_value;
-use super::super::{string_code_units, string_from_code_unit, surrogate_escape_code_unit};
+use super::super::{
+    push_code_unit, string_code_units, string_from_code_units, surrogate_escape_code_unit,
+};
 
 /// Case-maps an ASCII string receiver without decoding it: an ASCII
 /// string maps to ASCII, and one with nothing to map is returned as it is.
@@ -144,8 +146,8 @@ fn decode_utf16_code_points(value: &str) -> String {
                     // range. Private-use scalars have no case mapping, so the
                     // case conversion does not need to combine this pair.
                     if surrogate_escape_code_unit(character).is_some() {
-                        result.push_str(&string_from_code_unit(first));
-                        result.push_str(&string_from_code_unit(second));
+                        push_code_unit(&mut result, first);
+                        push_code_unit(&mut result, second);
                     } else {
                         result.push(character);
                     }
@@ -155,17 +157,14 @@ fn decode_utf16_code_points(value: &str) -> String {
             }
         }
 
-        result.push_str(&string_from_code_unit(first));
+        push_code_unit(&mut result, first);
         index += 1;
     }
     result
 }
 
 fn encode_utf16_code_units(value: &str) -> String {
-    string_code_units(value)
-        .into_iter()
-        .map(string_from_code_unit)
-        .collect()
+    string_from_code_units(&string_code_units(value))
 }
 
 #[cfg(test)]
