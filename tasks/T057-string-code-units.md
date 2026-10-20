@@ -150,7 +150,7 @@ The fetched `out/instructions.json` SHA-256 is `75610fcb70cffe9323a5964f280ed945
 Both jobs are diagnostics, not acceptance, and submit no compare/loop/timing.
 No disassembly-level spill identity or latency conclusion is claimed.
 
-## Proposed regression screen (lead must freeze before measuring)
+## Regression screen (frozen by the lead, 2026-10-20, before measuring)
 
 Correctness fix, no claimed win: one undisturbed 30-block workers-4
 three-engine comparison against `ae45226e`, exact committed candidate.
@@ -158,5 +158,6 @@ Each broad/sentinel/external/development lane geomean must be at most 1.010;
 no case's 95% interval lower bound may exceed 1.030. A failed case/lane gets
 no-timing base/candidate instruction follow-up: ratio at most 1.010 identifies
 a placement effect and does not block; above 1.010 requires fixing the added
-work and repeating the comparison. This is a proposal, not an accepted or
-executed screen. This owner submits no compare/loop/--timing job.
+work and repeating the comparison. The lead froze this rule unchanged before any result,
+with candidate `9df818ee85e7` (`9df818ee`; runtime as `b419d71e`).
+This owner submits no compare/loop/--timing job.
