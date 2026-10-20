@@ -24,9 +24,12 @@ performance result or freeze a performance plan.
   GetMethod, species, custom exec, callback and lastIndex observation order.
   Share immutable data; never cache an observable property lookup.
 - Cached ASCII classification makes byte/unit/scalar coordinates identical
-  only on the ASCII branch. String search, literal split and replacement
-  ranges decode UTF-16 locally for non-ASCII input, including half-pair matches;
-  no per-string unit view is introduced by this correctness fix.
+  only on the ASCII branch. Non-ASCII literal search uses canonical byte
+  matching for nonempty sentinel-free needles, with UTF-16 offset conversion.
+  Sentinel-bearing needles use temporary unit buffers and KMP so they can
+  match inside stored pairs; empty needles retain unit boundaries. Split and
+  replacement matching advance through disjoint matches without rescanning
+  prefixes. No per-string unit view is introduced by this correctness fix.
 - Mutation invalidates dependent metadata, or explicitly composes it from
   the appended suffix. Aliases retain their old value and caches. Preserve
   the existing unique append path and slot/shared-cell binding model.

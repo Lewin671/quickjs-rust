@@ -1,5 +1,6 @@
 //! String search and replacement protocols; match records use UTF-16 positions.
-//! ASCII keeps byte search/copy paths; non-ASCII helpers decode units locally.
+//! ASCII keeps byte search/copy paths; non-ASCII search uses canonical bytes
+//! for sentinel-free needles and linear unit matching for half-pair needles.
 
 use crate::{
     JsString, PropertyKey, RuntimeError, Value, call_function, construct_function, property_value,
@@ -12,6 +13,7 @@ use super::super::indexing::{
 };
 
 mod errors;
+mod kmp;
 mod units;
 pub(super) use units::split_code_units;
 mod substitution;
