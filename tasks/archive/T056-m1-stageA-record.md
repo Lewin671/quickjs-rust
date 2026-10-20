@@ -554,3 +554,58 @@ prospectively declared diagnostic triage before deciding whether to spend the so
 No new timing job is authorized for the implementation owner.
 
 Attempt-1 follow-up: [diagnosis and repair contract](T056-m1-stageA-attempt1-diagnosis.md).
+
+## Repair 94408090: complete pre-gate blocked
+
+Lead correctness job `20261020T225021Z-t056-m1a-last-correctness` passed the full gate,
+255 NG fixtures, 5170 subset and fresh complete configured Test262 on image
+`b2eaa2124bc9db15e84b05f0a78dd7f490ffb0405ca09bda1bdc734463dd830a`.
+The 86-case non-timing job `20261020T225024Z-t056-m1a-last-pregate86` blocked only
+`external/sunspider-1.0/access-nbody`: instructions 1.06043803, cutoff 1.03.
+Next: bitwise-and 1.01784022, 3d-morph 1.01559933, local_read 1.01523342,
+graphlib 1.01483549, branch_arithmetic 1.01312744, global_read 1.01311485,
+controlflow-recursive 1.01205589, empty_loop 1.00934774, math_abs 1.00883407.
+Triage did not run because its prerequisite failed. This pre-gate spends no
+screen attempt: one valid failure and one remaining attempt across A+B.
+Next: attribute nbody's numeric-slot paths and scalar dispatch instructions,
+repair generally, rebuild canonically and repeat instruction/correctness gates.
+
+## Numeric-slot follow-up: complete 86-case instruction pre-gate passed
+
+Job `20261020T232904Z-t056-nbody-pregate86-instructions`, done 0, uses the canonical
+51e78940 + runtime patch `5db877d1` image
+`807867f6a8874f5dd2501ee5440153e7ed1461badf7b439839aad0bbf4e0be9e`.
+All **86/86** fixed v6 cases pass one instruction pair at max(1.03,I_i), no missing cases.
+This is an instruction diagnostic, not a timing screen, and spends no attempt.
+Per-site attribution, all sealed diagnostics and code changes are in the
+[follow-up diagnosis](T056-m1-stageA-attempt1-diagnosis.md#nbody-follow-up-numeric-calls-and-scalar-spills).
+
+| Highest instruction ratios | Candidate / base |
+| --- | ---: |
+| external/sunspider-1.0/bitops-bitwise-and | 1.02565371 |
+| development/graphlib/paths | 1.01802156 |
+| external/jetstream3-js-subset/raytrace-public-class-fields | 1.01606036 |
+| external/sunspider-1.0/string-unpack-code | 1.01364631 |
+| external/sunspider-1.0/controlflow-recursive | 1.01138537 |
+| external/sunspider-1.0/math-partial-sums | 1.00734004 |
+| external/sunspider-1.0/access-nbody | 1.00715738 |
+| external/sunspider-1.0/3d-morph | 1.00674483 |
+| external/sunspider-1.0/bitops-bits-in-byte | 1.00451606 |
+| external/sunspider-1.0/access-nsieve | 1.00430851 |
+
+Other requested cases:
+
+| Case | Candidate / base |
+| --- | ---: |
+| broad/local_read | 1.00000347 |
+| broad/branch_arithmetic | 1.00003873 |
+| broad/global_read | 0.99997872 |
+| broad/property_dynamic_read | 0.92523045 |
+| external/sunspider-1.0/access-binary-trees | 0.98662965 |
+| development/moment/dates | 0.96542707 |
+| development/diff/compare | 0.96796972 |
+| development/meriyah/parse | 0.96666979 |
+
+Strict native pin audit and all 15 reference callee residues pass. Local full check, 26 focused
+typed-loop tests, 255 NG fixtures and 5170 subset pass. Fresh final-commit image identity and full
+configured exact remain to be verified; no wall repair, promotion or second attempt is claimed.

@@ -150,9 +150,11 @@ fn run<F: LoopFrame>(vm: &mut F, program: &TypedLoopProgram) -> Outcome {
                 vm,
                 program,
                 &mut scratch.registers.0,
-                &scratch.receivers,
-                &mut scratch.boxed,
-                &scratch.sloppy_global_writes,
+                &mut ObjectBanks {
+                    receivers: &scratch.receivers,
+                    boxed: &mut scratch.boxed,
+                    sloppy_global_writes: &scratch.sloppy_global_writes,
+                },
             )
         })
         .unwrap_or(Outcome::Declined);
@@ -202,6 +204,15 @@ fn reg(register: u16) -> usize {
     usize::from(register) & (REGISTER_FILE - 1)
 }
 
+/// Boxed/receiver banks travel together; only the scalar bank needs a live
+/// independent pointer on every dispatch. Slice metadata stays behind this
+/// borrowed handle instead of competing with the scalar bank for registers.
+struct ObjectBanks<'a> {
+    receivers: &'a [crate::ArrayRef],
+    boxed: &'a mut [Value],
+    sloppy_global_writes: &'a [super::super::vm_bindings::TypedLoopSloppyGlobalWrite],
+}
+
 // Entry owns the scratch bundle, but the dispatch loop receives its storage
 // directly. Its scalar register bank is an independent mutable borrow, not
 // a pointer it must repeatedly recover through the scratch owner.
@@ -210,10 +221,13 @@ fn execute<F: LoopFrame>(
     vm: &mut F,
     program: &TypedLoopProgram,
     registers: &mut [Typed; REGISTER_FILE],
-    receivers: &[crate::ArrayRef],
-    boxed: &mut [Value],
-    sloppy_global_writes: &[super::super::vm_bindings::TypedLoopSloppyGlobalWrite],
+    banks: &mut ObjectBanks<'_>,
 ) -> Outcome {
+    let ObjectBanks {
+        receivers,
+        boxed,
+        sloppy_global_writes,
+    } = banks;
     // Borrowed for the whole region: the program owns these across activations,
     // so a site stays warm across entries of a short inner loop.
     let mut shape_caches = program.shape_caches.borrow_mut();

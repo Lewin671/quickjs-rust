@@ -4,22 +4,22 @@
   was rejected on its sole screen and is closed; its replacement is frozen as plan
   [`interpreter-core-v2-layout-edges`](performance-units/interpreter-core-v2-layout-edges.json); stage A is
   implemented on `agent/t056-m1-stage-a/claude` (plan `50b42547`); valid K=6 failure of `0a9af81b` spent
-  attempt 1/2. Repair `94408090` is present and locally gated; one attempt remains across A+B.
+  attempt 1/2. Its numeric-slot follow-up is present and locally gated; one attempt remains across A+B.
 - Implementation: stage 1 on main. Stage A on its branch, not on main; the rejected M1.2 candidate stays on
   `agent/t056-m1-stage2/codex`; the write-site add replay removed from stage A stays on
   `agent/t056-add-transition-replay/claude`.
-- Verified at: repair `94408090`: pre-commit full/fast gates, 255 NG fixtures, 5170 subset, strict pin audit
-  and hash-matched canonical instruction diagnosis (see [repair evidence](archive/T056-m1-stageA-attempt1-diagnosis.md)); fresh exact/triage/pre-gate pending.
+- Verified at: 51e78940 + runtime patch 5db877d1: full gate, 255 NG fixtures, 5170 subset, strict pin audit
+  and canonical 86/86 instruction pre-gate (see [repair evidence](archive/T056-m1-stageA-attempt1-diagnosis.md)); final-commit identity/exact pending.
 - Evidence: [part 1](archive/T056-unit0-part1-evidence.md), [part 2](archive/T056-unit0-part2-evidence.md),
   [M1 stage 1](archive/T056-m1-stage1-evidence.md), [M1.2 rejection](archive/T056-m1-stage2-evidence.md),
   [M1.2 diagnosis](archive/T056-m1-stage2-diagnosis.md), [stage A record](archive/T056-m1-stageA-record.md),
   [M2 design inputs](archive/T056-m2-design-inputs.md);
   plans [`interpreter-core-v2-atoms-layouts`](performance-units/interpreter-core-v2-atoms-layouts.json) (closed),
   [`interpreter-core-v2-layout-edges`](performance-units/interpreter-core-v2-layout-edges.json).
-- Unresolved: repaired-image full configured Test262, 86-case pre-gate and diagnostic wall triage before
+- Unresolved: final-commit full configured exact and diagnostic wall triage before
   deciding on the final attempt; arm64 repair timing unmeasured. M2 still needs fresh post-M1 profiles.
-- Next action: the lead runs the prepared fresh correctness, 86-case pre-gate and T061 diagnostic jobs,
-  inspects all five failed cases plus targets, then decides on the sole remaining attempt. No automatic timing.
+- Next action: commit the numeric-slot repair, bind its canonical image and refresh correctness/pre-gate/
+  triage commands. Only the lead can submit timing or decide on the final screen attempt.
 
 ## Goal and scope
 

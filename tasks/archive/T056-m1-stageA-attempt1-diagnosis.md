@@ -197,3 +197,76 @@ not a change of the frozen acceptance rule. No favorable automatic retry is prop
 correctness/pre-gate and manual review may the lead consider one complete K=6 attempt; all ordinary
 formal/stage requirements remain if that screen passes. Repair wall time, full configured Test262 and
 the complete 86-case pre-gate are **not yet verified** by this handoff.
+
+## Nbody follow-up: numeric calls and scalar spills
+
+The lead's complete correctness and blocked pre-gate at `94408090` are recorded in the
+[stage A record](T056-m1-stageA-record.md#repair-94408090-complete-pre-gate-blocked).
+They do not spend attempt 2. All jobs in this section are non-timing diagnostics, not acceptance.
+
+### Events and per-site attribution
+
+Job `20261020T232041Z-t056-nbody-site-counters` builds base f58c696e and repair 94408090 with
+`agents,perf-counters` plus an identical temporary per-PC execution tally. Canonical release settings
+and explicit x86_64 target are retained; these instrumented images are never used for instruction
+or wall ratios. Each counter build dumps `(region header, backedge, PC, TypedOp, count)` on exit.
+The original nbody input has **240 occupied sites**, all with identical counts in both versions:
+945,908 GetNamedTyped, 337,491 SetNamedTyped, 1,585,485 Binary, 90,134 ElementRead,
+90,134 Update and 382,569 MoveBoxed. Loop entries remain 9,015, backedges 9,020 and declined edges 5;
+all common execution counters match except the expected atom-creation implementation difference
+(4 versus 486). There is no tier/admission/deoptimization explanation for the regression.
+At 10,000 requested iterations, local_read has 5 sites, branch_arithmetic 9, global_read 4;
+every site count also matches. Binary counts are 29,998 / 39,997 / 19,999 respectively.
+
+Exact release disassembly identifies an extra instruction on every numeric Binary fast path in
+94408090: after `orb %sil, %r8b`, the number/number branch reloads both boxed storage
+(`movq -0x30(%rbp), %rcx`) and the scalar bank (`movq -0x38(%rbp), %r8`). Base reloads one
+scratch pointer; restored numeric inlining reloads one scalar pointer. The boxed pointer is unused
+on this path, but register allocation placed the load at its common successor. Thus the extra work
+is 3 / 4 / 2 instructions per steady-state iteration of local / branch / global, respectively.
+Independent N/2N measurements in `20261020T232731Z-t056-nbody-site-precision-instructions`
+(N=1,000,000) give base→944 instruction increments per iteration 197.040→200.092,
+306.525→310.613 and 152.038→154.078. The observed +3.052/+4.088/+2.040 agrees with that count;
+it is not a source-level change to arithmetic or global lookup.
+
+For property-site costs, `20261020T232843Z-t056-nbody-varying-site-instructions` compares one
+versus four sites, then N versus 2N iterations, using constructor instances selected by `list[i & 1]`.
+The diagnostic trace verifies the numeric read/write operations remain in the loop. The marginal
+read-plus-add cost is base 115.042, 944 129.153, repaired ABI 116.086 instructions; writable numeric
+assignment is 88.033 / 104.133 / 89.034. Together with the independent +1 Binary cost, the regressed
+numeric read contributes approximately +13 instructions and each write +16. Projecting those rounded
+costs onto nbody's actual site counts, plus +1 for its Binary sites, predicts +19.282 million instructions.
+The actual whole-process median is 314.154→333.141 million (+18.987 million); the residual is
+-0.295 million. This is controlled site-cost attribution, not a claim to have hardware counters at
+every PC: different surrounding operands, entry/exit and other operations explain the residual.
+
+Earlier marginal jobs `20261020T232419Z-t056-nbody-marginal-site-instructions` and
+`20261020T232731Z-t056-nbody-site-precision-instructions` use a loop-invariant receiver. Their
+read is hoisted, so their read-site slope does **not** attribute a numeric property read. Raw outputs
+are retained; the latter's pure scalar probe independently measures approximately +0.959 per extra
+Binary. Job `20261020T232628Z-t056-scalar-site-instructions` uses shorter N=100,000 increments;
+it shows the same direction with more startup/counter error, not a different causal result.
+
+### General repair and sealed experiments
+
+Numeric shared-slot readers/writers are `inline(always)` again. Their Small-only admission, shape/key,
+accessor, writability, payload and module-namespace guards are unchanged. Dispatch still receives the
+scalar allocation directly. A stack-only borrowed `ObjectBanks` groups receiver, boxed and sloppy-global
+slice metadata behind one parameter, reducing long-lived ABI operands without allocating, copying
+values, changing the scratch pool or changing the binding model. No benchmark ID, source shape or
+new opcode is recognized. The earlier Small lookup loop and append-edge changes remain.
+
+| Non-timing job | Source / patch SHA-256 | Image SHA-256 | nbody / local / branch / global | dynamic / trees |
+| --- | --- | --- | --- | --- |
+| `20261020T231950Z-t056-nbody-inline-instructions` | 51e78940 + e1938bf94b2383eac88a89a3f15f5ac29a53ea61a0511e55eea6eeee54fb44ed | ef36b563c5c1da27f6e0167e60649e506469c1deca5ff4eb1e183a75558d89db | 1.008778 / 0.999913 / 0.999972 / 0.999991 | 0.925235 / 0.994303 |
+| `20261020T232201Z-t056-nbody-banks-instructions` | 51e78940 + afe5d67a5ca1c78eaf7a25386ca62daebba07f032c346f233f1adbd104197efe | 4d5bb1e1a3729c0412b633aa1c5b83408ef9b2dc7a32f98713f5398af50c2564 | 1.007088 / 1.000193 / 0.999933 / 1.000021 | 0.925333 / 0.986548 |
+| `20261020T232746Z-t056-nbody-pinned-instructions` | 51e78940 + 5db877d18997dcddcc452adcc89dd422ad50416beba1f863dc7352f88172befd | 807867f6a8874f5dd2501ee5440153e7ed1461badf7b439839aad0bbf4e0be9e | 1.007287 / 1.000087 / 1.000018 / 0.999924 | 0.925173 / 0.986831 |
+
+All builds use the canonical producer, including CARGO_BUILD_TARGET. The final order is regenerated
+from the emitted inventory and immutable f58c696e role residues, with no timing/offset search;
+order SHA-256 `d130aa3fdcf191c35d1ab23e4c631fb42c0d9e8965ae292e0e422c5f7272e3bd`.
+Strict audit finds no stale symbols/budgets, executor residues remain interpreter 0x110 / wide 0xd90,
+and all 15 surviving reference callee residues are checked. The final ten-case diagnosis retains target
+instruction ratios moment 0.964924 / diff 0.968134 / meriyah 0.967284, unpack 1.013624.
+Dynamic's gain is smaller than 94408090's 0.905467 but remains 0.925173 versus base; trees retains
+0.986831 versus 0.985229. These costs are not hidden by the nbody/scalar repair.
