@@ -24,6 +24,7 @@ use crate::{ArrayRef, Function, RuntimeError, function::DynamicBindings, proxy::
 
 use super::{Property, Value};
 
+mod add_transition;
 mod array_buffer_methods;
 mod class_fields;
 mod key_order;
@@ -37,6 +38,7 @@ use crate::property::atom::{AtomDomain, WeakAtomDomain};
 use crate::property::layout::{Attributes, BulkEdit, Encoding, Layout, layout_for_keys};
 use storage::{Payload, PropertyStorage};
 
+pub(crate) use add_transition::AddCache;
 pub(crate) use ordered_data_builder::OrderedDataPropertyBuilder;
 pub(crate) use slot_reads::{LiteralLayout, SharedSlot};
 

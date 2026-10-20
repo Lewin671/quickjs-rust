@@ -30,6 +30,9 @@ pub(crate) struct InstanceFieldInitializer {
     /// The initializer thunk: a function evaluated with `this` = the instance.
     /// `None` for a field with no initializer (which installs `undefined`).
     pub(crate) initializer: Option<Function>,
+    /// The layout transition this field's last plain installation made, so
+    /// the next instance on the same layout installs it by identity.
+    add: crate::value::AddCache,
 }
 
 /// A class field key after class-definition-time resolution.
@@ -55,7 +58,16 @@ impl InstanceFieldInitializer {
             PropertyKey::String(key) => InstanceFieldKey::String(atoms.intern_key(&key)),
             PropertyKey::Symbol(symbol) => InstanceFieldKey::Symbol(symbol),
         };
-        Self { key, initializer }
+        Self {
+            key,
+            initializer,
+            add: crate::value::AddCache::default(),
+        }
+    }
+
+    /// The field's remembered plain installation.
+    pub(crate) fn add_cache(&self) -> &crate::value::AddCache {
+        &self.add
     }
 
     /// Returns the shareable public string key when the field can take the

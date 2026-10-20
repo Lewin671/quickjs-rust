@@ -9,11 +9,16 @@
 //! removing or reconfiguring a property on any of those prototypes changes
 //! its layout revision, and replacing a prototype changes the identity the
 //! next receiver is checked against, so a stale proof only misses.
+//!
+//! Once the proof has served one creation it also remembers that creation's
+//! layout transition; a receiver on the transition's source layout replays
+//! it by identity (see `value::object::add_transition`), which skips the
+//! receiver's own-property probes along with the chain walk.
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::value::{ObjectWeakRef, OwnDataPropertyRead};
+use crate::value::{AddCache, ObjectWeakRef, OwnDataPropertyRead};
 use crate::{ObjectRef, Prototype, Value};
 
 /// Prototype chains longer than this are not remembered.
@@ -37,6 +42,8 @@ struct CreationProof {
     /// The receiver layout's interned text of the site's name, so a later
     /// creation follows the layout edge by pointer instead of comparing text.
     name: Option<Rc<str>>,
+    /// The layout transition the last proven creation made.
+    transition: AddCache,
 }
 
 impl CreationCache {
@@ -49,24 +56,49 @@ impl CreationCache {
         key: &Rc<str>,
         value: &Value,
     ) -> bool {
-        let proof = self.0.borrow();
-        let Some(proof) = proof.as_ref() else {
-            return false;
+        let source = {
+            let proof = self.0.borrow();
+            let Some(proof) = proof.as_ref() else {
+                return false;
+            };
+            if !receiver_is_plain(object)
+                || !matches!(
+                    object.own_data_property_read(key),
+                    OwnDataPropertyRead::Missing
+                )
+                || !chain_matches(object, &proof.chain)
+            {
+                return false;
+            }
+            let key = proof.name.as_ref().unwrap_or(key);
+            let source = object.add_source(key);
+            if !object.create_absent_own_data_property(Rc::clone(key), value.clone()) {
+                return false;
+            }
+            source
         };
-        if !receiver_is_plain(object)
-            || !matches!(
-                object.own_data_property_read(key),
-                OwnDataPropertyRead::Missing
-            )
-            || !chain_matches(object, &proof.chain)
-        {
-            return false;
-        }
-        let key = proof.name.as_ref().unwrap_or(key);
-        if !object.create_absent_own_data_property(Rc::clone(key), value.clone()) {
-            return false;
+        if let Some(proof) = self.0.borrow().as_ref() {
+            proof.transition.record(object, source, key);
         }
         true
+    }
+
+    /// Replays the remembered creation on a receiver whose layout is the
+    /// transition's source -- which proves the key absent -- and whose
+    /// chain is still the proven one. `false` changes nothing.
+    #[inline]
+    pub(in crate::bytecode) fn try_add(&self, object: &ObjectRef, value: &Value) -> bool {
+        let proof = self.0.borrow();
+        let Some(CreationProof {
+            chain, transition, ..
+        }) = proof.as_ref()
+        else {
+            return false;
+        };
+        transition.is_source_of(object)
+            && receiver_is_plain(object)
+            && chain_matches(object, chain)
+            && transition.replay(object, value)
     }
 
     /// Remembers `object`'s chain after the general path created `key` on
@@ -91,7 +123,11 @@ impl CreationCache {
             }
         }
         let name = object.own_property_name(key);
-        *self.0.borrow_mut() = Some(CreationProof { chain, name });
+        *self.0.borrow_mut() = Some(CreationProof {
+            chain,
+            name,
+            transition: AddCache::default(),
+        });
     }
 }
 

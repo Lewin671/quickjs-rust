@@ -223,6 +223,11 @@ pub(super) fn set_prop_named(
         && let Value::Object(object_ref) = object
         && !crate::symbol::is_symbol_primitive(object_ref)
     {
+        // A receiver on the site's remembered add source lacks the key, so
+        // the write is that creation.
+        if creation.is_some_and(|creation| creation.try_add(object_ref, &value)) {
+            return Ok(value);
+        }
         let cached = cache.and_then(|cache| cache.write(object_ref, key, &value));
         let cached_hit = cached.is_some();
         let write =

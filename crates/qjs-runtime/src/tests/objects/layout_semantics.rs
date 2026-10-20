@@ -53,3 +53,41 @@ fn layout_semantics_survive_edges_dictionaries_and_reencoding() {
                     b,c=! ; other,f ; a,g:2 ; 1:2:2 ; p,q,r:p,q";
     assert_eq!(value, Value::String(expected.into()));
 }
+
+#[test]
+fn replayed_adds_respect_prototype_extensibility_and_layout_changes() {
+    let source = r#"
+        var out = [];
+        function keys(o) { return Object.keys(o).join(','); }
+        function P(v) { this.a = v; this.b = v; }
+        var before = [new P(1), new P(2), new P(3)].map(keys).join('/');
+        // A setter added to the prototype afterwards intercepts the add.
+        var seen = [];
+        Object.defineProperty(P.prototype, 'b', { set: function (v) { seen.push(v); }, configurable: true });
+        var p = new P(4);
+        out.push(before + '|' + keys(p) + '|' + seen.join(','));
+        delete P.prototype.b;
+        out.push(keys(new P(5)) + ':' + new P(6).b);
+        // A receiver made non-extensible, or on another layout, misses.
+        function Q(lock, extra) {
+            if (lock) Object.preventExtensions(this);
+            if (extra) this.z = 0;
+            this.a = 1;
+        }
+        new Q(false, false); new Q(false, false);
+        out.push(keys(new Q(true, false)) + '|' + keys(new Q(false, true)) + '|' + keys(new Q(false, false)));
+        // Class fields: an initializer that adds a later field's key first,
+        // and a prototype setter that a field definition must not call.
+        class R { a = (this.b = 5, 1); b = 2; }
+        var r = [new R(), new R()].map(function (o) { return keys(o) + '=' + o.b; }).join('/');
+        class S { x = 1; y = 2; }
+        new S();
+        Object.defineProperty(S.prototype, 'x', { set: function () { throw new Error('called'); } });
+        var s = new S();
+        out.push(r + '|' + keys(s) + ':' + s.x);
+        out.join(' ; ');
+    "#;
+    let value = eval(source).expect("replay semantics script");
+    let expected = "a,b/a,b/a,b|a|4 ; a,b:6 ; |z,a|a ; b,a=2/b,a=2|x,y:1";
+    assert_eq!(value, Value::String(expected.into()));
+}
