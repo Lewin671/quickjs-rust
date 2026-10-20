@@ -7,11 +7,11 @@
 - Verified at: stage 1 `11c9fc08` gates (see its record); M1.2 diagnosis 2026-10-20 at
   `873c9bc5` versus `ab9c29b6` (instruction, counter and sampling jobs in the diagnosis record).
 - Evidence: [part 1](archive/T056-unit0-part1-evidence.md), [part 2](archive/T056-unit0-part2-evidence.md),
-  [M1 stage 1](archive/T056-m1-stage1-evidence.md), [M1.2 diagnosis](archive/T056-m1-stage2-diagnosis.md);
+  [M1 stage 1](archive/T056-m1-stage1-evidence.md), [M1.2 rejection](archive/T056-m1-stage2-evidence.md),
+  [M1.2 diagnosis](archive/T056-m1-stage2-diagnosis.md);
   plan [`interpreter-core-v2-atoms-layouts`](performance-units/interpreter-core-v2-atoms-layouts.json).
-- Unresolved: the M1.2 rejection record (`tasks/archive/T056-m1-stage2-evidence.md`, branch commit
-  `c6c06bca`) and that plan's `current_stage` 2 edit are not on main; the new shape depends on
-  T063 canonical string storage (`agent/string-canonical/codex`); M2 needs fresh post-M1 profiles.
+- Unresolved: the new shape depends on T063 canonical string storage (`agent/string-canonical/codex`);
+  M2 needs fresh post-M1 profiles.
 - Next action: after T063 is on main: fresh formal30, queue and profiles, then freeze the new M1
   plan (below) before any runtime code.
 
@@ -156,7 +156,8 @@ v2/v3 successor (`HELD_OUT_SUCCESSOR`). See the [stage 1 record](archive/T056-m1
 
 ## M1 stage 2 (layout authority): first shape closed
 
-Sole screen `20261018T055933Z-t056-m1s2-screen1` of `873c9bc5` under the frozen plan rejected
+Sole screen `20261018T055933Z-t056-m1s2-screen1` of `873c9bc5` under the frozen plan (`current_stage` 2)
+rejected; the [rejection record](archive/T056-m1-stage2-evidence.md) owns the gates and verdict. It rejected
 stage 2 (v4: 42/86 cases; external, development, sentinel and portfolio lanes above ceiling on
 all six layouts; not DISTURBED); the plan's single stage-2 attempt is spent and its JSON stays
 frozen. Under T022 the `abort` closes this implementation shape (value republication, weak

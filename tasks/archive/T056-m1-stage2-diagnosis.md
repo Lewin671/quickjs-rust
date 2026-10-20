@@ -23,8 +23,8 @@ The sole stage-2 screen was job `20261018T055933Z-t056-m1s2-screen1`:
   portfolio lanes exceed their ceilings on all six layouts;
 - not DISTURBED.
 
-The full record, `tasks/archive/T056-m1-stage2-evidence.md`, is on that branch at `c6c06bca`
-and has not yet been integrated. The slowest cases rose in instructions as much as in wall
+The full record is [T056-m1-stage2-evidence](T056-m1-stage2-evidence.md) (imported unchanged
+from that branch at `c6c06bca`). The slowest cases rose in instructions as much as in wall
 time:
 - json-parse-financial 5.65x;
 - raytrace-public-class-fields 3.77x;
