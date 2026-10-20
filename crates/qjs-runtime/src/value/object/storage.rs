@@ -7,7 +7,8 @@
 //! goes through [`LayoutEdit`] and mirrors its slot change in the payload
 //! under the same `&mut` borrow, so no reader can see the two disagree: for
 //! every slot, the layout field's descriptor attributes equal those of the
-//! payload descriptor.
+//! payload descriptor, and the store's encoding copy equals the layout's.
+//! Slot readers and writers rely on both, so they read no layout node.
 
 use std::rc::Rc;
 

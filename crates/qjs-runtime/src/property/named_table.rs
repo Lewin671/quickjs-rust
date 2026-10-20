@@ -2,10 +2,12 @@
 //! behind the same layout authority as an ordinary object's store.
 //!
 //! The receiver keeps its own semantic hooks (`length`, `name`, `prototype`,
-//! indices) and its own key-order bookkeeping; this table holds only the
-//! installed named descriptors. It has no layout until its first install,
-//! which takes the domain the installing code supplies -- the receiver's
-//! realm -- so creating a function or array creates no layout and no domain.
+//! indices); this table holds the installed named descriptors and, through
+//! its layout, their order. It has no layout until its first install, which
+//! takes the domain the installing code supplies -- the receiver's realm, or
+//! the shared fallback domain for a creator with none -- so creating a
+//! function or array creates no layout and no domain. An add probes once:
+//! [`NamedTable::probe`]'s miss feeds [`NamedTable::append_absent`].
 //!
 //! Invariant: for every slot, the layout field's descriptor attributes equal
 //! those of the slot's descriptor. Every mutation that can change attributes

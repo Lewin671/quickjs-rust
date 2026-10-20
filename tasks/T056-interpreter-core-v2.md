@@ -2,19 +2,23 @@
 
 - Status: active; M1 stage 1 integrated into main (`ab9c29b6`); the M1.2 shape `873c9bc5`
   was rejected on its sole screen and is closed; its replacement is frozen as plan
-  [`interpreter-core-v2-layout-edges`](performance-units/interpreter-core-v2-layout-edges.json) (stage A next).
-- Implementation: stage 1 on main. No M1.2 runtime code on main; the rejected candidate stays on
-  `agent/t056-m1-stage2/codex`.
-- Verified at: stage 1 `11c9fc08` gates (see its record); M1.2 diagnosis 2026-10-20 at
-  `873c9bc5` versus `ab9c29b6` (instruction, counter and sampling jobs in the diagnosis record).
+  [`interpreter-core-v2-layout-edges`](performance-units/interpreter-core-v2-layout-edges.json); stage A is
+  implemented on `agent/t056-m1-stage-a/claude` (from plan commit `50b42547`), pre-gate pending.
+- Implementation: stage 1 on main. Stage A on its branch, not on main; the rejected M1.2 candidate stays on
+  `agent/t056-m1-stage2/codex`; the write-site add replay removed from stage A stays on
+  `agent/t056-add-transition-replay/claude`.
+- Verified at: stage 1 `11c9fc08` gates (see its record); stage A focused, perf-counters and full gates on its
+  branch (see its [record](archive/T056-m1-stageA-record.md)).
 - Evidence: [part 1](archive/T056-unit0-part1-evidence.md), [part 2](archive/T056-unit0-part2-evidence.md),
   [M1 stage 1](archive/T056-m1-stage1-evidence.md), [M1.2 rejection](archive/T056-m1-stage2-evidence.md),
-  [M1.2 diagnosis](archive/T056-m1-stage2-diagnosis.md), [M2 design inputs](archive/T056-m2-design-inputs.md);
+  [M1.2 diagnosis](archive/T056-m1-stage2-diagnosis.md), [stage A record](archive/T056-m1-stageA-record.md),
+  [M2 design inputs](archive/T056-m2-design-inputs.md);
   plans [`interpreter-core-v2-atoms-layouts`](performance-units/interpreter-core-v2-atoms-layouts.json) (closed),
   [`interpreter-core-v2-layout-edges`](performance-units/interpreter-core-v2-layout-edges.json).
-- Unresolved: M2 (revised 2026-10-20 to five stages, cost-first) needs fresh post-M1 profiles.
-- Next action: implement stage A on a branch from the plan commit (no diagnostic cherry-picks),
-  pass the work-count obligations and the instruction pre-gate, then the stage A screen.
+- Unresolved: stage A pre-gate (x86, non-timing, all 86 cases) not run; M2 (revised 2026-10-20 to five stages,
+  cost-first) needs fresh post-M1 profiles.
+- Next action: run the stage A pre-gate on the final committed image and record it in the stage A record; on a
+  pass, record `git diff f58c696e <candidate> -- crates` and run the stage A screen.
 
 ## Goal and scope
 

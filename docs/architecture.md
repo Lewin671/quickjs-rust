@@ -125,8 +125,9 @@ and immutable (`bytecode/vm_string_append.rs`).
 **Named operands.** A named property opcode indexes its body's name pool;
 the interpreter resolves it to an atom of the frame realm's `AtomDomain`
 (`property/atom.rs`), linking each body once per domain
-(`bytecode/linked_code.rs`). Stores still key by text; the atom-keyed layout
-authority is the staged target in [design/interpreter-core-v2.md](design/interpreter-core-v2.md).
+(`bytecode/linked_code.rs`). Stores look keys up through their layout by
+text (below); routing named Get/Set through layouts is the next stage of
+[design/interpreter-core-v2.md](design/interpreter-core-v2.md).
 
 **Per-site caches.** `bytecode/named_property_cache.rs` caches named property
 reads and writes per instruction site, keyed by receiver layout.
@@ -161,17 +162,21 @@ Defined in `value/mod.rs`, `value/object.rs`, `value/property.rs` and
 - `ObjectData` holds the fields every object needs inline. Rare state
   (symbol-keyed properties, generator state, private names, ArrayBuffer and
   TypedArray slots) sits behind a lazily allocated `ObjectColdData` box.
-- String-keyed properties use one of four `PropertyStorage` forms: `Small`
-  (an insertion-ordered vector, up to 12 properties), `Dynamic` (a boxed
-  slot vector with a name index and an order list), and `Shaped` or
-  `ShapedPair` for object literals, which share one `ObjectLiteralShape` key
-  layout and store only values or descriptors per object.
+- String-keyed properties live in a `PropertyStorage`
+  (`value/object/storage.rs`): one layout pointer (`property/layout.rs`)
+  that owns every key, slot, attribute and the order, beside a keyless
+  payload of descriptors (`Small`, `Dynamic` and literal `Shaped` encodings)
+  or of two plain values (`Pair`). A layout is a shared immutable `Shape`,
+  reached through bounded append and edit edges from its atom domain's
+  roots, or a private `Dictionary` after heavy churn. Function and array
+  named parts use the same authority (`property/named_table.rs`). Rules and
+  bounds: [design/property-layouts.md](design/property-layouts.md).
 - `Property` is 32 bytes: value and flags inline, the accessor pair behind an
   optional shared `Rc`.
 - Each object has two counters. `property_revision` advances on any own
   string property change. `layout_revision` advances only when a slot index
-  could change (insert, delete, descriptor replacement), so a slot-keyed
-  cache survives ordinary field assignment.
+  or its attributes could change (insert, delete, descriptor replacement,
+  seal, freeze), so a slot-keyed cache survives ordinary field assignment.
 - An array stores its elements in a `Vec<Value>`; holes are recorded in a
   lazily allocated side set.
 

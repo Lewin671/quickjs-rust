@@ -30,19 +30,29 @@ The layout **replaces** payload lookup authority in the same stage; it is not la
   re-links later.
   - Ordinary objects take it from the prototype. Objects with a null prototype (and `PropertyStorage::dynamic`
     hosts without one) take it from the current realm.
-  - Function, array and wrapper named parts take it from the receiver realm.
+  - Function, array and wrapper named parts take it from the receiver realm; installers pass their realm's
+    domain.
+  - A creator with no realm at hand (a realm-less native's first named install, an array index past the dense or
+    index range, a null-prototype helper object) uses the per-thread shared fallback domain, which keeps its
+    roots like a realm. It is created once per thread, never per store.
   - Ordered-data builders (JSON, RegExp/String wrappers) receive it before their first insert.
   - `PropertyStorage::dynamic` (objects built from a host map) builds its layout by appending the ordered keys
     through edges from the domain root. It does not publish a whole field list.
 - **Lazy tables.** A function or array named table has no layout until its first ordinary named install;
   semantic hooks (`length`, `name`, `prototype`, indices) need none.
+  - The table's layout owns its key order; there is no second key list. A function's standard `length` and
+    `name`, once materialized, are inserted in front, and an unobserved default `prototype` is inserted right
+    after them when it is created, ahead of every later key. An add probes the table once.
 - **One pointer.** The layout is one `Rc<LayoutNode>`: a shared immutable `Shape` or a private `Dictionary`.
   The dictionary node is uniquely owned and edited in place through its cell.
-- **Dictionary identity.** A dictionary keeps an independent `identity: Rc<()>` beside its `u64` version. An IC
-  may hold a `Weak` of it, so a dead identity can never match a later dictionary at a reused address.
-  - The alternative is a monotonic `u64` id per domain. It was rejected because it needs either a domain
-    lookup or a stored domain to compare ids across domains.
-  - The `Rc<()>` is one allocation per dictionary, which only exists after heavy churn.
+- **Dictionary identity.** A dictionary keeps an independent `identity: Rc<()>` beside its `u64` version for
+  caches that outlive their object.
+  - A shared-slot read/write cache instead holds a `Weak` of the dictionary node and the owning object's
+    `layout_revision`, which every in-place structural edit (including seal and freeze) bumps: a hit compares
+    the node pointer and the revision without reading the node. The `Weak` keeps the allocation, so a dead
+    dictionary's address is never reused while the cache can compare it.
+  - A monotonic `u64` id per domain was rejected because it needs either a domain lookup or a stored domain to
+    compare ids across domains.
 
 ## Transitions are edges
 
@@ -53,7 +63,7 @@ token (the `token` semantics in `layout/tests.rs` are unchanged).
 | --- | --- |
 | Append | Edge label `(owned key, attributes, ordered, payload encoding)`. A hit compares key bytes (pointer first), allocates nothing and copies or compares no field vector. A miss copies the parent's fields once, interns the key, creates the child and records the edge. |
 | Payload re-encoding | `Small`→`Dynamic` and `Pair`→`Dynamic` are edges from the current shape. They are not structural edits and are not counted. |
-| Delete, reconfigure, reorder | Content-hash cache. The incremental 64-bit hash folds the payload encoding, then `(key, attributes)` per slot, then the order sequence. A full compare runs only on a hash match and also compares encoding, fields and order. |
+| Delete, reconfigure, reorder | Edit edges (at most 8 per shape), then a content-hash cache. The incremental 64-bit hash folds the payload encoding, then `(key, attributes)` per slot, then the order sequence. A full compare runs only on a hash match and also compares encoding, fields and order. A content-cache hit records no edge: the hit may be an ancestor, and an edge to it would form a cycle. |
 | Bulk freeze/seal and descriptor batches | Reconfigure only slots whose attributes changed; never re-intern every key. |
 | Dictionary switch | After 32 non-append edits, or when an append would exceed 128 fields. Appends never count as edits. |
 
@@ -99,7 +109,11 @@ hit per field.
 
 - Shapes with up to 12 fields compare field text linearly, pointer first and then bytes. There is no domain probe
   and no per-shape index.
-- Larger shapes and dictionaries keep one index keyed by atom text, so a probe hashes once.
+- Larger shapes and dictionaries keep one index keyed by atom text, so a probe hashes once. A large shape builds
+  its index after four linear probes: a shape an object only passes through while growing is probed once.
+- Append edges keep the appended field's text inline, so a hit compares the key without following the atom.
+- A store keeps its layout's encoding beside the payload, and descriptor payload slots carry the layout field's
+  attributes, so slot reads and writes admitted by encoding read no layout node.
 - Bytecode-linked named operations (M1.3) carry atoms and skip text entirely.
 - An identity is reused along a prototype chain only while every store shares the domain and the operation holds
   the key.
@@ -117,11 +131,13 @@ hit per field.
 
 Stage 2 added a domain, a two-word state and a counter to `PropertyStorage`, which made it 144 bytes.
 
-**Target: at most 120 bytes**, locked by the size test. It is reached with:
+**Target: at most 120 bytes**, locked by the size test (store at most 56). It is reached with:
 - the one-pointer `LayoutNode`, which adds 8 bytes to `PropertyStorage`;
-- the eight flags packed into one `Cell<u16>` bit set (7 bools plus 2 bits of brand, 9 bits). This frees 6 bytes;
-- the `u8` edit counter placed in the freed space;
+- the `u8` edit counter and the encoding copy in the store's padding;
 - the domain moved into the shape and dictionary nodes.
+
+The eight one-byte flags stay unpacked: a `Cell<u16>` bit set frees 6 bytes that alignment pads back, so the
+object is 120 bytes either way.
 
 **The cycle.** Moving the domain into shapes creates a cycle if the domain owned the roots: root → child →
 domain → root. `DomainRoots` therefore sits outside the domain, held by its realms. The domain keeps only its
