@@ -404,7 +404,7 @@ pub(crate) fn native_set_iterator_next(this_value: Value) -> Result<Value, Runti
         });
     };
     if iterator_done(&iterator) {
-        return Ok(iterator_result(Value::Undefined, true));
+        return Ok(iterator_result(Value::Undefined, true, &iterator));
     }
 
     let set = match iterator_slot(&iterator, SET_ITERATOR)? {
@@ -425,7 +425,7 @@ pub(crate) fn native_set_iterator_next(this_value: Value) -> Result<Value, Runti
                 SET_ITERATOR_NEXT_INDEX.to_owned(),
                 Value::Number(position as f64),
             );
-            return Ok(iterator_result(Value::Undefined, true));
+            return Ok(iterator_result(Value::Undefined, true, &iterator));
         }
         let entry = set.value_at(position);
         position += 1;
@@ -448,7 +448,7 @@ pub(crate) fn native_set_iterator_next(this_value: Value) -> Result<Value, Runti
             });
         }
     };
-    Ok(iterator_result(item, false))
+    Ok(iterator_result(item, false, &iterator))
 }
 
 fn this_set(this_value: Value) -> Result<SetRef, RuntimeError> {
@@ -542,11 +542,11 @@ fn iterator_kind(iterator: &ObjectRef) -> Result<String, RuntimeError> {
     }
 }
 
-fn iterator_result(value: Value, done: bool) -> Value {
+fn iterator_result(value: Value, done: bool, iterator: &ObjectRef) -> Value {
     let mut properties = HashMap::new();
     properties.insert("value".to_owned(), value);
     properties.insert("done".to_owned(), Value::Boolean(done));
-    Value::Object(ObjectRef::new(properties))
+    Value::Object(ObjectRef::new_like(iterator, properties))
 }
 
 fn define_set_prototype_function(

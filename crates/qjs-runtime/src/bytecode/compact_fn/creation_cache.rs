@@ -34,6 +34,9 @@ struct CreationProof {
     /// The chain from the receiver's prototype to the end, none of whose
     /// objects had an own property of the site's name.
     chain: Vec<(ObjectWeakRef, u64)>,
+    /// The receiver layout's interned text of the site's name, so a later
+    /// creation follows the layout edge by pointer instead of comparing text.
+    name: Option<Rc<str>>,
 }
 
 impl CreationCache {
@@ -59,6 +62,7 @@ impl CreationCache {
         {
             return false;
         }
+        let key = proof.name.as_ref().unwrap_or(key);
         if !object.create_absent_own_data_property(Rc::clone(key), value.clone()) {
             return false;
         }
@@ -86,7 +90,8 @@ impl CreationCache {
                 Some(_) => return,
             }
         }
-        *self.0.borrow_mut() = Some(CreationProof { chain });
+        let name = object.own_property_name(key);
+        *self.0.borrow_mut() = Some(CreationProof { chain, name });
     }
 }
 

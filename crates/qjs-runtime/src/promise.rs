@@ -875,7 +875,7 @@ fn resolve_promise(object: &ObjectRef, value: Value, env: &mut CallEnv) {
 /// only the first of resolve/reject to run settles the promise. Both are
 /// anonymous built-in functions (name "", length 1).
 fn resolving_function_pair(promise: Value) -> (Value, Value) {
-    let already_resolved = Value::Object(ObjectRef::new(HashMap::new()));
+    let already_resolved = Value::Object(ObjectRef::new_like_value(&promise, HashMap::new()));
     let mut resolve = Function::new_native(None, 1, NativeFunction::PromiseResolveFunction, false);
     resolve.insert_native_context(PROMISE_TARGET.to_owned(), promise.clone());
     resolve.insert_native_context(
@@ -993,7 +993,7 @@ fn callable_or_undefined(value: Option<&Value>) -> Value {
 }
 
 fn promise_reaction(handler: Value, capability: ObjectRef, fulfill: bool) -> ObjectRef {
-    let reaction = ObjectRef::new(HashMap::new());
+    let reaction = ObjectRef::new_like(&capability, HashMap::new());
     reaction.define_non_enumerable(PROMISE_HANDLER.to_owned(), handler);
     reaction.define_non_enumerable(
         PROMISE_REACTION_CAPABILITY.to_owned(),
@@ -1011,7 +1011,7 @@ fn promise_reaction_for_capability(
     capability: &capability::PromiseCapability,
     fulfill: bool,
 ) -> ObjectRef {
-    let reaction = ObjectRef::new(HashMap::new());
+    let reaction = ObjectRef::new_like_value(&capability.promise, HashMap::new());
     reaction.define_non_enumerable(PROMISE_HANDLER.to_owned(), handler);
     reaction.define_non_enumerable(
         PROMISE_REACTION_RESOLVE.to_owned(),

@@ -59,7 +59,9 @@ pub(crate) fn is_call_frame_binding(name: &str) -> bool {
     )
 }
 #[allow(unused_imports)]
-pub(crate) use env::{CallEnv, DynamicBindings, ModuleImports, Realm, new_realm};
+pub(crate) use env::{
+    CallEnv, DynamicBindings, ModuleImports, Realm, new_realm, new_realm_sharing_atoms,
+};
 pub(crate) use install::install_function;
 pub(crate) use local_names::{
     collect_function_local_names, parameter_argument_binding_name, parameter_binding_name,

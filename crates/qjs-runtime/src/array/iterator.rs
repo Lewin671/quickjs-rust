@@ -127,7 +127,7 @@ pub(crate) fn native_array_iterator_next(
         });
     };
     if iterator_done(&iterator) {
-        return Ok(iterator_result(Value::Undefined, true));
+        return Ok(iterator_result(Value::Undefined, true, env));
     }
 
     let target = iterator_slot(&iterator, ITERATED_OBJECT)?;
@@ -148,7 +148,7 @@ pub(crate) fn native_array_iterator_next(
     let length = to_length_with_env(property_value(target.clone(), "length", env)?, env)?;
     if index >= length {
         iterator.define_non_enumerable(ITERATOR_DONE.to_owned(), Value::Boolean(true));
-        return Ok(iterator_result(Value::Undefined, true));
+        return Ok(iterator_result(Value::Undefined, true, env));
     }
 
     iterator.define_non_enumerable(
@@ -170,7 +170,7 @@ pub(crate) fn native_array_iterator_next(
             });
         }
     };
-    Ok(iterator_result(value, false))
+    Ok(iterator_result(value, false, env))
 }
 
 fn iterator_done(iterator: &ObjectRef) -> bool {
@@ -212,9 +212,9 @@ fn iterator_kind(iterator: &ObjectRef) -> Result<String, RuntimeError> {
     }
 }
 
-fn iterator_result(value: Value, done: bool) -> Value {
+fn iterator_result(value: Value, done: bool, env: &crate::CallEnv) -> Value {
     let mut properties = HashMap::new();
     properties.insert("value".to_owned(), value);
     properties.insert("done".to_owned(), Value::Boolean(done));
-    Value::Object(ObjectRef::new(properties))
+    Value::Object(ObjectRef::new_in(env.realm().atoms(), properties))
 }

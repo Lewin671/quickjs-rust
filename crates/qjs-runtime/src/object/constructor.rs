@@ -152,7 +152,7 @@ pub(crate) fn native_object_create(
             HashMap::new(),
             Some(crate::array_as_prototype_slot(prototype, env)),
         )),
-        Some(Value::Null) => Value::Object(ObjectRef::new(HashMap::new())),
+        Some(Value::Null) => Value::Object(ObjectRef::new_in(env.realm().atoms(), HashMap::new())),
         _ => {
             return Err(RuntimeError {
                 thrown: None,

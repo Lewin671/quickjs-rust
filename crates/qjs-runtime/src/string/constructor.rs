@@ -50,7 +50,8 @@ pub(crate) fn construct_string_wrapper(
         _ => return None,
     };
     let keys = env.realm().string_object_keys();
-    let mut builder = crate::value::OrderedDataPropertyBuilder::with_capacity(2);
+    let mut builder =
+        crate::value::OrderedDataPropertyBuilder::with_capacity(env.realm().atoms(), 2);
     let length = crate::string::js_string_code_unit_len(&text) as f64;
     builder.insert_property(keys.data(), Property::non_enumerable(Value::String(text)));
     builder.insert_property(

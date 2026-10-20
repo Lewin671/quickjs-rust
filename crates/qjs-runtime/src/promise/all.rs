@@ -20,7 +20,7 @@ pub(crate) fn native_promise_all(
     let iterable = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let handler = AllHandler {
         values: ArrayRef::new(Vec::new()),
-        remaining: perform::new_remaining(1),
+        remaining: perform::new_remaining(1, env),
     };
     perform::run_combinator(this_value, iterable, "Promise.all", handler, env)
 }
@@ -35,13 +35,13 @@ impl ElementHandler for AllHandler {
         &mut self,
         index: usize,
         capability: &PromiseCapability,
-        _env: &mut CallEnv,
+        env: &mut CallEnv,
     ) -> Result<(Value, Value), RuntimeError> {
         // Reserve the slot so out-of-order fulfilment writes the right index.
         self.values.set(index, Value::Undefined);
         perform::increment_remaining(&self.remaining);
 
-        let already_called = ObjectRef::new(HashMap::new());
+        let already_called = ObjectRef::new_in(env.realm().atoms(), HashMap::new());
         let mut on_fulfilled =
             Function::new_native(None, 1, NativeFunction::PromiseAllResolveElement, false);
         on_fulfilled.insert_native_context(

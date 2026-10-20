@@ -835,6 +835,12 @@ impl Function {
         matches!(self.native, Some(NativeFunction::UninitializedLexical))
     }
 
+    /// The atom domain a store created with this function as its
+    /// prototype uses: its creation realm's.
+    pub(crate) fn atom_domain(&self) -> Option<crate::property::atom::AtomDomain> {
+        self.realm.as_ref().map(|realm| realm.atoms().clone())
+    }
+
     pub(crate) fn native_kind(&self) -> Option<NativeFunction> {
         self.native
     }
@@ -914,7 +920,6 @@ impl Function {
         native: Option<NativeFunction>,
         constructable: bool,
     ) -> Self {
-        let prototype = ObjectRef::new(HashMap::new());
         let auxiliary = FunctionAuxiliaryState::new(None, None);
         let function = Self(Rc::new(FunctionData {
             has_name_binding: false,
@@ -960,6 +965,7 @@ impl Function {
         function.define_length_property();
         function.define_name_property();
         if constructable {
+            let prototype = ObjectRef::new(HashMap::new());
             prototype
                 .define_non_enumerable("constructor".to_owned(), Value::Function(function.clone()));
             function.define_property(

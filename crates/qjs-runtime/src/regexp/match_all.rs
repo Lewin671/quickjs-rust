@@ -98,7 +98,7 @@ pub(crate) fn native_regexp_string_iterator_next(
         });
     };
     if iterator_done(&iterator) {
-        return Ok(iterator_result(Value::Undefined, true));
+        return Ok(iterator_result(Value::Undefined, true, env));
     }
 
     let regexp = iterator_slot(&iterator, REGEXP_STRING_ITERATOR_REGEXP)?;
@@ -107,14 +107,14 @@ pub(crate) fn native_regexp_string_iterator_next(
     if matches!(result, Value::Null) {
         iterator
             .define_non_enumerable(REGEXP_STRING_ITERATOR_DONE.to_owned(), Value::Boolean(true));
-        return Ok(iterator_result(Value::Undefined, true));
+        return Ok(iterator_result(Value::Undefined, true, env));
     }
 
     let match_result = ensure_exec_result_object(result)?;
     if !iterator_boolean(&iterator, REGEXP_STRING_ITERATOR_GLOBAL)? {
         iterator
             .define_non_enumerable(REGEXP_STRING_ITERATOR_DONE.to_owned(), Value::Boolean(true));
-        return Ok(iterator_result(match_result, false));
+        return Ok(iterator_result(match_result, false, env));
     }
 
     let match_string = match_result_value(match_result.clone(), env)?;
@@ -128,7 +128,7 @@ pub(crate) fn native_regexp_string_iterator_next(
         );
         set_last_index(regexp, Value::Number(next_index as f64), env)?;
     }
-    Ok(iterator_result(match_result, false))
+    Ok(iterator_result(match_result, false, env))
 }
 
 fn regexp_exec(regexp: Value, input: &JsString, env: &mut CallEnv) -> Result<Value, RuntimeError> {
@@ -216,11 +216,11 @@ fn iterator_slot(iterator: &ObjectRef, key: &str) -> Result<Value, RuntimeError>
         })
 }
 
-fn iterator_result(value: Value, done: bool) -> Value {
+fn iterator_result(value: Value, done: bool, env: &crate::CallEnv) -> Value {
     let mut properties = HashMap::new();
     properties.insert("value".to_owned(), value);
     properties.insert("done".to_owned(), Value::Boolean(done));
-    Value::Object(ObjectRef::new(properties))
+    Value::Object(ObjectRef::new_in(env.realm().atoms(), properties))
 }
 
 fn is_object_value(value: &Value) -> bool {

@@ -3,7 +3,7 @@
 
 use std::rc::Rc;
 
-use super::{ObjectData, ObjectRef, PropertyStorage};
+use super::{ObjectData, ObjectRef, Payload, PropertyStorage};
 use crate::value::{Value, teardown};
 
 impl ObjectRef {
@@ -21,23 +21,13 @@ impl ObjectRef {
 }
 
 fn defer_children(properties: &mut PropertyStorage, pending: &mut Vec<Value>) {
-    match properties {
-        PropertyStorage::Small { entries } => {
-            for (_, property) in entries {
-                teardown::defer_if_last(&mut property.value, pending);
-            }
-        }
-        PropertyStorage::Dynamic(dynamic) => {
-            for (_, property) in &mut dynamic.entries {
-                teardown::defer_if_last(&mut property.value, pending);
-            }
-        }
-        PropertyStorage::Shaped { properties, .. } => {
+    match &mut properties.payload {
+        Payload::Slots(properties) => {
             for property in properties {
                 teardown::defer_if_last(&mut property.value, pending);
             }
         }
-        PropertyStorage::ShapedPair { values, .. } => {
+        Payload::Pair(values) => {
             for value in values {
                 teardown::defer_if_last(value, pending);
             }

@@ -5,6 +5,7 @@ mod array;
 pub(crate) mod atom;
 mod function;
 mod key;
+pub(crate) mod layout;
 mod prototype;
 
 pub(crate) use array::{

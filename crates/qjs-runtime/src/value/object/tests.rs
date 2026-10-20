@@ -7,8 +7,13 @@
 
 use std::{collections::HashMap, mem, rc::Rc};
 
-use super::{ObjectData, ObjectLiteralShape, ObjectRef, OwnDataPropertyWrite, PropertyStorage};
+use super::{ObjectData, ObjectLiteralShape, ObjectRef, OwnDataPropertyWrite};
+use crate::property::layout::{Encoding, LINEAR_LOOKUP_LIMIT};
 use crate::{Property, Value};
+
+fn encoding(object: &ObjectRef) -> Encoding {
+    object.0.properties.borrow().layout.encoding()
+}
 
 #[test]
 fn array_index_keys_accept_only_canonical_decimal_spellings() {
@@ -57,56 +62,52 @@ fn ordinary_object_keeps_cold_state_unallocated() {
     assert!(object.own_property_symbols().is_empty());
     assert!(object.to_string_tag().is_none());
     assert!(object.0.cold.get().is_none());
-    // Boxing the cold `Dynamic` property-storage payload (HashMap + Vec)
-    // keeps this at 104 bytes instead of the 136 it cost when that
-    // payload sized the whole `PropertyStorage` enum for every object.
-    assert!(mem::size_of::<ObjectData>() <= 112);
+    // One layout pointer beside a keyless payload: the layout owns every
+    // name, so an object stays within fifteen machine words.
+    assert!(mem::size_of::<ObjectData>() <= 120);
 }
 
 #[test]
 fn ordinary_small_object_promotes_only_after_the_compact_limit() {
     let object = ObjectRef::new(HashMap::new());
 
-    for index in 0..PropertyStorage::SMALL_LIMIT {
+    for index in 0..LINEAR_LOOKUP_LIMIT {
         object.set(format!("field{index}"), Value::Number(index as f64));
     }
-    assert!(matches!(
-        &*object.0.properties.borrow(),
-        PropertyStorage::Small { entries } if entries.len() == PropertyStorage::SMALL_LIMIT
-    ));
+    assert_eq!(encoding(&object), Encoding::Small);
+    assert_eq!(object.0.properties.borrow().len(), LINEAR_LOOKUP_LIMIT);
 
-    let dynamic_index = PropertyStorage::SMALL_LIMIT;
+    let dynamic_index = LINEAR_LOOKUP_LIMIT;
     object.set(
         format!("field{dynamic_index}"),
         Value::Number(dynamic_index as f64),
     );
-    assert!(matches!(
-        &*object.0.properties.borrow(),
-        PropertyStorage::Dynamic(dynamic)
-            if dynamic.entries.len() == PropertyStorage::SMALL_LIMIT + 1
-                && dynamic.order.len() == PropertyStorage::SMALL_LIMIT + 1
-    ));
+    assert_eq!(encoding(&object), Encoding::Dynamic);
+    assert_eq!(object.0.properties.borrow().len(), LINEAR_LOOKUP_LIMIT + 1);
     assert_eq!(
         object.own_property_names(),
-        (0..=PropertyStorage::SMALL_LIMIT)
+        (0..=LINEAR_LOOKUP_LIMIT)
             .map(|index| format!("field{index}"))
             .collect::<Vec<_>>()
     );
 }
 
 #[test]
-fn ordinary_object_retains_shared_static_property_key() {
-    let object = ObjectRef::new(HashMap::new());
-    let key: Rc<str> = Rc::from("field");
+fn objects_of_one_domain_share_each_interned_property_name() {
+    let first = ObjectRef::new(HashMap::new());
+    first.set_shared_key(Rc::from("field"), Value::Number(1.0));
+    let second = ObjectRef::empty_with_prototype(first.clone());
+    second.set_shared_key(Rc::from("field"), Value::Number(2.0));
 
-    object.set_shared_key(Rc::clone(&key), Value::Number(1.0));
-
-    assert!(matches!(
-        &*object.0.properties.borrow(),
-        PropertyStorage::Small { entries }
-            if entries.len() == 1 && Rc::ptr_eq(&entries[0].0, &key)
-    ));
-    assert_eq!(object.get("field"), Some(Value::Number(1.0)));
+    let way = first.shared_data_slot("field").expect("small slot");
+    let other = second.shared_data_slot("field").expect("small slot");
+    assert!(Rc::ptr_eq(&way.key, &other.key));
+    assert_eq!(way.slot, other.slot);
+    assert_eq!(
+        second.shared_data_slot_value(&way),
+        Some(Value::Number(2.0))
+    );
+    assert_eq!(first.get("field"), Some(Value::Number(1.0)));
 }
 
 #[test]
@@ -120,10 +121,7 @@ fn small_object_removal_preserves_property_order() {
     object.set("second".to_owned(), Value::Number(4.0));
 
     assert_eq!(object.own_property_names(), ["first", "third", "second"]);
-    assert!(matches!(
-        &*object.0.properties.borrow(),
-        PropertyStorage::Small { entries } if entries.len() == 3
-    ));
+    assert_eq!(encoding(&object), Encoding::Small);
 }
 
 #[test]
@@ -134,10 +132,7 @@ fn small_object_enumerates_indices_before_strings() {
     object.set("2".to_owned(), Value::Number(2.0));
 
     assert_eq!(object.own_property_names(), ["2", "10", "label"]);
-    assert!(matches!(
-        &*object.0.properties.borrow(),
-        PropertyStorage::Small { entries } if entries.len() == 3
-    ));
+    assert_eq!(encoding(&object), Encoding::Small);
 }
 
 #[test]
@@ -170,28 +165,19 @@ fn literal_pair_keeps_inline_values_until_descriptor_mutation() {
     let object =
         ObjectRef::with_literal_pair(shape, [Value::Number(1.0), Value::Number(2.0)], None);
 
-    assert!(matches!(
-        &*object.0.properties.borrow(),
-        PropertyStorage::ShapedPair { .. }
-    ));
+    assert_eq!(encoding(&object), Encoding::Pair);
     assert!(matches!(
         object.write_existing_own_data_property("a", &Value::Number(3.0)),
         OwnDataPropertyWrite::Written
     ));
     assert_eq!(object.get("a"), Some(Value::Number(3.0)));
-    assert!(matches!(
-        &*object.0.properties.borrow(),
-        PropertyStorage::ShapedPair { .. }
-    ));
+    assert_eq!(encoding(&object), Encoding::Pair);
 
     object.define_property(
         "a".to_owned(),
         Property::data(Value::Number(4.0), false, false, true),
     );
-    assert!(matches!(
-        &*object.0.properties.borrow(),
-        PropertyStorage::Dynamic(_)
-    ));
+    assert_eq!(encoding(&object), Encoding::Dynamic);
     let descriptor = object.own_property("a").expect("defined property");
     assert_eq!(descriptor.value, Value::Number(4.0));
     assert!(!descriptor.enumerable);
@@ -241,7 +227,7 @@ fn literal_slot_survives_value_writes_and_misses_on_accessors() {
 #[test]
 fn dynamic_storage_keeps_order_values_and_slots_across_a_removal() {
     let object = ObjectRef::with_prototype(HashMap::new(), None);
-    let count = PropertyStorage::SMALL_LIMIT + 4;
+    let count = LINEAR_LOOKUP_LIMIT + 4;
     for index in 0..count {
         object.set(format!("k{index}"), Value::Number(index as f64));
     }
@@ -250,8 +236,8 @@ fn dynamic_storage_keeps_order_values_and_slots_across_a_removal() {
     let layout = object.layout_revision();
     assert!(object.delete_own_property("k2"));
     assert_ne!(object.layout_revision(), layout);
-    // The last property moved into the removed slot; the order is unchanged.
-    assert_eq!(object.any_storage_data_slot(&last), Some(2));
+    // A shape keeps slots in insertion order, so later slots moved down.
+    assert_eq!(object.any_storage_data_slot(&last), Some(count - 2));
     assert_eq!(object.get(&last), Some(Value::Number((count - 1) as f64)));
     let expected: Vec<String> = (0..count)
         .filter(|&index| index != 2)
@@ -259,7 +245,7 @@ fn dynamic_storage_keeps_order_values_and_slots_across_a_removal() {
         .collect();
     assert_eq!(object.own_property_names(), expected);
     assert!(matches!(
-        object.any_storage_data_slot_write(2, &Value::Number(-1.0)),
+        object.any_storage_data_slot_write(count - 2, &Value::Number(-1.0)),
         Some(OwnDataPropertyWrite::Written)
     ));
     assert_eq!(object.get(&last), Some(Value::Number(-1.0)));
@@ -286,22 +272,10 @@ fn all_property_storage_forms_share_surrogate_pair_key_bytes() {
         [Value::Number(0.0), Value::Undefined],
         None,
     );
-    assert!(matches!(
-        &*small.0.properties.borrow(),
-        PropertyStorage::Small { .. }
-    ));
-    assert!(matches!(
-        &*dynamic.0.properties.borrow(),
-        PropertyStorage::Dynamic(_)
-    ));
-    assert!(matches!(
-        &*shaped.0.properties.borrow(),
-        PropertyStorage::Shaped { .. }
-    ));
-    assert!(matches!(
-        &*pair.0.properties.borrow(),
-        PropertyStorage::ShapedPair { .. }
-    ));
+    assert_eq!(encoding(&small), Encoding::Small);
+    assert_eq!(encoding(&dynamic), Encoding::Dynamic);
+    assert_eq!(encoding(&shaped), Encoding::Shaped);
+    assert_eq!(encoding(&pair), Encoding::Pair);
     for object in [small, dynamic, shaped, pair] {
         for (stored, queried) in [(literal, built.as_str()), (built.as_str(), literal)] {
             object.set(stored.to_owned(), Value::Number(1.0));

@@ -55,7 +55,7 @@ pub(crate) fn new_promise_capability(
 
     // Generic path: the executor stashes resolve/reject into a shared record
     // object that we read after Construct(C, «executor»).
-    let record = ObjectRef::new(HashMap::new());
+    let record = ObjectRef::new_in(env.realm().atoms(), HashMap::new());
     let mut executor = Function::new_native(
         None,
         2,

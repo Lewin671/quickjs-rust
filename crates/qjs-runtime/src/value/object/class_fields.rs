@@ -8,7 +8,8 @@ use std::rc::Rc;
 
 use crate::{Property, Value};
 
-use super::{ObjectRef, PropertyStorage, is_array_index_key};
+use super::{ObjectRef, is_array_index_key};
+use crate::property::layout::{Attributes, Encoding, LINEAR_LOOKUP_LIMIT};
 
 impl ObjectRef {
     /// Defines a constant segment in order with one check and reservation.
@@ -29,23 +30,18 @@ impl ObjectRef {
             return false;
         }
         let mut properties = self.0.properties.borrow_mut();
-        let PropertyStorage::Small { entries } = &mut *properties else {
-            return false;
-        };
-        if entries.len() + fields.len() > PropertyStorage::SMALL_LIMIT
-            || entries.iter().any(|(_, property)| !property.configurable)
+        if properties.layout.encoding() != Encoding::Small
+            || properties.len() + fields.len() > LINEAR_LOOKUP_LIMIT
+            || !properties.all_attributes(Attributes::is_configurable)
         {
             return false;
         }
-        entries.reserve(fields.len());
+        properties.reserve(fields.len());
         let mut added_indices = 0;
         for (key, value) in fields {
             let property = Property::enumerable(value.clone());
-            if let Some((_, existing)) = entries.iter_mut().find(|(name, _)| name == key) {
-                *existing = property;
-            } else {
+            if properties.insert(key, property).is_none() {
                 added_indices += usize::from(is_array_index_key(key));
-                entries.push((key.clone(), property));
             }
         }
         self.0

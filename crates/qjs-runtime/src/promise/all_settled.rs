@@ -23,7 +23,7 @@ pub(crate) fn native_promise_all_settled(
     let iterable = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let handler = AllSettledHandler {
         values: ArrayRef::new(Vec::new()),
-        remaining: perform::new_remaining(1),
+        remaining: perform::new_remaining(1, env),
     };
     perform::run_combinator(this_value, iterable, "Promise.allSettled", handler, env)
 }
@@ -38,7 +38,7 @@ impl ElementHandler for AllSettledHandler {
         &mut self,
         index: usize,
         capability: &PromiseCapability,
-        _env: &mut CallEnv,
+        env: &mut CallEnv,
     ) -> Result<(Value, Value), RuntimeError> {
         self.values.set(index, Value::Undefined);
         perform::increment_remaining(&self.remaining);
@@ -46,7 +46,7 @@ impl ElementHandler for AllSettledHandler {
         // A single alreadyCalled record is shared by the resolve and reject
         // element functions for this index, so only the first observed
         // settlement is recorded.
-        let already_called = ObjectRef::new(HashMap::new());
+        let already_called = ObjectRef::new_in(env.realm().atoms(), HashMap::new());
         let on_fulfilled = element_function(
             NativeFunction::PromiseAllSettledResolveElement,
             index,

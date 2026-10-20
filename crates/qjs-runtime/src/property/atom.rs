@@ -29,11 +29,12 @@
 //!   churn costs memory proportional to the live atoms only.
 
 use std::borrow::Cow;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::fmt;
 use std::num::NonZeroU32;
 use std::rc::{Rc, Weak};
 
+use super::layout::{ContentCache, DomainRoots, Encoding, Layout};
 use crate::RuntimeError;
 use crate::string::{string_code_units, string_from_code_units_canonical};
 use crate::value::array_index_property_key;
@@ -90,7 +91,6 @@ struct AtomEntry {
 pub(crate) struct Atom(Rc<AtomEntry>);
 
 impl Atom {
-    #[allow(dead_code)] // Keyed on by the layout authority (T056 M1.2); tested here.
     pub(crate) fn id(&self) -> AtomId {
         self.0.id
     }
@@ -161,6 +161,17 @@ impl AtomTable {
 
 struct DomainState {
     table: RefCell<AtomTable>,
+    /// The domain's layout roots, owned by its realms. Weak, because every
+    /// shape holds its domain: a strong reference would be a cycle.
+    roots: RefCell<Weak<DomainRoots>>,
+    /// Each root of `roots`, weakly, so a store creation upgrades one
+    /// pointer instead of the whole set.
+    root_shapes: RefCell<[Weak<super::layout::LayoutNode>; 4]>,
+    /// Live shapes created by layout edge misses, shared by all realms of
+    /// the domain; a shape's `Drop` decrements it.
+    live_shapes: Cell<usize>,
+    /// Edit-created shapes by content hash, held weakly.
+    content: RefCell<ContentCache>,
 }
 
 /// An owned atom interning domain. Cloning shares the domain.
@@ -173,6 +184,7 @@ impl AtomDomain {
     }
 
     fn starting_at(first_id: NonZeroU32) -> Self {
+        crate::diagnostics::count!(property_domains_created);
         Self(Rc::new(DomainState {
             table: RefCell::new(AtomTable {
                 entries: NameMap::default(),
@@ -180,12 +192,17 @@ impl AtomDomain {
                 sweep_at: MIN_SWEEP_LEN,
                 created: 0,
             }),
+            roots: RefCell::new(Weak::new()),
+            root_shapes: RefCell::new([Weak::new(), Weak::new(), Weak::new(), Weak::new()]),
+            live_shapes: Cell::new(0),
+            content: RefCell::default(),
         }))
     }
 
     /// Interns the key `text` (stored runtime form), returning the domain's
     /// live atom for its code units or a new one.
     pub(crate) fn intern(&self, text: &str) -> Result<Atom, AtomDomainExhausted> {
+        crate::diagnostics::count!(property_atom_interns);
         let canonical = canonical_property_text(text);
         let mut table = self.0.table.borrow_mut();
         if let Some(entry) = table
@@ -214,6 +231,78 @@ impl AtomDomain {
         table.created += 1;
         crate::diagnostics::count!(property_atoms_created);
         Ok(Atom(entry))
+    }
+
+    /// Interns a layout key. Layout edits cannot fail, so an exhausted
+    /// domain hands out an unnumbered atom outside the table instead of an
+    /// error: lookups compare text and stay correct, and no id is reused.
+    pub(crate) fn intern_key(&self, text: &str) -> Atom {
+        self.intern(text).unwrap_or_else(|AtomDomainExhausted| {
+            let canonical = canonical_property_text(text);
+            Atom(Rc::new(AtomEntry {
+                id: AtomId(NonZeroU32::MAX),
+                text: Rc::from(canonical.as_ref()),
+                array_index: NO_ARRAY_INDEX,
+                domain: Rc::downgrade(&self.0),
+            }))
+        })
+    }
+
+    /// The layout roots of this domain, created when no realm holds them.
+    /// A realm keeps the returned roots alive for every store of its domain.
+    pub(crate) fn roots(&self) -> Rc<DomainRoots> {
+        if let Some(roots) = self.0.roots.borrow().upgrade() {
+            return roots;
+        }
+        let roots = Rc::new(DomainRoots::new(self));
+        *self.0.roots.borrow_mut() = Rc::downgrade(&roots);
+        *self.0.root_shapes.borrow_mut() = [
+            Encoding::Small,
+            Encoding::Dynamic,
+            Encoding::Shaped,
+            Encoding::Pair,
+        ]
+        .map(|encoding| Rc::downgrade(roots.root(encoding)));
+        roots
+    }
+
+    /// The empty layout of `encoding` in this domain.
+    #[inline]
+    pub(crate) fn root(&self, encoding: Encoding) -> Layout {
+        if let Some(root) = self.0.root_shapes.borrow()[encoding as usize].upgrade() {
+            return root;
+        }
+        self.root_slow(encoding)
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn root_slow(&self, encoding: Encoding) -> Layout {
+        Rc::clone(self.roots().root(encoding))
+    }
+
+    pub(crate) fn live_shapes(&self) -> usize {
+        self.0.live_shapes.get()
+    }
+
+    pub(crate) fn acquire_live_shape(&self) {
+        self.0.live_shapes.set(self.0.live_shapes.get() + 1);
+    }
+
+    pub(crate) fn release_live_shape(&self) {
+        self.0.live_shapes.set(self.0.live_shapes.get() - 1);
+    }
+
+    pub(crate) fn cached_shape(
+        &self,
+        hash: u64,
+        matches: impl Fn(&Layout) -> bool,
+    ) -> Option<Layout> {
+        self.0.content.borrow().find(hash, matches)
+    }
+
+    pub(crate) fn cache_shape(&self, hash: u64, shape: &Layout) {
+        self.0.content.borrow_mut().insert(hash, shape);
     }
 
     /// A non-owning handle that identifies this domain while it lives.

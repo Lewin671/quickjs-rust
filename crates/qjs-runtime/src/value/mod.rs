@@ -34,9 +34,11 @@ pub use map::MapRef;
 pub use object::ObjectRef;
 pub(crate) use object::Prototype;
 pub(crate) use object::{
+    LiteralLayout, ObjectLiteralShape, OrderedDataPropertyBuilder, SharedSlot,
+};
+pub(crate) use object::{
     ModuleNamespaceBindings, ObjectWeakRef, OwnDataPropertyRead, OwnDataPropertyWrite,
 };
-pub(crate) use object::{ObjectLiteralShape, OrderedDataPropertyBuilder};
 pub(crate) use property::Property;
 pub use set::SetRef;
 

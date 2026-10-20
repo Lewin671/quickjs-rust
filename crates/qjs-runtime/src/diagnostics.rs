@@ -78,6 +78,33 @@ declare_counters! {
     /// Property-name atoms created by an interning domain. Steady-state
     /// named access must add none: linked code reuses its atoms.
     property_atoms_created,
+    /// Calls that interned a key into an atom domain, whether or not the atom
+    /// already existed. An append that follows an existing edge, and bulk
+    /// attribute edits, intern nothing.
+    property_atom_interns,
+    /// Atom domains constructed. Object, function, array and JSON creation
+    /// take their domain from a realm or prototype, so this grows only with
+    /// independent realms.
+    property_domains_created,
+    /// Property layout shapes constructed, by any transition kind.
+    property_shapes_created,
+    /// Fields copied into a newly constructed shape.
+    property_shape_fields_copied,
+    /// Appends that followed an existing transition edge, and appends that
+    /// built a new child shape.
+    property_edge_hits,
+    property_edge_misses,
+    /// Whole field-vector comparisons, made only to confirm a content-hash
+    /// shape cache match.
+    property_field_vector_compares,
+    /// Text hashes computed to probe a layout index. Shapes of up to twelve
+    /// fields probe linearly and hash nothing.
+    property_lookup_hashes,
+    /// Own-key probes made by a store mutation (define, set, internal set).
+    /// An add probes once; its miss feeds the append.
+    property_add_probes,
+    /// Layouts that switched to a private dictionary.
+    property_dictionaries_created,
     /// Bodies whose named operands were linked to an atom domain. One per
     /// body and domain; a count that grows with executed operations means
     /// linking is not cached.
@@ -176,6 +203,10 @@ macro_rules! count {
     ($field:ident) => {
         #[cfg(feature = "perf-counters")]
         $crate::diagnostics::update(|counters| counters.$field += 1);
+    };
+    ($field:ident, $amount:expr) => {
+        #[cfg(feature = "perf-counters")]
+        $crate::diagnostics::update(|counters| counters.$field += $amount as u64);
     };
 }
 

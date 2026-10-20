@@ -26,7 +26,7 @@ pub(crate) fn native_promise_any(
         .cloned();
     let handler = AnyHandler {
         errors: ArrayRef::new(Vec::new()),
-        remaining: perform::new_remaining(1),
+        remaining: perform::new_remaining(1, env),
         aggregate_error,
     };
     perform::run_combinator(this_value, iterable, "Promise.any", handler, env)
@@ -43,12 +43,12 @@ impl ElementHandler for AnyHandler {
         &mut self,
         index: usize,
         capability: &PromiseCapability,
-        _env: &mut CallEnv,
+        env: &mut CallEnv,
     ) -> Result<(Value, Value), RuntimeError> {
         self.errors.set(index, Value::Undefined);
         perform::increment_remaining(&self.remaining);
 
-        let already_called = ObjectRef::new(HashMap::new());
+        let already_called = ObjectRef::new_in(env.realm().atoms(), HashMap::new());
         let mut on_rejected =
             Function::new_native(None, 1, NativeFunction::PromiseAnyRejectElement, false);
         on_rejected
@@ -168,13 +168,16 @@ fn build_aggregate_error(
         }
     }
 
-    let object = ObjectRef::new(HashMap::from([
-        (
-            "name".to_owned(),
-            Value::String("AggregateError".to_owned().into()),
-        ),
-        ("message".to_owned(), message),
-        ("errors".to_owned(), errors_value),
-    ]));
+    let object = ObjectRef::new_in(
+        env.realm().atoms(),
+        HashMap::from([
+            (
+                "name".to_owned(),
+                Value::String("AggregateError".to_owned().into()),
+            ),
+            ("message".to_owned(), message),
+            ("errors".to_owned(), errors_value),
+        ]),
+    );
     Value::Object(object)
 }

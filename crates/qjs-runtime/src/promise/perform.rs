@@ -248,11 +248,11 @@ fn is_truthy(value: &Value) -> bool {
 /// Combinators initialise it to 1 (PerformPromiseAll step "remainingElementsCount
 /// = 1"), increment per element, then decrement once after the loop so the
 /// capability is settled only after every element has been queued.
-pub(super) fn new_remaining(count: usize) -> ObjectRef {
-    ObjectRef::new(HashMap::from([(
-        "count".to_owned(),
-        Value::Number(count as f64),
-    )]))
+pub(super) fn new_remaining(count: usize, env: &CallEnv) -> ObjectRef {
+    ObjectRef::new_in(
+        env.realm().atoms(),
+        HashMap::from([("count".to_owned(), Value::Number(count as f64))]),
+    )
 }
 
 /// Increments a remaining record's count.

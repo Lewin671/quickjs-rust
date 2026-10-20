@@ -511,7 +511,7 @@ fn symbol_registry(env: &mut CallEnv) -> ObjectRef {
     if let Some(Value::Object(registry)) = env.get(SYMBOL_REGISTRY_BINDING) {
         return registry.clone();
     }
-    let registry = ObjectRef::new(HashMap::new());
+    let registry = ObjectRef::new_in(env.realm().atoms(), HashMap::new());
     env.insert_realm(
         SYMBOL_REGISTRY_BINDING.to_owned(),
         Value::Object(registry.clone()),

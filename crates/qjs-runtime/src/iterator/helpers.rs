@@ -682,7 +682,7 @@ fn get_iterator_flattenable(value: Value, env: &mut CallEnv) -> Result<Value, Ru
         });
     };
     let next = property_value(iterator.clone(), "next", env)?;
-    let record = ObjectRef::new(HashMap::new());
+    let record = ObjectRef::new_in(env.realm().atoms(), HashMap::new());
     record.define_non_enumerable(HELPER_UNDERLYING.to_owned(), iterator);
     record.define_non_enumerable(HELPER_NEXT.to_owned(), next);
     Ok(Value::Object(record))

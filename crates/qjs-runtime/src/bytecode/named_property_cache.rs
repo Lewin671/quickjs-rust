@@ -4,7 +4,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     ObjectRef, Value,
-    value::{ObjectLiteralShape, ObjectWeakRef, OwnDataPropertyWrite},
+    value::{LiteralLayout, ObjectWeakRef, OwnDataPropertyWrite, SharedSlot},
 };
 
 /// Number of receiver layouts one site retains before falling back.
@@ -50,7 +50,7 @@ enum NamedPropertyCacheEntry {
         value: CachedValue,
     },
     LiteralShape {
-        shape: Rc<ObjectLiteralShape>,
+        shape: LiteralLayout,
         slot: usize,
     },
     OwnSlot {
@@ -58,10 +58,7 @@ enum NamedPropertyCacheEntry {
         layout_revision: u64,
         slot: usize,
     },
-    SharedSlot {
-        key: Rc<str>,
-        slot: usize,
-    },
+    SharedSlot(SharedSlot),
     /// A read that resolved on the receiver's direct prototype.
     ///
     /// Every method call has this shape. Without this entry a receiver miss
@@ -169,9 +166,7 @@ impl NamedPropertyCache {
     pub(super) fn probe_hot(&self, object: &ObjectRef) -> Option<Value> {
         let state = self.0.borrow();
         match state.entries.get(usize::from(state.hot.get()))? {
-            Some(NamedPropertyCacheEntry::SharedSlot { key, slot }) => {
-                object.shared_data_slot_value(key, *slot)
-            }
+            Some(NamedPropertyCacheEntry::SharedSlot(way)) => object.shared_data_slot_value(way),
             Some(NamedPropertyCacheEntry::PrototypeSlot {
                 holder,
                 holder_layout_revision,
@@ -322,8 +317,8 @@ impl NamedPropertyCache {
                 }
                 return object.own_data_slot_value(*slot);
             }
-            NamedPropertyCacheEntry::SharedSlot { key, slot } => {
-                return object.shared_data_slot_value(key, *slot);
+            NamedPropertyCacheEntry::SharedSlot(way) => {
+                return object.shared_data_slot_value(way);
             }
             // Only valid once the receiver is known to have no own `key`, so
             // it is served by `get_from_prototype` rather than from here.
@@ -432,17 +427,17 @@ impl NamedPropertyCache {
                 NamedPropertyCacheEntry::Exact { object: cached, .. }
                 | NamedPropertyCacheEntry::OwnSlot { object: cached, .. } => !cached.ptr_eq(object),
                 NamedPropertyCacheEntry::LiteralShape { .. }
-                | NamedPropertyCacheEntry::SharedSlot { .. }
+                | NamedPropertyCacheEntry::SharedSlot(_)
                 | NamedPropertyCacheEntry::PrototypeSlot { .. }
                 | NamedPropertyCacheEntry::GrandprototypeSlot { .. } => false,
             });
         let entry = if let Some((shape, slot)) = object.literal_data_slot(key) {
             NamedPropertyCacheEntry::LiteralShape { shape, slot }
-        } else if let Some((key, slot)) = saw_other_object
+        } else if let Some(way) = saw_other_object
             .then(|| object.shared_data_slot(key))
             .flatten()
         {
-            NamedPropertyCacheEntry::SharedSlot { key, slot }
+            NamedPropertyCacheEntry::SharedSlot(way)
         } else if let Some(slot) = value_entry_went_stale
             .then(|| object.own_data_slot(key))
             .flatten()
@@ -532,8 +527,8 @@ impl NamedPropertyCache {
                 } if cached.ptr_eq(object) && *layout_revision == object.layout_revision() => {
                     return object.own_data_slot_write(*slot, value);
                 }
-                NamedPropertyCacheEntry::SharedSlot { key, slot } => {
-                    if let Some(result) = object.shared_data_slot_write(key, *slot, value) {
+                NamedPropertyCacheEntry::SharedSlot(way) => {
+                    if let Some(result) = object.shared_data_slot_write(way, value) {
                         hot.set(index as u8);
                         return Some(result);
                     }
@@ -560,12 +555,12 @@ impl NamedPropertyCache {
         value: &Value,
     ) -> Option<OwnDataPropertyWrite> {
         let state = self.0.borrow();
-        let Some(Some(NamedPropertyCacheEntry::SharedSlot { key, slot })) =
+        let Some(Some(NamedPropertyCacheEntry::SharedSlot(way))) =
             state.entries.get(usize::from(state.hot.get()))
         else {
             return None;
         };
-        object.shared_data_slot_write(key, *slot, value)
+        object.shared_data_slot_write(way, value)
     }
 
     pub(super) fn record_write(&self, object: &ObjectRef, key: &str) {
@@ -581,7 +576,7 @@ impl NamedPropertyCache {
         let entry = if saw_other_object {
             object
                 .shared_data_slot(key)
-                .map(|(key, slot)| NamedPropertyCacheEntry::SharedSlot { key, slot })
+                .map(NamedPropertyCacheEntry::SharedSlot)
         } else {
             object
                 .own_data_slot(key)

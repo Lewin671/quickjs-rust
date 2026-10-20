@@ -26,16 +26,19 @@ use super::{Property, Value};
 
 mod array_buffer_methods;
 mod class_fields;
-mod dynamic_storage;
 mod key_order;
 mod ordered_data_builder;
 mod slot_reads;
+mod storage;
 mod teardown;
 mod typed_array_methods;
 
-use dynamic_storage::DynamicPropertyStorage;
+use crate::property::atom::{AtomDomain, WeakAtomDomain};
+use crate::property::layout::{Attributes, BulkEdit, Encoding, Layout, layout_for_keys};
+use storage::{Payload, PropertyStorage};
 
 pub(crate) use ordered_data_builder::OrderedDataPropertyBuilder;
+pub(crate) use slot_reads::{LiteralLayout, SharedSlot};
 
 type NamespaceBindingCell = DynamicBindings;
 type NamespaceAliasMap = HashMap<String, (NamespaceBindingCell, String)>;
@@ -149,6 +152,16 @@ impl ArrayPrototypeRef {
 impl Prototype {
     pub(crate) fn array(array: ArrayRef, default_prototype: Option<ObjectRef>) -> Self {
         Self::Array(ArrayPrototypeRef::new(array, default_prototype))
+    }
+
+    /// The atom domain a store created with this prototype uses.
+    pub(crate) fn atom_domain(&self) -> Option<AtomDomain> {
+        match self {
+            Self::Object(object) => object.atom_domain(),
+            Self::Array(array) => array.0.default_prototype.as_ref()?.atom_domain(),
+            Self::Function(function) => function.atom_domain(),
+            Self::Proxy(_) => None,
+        }
     }
 
     pub(crate) fn ptr_eq(&self, other: &Self) -> bool {
@@ -477,33 +490,37 @@ impl ObjectData {
     }
 }
 
-/// Shared key layout for object literals whose property names are statically
-/// known. The bytecode owns one shape; each evaluated object allocates only
-/// its property values until a structural mutation requires generic storage.
-#[derive(Debug)]
+/// Shared key list of an object literal site whose property names are
+/// statically known. The bytecode owns one; each evaluated object clones one
+/// layout pointer and allocates only its values. The site keeps its layout
+/// for the last domain that evaluated it, built through that domain's edges.
 pub(crate) struct ObjectLiteralShape {
     keys: Rc<[Rc<str>]>,
     input_slots: Rc<[usize]>,
-    lookup: crate::value::name_hash::NameMap<Rc<str>, usize>,
     index_property_count: usize,
+    site: RefCell<Option<(WeakAtomDomain, Layout)>>,
+}
+
+impl fmt::Debug for ObjectLiteralShape {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ObjectLiteralShape")
+            .field("keys", &self.keys)
+            .field("input_slots", &self.input_slots)
+            .finish_non_exhaustive()
+    }
 }
 
 impl ObjectLiteralShape {
     pub(crate) fn new(input_keys: Vec<Rc<str>>) -> Rc<Self> {
-        let mut keys = Vec::with_capacity(input_keys.len());
-        let mut lookup = crate::value::name_hash::NameMap::with_capacity_and_hasher(
-            input_keys.len(),
-            <_>::default(),
-        );
+        let mut keys: Vec<Rc<str>> = Vec::with_capacity(input_keys.len());
         let mut input_slots = Vec::with_capacity(input_keys.len());
         for key in input_keys {
-            let slot = match lookup.get(key.as_ref()) {
-                Some(slot) => *slot,
+            let slot = match keys.iter().position(|existing| *existing == key) {
+                Some(slot) => slot,
                 None => {
-                    let slot = keys.len();
-                    keys.push(key.clone());
-                    lookup.insert(key, slot);
-                    slot
+                    keys.push(key);
+                    keys.len() - 1
                 }
             };
             input_slots.push(slot);
@@ -512,8 +529,8 @@ impl ObjectLiteralShape {
         Self {
             keys: keys.into(),
             input_slots: input_slots.into(),
-            lookup,
             index_property_count,
+            site: RefCell::new(None),
         }
         .into()
     }
@@ -526,392 +543,108 @@ impl ObjectLiteralShape {
         self.keys.len()
     }
 
+    /// The payload encoding of this site's objects.
+    fn encoding(&self) -> Encoding {
+        if self.keys.len() == 2 {
+            Encoding::Pair
+        } else {
+            Encoding::Shaped
+        }
+    }
+
+    /// This site's published layout in `domain`.
+    #[inline]
+    fn layout_in(&self, domain: &AtomDomain) -> Layout {
+        if let Some((site_domain, layout)) = &*self.site.borrow()
+            && site_domain.is(domain)
+        {
+            return Rc::clone(layout);
+        }
+        let layout = layout_for_keys(
+            domain,
+            self.encoding(),
+            self.keys
+                .iter()
+                .map(|key| (key.as_ref(), Attributes::DEFAULT)),
+        );
+        *self.site.borrow_mut() = Some((domain.downgrade(), Rc::clone(&layout)));
+        layout
+    }
+
+    /// The layout for an object with `prototype`: in the prototype's domain,
+    /// or, for a null-prototype literal, in the domain the site last used.
+    #[inline]
+    fn layout_for(&self, prototype: Option<&ObjectRef>) -> Layout {
+        if prototype.is_none()
+            && let Some((_, layout)) = &*self.site.borrow()
+        {
+            return Rc::clone(layout);
+        }
+        self.layout_in(&literal_domain(prototype))
+    }
+
     /// Returns the input value that supplies `key` after duplicate literal
-    /// definitions have been applied from left to right.
-    ///
-    /// `input_slots` maps every source property to its shared storage slot,
-    /// while `lookup` maps the final key to that slot. Walking the input map
-    /// backwards therefore identifies the last source value without exposing
-    /// the shape's storage representation to bytecode analyses.
+    /// definitions have been applied from left to right: the last input
+    /// that maps to `key`'s slot.
     pub(crate) fn final_input_index(&self, key: &str) -> Option<usize> {
-        let slot = *self.lookup.get(key)?;
+        let slot = self
+            .keys
+            .iter()
+            .position(|existing| existing.as_ref() == key)?;
         self.input_slots
             .iter()
             .rposition(|input_slot| *input_slot == slot)
     }
 }
 
-enum PropertyStorage {
-    /// Most ordinary objects have only a handful of properties. Keep their
-    /// descriptors and insertion order in one allocation, and pay hashing plus
-    /// a second order-vector allocation only after the object grows past the
-    /// small-object threshold.
-    Small {
-        entries: Vec<(Rc<str>, Property)>,
-    },
-    Dynamic(Box<DynamicPropertyStorage>),
-    Shaped {
-        shape: Rc<ObjectLiteralShape>,
-        properties: Vec<Property>,
-    },
-    ShapedPair {
-        shape: Rc<ObjectLiteralShape>,
-        values: [Value; 2],
-    },
-}
-
-impl PropertyStorage {
-    // Keep the common 9-to-12 field receiver compact. Repeated named access
-    // can then use the existing shared small-object slot cache instead of
-    // immediately allocating a dynamic name table at the ninth field.
-    const SMALL_LIMIT: usize = 12;
-
-    fn dynamic(
-        properties: crate::value::name_hash::NameMap<Rc<str>, Property>,
-        order: Vec<Rc<str>>,
-    ) -> Self {
-        if properties.len() <= Self::SMALL_LIMIT {
-            let mut properties = properties;
-            let entries = order
-                .into_iter()
-                .map(|key| {
-                    let property = properties
-                        .remove(&key)
-                        .expect("property order must cover every initial property");
-                    (key, property)
-                })
-                .collect();
-            debug_assert!(properties.is_empty());
-            return Self::Small { entries };
-        }
-        let mut properties = properties;
-        let mut entries: Vec<(Rc<str>, Property)> = order
-            .iter()
-            .filter_map(|key| {
-                properties
-                    .remove(key)
-                    .map(|property| (key.clone(), property))
-            })
-            .collect();
-        entries.extend(properties);
-        let index = entries
-            .iter()
-            .enumerate()
-            .map(|(slot, (key, _))| (key.clone(), slot))
-            .collect();
-        Self::Dynamic(Box::new(DynamicPropertyStorage {
-            entries,
-            index,
-            order,
-        }))
-    }
-
-    fn len(&self) -> usize {
-        match self {
-            Self::Small { entries } => entries.len(),
-            Self::Dynamic(dynamic) => dynamic.entries.len(),
-            Self::Shaped { properties, .. } => properties.len(),
-            Self::ShapedPair { .. } => 2,
-        }
-    }
-
-    fn get(&self, key: &str) -> Option<Property> {
-        match self {
-            Self::Small { entries } => entries
-                .iter()
-                .find(|(candidate, _)| candidate.as_ref() == key)
-                .map(|(_, property)| property.clone()),
-            Self::Dynamic(dynamic) => dynamic.property(key).cloned(),
-            Self::Shaped { shape, properties } => shape
-                .lookup
-                .get(key)
-                .and_then(|slot| properties.get(*slot))
-                .cloned(),
-            Self::ShapedPair { shape, values } => {
-                let value = values.get(*shape.lookup.get(key)?)?.clone();
-                Some(Property::enumerable(value))
-            }
-        }
-    }
-
-    /// The enumerable flag of an own property, without cloning its value.
-    fn enumerable(&self, key: &str) -> Option<bool> {
-        match self {
-            Self::Small { entries } => entries
-                .iter()
-                .find(|(candidate, _)| candidate.as_ref() == key)
-                .map(|(_, property)| property.enumerable),
-            Self::Dynamic(dynamic) => dynamic.property(key).map(|property| property.enumerable),
-            Self::Shaped { shape, properties } => shape
-                .lookup
-                .get(key)
-                .and_then(|slot| properties.get(*slot))
-                .map(|property| property.enumerable),
-            Self::ShapedPair { shape, values } => values.get(*shape.lookup.get(key)?).map(|_| true),
-        }
-    }
-
-    fn value(&self, key: &str) -> Option<Value> {
-        match self {
-            Self::Small { entries } => entries
-                .iter()
-                .find(|(candidate, _)| candidate.as_ref() == key)
-                .map(|(_, property)| property.value.clone()),
-            Self::Dynamic(dynamic) => dynamic.property(key).map(|property| property.value.clone()),
-            Self::Shaped { shape, properties } => shape
-                .lookup
-                .get(key)
-                .and_then(|slot| properties.get(*slot))
-                .map(|property| property.value.clone()),
-            Self::ShapedPair { shape, values } => values.get(*shape.lookup.get(key)?).cloned(),
-        }
-    }
-
-    fn get_mut(&mut self, key: &str) -> Option<&mut Property> {
-        if matches!(self, Self::ShapedPair { .. }) {
-            self.ensure_dynamic();
-        }
-        match self {
-            Self::Small { entries } => entries
-                .iter_mut()
-                .find(|(candidate, _)| candidate.as_ref() == key)
-                .map(|(_, property)| property),
-            Self::Dynamic(dynamic) => dynamic.property_mut(key),
-            Self::Shaped { shape, properties } => {
-                let slot = *shape.lookup.get(key)?;
-                properties.get_mut(slot)
-            }
-            Self::ShapedPair { .. } => unreachable!("literal pair was converted to dynamic"),
-        }
-    }
-
-    fn contains_key(&self, key: &str) -> bool {
-        match self {
-            Self::Small { entries } => entries
-                .iter()
-                .any(|(candidate, _)| candidate.as_ref() == key),
-            Self::Dynamic(dynamic) => dynamic.index.contains_key(key),
-            Self::Shaped { shape, .. } | Self::ShapedPair { shape, .. } => {
-                shape.lookup.contains_key(key)
-            }
-        }
-    }
-
-    fn own_data_read(&self, key: &str) -> OwnDataPropertyRead {
-        match self {
-            Self::Small { entries } => data_property_read(
-                entries
-                    .iter()
-                    .find(|(candidate, _)| candidate.as_ref() == key)
-                    .map(|(_, property)| property),
-            ),
-            Self::ShapedPair { shape, values } => shape
-                .lookup
-                .get(key)
-                .and_then(|slot| values.get(*slot))
-                .map_or(OwnDataPropertyRead::Missing, |value| {
-                    OwnDataPropertyRead::Data(value.clone())
-                }),
-            Self::Dynamic(dynamic) => data_property_read(dynamic.property(key)),
-            Self::Shaped { shape, properties } => {
-                data_property_read(shape.lookup.get(key).and_then(|slot| properties.get(*slot)))
-            }
-        }
-    }
-
-    /// Writes an existing writable data property whose current value
-    /// `guard` accepts; a rejected one is `NeedsSlowPath`, unchanged.
-    fn write_existing_data(
-        &mut self,
-        key: &str,
-        value: &Value,
-        guard: impl FnOnce(&Value) -> bool,
-    ) -> OwnDataPropertyWrite {
-        match self {
-            Self::Small { entries } => write_existing_property(
-                entries
-                    .iter_mut()
-                    .find(|(candidate, _)| candidate.as_ref() == key)
-                    .map(|(_, property)| property),
-                value,
-                guard,
-            ),
-            Self::ShapedPair { shape, values } => {
-                let Some(slot) = shape.lookup.get(key) else {
-                    return OwnDataPropertyWrite::NeedsSlowPath;
-                };
-                if !guard(&values[*slot]) {
-                    return OwnDataPropertyWrite::NeedsSlowPath;
-                }
-                values[*slot] = value.clone();
-                OwnDataPropertyWrite::Written
-            }
-            Self::Dynamic(dynamic) => {
-                write_existing_property(dynamic.property_mut(key), value, guard)
-            }
-            Self::Shaped { shape, properties } => {
-                let property = shape
-                    .lookup
-                    .get(key)
-                    .and_then(|slot| properties.get_mut(*slot));
-                write_existing_property(property, value, guard)
-            }
-        }
-    }
-
-    fn for_each_mut(&mut self, apply: impl FnMut(&mut Property)) {
-        if matches!(self, Self::ShapedPair { .. }) {
-            self.ensure_dynamic();
-        }
-        match self {
-            Self::Small { entries } => entries
-                .iter_mut()
-                .map(|(_, property)| property)
-                .for_each(apply),
-            Self::Dynamic(dynamic) => dynamic
-                .entries
-                .iter_mut()
-                .map(|(_, property)| property)
-                .for_each(apply),
-            Self::Shaped { properties, .. } => properties.iter_mut().for_each(apply),
-            Self::ShapedPair { .. } => unreachable!("literal pair was converted to dynamic"),
-        }
-    }
-
-    fn all(&self, predicate: impl Fn(&Property) -> bool) -> bool {
-        match self {
-            Self::Small { entries } => entries.iter().all(|(_, property)| predicate(property)),
-            Self::Dynamic(dynamic) => dynamic
-                .entries
-                .iter()
-                .all(|(_, property)| predicate(property)),
-            Self::Shaped { properties, .. } => properties.iter().all(predicate),
-            Self::ShapedPair { values, .. } => values
-                .iter()
-                .all(|value| predicate(&Property::enumerable(value.clone()))),
-        }
-    }
-
-    fn order(&self) -> Option<&[Rc<str>]> {
-        match self {
-            Self::Small { .. } => None,
-            Self::Dynamic(dynamic) => Some(&dynamic.order),
-            Self::Shaped { shape, .. } => Some(&shape.keys),
-            Self::ShapedPair { shape, .. } => Some(&shape.keys),
-        }
-    }
-
-    fn ensure_dynamic(&mut self) {
-        match self {
-            Self::Dynamic(_) => {}
-            Self::Small { entries } => {
-                let entries = std::mem::take(entries);
-                *self = Self::Dynamic(Box::new(DynamicPropertyStorage::ordered(entries)));
-            }
-            Self::Shaped { shape, properties } => {
-                let properties = std::mem::take(properties);
-                let entries = shape.keys.iter().cloned().zip(properties).collect();
-                *self = Self::Dynamic(Box::new(DynamicPropertyStorage::ordered(entries)));
-            }
-            Self::ShapedPair { shape, values } => {
-                let entries = shape
-                    .keys
-                    .iter()
-                    .cloned()
-                    .zip(values.iter().cloned().map(Property::enumerable))
-                    .collect();
-                *self = Self::Dynamic(Box::new(DynamicPropertyStorage::ordered(entries)));
-            }
-        }
-    }
-
-    fn insert(&mut self, key: Rc<str>, property: Property) -> Option<Property> {
-        if let Some(existing) = self.get_mut(&key) {
-            return Some(std::mem::replace(existing, property));
-        }
-        if let Self::Small { entries } = self
-            && entries.len() < Self::SMALL_LIMIT
-        {
-            entries.push((key, property));
-            return None;
-        }
-        self.ensure_dynamic();
-        let Self::Dynamic(dynamic) = self else {
-            unreachable!("property storage was converted to dynamic")
-        };
-        dynamic.order.push(key.clone());
-        dynamic.insert_new(key, property);
-        None
-    }
-
-    /// Appends a key the caller has already proved absent.
-    ///
-    /// `insert` re-probes the storage first, which is a second linear scan of a
-    /// receiver the creation path has just scanned twice.
-    fn insert_absent(&mut self, key: Rc<str>, property: Property) {
-        if let Self::Small { entries } = self
-            && entries.len() < Self::SMALL_LIMIT
-        {
-            entries.push((key, property));
-            return;
-        }
-        self.insert(key, property);
-    }
-
-    fn insert_unordered(&mut self, key: Rc<str>, property: Property) -> Option<Property> {
-        if let Some(existing) = self.get_mut(&key) {
-            return Some(std::mem::replace(existing, property));
-        }
-        self.ensure_dynamic();
-        let Self::Dynamic(dynamic) = self else {
-            unreachable!("property storage was converted to dynamic")
-        };
-        dynamic.insert_new(key, property);
-        None
-    }
-
-    fn remove(&mut self, key: &str) -> Option<Property> {
-        if let Self::Small { entries } = self {
-            let index = entries
-                .iter()
-                .position(|(candidate, _)| candidate.as_ref() == key)?;
-            return Some(entries.remove(index).1);
-        }
-        if !self.contains_key(key) {
-            return None;
-        }
-        self.ensure_dynamic();
-        let Self::Dynamic(dynamic) = self else {
-            unreachable!("property storage was converted to dynamic")
-        };
-        dynamic.remove(key)
-    }
-}
-
-fn data_property_read(property: Option<&Property>) -> OwnDataPropertyRead {
-    match property {
+fn own_data_read(storage: &PropertyStorage, key: &str) -> OwnDataPropertyRead {
+    let Some(slot) = storage.lookup(key) else {
+        return OwnDataPropertyRead::Missing;
+    };
+    match storage.slot(slot) {
         None => OwnDataPropertyRead::Missing,
-        Some(property) if property.is_accessor() => OwnDataPropertyRead::NeedsSlowPath,
-        Some(property) => OwnDataPropertyRead::Data(property.value.clone()),
+        Some(slot) if slot.is_accessor() => OwnDataPropertyRead::NeedsSlowPath,
+        Some(slot) => OwnDataPropertyRead::Data(slot.value().clone()),
     }
 }
 
-fn write_existing_property(
-    property: Option<&mut Property>,
+/// Writes the existing writable data property at `slot` when `guard`
+/// accepts its current value; a rejected one is `NeedsSlowPath`, unchanged.
+fn write_slot(
+    storage: &mut PropertyStorage,
+    slot: usize,
     value: &Value,
     guard: impl FnOnce(&Value) -> bool,
 ) -> OwnDataPropertyWrite {
-    let Some(property) = property else {
+    let Some(attributes) = storage.field(slot).map(|field| field.attributes) else {
         return OwnDataPropertyWrite::NeedsSlowPath;
     };
-    if property.is_accessor() || !guard(&property.value) {
+    if attributes.is_accessor() {
         return OwnDataPropertyWrite::NeedsSlowPath;
     }
-    if !property.writable {
+    let Some(current) = storage.value_mut(slot) else {
+        return OwnDataPropertyWrite::NeedsSlowPath;
+    };
+    if !guard(current) {
+        return OwnDataPropertyWrite::NeedsSlowPath;
+    }
+    if !attributes.is_writable() {
         return OwnDataPropertyWrite::ReadOnly;
     }
-    property.value = value.clone();
+    *current = value.clone();
     OwnDataPropertyWrite::Written
+}
+
+fn write_existing_data(
+    storage: &mut PropertyStorage,
+    key: &str,
+    value: &Value,
+    guard: impl FnOnce(&Value) -> bool,
+) -> OwnDataPropertyWrite {
+    match storage.lookup(key) {
+        Some(slot) => write_slot(storage, slot, value, guard),
+        None => OwnDataPropertyWrite::NeedsSlowPath,
+    }
 }
 
 impl fmt::Debug for ObjectRef {
@@ -1005,7 +738,30 @@ impl ObjectRef {
     }
 
     pub(crate) fn new(properties: HashMap<String, Value>) -> Self {
-        Self::with_prototype(properties, None)
+        Self::with_prototype_slot(properties, None)
+    }
+
+    /// An object with no prototype whose store uses `domain`: a
+    /// null-prototype object takes its domain from the realm creating it.
+    pub(crate) fn new_in(domain: &AtomDomain, properties: HashMap<String, Value>) -> Self {
+        Self::with_prototype_slot_in(domain, properties, None)
+    }
+
+    /// [`Self::new_like`] of an object value; any other value has no domain.
+    pub(crate) fn new_like_value(like: &Value, properties: HashMap<String, Value>) -> Self {
+        match like {
+            Value::Object(object) => Self::new_like(object, properties),
+            _ => Self::new(properties),
+        }
+    }
+
+    /// A null-prototype object in the domain of `like`, for an internal
+    /// record created alongside an existing object.
+    pub(crate) fn new_like(like: &ObjectRef, properties: HashMap<String, Value>) -> Self {
+        match like.atom_domain() {
+            Some(domain) => Self::new_in(&domain, properties),
+            None => Self::new(properties),
+        }
     }
 
     pub(crate) fn with_prototype(
@@ -1019,18 +775,63 @@ impl ObjectRef {
         properties: HashMap<String, Value>,
         prototype: Option<Prototype>,
     ) -> Self {
-        let properties: crate::value::name_hash::NameMap<Rc<str>, Property> = properties
+        if properties.is_empty()
+            && let Some(Prototype::Object(object)) = &prototype
+            && let Some(storage) = object
+                .0
+                .properties
+                .try_borrow()
+                .ok()
+                .map(|storage| PropertyStorage::empty(storage.domain(), 0))
+        {
+            return Self::from_storage(storage, 0, prototype);
+        }
+        let domain = store_domain(prototype.as_ref());
+        Self::with_prototype_slot_in(&domain, properties, prototype)
+    }
+
+    /// An empty ordinary object whose store takes its domain from
+    /// `prototype`.
+    #[cfg(test)]
+    pub(crate) fn empty_with_prototype(prototype: ObjectRef) -> Self {
+        let storage = match prototype.0.properties.try_borrow() {
+            Ok(properties) => PropertyStorage::empty(properties.domain(), 0),
+            Err(_) => PropertyStorage::empty(&fallback_domain(), 0),
+        };
+        Self::from_storage(storage, 0, Some(Prototype::Object(prototype)))
+    }
+
+    pub(crate) fn with_prototype_slot_in(
+        domain: &AtomDomain,
+        properties: HashMap<String, Value>,
+        prototype: Option<Prototype>,
+    ) -> Self {
+        if properties.is_empty() {
+            return Self::from_storage(PropertyStorage::empty(domain, 0), 0, prototype);
+        }
+        let mut entries: Vec<(Rc<str>, Property)> = properties
             .into_iter()
             .map(|(key, value)| (Rc::from(key), Property::enumerable(value)))
             .collect();
-        let mut property_order: Vec<_> = properties.keys().cloned().collect();
-        property_order.sort();
-        let index_property_count = property_order
+        entries.sort_by(|(left, _), (right, _)| left.cmp(right));
+        let index_property_count = entries
             .iter()
-            .filter(|key| is_array_index_key(key))
+            .filter(|(key, _)| is_array_index_key(key))
             .count();
+        Self::from_storage(
+            PropertyStorage::from_ordered(domain, entries),
+            index_property_count,
+            prototype,
+        )
+    }
+
+    fn from_storage(
+        storage: PropertyStorage,
+        index_property_count: usize,
+        prototype: Option<Prototype>,
+    ) -> Self {
         Self(Rc::new(ObjectData {
-            properties: RefCell::new(PropertyStorage::dynamic(properties, property_order)),
+            properties: RefCell::new(storage),
             property_revision: Cell::new(0),
             layout_revision: Cell::new(0),
             index_property_count: Cell::new(index_property_count),
@@ -1057,42 +858,32 @@ impl ObjectRef {
         prototype: Option<ObjectRef>,
     ) -> Self {
         debug_assert_eq!(shape.input_slots.len(), values.len());
-        let mut properties = vec![None; shape.keys.len()];
-        for (slot, value) in shape.input_slots.iter().copied().zip(values) {
-            properties[slot] = Some(Property::enumerable(value));
-        }
-        let properties = properties
-            .into_iter()
-            .map(|property| property.expect("literal shape slot must have a value"))
-            .collect::<Vec<_>>();
-        let index_property_count = shape.index_property_count;
-        let properties = if properties.len() == 2 {
-            let properties: [Property; 2] = properties
-                .try_into()
-                .unwrap_or_else(|_| unreachable!("literal pair length checked"));
-            PropertyStorage::ShapedPair {
-                shape,
-                values: properties.map(|property| property.value),
+        let layout = shape.layout_for(prototype.as_ref());
+        let payload = if shape.encoding() == Encoding::Pair {
+            let mut pair = [Value::Undefined, Value::Undefined];
+            for (slot, value) in shape.input_slots.iter().copied().zip(values) {
+                pair[slot] = value;
             }
+            Payload::Pair(pair)
+        } else if shape.input_slots.len() == shape.keys.len() {
+            Payload::Slots(values.into_iter().map(Property::enumerable).collect())
         } else {
-            PropertyStorage::Shaped { shape, properties }
+            let mut properties = vec![None; shape.keys.len()];
+            for (slot, value) in shape.input_slots.iter().copied().zip(values) {
+                properties[slot] = Some(Property::enumerable(value));
+            }
+            Payload::Slots(
+                properties
+                    .into_iter()
+                    .map(|property| property.expect("literal shape slot must have a value"))
+                    .collect(),
+            )
         };
-        Self(Rc::new(ObjectData {
-            properties: RefCell::new(properties),
-            property_revision: Cell::new(0),
-            layout_revision: Cell::new(0),
-            index_property_count: Cell::new(index_property_count),
-            extensible: Cell::new(true),
-            prototype: RefCell::new(prototype.map(Prototype::Object)),
-            raw_json: Cell::new(false),
-            array_prototype_exotic: Cell::new(false),
-            typed_array_exotic: Cell::new(false),
-            symbol_brand: Cell::new(SymbolBrand::None),
-            immutable_prototype_exotic: Cell::new(false),
-            module_namespace_exotic: Cell::new(false),
-            string_indices_pending: Cell::new(false),
-            cold: OnceCell::new(),
-        }))
+        Self::from_storage(
+            PropertyStorage::literal(layout, payload),
+            shape.index_property_count,
+            prototype.map(Prototype::Object),
+        )
     }
 
     /// Builds the common two-property literal without intermediate value or
@@ -1105,23 +896,12 @@ impl ObjectRef {
     ) -> Self {
         debug_assert_eq!(shape.input_len(), 2);
         debug_assert_eq!(shape.unique_len(), 2);
-        let index_property_count = shape.index_property_count;
-        Self(Rc::new(ObjectData {
-            properties: RefCell::new(PropertyStorage::ShapedPair { shape, values }),
-            property_revision: Cell::new(0),
-            layout_revision: Cell::new(0),
-            index_property_count: Cell::new(index_property_count),
-            extensible: Cell::new(true),
-            prototype: RefCell::new(prototype.map(Prototype::Object)),
-            raw_json: Cell::new(false),
-            array_prototype_exotic: Cell::new(false),
-            typed_array_exotic: Cell::new(false),
-            symbol_brand: Cell::new(SymbolBrand::None),
-            immutable_prototype_exotic: Cell::new(false),
-            module_namespace_exotic: Cell::new(false),
-            string_indices_pending: Cell::new(false),
-            cold: OnceCell::new(),
-        }))
+        let layout = shape.layout_for(prototype.as_ref());
+        Self::from_storage(
+            PropertyStorage::literal(layout, Payload::Pair(values)),
+            shape.index_property_count,
+            prototype.map(Prototype::Object),
+        )
     }
 
     /// The generator [[GeneratorState]] cell for this object. Non-generator
@@ -1180,6 +960,15 @@ impl ObjectRef {
 
     pub(crate) fn ptr_eq(&self, other: &Self) -> bool {
         Rc::ptr_eq(&self.0, &other.0)
+    }
+
+    /// The atom domain of this object's store.
+    pub(crate) fn atom_domain(&self) -> Option<AtomDomain> {
+        self.0
+            .properties
+            .try_borrow()
+            .ok()
+            .map(|properties| properties.domain().clone())
     }
 
     /// Identity of the shared storage, for hashing this reference as a key.
@@ -1397,9 +1186,14 @@ impl ObjectRef {
         let establishes_realm_identity = key.as_ref() == "globalThis"
             && matches!(&value, Value::Object(global_this) if self.ptr_eq(global_this));
         let mut properties = self.properties_for(&key).borrow_mut();
-        if let Some(property) = properties.get_mut(&key) {
-            if property.writable {
-                property.value = value;
+        if let Some(slot) = properties.probe_for_edit(&key) {
+            if properties
+                .field(slot)
+                .is_some_and(|field| field.attributes.is_writable())
+            {
+                if let Some(current) = properties.value_mut(slot) {
+                    *current = value;
+                }
                 self.bump_value_revision();
                 drop(properties);
                 if establishes_realm_identity {
@@ -1413,15 +1207,18 @@ impl ObjectRef {
         }
         if self.0.array_prototype_exotic.get()
             && let Some(index) = array_index_property_key(&key)
-            && let Some(length_property) = properties.get_mut("length")
-            && length_property.writable
+            && let Some(length_slot) = properties.lookup("length")
+            && properties
+                .field(length_slot)
+                .is_some_and(|field| field.attributes.is_writable())
+            && let Some(length) = properties.value_mut(length_slot)
         {
-            let current_length = match length_property.value {
-                Value::Number(length) if length.is_finite() && length >= 0.0 => length as u32,
+            let current_length = match length {
+                Value::Number(length) if length.is_finite() && *length >= 0.0 => *length as u32,
                 _ => 0,
             };
             if index >= current_length {
-                length_property.value = Value::Number((index + 1) as f64);
+                *length = Value::Number((index + 1) as f64);
             }
         }
         if is_array_index_key(&key) {
@@ -1429,7 +1226,7 @@ impl ObjectRef {
                 .index_property_count
                 .set(self.0.index_property_count.get() + 1);
         }
-        properties.insert(key, Property::enumerable(value));
+        properties.append(&key, Property::enumerable(value), true);
         self.bump_property_revision();
         drop(properties);
         if establishes_realm_identity {
@@ -1463,7 +1260,8 @@ impl ObjectRef {
         }
         {
             let mut properties = self.properties_for(&key).borrow_mut();
-            properties.insert_absent(key, Property::enumerable(value));
+            debug_assert!(!properties.contains_key(&key));
+            properties.append(&key, Property::enumerable(value), true);
             self.bump_property_revision();
         }
         if establishes_realm_identity {
@@ -1477,16 +1275,10 @@ impl ObjectRef {
             && !property.is_accessor()
             && matches!(&property.value, Value::Object(global_this) if self.ptr_eq(global_this));
         let mut properties = self.properties_for(&key).borrow_mut();
-        if let Some(existing) = properties.get_mut(key.as_str()) {
-            *existing = property;
-        } else {
-            if is_array_index_key(&key) {
-                self.0
-                    .index_property_count
-                    .set(self.0.index_property_count.get() + 1);
-            }
-            let key: Rc<str> = key.into();
-            properties.insert(key, property);
+        if properties.insert(&key, property).is_none() && is_array_index_key(&key) {
+            self.0
+                .index_property_count
+                .set(self.0.index_property_count.get() + 1);
         }
         self.bump_property_revision();
         drop(properties);
@@ -1505,15 +1297,10 @@ impl ObjectRef {
             "the realm identity capture needs define_property"
         );
         let mut properties = self.properties_for(&key).borrow_mut();
-        if let Some(existing) = properties.get_mut(&key) {
-            *existing = property;
-        } else {
-            if is_array_index_key(&key) {
-                self.0
-                    .index_property_count
-                    .set(self.0.index_property_count.get() + 1);
-            }
-            properties.insert(key, property);
+        if properties.insert(&key, property).is_none() && is_array_index_key(&key) {
+            self.0
+                .index_property_count
+                .set(self.0.index_property_count.get() + 1);
         }
         self.bump_property_revision();
     }
@@ -1536,12 +1323,14 @@ impl ObjectRef {
 
     pub(crate) fn set_internal_non_enumerable(&self, key: &str, value: Value) {
         let mut properties = self.properties_for(key).borrow_mut();
-        if let Some(property) = properties.get_mut(key) {
-            property.value = value;
+        if let Some(slot) = properties.probe_for_edit(key) {
+            if let Some(current) = properties.value_mut(slot) {
+                *current = value;
+            }
             self.bump_property_revision();
             return;
         }
-        properties.insert_unordered(Rc::from(key), Property::non_enumerable(value));
+        properties.append(key, Property::non_enumerable(value), false);
         self.bump_property_revision();
     }
 
@@ -1571,9 +1360,7 @@ impl ObjectRef {
 
     pub(crate) fn seal(&self) {
         self.prevent_extensions();
-        self.properties()
-            .borrow_mut()
-            .for_each_mut(Property::make_non_configurable);
+        self.properties().borrow_mut().bulk(BulkEdit::Seal);
         if let Some(cold) = self.0.cold_if_present() {
             for (_, property) in cold.symbol_properties.borrow_mut().iter_mut() {
                 property.make_non_configurable();
@@ -1583,11 +1370,12 @@ impl ObjectRef {
 
     pub(crate) fn append_string_property(&self, key: &str, suffix: &str) -> Option<Value> {
         let mut properties = self.properties_for(key).borrow_mut();
-        let property = properties.get_mut(key)?;
-        if !property.writable || property.is_accessor() {
+        let slot = properties.lookup(key)?;
+        let attributes = properties.field(slot)?.attributes;
+        if !attributes.is_writable() || attributes.is_accessor() {
             return None;
         }
-        let Value::String(string) = &mut property.value else {
+        let Value::String(string) = properties.value_mut(slot)? else {
             return None;
         };
         crate::string::push_js_str(string.make_mut(), suffix);
@@ -1600,7 +1388,7 @@ impl ObjectRef {
             && self
                 .properties()
                 .borrow()
-                .all(|property| !property.configurable)
+                .all_attributes(|attributes| !attributes.is_configurable())
             && self.0.cold_if_present().is_none_or(|cold| {
                 cold.symbol_properties
                     .borrow()
@@ -1611,9 +1399,7 @@ impl ObjectRef {
 
     pub(crate) fn freeze(&self) {
         self.prevent_extensions();
-        self.properties()
-            .borrow_mut()
-            .for_each_mut(Property::freeze_data);
+        self.properties().borrow_mut().bulk(BulkEdit::Freeze);
         if let Some(cold) = self.0.cold_if_present() {
             for (_, property) in cold.symbol_properties.borrow_mut().iter_mut() {
                 property.freeze_data();
@@ -1623,10 +1409,9 @@ impl ObjectRef {
 
     pub(crate) fn is_frozen(&self) -> bool {
         !self.0.extensible.get()
-            && self
-                .properties()
-                .borrow()
-                .all(|property| !property.configurable && !property.writable)
+            && self.properties().borrow().all_attributes(|attributes| {
+                !attributes.is_configurable() && !attributes.is_writable()
+            })
             && self.0.cold_if_present().is_none_or(|cold| {
                 cold.symbol_properties
                     .borrow()
@@ -1672,10 +1457,12 @@ impl ObjectRef {
         }
         let establishes_realm_identity = key == "globalThis"
             && matches!(value, Value::Object(global_this) if self.ptr_eq(global_this));
-        let result = self
-            .properties_for(key)
-            .borrow_mut()
-            .write_existing_data(key, value, guard);
+        let result = write_existing_data(
+            &mut self.properties_for(key).borrow_mut(),
+            key,
+            value,
+            guard,
+        );
         if matches!(result, OwnDataPropertyWrite::Written) {
             self.bump_value_revision();
             if establishes_realm_identity {
@@ -1768,13 +1555,16 @@ impl ObjectRef {
 
     pub(crate) fn delete_own_property(&self, key: &str) -> bool {
         let mut properties = self.properties_for(key).borrow_mut();
+        let Some(slot) = properties.probe_for_edit(key) else {
+            return true;
+        };
         if properties
-            .get(key)
-            .is_some_and(|property| !property.configurable)
+            .field(slot)
+            .is_some_and(|field| !field.attributes.is_configurable())
         {
             return false;
         }
-        let removed = properties.remove(key);
+        let removed = Some(properties.remove_slot(slot));
         if removed.is_some() {
             self.bump_property_revision();
         }
@@ -1852,6 +1642,30 @@ fn same_prototype_slot(left: Option<&Prototype>, right: Option<&Prototype>) -> b
         (Some(left), Some(right)) => left.ptr_eq(right),
         _ => false,
     }
+}
+
+/// The domain of a new store with `prototype`: the prototype's own, or a
+/// fresh one when the prototype names none.
+fn store_domain(prototype: Option<&Prototype>) -> AtomDomain {
+    prototype
+        .and_then(Prototype::atom_domain)
+        .unwrap_or_else(fallback_domain)
+}
+
+#[inline]
+fn literal_domain(prototype: Option<&ObjectRef>) -> AtomDomain {
+    match prototype.map(|prototype| prototype.0.properties.try_borrow()) {
+        Some(Ok(properties)) => properties.domain().clone(),
+        _ => fallback_domain(),
+    }
+}
+
+/// A domain for a store created with no realm or prototype to take one from.
+/// Counted with every other domain, so the obligation tests show which
+/// creation paths still reach it.
+#[cold]
+fn fallback_domain() -> AtomDomain {
+    AtomDomain::new()
 }
 
 fn is_internal_property_key(key: &str) -> bool {

@@ -93,7 +93,7 @@ pub(crate) fn call_async_function(
         .bytecode
         .clone()
         .expect("async function has a bytecode body");
-    let context = ObjectRef::new(HashMap::new());
+    let context = ObjectRef::new_in(env.realm().atoms(), HashMap::new());
     *context.generator_state().borrow_mut() =
         Some(GeneratorState::SuspendedStart(Box::new(GeneratorStart {
             bytecode,

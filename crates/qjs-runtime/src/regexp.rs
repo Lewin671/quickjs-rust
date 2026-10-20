@@ -274,7 +274,8 @@ pub(crate) fn construct_regexp_from_strings(
     if !validated && let Err(error) = validate_regexp_init_cached(source, &flags, env) {
         return Some(Err(error));
     }
-    let mut builder = crate::value::OrderedDataPropertyBuilder::with_capacity(3);
+    let mut builder =
+        crate::value::OrderedDataPropertyBuilder::with_capacity(env.realm().atoms(), 3);
     REGEXP_OBJECT_KEYS.with(|[source_key, flags_key, last_index_key]| {
         builder.insert_property(
             source_key.clone(),

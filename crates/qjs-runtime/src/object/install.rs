@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use crate::{Function, NativeFunction, ObjectRef, Property, Value};
 
 pub(crate) fn install_object(env: &mut CallEnv, global_this: &Value) -> ObjectRef {
-    let object_prototype = ObjectRef::new(HashMap::new());
+    let object_prototype = ObjectRef::new_in(env.realm().atoms(), HashMap::new());
     object_prototype.mark_immutable_prototype_exotic();
     env.realm()
         .initialize_object_prototype(object_prototype.clone());

@@ -501,7 +501,7 @@ impl fmt::Debug for TypedLoopScratch {
 /// `memcmp` per access. Shape identity is an `Rc` pointer comparison, so
 /// scanning a few is far cheaper than resolving the name.
 /// One remembered shape and the slot the property occupies in it.
-type ShapeWay = (Rc<crate::value::ObjectLiteralShape>, usize);
+type ShapeWay = (crate::value::LiteralLayout, usize);
 
 /// A property resolved on a receiver's immediate prototype.
 ///
@@ -527,7 +527,7 @@ pub(super) struct ShapeWays {
     /// program, not in the per-entry scratch that is cleared at every loop
     /// entry: an inner loop that runs a few iterations per entry would
     /// otherwise re-resolve every field access by name scan on each entry.
-    pub(super) slot: Option<(Rc<str>, usize)>,
+    pub(super) slot: Option<crate::value::SharedSlot>,
     /// Boxed deliberately, against `clippy::box_collection`. Most sites are
     /// answered by the one-way cache and never resolve a shape at all, so this
     /// keeps their entry one pointer instead of three. The entry's size is
@@ -613,7 +613,7 @@ impl ShapeWays {
         }));
     }
 
-    pub(super) fn record(&mut self, shape: Rc<crate::value::ObjectLiteralShape>, slot: usize) {
+    pub(super) fn record(&mut self, shape: crate::value::LiteralLayout, slot: usize) {
         let ways = self.ways.get_or_insert_with(Box::default);
         if ways.len() < Self::WAYS {
             ways.push((shape, slot));

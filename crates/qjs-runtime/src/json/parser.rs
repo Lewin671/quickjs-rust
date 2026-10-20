@@ -417,7 +417,7 @@ impl<'a> JsonParser<'a> {
 
     fn object<const PRESERVE_METADATA: bool>(&mut self) -> Result<JsonNode, RuntimeError> {
         self.expect_byte(b'{')?;
-        let mut properties = OrderedDataPropertyBuilder::new();
+        let mut properties = OrderedDataPropertyBuilder::new(self.env.realm().atoms());
         let mut children = PRESERVE_METADATA.then(Vec::new);
         self.skip_whitespace();
         if self.consume_byte(b'}') {

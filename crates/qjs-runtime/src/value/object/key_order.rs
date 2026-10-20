@@ -1,14 +1,15 @@
 //! An object's own string keys in property-key order: array indices
-//! ascending, then insertion order.
+//! ascending, then insertion order. The layout owns the order; internal keys
+//! are kept out of it or filtered by name.
 
 use std::rc::Rc;
 
-use super::{ObjectRef, PropertyStorage, array_index_property_key, is_internal_property_key};
-use crate::Property;
+use super::{ObjectRef, array_index_property_key, is_internal_property_key};
+use crate::property::layout::Attributes;
 
 impl ObjectRef {
     pub(crate) fn own_property_keys(&self) -> Vec<String> {
-        self.ordered_property_names(|property| property.enumerable)
+        self.ordered_property_names(Attributes::is_enumerable)
     }
 
     pub(crate) fn own_property_names(&self) -> Vec<String> {
@@ -17,35 +18,23 @@ impl ObjectRef {
 
     /// Own string keys in property-key order -- array indices ascending, then
     /// insertion order -- each with its enumerable flag, without cloning a
-    /// descriptor or a key's text. Internal keys are omitted. `for-in` walks
-    /// every layer of the prototype chain with this.
+    /// descriptor. Internal keys are omitted. `for-in` walks every layer of
+    /// the prototype chain with this.
     pub(crate) fn own_string_keys_with_enumerability(&self) -> Vec<(Rc<str>, bool)> {
         let properties = self.properties().borrow();
         let has_indices = self.0.index_property_count.get() > 0;
         let mut indices: Vec<(u32, Rc<str>, bool)> = Vec::new();
-        let mut strings: Vec<(Rc<str>, bool)> = Vec::new();
-        let mut visit = |key: &Rc<str>, enumerable: bool| {
+        let mut strings: Vec<(Rc<str>, bool)> = Vec::with_capacity(properties.len());
+        for (_, field) in properties.ordered_fields() {
+            let key = field.text();
             if is_internal_property_key(key) {
-                return;
+                continue;
             }
+            let enumerable = field.attributes.is_enumerable();
             if has_indices && let Some(index) = array_index_property_key(key) {
-                indices.push((index, key.clone(), enumerable));
+                indices.push((index, Rc::clone(key), enumerable));
             } else {
-                strings.push((key.clone(), enumerable));
-            }
-        };
-        if let PropertyStorage::Small { entries } = &*properties {
-            for (key, property) in entries {
-                visit(key, property.enumerable);
-            }
-        } else {
-            let order = properties
-                .order()
-                .expect("non-small property storage has a separate order");
-            for key in order {
-                if let Some(enumerable) = properties.enumerable(key) {
-                    visit(key, enumerable);
-                }
+                strings.push((Rc::clone(key), enumerable));
             }
         }
         if indices.is_empty() {
@@ -61,78 +50,27 @@ impl ObjectRef {
 
     pub(super) fn ordered_property_names(
         &self,
-        include: impl Fn(&Property) -> bool,
+        include: impl Fn(Attributes) -> bool,
     ) -> Vec<String> {
         let properties = self.properties().borrow();
-        if let PropertyStorage::Small { entries } = &*properties {
-            if self.0.index_property_count.get() == 0 {
-                return entries
-                    .iter()
-                    .filter_map(|(key, property)| {
-                        if is_internal_property_key(key) {
-                            return None;
-                        }
-                        include(property).then(|| key.to_string())
-                    })
-                    .collect();
-            }
-
-            let mut indices = Vec::new();
-            let mut strings = Vec::new();
-            for (key, property) in entries {
-                if is_internal_property_key(key) || !include(property) {
-                    continue;
-                }
-                if let Some(index) = array_index_property_key(key) {
-                    indices.push((index, key.to_string()));
-                } else {
-                    strings.push(key.to_string());
-                }
-            }
-            indices.sort_by_key(|(index, _)| *index);
-            return indices
-                .into_iter()
-                .map(|(_, key)| key)
-                .chain(strings)
-                .collect();
-        }
-
-        let order = properties
-            .order()
-            .expect("non-small property storage has a separate order");
+        let included = properties.ordered_fields().filter(|(_, field)| {
+            !is_internal_property_key(field.text()) && include(field.attributes)
+        });
         if self.0.index_property_count.get() == 0 {
-            return order
-                .iter()
-                .filter_map(|key| {
-                    if is_internal_property_key(key) {
-                        return None;
-                    }
-                    let property = properties.get(key.as_ref())?;
-                    include(&property).then(|| key.to_string())
-                })
+            return included
+                .map(|(_, field)| field.text().to_string())
                 .collect();
         }
-
         let mut indices = Vec::new();
         let mut strings = Vec::new();
-
-        for key in order.iter() {
-            if is_internal_property_key(key) {
-                continue;
-            }
-            let Some(property) = properties.get(key.as_ref()) else {
-                continue;
-            };
-            if !include(&property) {
-                continue;
-            }
+        for (_, field) in included {
+            let key = field.text();
             if let Some(index) = array_index_property_key(key) {
                 indices.push((index, key.to_string()));
             } else {
                 strings.push(key.to_string());
             }
         }
-
         indices.sort_by_key(|(index, _)| *index);
         indices
             .into_iter()

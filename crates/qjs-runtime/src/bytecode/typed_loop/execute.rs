@@ -396,8 +396,8 @@ fn execute<F: LoopFrame>(
                 // straight to the rest of `get_named`, whose first step this is.
                 if let Value::Object(receiver) = &boxed[object as usize] {
                     let shapes = &mut shape_caches[cache as usize];
-                    if let Some((key, slot)) = shapes.slot.as_ref()
-                        && let Some(number) = receiver.shared_data_slot_number(key, *slot)
+                    if let Some(way) = shapes.slot.as_ref()
+                        && let Some(number) = receiver.shared_data_slot_number(way)
                     {
                         registers[reg(dst)] = Typed::Number(number);
                         continue;
@@ -435,8 +435,8 @@ fn execute<F: LoopFrame>(
                 // inline numeric read.
                 if let (Value::Object(receiver), Typed::Number(number)) =
                     (&boxed[object as usize], registers[reg(value)])
-                    && let Some((key, slot)) = shape_caches[cache as usize].slot.as_ref()
-                    && receiver.shared_data_slot_write_number(key, *slot, number)
+                    && let Some(way) = shape_caches[cache as usize].slot.as_ref()
+                    && receiver.shared_data_slot_write_number(way, number)
                 {
                     continue;
                 }
@@ -1243,8 +1243,8 @@ fn get_named(
     let Value::Object(object) = receiver else {
         return None;
     };
-    if let Some((key, slot)) = shapes.slot.as_ref()
-        && let Some(value) = object.shared_data_slot_value(key, *slot)
+    if let Some(way) = shapes.slot.as_ref()
+        && let Some(value) = object.shared_data_slot_value(way)
     {
         return Some(value);
     }
@@ -1273,8 +1273,8 @@ fn get_named_object(
     // here with the site's slot still valid, and re-resolving the name each
     // time would be a hash lookup per read. Checked after the shapes: checked
     // first, a polymorphic site's small-storage misses would pay for it.
-    if let Some((key, slot)) = shapes.slot.as_ref()
-        && let Some(value) = object.shared_dynamic_slot_value(key, *slot)
+    if let Some(way) = shapes.slot.as_ref()
+        && let Some(value) = object.shared_dynamic_slot_value(way)
     {
         return Some(value);
     }
@@ -1288,10 +1288,10 @@ fn get_named_object(
     {
         return Some(value);
     }
-    if let Some((key, slot)) = object.shared_data_slot(name)
-        && let Some(value) = object.shared_data_slot_value(&key, slot)
+    if let Some(way) = object.shared_data_slot(name)
+        && let Some(value) = object.shared_data_slot_value(&way)
     {
-        shapes.slot = Some((key, slot));
+        shapes.slot = Some(way);
         return Some(value);
     }
     if let Some((shape, slot)) = object.literal_data_slot(name)
@@ -1388,20 +1388,18 @@ fn set_named(
     let Value::Object(object) = receiver else {
         return false;
     };
-    if let Some((key, slot)) = shapes.slot.as_ref()
-        && let Some(OwnDataPropertyWrite::Written) =
-            object.shared_data_slot_write(key, *slot, value)
+    if let Some(way) = shapes.slot.as_ref()
+        && let Some(OwnDataPropertyWrite::Written) = object.shared_data_slot_write(way, value)
     {
         return true;
     }
     // `globalThis` as an own name establishes realm identity on the slow
     // path, so it is never cached.
     if name.as_ref() != "globalThis"
-        && let Some((key, slot)) = object.shared_data_slot(name)
-        && let Some(OwnDataPropertyWrite::Written) =
-            object.shared_data_slot_write(&key, slot, value)
+        && let Some(way) = object.shared_data_slot(name)
+        && let Some(OwnDataPropertyWrite::Written) = object.shared_data_slot_write(&way, value)
     {
-        shapes.slot = Some((key, slot));
+        shapes.slot = Some(way);
         return true;
     }
     matches!(

@@ -301,7 +301,7 @@ fn define_array_unscopables(env: &CallEnv, prototype: &ObjectRef) {
         return;
     };
 
-    let unscopables = ObjectRef::new(HashMap::new());
+    let unscopables = ObjectRef::new_in(env.realm().atoms(), HashMap::new());
     for key in [
         "copyWithin",
         "entries",
