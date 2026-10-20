@@ -1456,6 +1456,33 @@ impl ObjectRef {
         self.write_existing_own_data_property_if(key, value, |_| true)
     }
 
+    /// [`Self::write_existing_own_data_property`] that tells a missing key
+    /// apart: `None` proves `key` absent from this store, so a creation that
+    /// follows needs no probe of its own.
+    pub(crate) fn write_existing_or_absent(
+        &self,
+        key: &str,
+        value: &Value,
+    ) -> Option<OwnDataPropertyWrite> {
+        if self.0.module_namespace_exotic.get() {
+            return Some(OwnDataPropertyWrite::NeedsSlowPath);
+        }
+        let result = {
+            let mut storage = self.properties_for(key).borrow_mut();
+            let slot = storage.lookup(key)?;
+            write_slot(&mut storage, slot, value, |_| true)
+        };
+        if matches!(result, OwnDataPropertyWrite::Written) {
+            self.bump_value_revision();
+            if key == "globalThis"
+                && matches!(value, Value::Object(global_this) if self.ptr_eq(global_this))
+            {
+                self.capture_realm_intrinsic_identity();
+            }
+        }
+        Some(result)
+    }
+
     /// [`Self::write_existing_own_data_property`] of a property whose current
     /// value `guard` accepts, in the same lookup; a rejected one is
     /// `NeedsSlowPath`, unchanged.

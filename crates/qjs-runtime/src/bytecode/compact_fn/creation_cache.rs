@@ -42,22 +42,25 @@ struct CreationProof {
 impl CreationCache {
     /// Creates `key` on `object` as an own enumerable data property when the
     /// remembered chain still proves that plain; `false` leaves the store to
-    /// the general path.
+    /// the general path. `proven_absent` says the caller's own probe already
+    /// missed, so the receiver is not probed again.
     pub(in crate::bytecode) fn try_create(
         &self,
         object: &ObjectRef,
         key: &Rc<str>,
         value: &Value,
+        proven_absent: bool,
     ) -> bool {
         let proof = self.0.borrow();
         let Some(proof) = proof.as_ref() else {
             return false;
         };
         if !receiver_is_plain(object)
-            || !matches!(
-                object.own_data_property_read(key),
-                OwnDataPropertyRead::Missing
-            )
+            || !(proven_absent
+                || matches!(
+                    object.own_data_property_read(key),
+                    OwnDataPropertyRead::Missing
+                ))
             || !chain_matches(object, &proof.chain)
         {
             return false;

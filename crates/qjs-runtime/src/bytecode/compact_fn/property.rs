@@ -225,8 +225,15 @@ pub(super) fn set_prop_named(
     {
         let cached = cache.and_then(|cache| cache.write(object_ref, key, &value));
         let cached_hit = cached.is_some();
-        let write =
-            cached.unwrap_or_else(|| object_ref.write_existing_own_data_property(key, &value));
+        // A miss here proves the key absent: the creation below then makes
+        // the add's only probe of the receiver.
+        let (write, absent) = match cached {
+            Some(write) => (write, false),
+            None => match object_ref.write_existing_or_absent(key, &value) {
+                Some(write) => (write, false),
+                None => (OwnDataPropertyWrite::NeedsSlowPath, true),
+            },
+        };
         match write {
             OwnDataPropertyWrite::Written => {
                 if !cached_hit && let Some(cache) = cache {
@@ -243,7 +250,9 @@ pub(super) fn set_prop_named(
             OwnDataPropertyWrite::NeedsSlowPath => {
                 // A constructor's `this.x = x` creates the property on every
                 // instance; the site's proof skips the prototype walk.
-                if creation.is_some_and(|creation| creation.try_create(object_ref, key, &value)) {
+                if creation
+                    .is_some_and(|creation| creation.try_create(object_ref, key, &value, absent))
+                {
                     return Ok(value);
                 }
                 if try_create_ordinary_own_data_property(object_ref, Rc::clone(key), &value) {

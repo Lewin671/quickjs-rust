@@ -211,9 +211,10 @@ enum EditLabel {
     Bulk(BulkEdit),
 }
 
+/// An append edge: the appended field -- its text inline, so a hit compares
+/// the key without following the atom -- and the child it leads to.
 struct AppendEdge {
-    atom: Atom,
-    attributes: Attributes,
+    field: Field,
     child: Layout,
 }
 
@@ -477,10 +478,9 @@ impl Shape {
     #[inline]
     fn append_edge(&self, key: &str, attributes: Attributes) -> Option<Layout> {
         let edges = self.edges.borrow();
-        let edge =
-            edges.appends.iter().rev().find(|edge| {
-                edge.attributes == attributes && text_matches(edge.atom.text(), key)
-            })?;
+        let edge = edges.appends.iter().rev().find(|edge| {
+            text_matches(edge.field.text(), key) && edge.field.attributes == attributes
+        })?;
         crate::diagnostics::count!(property_edge_hits);
         Some(Rc::clone(&edge.child))
     }
@@ -501,7 +501,7 @@ impl Shape {
             .borrow()
             .appends
             .iter()
-            .find(|edge| edge.attributes == attributes && edge.atom == atom)
+            .find(|edge| edge.field.attributes == attributes && edge.field.atom == atom)
         {
             crate::diagnostics::count!(property_edge_hits);
             return Rc::clone(&edge.child);
@@ -526,8 +526,7 @@ impl Shape {
                 edges.appends.remove(0);
             }
             edges.appends.push(AppendEdge {
-                atom: field.atom,
-                attributes,
+                field,
                 child: Rc::clone(&child),
             });
         }
@@ -619,7 +618,7 @@ impl Shape {
             .borrow()
             .appends
             .iter()
-            .map(|edge| edge.atom.as_str().to_owned())
+            .map(|edge| edge.field.atom.as_str().to_owned())
             .collect()
     }
 
