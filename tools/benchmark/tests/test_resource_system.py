@@ -287,7 +287,9 @@ class ResourceSystemTests(unittest.TestCase):
             int(line.split()[1]) for row in samples for line in row["stdout"].splitlines()
             if line.startswith("CHILD ")
         ]
-        deadline = time.monotonic() + 2
+        # Poll until every killed descendant is gone. Each one is `sleep 30`,
+        # so only a descendant that containment missed is still alive at 20 s.
+        deadline = time.monotonic() + 20
         remaining = set(child_pids)
         while remaining and time.monotonic() < deadline:
             for pid in list(remaining):

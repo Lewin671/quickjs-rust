@@ -36,7 +36,7 @@ def _runner_repo(root: Path) -> dict[str, Any]:
             text=True, timeout=5, check=False,
         )
         dirty = subprocess.run(
-            ["git", "-C", str(root), "status", "--porcelain"], capture_output=True,
+            ["git", "--no-optional-locks", "-C", str(root), "status", "--porcelain"], capture_output=True,
             text=True, timeout=5, check=False,
         )
     except (OSError, subprocess.TimeoutExpired):

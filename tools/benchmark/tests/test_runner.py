@@ -23,6 +23,18 @@ from tools.benchmark.snapshots import SnapshotError
 ROOT = Path(__file__).resolve().parents[3]
 
 
+
+def _wait_until_gone(pid: int, bound_seconds: float = 20.0) -> bool:
+    """Poll until `pid` no longer exists; False only if it outlives the bound."""
+    deadline = time.monotonic() + bound_seconds
+    while time.monotonic() < deadline:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return True
+        time.sleep(0.01)
+    return False
+
 class RunnerTests(unittest.TestCase):
     def setUp(self) -> None:
         # Runner semantic tests must not depend on spawning a dynamic-loader
@@ -148,11 +160,18 @@ class RunnerTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         marker = Path(temporary.name) / "child-finished"
-        child = f"import time, pathlib; time.sleep(.3); pathlib.Path({str(marker)!r}).write_text('bad')"
-        parent = "import subprocess, sys, time; subprocess.Popen([sys.executable, '-c', sys.argv[1]]); time.sleep(2)"
-        result = run_process(["python3", "-c", parent, child], 0.05)
+        started = Path(temporary.name) / "child-started"
+        # The child records its PID before sleeping and the parent waits for
+        # that record, so the timeout always lands after the child exists; the
+        # test then waits for the child to be gone instead of for a fixed time.
+        child = (f"import os, time, pathlib; pathlib.Path({str(started)!r}).write_text(str(os.getpid()));"
+                 f" time.sleep(30); pathlib.Path({str(marker)!r}).write_text('bad')")
+        parent = ("import subprocess, sys, time, pathlib; subprocess.Popen([sys.executable, '-c', sys.argv[1]]);"
+                  f"\nwhile not pathlib.Path({str(started)!r}).exists(): time.sleep(0.01)\ntime.sleep(30)")
+        result = run_process(["python3", "-c", parent, child], 5)
         self.assertTrue(result.timed_out)
-        time.sleep(0.4)
+        self.assertTrue(started.exists(), "the parent was killed before its child existed")
+        self.assertTrue(_wait_until_gone(int(started.read_text())), "the child survived the timeout")
         self.assertFalse(marker.exists())
 
     @unittest.skipUnless(os.name == "posix", "process-group assertion is POSIX-specific")
@@ -160,14 +179,17 @@ class RunnerTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         marker = Path(temporary.name) / "orphan-finished"
-        # The orphan must outlive everything `run_process` does after the
-        # parent exits (reading counters, then two 0.1 s pipe joins) by a wide
-        # margin, or it finishes on a busy host before containment is due.
-        child = f"import time, pathlib; time.sleep(2); pathlib.Path({str(marker)!r}).write_text('bad')"
-        parent = "import subprocess, sys; subprocess.Popen([sys.executable, '-c', sys.argv[1]])"
-        result = run_process(["python3", "-c", parent, child], 5)
+        started = Path(temporary.name) / "orphan-started"
+        # The parent exits only after the orphan has recorded its PID; the
+        # orphan sleeps far longer than any containment delay, and the test
+        # waits for it to be gone rather than for a fixed time.
+        child = (f"import os, time, pathlib; pathlib.Path({str(started)!r}).write_text(str(os.getpid()));"
+                 f" time.sleep(30); pathlib.Path({str(marker)!r}).write_text('bad')")
+        parent = ("import subprocess, sys, time, pathlib; subprocess.Popen([sys.executable, '-c', sys.argv[1]])"
+                  f"\nwhile not pathlib.Path({str(started)!r}).exists(): time.sleep(0.01)")
+        result = run_process(["python3", "-c", parent, child], 60)
         self.assertEqual(result.exit_code, 0)
-        time.sleep(2.2)
+        self.assertTrue(_wait_until_gone(int(started.read_text())), "the orphan survived containment")
         self.assertFalse(marker.exists())
 
     def test_version_probe_uses_requested_path_flag_and_bounded_output(self) -> None:

@@ -25,7 +25,7 @@
   activation order in `docs/benchmarking.md`, "Gate activation".
 - 2026-10-20: resource protocol v4 adds a launch admission per executed snapshot (macOS first-exec
   assessment had landed in first samples): [record](archive/T017-resource-launch-admission.md); tool tests use
-  CPU-time bounds, not wall timeouts: [record](archive/T017-test-wall-timeouts.md).
+  CPU-time bounds, not wall timeouts: [record](archive/T017-test-wall-timeouts.md), [follow-up](archive/T017-git-lock-and-race-tests.md).
 
 A new-file launch delay and the symmetric screen preflight are recorded in
 [the diagnostic](archive/T017-launch-preflight-diagnostic.md); fixed-hardware

@@ -4,6 +4,9 @@
 # function-size and typed-loop diagnostics.
 # Diagnostic only; formal acceptance follows docs/performance-workflow.md.
 set -euo pipefail
+# runner.py's `git status` probe (a protocol file, so unchanged) runs with a
+# short timeout; a killed probe must not leave the checkout's index.lock.
+export GIT_OPTIONAL_LOCKS=0
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 . "$ROOT_DIR/scripts/lib.sh"

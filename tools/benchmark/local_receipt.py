@@ -56,7 +56,7 @@ def receipt(identity: str, revision: str, binary: Path, manifest_path: Path) -> 
         checkout = ROOT / "third_party/quickjs-ng"
         if _run(["git", "rev-parse", "HEAD"], checkout) != manifest.reference_revision:
             raise LocalReceiptError("third_party/quickjs-ng is not at the pinned reference revision")
-        if _run(["git", "status", "--porcelain", "--untracked-files=no"], checkout):
+        if _run(["git", "--no-optional-locks", "status", "--porcelain", "--untracked-files=no"], checkout):
             raise LocalReceiptError("third_party/quickjs-ng has local modifications")
         if revision != manifest.reference_revision:
             raise LocalReceiptError("a reference receipt must name the pinned revision")

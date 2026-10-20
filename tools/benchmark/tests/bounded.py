@@ -15,13 +15,16 @@ import subprocess
 from typing import Any, Sequence
 
 CPU_SECONDS = 60
-WALL_BACKSTOP_SECONDS = 900
+# Well inside the 10-35 minute CI job limits.
+WALL_BACKSTOP_SECONDS = 300
 
 
 def run_bounded(
     argv: Sequence[Any], *, cpu_seconds: int = CPU_SECONDS, **kwargs: Any
 ) -> subprocess.CompletedProcess:
     kwargs.setdefault("timeout", WALL_BACKSTOP_SECONDS)
+    if "input" not in kwargs:
+        kwargs.setdefault("stdin", subprocess.DEVNULL)
     return subprocess.run(
         ["/bin/sh", "-c", 'ulimit -t "$1" && shift && exec "$@"', "bounded",
          str(cpu_seconds), *(str(item) for item in argv)],

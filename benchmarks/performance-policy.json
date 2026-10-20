@@ -21,7 +21,7 @@
     "resource_measurement": {
       "manifest_path": "benchmarks/resources.json",
       "protocol_id": "quickjs-resource-measurement-protocol-v4",
-      "protocol_sha256": "5db4734bce20e322f03814065b9632c6e8099ee807e9f7be0a93e2da37ba9f7d"
+      "protocol_sha256": "a17fec25fa30769441c0a29b16300364332a7aa17ec9ddefc28ab2a5f57541c7"
     },
     "resource_analysis": {
       "manifest_path": "benchmarks/resource-analysis.json",
@@ -111,7 +111,7 @@
       "tools/benchmark/preview_sentinel.py",
       "tools/benchmark/preview_summary.py"
     ],
-    "aggregate_sha256": "46c48c0bcf257c1edbb276635d9c4cff07c95186596804aac9cf26c473617f0f"
+    "aggregate_sha256": "7a7751f4b5e95e2ffa12d44bb570aa1ea27145794d7079b4dde8d5f8a3d79515"
   },
   "hosted_pr": {
     "tier": "informational_preview",
@@ -178,7 +178,7 @@
         "required_protocol_sha256": {
           "throughput_measurement": "ab67b7cf62e3e980e86d133109d318bc18bc0f6bf345de47a137571df367a541",
           "throughput_analysis": "0a59121cee6e7a71098dc0f5aca2712bab6437e07741b692f40923cf93cad176",
-          "resource_measurement": "5db4734bce20e322f03814065b9632c6e8099ee807e9f7be0a93e2da37ba9f7d",
+          "resource_measurement": "a17fec25fa30769441c0a29b16300364332a7aa17ec9ddefc28ab2a5f57541c7",
           "resource_analysis": "8bbfc9907719f10f49a9e014e2a43c6273922acd20a2a5d5fb72a4a937af2546",
           "sentinel_measurement": "d5ae2485115579cfeb0898def36b8dd07753fe37b01fdda7bf271129301bb620"
         }
@@ -200,7 +200,7 @@
         "required_protocol_sha256": {
           "throughput_measurement": "ab67b7cf62e3e980e86d133109d318bc18bc0f6bf345de47a137571df367a541",
           "throughput_analysis": "0a59121cee6e7a71098dc0f5aca2712bab6437e07741b692f40923cf93cad176",
-          "resource_measurement": "5db4734bce20e322f03814065b9632c6e8099ee807e9f7be0a93e2da37ba9f7d",
+          "resource_measurement": "a17fec25fa30769441c0a29b16300364332a7aa17ec9ddefc28ab2a5f57541c7",
           "resource_analysis": "8bbfc9907719f10f49a9e014e2a43c6273922acd20a2a5d5fb72a4a937af2546",
           "sentinel_measurement": "d5ae2485115579cfeb0898def36b8dd07753fe37b01fdda7bf271129301bb620"
         }
@@ -223,7 +223,7 @@
         "required_protocol_sha256": {
           "throughput_measurement": "ab67b7cf62e3e980e86d133109d318bc18bc0f6bf345de47a137571df367a541",
           "throughput_analysis": "0a59121cee6e7a71098dc0f5aca2712bab6437e07741b692f40923cf93cad176",
-          "resource_measurement": "5db4734bce20e322f03814065b9632c6e8099ee807e9f7be0a93e2da37ba9f7d",
+          "resource_measurement": "a17fec25fa30769441c0a29b16300364332a7aa17ec9ddefc28ab2a5f57541c7",
           "resource_analysis": "8bbfc9907719f10f49a9e014e2a43c6273922acd20a2a5d5fb72a4a937af2546",
           "sentinel_measurement": "d5ae2485115579cfeb0898def36b8dd07753fe37b01fdda7bf271129301bb620"
         }
