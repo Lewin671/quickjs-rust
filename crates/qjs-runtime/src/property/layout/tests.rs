@@ -3,8 +3,8 @@
 use std::rc::Rc;
 
 use super::{
-    APPEND_EDGE_LIMIT, Attributes, BulkEdit, DICTIONARY_AFTER_EDITS, Encoding, LIVE_SHAPE_BUDGET,
-    Layout, LayoutEdit, SHAPE_FIELD_LIMIT, SlotRemoval, layout_for_keys,
+    APPEND_EDGE_LIMIT, Attributes, BulkEdit, DICTIONARY_AFTER_EDITS, Encoding, Layout, LayoutEdit,
+    SHAPE_FIELD_LIMIT, SlotRemoval, layout_for_keys,
 };
 use crate::property::atom::AtomDomain;
 
@@ -204,8 +204,19 @@ fn dictionary_order_tombstones_stay_bounded_under_fixed_live_churn() {
             LayoutEdit::remove(&mut layout, &mut edits, slot),
             SlotRemoval::SwapLast
         );
+        if index % 97 == 0 {
+            layout
+                .as_dictionary()
+                .expect("dictionary")
+                .assert_consistent();
+        }
     }
     let dictionary = layout.as_dictionary().expect("dictionary");
+    let tombstones = dictionary.assert_consistent();
+    assert!(
+        tombstones <= layout.len() + 64 + 1,
+        "{tombstones} tombstones"
+    );
     assert!(dictionary.order_len() <= 2 * layout.len() + 64 + 1);
     assert!(dictionary.version() >= 4000);
     assert_eq!(keys(&layout), ["live"]);
@@ -217,35 +228,4 @@ fn dictionary_order_tombstones_stay_bounded_under_fixed_live_churn() {
     drop(layout);
     drop(roots);
     assert_eq!(domain.live_count(), 0);
-}
-
-#[test]
-fn the_live_shape_budget_stops_recording_edges_until_shapes_die() {
-    let domain = AtomDomain::new();
-    let roots = domain.roots();
-    let root = Rc::clone(roots.root(Encoding::Small));
-    let base = domain.live_shapes();
-    // Each leaf is held by its object even after its root edge is evicted.
-    let held: Vec<Layout> = (0..5000)
-        .map(|index| appended(&domain, &[&format!("k{index}")]))
-        .collect();
-    assert!(domain.live_shapes() >= LIVE_SHAPE_BUDGET);
-    let edges_at_budget: Vec<String> = root_edge_keys(&root);
-    let extra = appended(&domain, &["over-budget"]);
-    assert_eq!(
-        root_edge_keys(&root),
-        edges_at_budget,
-        "no edge recorded at the budget"
-    );
-    assert_eq!(extra.lookup("over-budget"), Some(0));
-    drop(held);
-    drop(extra);
-    assert!(domain.live_shapes() < LIVE_SHAPE_BUDGET);
-    assert!(domain.live_shapes() <= base + APPEND_EDGE_LIMIT);
-    let _recorded = appended(&domain, &["after"]);
-    assert!(root_edge_keys(&root).iter().any(|key| key == "after"));
-}
-
-fn root_edge_keys(root: &Layout) -> Vec<String> {
-    root.as_shape().expect("root shape").append_edge_keys()
 }

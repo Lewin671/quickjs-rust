@@ -317,6 +317,24 @@ impl Dictionary {
         self.version
     }
 
+    /// Asserts that `order`, `positions` and `index` describe exactly the
+    /// live fields: each live slot sits once in `order` at its recorded
+    /// position, every other entry is a tombstone, and the index maps each
+    /// live key to its slot and nothing else. Returns the tombstone count.
+    #[cfg(test)]
+    pub(crate) fn assert_consistent(&self) -> usize {
+        assert_eq!(self.positions.len(), self.fields.len());
+        assert_eq!(self.index.len(), self.fields.len());
+        for (slot, field) in self.fields.iter().enumerate() {
+            let position = self.positions[slot] as usize;
+            assert_eq!(self.order[position], slot as u32, "slot {slot}");
+            assert_eq!(self.index.get(field.text().as_ref()), Some(&(slot as u32)));
+        }
+        let live = self.order.iter().filter(|&&slot| slot != NO_SLOT).count();
+        assert_eq!(live, self.fields.len(), "order holds each live slot once");
+        self.order.len() - live
+    }
+
     /// Identity of this dictionary for a cache that holds it weakly.
     #[allow(dead_code)] // Read by the M1 stage B lookup caches.
     pub(crate) fn identity(&self) -> &Rc<()> {

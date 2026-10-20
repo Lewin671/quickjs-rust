@@ -63,8 +63,11 @@ fn ordinary_object_keeps_cold_state_unallocated() {
     assert!(object.to_string_tag().is_none());
     assert!(object.0.cold.get().is_none());
     // One layout pointer beside a keyless payload: the layout owns every
-    // name, so an object stays within fifteen machine words.
+    // name, so an object stays within fifteen machine words. The one-byte
+    // flags stay unpacked: packing them into a `Cell<u16>` frees six bytes
+    // that alignment pads back, so the object would still be 120 bytes.
     assert!(mem::size_of::<ObjectData>() <= 120);
+    assert!(mem::size_of::<std::cell::RefCell<super::PropertyStorage>>() <= 56);
 }
 
 #[test]
@@ -292,4 +295,122 @@ fn all_property_storage_forms_share_surrogate_pair_key_bytes() {
             );
         }
     }
+}
+
+/// One literal site evaluated against prototypes of two realms builds each
+/// object in its prototype's domain; switching realms back reuses that
+/// realm's layout, and mutating one realm's instance leaves the other's
+/// layout untouched.
+#[test]
+fn a_literal_site_shared_by_two_realms_builds_in_each_prototypes_domain() {
+    let first = crate::property::atom::AtomDomain::new();
+    let second = crate::property::atom::AtomDomain::new();
+    let (_first_roots, _second_roots) = (first.roots(), second.roots());
+    let first_prototype = ObjectRef::new_in(&first, HashMap::new());
+    let second_prototype = ObjectRef::new_in(&second, HashMap::new());
+    let shape = ObjectLiteralShape::new(vec![Rc::from("a"), Rc::from("b"), Rc::from("c")]);
+    let build = |prototype: &ObjectRef, base: f64| {
+        ObjectRef::with_literal_properties(
+            Rc::clone(&shape),
+            vec![
+                Value::Number(base),
+                Value::Number(base + 1.0),
+                Value::Number(base + 2.0),
+            ],
+            Some(prototype.clone()),
+        )
+    };
+    let a = build(&first_prototype, 1.0);
+    let b = build(&second_prototype, 10.0);
+    let c = build(&first_prototype, 20.0);
+    let domain_is = |object: &ObjectRef, domain: &crate::property::atom::AtomDomain| {
+        object.atom_domain().is_some_and(|own| own.ptr_eq(domain))
+    };
+    assert!(domain_is(&a, &first) && domain_is(&c, &first));
+    assert!(domain_is(&b, &second));
+    let layout = |object: &ObjectRef| Rc::clone(&object.0.properties.borrow().layout);
+    assert!(Rc::ptr_eq(&layout(&a), &layout(&c)));
+    assert!(!Rc::ptr_eq(&layout(&a), &layout(&b)));
+    b.set("d".to_owned(), Value::Number(13.0));
+    assert!(Rc::ptr_eq(&layout(&a), &layout(&c)));
+    assert_eq!(c.get("c"), Some(Value::Number(22.0)));
+    assert_eq!(b.own_property_keys(), ["a", "b", "c", "d"]);
+    assert_eq!(a.own_property_keys(), ["a", "b", "c"]);
+}
+
+/// An object built from a host map orders its keys deterministically --
+/// indices ascending, then the other keys sorted -- builds its layout through
+/// the domain's append edges, so equal maps share one layout, and stays an
+/// ordinary store afterwards.
+#[test]
+fn a_host_map_object_orders_keys_and_shares_its_edge_built_layout() {
+    let domain = crate::property::atom::AtomDomain::new();
+    let _roots = domain.roots();
+    let map = |extra: usize| {
+        let mut map: HashMap<String, Value> = ["b", "a", "10", "2"]
+            .iter()
+            .map(|key| ((*key).to_owned(), Value::String((*key).to_owned().into())))
+            .collect();
+        for index in 0..extra {
+            map.insert(format!("k{index:02}"), Value::Number(index as f64));
+        }
+        map
+    };
+    let first = ObjectRef::new_in(&domain, map(0));
+    let second = ObjectRef::new_in(&domain, map(0));
+    assert_eq!(first.own_property_keys(), ["2", "10", "a", "b"]);
+    let layout = |object: &ObjectRef| Rc::clone(&object.0.properties.borrow().layout);
+    assert!(Rc::ptr_eq(&layout(&first), &layout(&second)));
+    assert!(first.atom_domain().is_some_and(|own| own.ptr_eq(&domain)));
+    assert!(first.delete_own_property("a"));
+    first.set("a".to_owned(), Value::Number(1.0));
+    assert_eq!(first.own_property_keys(), ["2", "10", "b", "a"]);
+    assert_eq!(second.own_property_keys(), ["2", "10", "a", "b"]);
+    let large = ObjectRef::new_in(&domain, map(20));
+    assert_eq!(encoding(&large), Encoding::Dynamic);
+    assert_eq!(large.get("k17"), Some(Value::Number(17.0)));
+    assert_eq!(large.own_property_keys().len(), 24);
+    assert_eq!(large.own_property_keys()[..3], ["2", "10", "a"]);
+}
+
+/// The live-shape budget, exercised by objects: 5000 live objects, each
+/// holding a one-key shape of its own, push the domain past the budget;
+/// past it an add still works but records no edge, and once the objects die
+/// the shapes are released and edges are recorded again.
+#[test]
+fn the_live_shape_budget_stops_recording_edges_until_objects_die() {
+    use crate::property::layout::{APPEND_EDGE_LIMIT, LIVE_SHAPE_BUDGET};
+    let domain = crate::property::atom::AtomDomain::new();
+    let roots = domain.roots();
+    let root_edges = || {
+        roots
+            .root(Encoding::Small)
+            .as_shape()
+            .expect("root shape")
+            .append_edge_keys()
+    };
+    let object_with = |key: &str| {
+        let object = ObjectRef::new_in(&domain, HashMap::new());
+        object.set(key.to_owned(), Value::Number(1.0));
+        object
+    };
+    let base = domain.live_shapes();
+    let objects: Vec<ObjectRef> = (0..5000)
+        .map(|index| object_with(&format!("k{index}")))
+        .collect();
+    assert!(domain.live_shapes() >= LIVE_SHAPE_BUDGET);
+    let edges_at_budget = root_edges();
+    let extra = object_with("over-budget");
+    assert_eq!(
+        root_edges(),
+        edges_at_budget,
+        "no edge recorded at the budget"
+    );
+    assert_eq!(extra.get("over-budget"), Some(Value::Number(1.0)));
+    assert_eq!(objects[0].get("k0"), Some(Value::Number(1.0)));
+    drop(objects);
+    drop(extra);
+    assert!(domain.live_shapes() <= base + APPEND_EDGE_LIMIT);
+    let _after = object_with("after");
+    assert!(root_edges().iter().any(|key| key == "after"));
 }
