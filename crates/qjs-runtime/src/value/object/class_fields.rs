@@ -30,7 +30,7 @@ impl ObjectRef {
             return false;
         }
         let mut properties = self.0.properties.borrow_mut();
-        if properties.layout.encoding() != Encoding::Small
+        if properties.encoding() != Encoding::Small
             || properties.len() + fields.len() > LINEAR_LOOKUP_LIMIT
             || !properties.all_attributes(Attributes::is_configurable)
         {

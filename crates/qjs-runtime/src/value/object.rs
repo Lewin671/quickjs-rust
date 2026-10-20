@@ -1372,6 +1372,7 @@ impl ObjectRef {
     pub(crate) fn seal(&self) {
         self.prevent_extensions();
         self.properties().borrow_mut().bulk(BulkEdit::Seal);
+        self.bump_property_revision();
         if let Some(cold) = self.0.cold_if_present() {
             for (_, property) in cold.symbol_properties.borrow_mut().iter_mut() {
                 property.make_non_configurable();
@@ -1411,6 +1412,7 @@ impl ObjectRef {
     pub(crate) fn freeze(&self) {
         self.prevent_extensions();
         self.properties().borrow_mut().bulk(BulkEdit::Freeze);
+        self.bump_property_revision();
         if let Some(cold) = self.0.cold_if_present() {
             for (_, property) in cold.symbol_properties.borrow_mut().iter_mut() {
                 property.freeze_data();

@@ -13,7 +13,9 @@ use std::rc::Rc;
 use super::storage::{Payload, PropertyStorage};
 use super::{ObjectRef, OwnDataPropertyRead, OwnDataPropertyWrite, own_data_read, write_slot};
 use crate::Value;
-use crate::property::layout::{Encoding, Layout};
+use std::rc::Weak;
+
+use crate::property::layout::{Encoding, Layout, LayoutNode};
 
 /// A literal site's published layout, as a read cache records it.
 pub(crate) type LiteralLayout = Layout;
@@ -28,6 +30,10 @@ pub(crate) struct SharedSlot {
     small: bool,
     /// `None` for a dictionary, which a cache must not share.
     shape: Option<Layout>,
+    /// For a dictionary: its node, held weakly so the cache neither keeps
+    /// it alive nor lets its address be reused, and the owning object's
+    /// layout revision, which every in-place structural edit bumps.
+    dictionary: Option<(Weak<LayoutNode>, u64)>,
 }
 
 impl SharedSlot {
@@ -39,14 +45,23 @@ impl SharedSlot {
             .as_ref()
             .is_some_and(|shape| Rc::ptr_eq(shape, &storage.layout))
     }
+
+    /// [`Self::on_shape`], or still on the recorded dictionary unedited
+    /// since: either fixes the slot's key and attributes as recorded, and
+    /// neither reads the layout node.
+    #[inline(always)]
+    fn on_layout(&self, object: &ObjectRef, storage: &PropertyStorage) -> bool {
+        self.on_shape(storage)
+            || self.dictionary.as_ref().is_some_and(|(node, revision)| {
+                std::ptr::eq(node.as_ptr(), Rc::as_ptr(&storage.layout))
+                    && object.layout_revision() == *revision
+            })
+    }
 }
 
 #[inline(always)]
 fn named_encoding(storage: &PropertyStorage) -> bool {
-    matches!(
-        storage.layout.encoding(),
-        Encoding::Small | Encoding::Dynamic
-    )
+    matches!(storage.encoding(), Encoding::Small | Encoding::Dynamic)
 }
 
 /// The data slot `key` names in `storage`, when `admit` accepts its encoding.
@@ -56,7 +71,7 @@ fn data_slot(
     key: &str,
     admit: impl Fn(Encoding) -> bool,
 ) -> Option<usize> {
-    if !admit(storage.layout.encoding()) {
+    if !admit(storage.encoding()) {
         return None;
     }
     let slot = storage.lookup(key)?;
@@ -118,7 +133,7 @@ impl ObjectRef {
         }
         let result = {
             let mut storage = self.0.properties.borrow_mut();
-            if !named_encoding(&storage) || slot >= storage.len() {
+            if !named_encoding(&storage) || slot >= storage.slot_count() {
                 return None;
             }
             write_slot(&mut storage, slot, value, |_| true)
@@ -161,8 +176,12 @@ impl ObjectRef {
             key: Rc::clone(field.text()),
             slot,
             writable: field.attributes.is_writable(),
-            small: storage.layout.encoding() == Encoding::Small,
+            small: storage.encoding() == Encoding::Small,
             shape: (!storage.layout.is_dictionary()).then(|| Rc::clone(&storage.layout)),
+            dictionary: storage
+                .layout
+                .is_dictionary()
+                .then(|| (Rc::downgrade(&storage.layout), self.layout_revision())),
         })
     }
 
@@ -244,7 +263,7 @@ impl ObjectRef {
             return None;
         }
         let storage = self.0.properties.borrow();
-        if way.on_shape(&storage) {
+        if way.on_layout(self, &storage) {
             return storage.slot(way.slot).map(|slot| slot.value().clone());
         }
         if !named_encoding(&storage) {
@@ -258,13 +277,13 @@ impl ObjectRef {
     /// there costs a polymorphic site a second mispredicted check.
     pub(crate) fn shared_dynamic_slot_value(&self, way: &SharedSlot) -> Option<Value> {
         let storage = self.0.properties.borrow();
-        if storage.layout.encoding() != Encoding::Dynamic {
+        if storage.encoding() != Encoding::Dynamic {
             return None;
         }
         if self.0.module_namespace_exotic.get() {
             return None;
         }
-        if way.on_shape(&storage) {
+        if way.on_layout(self, &storage) {
             return storage.slot(way.slot).map(|slot| slot.value().clone());
         }
         named_slot_value(&storage, &way.key, way.slot)
@@ -275,23 +294,20 @@ impl ObjectRef {
     /// describe simply misses the cache instead of reading the wrong slot.
     pub(crate) fn own_data_slot_value(&self, slot: usize) -> Option<Value> {
         let storage = self.0.properties.borrow();
-        if storage.layout.encoding() != Encoding::Small {
+        if storage.encoding() != Encoding::Small {
             return None;
         }
-        if storage.field(slot)?.attributes.is_accessor() {
-            return None;
-        }
-        storage.slot(slot).map(|slot| slot.value().clone())
+        // The payload descriptor carries the layout field's attributes.
+        let slot = storage.slot(slot)?;
+        (!slot.is_accessor()).then(|| slot.value().clone())
     }
 
     /// Reads a guarded prototype slot of any encoding.
     #[inline]
     pub(crate) fn prototype_data_slot_value(&self, slot: usize) -> Option<Value> {
         let storage = self.0.properties.borrow();
-        if storage.field(slot)?.attributes.is_accessor() {
-            return None;
-        }
-        storage.slot(slot).map(|slot| slot.value().clone())
+        let slot = storage.slot(slot)?;
+        (!slot.is_accessor()).then(|| slot.value().clone())
     }
 
     /// Writes a slot resolved by [`Self::own_data_slot`]. The caller already
@@ -307,7 +323,7 @@ impl ObjectRef {
         }
         let result = {
             let mut storage = self.0.properties.borrow_mut();
-            if storage.layout.encoding() != Encoding::Small || slot >= storage.len() {
+            if storage.encoding() != Encoding::Small || slot >= storage.slot_count() {
                 return None;
             }
             write_slot(&mut storage, slot, value, |_| true)
@@ -331,7 +347,7 @@ impl ObjectRef {
         }
         let result = {
             let mut storage = self.0.properties.borrow_mut();
-            if way.writable && way.on_shape(&storage) {
+            if way.writable && way.on_layout(self, &storage) {
                 *storage.value_mut(way.slot)? = value.clone();
                 OwnDataPropertyWrite::Written
             } else {
@@ -394,7 +410,7 @@ impl ObjectRef {
         if storage.layout.is_dictionary() {
             return "dictionary";
         }
-        match storage.layout.encoding() {
+        match storage.encoding() {
             Encoding::Small => "small",
             Encoding::Dynamic => "dynamic",
             Encoding::Shaped => "shaped",

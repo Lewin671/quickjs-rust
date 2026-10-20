@@ -25,6 +25,9 @@ pub(super) enum Payload {
 pub(super) struct PropertyStorage {
     pub(super) layout: Layout,
     pub(super) payload: Payload,
+    /// The layout's encoding, kept beside the payload so a slot access that
+    /// admits by encoding reads no layout node; resynced after every edit.
+    encoding: Encoding,
     /// Non-append edits; the store becomes a dictionary at a fixed count.
     edits: u8,
 }
@@ -61,6 +64,7 @@ impl PropertyStorage {
         Self {
             layout: domain.root(Encoding::Small),
             payload: Payload::Slots(Vec::with_capacity(capacity)),
+            encoding: Encoding::Small,
             edits: 0,
         }
     }
@@ -81,6 +85,7 @@ impl PropertyStorage {
         );
         let payload = Payload::Slots(entries.into_iter().map(|(_, property)| property).collect());
         Self {
+            encoding: layout.encoding(),
             layout,
             payload,
             edits: 0,
@@ -94,10 +99,31 @@ impl PropertyStorage {
             layout.encoding() == Encoding::Pair
         );
         Self {
+            encoding: layout.encoding(),
             layout,
             payload,
             edits: 0,
         }
+    }
+
+    /// The layout's encoding, without reading the layout.
+    #[inline(always)]
+    pub(super) fn encoding(&self) -> Encoding {
+        self.encoding
+    }
+
+    /// The number of slots, read from the payload.
+    #[inline(always)]
+    pub(super) fn slot_count(&self) -> usize {
+        match &self.payload {
+            Payload::Slots(properties) => properties.len(),
+            Payload::Pair(values) => values.len(),
+        }
+    }
+
+    #[inline(always)]
+    fn sync_encoding(&mut self) {
+        self.encoding = self.layout.encoding();
     }
 
     #[inline(always)]
@@ -171,6 +197,7 @@ impl PropertyStorage {
             let values = std::mem::replace(values, [Value::Undefined, Value::Undefined]);
             self.payload = Payload::Slots(values.into_iter().map(Property::enumerable).collect());
             LayoutEdit::recode(&mut self.layout, Encoding::Dynamic);
+            self.sync_encoding();
         }
     }
 
@@ -187,6 +214,7 @@ impl PropertyStorage {
         }
         self.ensure_descriptors();
         LayoutEdit::reconfigure(&mut self.layout, &mut self.edits, slot, attributes);
+        self.sync_encoding();
         let Payload::Slots(properties) = &mut self.payload else {
             unreachable!("descriptor payload ensured")
         };
@@ -208,6 +236,7 @@ impl PropertyStorage {
         }
         self.ensure_descriptors();
         let slot = LayoutEdit::append(&mut self.layout, key, attributes);
+        self.sync_encoding();
         let Payload::Slots(properties) = &mut self.payload else {
             unreachable!("descriptor payload ensured")
         };
@@ -227,6 +256,7 @@ impl PropertyStorage {
             crate::diagnostics::count!(property_add_probes);
             debug_assert_eq!(slot, properties.len());
             properties.push(property);
+            self.encoding = self.layout.encoding();
             return None;
         }
         match self.probe_for_edit(key) {
@@ -241,6 +271,7 @@ impl PropertyStorage {
     pub(super) fn remove_slot(&mut self, slot: usize) -> Property {
         self.ensure_descriptors();
         let removal = LayoutEdit::remove(&mut self.layout, &mut self.edits, slot);
+        self.sync_encoding();
         let Payload::Slots(properties) = &mut self.payload else {
             unreachable!("descriptor payload ensured")
         };
@@ -254,6 +285,7 @@ impl PropertyStorage {
     pub(super) fn bulk(&mut self, edit: BulkEdit) {
         self.ensure_descriptors();
         LayoutEdit::bulk(&mut self.layout, &mut self.edits, edit);
+        self.sync_encoding();
         let Payload::Slots(properties) = &mut self.payload else {
             unreachable!("descriptor payload ensured")
         };
