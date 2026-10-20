@@ -304,15 +304,21 @@ pub(crate) fn char_from_code_unit(code_unit: u16) -> char {
     }
 }
 
+#[inline(always)]
 pub(crate) fn push_code_unit(result: &mut String, code_unit: u16) {
-    let character = char_from_code_unit(code_unit);
-    if (0xDC00..=0xDFFF).contains(&code_unit) {
-        push_js_char(result, character);
+    if (0xD800..=0xDFFF).contains(&code_unit) {
+        push_surrogate_code_unit(result, code_unit);
     } else {
-        // BMP scalars and high surrogates cannot complete a seam pair. Keep
-        // their ordinary emission independent of the sentinel repair helper.
-        result.push(character);
+        // A non-surrogate BMP unit is already a scalar and cannot complete a
+        // seam pair. Keep its emission off the surrogate helper's call path.
+        result.push(char::from_u32(u32::from(code_unit)).expect("non-surrogate BMP unit"));
     }
+}
+
+#[cold]
+#[inline(never)]
+fn push_surrogate_code_unit(result: &mut String, code_unit: u16) {
+    push_js_char(result, char_from_code_unit(code_unit));
 }
 
 /// Appends one validated Unicode code point using the runtime's WTF-16 string

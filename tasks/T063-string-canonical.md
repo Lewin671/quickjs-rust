@@ -142,6 +142,13 @@ Code-unit encoding still sends ordinary BMP units through the sentinel-aware
 scalar helper. Only low surrogate units can form a seam pair: send those to
 the shared helper, append all other units directly, and retain every test.
 
+Exact assembly at `be8edc27` exposes the per-unit call: the 192-byte
+`string_from_code_units` loop calls a 416-byte `push_code_unit` for every unit.
+Keep the ordinary BMP emission as a tiny always-inlined wrapper, with the
+entire surrogate branch in one cold non-inlined helper. This makes the ASCII
+loop independent of the rare pair machinery without relying on inline cost
+heuristics; the canonical repair remains shared for surrogate inputs.
+
 ### Lead regression-screen decision (2026-10-20, before any formal result)
 
 Fixed before the formal run; quick triage `20261020T084226Z-t063-quick-triage`
