@@ -354,15 +354,15 @@ repository rather than depending on workspace artifacts. Ratios are candidate/ba
 | external/kraken-1.1/json-parse-financial | 0.95102842 |
 | sentinel/heterogeneous_property_read | 0.89533304 |
 
-The lead's next action is the frozen stage A timed screen using this exact candidate image. The documentary
-successor changes no runtime source; it does not establish timing acceptance or integrate stage A into main.
+This pre-gate admitted that earlier image only; the review corrections below supersede it for timing.
+Its documentary successor changed no runtime source and established no timing acceptance or integration.
 
 
 ## Independent review corrections after `6f5eb651`
 
 All four findings were reproduced before the fixes: four focused tests failed on default-key reordering,
 prototype placement, dictionary copy-on-edit and two root sets per independent realm. The review correction
-working tree makes these changes:
+`0a9af81b` makes these changes:
 
 - Materializing implicit `length`/`name` moves an already installed descriptor into its leading slot and
   counts it in `leading_defaults`, preserving its value and attributes. Error and eight native error subtypes,
@@ -388,3 +388,137 @@ regressions were first observed failing), `./scripts/check.sh` (2345 runtime tes
 255 `./scripts/compare-qjs.sh` fixtures. The pre-commit fast gate also verifies the staged correction; the
 committed-image exact and instruction pre-gate follow. New diagnostic counters count dictionary field copies
 and domain root-set creation; neither exists as executed counter work in the canonical uninstrumented build.
+
+Runtime correction commit: **`0a9af81bebcef80e9239954f8db191a71f10316e`**. Its pre-commit fast gate passed
+2345 runtime tests and the 117 selected Test262 function/eval slices. The full gate above ran manually before
+push, so the duplicate pre-push invocation was skipped via the hook's `QJS_SKIP_PRE_PUSH=1` switch. Remote CI
+run **39487411821** is **success** for this exact commit. Candidate isolation remains unchanged: the plan commit
+`50b42547` is an ancestor, no merges occur in `50b42547..0a9af81b`, and
+`git diff f58c696e 0a9af81b -- crates` touches only 122 M1 files in `crates/qjs-runtime`.
+
+Fresh non-timing jobs are `20261020T195419Z-t056-m1a-review-test262-shards` (eight disjoint complete shards) and
+`20261020T195429Z-t056-m1a-pregate3-review-final` (dependent 86-case instruction gate). The canonical
+candidate SHA-256 is `1970bb690fd9445e94036df51eb29ff7580c10ef16f0f298d0b0cee2112b7491`; the pre-gate
+checks its physical hash against the exact-scan image before collecting. The complete results follow.
+
+The new complete exact job finished **done 0** in 1112 seconds including its canonical release build.
+Rust: **42,672/42,672 configured pass**, zero fail/timeout/not-run. QuickJS-NG: 42,602 pass, 70 fail,
+zero timeout; actionable gaps zero. All eight shard summaries are `--all --engine both`, with no filter;
+the 53,572 raw case paths occur exactly once and equal the pinned corpus. The decision tool's
+`_test262_zero_gap` accepted the new commit's schema-1 entry, which was appended through the standard
+`test262-burndown.sh --entry` path to `docs/conformance/burndown.jsonl`. The acceptance chain must reuse
+this new receipt, never the superseded `72c2e5db` entry.
+
+
+## Corrected-image pre-gate 3: PASS
+
+Job **`20261020T195429Z-t056-m1a-pregate3-review-final`**, candidate **`0a9af81b`** versus the original
+base **`f58c696e`**, completed **done 0** in 187 seconds, after checking the new complete exact entry.
+The candidate's physical SHA-256 matches the exact-scan image above; base SHA-256 remains
+`b0dfc65d0c026d62aa64ef3d69a089eb73b51088c84af75b44617ea2a1737f0e`. All **86/86** policy cases are present
+and pass the unchanged `max(1.03, I_i)` instruction cutoff (all current cutoffs are 1.03). The worst case is
+string-unpack-code at **1.02717746**; the engineering aim <=1.02 is not met by unpack-code, prototype-method-call,
+raytrace fields and binary-trees. There is no wall-time acceptance claim. Both jobs are non-timing; no timed
+screen or attempt was submitted, and the two frozen attempts across stages A/B remain available.
+
+Instruction geomean **0.99197342**. Targets moment/dates **0.97775942**, diff/compare **0.97853817**,
+meriyah/parse **0.97096351**. Raw receipt: workspace
+`outputs/imac-bench/20261020T195429Z-t056-m1a-pregate3-review-final/out/` (`images.txt`, `pregate.json`,
+`verdict.txt`); images.txt now reports `cases 86` rather than counting shell argument words.
+
+| Case | Instruction ratio |
+| --- | ---: |
+| external/sunspider-1.0/string-unpack-code | 1.02717746 |
+| sentinel/prototype_method_call | 1.02583470 |
+| external/jetstream3-js-subset/raytrace-public-class-fields | 1.02155102 |
+| external/sunspider-1.0/access-binary-trees | 1.02048402 |
+| development/graphlib/paths | 1.01990818 |
+| external/sunspider-1.0/controlflow-recursive | 1.01177744 |
+| external/sunspider-1.0/bitops-bitwise-and | 1.00965338 |
+| external/sunspider-1.0/bitops-3bit-bits-in-byte | 1.00845475 |
+| external/sunspider-1.0/crypto-sha1 | 1.00733624 |
+| external/sunspider-1.0/bitops-bits-in-byte | 1.00727731 |
+| external/jetstream3-js-subset/gaussian-blur | 1.00668174 |
+| external/jetstream3-js-subset/cdjs | 1.00596863 |
+| development/js-yaml/document | 1.00408113 |
+| external/kraken-1.1/audio-dft | 1.00365246 |
+| broad/function_call_reordered | 1.00356000 |
+| broad/plain_function_call | 1.00344681 |
+| broad/captured_read | 1.00327565 |
+| external/sunspider-1.0/string-validate-input | 1.00300185 |
+| external/sunspider-1.0/bitops-nsieve-bits | 1.00283842 |
+| external/sunspider-1.0/access-nbody | 1.00232232 |
+| external/sunspider-1.0/math-spectral-norm | 1.00188262 |
+| broad/function_call_two_args | 1.00177708 |
+| broad/many_locals_call | 1.00171991 |
+| broad/string_slice | 1.00157426 |
+| external/sunspider-1.0/3d-raytrace | 1.00132530 |
+| external/jetstream3-js-subset/hash-map | 1.00128216 |
+| external/kraken-1.1/imaging-desaturate | 1.00110974 |
+| broad/object_allocation | 1.00090495 |
+| broad/array_allocation | 1.00081469 |
+| external/sunspider-1.0/crypto-md5 | 1.00068272 |
+| external/kraken-1.1/audio-oscillator | 1.00056597 |
+| sentinel/recursive_call_tree | 1.00000933 |
+| broad/array_dynamic_read | 1.00000254 |
+| external/sunspider-1.0/regexp-dna | 0.99875713 |
+| broad/property_read | 0.99777406 |
+| broad/array_read | 0.99758903 |
+| broad/closure_allocation_call | 0.99711023 |
+| external/kraken-1.1/stanford-crypto-ccm | 0.99607122 |
+| external/kraken-1.1/audio-fft | 0.99598513 |
+| external/kraken-1.1/audio-beat-detection | 0.99562510 |
+| external/sunspider-1.0/string-base64 | 0.99555671 |
+| external/sunspider-1.0/math-partial-sums | 0.99490257 |
+| broad/property_write | 0.99449549 |
+| broad/array_write | 0.99415112 |
+| external/sunspider-1.0/access-nsieve | 0.99352340 |
+| external/sunspider-1.0/date-format-tofte | 0.99331170 |
+| broad/dynamic_method_call | 0.99313380 |
+| development/lodash/transform | 0.99136899 |
+| development/papaparse/csv | 0.99112354 |
+| sentinel/string_key_map_churn | 0.99086239 |
+| broad/top_level_function_call | 0.99037263 |
+| broad/captured_write | 0.99034174 |
+| sentinel/polymorphic_call_site | 0.98915141 |
+| external/kraken-1.1/ai-astar | 0.98911946 |
+| development/immutable/persistent | 0.98907397 |
+| broad/math_abs | 0.98824118 |
+| broad/property_dynamic_read | 0.98753713 |
+| sentinel/capturing_closure_call | 0.98750339 |
+| external/kraken-1.1/imaging-darkroom | 0.98703315 |
+| external/sunspider-1.0/3d-morph | 0.98684095 |
+| broad/method_call | 0.98677638 |
+| development/big.js/arith | 0.98602714 |
+| external/sunspider-1.0/access-fannkuch | 0.98540047 |
+| external/sunspider-1.0/crypto-aes | 0.98497359 |
+| external/sunspider-1.0/string-fasta | 0.98459238 |
+| external/jetstream3-js-subset/stanford-crypto-aes | 0.98208674 |
+| external/kraken-1.1/json-stringify-tinderbox | 0.98136138 |
+| broad/empty_loop | 0.98128013 |
+| development/matter-js/simulate | 0.98098562 |
+| external/kraken-1.1/stanford-crypto-aes | 0.97986987 |
+| external/sunspider-1.0/math-cordic | 0.97966222 |
+| external/kraken-1.1/imaging-gaussian-blur | 0.97859344 |
+| development/diff/compare | 0.97853817 |
+| development/moment/dates | 0.97775942 |
+| external/kraken-1.1/stanford-crypto-sha256-iterative | 0.97729749 |
+| external/sunspider-1.0/date-format-xparb | 0.97709932 |
+| broad/branch_arithmetic | 0.97410777 |
+| external/kraken-1.1/stanford-crypto-pbkdf2 | 0.97405876 |
+| broad/global_read | 0.97376811 |
+| broad/array_index_of | 0.97209003 |
+| development/meriyah/parse | 0.97096351 |
+| broad/local_read | 0.96951403 |
+| external/sunspider-1.0/3d-cube | 0.96917801 |
+| external/sunspider-1.0/string-tagcloud | 0.96113000 |
+| external/kraken-1.1/json-parse-financial | 0.95212415 |
+| sentinel/heterogeneous_property_read | 0.89532748 |
+
+The regenerated acceptance chain lives outside the repository in workspace `tmp/t056-m1a-chain/`, bound to
+this candidate and its new exact/pre-gate jobs. It preserves the lead's ZoneInfo-from-/etc/localtime window
+implementation (no time.tzset call; compatible with the iMac uv Python), checks `done 0` and no DISTURBED
+between jobs, and rechecks variant-0 hashes before any timing. The old READY.id belongs to the superseded
+candidate and is not reusable. The lead starts with a fresh correctness-ready job, then K=6 selection,
+formal30, stage-mode continuation and `decide --mode stage`; held-out remains a final-promotion requirement.
+No acceptance-chain job has been submitted for the new candidate.
