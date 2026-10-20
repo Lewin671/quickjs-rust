@@ -121,32 +121,43 @@ END_FIELDS = {
 }
 
 
-ADMISSION_FIELDS = {"attempts", "descendants_detected", "duration_ns", "exit_code", "role", "timed_out"}
+ADMISSION_FIELDS = {"argv", "binary_sha256", "descendants_detected", "duration_ns", "exit_code", "role"}
+ADMITTING_LANES = {"fresh_process_latency/wall_ns_per_process", "peak_rss/bytes"}
 
 
 def _validate_exec_admission(start: dict[str, Any], lane_id: str) -> None:
-    """The fresh lane admits every engine snapshot once before its plan."""
+    """Every lane that executes engines admits each snapshot once before its plan."""
     admission = start["exec_admission"]
-    if lane_id != "fresh_process_latency/wall_ns_per_process":
+    if lane_id not in ADMITTING_LANES:
         if admission is not None:
-            raise ResourceReportError("run_start.exec_admission: only the fresh lane admits")
+            raise ResourceReportError("run_start.exec_admission: this lane executes no engine")
         return
     if not isinstance(admission, list) or not isinstance(start["engines"], list):
         raise ResourceReportError("run_start.exec_admission: expected a list")
+    engines = {
+        engine.get("role"): engine for engine in start["engines"] if isinstance(engine, dict)
+    }
     roles = []
     for index, entry in enumerate(admission):
-        entry = _keys(entry, ADMISSION_FIELDS, f"run_start.exec_admission[{index}]")
-        roles.append(_string(entry["role"], f"run_start.exec_admission[{index}].role"))
-        _integer(entry["duration_ns"], f"run_start.exec_admission[{index}].duration_ns")
-        _integer(entry["attempts"], f"run_start.exec_admission[{index}].attempts", 1, 3)
-        if entry["exit_code"] is not None:
-            _integer(entry["exit_code"], f"run_start.exec_admission[{index}].exit_code", -(2**31))
-        _boolean(entry["timed_out"], f"run_start.exec_admission[{index}].timed_out")
-        _boolean(entry["descendants_detected"], f"run_start.exec_admission[{index}].descendants_detected")
-    expected = [
-        role for role in ("candidate", "base", "quickjs-ng")
-        if any(isinstance(engine, dict) and engine.get("role") == role for engine in start["engines"])
-    ]
+        where = f"run_start.exec_admission[{index}]"
+        entry = _keys(entry, ADMISSION_FIELDS, where)
+        role = _string(entry["role"], f"{where}.role")
+        roles.append(role)
+        argv = entry["argv"]
+        if (not isinstance(argv, list) or not argv
+                or not all(isinstance(item, str) for item in argv)
+                or argv[-2:] != ["-e", "0"]):
+            raise ResourceReportError(f"{where}.argv: expected the launch expression")
+        engine = engines.get(role, {})
+        if argv[0] != engine.get("binary_snapshot_path"):
+            raise ResourceReportError(f"{where}.argv: must launch the measured snapshot")
+        if entry["binary_sha256"] != engine.get("binary_sha256"):
+            raise ResourceReportError(f"{where}.binary_sha256: must match the engine")
+        _integer(entry["duration_ns"], f"{where}.duration_ns")
+        if _integer(entry["exit_code"], f"{where}.exit_code") != 0:
+            raise ResourceReportError(f"{where}.exit_code: admission must succeed")
+        _boolean(entry["descendants_detected"], f"{where}.descendants_detected")
+    expected = [role for role in ("candidate", "base", "quickjs-ng") if role in engines]
     if roles != expected:
         raise ResourceReportError("run_start.exec_admission: must admit each engine once in role order")
 

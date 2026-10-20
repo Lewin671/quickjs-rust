@@ -20,13 +20,13 @@
     },
     "resource_measurement": {
       "manifest_path": "benchmarks/resources.json",
-      "protocol_id": "quickjs-resource-measurement-protocol-v3",
-      "protocol_sha256": "e7abb93f36a5170a4a22ce7e5d40a44f392d75c450aa59339bd75da75ff35066"
+      "protocol_id": "quickjs-resource-measurement-protocol-v4",
+      "protocol_sha256": "5db4734bce20e322f03814065b9632c6e8099ee807e9f7be0a93e2da37ba9f7d"
     },
     "resource_analysis": {
       "manifest_path": "benchmarks/resource-analysis.json",
       "protocol_id": "quickjs-resource-analysis-protocol-v1",
-      "protocol_sha256": "b8072ce91a987c1e1b3d7a70e5a252d6a863643ba7f4a1305234deca11cd7e7c"
+      "protocol_sha256": "8bbfc9907719f10f49a9e014e2a43c6273922acd20a2a5d5fb72a4a937af2546"
     }
   },
   "external_corpora": {
@@ -111,7 +111,7 @@
       "tools/benchmark/preview_sentinel.py",
       "tools/benchmark/preview_summary.py"
     ],
-    "aggregate_sha256": "b50e4ad18438295676c77d351727d577e342ba4a5d53ba299f9084f78a007ebe"
+    "aggregate_sha256": "46c48c0bcf257c1edbb276635d9c4cff07c95186596804aac9cf26c473617f0f"
   },
   "hosted_pr": {
     "tier": "informational_preview",
@@ -178,8 +178,8 @@
         "required_protocol_sha256": {
           "throughput_measurement": "ab67b7cf62e3e980e86d133109d318bc18bc0f6bf345de47a137571df367a541",
           "throughput_analysis": "0a59121cee6e7a71098dc0f5aca2712bab6437e07741b692f40923cf93cad176",
-          "resource_measurement": "e7abb93f36a5170a4a22ce7e5d40a44f392d75c450aa59339bd75da75ff35066",
-          "resource_analysis": "b8072ce91a987c1e1b3d7a70e5a252d6a863643ba7f4a1305234deca11cd7e7c",
+          "resource_measurement": "5db4734bce20e322f03814065b9632c6e8099ee807e9f7be0a93e2da37ba9f7d",
+          "resource_analysis": "8bbfc9907719f10f49a9e014e2a43c6273922acd20a2a5d5fb72a4a937af2546",
           "sentinel_measurement": "d5ae2485115579cfeb0898def36b8dd07753fe37b01fdda7bf271129301bb620"
         }
       }
@@ -200,8 +200,8 @@
         "required_protocol_sha256": {
           "throughput_measurement": "ab67b7cf62e3e980e86d133109d318bc18bc0f6bf345de47a137571df367a541",
           "throughput_analysis": "0a59121cee6e7a71098dc0f5aca2712bab6437e07741b692f40923cf93cad176",
-          "resource_measurement": "e7abb93f36a5170a4a22ce7e5d40a44f392d75c450aa59339bd75da75ff35066",
-          "resource_analysis": "b8072ce91a987c1e1b3d7a70e5a252d6a863643ba7f4a1305234deca11cd7e7c",
+          "resource_measurement": "5db4734bce20e322f03814065b9632c6e8099ee807e9f7be0a93e2da37ba9f7d",
+          "resource_analysis": "8bbfc9907719f10f49a9e014e2a43c6273922acd20a2a5d5fb72a4a937af2546",
           "sentinel_measurement": "d5ae2485115579cfeb0898def36b8dd07753fe37b01fdda7bf271129301bb620"
         }
       }
@@ -223,8 +223,8 @@
         "required_protocol_sha256": {
           "throughput_measurement": "ab67b7cf62e3e980e86d133109d318bc18bc0f6bf345de47a137571df367a541",
           "throughput_analysis": "0a59121cee6e7a71098dc0f5aca2712bab6437e07741b692f40923cf93cad176",
-          "resource_measurement": "e7abb93f36a5170a4a22ce7e5d40a44f392d75c450aa59339bd75da75ff35066",
-          "resource_analysis": "b8072ce91a987c1e1b3d7a70e5a252d6a863643ba7f4a1305234deca11cd7e7c",
+          "resource_measurement": "5db4734bce20e322f03814065b9632c6e8099ee807e9f7be0a93e2da37ba9f7d",
+          "resource_analysis": "8bbfc9907719f10f49a9e014e2a43c6273922acd20a2a5d5fb72a4a937af2546",
           "sentinel_measurement": "d5ae2485115579cfeb0898def36b8dd07753fe37b01fdda7bf271129301bb620"
         }
       }

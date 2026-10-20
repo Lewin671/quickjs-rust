@@ -23,6 +23,8 @@
   sequential reference.
 - Next action: a 30-block A/A bundle on the x86_64 host, then follow the
   activation order in `docs/benchmarking.md`, "Gate activation".
+- 2026-10-20: resource protocol v4 adds a launch admission per executed snapshot (macOS first-exec
+  assessment had landed in first samples): [record](archive/T017-resource-launch-admission.md).
 
 A new-file launch delay and the symmetric screen preflight are recorded in
 [the diagnostic](archive/T017-launch-preflight-diagnostic.md); fixed-hardware

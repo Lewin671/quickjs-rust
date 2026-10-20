@@ -19,8 +19,10 @@ from .resource_wall_process import ResourceWallResult, run_fresh_process
 from .snapshots import SnapshotStore
 
 
-# Untimed first executions of each fresh-lane snapshot; see `_exec_admission`.
-ADMISSION_ATTEMPTS = 3
+# The untimed launch admission of each executed snapshot; see `_exec_admission`.
+# The same bound as the throughput tools' launch preflight.
+ADMISSION_TIMEOUT_SECONDS = 120
+ADMITTING_LANES = {"fresh_process_latency/wall_ns_per_process", "peak_rss/bytes"}
 
 
 class ResourceRunError(ValueError):
@@ -326,40 +328,38 @@ class ResourceRun:
         ]
 
     def _exec_admission(self) -> list[dict[str, Any]] | None:
-        """Execute each fresh-lane engine snapshot once, untimed, before the plan.
+        """Launch each executed engine snapshot once, untimed, before the plan.
 
-        macOS assesses a newly created executable on its first execve. For a
-        just-written snapshot that one-time cost (about 0.3 s for a fresh copy
-        of qjs against 4 ms afterwards, and seconds while other new
-        executables are being launched) is not process latency, yet it would
-        land in each engine's first planned sample. The admission runs the
-        exact planned command, so it executes nothing measurement would not;
-        its outcome is recorded, never used as a sample.
+        macOS assesses a newly written executable on its first execve, and
+        every run executes fresh snapshots. Without this launch the one-time
+        cost (about 0.3 s for a new copy of qjs against 4 ms afterwards, and
+        seconds while other new executables launch) lands in each engine's
+        first sample, or times it out. Like the throughput tools' launch
+        preflight it runs a tiny expression once per snapshot, fails the run
+        on a nonzero exit, timeout or truncated output, and records the
+        executed binary's SHA-256. A descendant is left to the sample rules.
         """
-        if self.lane.id != "fresh_process_latency/wall_ns_per_process":
+        if self.lane.id not in ADMITTING_LANES:
             return None
-        case = self.lane.case
-        if case is None or self.workload_snapshot is None:
-            raise AssertionError("dynamic lane is missing workload snapshot")
         admitted = []
         for role in ("candidate", "base", "quickjs-ng"):
             engine = self.engines.get(role)
             if engine is None:
                 continue
-            argv = engine.command(
-                self.workload_snapshot, case.id, case.iterations,
-                binary=self.engine_snapshots[role],
-            )
-            # An assessment slower than the case timeout is killed before it
-            # completes, so admit again (bounded) until one exec finishes.
-            for attempts in range(1, ADMISSION_ATTEMPTS + 1):
-                result = self.admission_runner(argv, case.timeout_seconds)
-                if not result.timed_out:
-                    break
+            binary = self.engine_snapshots[role]
+            argv = [str(binary), *(["--raw"] if engine.adapter_id == "qjs-rust-raw" else []),
+                    "-e", "0"]
+            result = self.admission_runner(argv, ADMISSION_TIMEOUT_SECONDS)
+            if (result.exit_code != 0 or result.timed_out
+                    or result.stdout_truncated or result.stderr_truncated):
+                raise ResourceRunError(
+                    f"{role}: launch admission failed (exit {result.exit_code}, "
+                    f"timed out {result.timed_out}): {result.stderr[:512]}"
+                )
             admitted.append({
-                "attempts": attempts, "role": role, "duration_ns": result.duration_ns,
-                "exit_code": result.exit_code, "timed_out": result.timed_out,
+                "argv": argv, "binary_sha256": sha256_file(binary),
                 "descendants_detected": bool(getattr(result, "descendants_detected", False)),
+                "duration_ns": result.duration_ns, "exit_code": result.exit_code, "role": role,
             })
         return admitted
 
