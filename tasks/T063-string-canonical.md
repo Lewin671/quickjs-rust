@@ -155,6 +155,19 @@ result or acceptance. Next isolate the whole canonical append, including its
 allocation/copy tail, behind a non-inlined shared call rather than importing
 that machinery into runtime callers. Keep the cold seam helper and tests.
 
+Whole-append outlining `5a8147c4` also misses the goal: no-timing job
+`20261020T093457Z-t063-shared-append-instructions` completes all nine case
+counts, but exits 1 before its extra probes because the synthetic append probe
+incorrectly calls unavailable `console`. No sentinel or per-append conclusion
+comes from that failed tail. Property ratio 1.01493, wide body still 25856
+bytes; outlining the allocation tail did not remove the remaining pressure.
+Restore the small inline wrapper; isolate the wide driver's general operand
+ownership/clone helper instead. It is used only after the numeric fast path,
+so numeric register arithmetic stays inline. This directly limits the large
+Value-clone branch imported into the hot driver; it changes no ownership rule
+or string invariant. Verify forwarded locals and consumed temporaries, then
+repeat the original exact-recipe instruction cohort and corrected probes.
+
 ### Lead regression-screen decision (2026-10-20, before any formal result)
 
 Fixed before the formal run; quick triage `20261020T084226Z-t063-quick-triage`

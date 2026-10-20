@@ -1903,3 +1903,29 @@ fn callbacks_assign_captured_variables_through_their_cells() {
         Value::String("10,ReferenceError5,TypeError1,4,true,true,7,b2,3:4".into())
     );
 }
+
+#[test]
+fn computed_reads_preserve_forwarded_locals_and_consumed_temporaries() {
+    let source = "function readLocal(o, k) { return o[k] + o[k]; }
+                  function readTemporary(o, k) { return o[k][k]; }
+                  function overwrite(o, k) { o = o[k]; k = o[k]; return k; }";
+    let program = compile::compile(&nested_function(source, "readLocal")).unwrap();
+    assert!(
+        program
+            .ops
+            .iter()
+            .any(|op| matches!(op, WideOp::GetProp { .. }))
+    );
+    assert_eq!(
+        value_of(&format!(
+            "{source}
+         var trace = '';
+         var inner = {{ get p() {{ trace += 'i'; return 9; }} }};
+         var outer = {{ get p() {{ trace += 'o'; return inner; }} }};
+         [readLocal({{ p: 4 }}, 'p'), readLocal([2, 5], 1),
+          readLocal({{ p: 'x' }}, 'p'), readTemporary(outer, 'p'),
+          overwrite(outer, 'p'), trace].join(':');"
+        )),
+        Value::String("8:10:xx:9:9:oioi".into())
+    );
+}

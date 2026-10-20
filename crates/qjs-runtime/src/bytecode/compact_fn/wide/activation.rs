@@ -423,7 +423,10 @@ fn callee_parameter_slots(callee: &Value) -> &[usize] {
 /// An operand of an operation that consumes it: a stack register's value is
 /// moved out, but a local's -- a forwarded operand (`compile`'s `aliases`)
 /// -- is copied, unless the operation writes its result back there.
-#[inline(always)]
+// Keep general Value cloning and its ownership branches outside the hot
+// driver. Numeric arithmetic already bypasses this helper; importing its enum
+// dispatch into each remaining caller destabilizes the driver's registers.
+#[inline(never)]
 fn take_operand(window: &mut [Value], register: u16, dst: u16, locals: u16) -> Value {
     if register == dst || register >= locals {
         std::mem::replace(&mut window[register as usize], Value::Undefined)
