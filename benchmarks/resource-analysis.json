@@ -24,7 +24,7 @@
       "tools/benchmark/schema.py",
       "tools/benchmark/statistics.py"
     ],
-    "aggregate_sha256": "4d28b20cd3090bdc74a4350774c1d12807458a957ebfe85ae03d286f4b59e14a"
+    "aggregate_sha256": "b8072ce91a987c1e1b3d7a70e5a252d6a863643ba7f4a1305234deca11cd7e7c"
   },
   "bootstrap": {
     "samples": 20000,

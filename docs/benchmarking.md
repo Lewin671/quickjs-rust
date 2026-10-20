@@ -52,7 +52,7 @@ ranked. The shared loader refuses a program both lanes pin; see
 
 **Resources** are three lanes selected with
 `scripts/resource-benchmark.sh --lane fresh|rss|size`: peak RSS is a single
-direct-process value, not a tree; binary size is the logical executable size.
+direct-process value, not a tree; binary size is the logical executable size. Fresh-process latency runs each new engine snapshot once, untimed, before its plan (`exec_admission` in the run start), so macOS's first-exec assessment of a newly written executable (0.3 s to several seconds) is never sampled.
 
 **Lifecycle** times `qjs_parser::parse_script` and `qjs_runtime::compile_script`
 on two repository fixtures; it is diagnostic and never pooled with the lanes above.

@@ -19,6 +19,10 @@ from .resource_wall_process import ResourceWallResult, run_fresh_process
 from .snapshots import SnapshotStore
 
 
+# Untimed first executions of each fresh-lane snapshot; see `_exec_admission`.
+ADMISSION_ATTEMPTS = 3
+
+
 class ResourceRunError(ValueError):
     """A resource run cannot produce evidence under the selected contract."""
 
@@ -73,6 +77,7 @@ class ResourceRun:
         machine_name: str | None = None,
         wall_runner: Callable[[list[str], int], ResourceWallResult] = run_fresh_process,
         rss_runner: Callable[..., ResourceProcessResult] = run_process_wait4,
+        admission_runner: Callable[[list[str], int], ResourceWallResult] = run_fresh_process,
     ):
         self.manifest = manifest
         self.lane = lane
@@ -114,6 +119,7 @@ class ResourceRun:
             raise ResourceRunError("binary-size lane requires exactly one sample per role")
         self.wall_runner = wall_runner
         self.rss_runner = rss_runner
+        self.admission_runner = admission_runner
         self.run_id = str(uuid4())
         self.host = _host(self.machine_name)
         self.runner_repo = _runner_repo(root)
@@ -319,9 +325,48 @@ class ResourceRun:
             )
         ]
 
+    def _exec_admission(self) -> list[dict[str, Any]] | None:
+        """Execute each fresh-lane engine snapshot once, untimed, before the plan.
+
+        macOS assesses a newly created executable on its first execve. For a
+        just-written snapshot that one-time cost (about 0.3 s for a fresh copy
+        of qjs against 4 ms afterwards, and seconds while other new
+        executables are being launched) is not process latency, yet it would
+        land in each engine's first planned sample. The admission runs the
+        exact planned command, so it executes nothing measurement would not;
+        its outcome is recorded, never used as a sample.
+        """
+        if self.lane.id != "fresh_process_latency/wall_ns_per_process":
+            return None
+        case = self.lane.case
+        if case is None or self.workload_snapshot is None:
+            raise AssertionError("dynamic lane is missing workload snapshot")
+        admitted = []
+        for role in ("candidate", "base", "quickjs-ng"):
+            engine = self.engines.get(role)
+            if engine is None:
+                continue
+            argv = engine.command(
+                self.workload_snapshot, case.id, case.iterations,
+                binary=self.engine_snapshots[role],
+            )
+            # An assessment slower than the case timeout is killed before it
+            # completes, so admit again (bounded) until one exec finishes.
+            for attempts in range(1, ADMISSION_ATTEMPTS + 1):
+                result = self.admission_runner(argv, case.timeout_seconds)
+                if not result.timed_out:
+                    break
+            admitted.append({
+                "attempts": attempts, "role": role, "duration_ns": result.duration_ns,
+                "exit_code": result.exit_code, "timed_out": result.timed_out,
+                "descendants_detected": bool(getattr(result, "descendants_detected", False)),
+            })
+        return admitted
+
     def execute(self) -> bool:
         try:
             plan = self._plan()
+            admission = self._exec_admission()
             self.writer.write({
                 "blocks": self.blocks,
                 "build_recipes": {
@@ -335,6 +380,7 @@ class ResourceRun:
                     {"role": engine.role, **self._engine_fields(engine)}
                     for engine in self.engines.values()
                 ],
+                "exec_admission": admission,
                 "expected_samples": len(plan),
                 "host": self.host,
                 "lane_id": self.lane.id,
