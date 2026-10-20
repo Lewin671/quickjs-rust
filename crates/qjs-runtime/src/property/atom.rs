@@ -9,9 +9,9 @@
 //! Invariants that keep atom identity sound:
 //!
 //! - **Exact keys.** The runtime stores strings as UTF-8 with lone surrogates
-//!   escaped to sentinel scalars, and a surrogate pair may be stored either
-//!   whole or as two escaped halves. A domain interns the canonical form of
-//!   the code units ([`canonical_property_text`]), so two keys share an atom
+//!   escaped to sentinel scalars. String builders produce canonical text;
+//!   this untyped `&str` boundary also defensively canonicalizes code units
+//!   ([`canonical_property_text`]), so two keys share an atom
 //!   exactly when their code units are equal. Nothing else is folded: `"01"`
 //!   and `"1"` are distinct atoms, and only the canonical decimal form of an
 //!   index carries [`Atom::array_index`].

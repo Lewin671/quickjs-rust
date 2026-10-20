@@ -13,6 +13,7 @@ it to `archive/` with `git mv` and move its row below.
 
 | Task | Status | What it is |
 | --- | --- | --- |
+| [T063](T063-string-canonical.md) canonical string construction | active | Correctness fix for surrogate-pair storage; final gates and integration pending. |
 | [T057](T057-string-code-units.md) string code units | active | Stage-1 PROMOTE under v4; integrated into main; stages 2 onward require new plans. |
 | [T056](T056-interpreter-core-v2.md) interpreter core v2 | active | Target design for names, frames and values; unit 0 and M2 re-plan complete; M1 stage 1 complete on its branch (v4 screen pass), integration next. |
 | [T018](T018-broad-performance.md) broad performance | active | The performance campaign contract and its targets against QuickJS-NG. Start performance work here, then follow [the workflow](../docs/performance-workflow.md). |
@@ -116,5 +117,4 @@ outcome column says what happened, not what to do next.
   [performance-units/README.md](performance-units/README.md).
 
 Search before repeating an experiment:
-`grep -rn -i "<mechanism>" tasks/`. Records describe the revisions they name
-and never establish current priority.
+`grep -rn -i "<mechanism>" tasks/`. Records describe their named revisions and never establish current priority.

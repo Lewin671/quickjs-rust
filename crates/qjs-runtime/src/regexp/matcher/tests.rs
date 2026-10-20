@@ -1,5 +1,7 @@
 use super::{PreparedRegexp, RegexpMatch};
-use crate::string::{string_code_units, string_from_code_unit, string_from_utf8_scalars};
+use crate::string::{
+    string_code_units, string_from_code_unit, string_from_code_units, string_from_utf8_scalars,
+};
 
 /// Compiles `source` and matches it once, as `exec` does through the realm's
 /// program cache.
@@ -116,13 +118,10 @@ fn fixed_width_simple_atoms_preserve_greedy_and_lazy_retries() {
 
     // Unicode mode retains explicit boundaries because one dot can consume a
     // surrogate pair; this also guards the fixed-width admission boundary.
-    let input = format!(
-        "{}{}x",
-        string_from_code_unit(0xD83D),
-        string_from_code_unit(0xDE00)
-    );
+    let input = string_from_code_units(&[0xD83D, 0xDE00, 0x78]);
     let unicode = regexp_match_range(r"^.+x$", &input, 0, false, true, false).unwrap();
-    assert_eq!((unicode.start, unicode.end), (0, 3));
+    // Unicode matcher coordinates count stored scalars.
+    assert_eq!((unicode.start, unicode.end), (0, 2));
 }
 
 #[test]
@@ -135,13 +134,9 @@ fn exact_simple_atoms_preserve_captures_and_unicode_advancement() {
 
     // In Unicode mode a direct `.` route must advance past the entire
     // surrogate pair, rather than accepting its high code-unit half.
-    let input = format!(
-        "{}{}",
-        string_from_code_unit(0xD83D),
-        string_from_code_unit(0xDE00)
-    );
+    let input = string_from_code_units(&[0xD83D, 0xDE00]);
     let matched = regexp_match_range(r"^.$", &input, 0, false, true, false).unwrap();
-    assert_eq!((matched.start, matched.end), (0, 2));
+    assert_eq!((matched.start, matched.end), (0, 1));
 }
 
 #[test]
@@ -424,26 +419,24 @@ fn unicode_character_classes_match_surrogate_pairs_as_code_points() {
     let high = string_from_code_unit(0xD834);
     let low = string_from_code_unit(0xDF06);
     let pattern = format!("[{high}{low}]");
-    let input = format!("{high}{low}");
+    let input = string_from_code_units(&[0xD834, 0xDF06]);
 
     let matched = regexp_match_range(&pattern, &input, 0, false, true, false).unwrap();
-    assert_eq!((matched.start, matched.end), (0, 2));
+    assert_eq!((matched.start, matched.end), (0, 1));
     assert!(regexp_match_range(&pattern, &high, 0, false, true, false).is_none());
     assert!(regexp_match_range(&pattern, &low, 0, false, true, false).is_none());
 }
 
 #[test]
 fn unicode_character_class_escapes_advance_over_surrogate_pairs() {
-    let high = string_from_code_unit(0xD800);
-    let low = string_from_code_unit(0xDC00);
-    let input = format!("{high}{low}");
+    let input = string_from_code_units(&[0xD800, 0xDC00]);
 
     let matched = regexp_match_range(r"^\S$", &input, 0, false, true, false).unwrap();
-    assert_eq!((matched.start, matched.end), (0, 2));
+    assert_eq!((matched.start, matched.end), (0, 1));
     let matched = regexp_match_range(r"^\D$", &input, 0, false, true, false).unwrap();
-    assert_eq!((matched.start, matched.end), (0, 2));
+    assert_eq!((matched.start, matched.end), (0, 1));
     let matched = regexp_match_range(r"^\W$", &input, 0, false, true, false).unwrap();
-    assert_eq!((matched.start, matched.end), (0, 2));
+    assert_eq!((matched.start, matched.end), (0, 1));
 
     assert!(regexp_match_range(r"^\S$", &input, 0, false, false, false).is_none());
 }
@@ -638,11 +631,7 @@ fn lazy_simple_atom_continuations_keep_captures_backreferences_and_lookahead() {
 
 #[test]
 fn lazy_simple_atom_advances_by_code_point_in_unicode_mode() {
-    let pair = format!(
-        "{}{}",
-        string_from_code_unit(0xD83D),
-        string_from_code_unit(0xDE00)
-    );
+    let pair = string_from_code_units(&[0xD83D, 0xDE00]);
     let input = format!("{pair}{pair}x");
     let matched = regexp_match_range(r"^(.+?)x$", &input, 0, false, true, false).unwrap();
     assert_eq!(matched.end, input.chars().count());
@@ -755,9 +744,8 @@ fn unicode_property_escapes_match_code_points() {
     assert!(regexp_match_range(r"^\p{Script=Greek}$", "\u{03B1}", 0, false, true, false).is_some());
     // Astral code point matched as a single code point.
     assert!(regexp_match_range(r"^\p{Any}$", "\u{1F600}", 0, false, true, false).is_some());
-    let high = string_from_code_unit(0xD83D);
     let low = string_from_code_unit(0xDE00);
-    let pair = format!("{high}{low}");
+    let pair = string_from_code_units(&[0xD83D, 0xDE00]);
     assert!(regexp_match_range(r"^\p{Surrogate}$", &low, 0, false, true, false).is_some());
     assert!(regexp_match_range(r"^\p{Surrogate}$", &pair, 0, false, true, false).is_none());
     // Inside a character class, optionally combined with other atoms.

@@ -613,7 +613,7 @@ fn lexes_surrogate_unicode_escapes() {
     let TokenKind::String(value) = &kinds[0] else {
         panic!("expected string token");
     };
-    assert_eq!(value.chars().count(), 2);
+    assert_eq!(value, "\u{10000}");
 }
 
 #[test]
@@ -1117,4 +1117,35 @@ fn question_dot_followed_by_digit_is_not_optional_chain() {
             TokenKind::Eof,
         ]
     );
+}
+
+#[test]
+fn literal_and_template_builders_canonicalize_surrogate_pairs() {
+    for source in [
+        r#"'\uD83D\uDE00'"#,
+        r#"'\u{D83D}\u{DE00}'"#,
+        r#"`\uD83D\uDE00`"#,
+    ] {
+        let tokens = lex(source).expect("literal should lex");
+        let value = match &tokens[0].kind {
+            TokenKind::String(value) => value.as_str(),
+            TokenKind::TemplateNoSubstitution(segment) => segment.cooked.as_deref().unwrap(),
+            _ => panic!("string or template expected"),
+        };
+        assert_eq!(value, "😀");
+        assert_eq!(tokens[0].span, qjs_ast::Span::new(0, source.len()));
+    }
+    let source = format!("'{}{}'", '\u{F003D}', '\u{F0600}');
+    let tokens = lex_with_options(
+        &source,
+        LexOptions {
+            wtf16_source: true,
+            ..LexOptions::default()
+        },
+    )
+    .unwrap();
+    let TokenKind::String(value) = &tokens[0].kind else {
+        panic!("string expected")
+    };
+    assert_eq!(value, "😀");
 }

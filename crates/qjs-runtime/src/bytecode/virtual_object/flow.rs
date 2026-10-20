@@ -117,8 +117,8 @@ impl AbstractValue {
             return Self::some_string();
         };
         let mut value = String::with_capacity(prefix.len() + suffix.len());
-        value.push_str(prefix);
-        value.push_str(suffix);
+        crate::string::push_js_str(&mut value, prefix);
+        crate::string::push_js_str(&mut value, suffix);
         Self::known_string(JsString::from(value))
     }
 

@@ -561,7 +561,7 @@ fn replace_matches(
     for string_match in matches {
         let prefix_len = string_match.start.saturating_sub(copied_until);
         result_len = checked_string_length(result_len, prefix_len)?;
-        result.push_str(cursor.advance_to(&input, string_match.start));
+        crate::string::push_js_str(&mut result, cursor.advance_to(&input, string_match.start));
         let replacement_string = match &replacement {
             Replacement::Function(function) => {
                 // The callback shares the subject instead of copying it per match.
@@ -590,14 +590,14 @@ fn replace_matches(
         if replacement_is_function {
             result_len = checked_string_length(result_len, replacement_string.chars().count())?;
         }
-        result.push_str(&replacement_string);
+        crate::string::push_js_str(&mut result, &replacement_string);
         // Step the cursor over the matched text so the next kept region starts
         // after it rather than repeating it.
         cursor.advance_to(&input, string_match.end);
         copied_until = string_match.end;
     }
     checked_string_length(result_len, input_len.saturating_sub(copied_until))?;
-    result.push_str(cursor.advance_to(&input, input_len));
+    crate::string::push_js_str(&mut result, cursor.advance_to(&input, input_len));
     Ok(Value::String(result.into()))
 }
 

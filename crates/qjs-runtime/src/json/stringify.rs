@@ -227,7 +227,7 @@ fn serialize_json_array_into(
 ) -> Result<(), RuntimeError> {
     push_stack(value.clone(), ctx)?;
     let old_indent = ctx.indent.clone();
-    ctx.indent.push_str(&ctx.gap);
+    crate::string::push_js_str(&mut ctx.indent, &ctx.gap);
     let length = crate::to_length_with_env(property_value(value.clone(), "length", env)?, env)?;
     output.push('[');
     for index in 0..length {
@@ -284,7 +284,7 @@ fn serialize_json_object_into(
         enumerable_own_string_keys(value.clone(), env)?
     };
     let old_indent = ctx.indent.clone();
-    ctx.indent.push_str(&ctx.gap);
+    crate::string::push_js_str(&mut ctx.indent, &ctx.gap);
     output.push('{');
     let mut wrote_member = false;
     for key in keys {

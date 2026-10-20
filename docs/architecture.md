@@ -19,7 +19,8 @@ source text -> qjs-lexer (tokens with spans) -> qjs-parser (qjs-ast)
 
 - `qjs-ast`: syntax and span types (`expression`, `statement`, `class`,
   `span`). Depends on no other workspace crate.
-- `qjs-unicode`: Unicode tables shared by the lexer and the runtime.
+- `qjs-unicode`: Unicode tables and canonical WTF-16 text builders shared by
+  the lexer and the runtime (`wtf16`).
 - `qjs-lexer`: UTF-8 source to tokens (`scanner`, `token`, `error`). Every
   token carries a byte span.
 - `qjs-parser`: tokens to AST (`expression`, `statement`, `cursor`). It is

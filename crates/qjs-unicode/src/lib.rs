@@ -1,4 +1,4 @@
-//! Unicode property and identifier tables shared by the lexer and runtime.
+//! Unicode tables and canonical WTF-16 text shared by the lexer and runtime.
 //!
 //! The range tables under this module are generated from the Unicode
 //! Character Database 17.0.0 (see the `GENERATED FILE` headers and `tables.rs`).
@@ -6,6 +6,9 @@
 //! (sec-static-semantics-unicodematchproperty-p and friends): property and
 //! value names match the canonical Unicode names and their listed aliases
 //! exactly, with no loose matching.
+
+/// Canonical string builders and the lone-surrogate sentinel convention.
+pub mod wtf16;
 
 mod aliases;
 mod tables;

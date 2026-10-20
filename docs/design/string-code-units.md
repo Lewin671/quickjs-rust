@@ -12,8 +12,13 @@ performance result or freeze a performance plan.
 - JavaScript lengths, positions, captures and keys count UTF-16 code units.
   A scalar above U+FFFF occupies two units; a lone surrogate occupies one.
 - The current UTF-8 container represents lone surrogates with U+F0000..F07FF
-  sentinels and escapes actual scalars in that range. Equivalent scalar and
-  surrogate-pair encodings must compare and hash as the same unit sequence.
+  sentinels and escapes actual scalars in that range. Stored text is canonical:
+  a high-surrogate sentinel immediately followed by a low-surrogate sentinel
+  is merged to one scalar unless that scalar is in U+F0000..F07FF. This makes
+  byte equality and hashing agree with UTF-16 sequence equality.
+  `qjs_unicode::wtf16` owns the shared lexer/runtime append and validation
+  helpers. Appending canonical fragments checks only their seam; code-unit
+  builders merge as they emit. `JsString::new` debug-asserts the invariant.
   Plain `encode_utf16` on sentinel text is not a unit decoder.
 - Typed internal coercion returns a shared `JsString`. Keep ToPrimitive,
   GetMethod, species, custom exec, callback and lastIndex observation order.

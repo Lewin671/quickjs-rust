@@ -301,11 +301,10 @@ fn replace_matches(
         }
         result_len =
             checked_string_length(result_len, match_record.start.saturating_sub(copied_until))?;
-        result.push_str(&input_code_unit_slice(
-            &input_code_units,
-            copied_until,
-            match_record.start,
-        ));
+        crate::string::push_js_str(
+            &mut result,
+            &input_code_unit_slice(&input_code_units, copied_until, match_record.start),
+        );
         let replacement_string = match &replacement {
             Replacement::Function(function) => {
                 // JavaScript strings are immutable, so the callback can share
@@ -350,15 +349,14 @@ fn replace_matches(
             result_len =
                 checked_string_length(result_len, string_code_units(&replacement_string).len())?;
         }
-        result.push_str(&replacement_string);
+        crate::string::push_js_str(&mut result, &replacement_string);
         copied_until = match_record.end;
     }
     checked_string_length(result_len, input_len.saturating_sub(copied_until))?;
-    result.push_str(&input_code_unit_slice(
-        &input_code_units,
-        copied_until,
-        input_len,
-    ));
+    crate::string::push_js_str(
+        &mut result,
+        &input_code_unit_slice(&input_code_units, copied_until, input_len),
+    );
     Ok(Value::String(result.into()))
 }
 
@@ -426,7 +424,7 @@ fn get_substitution(
     let mut chars = replacement.chars().peekable();
     while let Some(character) = chars.next() {
         if character != '$' {
-            result.push(character);
+            crate::string::push_js_char(&mut result, character);
             continue;
         }
         let Some(next) = chars.next() else {
@@ -435,13 +433,19 @@ fn get_substitution(
         };
         match next {
             '$' => result.push('$'),
-            '&' => result.push_str(matched),
-            '`' => result.push_str(&input_code_unit_slice(input_code_units, 0, position)),
-            '\'' => result.push_str(&input_code_unit_slice(
-                input_code_units,
-                position + string_code_units(matched).len(),
-                input_code_units.len(),
-            )),
+            '&' => crate::string::push_js_str(&mut result, matched),
+            '`' => crate::string::push_js_str(
+                &mut result,
+                &input_code_unit_slice(input_code_units, 0, position),
+            ),
+            '\'' => crate::string::push_js_str(
+                &mut result,
+                &input_code_unit_slice(
+                    input_code_units,
+                    position + string_code_units(matched).len(),
+                    input_code_units.len(),
+                ),
+            ),
             '0'..='9' => substitute_capture(&mut result, &mut chars, captures, next),
             '<' if !matches!(named_captures, Value::Undefined) => {
                 substitute_named_capture(&mut result, &mut chars, named_captures, env)?;
@@ -544,13 +548,13 @@ fn substitute_named_capture(
         name.push(value);
     }
     if !closed {
-        result.push_str("$<");
-        result.push_str(&name);
+        crate::string::push_js_str(result, "$<");
+        crate::string::push_js_str(result, &name);
         return Ok(());
     }
     let capture = property_value(named_captures.clone(), &name, env)?;
     if !matches!(capture, Value::Undefined) {
-        result.push_str(&to_js_string_with_env(capture, env)?);
+        crate::string::push_js_str(result, &to_js_string_with_env(capture, env)?);
     }
     Ok(())
 }
@@ -587,7 +591,7 @@ fn substitute_capture(
 
 fn push_capture(result: &mut String, captures: &[Value], index: usize) {
     if let Some(Value::String(capture)) = captures.get(index - 1) {
-        result.push_str(capture);
+        crate::string::push_js_str(result, capture);
     }
 }
 
