@@ -1,17 +1,19 @@
 # T056: Interpreter core v2
 
-- Status: active; unit 0 and the M2 re-plan (design) complete; M1 stage 1 complete
-  on `agent/t056-m1-atoms/claude`: its screen passes under the governing v4 rule.
-- Implementation: stage 1 on that branch (`11c9fc08`; runtime unchanged through
-  `a8c533ef`): atom domain, per-domain named-operand links, Value facade. Not on main.
-- Verified at: `11c9fc08`, 2026-10-17: fast gate, Test262 subset 5170/5170, exact
-  scan 0 Rust failures, NG 248/248 (local), iMac `check.sh`; screen replayed at merge head.
+- Status: active; M1 stage 1 integrated into main (`ab9c29b6`); the M1.2 shape `873c9bc5`
+  was rejected on its sole screen and is closed; its replacement is designed, not planned.
+- Implementation: stage 1 on main. No M1.2 runtime code on main; the rejected candidate stays on
+  `agent/t056-m1-stage2/codex`.
+- Verified at: stage 1 `11c9fc08` gates (see its record); M1.2 diagnosis 2026-10-20 at
+  `873c9bc5` versus `ab9c29b6` (instruction, counter and sampling jobs in the diagnosis record).
 - Evidence: [part 1](archive/T056-unit0-part1-evidence.md), [part 2](archive/T056-unit0-part2-evidence.md),
-  [M1 stage 1](archive/T056-m1-stage1-evidence.md); plan [`interpreter-core-v2-atoms-layouts`](performance-units/interpreter-core-v2-atoms-layouts.json).
-- Unresolved: no formal `decide --mode stage` run for stage 1 yet; M2 runtime plan
-  needs a fresh post-M1 queue/profiles; part 1's imprecise bitops-3bit interval;
-  `docs/architecture.md`'s no-snapshot wording omits the compatibility view.
-- Next action: integrate stage 1, then M1.2 (layout authority for every store).
+  [M1 stage 1](archive/T056-m1-stage1-evidence.md), [M1.2 diagnosis](archive/T056-m1-stage2-diagnosis.md);
+  plan [`interpreter-core-v2-atoms-layouts`](performance-units/interpreter-core-v2-atoms-layouts.json).
+- Unresolved: the M1.2 rejection record (`tasks/archive/T056-m1-stage2-evidence.md`, branch commit
+  `c6c06bca`) and that plan's `current_stage` 2 edit are not on main; the new shape depends on
+  T063 canonical string storage (`agent/string-canonical/codex`); M2 needs fresh post-M1 profiles.
+- Next action: after T063 is on main: fresh formal30, queue and profiles, then freeze the new M1
+  plan (below) before any runtime code.
 
 ## Goal and scope
 
@@ -35,55 +37,7 @@ M2 re-plan owner: `agent/t056-m2-replan/codex`, base `290e3f51`, worktree
 no runtime edits, iMac jobs, push or merge. The design's [frames section](../docs/design/interpreter-core-v2.md#frames-storage-activation-context-and-lazy-names)
 owns the source-grounded consumer inventory and target contracts; the M2 rows below own staging.
 
-## Source checks and input limits
-
-Read the task entry, architecture, protected env/cell invariants, suspension
-invariants, performance knowledge/workflow and T022 before designing.
-Paths below are relative to `crates/qjs-runtime/src/`, inspected at the base.
-
-| Finding | Source / implication |
-| --- | --- |
-| Frame calls still construct a nested Vm. | `bytecode/vm.rs` eval entry points and `function/call.rs::run_prepared_bytecode_call`; `bytecode/frame_stack.rs` is dormant. |
-| Activating the driver alone repeats the moved-frame design. | `push_frame` uses `mem::replace(&mut self.current, frame)` and stores complete FrameStates; REPORT W2's claim that this path avoids movement is false. |
-| Cold splitting already exists. | `bytecode/vm.rs::ColdFrame`; old 704-byte measurements are historical, not today's measured frame size. |
-| Switching requires a view boundary. | `bytecode/frame_program.rs` owns code through a retained handle and forbids frame replacement under a live view. |
-| All four property stores still compare string names. | `value/object.rs::PropertyStorage` and `ObjectLiteralShape`; `value/object/dynamic_storage.rs` maintains its own name-to-slot index. |
-| Existing caches are not one uniform shape authority. | `bytecode/named_property_cache.rs` has Exact/LiteralShape/OwnSlot/SharedSlot/prototype entries, weak identities and revisions. |
-| Value is a 16-byte enum of immediate values and Rc-like handles. | `value/mod.rs`, including its size test; clone/drop is ownership work, not necessarily removable work. |
-| Scalar replacement already handles virtual reads directly. | `bytecode/vm_virtual_object.rs::LoadVirtualValue` reads the frame bank; it need not perform a named-property cache probe. |
-| Accelerator decline restores ordinary execution. | `bytecode/vm_loop_dispatch.rs`; `virtual_object.rs` proves identity/escape and treats suspension as escape. Exact current workload reach still needs counters. |
-
-Inputs were workspace-local `tmp/perf-gap-analysis/REPORT.md` and REPORT-2.md,
-read for this design. They are not retained evidence; the durable facts needed
-to motivate the design are recorded here, with their limitations:
-
-- Lead-verified input: hash-map counted 7,020,006 OwnSlot hot rejects versus
-  3,599,982 hits. Counts establish reach, not removable latency. The input
-  identifies job `20261016T123302Z-general-fresh-route-counts` as diagnostic,
-  never a timing binary.
-- Lead-verified input: when typed-loop declines, ordinary named reads were
-  estimated around 50 ns versus NG 11.6 ns. These are supplied path-cost
-  estimates, not a new measurement here or proof that ICs explain the gap.
-- The reports bind the 76-case baseline to binary
-  `926ee634ca3901b89c778478702a4fe993288ef7e8e69cd93c238c694595aa85`,
-  job `20261016T122024Z-general-current-baseline`; source main `6af62300`,
-  executable source `9a0eeeca`. [T053](archive/T053-ordinary-own-slot-hot-read-fat-lto.md)
-  records that exact baseline and its byte-identical restoration.
-- Lead-verified NG input: 8-byte JSValue and atom/shape lookup with no per-site
-  IC at pinned `f7830186043e4488f2998759d60a514faf07cbc9`. This worktree's
-  submodules are uninitialized; NG source/ABI was not independently inspected.
-  No assertion about NG's call-stack implementation is needed for our design.
-- REPORT's 845/866 inclusive AES call-chain samples include the work of all
-  callees. They are not a removable-call-overhead fraction or a 10–30% forecast.
-  Reports' expected percentage wins remain unverified hypotheses.
-- REPORT-2's escape/warm/cache experiments suggest virtual receivers block
-  tier seeding. Source supports the distinct virtual bank, not the claim that
-  every fallback read executes GetPropNamed or that all excess cost is IC work.
-  Unit 0 must count actual lowered opcodes and admission/exit reasons.
-- Reusing compiled eval source needs fresh instantiation/identity and scope
-  validation; no general eval cache is smuggled into frame or atom migration.
-  Held-out npm versions, licenses and plain-shell compatibility in REPORT-2
-  were not verified here. Pin runnable inputs and validate outputs before use.
+Design-time source checks and report limits: [design inputs](archive/T056-design-inputs.md).
 
 ## Prior attempts
 
@@ -199,6 +153,20 @@ Owner `agent/t056-m1-atoms/claude` from `a0b6bb23`: realm-owned `AtomDomain`, na
 linked once per body and domain, Value facade; stores still key by text. Its single screen is a
 v3 `reject` (development lane, layouts 0 and 2) and a v4 `pass`; v4 governs as main's bound
 v2/v3 successor (`HELD_OUT_SUCCESSOR`). See the [stage 1 record](archive/T056-m1-stage1-evidence.md).
+
+## M1 stage 2 (layout authority): first shape closed
+
+Sole screen `20261018T055933Z-t056-m1s2-screen1` of `873c9bc5` under the frozen plan rejected
+stage 2 (v4: 42/86 cases; external, development, sentinel and portfolio lanes above ceiling on
+all six layouts; not DISTURBED); the plan's single stage-2 attempt is spent and its JSON stays
+frozen. Under T022 the `abort` closes this implementation shape (value republication, weak
+intermediate shapes, private domains, double-hashed probes), not the layout-authority family.
+The [diagnosis](archive/T056-m1-stage2-diagnosis.md) reproduces the screen's instruction ratios
+and its ablations remove most of the excess. The replacement is
+[property layouts](../docs/design/property-layouts.md), which assumes T063's invariant that
+stored strings keep valid surrogate pairs as scalars, so typed keys need no canonicalization scan.
+It needs a new queue/profile-bound plan (the closed shape's data is not reused) and the
+work-count obligations listed in that design before any screen.
 
 ## Design acceptance and verification
 
