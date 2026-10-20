@@ -12,7 +12,7 @@ Sampled cost classes on the development lane: 7 libraries, 28.7 s of quickjs-rus
 
 | Cost class | ms | Covered by the frames section | Gap closed here |
 | --- | ---: | --- | --- |
-| Env assembly, export, write-back (`function_env`, `FrameBindings`, `apply_env`, `current_env`, realm refresh, env teardown) | 2,171 | Yes: indexed entry, lazy consumers | The entry stage kept legacy adapters beside the typed fields, an overlay. It now removes them for the ordinary cohort. |
+| Env assembly, export, write-back (`function_env`, `FrameBindings`, `apply_env`, `current_env`, realm refresh, env teardown) | 2,171 | Yes: indexed entry, lazy consumers | The entry stage kept legacy adapters beside the typed fields, an overlay. M2.1 now removes them for callee-ordinary entries. |
 | Nested Vm and executor plumbing | 1,854 | Yes: same-Vm driver | The frame store and the driver now land together; a store with nested-Vm routing unchanged has no reach. |
 | Direct-leaf `CallEnv` per call | 224 | No: the leaf cohort was treated as already clean | Leaf calls take the typed context like every call. |
 | Static facts resolved by name per call (`Bytecode::local_slot` hashing; immutable-self, `arguments` and global-shadow checks) | 210 | Partly (BindingPlan) | BindingPlan precomputes every fact a call or a global load asks by name. |
@@ -25,23 +25,78 @@ Sampled cost classes on the development lane: 7 libraries, 28.7 s of quickjs-rus
 
 These are upper bounds on reach. Each class contains semantic work that remains.
 
-## Ordinary cohort and replacement rule
+## Cohorts: two predicates, and the replacement rule
 
-A call is **ordinary** when it needs no caller names. The caller is not a direct-eval, with or deopt frame, and the
-callee creates no eval-capable closure. This is the condition under which `callee_env` already selects the realm-only
-view. Callee kind does not matter: bytecode, direct-leaf, compact and native callees all qualify.
+Today two different decisions exist (source paths relative to `crates/qjs-runtime/src/`):
+- `vm_call_env.rs::callee_env` / `callee_env_origin` look at the **caller**. They pick the environment lent to natives,
+  getters, Proxy traps and coercion hooks.
+- A bytecode callee always gets `FreshFunctionFrame` from `call_env`, and `function_env` inserts its names regardless.
 
-Every stage replaces the old route for its cohort. It never computes both representations:
-- in a stage that removes per-call `CallEnv` assembly, an ordinary call builds no `CallEnv`, no `FrameBindings` and
-  no write-back;
-- calls outside the cohort keep the whole legacy route unchanged until their stage.
+M2.1 removes callee-side work, so it needs both predicates, decided separately:
 
-A typed field with a legacy name entry mirrored beside it is an overlay and is forbidden. This was the M1.2 failure.
+- **Callee-ordinary.** The entry route builds no names. All of the following must hold:
+  - the callee's code contains no direct eval and no `with` (today `vm_frame_init.rs` installs deopt bindings for those);
+  - the function object carries no `deopt_bindings`, or `scope_bypassed` is set (`function/call.rs`, in `function_env`);
+  - no parameter/body scope split (`vm_bindings.rs::split_body_deopt_scope`, reached from direct eval in parameter
+    expressions);
+  - the code creates no eval-capable closure. **Eval-capable** means that the closure's code or any function nested in
+    it, at any depth, contains direct eval or `with`. BindingPlan computes this transitively at compile time.
+- **Caller-ordinary.** The environment lent to natives and hooks carries no caller names. Today this requires no direct
+  eval, no `with`, no deopt bindings and `!creates_closures()`, which means any closure. M2.1 may narrow "any closure"
+  to "eval-capable closure" under the same transitive definition, nested `with` included.
 
-Natives keep their `&mut CallEnv` signature until the last stage, but they no longer receive a per-call frame. Each
-`ExecutionContext` owns one realm-only services env, built once and lent to each native call. A debug assertion
-checks after every call that it still has no frame bindings. A native that would write frame state takes the legacy
-route, so the shared env never accumulates state.
+Fixtures for each predicate cover:
+- callee side: callee eval and `with`, a reused deopt-carrying function, parameter-expression eval, and a closure
+  three levels deep whose innermost body uses `eval` or `with`;
+- caller side: the same deep closure passed to `Array.prototype.map` and to a getter, and then run.
+
+Every stage replaces the old route for its cohort; it never computes both. In M2.1 a callee-ordinary entry builds no
+`CallEnv`, no `FrameBindings` and no write-back. Every other entry keeps the whole legacy route until its stage. A
+typed field mirrored by a legacy name entry is an overlay and is forbidden; that was the M1.2 failure.
+
+## Native environment (M2.1 until natives take a capability in M2.5)
+
+`empty_frame()` is not realm-only. `new_function_frame` inherits the caller's:
+- `module_host`, including its referrer;
+- `module_imports`;
+- `private_environment`;
+- `direct_eval_with_stack` (cloning a `Vec` on every call);
+- `catch_bindings`;
+- `direct_eval_var_conflicts`.
+
+So one shared env per `ExecutionContext` would be wrong. For example, code made by indirect eval or `Function` inside a
+module that then runs `import()` must keep the module's referrer. The chosen fix:
+
+- **Typed caller-varying fields.** The current ScriptOrModule (module host and referrer), module imports, private
+  environment, with stack, catch bindings, var conflicts, deopt and new.target become typed fields of the caller's
+  `ActivationContext`. The services env refers to them; it does not copy them. A native call sets one O(1) "current
+  activation" field and clones no `Vec`. The invariant part (scope, realm, agent) is built once per context.
+- **Stack-discipline borrowing.** The services env is lent down the Rust call chain as a reborrow and is never
+  mutably borrowed twice. An activation entered from a native (`call_sync`) saves the caller-varying field it replaces
+  and restores it on return or unwind, through a guard. No activation observes another's fields.
+- **Writers stay legacy.** Natives that write frame state are listed statically by `NativeFunction`. The list is
+  frozen in the plan from an audit of every `CallEnv` mutation reachable from native code. Listed natives keep a
+  legacy frame.
+- **Debug assertion.** After every native call it checks that frame bindings, deopt, with stack, private environment,
+  module host and referrer, module imports, catch bindings, var conflicts and new.target are unchanged.
+- **Tests.**
+  - The Test262 dynamic-import and private-name directories.
+  - A fixture: module → indirect eval and `Function` → `import()` resolves against the module's referrer.
+  - `Function` and indirect eval inside a class do not see `#x`.
+  - A native callback run under `with` sees the right with stack.
+  - `new.target` inside callbacks invoked from natives.
+
+## Nested Vms during M2.1
+
+M2.1 runs while nested Vms still exist. So that `call_env_constructions` is 0 rather than moved, `Vm` stops owning a
+`CallEnv`. It holds the callee's `ActivationContext` plus a borrowed services env (`Vm<'a>` already carries a
+lifetime). Its environment field is one of two forms, chosen at entry by cohort and never both:
+- a typed form, for callee-ordinary entries;
+- a legacy form, for everything else.
+
+This replaces the env the Vm used to own, and M2.3's driver reuses the same field. It changes the `Vm` construction
+API widely: every `new_with_globals*` and `with_frame_bytecode` caller in function calls, eval, modules and
+generators. Cloning an env into each nested Vm instead would be another adapter layer and is not allowed.
 
 ## Entry: BindingPlan, CallSeed and ActivationContext
 
@@ -59,25 +114,34 @@ route, so the shared env never accumulates state.
 - **ActivationContext** carries realm, home and super, the private environment, the module host and the agent as
   typed fields. Direct-leaf, compact-boundary and generic entries all build this one context.
 
-## Driver contract (frame store, compact windows and exits)
+## Driver contract (M2.3 generic frames, M2.4 compact windows)
 
-- **One frame store.** Generic frames and compact windows lease slots from the same `FrameStore`. The compact
-  executor's thread-local register pool and its frame stack go away. A compact body calling a non-compact body pushes
-  a FrameId on the same driver: no `call_from_activation` CallEnv, no nested Vm.
-- **No yield token in memory.**
-  - The hot call and return between frames of one executor stay inside the dispatch loop. Code pointer, window base,
-    pc and frame index are loop-carried values, not fields reloaded from the stack on every op.
-  - `Enter`, `Return`, `Throw` and `NativeRequest` leave the loop only for cross-executor or native boundaries.
-  - The emitted code of those transitions is audited in the release binary with the method of the
-    [inputs](../../tasks/archive/T056-m2-design-inputs.md): no aggregate store-then-reload of the transition value on the
-    admitted call/return path, and no re-resolution of program, bytecode or upvalue owner when the callee's code is
-    already known.
-- **Clear what was written.** Return releases only the registers the activation wrote, bounded by a per-frame
-  high-water mark, not every register. Reuse still clears values and cells before the generation advances.
-- **Exits.** An exit keeps its FrameSlot. The generic dispatcher continues on the same slot at the recorded IP, with no
-  window copy or rebuilt activation. A backedge whose probe declined for this code no longer emits the exit: the
-  program records the decline and its op stream jumps directly. New wide opcodes for exit kinds (object literals,
-  `SetPropIndex`) are tier work, deferred to L4.
+The driver is staged by call population, not by mechanism:
+- **M2.3: generic frame calling generic frame.** The frame store and the same-Vm driver land together for this
+  population.
+- **M2.4: compact windows join the same store.** Their thread-local register pool and frame stack go away. A compact
+  body calling a non-compact body then pushes a FrameId on the same driver, with no `call_from_activation` CallEnv and
+  no nested Vm.
+
+Rules for both stages:
+- **Generator and async frames.** They do not lease store slots before M2.5, because they break LIFO order. They keep
+  their own frames until resume leases exist.
+- **Indices, not pointers.** Window bases are store indices. Every view (slot, buffer, program) is fetched again after
+  any call that may re-enter: a native, an accessor, a Proxy trap, coercion or a callback.
+- **No transition value in memory.**
+  - Call and return between frames of one executor stay inside the dispatch loop. Code, window index, pc and frame
+    index are loop-carried values, not reloaded from the stack on every op.
+  - `Enter`, `Return`, `Throw` and `NativeRequest` leave the loop only at cross-executor or native boundaries.
+  - A release-binary audit uses the method of the [inputs](../../tasks/archive/T056-m2-design-inputs.md). It must find
+    no aggregate store-then-reload of the transition on the admitted path, and no re-resolution of program, bytecode
+    or upvalue owner when the callee's code is known.
+- **Clear what was written.** Return releases only the registers below a per-frame high-water mark. Reuse still
+  clears values and cells before the generation advances.
+- **Exits (M2.4).** An exit continues on its own FrameSlot at the recorded IP only if the compact register layout maps
+  directly onto the generic frame's slots: locals at the same indices, and operand registers at the generic stack
+  positions for that IP's depth. Where it does not, the exit pays one recorded conversion, which is counted. A backedge
+  whose probe declined for this code stops emitting the exit. New wide opcodes for exit kinds (object literals,
+  `SetPropIndex`) are tier work for L4.
 
 ## Interface with M1 (atoms and layouts)
 
@@ -93,30 +157,4 @@ route, so the shared env never accumulates state.
   plan is frozen on post-M1 receipts once M1 is finished: either stage B accepted, or M1 closed with its last verified
   stage on main. M2 does not need both M1 stages to land.
 
-## Diagnosed leaf candidates: where each goes
-
-History says leaf reach of 1–2% does not survive layout noise and complete controls: T041 and T049 failed their
-screens; T053's 0.917 on one case did not excuse six failing controls; T027 missed at 0.984. Each candidate therefore
-goes to the structural stage whose work-count tests prove it. None becomes a standalone unit.
-
-| Candidate (inputs record) | Reach | Home |
-| --- | ---: | --- |
-| 3a: non-object named reads in compact (arrays, strings, functions) | ~0.5 s | M1 stage B: its routed Get covers the ordinary named part of these receivers, and the compact inline arm uses the same lookup |
-| 4: upvalue cell index | 0.11 s | M2 entry stage (BindingPlan) |
-| 4: borrow-free cache state | part of 0.42 s | M1 stage B (its cache replaces `NamedPropertyCache` state) |
-| 4: borrow-free cell reads | 0.16 s | M3 (cells hold the value word) |
-| 5: exit fast path | ≤1.18 s inclusive | M2 driver stage (declined backedges, slot continuation); new exit opcodes go to L4 |
-| 6: `is_html_dda` on truthiness | 0.08 s | no unit; any later truthiness change, such as M3.3's tag tests, may absorb it |
-
-## Work-count obligations (perf-counters, before any timed screen)
-
-Counters are plain `cfg(feature = "perf-counters")` code. A fixture set counts exact events per call and covers:
-fixed and variable arity, method calls, closure creation and invocation, a native with a JS callback (sort, map), a
-getter, a compact-to-non-compact call, and a constructor.
-
-| Stage | Obligation |
-| --- | --- |
-| Entry (ordinary cohort) | `call_env_constructions`, `frame_binding_inserts`, `env_write_backs`, `env_exports`, `realm_refresh_scans`, `argument_vectors` and runtime `name_slot_lookups` are 0 per ordinary call. The non-ordinary fixtures still count their legacy work, which shows the cohort split. |
-| Dynamic consumers | Callback eval, with, coercion and result fixtures reach their names through leases. Ordinary calls stay at 0. Legacy `CallEnv` name storage is deleted. |
-| Driver | `nested_vm_constructions` is 0 for JS-to-JS calls, including compact-to-non-compact calls. `same_vm_frame_entries` equals those calls. Warm frame-slot allocations plateau. `window_slots_cleared` equals written registers. `compact_driver_breaks` is 0 on admitted call/return. Declined backedges execute no exit. |
-| Final routing | 0 nested Vms in an active context. No per-native-call frame. Every adapter is gone. |
+Leaf placement and per-stage work-count obligations are planning decisions; [T056](../../tasks/T056-interpreter-core-v2.md#m2-leaf-placement-and-work-count-obligations) owns them.
