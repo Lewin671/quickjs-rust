@@ -193,7 +193,7 @@ fn run() -> Result<(), CliError> {
         result.map_err(format_test262_error)?
     } else {
         result.map_err(|error| CliError {
-            message: error.message,
+            message: error.host_message(),
         })?
     };
     println!("{}", format_value(&value, raw_output));
@@ -325,7 +325,7 @@ fn run_repl_with_io<R: BufRead, W: Write>(
                 writeln!(output, "error: {}", error.message).map_err(io_error)?;
             }
             Err(error) => {
-                writeln!(output, "error: {}", error.message).map_err(io_error)?;
+                writeln!(output, "error: {}", error.host_message()).map_err(io_error)?;
             }
         }
     }
@@ -368,7 +368,7 @@ fn run_module(
         Ok(_) => Ok(()),
         Err(error) if test262_error_format => Err(format_test262_error(error)),
         Err(error) => Err(CliError {
-            message: error.message,
+            message: error.host_message(),
         }),
     }
 }
@@ -428,7 +428,7 @@ fn format_test262_error(error: EvalError) -> CliError {
             "kind={} type={} message={}",
             error.kind.as_str(),
             error_type,
-            error.message
+            error.host_message()
         ),
     }
 }

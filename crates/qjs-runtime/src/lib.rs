@@ -165,8 +165,19 @@ impl EvalErrorKind {
 pub struct EvalError {
     /// Failure stage.
     pub kind: EvalErrorKind,
-    /// Human-readable message.
+    /// Human-readable message, in the engine's internal string form: a
+    /// surrogate pair built from separate halves may be stored as two escape
+    /// sentinels. Use [`EvalError::host_message`] when writing it to a host.
     pub message: String,
+}
+
+impl EvalError {
+    /// The message as host UTF-8: surrogate pairs recombine and lone
+    /// surrogates become U+FFFD, the same boundary rule as String values.
+    #[must_use]
+    pub fn host_message(&self) -> String {
+        string::string_to_utf8_lossy(&self.message)
+    }
 }
 
 /// Evaluates source text through the bytecode VM and returns the last statement value.
