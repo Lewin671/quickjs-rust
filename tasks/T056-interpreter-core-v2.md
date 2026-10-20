@@ -4,12 +4,12 @@
   was rejected on its sole screen and is closed; its replacement is frozen as plan
   [`interpreter-core-v2-layout-edges`](performance-units/interpreter-core-v2-layout-edges.json); stage A is
   implemented on `agent/t056-m1-stage-a/claude` (plan `50b42547`); valid K=6 failure of `0a9af81b` spent
-  attempt 1/2. A codegen/lookup repair is present and locally gated; one attempt remains across A+B.
+  attempt 1/2. Repair `94408090` is present and locally gated; one attempt remains across A+B.
 - Implementation: stage 1 on main. Stage A on its branch, not on main; the rejected M1.2 candidate stays on
   `agent/t056-m1-stage2/codex`; the write-site add replay removed from stage A stays on
   `agent/t056-add-transition-replay/claude`.
-- Verified at: repair working tree over `e87fa8c5`: full gate, 255 NG fixtures, 5170 subset, strict pin audit
-  and eight-case canonical instruction diagnosis (see [repair evidence](archive/T056-m1-stageA-attempt1-diagnosis.md)); fresh exact/triage/pre-gate pending.
+- Verified at: repair `94408090`: pre-commit full/fast gates, 255 NG fixtures, 5170 subset, strict pin audit
+  and hash-matched canonical instruction diagnosis (see [repair evidence](archive/T056-m1-stageA-attempt1-diagnosis.md)); fresh exact/triage/pre-gate pending.
 - Evidence: [part 1](archive/T056-unit0-part1-evidence.md), [part 2](archive/T056-unit0-part2-evidence.md),
   [M1 stage 1](archive/T056-m1-stage1-evidence.md), [M1.2 rejection](archive/T056-m1-stage2-evidence.md),
   [M1.2 diagnosis](archive/T056-m1-stage2-diagnosis.md), [stage A record](archive/T056-m1-stageA-record.md),

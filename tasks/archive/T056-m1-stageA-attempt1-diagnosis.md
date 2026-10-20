@@ -156,3 +156,44 @@ Test262 subset. All 255 QuickJS-NG comparison fixtures pass. Focused layout/type
 No dependency, unsafe block, environment snapshot, new opcode or new tier admission was introduced.
 The full configured exact scan at 0a9af81b does not establish conformance for the repair image; the lead's
 fresh correctness job must complete before the final attempt.
+
+
+## Committed repair and proposed lead verification
+
+Repair commit **`94408090e3fdea93cb1904bda445b14192112bb0`** passed the staged fast gate, including
+2345 runtime tests, 663 benchmark-tool tests and the 65 selected Test262 eval/function cases. Manual full
+gate and NG fixture results above precede the commit; final edits after that full run were task/runbook
+and test documentation. The pre-push duplicate gate was skipped after those completed local gates.
+
+Non-timing identity job **`20261020T224241Z-t056-m1a-repair-committed-image`**, done 0 in 72 seconds,
+rebuilt the exact commit through qjs_build_revision. Its SHA-256 is **b2eaa2124bc9db15e84b05f0a78dd7f490ffb0405ca09bda1bdc734463dd830a**,
+identical to the canonical instruction diagnostic; strict pin audit passes again. Thus the eight final
+instruction ratios describe the committed image, not a temporary source variant.
+
+Candidate isolation: `50b42547` remains an ancestor and no merge was introduced.
+`git diff f58c696e 94408090 -- crates` is the same 122 M1 runtime files plus the explicitly authorized
+native x86 CLI order file (123 files total). No main runtime, diagnosis-branch replay, AST/parser or
+compiler-recipe change was imported. Frozen plan d184dbcc remains unchanged and exactly one attempt remains.
+
+The prepared, unsubmitted commands are in workspace **`tmp/t056-m1a-last-attempt-verify/`**:
+
+1. New full correctness receipt: full gate/255 NG/5170 subset and eight disjoint complete exact shards,
+   canonical candidate/base hash checks, no timing. The old 0a9af81b exact receipt is not reused.
+2. Fresh complete 86-case instruction pre-gate, one pair, fixed max(1.03,I_i), no timing, dependent on
+   the new correctness receipt and its exact image. Record the complete entry through the standard ledger.
+3. One T061 diagnostic triage, submitted **only by the lead with --timing**, five pairs and workers 4;
+   all 19 fixed controls remain and the eight requested diagnostic focus cases yield 23 unique cases.
+   The existing --target flags label diagnostic focus only and never edit the migration's three targets.
+
+All commands freeze candidate=94408090, require prerequisite done0/no-DISTURBED and matching helper/unit/
+image bindings, and preserve the lead's ZoneInfo-based iMac window guard. No prepared verification job or
+new timing job was submitted by the implementation owner. Local static/render/window/guard/inventory
+validation passes; old acceptance scripts are disabled after the valid rejection.
+
+T061 uses its existing v5 exploratory heuristic, not the v6 stage gate. Even a likely win cannot advance
+stage A. The lead must inspect every result, especially the five previous failures; if a focus case's wall
+CI upper endpoint still exceeds 1.025, deferring the last screen is the conservative diagnostic choice,
+not a change of the frozen acceptance rule. No favorable automatic retry is proposed. Only after fresh
+correctness/pre-gate and manual review may the lead consider one complete K=6 attempt; all ordinary
+formal/stage requirements remain if that screen passes. Repair wall time, full configured Test262 and
+the complete 86-case pre-gate are **not yet verified** by this handoff.
