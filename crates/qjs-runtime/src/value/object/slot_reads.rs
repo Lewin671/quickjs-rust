@@ -302,8 +302,10 @@ impl ObjectRef {
         (!slot.is_accessor()).then(|| slot.value().clone())
     }
 
-    /// Reads a guarded prototype slot of any encoding.
-    #[inline]
+    /// Reads a guarded prototype slot of any encoding. Keep the layout/payload
+    /// dispatch out of the wide executor's property arms: changing that
+    /// inlining graph can spill unrelated scalar and upvalue operations.
+    #[inline(never)]
     pub(crate) fn prototype_data_slot_value(&self, slot: usize) -> Option<Value> {
         let storage = self.0.properties.borrow();
         let slot = storage.slot(slot)?;

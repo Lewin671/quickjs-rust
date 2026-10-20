@@ -248,7 +248,7 @@ impl PropertyStorage {
 
     /// Defines `key`: replaces an existing descriptor in its slot or appends
     /// a new one. One probe either way.
-    #[inline]
+    #[inline(always)]
     pub(super) fn insert(&mut self, key: &str, property: Property) -> Option<Property> {
         // An append edge from this shape proves `key` absent: its probe.
         if let Payload::Slots(properties) = &mut self.payload
