@@ -125,7 +125,7 @@ impl NamedTable {
     /// Defines `key` with one probe: replaces an existing descriptor in its
     /// slot or appends a new one. A table without a layout takes `domain`,
     /// the receiver's realm domain. Returns the replaced descriptor.
-    #[inline]
+    #[inline(never)]
     pub(crate) fn insert_in(
         &mut self,
         domain: &AtomDomain,

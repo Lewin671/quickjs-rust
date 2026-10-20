@@ -229,3 +229,28 @@ fn dictionary_order_tombstones_stay_bounded_under_fixed_live_churn() {
     drop(roots);
     assert_eq!(domain.live_count(), 0);
 }
+
+#[test]
+fn key_probes_distinguish_every_byte_at_inline_comparison_boundaries() {
+    for len in 0..=40 {
+        let key = "a".repeat(len);
+        let equal = key.clone();
+        assert!(super::text_matches(&key, &equal), "equal length {len}");
+        assert!(!super::text_matches(&key, &format!("{key}a")));
+        for changed in 0..len {
+            let mut other = key.as_bytes().to_vec();
+            other[changed] = b'b';
+            let other = String::from_utf8(other).expect("ASCII test key");
+            assert!(
+                !super::text_matches(&key, &other),
+                "length {len}, byte {changed}"
+            );
+        }
+    }
+    for key in ["é", "aé", "€é", "💡a", "a💡💡", "a💡💡💡", "a💡💡💡💡"] {
+        let equal = key.to_owned();
+        assert!(super::text_matches(key, &equal));
+        let different = key.replace('é', "ê").replace('💡', "💢");
+        assert!(!super::text_matches(key, &different));
+    }
+}

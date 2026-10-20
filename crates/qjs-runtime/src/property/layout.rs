@@ -169,9 +169,9 @@ impl PartialEq for Field {
 
 impl Eq for Field {}
 
-/// Whether a field's key is `key`: length, then pointer, then the first
-/// byte, and only then the remaining bytes. Distinct keys of equal length
-/// usually differ in their first byte, which spares a `memcmp` call.
+/// Whether a field's key is `key`: length, pointer, first byte, then bounded
+/// head/tail words for short keys or a general byte comparison for long keys.
+/// Distinct equal-length keys usually differ in their first byte.
 #[inline(always)]
 fn text_matches(text: &str, key: &str) -> bool {
     let (text, key) = (text.as_bytes(), key.as_bytes());
@@ -181,8 +181,19 @@ fn text_matches(text: &str, key: &str) -> bool {
     if std::ptr::eq(text.as_ptr(), key.as_ptr()) {
         return true;
     }
-    match (text.first(), key.first()) {
-        (Some(left), Some(right)) if left != right => false,
+    if let (Some(left), Some(right)) = (text.first(), key.first())
+        && left != right
+    {
+        return false;
+    }
+    let len = text.len();
+    // Fixed-width slice comparisons become safe word loads rather than a
+    // general memcmp call. Overlapping head/tail words cover every byte.
+    match len {
+        0 | 1 => true,
+        2..=3 => text[len - 2..] == key[len - 2..],
+        4..=7 => text[..4] == key[..4] && text[len - 4..] == key[len - 4..],
+        8..=15 => text[..8] == key[..8] && text[len - 8..] == key[len - 8..],
         _ => text == key,
     }
 }
