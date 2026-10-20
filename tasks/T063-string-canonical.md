@@ -177,6 +177,12 @@ a separate non-inlined owned-store helper preserves publish-before-drop for
 the remaining variants. This bounds the actual store lifetime, rather than
 adding calls to hot reads. Add a refcount/replacement regression test.
 
+Store-lifetime repair `623cf4d2` brings seven of nine cases below 1.005;
+remaining ratios are access-binary-trees 1.00783 and tagcloud 1.01453.
+The lexer scalar producer already excludes the entire sentinel range before
+its ordinary branch, so that branch cannot need seam repair. Restore its
+direct scalar append instead of redundantly calling the sentinel-aware helper.
+
 ### Lead regression-screen decision (2026-10-20, before any formal result)
 
 Fixed before the formal run; quick triage `20261020T084226Z-t063-quick-triage`

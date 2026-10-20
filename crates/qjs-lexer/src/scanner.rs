@@ -27,7 +27,9 @@ pub(in crate::scanner) fn push_js_scalar(result: &mut String, character: char) {
             push_js_code_unit(result, *code_unit);
         }
     } else {
-        push_js_char(result, character);
+        // This branch excludes every sentinel, so it cannot append a low
+        // surrogate or create a new pair at the existing tail.
+        result.push(character);
     }
 }
 
