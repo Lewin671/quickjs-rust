@@ -221,7 +221,11 @@ impl Vm<'_> {
                             name,
                         );
                         constructor_function.push_instance_public_field(
-                            InstanceFieldInitializer::new(key, initializer),
+                            InstanceFieldInitializer::new(
+                                key,
+                                initializer,
+                                self.current.realm.atoms(),
+                            ),
                         );
                     }
                 }

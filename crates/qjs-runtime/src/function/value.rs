@@ -34,20 +34,25 @@ pub(crate) struct InstanceFieldInitializer {
 
 /// A class field key after class-definition-time resolution.
 ///
-/// Public string keys are immutable for the class's lifetime, so retaining
-/// them as a shared string avoids deep-copying the same source key for every
-/// constructed instance. Symbols retain their existing identity handle and
-/// use the generic installation path.
+/// Public string keys are immutable for the class's lifetime and are
+/// interned once, at class definition, into the defining realm's atom
+/// domain: every instance then installs the key the layout already holds,
+/// following its edges by pointer. Symbols retain their existing identity
+/// handle and use the generic installation path.
 #[derive(Clone)]
 enum InstanceFieldKey {
-    String(Rc<str>),
+    String(crate::property::atom::Atom),
     Symbol(ObjectRef),
 }
 
 impl InstanceFieldInitializer {
-    pub(crate) fn new(key: PropertyKey, initializer: Option<Function>) -> Self {
+    pub(crate) fn new(
+        key: PropertyKey,
+        initializer: Option<Function>,
+        atoms: &crate::property::atom::AtomDomain,
+    ) -> Self {
         let key = match key {
-            PropertyKey::String(key) => InstanceFieldKey::String(key.into()),
+            PropertyKey::String(key) => InstanceFieldKey::String(atoms.intern_key(&key)),
             PropertyKey::Symbol(symbol) => InstanceFieldKey::Symbol(symbol),
         };
         Self { key, initializer }
@@ -57,7 +62,7 @@ impl InstanceFieldInitializer {
     /// ordinary-object installation route.
     pub(crate) fn shared_string_key(&self) -> Option<&Rc<str>> {
         match &self.key {
-            InstanceFieldKey::String(key) => Some(key),
+            InstanceFieldKey::String(key) => Some(key.text()),
             InstanceFieldKey::Symbol(_) => None,
         }
     }
@@ -66,7 +71,7 @@ impl InstanceFieldInitializer {
     /// fast path. This preserves the full symbol and exotic-receiver route.
     pub(crate) fn property_key(&self) -> PropertyKey {
         match &self.key {
-            InstanceFieldKey::String(key) => PropertyKey::String(key.to_string()),
+            InstanceFieldKey::String(key) => PropertyKey::String(key.as_str().to_owned()),
             InstanceFieldKey::Symbol(symbol) => PropertyKey::Symbol(symbol.clone()),
         }
     }
@@ -964,17 +969,14 @@ impl Function {
         }));
         function.define_length_property();
         function.define_name_property();
+        // A constructable native's default `prototype` -- a null-prototype
+        // object whose `constructor` is the function -- is materialized only
+        // when observed. Installers replace it with the intrinsic prototype
+        // first, so most never exist.
         if constructable {
-            let prototype = ObjectRef::new(HashMap::new());
-            prototype
-                .define_non_enumerable("constructor".to_owned(), Value::Function(function.clone()));
-            function.define_property(
-                "prototype".to_owned(),
-                // A function's `prototype` is writable and non-enumerable but
-                // non-configurable (a class constructor's is also non-writable,
-                // wired separately by the class builder).
-                Property::data(Value::Object(prototype), false, true, false),
-            );
+            function.mark_lazy_default_prototype();
+            // Its key order is fixed now, as an eager definition fixed it.
+            function.materialize_default_prototype_order();
         }
         function
     }
@@ -1057,6 +1059,11 @@ impl Function {
     fn ensure_default_prototype(&self) {
         self.materialize_default_prototype_order();
         if !self.auxiliary.lazy_default_prototype.replace(false) {
+            return;
+        }
+        // An installer that wrote `prototype` straight into the table has
+        // replaced the default before anything observed it.
+        if self.properties.borrow().contains_key("prototype") {
             return;
         }
         let prototype =
@@ -1199,8 +1206,11 @@ impl Function {
         {
             self.materialize_default_data_properties();
         }
-        if key == "prototype" {
-            self.ensure_default_prototype();
+        if key == "prototype" && self.auxiliary.lazy_default_prototype.replace(false) {
+            // Replacing the unobserved default: its order slot was recorded
+            // above, and no reference to the default object can exist.
+            self.properties.borrow_mut().insert(key, property);
+            return;
         }
         let mut properties = self.properties.borrow_mut();
         if !properties.contains_key(&key) {
