@@ -1,0 +1,99 @@
+{
+  "schema_version": 3,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_kind": "migration",
+  "unit_id": "interpreter-core-v2-layout-edges",
+  "base_sha": "f58c696e8379261ed726f0cea1051ed6d34f431a",
+  "queue": {
+    "candidate_sha": "f58c696e8379261ed726f0cea1051ed6d34f431a",
+    "sha256": "c50ee7df6acb4dd791fa0e9255ff47276c3cbff3af4cd4bfeb30bb4aef673977"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "development/moment/dates",
+      "development/diff/compare",
+      "development/meriyah/parse"
+    ],
+    "rank_ceiling": 5,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "T056 M1 replacement for the closed stage-2 shape of interpreter-core-v2-atoms-layouts, per docs/design/property-layouts.md, in two stages on the post-T063 base: (A) layout authority for every ordinary named-property store through owned, bounded transition edges, replacing payload lookup authority in the same stage (one probe per add, the Dynamic name map and ObjectLiteralShape.lookup removed, one-pointer layout, ObjectData at most 120 bytes); (B, final) route ordinary and shared accelerated Get/Set through atoms and layouts and retire the rejecting probe chain and superseded revisions. Before every timed screen a frozen, non-timing instruction pre-gate runs exact canonical candidate and base images once per role on all 86 policy cases; a case whose candidate/base instructions exceed max(1.03, I_i) (I_i the policy's instruction hard cap) stops the screen; the pre-gate only blocks, spends no attempt, and its job, image hashes and per-case ratios are recorded in T056 whatever its result. A screen uses exactly the image whose hash passed the pre-gate; the pre-gate never replaces or cancels a timed attempt already started. Attempt accounting: max_attempts 2 counts failed screens across stages A and B together; a stage abort counts as one, an inconclusive screen spends none (existing rule); after a stage A abort the remaining attempt may reimplement stage A, and it is the last. Candidate isolation: every stage A/B candidate is this plan commit (on ae45226e, runtime equal to f58c696e) plus M1's own runtime commits; until the unit closes no runtime change on main after f58c696e is merged in (including T057 at fa96320f and string-search-linear), only tooling/docs merges; before each screen T056 records `git diff f58c696e <candidate> -- crates` showing only M1 files. Statements: (1) a diagnostic prototype exists on agent/t056-m12-diagnosis/claude (never merged); its measured numbers are instruction ratios only (steps i-viii at 1.02-1.39 against stage 1; canonical-scan bound 7-10%), no timing. (2) The stage budget 1.025, payoff 0.97 (or 1/B_i) and rank ceiling 5 are the standing values, none derived from diagnosis data. (3) The runtime is reimplemented on this base; this plan commit is an ancestor of every runtime commit and nothing is cherry-picked from the diagnosis branch. (4) Diagnostic samples (jobs *-t056-m12-*) are not profile receipts; only the exact-image receipts below are. Targets are the queue's rank 3-5 development cases with the largest layout envelope (27.3%, 32.3%, 27.9% inclusive). Higher-ranked cases are not targets: js-yaml/document (rank 1) has a 16.9% inclusive / 9.5% owner envelope and its excess is string and RegExp work owned by T057, so a target there would credit string-path effects to this unit; immutable/persistent (rank 2) has 17.5% / 15.1% and its largest excess is call/frame/env work owned by M2. Both remain ordinary controls.",
+    "generality": "Admission is ordinary named-property semantics, receiver kind and atom-domain/layout identity. Every store, constructor/literal/native/host receiver and computed key (one ToPropertyKey, then interning) uses the same authority and edges; transitions are keyed by (atom, attributes, encoding) and admitted by what a program does, never by source text, property spelling, library or benchmark identity, literal template or iteration count. No environment snapshot or per-call name map is introduced.",
+    "semantic_risks": [
+      "Enumeration order, delete/re-add order, duplicate keys and more than 32/128 properties must follow the language order after edge, dictionary and Small-to-Dynamic re-encoding transitions.",
+      "Every add/delete/reconfigure/freeze/seal/prototype/lazy-property change publishes the new layout before any cached observer can reuse a slot; equal keys with different attributes take different edges.",
+      "Edge and shape retention stays bounded under key churn: evicted root edges, the 4096 live-shape budget and dictionary tombstones are tested; atom IDs never wrap or get reused.",
+      "Getters, setters, Proxy traps and native re-entry run after property and layout borrows are released; receiver identity, strict-mode write errors and exotic algorithms are preserved.",
+      "Cross-realm, eval and foreign code never interpret another atom domain's IDs; null-prototype objects use the current realm; typed keys rely on T063's canonical surrogate-pair storage.",
+      "Tier coverage stays comparable: a payoff that comes only from a tier or literal-path switch does not count; layout moves are judged on all six placements, the complete portfolio and held-out acceptance."
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "moment--dates/receipt.json",
+      "sha256": "a70c101476af7f203c88cbc040288f4f5e76556aeda5ecb4dcf6016b7f673caa",
+      "base_sha": "f58c696e8379261ed726f0cea1051ed6d34f431a",
+      "opportunity_ids": [
+        "development/moment/dates"
+      ],
+      "shared_cost": "Exact queue-candidate image (binary b0dfc65d..., queue rank 3), macOS sample 60 s at 1 ms over 7 passes: 13628/49903 main-thread samples (27.3%) have a named-property or layout frame on the stack (PropertyStorage, layout, own-data/slot reads, named get/set handlers and caches, prototype lookup, literal shapes); owner-attributed self samples (allocator, mem* and hash charged to their engine caller) put 23.9% in named-property code. Envelope includes mandatory lookup and ownership work; it bounds reach and is not a removable fraction.",
+      "inclusive_fraction": 0.27308979420074947
+    },
+    {
+      "source": "diff--compare/receipt.json",
+      "sha256": "1afb8b6246e348de553f4487d7184e5b792b49a47a98e841af61d7e539768f5d",
+      "base_sha": "f58c696e8379261ed726f0cea1051ed6d34f431a",
+      "opportunity_ids": [
+        "development/diff/compare"
+      ],
+      "shared_cost": "Exact queue-candidate image (binary b0dfc65d..., queue rank 4), macOS sample 60 s at 1 ms over 11 passes: 16122/49919 main-thread samples (32.3%) have a named-property or layout frame on the stack (PropertyStorage, layout, own-data/slot reads, named get/set handlers and caches, prototype lookup, literal shapes); owner-attributed self samples (allocator, mem* and hash charged to their engine caller) put 22.4% in named-property code. Envelope includes mandatory lookup and ownership work; it bounds reach and is not a removable fraction.",
+      "inclusive_fraction": 0.3229632003846231
+    },
+    {
+      "source": "meriyah--parse/receipt.json",
+      "sha256": "027ba9faf41319debdc8f19caa30c8bc1a7c966bad2ed49fbe865b5fe34b2bd0",
+      "base_sha": "f58c696e8379261ed726f0cea1051ed6d34f431a",
+      "opportunity_ids": [
+        "development/meriyah/parse"
+      ],
+      "shared_cost": "Exact queue-candidate image (binary b0dfc65d..., queue rank 5), macOS sample 60 s at 1 ms over 26 passes: 13899/49862 main-thread samples (27.9%) have a named-property or layout frame on the stack (PropertyStorage, layout, own-data/slot reads, named get/set handlers and caches, prototype lookup, literal shapes); owner-attributed self samples (allocator, mem* and hash charged to their engine caller) put 23.0% in named-property code. Envelope includes mandatory lookup and ownership work; it bounds reach and is not a removable fraction.",
+      "inclusive_fraction": 0.27874934820103486
+    }
+  ],
+  "migration": {
+    "stages": 2,
+    "current_stage": 1,
+    "cumulative_target_ids": [
+      "development/moment/dates",
+      "development/diff/compare",
+      "development/meriyah/parse"
+    ],
+    "stage_max_candidate_over_base": 1.025
+  },
+  "fast_gate": {
+    "target_ids": [
+      "development/moment/dates",
+      "development/diff/compare",
+      "development/meriyah/parse"
+    ],
+    "target_max_candidate_over_base": 0.97,
+    "max_attempts": 2
+  },
+  "layout_gate": {
+    "policy_path": "benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v6.json",
+    "policy_sha256": "be123f7c5cfd46aa863467256eb8bf6947ff64f72541efc371f05a36c5535a31",
+    "mechanism_class": "cpu-work",
+    "memory_wall_targets": [],
+    "panel_required": true,
+    "panel_pairs": 5,
+    "held_out_pairs": 30,
+    "formal_blocks": 30
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

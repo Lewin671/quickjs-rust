@@ -1,7 +1,8 @@
 # T056: Interpreter core v2
 
 - Status: active; M1 stage 1 integrated into main (`ab9c29b6`); the M1.2 shape `873c9bc5`
-  was rejected on its sole screen and is closed; its replacement is designed, not planned.
+  was rejected on its sole screen and is closed; its replacement is frozen as plan
+  [`interpreter-core-v2-layout-edges`](performance-units/interpreter-core-v2-layout-edges.json) (stage A next).
 - Implementation: stage 1 on main. No M1.2 runtime code on main; the rejected candidate stays on
   `agent/t056-m1-stage2/codex`.
 - Verified at: stage 1 `11c9fc08` gates (see its record); M1.2 diagnosis 2026-10-20 at
@@ -9,11 +10,11 @@
 - Evidence: [part 1](archive/T056-unit0-part1-evidence.md), [part 2](archive/T056-unit0-part2-evidence.md),
   [M1 stage 1](archive/T056-m1-stage1-evidence.md), [M1.2 rejection](archive/T056-m1-stage2-evidence.md),
   [M1.2 diagnosis](archive/T056-m1-stage2-diagnosis.md), [M2 design inputs](archive/T056-m2-design-inputs.md);
-  plan [`interpreter-core-v2-atoms-layouts`](performance-units/interpreter-core-v2-atoms-layouts.json).
-- Unresolved: the new shape depends on T063 canonical string storage (`agent/string-canonical/codex`);
-  M2 (revised 2026-10-20 to five stages, cost-first) needs fresh post-M1 profiles.
-- Next action: after T063 is on main: fresh formal30, queue and profiles, then freeze the new M1
-  plan (below) before any runtime code.
+  plans [`interpreter-core-v2-atoms-layouts`](performance-units/interpreter-core-v2-atoms-layouts.json) (closed),
+  [`interpreter-core-v2-layout-edges`](performance-units/interpreter-core-v2-layout-edges.json).
+- Unresolved: M2 (revised 2026-10-20 to five stages, cost-first) needs fresh post-M1 profiles.
+- Next action: implement stage A on a branch from the plan commit (no diagnostic cherry-picks),
+  pass the work-count obligations and the instruction pre-gate, then the stage A screen.
 
 ## Goal and scope
 
@@ -130,7 +131,8 @@ stored strings keep valid surrogate pairs as scalars, so typed keys need no cano
 It needs a new queue/profile-bound plan (the closed shape's data is not reused) and the
 work-count obligations listed in that design before any screen.
 
-Decided plan parameters (frozen only with the fresh queue/receipts): migration, stages A (layout replacement)
+Plan `interpreter-core-v2-layout-edges` (base and queue candidate `f58c696e`, post-T063; queue `c50ee7df`)
+freezes these parameters: migration, stages A (layout replacement)
 and B (routing, final); cumulative 1.025; payoff 0.97 or 1/B_i; rank ceiling 5; `max_attempts` 2; a frozen,
 block-only non-timing instruction pre-gate over all 86 policy cases before each screen, recorded here.
 Pre-gate cutoff: `max(1.03, I_i)`, the existing hard cap. Plan-before-implementation statements: the mechanism
@@ -138,6 +140,23 @@ summary discloses the diagnostic prototype and its measured ratios; budget, payo
 existing values, not values derived from the diagnosis; the candidate is reimplemented on a post-T063 base whose
 plan commit is an ancestor of every runtime commit, with no diagnostic-branch cherry-picks; diagnostic samples are
 never profile receipts.
+
+Targets and receipts: profile job `20261020T125346Z-t056-m1-profile` (exact queue image `b0dfc65d`, `sample` 60 s
+at 1 ms, not disturbed) on all rank-1-5 development and external cases. Named-property/layout envelope, inclusive /
+owner-attributed: moment/dates (rank 3) 27.3% / 23.9%, diff/compare (4) 32.3% / 22.4%, meriyah/parse (5)
+27.9% / 23.0% — the three targets. Not targets: js-yaml/document (1) 16.9% / 9.5%, its excess is string/RegExp
+work owned by T057; immutable/persistent (2) 17.5% / 15.1%, its largest excess is call/frame/env work (M2);
+external rank 1-5 cases 0.1-12.8%. T057 (main `fa96320f`) is not in this base and touches mainly js-yaml, so the
+queue is not refreshed. Receipts and scripts: workspace `tmp/t056-m1-profile/`.
+
+Plan rules beyond the parameters: (a) candidate isolation — every stage A/B candidate is the plan commit (on
+`ae45226e`) plus M1's own runtime commits; until the unit closes no main runtime change after `f58c696e` is merged
+(including T057 `fa96320f`, whose search/units/substitution/sequence paths `diff/compare` uses, and
+string-search-linear); tooling/docs merges are allowed; before each screen record `git diff f58c696e <candidate> -- crates`
+here, showing only M1 files. (b) `max_attempts` 2 counts failed screens over A and B together; a stage abort counts,
+inconclusive does not; after an A abort the remaining attempt may reimplement A and is the last. (c) The screen uses
+the exact image hash that passed the pre-gate; every pre-gate run is recorded whatever its result; a pre-gate never
+replaces or cancels a timed attempt already started.
 
 ### New-shape work-count obligations (perf-counters, before any timed screen)
 
