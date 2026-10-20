@@ -4,11 +4,11 @@ from __future__ import annotations
 import json
 import os
 import shutil
-import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from tools.benchmark.tests.bounded import run_bounded
 
 ROOT = Path(__file__).resolve().parents[3]
 FAKE_PYTHON = r'''
@@ -59,9 +59,9 @@ class LayoutScanRecipeTests(unittest.TestCase):
             binary.chmod(0o755)
             env = {**os.environ, 'PATH': str(binary.parent) + os.pathsep + os.environ['PATH'],
                    'SCAN_TEST_ROOT': str(root), 'FAIL_BUILD_NUMBER': str(fail_build)}
-            result = subprocess.run(['bash', str(script), '--offsets', '0x20',
+            result = run_bounded(['bash', str(script), '--offsets', '0x20',
                                      '--case', 'sentinel'], env=env,
-                                    capture_output=True, text=True, timeout=15)
+                                    capture_output=True, text=True)
             calls = [json.loads(line) for line in (root / 'calls.jsonl').read_text().splitlines()]
             self.assertEqual(order.read_text(), 'original\n')
             return result, calls

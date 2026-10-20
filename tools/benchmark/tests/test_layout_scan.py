@@ -2,10 +2,10 @@
 import os
 from pathlib import Path
 import shutil
-import subprocess
 import sys
 import tempfile
 import unittest
+from tools.benchmark.tests.bounded import run_bounded
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -58,9 +58,9 @@ else:
             env = dict(os.environ, PATH=str(fake_bin) + os.pathsep + os.environ["PATH"],
                        CARGO=str(cargo), SCAN_ORDER=str(selected),
                        SCAN_STABLE="1" if stable else "0")
-            result = subprocess.run(["bash", str(scripts / "layout-scan.sh"),
+            result = run_bounded(["bash", str(scripts / "layout-scan.sh"),
                                      "--offsets", "0x0"], cwd=root, env=env,
-                                    capture_output=True, text=True, timeout=15)
+                                    capture_output=True, text=True)
             self.assertEqual(result.returncode, 0 if stable else 1, result.stderr)
             self.assertEqual(arm.read_text(), "original arm\n")
             self.assertEqual(x86.read_text(), "original x86\n")

@@ -100,7 +100,7 @@ outcome column says what happened, not what to do next.
 - [T050 complete diagnostic tables](archive/T050-vm-layout-diagnostic-data.md), including the unattributed dynamic-read regression.
 - First batch-1 formal decisions: `T037-first-formal-decision.md`.
 - Audio DFT one-factor diagnostics: `T038-audio-dft-diagnostic-data.md`; [Gaussian engine tails](archive/T038-gaussian-wall-tail-data.md).
-- Executable launch controls: `T017-launch-preflight-diagnostic.md`; resource-lane launch admission: [T017-resource-launch-admission](archive/T017-resource-launch-admission.md).
+- Executable launch controls: `T017-launch-preflight-diagnostic.md`; resource-lane launch admission: [T017-resource-launch-admission](archive/T017-resource-launch-admission.md); loaded-host test failures: [T017-test-wall-timeouts](archive/T017-test-wall-timeouts.md) and [follow-up](archive/T017-git-lock-and-race-tests.md).
 - Design measurement record: [T036-mixed-call-execution-measurements.md](archive/T036-mixed-call-execution-measurements.md).
 - Case-level formal standing: `T018-af4d0d3c-case-standing.md`.
 - Prior formal standing: `T018-e54e33eb-standing.md`.

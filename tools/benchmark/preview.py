@@ -360,7 +360,7 @@ def verify_source(args: argparse.Namespace) -> None:
             capture_output=True, text=True, timeout=10, check=False,
         )
         status = subprocess.run(
-            ["git", "-C", str(source), "status", "--porcelain", "--untracked-files=normal"],
+            ["git", "--no-optional-locks", "-C", str(source), "status", "--porcelain", "--untracked-files=normal"],
             capture_output=True, text=True, timeout=10, check=False,
         )
     except (OSError, subprocess.TimeoutExpired) as error:

@@ -8,6 +8,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from tools.benchmark.tests.bounded import run_bounded
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -106,13 +107,13 @@ class CliTests(unittest.TestCase):
                 subprocess.run(["git", "add", "-A"], cwd=root, check=True)
                 env = os.environ.copy()
                 env["CARGO"] = "/usr/bin/true"
-                result = subprocess.run(
+                result = run_bounded(
                     [str(scripts / "check-touched.sh"), "--staged", "--explain"],
                     cwd=root,
                     env=env,
                     capture_output=True,
                     text=True,
-                    timeout=10,
+                    
                     check=False,
                 )
             self.assertEqual(result.returncode, 0, result.stderr)
@@ -147,7 +148,7 @@ class CliTests(unittest.TestCase):
 
     def test_wrapper_runs_from_outside_repository(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            result = subprocess.run(
+            result = run_bounded(
                 [
                     str(ROOT / "scripts/benchmark.sh"),
                     "--dry-run",
@@ -157,7 +158,7 @@ class CliTests(unittest.TestCase):
                 cwd=directory,
                 capture_output=True,
                 text=True,
-                timeout=10,
+                
                 check=False,
             )
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -173,7 +174,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(declarations["quickjs-ng"]["adapter_id"], "qjs-file")
 
     def test_adapter_and_identity_are_independent_and_known(self) -> None:
-        result = subprocess.run(
+        result = run_bounded(
             [
                 str(ROOT / "scripts/benchmark.sh"), "--dry-run", "--blocks", "1",
                 "--candidate", "/bin/echo", "--candidate-adapter", "qjs-file",
@@ -181,7 +182,7 @@ class CliTests(unittest.TestCase):
             ],
             capture_output=True,
             text=True,
-            timeout=10,
+            
             check=False,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -189,14 +190,14 @@ class CliTests(unittest.TestCase):
         self.assertEqual(declaration["adapter_id"], "qjs-file")
         self.assertEqual(declaration["engine_identity"], "qjs-rust")
 
-        rejected = subprocess.run(
+        rejected = run_bounded(
             [
                 str(ROOT / "scripts/benchmark.sh"), "--dry-run", "--blocks", "1",
                 "--candidate-identity", "unknown-engine",
             ],
             capture_output=True,
             text=True,
-            timeout=10,
+            
             check=False,
         )
         self.assertEqual(rejected.returncode, 2)
@@ -220,13 +221,13 @@ class CliTests(unittest.TestCase):
             }
 
             quick_log = temporary / "quick.log"
-            quick = subprocess.run(
+            quick = run_bounded(
                 [str(ROOT / "scripts/lifecycle-bench.sh"), "--quick", "parse/small-v1"],
                 cwd=temporary,
                 env={**environment, "FAKE_CARGO_LOG": str(quick_log)},
                 capture_output=True,
                 text=True,
-                timeout=10,
+                
                 check=False,
             )
             self.assertEqual(quick.returncode, 0, quick.stderr)
@@ -239,13 +240,13 @@ class CliTests(unittest.TestCase):
             )
 
             formal_log = temporary / "formal.log"
-            formal = subprocess.run(
+            formal = run_bounded(
                 [str(ROOT / "scripts/lifecycle-bench.sh"), "compile/medium-v1"],
                 cwd=temporary,
                 env={**environment, "FAKE_CARGO_LOG": str(formal_log)},
                 capture_output=True,
                 text=True,
-                timeout=10,
+                
                 check=False,
             )
             self.assertEqual(formal.returncode, 0, formal.stderr)
@@ -261,13 +262,13 @@ class CliTests(unittest.TestCase):
             for index, option in enumerate(allowed):
                 with self.subTest(allowed=option):
                     allowed_log = temporary / f"allowed-{index}.log"
-                    result = subprocess.run(
+                    result = run_bounded(
                         [str(ROOT / "scripts/lifecycle-bench.sh"), option],
                         cwd=temporary,
                         env={**environment, "FAKE_CARGO_LOG": str(allowed_log)},
                         capture_output=True,
                         text=True,
-                        timeout=10,
+                        
                         check=False,
                     )
                     self.assertEqual(result.returncode, 0, result.stderr)
@@ -291,13 +292,13 @@ class CliTests(unittest.TestCase):
             for index, attack in enumerate(attacks):
                 with self.subTest(attack=attack):
                     attack_log = temporary / f"attack-{index}.log"
-                    result = subprocess.run(
+                    result = run_bounded(
                         [str(ROOT / "scripts/lifecycle-bench.sh"), *attack],
                         cwd=temporary,
                         env={**environment, "FAKE_CARGO_LOG": str(attack_log)},
                         capture_output=True,
                         text=True,
-                        timeout=10,
+                        
                         check=False,
                     )
                     self.assertEqual(result.returncode, 2)

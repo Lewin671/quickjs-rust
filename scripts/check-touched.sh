@@ -211,7 +211,8 @@ else
 fi
 
 if [ "$touches_benchmark" -eq 1 ]; then
-  run_cmd env PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$ROOT_DIR" \
+  # GIT_OPTIONAL_LOCKS=0: a timed-out tool `git status` must not leave index.lock.
+  run_cmd env PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$ROOT_DIR" GIT_OPTIONAL_LOCKS=0 \
     python3 -m unittest discover -s "$ROOT_DIR/tools/benchmark/tests" -v
   run_cmd bash -n \
     "$ROOT_DIR/scripts/benchmark.sh" "$ROOT_DIR/scripts/benchmark-report.sh" \

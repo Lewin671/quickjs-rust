@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import subprocess
 import sys
 import tempfile
 import unittest
@@ -18,6 +17,7 @@ from tools.benchmark.hosted_preview import (
 from tools.benchmark.preview import HOSTED_CASES, shard_cases, summarize
 from tools.benchmark.tests.test_preview import report, without_legend
 from tools.benchmark.tests.test_preview_summary import external, external_case, sentinel
+from tools.benchmark.tests.bounded import run_bounded
 
 ROOT = Path(__file__).resolve().parents[3]
 BINARIES = {"candidate": "1" * 64, "base": "2" * 64, "quickjs-ng": "3" * 64}
@@ -205,13 +205,13 @@ class PublishTests(unittest.TestCase):
         self.assertFalse(complete)
         self.assertEqual(status["lanes_with_evidence"], [])
         self.assertEqual(status["stages"]["build"]["state"], "superseded")
-        result = subprocess.run(
+        result = run_bounded(
             [
                 sys.executable, "-m", "tools.benchmark.hosted_preview", "publish",
                 "--output-dir", str(self.output),
                 "--step-summary", str(self.root / "again.md"), "--build-result", "failure",
             ],
-            cwd=ROOT, capture_output=True, text=True, timeout=20, check=False,
+            cwd=ROOT, capture_output=True, text=True, check=False,
         )
         self.assertEqual(result.returncode, 2, result.stderr)
 
@@ -283,7 +283,7 @@ class PublishTests(unittest.TestCase):
     def test_a_stage_record_names_the_attempt_that_produced_it(self) -> None:
         import os
 
-        result = subprocess.run(
+        result = run_bounded(
             [
                 sys.executable, "-m", "tools.benchmark.preview", "status",
                 "--stage", "external", "--state", "success", "--phase", "complete",
@@ -293,7 +293,7 @@ class PublishTests(unittest.TestCase):
                 "--message", "done",
             ],
             cwd=ROOT, env={**os.environ, "GITHUB_RUN_ATTEMPT": "3"},
-            capture_output=True, text=True, timeout=20, check=False,
+            capture_output=True, text=True, check=False,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         stages, _, _ = collect(self.output)
@@ -405,12 +405,12 @@ class PublishTests(unittest.TestCase):
                 output = Path(name) / "evidence"
                 prepare(output)
                 summary = Path(name) / "step-summary.md"
-                result = subprocess.run(
+                result = run_bounded(
                     [
                         sys.executable, "-m", "tools.benchmark.hosted_preview", "publish",
                         "--output-dir", str(output), "--step-summary", str(summary),
                     ],
-                    cwd=ROOT, capture_output=True, text=True, timeout=20, check=False,
+                    cwd=ROOT, capture_output=True, text=True, check=False,
                 )
                 self.assertEqual(result.returncode, expected, result.stderr)
                 self.assertEqual(summary.read_bytes(), (output / "summary.md").read_bytes())
