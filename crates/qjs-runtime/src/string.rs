@@ -305,7 +305,14 @@ pub(crate) fn char_from_code_unit(code_unit: u16) -> char {
 }
 
 pub(crate) fn push_code_unit(result: &mut String, code_unit: u16) {
-    push_js_char(result, char_from_code_unit(code_unit));
+    let character = char_from_code_unit(code_unit);
+    if (0xDC00..=0xDFFF).contains(&code_unit) {
+        push_js_char(result, character);
+    } else {
+        // BMP scalars and high surrogates cannot complete a seam pair. Keep
+        // their ordinary emission independent of the sentinel repair helper.
+        result.push(character);
+    }
 }
 
 /// Appends one validated Unicode code point using the runtime's WTF-16 string

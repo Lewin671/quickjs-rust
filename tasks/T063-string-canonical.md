@@ -135,6 +135,13 @@ body adds a second out-of-line `drop_in_place<Value>` plus an old-enum stack
 copy. Expand that bounded enum dispatch inside the existing non-inlined owned
 helper, preserving publication order and each field's normal Rust drop.
 
+Tagcloud phase probe `20261020T100511Z-t063-tagcloud-phase-instructions`
+(exit 0, five alternating pairs) isolates setup at 1.01254; the makeTagCloud
+body's instruction difference is 0.99756. The residual is not its append loop.
+Code-unit encoding still sends ordinary BMP units through the sentinel-aware
+scalar helper. Only low surrogate units can form a seam pair: send those to
+the shared helper, append all other units directly, and retain every test.
+
 ### Lead regression-screen decision (2026-10-20, before any formal result)
 
 Fixed before the formal run; quick triage `20261020T084226Z-t063-quick-triage`
