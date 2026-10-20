@@ -93,3 +93,10 @@ instruction count against the base: instruction ratio at most 1.010 marks a
 placement effect and does not block; above it, the extra work is fixed and the
 compare is rerun. The quick-triage outcome only decides whether the compare is
 worth queuing; neither the thresholds nor this rule change after a result.
+
+Candidate amendment (2026-10-20): the diagnostic triage showed 1.2-2.8%
+extra instructions on non-string cases; the cause (wide-executor register
+store code generation and a per-unit helper call) was fixed in `d5787373`.
+The formal compare above therefore runs against candidate `32e085f8`
+(runtime identical to `d5787373`) instead of `41f4ee96`. Base, thresholds
+and the failure procedure are unchanged.
