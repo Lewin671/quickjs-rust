@@ -7,6 +7,13 @@ QJS_DIR="$ROOT_DIR/third_party/quickjs-ng"
 QJS_BIN="$QJS_DIR/build/qjs"
 FIXTURE_DIR="${1:-$ROOT_DIR/tests/fixtures/compare-qjs}"
 CASE_TIMEOUT_SECONDS="${COMPARE_QJS_CASE_TIMEOUT_SECONDS:-10}"
+# quickjs-rust's local time zone is UTC by design (crates/qjs-runtime/src/date),
+# while QuickJS-NG follows the host zone. Run both in UTC so local-time Date
+# results compare the same semantics on every host instead of depending on
+# the machine's zone (e.g. a local time near the time-value limit is valid in
+# UTC+8 but not in UTC). quickjs-rust output does not depend on TZ, so this
+# only fixes the reference side.
+export TZ=UTC
 COMPARE_QJS_JOBS="${COMPARE_QJS_JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)}"
 
 case "$COMPARE_QJS_JOBS" in

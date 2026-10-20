@@ -35,7 +35,8 @@ artifacts mean.
 ## Conformance
 
 - `compare-qjs.sh`: runs `tests/fixtures/compare-qjs/` against quickjs-rust
-  and the pinned QuickJS-NG. Harness.
+  and the pinned QuickJS-NG, both with `TZ=UTC` (this engine's local time
+  zone). Harness.
 - `find-qjsng-gaps.sh`: first entry point for conformance work; reports cases
   QuickJS-NG passes and this engine does not, with a recommendation queue.
   Harness; `--help` for strategies and probe flags.
