@@ -305,9 +305,27 @@ pub(crate) fn install_date(env: &mut CallEnv, global_this: &Value, object_protot
         "prototype",
         Property::fixed_non_enumerable(Value::Object(date_prototype)),
     );
-    define_date_function(&date_function, "now", 0, NativeFunction::DateNow);
-    define_date_function(&date_function, "parse", 1, NativeFunction::DateParse);
-    define_date_function(&date_function, "UTC", 7, NativeFunction::DateUtc);
+    define_date_function(
+        env.realm().atoms(),
+        &date_function,
+        "now",
+        0,
+        NativeFunction::DateNow,
+    );
+    define_date_function(
+        env.realm().atoms(),
+        &date_function,
+        "parse",
+        1,
+        NativeFunction::DateParse,
+    );
+    define_date_function(
+        env.realm().atoms(),
+        &date_function,
+        "UTC",
+        7,
+        NativeFunction::DateUtc,
+    );
 
     let date_value = Value::Function(date_function);
     env.insert_realm("Date".to_owned(), date_value.clone());
@@ -316,8 +334,15 @@ pub(crate) fn install_date(env: &mut CallEnv, global_this: &Value, object_protot
     }
 }
 
-fn define_date_function(function: &Function, key: &str, length: usize, native: NativeFunction) {
-    function.properties.borrow_mut().insert(
+fn define_date_function(
+    atoms: &crate::property::atom::AtomDomain,
+    function: &Function,
+    key: &str,
+    length: usize,
+    native: NativeFunction,
+) {
+    function.properties.borrow_mut().insert_in(
+        atoms,
         key,
         Property::non_enumerable(Value::Function(Function::new_native(
             Some(key),

@@ -21,8 +21,11 @@ fn counted(source: &str) -> Counters {
     counters().expect("perf-counters build exposes counters")
 }
 
-/// Counters of `workload(n)` for the two repetition counts.
+/// Counters of `workload(n)` for the two repetition counts, after one
+/// discarded run: the thread's shared fallback domain is created, and its
+/// shapes recorded, by whichever run comes first.
 fn repeated(workload: impl Fn(u32) -> String) -> (Counters, Counters) {
+    counted(&workload(FEW));
     (counted(&workload(FEW)), counted(&workload(MANY)))
 }
 
@@ -172,7 +175,8 @@ fn wrapper_function_array_and_regexp_result_creation_create_no_domain() {
 #[test]
 fn an_add_probes_its_store_once() {
     // A null-prototype receiver has no inherited setter to look up, so every
-    // probe counted here is the store's own.
+    // probe counted here is the store's own; a function's and an array's
+    // named tables are held to the same rule.
     let adds = |n: u32| {
         format!(
             "var o = Object.create(null);
@@ -181,11 +185,15 @@ fn an_add_probes_its_store_once() {
              for (var j = 0; j < {n}; j++) {{
                  Object.defineProperty(d, 'p' + j, {{ value: j, writable: true, enumerable: true, configurable: true }});
              }}
+             var f = function () {{}};
+             for (var k = 0; k < {n}; k++) {{ f['f' + k] = k; }}
+             var a = [];
+             for (var m = 0; m < {n}; m++) {{ a['a' + m] = m; }}
              0;"
         )
     };
     let (few, many) = repeated(adds);
-    let added = u64::from(2 * (MANY - FEW));
+    let added = u64::from(4 * (MANY - FEW));
     assert!(
         many.property_add_probes - few.property_add_probes <= added,
         "{} add probes for {added} adds",

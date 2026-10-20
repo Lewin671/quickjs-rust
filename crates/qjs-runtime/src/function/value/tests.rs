@@ -216,12 +216,11 @@ fn compiled_function_keeps_default_prototype_order_implicit_until_observation() 
     };
 
     assert!(function.auxiliary.lazy_default_prototype.get());
-    assert!(function.property_order().is_empty());
+    assert!(function.properties.borrow().is_empty());
     assert_eq!(
         function.own_property_names(),
         ["length", "name", "prototype"]
     );
-    assert_eq!(function.property_order(), ["prototype"]);
 }
 
 #[test]

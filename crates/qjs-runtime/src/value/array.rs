@@ -802,15 +802,17 @@ impl ArrayRef {
 
     pub(crate) fn set(&self, index: usize, value: Value) {
         if index > MAX_ARRAY_INDEX {
+            let key = index.to_string();
             let mut properties = self.0.cold().properties.borrow_mut();
-            if let Some(mut property) = properties.get_mut(&index.to_string()) {
+            if let Some(slot) = properties.probe(&key) {
+                let mut property = properties.slot_mut(slot);
                 if property.writable {
                     property.value = value;
                 }
                 return;
             }
             if self.0.extensible.get() {
-                properties.insert(index.to_string(), Property::enumerable(value));
+                properties.append_absent(None, &key, Property::enumerable(value));
             }
             return;
         }
@@ -901,7 +903,8 @@ impl ArrayRef {
     /// table takes at its first install.
     pub(crate) fn set_property(&self, domain: &AtomDomain, key: String, value: Value) {
         let mut properties = self.0.cold().properties.borrow_mut();
-        if let Some(mut property) = properties.get_mut(&key) {
+        if let Some(slot) = properties.probe(&key) {
+            let mut property = properties.slot_mut(slot);
             if property.writable {
                 property.value = value;
             }
@@ -910,7 +913,7 @@ impl ArrayRef {
         if !self.0.extensible.get() {
             return;
         }
-        properties.insert_hinted(Some(domain), key, Property::enumerable(value));
+        properties.append_absent(Some(domain), &key, Property::enumerable(value));
     }
 
     /// Defines an own property; a named one takes `domain` at the table's

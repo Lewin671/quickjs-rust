@@ -139,7 +139,7 @@ pub(crate) fn install_typed_arrays(
         Value::Function(typed_array_intrinsic.clone()),
     );
     symbol::define_species_accessor(env, &typed_array_intrinsic);
-    install_typed_array_static_methods(&typed_array_intrinsic);
+    install_typed_array_static_methods(env.realm().atoms(), &typed_array_intrinsic);
 
     for (name, native) in TYPED_ARRAY_KINDS {
         install_typed_array_constructor(
@@ -192,12 +192,16 @@ pub(crate) fn alias_array_prototype_to_string(env: &mut CallEnv) {
 /// Installs the `%TypedArray%.from` and `%TypedArray%.of` static methods on the
 /// shared intrinsic; concrete constructors inherit them through the function
 /// prototype chain.
-fn install_typed_array_static_methods(intrinsic: &Function) {
+fn install_typed_array_static_methods(
+    atoms: &crate::property::atom::AtomDomain,
+    intrinsic: &Function,
+) {
     for (name, length, native) in [
         ("from", 1, NativeFunction::TypedArrayFrom),
         ("of", 0, NativeFunction::TypedArrayOf),
     ] {
-        intrinsic.properties.borrow_mut().insert(
+        intrinsic.properties.borrow_mut().insert_in(
+            atoms,
             name,
             Property::non_enumerable(Value::Function(Function::new_native(
                 Some(name),

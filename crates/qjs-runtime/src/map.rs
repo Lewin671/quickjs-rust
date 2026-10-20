@@ -20,7 +20,13 @@ pub(crate) fn install_map(env: &mut CallEnv, global_this: &Value, object_prototy
     map_prototype.set_to_string_tag("Map");
     symbol::define_well_known_to_string_tag(env, &map_prototype, "Map");
     let map_function = Function::new_native(Some("Map"), 0, NativeFunction::Map, true);
-    define_map_function(&map_function, "groupBy", 2, NativeFunction::MapGroupBy);
+    define_map_function(
+        env.realm().atoms(),
+        &map_function,
+        "groupBy",
+        2,
+        NativeFunction::MapGroupBy,
+    );
     map_prototype.define_non_enumerable(
         "constructor".to_owned(),
         Value::Function(map_function.clone()),
@@ -490,8 +496,15 @@ fn map_prototype(env: &CallEnv) -> Option<ObjectRef> {
     }
 }
 
-fn define_map_function(function: &Function, key: &str, length: usize, native: NativeFunction) {
-    function.properties.borrow_mut().insert(
+fn define_map_function(
+    atoms: &crate::property::atom::AtomDomain,
+    function: &Function,
+    key: &str,
+    length: usize,
+    native: NativeFunction,
+) {
+    function.properties.borrow_mut().insert_in(
+        atoms,
         key,
         Property::non_enumerable(Value::Function(Function::new_native(
             Some(key),

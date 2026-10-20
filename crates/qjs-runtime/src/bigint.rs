@@ -37,8 +37,15 @@ pub(crate) fn install_bigint(env: &mut CallEnv, global_this: &Value, object_prot
         0,
         NativeFunction::BigIntPrototypeValueOf,
     );
-    define_static_native(&bigint_function, "asIntN", 2, NativeFunction::BigIntAsIntN);
     define_static_native(
+        env.realm().atoms(),
+        &bigint_function,
+        "asIntN",
+        2,
+        NativeFunction::BigIntAsIntN,
+    );
+    define_static_native(
+        env.realm().atoms(),
         &bigint_function,
         "asUintN",
         2,
@@ -75,8 +82,15 @@ fn define_prototype_native(
     );
 }
 
-fn define_static_native(function: &Function, key: &str, length: usize, native: NativeFunction) {
-    function.properties.borrow_mut().insert(
+fn define_static_native(
+    atoms: &crate::property::atom::AtomDomain,
+    function: &Function,
+    key: &str,
+    length: usize,
+    native: NativeFunction,
+) {
+    function.properties.borrow_mut().insert_in(
+        atoms,
         key,
         Property::non_enumerable(Value::Function(Function::new_native(
             Some(key),

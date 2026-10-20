@@ -256,15 +256,34 @@ pub(crate) fn install_array(env: &mut CallEnv, global_this: &Value, object_proto
         Property::fixed_non_enumerable(Value::Object(array_prototype)),
     );
     symbol::define_species_accessor(env, &array_function);
-    define_array_function(&array_function, "from", 1, NativeFunction::ArrayFrom);
     define_array_function(
+        env.realm().atoms(),
+        &array_function,
+        "from",
+        1,
+        NativeFunction::ArrayFrom,
+    );
+    define_array_function(
+        env.realm().atoms(),
         &array_function,
         "fromAsync",
         1,
         NativeFunction::ArrayFromAsync,
     );
-    define_array_function(&array_function, "isArray", 1, NativeFunction::ArrayIsArray);
-    define_array_function(&array_function, "of", 0, NativeFunction::ArrayOf);
+    define_array_function(
+        env.realm().atoms(),
+        &array_function,
+        "isArray",
+        1,
+        NativeFunction::ArrayIsArray,
+    );
+    define_array_function(
+        env.realm().atoms(),
+        &array_function,
+        "of",
+        0,
+        NativeFunction::ArrayOf,
+    );
 
     let array_value = Value::Function(array_function);
     env.insert_realm("Array".to_owned(), array_value.clone());
@@ -285,8 +304,15 @@ fn define_array_prototype_function(
     );
 }
 
-fn define_array_function(function: &Function, key: &str, length: usize, native: NativeFunction) {
-    function.properties.borrow_mut().insert(
+fn define_array_function(
+    atoms: &crate::property::atom::AtomDomain,
+    function: &Function,
+    key: &str,
+    length: usize,
+    native: NativeFunction,
+) {
+    function.properties.borrow_mut().insert_in(
+        atoms,
         key,
         Property::non_enumerable(Value::Function(Function::new_native(
             Some(key),

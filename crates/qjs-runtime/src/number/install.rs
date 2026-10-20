@@ -74,36 +74,67 @@ pub(crate) fn install_number(env: &mut CallEnv, global_this: &Value, object_prot
         "prototype",
         Property::fixed_non_enumerable(Value::Object(number_prototype)),
     );
-    define_number_constant(&number_function, "EPSILON", f64::EPSILON);
     define_number_constant(
+        env.realm().atoms(),
+        &number_function,
+        "EPSILON",
+        f64::EPSILON,
+    );
+    define_number_constant(
+        env.realm().atoms(),
         &number_function,
         "MAX_SAFE_INTEGER",
         9_007_199_254_740_991.0,
     );
-    define_number_constant(&number_function, "MAX_VALUE", f64::MAX);
+    define_number_constant(env.realm().atoms(), &number_function, "MAX_VALUE", f64::MAX);
     define_number_constant(
+        env.realm().atoms(),
         &number_function,
         "MIN_SAFE_INTEGER",
         -9_007_199_254_740_991.0,
     );
-    define_number_constant(&number_function, "MIN_VALUE", f64::from_bits(1));
-    define_number_constant(&number_function, "NaN", f64::NAN);
-    define_number_constant(&number_function, "NEGATIVE_INFINITY", f64::NEG_INFINITY);
-    define_number_constant(&number_function, "POSITIVE_INFINITY", f64::INFINITY);
+    define_number_constant(
+        env.realm().atoms(),
+        &number_function,
+        "MIN_VALUE",
+        f64::from_bits(1),
+    );
+    define_number_constant(env.realm().atoms(), &number_function, "NaN", f64::NAN);
+    define_number_constant(
+        env.realm().atoms(),
+        &number_function,
+        "NEGATIVE_INFINITY",
+        f64::NEG_INFINITY,
+    );
+    define_number_constant(
+        env.realm().atoms(),
+        &number_function,
+        "POSITIVE_INFINITY",
+        f64::INFINITY,
+    );
     define_function_property(
+        env.realm().atoms(),
         &number_function,
         "isFinite",
         1,
         NativeFunction::NumberIsFinite,
     );
     define_function_property(
+        env.realm().atoms(),
         &number_function,
         "isInteger",
         1,
         NativeFunction::NumberIsInteger,
     );
-    define_function_property(&number_function, "isNaN", 1, NativeFunction::NumberIsNaN);
     define_function_property(
+        env.realm().atoms(),
+        &number_function,
+        "isNaN",
+        1,
+        NativeFunction::NumberIsNaN,
+    );
+    define_function_property(
+        env.realm().atoms(),
         &number_function,
         "isSafeInteger",
         1,
@@ -148,15 +179,28 @@ pub(crate) fn install_number(env: &mut CallEnv, global_this: &Value, object_prot
     }
 }
 
-fn define_number_constant(function: &Function, key: &str, value: f64) {
-    function.properties.borrow_mut().insert(
+fn define_number_constant(
+    atoms: &crate::property::atom::AtomDomain,
+    function: &Function,
+    key: &str,
+    value: f64,
+) {
+    function.properties.borrow_mut().insert_in(
+        atoms,
         key,
         Property::data(Value::Number(value), false, false, false),
     );
 }
 
-fn define_function_property(function: &Function, key: &str, length: usize, native: NativeFunction) {
-    function.properties.borrow_mut().insert(
+fn define_function_property(
+    atoms: &crate::property::atom::AtomDomain,
+    function: &Function,
+    key: &str,
+    length: usize,
+    native: NativeFunction,
+) {
+    function.properties.borrow_mut().insert_in(
+        atoms,
         key,
         Property::non_enumerable(Value::Function(Function::new_native(
             Some(key),

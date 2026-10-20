@@ -271,6 +271,9 @@ pub struct FunctionAuxiliaryState {
     sealed: Cell<bool>,
     frozen: Cell<bool>,
     lazy_default_prototype: Cell<bool>,
+    /// How many materialized standard defaults (`length`, `name`) lead the
+    /// table; an unobserved default `prototype` stands right after them.
+    leading_defaults: Cell<u8>,
     /// Metadata absent from ordinary closures. A single lazy allocation keeps
     /// the hot function object compact while preserving shared object identity
     /// when methods, classes, symbols, or prototype mutation need this state.
@@ -287,7 +290,6 @@ struct FunctionColdState {
     /// instance is constructed (base class: at construction start; derived
     /// class: immediately after `super()` returns).
     instance_elements: Rc<Vec<InstanceElementInitializer>>,
-    property_order: Vec<String>,
     symbol_properties: Vec<(ObjectRef, Property)>,
     /// Explicit [[Prototype]] override. `None` means "use the default
     /// %Function.prototype% intrinsic"; `Some(None)` means it is null.
@@ -403,6 +405,7 @@ impl FunctionAuxiliaryState {
             sealed: Cell::new(false),
             frozen: Cell::new(false),
             lazy_default_prototype: Cell::new(false),
+            leading_defaults: Cell::new(0),
             cold: RefCell::new(cold),
         }
     }
@@ -426,7 +429,6 @@ impl FunctionColdState {
             lexical_derived_this: None,
             super_constructor,
             instance_elements: Rc::new(Vec::new()),
-            property_order: Vec::new(),
             symbol_properties: Vec::new(),
             internal_prototype: None,
             private_state: crate::private::PrivateState::default(),
@@ -988,8 +990,6 @@ impl Function {
         // first, so most never exist.
         if constructable {
             function.mark_lazy_default_prototype();
-            // Its key order is fixed now, as an eager definition fixed it.
-            function.materialize_default_prototype_order();
         }
         function
     }
@@ -1020,58 +1020,60 @@ impl Function {
         )
     }
 
-    /// Moves the implicit standard data properties into the general table.
-    /// Inserting at the front preserves the creation order (`length`, `name`,
-    /// then `prototype`) even when a constructable function has already
-    /// recorded its lazy prototype slot.
+    /// Moves the implicit standard data properties into the general table,
+    /// in front of every other key: creation order is `length`, `name`, then
+    /// `prototype`.
     fn materialize_default_data_properties(&self) {
-        self.materialize_default_prototype_order();
         let had_length = self.auxiliary.implicit_length_property.replace(false);
         let had_name = self.auxiliary.implicit_name_property.replace(false);
         if !had_length && !had_name {
             return;
         }
-
         let domain = self.named_domain();
         let mut properties = self.properties.borrow_mut();
-        self.auxiliary.with_cold_mut(|cold| {
-            let mut insert_at = 0;
-            if had_length && !properties.contains_key("length") {
-                properties.insert_hinted(domain, "length", self.default_length_property());
-            }
-            if had_length {
-                cold.property_order.insert(insert_at, "length".to_owned());
-                insert_at += 1;
-            }
-            if had_name && !properties.contains_key("name") {
-                properties.insert_hinted(domain, "name", self.default_name_property());
-            }
-            if had_name {
-                cold.property_order.insert(insert_at, "name".to_owned());
-            }
-        });
+        let mut leading = self.auxiliary.leading_defaults.get();
+        if had_length && properties.probe("length").is_none() {
+            properties.insert_absent_at(domain, 0, "length", self.default_length_property());
+            leading += 1;
+        }
+        if had_name && properties.probe("name").is_none() {
+            let at = usize::from(leading > 0);
+            properties.insert_absent_at(domain, at, "name", self.default_name_property());
+            leading += 1;
+        }
+        self.auxiliary.leading_defaults.set(leading);
     }
 
     fn mark_lazy_default_prototype(&self) {
         self.auxiliary.lazy_default_prototype.set(true);
     }
 
-    /// Records the ordinary function's original `prototype` property slot
-    /// only when property observation or mutation needs ordering state. This
-    /// keeps unobserved closures from allocating a `Vec` buffer and owned key.
-    fn materialize_default_prototype_order(&self) {
-        if !self.auxiliary.lazy_default_prototype.get() {
-            return;
+    /// Where an unobserved default `prototype` stands in key order: right
+    /// after the materialized standard `length` and `name`, ahead of every
+    /// key added after the function was created.
+    fn default_prototype_position(&self) -> usize {
+        usize::from(self.auxiliary.leading_defaults.get())
+    }
+
+    /// Keeps [`Self::default_prototype_position`] true when `key` is about
+    /// to leave the table.
+    fn forget_leading_default(
+        &self,
+        properties: &crate::property::named_table::NamedTable,
+        key: &str,
+    ) {
+        let leading = usize::from(self.auxiliary.leading_defaults.get());
+        if leading > 0
+            && properties
+                .keys()
+                .take(leading)
+                .any(|existing| existing == key)
+        {
+            self.auxiliary.leading_defaults.set(leading as u8 - 1);
         }
-        self.auxiliary.with_cold_mut(|cold| {
-            if !cold.property_order.iter().any(|key| key == "prototype") {
-                cold.property_order.push("prototype".to_owned());
-            }
-        });
     }
 
     fn ensure_default_prototype(&self) {
-        self.materialize_default_prototype_order();
         if !self.auxiliary.lazy_default_prototype.replace(false) {
             return;
         }
@@ -1083,8 +1085,11 @@ impl Function {
         let prototype =
             ObjectRef::with_prototype(HashMap::new(), object_prototype(&self.creation_env()));
         prototype.define_non_enumerable("constructor".to_owned(), Value::Function(self.clone()));
-        self.properties.borrow_mut().insert_hinted(
+        let mut properties = self.properties.borrow_mut();
+        let at = self.default_prototype_position();
+        properties.insert_absent_at(
             self.named_domain(),
+            at,
             "prototype",
             Property::data(Value::Object(prototype), false, true, false),
         );
@@ -1195,12 +1200,12 @@ impl Function {
             self.ensure_default_prototype();
         }
         let mut properties = self.properties.borrow_mut();
-        if properties.contains_key(&key) {
-            if let Some(mut property) = properties.get_mut(&key)
-                && property.writable
-            {
+        if let Some(slot) = properties.probe(&key) {
+            let mut property = properties.slot_mut(slot);
+            if property.writable {
                 property.value = value;
             }
+            drop(property);
             drop(properties);
             self.refresh_dynamic_function_realm_override(&key);
             return;
@@ -1208,35 +1213,26 @@ impl Function {
         if !self.auxiliary.extensible.get() {
             return;
         }
-        self.materialize_default_prototype_order();
-        self.auxiliary
-            .with_cold_mut(|cold| cold.property_order.push(key.clone()));
-        let domain = self.named_domain();
-        properties.insert_hinted(domain, key.as_str(), Property::enumerable(value));
+        properties.append_absent(self.named_domain(), &key, Property::enumerable(value));
         drop(properties);
         self.refresh_dynamic_function_realm_override(&key);
     }
 
     pub(crate) fn define_property(&self, key: String, property: Property) {
-        self.materialize_default_prototype_order();
         if (key == "length" && self.auxiliary.implicit_length_property.get())
             || (key == "name" && self.auxiliary.implicit_name_property.get())
         {
             self.materialize_default_data_properties();
         }
         if key == "prototype" && self.auxiliary.lazy_default_prototype.replace(false) {
-            // Replacing the unobserved default: its order slot was recorded
-            // above, and no reference to the default object can exist.
-            self.properties
-                .borrow_mut()
-                .insert_hinted(self.named_domain(), key, property);
+            // Replacing the unobserved default in its slot: no reference to
+            // the default object can exist.
+            let mut properties = self.properties.borrow_mut();
+            let at = self.default_prototype_position();
+            properties.insert_absent_at(self.named_domain(), at, &key, property);
             return;
         }
         let mut properties = self.properties.borrow_mut();
-        if !properties.contains_key(&key) {
-            self.auxiliary
-                .with_cold_mut(|cold| cold.property_order.push(key.clone()));
-        }
         properties.insert_hinted(self.named_domain(), key.as_str(), property);
         drop(properties);
         self.refresh_dynamic_function_realm_override(&key);
@@ -1288,13 +1284,8 @@ impl Function {
     fn ordered_property_names(&self, include: impl Fn(&Property) -> bool) -> Vec<String> {
         self.ensure_default_prototype();
         let properties = self.properties.borrow();
-        let property_order = self
-            .auxiliary
-            .with_cold(|cold| cold.map_or_else(Vec::new, |cold| cold.property_order.clone()));
         let mut indices = Vec::new();
         let mut strings = Vec::new();
-        let mut fallback_strings = Vec::new();
-
         let implicit_length = self.auxiliary.implicit_length_property.get();
         let implicit_name = self.auxiliary.implicit_name_property.get();
         if implicit_length {
@@ -1315,25 +1306,10 @@ impl Function {
                 strings.push("name".to_owned());
             }
         }
-
-        for key in property_order.iter() {
-            let Some(property) = properties.get(key.as_str()) else {
-                continue;
-            };
-            if !include(property) {
-                continue;
-            }
-            if let Some(index) = array_index_property_key(key) {
-                indices.push((index, key.clone()));
-            } else {
-                strings.push(key.clone());
-            }
-        }
-
+        // The table's layout owns the order of everything else.
         for (key, property) in properties.iter() {
             if (implicit_length && key == "length")
                 || (implicit_name && key == "name")
-                || property_order.iter().any(|ordered| ordered == key)
                 || !include(property)
             {
                 continue;
@@ -1341,13 +1317,10 @@ impl Function {
             if let Some(index) = array_index_property_key(key) {
                 indices.push((index, key.to_owned()));
             } else {
-                fallback_strings.push(key.to_owned());
+                strings.push(key.to_owned());
             }
         }
-
         indices.sort_by_key(|(index, _)| *index);
-        fallback_strings.sort();
-        strings.extend(fallback_strings);
         indices
             .into_iter()
             .map(|(_, key)| key)
@@ -1383,13 +1356,12 @@ impl Function {
         {
             return false;
         }
+        self.forget_leading_default(&properties, key);
         properties.remove(key);
         drop(properties);
         if key == DYNAMIC_FUNCTION_REALM_GLOBAL {
             self.has_dynamic_function_realm_override.set(false);
         }
-        self.auxiliary
-            .with_cold_mut(|cold| cold.property_order.retain(|existing| existing != key));
         true
     }
 
@@ -1406,12 +1378,13 @@ impl Function {
         if key == "prototype" {
             self.ensure_default_prototype();
         }
-        self.properties.borrow_mut().remove(key);
+        let mut properties = self.properties.borrow_mut();
+        self.forget_leading_default(&properties, key);
+        properties.remove(key);
+        drop(properties);
         if key == DYNAMIC_FUNCTION_REALM_GLOBAL {
             self.has_dynamic_function_realm_override.set(false);
         }
-        self.auxiliary
-            .with_cold_mut(|cold| cold.property_order.retain(|existing| existing != key));
     }
 
     pub(crate) fn symbol_property(&self, symbol: &ObjectRef, env: &CallEnv) -> Option<Property> {
@@ -1676,12 +1649,6 @@ impl Function {
     pub(crate) fn set_lexical_derived_this(&self, cell: Upvalue, constructor: Function) {
         self.auxiliary
             .with_cold_mut(|cold| cold.lexical_derived_this = Some((cell, constructor)));
-    }
-
-    #[cfg(test)]
-    fn property_order(&self) -> Vec<String> {
-        self.auxiliary
-            .with_cold(|cold| cold.map_or_else(Vec::new, |cold| cold.property_order.clone()))
     }
 }
 

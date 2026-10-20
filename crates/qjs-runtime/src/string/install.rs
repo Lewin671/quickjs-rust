@@ -96,18 +96,26 @@ pub(crate) fn install_string(env: &mut CallEnv, global_this: &Value, object_prot
         Property::fixed_non_enumerable(Value::Object(string_prototype)),
     );
     define_function_property(
+        env.realm().atoms(),
         &string_function,
         "fromCharCode",
         1,
         NativeFunction::StringFromCharCode,
     );
     define_function_property(
+        env.realm().atoms(),
         &string_function,
         "fromCodePoint",
         1,
         NativeFunction::StringFromCodePoint,
     );
-    define_function_property(&string_function, "raw", 1, NativeFunction::StringRaw);
+    define_function_property(
+        env.realm().atoms(),
+        &string_function,
+        "raw",
+        1,
+        NativeFunction::StringRaw,
+    );
     let string_value = Value::Function(string_function);
     env.insert_realm("String".to_owned(), string_value.clone());
     if let Value::Object(global_object) = global_this {
@@ -146,8 +154,15 @@ fn define_object_alias(object: &ObjectRef, key: &str, target: &str) {
     }
 }
 
-fn define_function_property(function: &Function, key: &str, length: usize, native: NativeFunction) {
-    function.properties.borrow_mut().insert(
+fn define_function_property(
+    atoms: &crate::property::atom::AtomDomain,
+    function: &Function,
+    key: &str,
+    length: usize,
+    native: NativeFunction,
+) {
+    function.properties.borrow_mut().insert_in(
+        atoms,
         key,
         Property::non_enumerable(Value::Function(Function::new_native(
             Some(key),

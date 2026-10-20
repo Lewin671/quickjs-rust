@@ -1671,12 +1671,11 @@ fn literal_domain(prototype: Option<&ObjectRef>) -> AtomDomain {
     }
 }
 
-/// A domain for a store created with no realm or prototype to take one from.
-/// Counted with every other domain, so the obligation tests show which
-/// creation paths still reach it.
+/// The domain for a store created with no realm or prototype to take one
+/// from: the shared fallback, never a private one.
 #[cold]
 fn fallback_domain() -> AtomDomain {
-    AtomDomain::new()
+    AtomDomain::shared_fallback()
 }
 
 fn is_internal_property_key(key: &str) -> bool {

@@ -98,49 +98,93 @@ impl NamedTable {
         Some(SlotMut { table: self, slot })
     }
 
-    /// Defines `key` in a table whose domain is already fixed or is fixed
-    /// now from `domain`. Returns the replaced descriptor.
-    pub(crate) fn insert_in(
+    /// The one probe an edit makes, counted against the one-probe rule; a
+    /// miss proves `key` absent for [`Self::append_absent`].
+    pub(crate) fn probe(&self, key: &str) -> Option<usize> {
+        crate::diagnostics::count!(property_add_probes);
+        self.lookup(key)
+    }
+
+    /// The descriptor at a probed slot, borrowed for in-place mutation.
+    pub(crate) fn slot_mut(&mut self, slot: usize) -> SlotMut<'_> {
+        SlotMut { table: self, slot }
+    }
+
+    /// Appends `key`, which a [`Self::probe`] proved absent. A table without
+    /// a layout takes `domain` -- the receiver's realm domain -- or, from a
+    /// caller with no realm at hand, the shared fallback domain.
+    pub(crate) fn append_absent(
         &mut self,
-        domain: &AtomDomain,
-        key: impl AsRef<str>,
+        domain: Option<&AtomDomain>,
+        key: &str,
         property: Property,
-    ) -> Option<Property> {
-        let key = key.as_ref();
-        if let Some(slot) = self.lookup(key) {
-            let old = std::mem::replace(&mut self.slots[slot], property);
-            self.publish(slot);
-            return Some(old);
-        }
-        let layout = self
-            .layout
-            .get_or_insert_with(|| domain.root(Encoding::Small));
+    ) {
+        let layout = self.layout.get_or_insert_with(|| match domain {
+            Some(domain) => domain.root(Encoding::Small),
+            None => AtomDomain::shared_fallback().root(Encoding::Small),
+        });
         let slot = LayoutEdit::append(layout, key, Attributes::of(&property));
         debug_assert_eq!(slot, self.slots.len());
         self.slots.push(property);
-        None
     }
 
-    /// [`Self::insert_in`] with the receiver's realm domain when the caller
-    /// knows it, falling back to [`Self::insert`].
+    /// Defines `key` with one probe: replaces an existing descriptor in its
+    /// slot or appends a new one. Returns the replaced descriptor.
     pub(crate) fn insert_hinted(
         &mut self,
         domain: Option<&AtomDomain>,
         key: impl AsRef<str>,
         property: Property,
     ) -> Option<Property> {
-        match (self.layout.is_some(), domain) {
-            (false, Some(domain)) => self.insert_in(domain, key, property),
-            _ => self.insert(key, property),
+        let key = key.as_ref();
+        if let Some(slot) = self.probe(key) {
+            let old = std::mem::replace(&mut self.slots[slot], property);
+            self.publish(slot);
+            return Some(old);
         }
+        self.append_absent(domain, key, property);
+        None
     }
 
-    /// [`Self::insert_in`] for a caller with no realm at hand: the table's
-    /// own domain once it has one.
+    /// [`Self::insert_hinted`] with the installer's realm domain.
+    pub(crate) fn insert_in(
+        &mut self,
+        domain: &AtomDomain,
+        key: impl AsRef<str>,
+        property: Property,
+    ) -> Option<Property> {
+        self.insert_hinted(Some(domain), key, property)
+    }
+
+    /// [`Self::insert_hinted`] for a caller with no realm at hand.
     pub(crate) fn insert(&mut self, key: impl AsRef<str>, property: Property) -> Option<Property> {
-        match self.layout.as_ref().map(|layout| layout.domain().clone()) {
-            Some(domain) => self.insert_in(&domain, key, property),
-            None => self.insert_in(&unshared_domain(), key, property),
+        self.insert_hinted(None, key, property)
+    }
+
+    /// Inserts absent `key` at enumeration position `index`. A position
+    /// before the end rebuilds the table in the new order, which only a
+    /// lazily materialized default property needs.
+    pub(crate) fn insert_absent_at(
+        &mut self,
+        domain: Option<&AtomDomain>,
+        index: usize,
+        key: &str,
+        property: Property,
+    ) {
+        if index >= self.slots.len() {
+            self.append_absent(domain, key, property);
+            return;
+        }
+        let own = self.domain().cloned();
+        let domain = own.as_ref().or(domain);
+        let old = std::mem::take(self);
+        let mut entries: Vec<(String, Property)> = old
+            .iter()
+            .map(|(key, property)| (key.to_owned(), property.clone()))
+            .collect();
+        entries.insert(index, (key.to_owned(), property));
+        for (key, property) in entries {
+            self.append_absent(domain, &key, property);
         }
     }
 
@@ -182,12 +226,4 @@ impl NamedTable {
     pub(crate) fn values(&self) -> impl Iterator<Item = &Property> {
         self.slots.iter()
     }
-}
-
-/// A domain for a table first installed by code with no realm at hand.
-/// Counted with every other domain, so the obligation tests show which
-/// install paths still reach it.
-#[cold]
-fn unshared_domain() -> AtomDomain {
-    AtomDomain::new()
 }
