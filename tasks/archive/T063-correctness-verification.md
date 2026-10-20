@@ -2,7 +2,7 @@
 
 - Status: historical-campaign; initial correctness checks complete.
 - Implementation: present at `8e5a2c3f`; later instruction repairs are owned by
-  [active T063](../T063-string-canonical.md).
+  [T063](T063-string-canonical.md).
 - Verified at: `8e5a2c3f`, 2026-10-20; the exact commands and results below.
 - Evidence: committed fixtures/tests and durable counts below; raw iMac logs
   are local workspace artifacts, not retained in this repository.

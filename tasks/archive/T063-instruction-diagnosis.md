@@ -9,7 +9,7 @@
   are workspace `outputs/imac-bench/<job>/` artifacts, not retained in Git.
 - Unresolved: lead wall-time acceptance remains open; exact LLVM heuristic
   behind the original code-generation perturbation is not claimed.
-- Next action: [active T063](../T063-string-canonical.md) owns integration under
+- Next action: [T063](T063-string-canonical.md) owns integration under
   its unchanged lead decision.
 
 ## Root cause and final repair

@@ -13,7 +13,6 @@ it to `archive/` with `git mv` and move its row below.
 
 | Task | Status | What it is |
 | --- | --- | --- |
-| [T063](T063-string-canonical.md) canonical string construction | active | Correctness and instruction repair verified; lead screen pending ([diagnosis](archive/T063-instruction-diagnosis.md), [initial checks](archive/T063-correctness-verification.md)). |
 | [T057](T057-string-code-units.md) string code units | active | Stage-1 PROMOTE under v4; integrated into main; stages 2 onward require new plans. |
 | [T056](T056-interpreter-core-v2.md) interpreter core v2 | active | Target design for names, frames and values; unit 0 and M2 re-plan complete; M1 stage 1 complete on its branch (v4 screen pass), integration next. |
 | [T018](T018-broad-performance.md) broad performance | active | The performance campaign contract and its targets against QuickJS-NG. Start performance work here, then follow [the workflow](../docs/performance-workflow.md). |
@@ -43,6 +42,7 @@ outcome column says what happened, not what to do next.
 
 | Task | Outcome |
 | --- | --- |
+| `T063-string-canonical.md` | Surrogate pairs stored canonically at construction; instruction repair; regression screen passed (lanes 0.998-1.008); integrated ([correctness](archive/T063-correctness-verification.md), [instructions](archive/T063-instruction-diagnosis.md)). |
 | `T058-regexp-lazy-quantifiers.md` | Fixed-candidate v6 unit retained: papaparse/csv 0.0806 at formal, 86/86 selection and 9/9 held-out pass, Test262 42,672/42,672; candidate `736200aa`, integration pending. |
 | `T062-formal-precision-rule.md` | Prospective v6 two-look exact-median formal gates; v5 measurement/bands retained; historical attempts unchanged. |
 | `T061-quick-triage.md` | Queue-only v5 fixed-subset diagnostics; T058 validation took 9.01 min, verdict unclear, no acceptance changes. |

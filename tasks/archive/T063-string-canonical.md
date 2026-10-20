@@ -1,19 +1,17 @@
 # T063: Canonical surrogate-pair string construction
 
-- Status: active; correctness and instruction repair verified; lead screen
-  and integration pending.
-- Implementation: canonical builders and staged instruction repairs present
-  through `d5787373`; no merge or project-remote push.
+- Status: closed; correctness fix integrated after the lead regression screen passed.
+- Implementation: canonical builders and instruction repairs through `d5787373`;
+  screened candidate `32e085f8`; integrated into main.
 - Verified at: `d5787373`, 2026-10-20; fast/full gates, 252 NG fixtures, 671
   focused and 5170 complete allowlist cases; nine instruction goals pass.
-- Evidence: [initial correctness](archive/T063-correctness-verification.md) and
-  [instruction repair](archive/T063-instruction-diagnosis.md) records; raw logs
-  are local workspace artifacts, not retained in this repository.
-- Unresolved: lead wall-time screen pending; three unconfigured upstream
-  cases fail identically on base and repair. Existing T057 search coordinate
-  and half-surrogate differences remain outside this fix.
-- Next action: lead reviews the repaired branch and runs its unchanged
-  acceptance rule before integration; retain the owner worktree.
+- Evidence: [initial correctness](T063-correctness-verification.md) and
+  [instruction repair](T063-instruction-diagnosis.md) records; regression screen
+  result below; raw logs are local workspace artifacts.
+- Unresolved: three unconfigured upstream cases fail identically on base and
+  repair. Existing T057 search coordinate and half-surrogate differences remain
+  outside this fix.
+- Next action: none; T056's property-layout work builds on this invariant.
 
 ## Goal and scope
 
@@ -66,7 +64,7 @@ payloads and isolate owned field drops with the same publication order.
 ## Verification
 
 Initial correctness commands, first padding failure and completed 5107-case
-scoped coverage are recorded in [the correctness verification archive](archive/T063-correctness-verification.md).
+scoped coverage are recorded in [the correctness verification archive](T063-correctness-verification.md).
 The lead decision below controls acceptance; instruction diagnostics do not
 replace its wall-time screen.
 
@@ -74,7 +72,7 @@ replace its wall-time screen.
 
 The repair at `d5787373` meets the requested instruction goal on all nine
 cases (highest median 1.001043); all six sentinels stay within 0.999957..1.000797.
-[The instruction diagnosis record](archive/T063-instruction-diagnosis.md) owns
+[The instruction diagnosis record](T063-instruction-diagnosis.md) owns
 exact images, root-cause evidence, all failed experiments, per-case ratios,
 per-operation counts and rerun results. This is instruction-only evidence;
 there is no new wall-time acceptance or change to the lead decision below.
@@ -100,3 +98,17 @@ store code generation and a per-unit helper call) was fixed in `d5787373`.
 The formal compare above therefore runs against candidate `32e085f8`
 (runtime identical to `d5787373`) instead of `41f4ee96`. Base, thresholds
 and the failure procedure are unchanged.
+
+### Regression screen result (lead, 2026-10-20): pass
+
+Formal job `20261020T102844Z-t063-regression-formal30` (base `cb8ec3ad`,
+candidate `32e085f8`, 30 blocks, workers-4), exit 0 after 2272 s, not
+DISTURBED. Lane geomeans candidate/base: broad 0.9976, sentinel 1.0077,
+external 1.0018 (45 cases), development 1.0031 (10 cases), all at most
+1.010. One case exceeded the interval rule: broad `captured_write` 1.0584
+[1.0535, ...]. Its no-timing follow-up `20261020T110933Z-t063-captured-write-instr`
+(exact compare binaries, SHA-256 `c2ba9849...` base, `6dac1d26...`
+candidate; per-iteration instructions from 1M/5M iterations, three runs)
+gives 1482.7 base and 1479.7 candidate, ratio 0.998, so the excess is
+placement and does not block. Highest other cases: external hash-map 1.0355
+[1.0282], lodash/transform 1.0270 [1.0228]. The rule passes; T063 integrates.
