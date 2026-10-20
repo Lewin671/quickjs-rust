@@ -78,6 +78,9 @@
     check(Reflect.ownKeys(proxy).length === 1, p[0] + ' proxy');
   }
   check(JSON.stringify({a:{b:0}}, null, lo + hi).includes(C), 'JSON indentation seam');
+  check('abc'.padEnd(6, C) === 'abc' + C + hi, 'padEnd unit prefix');
+  check('abc'.padStart(6, C) === C + hi + 'abc', 'padStart unit prefix');
+  check(C.padStart(2, 'x') === C && C.padEnd(3, 'x') === C + 'x', 'padding receiver length');
   var name = '\uD801' + '\uDC00';
   globalThis[name] = 42;
   check((0, eval)('\u{10400}') === 42, 'global identifier');

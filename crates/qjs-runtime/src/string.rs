@@ -55,7 +55,7 @@ pub(crate) const STRING_DATA_PROPERTY: &str = "\0StringData";
 const SURROGATE_ESCAPE_SENTINEL_BASE: u32 = 0xF0000;
 
 /// Iterates the UTF-16 code units of a stored string without allocating.
-pub(crate) fn code_units(value: &str) -> impl Iterator<Item = u16> + '_ {
+pub(crate) fn code_units(value: &str) -> impl Iterator<Item = u16> + Clone + '_ {
     value.chars().flat_map(|character| {
         let mut buffer = [0_u16; 2];
         let units: &[u16] = match surrogate_escape_code_unit(character) {

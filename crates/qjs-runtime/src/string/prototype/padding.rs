@@ -20,7 +20,7 @@ pub(crate) fn native_string_prototype_pad(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
         env,
     )?;
-    let string_length = value.chars().count();
+    let string_length = super::super::string_code_unit_len(&value);
     if max_length <= string_length {
         return Ok(Value::String(value.into()));
     }
@@ -60,8 +60,8 @@ pub(crate) fn native_string_prototype_pad(
 
 fn repeated_prefix(pattern: &str, length: usize) -> String {
     let mut result = String::new();
-    for character in pattern.chars().cycle().take(length) {
-        crate::string::push_js_char(&mut result, character);
+    for unit in super::super::code_units(pattern).cycle().take(length) {
+        super::super::push_code_unit(&mut result, unit);
     }
     result
 }

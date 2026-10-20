@@ -108,3 +108,39 @@ fn producers_and_consumers_observe_one_code_unit_spelling() {
         ))
     );
 }
+
+#[test]
+fn padding_counts_and_truncates_by_utf16_units() {
+    for (source, expected) in [
+        (
+            r#"'abc'.padEnd(6, '😀')"#,
+            vec![0x61, 0x62, 0x63, 0xD83D, 0xDE00, 0xD83D],
+        ),
+        (
+            r#"'abc'.padStart(6, '😀')"#,
+            vec![0xD83D, 0xDE00, 0xD83D, 0x61, 0x62, 0x63],
+        ),
+        (r#"'😀'.padEnd(3, 'x')"#, vec![0xD83D, 0xDE00, 0x78]),
+        (r#"'😀'.padStart(3, 'x')"#, vec![0x78, 0xD83D, 0xDE00]),
+    ] {
+        let crate::Value::String(text) = crate::eval(source).unwrap() else {
+            panic!("string expected")
+        };
+        assert_eq!(string_code_units(&text), expected, "{source}");
+        assert!(is_canonical(&text));
+    }
+    assert_eq!(
+        crate::eval(r#"'😀'.padEnd(2, { toString() { throw 1; } })"#),
+        Ok(crate::Value::String("😀".into()))
+    );
+}
+
+#[test]
+fn repeat_rejects_excess_utf16_length_before_allocating() {
+    assert!(
+        crate::eval(r#"'😀'.repeat(536870912)"#)
+            .unwrap_err()
+            .message
+            .contains("RangeError")
+    );
+}

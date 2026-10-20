@@ -1,7 +1,9 @@
 # T063: Canonical surrogate-pair string construction
 
-- Status: active; correctness fix awaiting final gates and integration.
-- Implementation: present in the working tree on `agent/string-canonical/codex`.
+- Status: active; first full gate exposed padding unit-count regression; fixed
+  in working tree, final gates pending.
+- Implementation: present at `3504e994` plus padding/repeat length correction
+  in the working tree on `agent/string-canonical/codex`.
 - Verified at: base `cb8ec3ad`, 2026-10-20 working tree; `cargo test --workspace`
   passes (runtime 2321 tests); staged fast gate passes including 163 Test262
   cases. Full gate and NG comparison pending.
@@ -37,7 +39,8 @@ replacement output/substitutions; RegExp escaping; global unescape. Normalize
 and toWellFormed preserve canonical input, including actual sentinel-range
 scalars. Atom interning retains defensive canonicalization: its untyped `&str`
 API accepts raw text independently of `JsString`, so removing it is not part
-of this fix. No consumer adds a normalization scan.
+of this fix. No consumer adds a normalization scan. Padding counts and truncates UTF-16
+units; repeat checks its maximum length in units before allocating.
 
 ## Coverage
 
@@ -55,6 +58,13 @@ of this fix. No consumer adds a normalization scan.
   internal expectations use stored-scalar coordinates, as its API requires.
 
 ## Verification and merge screening
+
+First iMac no-timing job `20261020T081603Z-string-canonical-gates` at
+`3504e994`: full gate exit 1, `String/prototype/padEnd/normal-operation.js`
+failed with `Expected SameValue to be true`. All preceding stages passed.
+Canonical literals made the old scalar-based filler truncation observable;
+padding now streams code units, and repeat's length limit also counts units.
+The dependent compare/slice commands did not run after that failure.
 
 Pending final commands:
 

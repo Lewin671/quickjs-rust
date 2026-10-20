@@ -47,9 +47,7 @@ pub(crate) fn native_string_prototype_repeat(
     let count = count.trunc() as usize;
     // The result must not exceed the maximum string length, matching QuickJS-NG
     // (2^30 - 1); otherwise repeat would attempt a multi-gigabyte allocation.
-    let too_long = value
-        .chars()
-        .count()
+    let too_long = string_code_unit_len(&value)
         .checked_mul(count)
         .is_none_or(|len| len > MAX_STRING_LENGTH);
     if too_long {
