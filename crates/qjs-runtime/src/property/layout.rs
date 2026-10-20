@@ -836,7 +836,7 @@ impl LayoutEdit {
     /// Follows an existing append edge for `key` from a `Small` or `Dynamic`
     /// shape. An edge's key is absent from its parent, so a hit proves `key`
     /// absent without probing the fields. Returns the new slot.
-    #[inline]
+    #[inline(always)]
     pub(crate) fn append_by_edge(
         layout: &mut Layout,
         key: &str,

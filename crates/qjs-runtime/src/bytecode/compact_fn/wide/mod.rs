@@ -473,7 +473,20 @@ impl std::fmt::Debug for WideProgram {
 
 /// Returns this body's wide program, compiling it on first use. A body that
 /// cannot be represented caches `None`.
+#[inline]
 pub(super) fn program_for(bytecode: &Bytecode) -> Option<&WideProgram> {
+    match bytecode.compact_wide_program.get() {
+        Some(program) => program.as_ref(),
+        None => initialize_program(bytecode),
+    }
+}
+
+// Compiling an unseen body is cold. Inlining the OnceCell initializer into
+// each cached admission extends pointer live ranges across that call and can
+// spill the wide driver's ordinary scalar/upvalue paths after layout edits.
+#[cold]
+#[inline(never)]
+fn initialize_program(bytecode: &Bytecode) -> Option<&WideProgram> {
     bytecode
         .compact_wide_program
         .get_or_init(|| {
