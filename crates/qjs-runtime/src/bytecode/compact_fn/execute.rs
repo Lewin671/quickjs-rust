@@ -56,7 +56,20 @@ pub(super) fn store(slot: &mut Value, value: Value) {
 #[inline(never)]
 fn store_owned(slot: &mut Value, value: Value) {
     let previous = std::mem::replace(slot, value);
-    drop(previous);
+    // Spell the bounded dispatch here instead of adding another out-of-line
+    // drop_in_place<Value> call and keeping an entire enum temporary on stack.
+    // Exhaustiveness makes a future resource variant an explicit choice.
+    match previous {
+        Value::Number(_) | Value::Boolean(_) | Value::Null | Value::Undefined => {}
+        Value::BigInt(value) => drop(value),
+        Value::String(value) => drop(value),
+        Value::Function(value) => drop(value),
+        Value::Array(value) => drop(value),
+        Value::Object(value) => drop(value),
+        Value::Proxy(value) => drop(value),
+        Value::Map(value) => drop(value),
+        Value::Set(value) => drop(value),
+    }
 }
 
 #[cold]

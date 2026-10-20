@@ -128,6 +128,13 @@ The lexer scalar producer already excludes the entire sentinel range before
 its ordinary branch, so that branch cannot need seam repair. Restore its
 direct scalar append instead of redundantly calling the sentinel-aware helper.
 
+The scalar-producer fix reduces tagcloud only partially. Residual short exact
+samples (`20261020T095916Z-t063-residual-short-samples`, exit 0) are too sparse
+for percentages, but show the new owned-store call in the hot path. Its x86
+body adds a second out-of-line `drop_in_place<Value>` plus an old-enum stack
+copy. Expand that bounded enum dispatch inside the existing non-inlined owned
+helper, preserving publication order and each field's normal Rust drop.
+
 ### Lead regression-screen decision (2026-10-20, before any formal result)
 
 Fixed before the formal run; quick triage `20261020T084226Z-t063-quick-triage`
