@@ -13,7 +13,6 @@ it to `archive/` with `git mv` and move its row below.
 
 | Task | Status | What it is |
 | --- | --- | --- |
-| [T058](T058-regexp-lazy-quantifiers.md) RegExp lazy quantifiers | active | Old units remain closed; coordinator accepted general fix `736200aa`; distinct v6 contract committed and all nine guarded jobs queued; fresh schema-3 freeze precedes acceptance. |
 | [T057](T057-string-code-units.md) string code units | active | Stage-1 PROMOTE under v4; integrated into main; stages 2 onward require new plans. |
 | [T056](T056-interpreter-core-v2.md) interpreter core v2 | active | Target design for names, frames and values; unit 0 and M2 re-plan complete; M1 stage 1 complete on its branch (v4 screen pass), integration next. |
 | [T018](T018-broad-performance.md) broad performance | active | The performance campaign contract and its targets against QuickJS-NG. Start performance work here, then follow [the workflow](../docs/performance-workflow.md). |
@@ -43,6 +42,7 @@ outcome column says what happened, not what to do next.
 
 | Task | Outcome |
 | --- | --- |
+| `T058-regexp-lazy-quantifiers.md` | Fixed-candidate v6 unit retained: papaparse/csv 0.0806 at formal, 86/86 selection and 9/9 held-out pass, Test262 42,672/42,672; candidate `736200aa`, integration pending. |
 | `T062-formal-precision-rule.md` | Prospective v6 two-look exact-median formal gates; v5 measurement/bands retained; historical attempts unchanged. |
 | `T061-quick-triage.md` | Queue-only v5 fixed-subset diagnostics; T058 validation took 9.01 min, verdict unclear, no acceptance changes. |
 | `T060-parallel-layout-policy-v5.md` | Workers-4 policy v5 qualified (SHA-256 `f3e8ef40...`): case-sharded collection, screens and K=6 panels 2.55x faster than serial. |
@@ -91,7 +91,7 @@ outcome column says what happened, not what to do next.
 
 ## Other Records In `archive/`
 
-- T058: [attempt 1 incomplete closure](archive/T058-attempt1-incomplete.md), [attempt 2 inconclusive](archive/T058-attempt2-inconclusive.md), [v6 rejection](archive/T058-v6-rejection.md), [instruction diagnosis](archive/T058-instruction-diagnosis.md).
+- T058: [fixed-candidate v6 promotion](archive/T058-regexp-lazy-quantifiers.md), [attempt 1 incomplete closure](archive/T058-attempt1-incomplete.md), [attempt 2 inconclusive](archive/T058-attempt2-inconclusive.md), [v6 rejection](archive/T058-v6-rejection.md), [instruction diagnosis](archive/T058-instruction-diagnosis.md).
 - T057: [preliminary development baseline](archive/T057-development-baseline.md) [policy v3 qualification](archive/T057-development-policy.md) and [pre-stage-1 log](archive/T057-log.md).
 - T056: [unit 0 part 1 evidence](archive/T056-unit0-part1-evidence.md) (standing, attribution limits, RSS, ABI probes), [part 2](archive/T056-unit0-part2-evidence.md) (mechanism counters, development profiles, first-unit ranking and plan binding) and [M1 stage 1](archive/T056-m1-stage1-evidence.md) (atom linking and Value facade).
 - T055: [qualified policy adoption](archive/T055-layout-noise-control.md), [feedback-2 record](archive/T055-feedback-2-qualification.md), [feedback-1 record](archive/T055-feedback-1-qualification.md), [complete A2 data](archive/T055-phase-a2-data.md) and [B frozen plans/blocked qualification log](archive/T055-phase-b-plan-and-log.md).
