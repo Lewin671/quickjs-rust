@@ -14,7 +14,7 @@ mechanisms, ablations and jobs. The rules below remove each mechanism as a new i
 
 ## Dependency and replacement
 
-T063 (branch `agent/string-canonical/codex`, not yet on main) keeps every valid surrogate pair of a stored
+T063 (included in the frozen base `f58c696e`) keeps every valid surrogate pair of a stored
 string as its scalar, so equal code units have equal bytes. Keys from `JsString` values or linked atoms are then
 canonical by construction: probes compare and hash their bytes directly, behind a debug assertion. Untyped host
 `&str` entry points (atom interning, host property APIs) canonicalize once at entry.
@@ -32,9 +32,11 @@ The layout **replaces** payload lookup authority in the same stage; it is not la
     hosts without one) take it from the current realm.
   - Function, array and wrapper named parts take it from the receiver realm; installers pass their realm's
     domain.
-  - A creator with no realm at hand (a realm-less native's first named install, an array index past the dense or
-    index range, a null-prototype helper object) uses the per-thread shared fallback domain, which keeps its
-    roots like a realm. It is created once per thread, never per store.
+  - Every creation path receives the realm domain explicitly, including native/bound functions and null-prototype
+    helpers. Native functions retain it for later named installs; arrays request it lazily only for named-index
+    fallback. There is no production thread-local or global fallback domain.
+  - The internal `uninitialized_lexical_marker` alone has no domain: it is an identity sentinel that never receives
+    named properties. Attempting a named install on it is an invariant violation.
   - Ordered-data builders (JSON, RegExp/String wrappers) receive it before their first insert.
   - `PropertyStorage::dynamic` (objects built from a host map) builds its layout by appending the ordered keys
     through edges from the domain root. It does not publish a whole field list.
@@ -43,6 +45,8 @@ The layout **replaces** payload lookup authority in the same stage; it is not la
   - The table's layout owns its key order; there is no second key list. A function's standard `length` and
     `name`, once materialized, are inserted in front, and an unobserved default `prototype` is inserted right
     after them when it is created, ahead of every later key. An add probes the table once.
+  - Built-in constructors enumerate their remaining keys in installation order. Only a compiled function's implicit
+    default prototype reserves an earlier position; explicitly installed native prototypes do not reorder keys.
 - **One pointer.** The layout is one `Rc<LayoutNode>`: a shared immutable `Shape` or a private `Dictionary`.
   The dictionary node is uniquely owned and edited in place through its cell.
 - **Dictionary identity.** A dictionary keeps an independent `identity: Rc<()>` beside its `u64` version for

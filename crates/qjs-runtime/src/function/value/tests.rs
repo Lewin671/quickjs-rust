@@ -240,10 +240,3 @@ fn later_properties_follow_an_unobserved_default_prototype_slot() {
         ))
     );
 }
-
-#[test]
-fn tmp_probe_table_after_prototype_read() {
-    let Value::Function(function) = eval("function N(v){} N.prototype; N").unwrap() else { panic!() };
-    let table = function.properties.borrow();
-    eprintln!("TMPPROBE len={} keys={:?} enc={:?}", table.len(), table.keys().collect::<Vec<_>>(), table.domain().is_some());
-}

@@ -694,7 +694,8 @@ fn push_resource(
     let resources = disposable_stack_resources(object)?;
     resources.set(
         resources.len(),
-        resource_record(&object.store_domain(), kind, value, method), &|| object.store_domain(),
+        resource_record(&object.store_domain(), kind, value, method),
+        &|| object.store_domain(),
     );
     Ok(())
 }

@@ -15,10 +15,11 @@
   [M2 design inputs](archive/T056-m2-design-inputs.md);
   plans [`interpreter-core-v2-atoms-layouts`](performance-units/interpreter-core-v2-atoms-layouts.json) (closed),
   [`interpreter-core-v2-layout-edges`](performance-units/interpreter-core-v2-layout-edges.json).
-- Unresolved: stage A pre-gate (x86, non-timing, all 86 cases) not run; M2 (revised 2026-10-20 to five stages,
+- Unresolved: stage A diagnostic pre-gate 1 blocked on class fields and captured writes; the final-image
+  pre-gate (x86, non-timing, all 86 cases) is pending; M2 (revised 2026-10-20 to five stages,
   cost-first) needs fresh post-M1 profiles.
-- Next action: run the stage A pre-gate on the final committed image and record it in the stage A record; on a
-  pass, record `git diff f58c696e <candidate> -- crates` and run the stage A screen.
+- Next action: finish the explicit-realm-domain continuation, diagnose/reduce the instruction regressions, then
+  run and record the final committed-image pre-gate; the lead owns the timed stage A screen after a pass.
 
 ## Goal and scope
 

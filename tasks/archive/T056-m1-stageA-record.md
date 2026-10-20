@@ -12,12 +12,15 @@ Runtime commits over `50b42547`, oldest first: `3506f4db` (layout authority for 
 tables), `83601f83` and its revert `a31e87fa` (see the disclosure below), `9d5f96fb` (slot writes through the
 payload descriptor), `0abd7976` (one probe per named-table add, layout-owned function key order, shared fallback
 domain), `7d8f18db` (slot accesses without reading the layout node), `9049dfc6` (a missed named write is the
-creation's only probe), then tests and documentation.
+creation's only probe), then tests and documentation. `ff850af8` removes that fallback domain and threads the realm domain through
+all creation paths; its WIP formatting and temporary probe test are cleaned up in the continuation.
 
 Deviations from the design, with their reasons, are now stated in the design itself: the shared-slot dictionary
 token (a `Weak` of the node plus the owner's layout revision), edit edges capped at 8 with content-cache hits
-recording no edge, the lazy large-shape index, the per-thread shared fallback domain, and unpacked flags (packing
-saves no bytes at 120).
+recording no edge, the lazy large-shape index, explicit realm domains on all creation paths, and unpacked flags (packing
+saves no bytes at 120). The domain-less lexical marker never accepts named properties. Built-in constructor key
+order follows installation order, locked by `builtin_constructor_keys_enumerate_in_installation_order`. Counter
+tests no longer warm a fallback domain because that one-time production initialization no longer exists.
 
 ## Disclosure: write-site add replay (removed from stage A)
 
@@ -67,6 +70,31 @@ At `ccbc2378` plus the documentation commit: `./scripts/check.sh` passed (format
 perf-counters, all three test configurations, benchmark tool tests, plans, context, file sizes, Test262 subset of
 5170 cases) and `./scripts/compare-qjs.sh` passed all 255 fixtures, including the three new layout fixtures.
 
-## Pre-gate
+Continuation of `ff850af8`: removed the temporary prototype-table probe, formatted the realm-domain WIP,
+and split the native Test262 helpers from `global.rs` into `global/test262.rs` after the domain additions took
+the parent past its 2000-line limit. The cleanup working tree passed `check.sh` (including 5170 Test262 cases),
+`compare-qjs.sh` (255 fixtures), and `check-touched.sh --staged --explain` (2340 runtime tests and the selected
+function/eval slices). Final runtime changes will receive fresh gates.
 
-Not run yet: it runs on the final committed image, after the full gate.
+## Pre-gate 1: diagnostic image, BLOCK
+
+Job `20261020T171937Z-t056-m1a-pregate1`, image `38af1bc3` versus base `f58c696e`, x86_64 canonical
+release builds, one instruction pair over all 86 policy cases, cutoff `max(1.03, I_i)`. This image still used
+the removed thread-local fallback and is diagnostic only, never the screen image. No timed attempt was spent.
+Raw job files: workspace `outputs/imac-bench/20261020T171937Z-t056-m1a-pregate1/out/`.
+
+| Case | Candidate/base instructions |
+| --- | ---: |
+| external/jetstream3-js-subset/raytrace-public-class-fields | 1.0387 **BLOCK** |
+| broad/captured_write | 1.0310 **BLOCK** |
+| development/graphlib/paths | 1.0291 |
+| external/sunspider-1.0/string-unpack-code | 1.0275 |
+| external/jetstream3-js-subset/hash-map | 1.0196 |
+| external/sunspider-1.0/string-base64 | 1.0176 |
+| external/sunspider-1.0/string-validate-input | 1.0170 |
+| development/js-yaml/document | 1.0160 |
+| development/moment/dates (target) | 0.9811 |
+| development/diff/compare (target) | 0.9746 |
+| development/meriyah/parse (target) | 0.9819 |
+
+Final committed-image pre-gate remains pending.
