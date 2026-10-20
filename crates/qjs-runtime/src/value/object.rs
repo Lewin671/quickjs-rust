@@ -612,29 +612,40 @@ fn own_data_read(storage: &PropertyStorage, key: &str) -> OwnDataPropertyRead {
 
 /// Writes the existing writable data property at `slot` when `guard`
 /// accepts its current value; a rejected one is `NeedsSlowPath`, unchanged.
+/// The payload descriptor carries the same attributes as the layout field,
+/// so the write reads only the payload.
+#[inline]
 fn write_slot(
     storage: &mut PropertyStorage,
     slot: usize,
     value: &Value,
     guard: impl FnOnce(&Value) -> bool,
 ) -> OwnDataPropertyWrite {
-    let Some(attributes) = storage.field(slot).map(|field| field.attributes) else {
-        return OwnDataPropertyWrite::NeedsSlowPath;
-    };
-    if attributes.is_accessor() {
-        return OwnDataPropertyWrite::NeedsSlowPath;
+    match &mut storage.payload {
+        Payload::Slots(properties) => {
+            let Some(property) = properties.get_mut(slot) else {
+                return OwnDataPropertyWrite::NeedsSlowPath;
+            };
+            if property.is_accessor() || !guard(&property.value) {
+                return OwnDataPropertyWrite::NeedsSlowPath;
+            }
+            if !property.writable {
+                return OwnDataPropertyWrite::ReadOnly;
+            }
+            property.value = value.clone();
+            OwnDataPropertyWrite::Written
+        }
+        Payload::Pair(values) => {
+            let Some(current) = values.get_mut(slot) else {
+                return OwnDataPropertyWrite::NeedsSlowPath;
+            };
+            if !guard(current) {
+                return OwnDataPropertyWrite::NeedsSlowPath;
+            }
+            *current = value.clone();
+            OwnDataPropertyWrite::Written
+        }
     }
-    let Some(current) = storage.value_mut(slot) else {
-        return OwnDataPropertyWrite::NeedsSlowPath;
-    };
-    if !guard(current) {
-        return OwnDataPropertyWrite::NeedsSlowPath;
-    }
-    if !attributes.is_writable() {
-        return OwnDataPropertyWrite::ReadOnly;
-    }
-    *current = value.clone();
-    OwnDataPropertyWrite::Written
 }
 
 fn write_existing_data(
