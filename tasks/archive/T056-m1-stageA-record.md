@@ -522,3 +522,33 @@ between jobs, and rechecks variant-0 hashes before any timing. The old READY.id 
 candidate and is not reusable. The lead starts with a fresh correctness-ready job, then K=6 selection,
 formal30, stage-mode continuation and `decide --mode stage`; held-out remains a final-promotion requirement.
 No acceptance-chain job has been submitted for the new candidate.
+
+
+## Attempt 1 of 2: valid K=6 rejection
+
+Job **`20261020T210106Z-t056-m1a-chain-selection-k6`**, candidate `0a9af81b` against frozen base
+`f58c696e`, completed **done 3**, `label=reject`, complete=true, missing=[], with no DISTURBED marker.
+This is a **valid failed screen**: attempt **1 of 2 spent**, **one attempt remains across A+B combined**.
+The implementation shape at this image is rejected; this does not close the mechanism family. Downstream
+formal/continuation/decision jobs stop at the failed-prerequisite check. Do not rerun this image as a new
+acceptance or reuse its passing instruction pre-gate as timing acceptance.
+
+Natural image SHA-256: base `b0dfc65d0c026d62aa64ef3d69a089eb73b51088c84af75b44617ea2a1737f0e`,
+candidate `1970bb690fd9445e94036df51eb29ff7580c10ef16f0f298d0b0cee2112b7491`.
+All six lane/portfolio gates pass; actual per-layout portfolio geomeans span **0.99253276–0.99900745**.
+The five failures are all `persistent six-layout wall cost`, wall band **1.025**. Ratios below are
+candidate/base; the first two columns are natural placement, followed by wall medians for variants 0–5.
+
+| Case | Natural wall | Natural instructions | Six layout wall medians |
+| --- | ---: | ---: | --- |
+| broad/local_read | 1.07108483 | 0.96955200 | 1.071085, 1.027881, 1.054727, 1.144202, 1.086894, 1.096163 |
+| broad/property_dynamic_read | 1.07853161 | 0.98752372 | 1.078532, 1.045418, 1.059201, 1.057602, 1.052468, 1.043657 |
+| broad/branch_arithmetic | 1.05693929 | 0.97386144 | 1.056939, 1.039396, 1.072086, 1.131012, 1.036699, 1.135331 |
+| external/sunspider-1.0/access-binary-trees | 1.05264355 | 1.02048312 | 1.052644, 1.057757, 1.045871, 1.040363, 1.047475, 1.045481 |
+| external/sunspider-1.0/string-unpack-code | 1.04080178 | 1.02691898 | 1.040802, 1.042394, 1.051884, 1.048312, 1.039864, 1.047991 |
+
+Raw evidence: workspace `outputs/imac-bench/20261020T210106Z-t056-m1a-chain-selection-k6/out/`
+(`verdict.json`, immutable `screen/panel.json`, appended `screen/complete.json` and per-variant raw records).
+Next: diagnose executor/codegen placement and real tree/unpack instruction work, then have the lead run
+prospectively declared diagnostic triage before deciding whether to spend the sole remaining attempt.
+No new timing job is authorized for the implementation owner.
