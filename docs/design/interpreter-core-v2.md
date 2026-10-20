@@ -24,7 +24,7 @@ views first. Typed activation context replaces hot `CallEnv` copies; shared serv
 ## Frames: storage, activation context and lazy names
 
 M2 removes both nested Vms and ordinary per-call environment assembly. It preserves one authoritative slot/cell per binding; an ordinary call, including one creating closures or invoking natives,
-installs **no name-keyed entries**. General admission uses callable kind and execution state, never a benchmark identity or direct-leaf prerequisite. No unsafe is required.
+installs **no name-keyed entries**. General admission uses callable kind and execution state, never a benchmark identity or direct-leaf prerequisite. No unsafe is required. [Frame activation](frame-activation.md) owns the measured cost inventory, cohort replacement rule, driver/compact-window contract and M1 interface.
 
 Source paths are relative to `crates/qjs-runtime/src/`. `function/call.rs::function_env` inserts general-call parameters, this, arguments and internal context into `CallEnv.frame_bindings`;
 `initial_slots`/`initial_local_upvalues` in `bytecode/vm_bindings.rs` import them. `FrameBindings` is a name-keyed **vector**. `vm_frame_init.rs::frame_call_env` forks entries as values, exports live slots,
@@ -34,8 +34,8 @@ closure creators**: a native may invoke a passed closure whose eval needs outer 
 `callee_env`/`current_env` still export it. Deleting the closure predicate or pooling the vector neither migrates consumers nor removes the work.
 
 Owned code gets an immutable `BindingPlan`: parameter/input slot indices, received-cell order, call-context indices, scope parent/ranges, declaration kind/mutability and parameter/body/catch
-relationships. Runtime scope-instance tokens distinguish shadowing, TDZ, exited scopes and fresh loop iterations; source names live in code metadata, never copied at entry. `CallSeed` carries owned
-arguments (or a slice consumed before switching), this/new.target, callee/code/cells and realm handles. Initialize slots by index; compiled default/destructuring/rest prologues retain their order.
+relationships. Runtime scope-instance tokens distinguish shadowing, TDZ, exited scopes and fresh loop iterations; source names live in code metadata, never copied at entry. `CallSeed` carries the
+caller's argument range, moved once into parameter slots with no intermediate vector, this/new.target, callee/code/cells and realm handles. Initialize slots by index; compiled default/destructuring/rest prologues retain their order.
 Mapped arguments uses those same parameter cells, including duplicate-parameter rules. `ActivationContext` stores typed home/super/active-constructor, derived-this cell, function/field/eval flags,
 immutable-self identity, private environment, module/host/agent handles and realm. Lexical arrows retain the declaring context/cells, never inherit these from whichever native happens to invoke them.
 
@@ -150,8 +150,8 @@ not a hidden prerequisite or claimed allocation win over T023.
 
 ## Tiers and exits
 
-Compact/numeric/typed-loop tiers retain scalar banks and admission order. Their boxed banks use `Value`; shared property
-operations use atoms/layouts. Exit records name FrameId, exact IP, operands, slot/cell authority and pending completion.
+Compact/numeric/typed-loop tiers retain scalar banks and admission order; compact windows lease frame-store slots under the
+one driver. Boxed banks use `Value`; shared property operations use atoms/layouts. Exit records name FrameId, exact IP, operands, slot/cell authority and pending completion.
 Publish them before a generic call/re-entry; reacquire views after it. Virtual objects retain their field bank and
 identity-flow proof; do not invent a heap receiver for a placeholder. Only a later tier unit maps proven virtual fields
 into registers or materializes at a proved escape. Any side exit reconstructs state once, without replaying effects.
