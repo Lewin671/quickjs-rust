@@ -125,6 +125,7 @@ impl NamedTable {
     /// Defines `key` with one probe: replaces an existing descriptor in its
     /// slot or appends a new one. A table without a layout takes `domain`,
     /// the receiver's realm domain. Returns the replaced descriptor.
+    #[inline]
     pub(crate) fn insert_in(
         &mut self,
         domain: &AtomDomain,
@@ -132,6 +133,27 @@ impl NamedTable {
         property: Property,
     ) -> Option<Property> {
         let key = key.as_ref();
+        let layout = self
+            .layout
+            .get_or_insert_with(|| domain.root(Encoding::Small));
+        // An append edge proves this key absent, just as it does for an
+        // ordinary object's store. Do not probe the parent's fields again.
+        if let Some(slot) = LayoutEdit::append_by_edge(layout, key, Attributes::of(&property)) {
+            crate::diagnostics::count!(property_add_probes);
+            debug_assert_eq!(slot, self.slots.len());
+            self.slots.push(property);
+            return None;
+        }
+        self.insert_without_edge(domain, key, property)
+    }
+
+    #[inline(never)]
+    fn insert_without_edge(
+        &mut self,
+        domain: &AtomDomain,
+        key: &str,
+        property: Property,
+    ) -> Option<Property> {
         if let Some(slot) = self.probe(key) {
             let old = std::mem::replace(&mut self.slots[slot], property);
             self.publish(slot);
