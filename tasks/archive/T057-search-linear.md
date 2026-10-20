@@ -170,3 +170,14 @@ instruction follow-up on the exact compare binaries: ratio at most 1.010 is a
 placement effect and does not block; above it, the added work is fixed and the
 comparison repeated. The arm64 +1.07% `property_dynamic_read` instruction
 note is diagnostic only; x86_64 instructions decide.
+
+Result (lead, 2026-10-20): pass. Formal `20261020T130140Z-search-linear-formal30`
+(base `fa96320f`, candidate `9578dcee`), exit 0 after 2199 s, not DISTURBED.
+Lane geomeans: broad 0.9960, sentinel 1.0000, external 1.0001 (45),
+development 0.9949 (10). Two cases exceeded the interval rule: broad
+`empty_loop` 1.0459 (lower 1.0432) and external `kraken-1.1/imaging-gaussian-blur`
+1.0522 (lower 1.0452). No-timing follow-up `20261020T142221Z-search-linear-instr-followup`
+on the exact compare binaries (`41a86320...` base, `f5822aa3...` candidate):
+empty_loop 107.02 vs 107.03 instructions per iteration (1.0001); gaussian-blur
+whole run, median of three, 123.916e9 vs 123.927e9 (1.0001). Both are placement
+and do not block.
