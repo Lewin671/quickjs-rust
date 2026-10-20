@@ -47,19 +47,30 @@ pub fn is_canonical(text: &str) -> bool {
 
 /// Appends canonical stored text, checking at most the two seam scalars.
 /// The ASCII path inspects only the first suffix byte; no prefix scan occurs.
-#[inline]
+#[inline(always)]
 pub fn push_js_str(output: &mut String, suffix: &str) {
-    if suffix.as_bytes().first().is_some_and(|byte| *byte >= 0xF0)
-        && let Some(last) = output.chars().next_back()
+    if suffix.as_bytes().first().is_some_and(|byte| *byte >= 0xF0) {
+        push_wide_seam(output, suffix);
+    } else {
+        output.push_str(suffix);
+    }
+}
+
+// Keep UTF-8 decoding and the pair-repair branch out of append callers' inline
+// graph. Their ordinary path needs only the first suffix byte and bulk copy.
+#[cold]
+#[inline(never)]
+fn push_wide_seam(output: &mut String, suffix: &str) {
+    if let Some(last) = output.chars().next_back()
         && let Some(first) = suffix.chars().next()
         && let Some(merged) = merged_pair(last, first)
     {
         output.truncate(output.len() - last.len_utf8());
         output.push(merged);
         output.push_str(&suffix[first.len_utf8()..]);
-        return;
+    } else {
+        output.push_str(suffix);
     }
-    output.push_str(suffix);
 }
 
 /// Appends one stored scalar (including a lone-surrogate sentinel).

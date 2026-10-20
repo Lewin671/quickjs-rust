@@ -121,6 +121,30 @@ emission; repeat retains Rust's bulk path when its seam cannot merge. Debug
 construction alone adds a full validation scan. Existing non-ASCII search
 coordinate and half-surrogate search differences remain later T057 work.
 
+## Instruction regression follow-up (2026-10-20)
+
+Lead feedback authorizes instruction-only diagnosis and a general repair under
+this correctness task; it does not open a performance promotion or change the
+lead decision below. Baseline `cb8ec3ad`, reviewed candidate `41f4ee96`.
+
+Before further runtime edits, exact-image no-timing job
+`20261020T092510Z-t063-instruction-diagnosis-r2` (exit 0) reproduced the
+regression. `property_dynamic_read` has three existing string keys, no loop
+concatenation. N=2M/4M, three alternating pairs: 618.7032 versus 636.0159
+instructions/property, +17.3127. Both five-second exact-binary samples execute
+the same wide activation/property-read chain; the untouched wide executor
+body grows from 24736 to 26704 bytes with additional spill/reload operations.
+The ordinary VM activation assembly normalizes identically; release binaries
+contain no canonical-check assertion or validation routine. Other case ratios
+and final evidence will be recorded after the repair.
+
+Diagnostic repair to test: keep the ASCII append wrapper small and inline,
+and isolate UTF-8 seam decoding/reconciliation in one cold out-of-line helper.
+This retains the canonical invariant and constant seam work, and removes the
+large rare branch from callers' inline graph. Confirm with the exact x86 build
+recipe and the same nine cases, then rerun correctness gates. No benchmark
+recognition, selection acceptance or timing job is authorized to this owner.
+
 ### Lead regression-screen decision (2026-10-20, before any formal result)
 
 Fixed before the formal run; quick triage `20261020T084226Z-t063-quick-triage`
