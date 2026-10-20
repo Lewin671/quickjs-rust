@@ -471,26 +471,32 @@ fn try_numeric_call(callee: &Value, arguments: &[Value]) -> Option<Value> {
     )
 }
 
-/// What the driver needs to enter an admitted callee in its own window.
-struct InlineCallee {
-    register_count: usize,
-    requires_this: bool,
-    is_strict: bool,
-    /// Whether the callee's window starts with dead-zone markers to seed.
-    has_lexical_slots: bool,
-    /// Whether the callee has a numeric plan to try first.
-    numeric: bool,
+/// The already-packed fixed facts needed to enter an admitted callee.
+/// Keeping them packed avoids materializing and returning four booleans plus
+/// a register count on every call. An eligible facts word is nonzero, so a
+/// declined entry needs no separate aggregate discriminant either.
+#[derive(Clone, Copy)]
+struct InlineCallee(std::num::NonZeroU64);
+
+impl InlineCallee {
+    fn register_count(self) -> usize {
+        (self.0.get() >> FACTS_REGISTER_SHIFT) as usize
+    }
+
+    fn has(self, flag: u64) -> bool {
+        self.0.get() & flag != 0
+    }
 }
 
 /// Proves a callee may run on this driver, in a window of its register stack.
 fn inline_callee(callee: &Value, env: &CallEnv) -> Option<InlineCallee> {
-    let (inline, class) = inline_entry(callee, env)?;
-    (!class).then_some(inline)
+    let inline = inline_entry(callee, env)?;
+    (!inline.has(FACTS_CLASS)).then_some(inline)
 }
 
-/// `inline_callee` for any admitted body, with whether it is a class
-/// constructor, which only `new` may enter.
-fn inline_entry(callee: &Value, env: &CallEnv) -> Option<(InlineCallee, bool)> {
+/// Admits any eligible body; its packed FACTS_CLASS bit distinguishes a
+/// class constructor, which only `new` may enter.
+fn inline_entry(callee: &Value, env: &CallEnv) -> Option<InlineCallee> {
     let Value::Function(function) = callee else {
         return None;
     };
@@ -502,16 +508,8 @@ fn inline_entry(callee: &Value, env: &CallEnv) -> Option<(InlineCallee, bool)> {
     if !super::program_for(bytecode)?.admit_activation() {
         return None;
     }
-    Some((
-        InlineCallee {
-            register_count: (facts >> FACTS_REGISTER_SHIFT) as usize,
-            requires_this: facts & FACTS_REQUIRES_THIS != 0,
-            is_strict: facts & FACTS_STRICT != 0,
-            has_lexical_slots: facts & FACTS_LEXICAL_SLOTS != 0,
-            numeric: facts & FACTS_NUMERIC_PLAN != 0,
-        },
-        facts & FACTS_CLASS != 0,
-    ))
+    // FACTS_ELIGIBLE above proves this word nonzero.
+    std::num::NonZeroU64::new(facts).map(InlineCallee)
 }
 
 /// Proves `new callee(...)` may run on this driver: an ordinary (not class,
@@ -528,7 +526,8 @@ fn inline_constructor(
     if function.native.is_some() || function.bound.is_some() || !function.constructable {
         return None;
     }
-    let (inline, class) = inline_entry(callee, env)?;
+    let inline = inline_entry(callee, env)?;
+    let class = inline.has(FACTS_CLASS);
     let prototype = match function.own_property("prototype") {
         Some(property) if !property.is_accessor() => match property.value {
             Value::Object(prototype) if !crate::symbol::is_symbol_primitive(&prototype) => {
@@ -587,7 +586,7 @@ fn enter_constructor(
     crate::diagnostics::count!(ordinary_call_attempts);
     crate::diagnostics::count!(compact_direct_calls);
     let callee_base = *current_base + *current_len;
-    let callee_len = inline.register_count;
+    let callee_len = inline.register_count();
     reserve_registers(registers, callee_base + callee_len);
     {
         let parameter_slots = callee_parameter_slots(&callee);
@@ -601,7 +600,7 @@ fn enter_constructor(
             }
         }
     }
-    if inline.has_lexical_slots
+    if inline.has(FACTS_LEXICAL_SLOTS)
         && let Some(program) = super::program_for(running_bytecode(&callee, root_bytecode))
     {
         seed_lexical_markers(
@@ -1297,7 +1296,7 @@ fn run_frames(
         if let Some(inline) = inline_callee(&callee, env) {
             // A numeric body runs its whole call tree on `f64` registers,
             // leaving the arguments where they are: they are numbers.
-            if inline.numeric
+            if inline.has(FACTS_NUMERIC_PLAN)
                 && let Some(value) = try_numeric_call(
                     &callee,
                     &registers[argument_index..argument_index + argument_count],
@@ -1317,7 +1316,7 @@ fn run_frames(
             crate::diagnostics::count!(ordinary_call_attempts);
             crate::diagnostics::count!(compact_direct_calls);
             let callee_base = current_base + current_len;
-            let callee_len = inline.register_count;
+            let callee_len = inline.register_count();
             reserve_registers(registers, callee_base + callee_len);
             {
                 let parameter_slots = callee_parameter_slots(&callee);
@@ -1340,7 +1339,7 @@ fn run_frames(
             // A callee that reads `this` receives the same coercion the
             // general path applies: the resolved receiver, or `undefined`
             // for a plain call.
-            let callee_this = if inline.requires_this {
+            let callee_this = if inline.has(FACTS_REQUIRES_THIS) {
                 // An object receiver is `this` unchanged, strict or not;
                 // only a primitive (a symbol is an object here) or a missing
                 // receiver takes the coercion.
@@ -1350,7 +1349,7 @@ fn run_frames(
                         Value::Object(object)
                     }
                     receiver => {
-                        crate::function::function_call_this(receiver, env, inline.is_strict)
+                        crate::function::function_call_this(receiver, env, inline.has(FACTS_STRICT))
                     }
                 })
             } else {
@@ -1359,7 +1358,7 @@ fn run_frames(
                 }
                 None
             };
-            if inline.has_lexical_slots
+            if inline.has(FACTS_LEXICAL_SLOTS)
                 && let Some(program) = super::program_for(running_bytecode(&callee, root_bytecode))
             {
                 seed_lexical_markers(
