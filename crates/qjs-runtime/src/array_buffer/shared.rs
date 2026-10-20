@@ -72,8 +72,9 @@ pub(crate) fn install_shared_array_buffer(
             false,
         )),
     );
-    function.properties.borrow_mut().insert(
-        "prototype".to_owned(),
+    function.properties.borrow_mut().insert_in(
+        env.realm().atoms(),
+        "prototype",
         Property::fixed_non_enumerable(Value::Object(prototype)),
     );
     symbol::define_species_accessor(env, &function);

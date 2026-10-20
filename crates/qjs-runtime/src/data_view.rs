@@ -136,8 +136,9 @@ pub(crate) fn install_data_view(
     // { value: "DataView", writable: false, enumerable: false, configurable: true }.
     symbol::define_well_known_to_string_tag(env, &prototype, "DataView");
 
-    constructor.properties.borrow_mut().insert(
-        "prototype".to_owned(),
+    constructor.properties.borrow_mut().insert_in(
+        env.realm().atoms(),
+        "prototype",
         Property::fixed_non_enumerable(Value::Object(prototype)),
     );
 

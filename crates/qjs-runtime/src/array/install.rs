@@ -250,8 +250,9 @@ pub(crate) fn install_array(env: &mut CallEnv, global_this: &Value, object_proto
         NativeFunction::ArrayPrototypeWith,
     );
     define_array_unscopables(env, &array_prototype);
-    array_function.properties.borrow_mut().insert(
-        "prototype".to_owned(),
+    array_function.properties.borrow_mut().insert_in(
+        env.realm().atoms(),
+        "prototype",
         Property::fixed_non_enumerable(Value::Object(array_prototype)),
     );
     symbol::define_species_accessor(env, &array_function);
@@ -286,7 +287,7 @@ fn define_array_prototype_function(
 
 fn define_array_function(function: &Function, key: &str, length: usize, native: NativeFunction) {
     function.properties.borrow_mut().insert(
-        key.to_owned(),
+        key,
         Property::non_enumerable(Value::Function(Function::new_native(
             Some(key),
             length,

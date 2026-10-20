@@ -256,7 +256,7 @@ pub(crate) fn define_property_descriptor_on_value_key(
             {
                 return Ok(false);
             }
-            elements.define_property(key, property);
+            elements.define_property(env.realm().atoms(), key, property);
             Ok(true)
         }
         Value::Proxy(proxy) => {
@@ -760,7 +760,7 @@ pub(crate) fn define_property_on_value_key(
             {
                 elements.set(index, descriptor.value);
             } else {
-                elements.define_property(key, descriptor);
+                elements.define_property(env.realm().atoms(), key, descriptor);
             }
             Ok(true)
         }

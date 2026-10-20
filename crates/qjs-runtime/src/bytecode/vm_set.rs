@@ -170,7 +170,7 @@ pub(crate) fn set_property(
                         if let Some(index) = crate::array_index_property_key(&key) {
                             elements.set(index, value);
                         } else {
-                            elements.set_property(key, value);
+                            elements.set_property(env.realm().atoms(), key, value);
                         }
                         Ok(true)
                     }

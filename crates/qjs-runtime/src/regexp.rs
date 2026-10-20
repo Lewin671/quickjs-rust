@@ -42,8 +42,9 @@ pub(crate) fn install_regexp(env: &mut CallEnv, global_this: &Value, object_prot
     regexp_prototype.set_to_string_tag("RegExp");
 
     let regexp_function = Function::new_native(Some("RegExp"), 2, NativeFunction::RegExp, true);
-    regexp_function.properties.borrow_mut().insert(
-        "escape".to_owned(),
+    regexp_function.properties.borrow_mut().insert_in(
+        env.realm().atoms(),
+        "escape",
         Property::non_enumerable(Value::Function(Function::new_native(
             Some("escape"),
             1,
@@ -170,8 +171,9 @@ pub(crate) fn install_regexp(env: &mut CallEnv, global_this: &Value, object_prot
         "unicodeSets",
         NativeFunction::RegExpPrototypeUnicodeSets,
     );
-    regexp_function.properties.borrow_mut().insert(
-        "prototype".to_owned(),
+    regexp_function.properties.borrow_mut().insert_in(
+        env.realm().atoms(),
+        "prototype",
         Property::fixed_non_enumerable(Value::Object(regexp_prototype)),
     );
     symbol::define_species_accessor(env, &regexp_function);
@@ -433,6 +435,7 @@ pub(crate) fn native_regexp_prototype_exec(
         unicode,
         &group_names,
         has_indices,
+        env.realm().atoms(),
     ))
 }
 
@@ -952,6 +955,7 @@ fn regexp_match_array(
     unicode: bool,
     group_names: &[Option<String>],
     has_indices: bool,
+    domain: &crate::property::atom::AtomDomain,
 ) -> Value {
     let captures = match_result.captures.clone();
     let mut values = Vec::with_capacity(1 + captures.len());
@@ -969,14 +973,16 @@ fn regexp_match_array(
     } else {
         match_result.start
     };
-    result.set_property("index".to_owned(), Value::Number(index as f64));
-    result.set_property("input".to_owned(), Value::String(input.clone()));
+    result.set_property(domain, "index".to_owned(), Value::Number(index as f64));
+    result.set_property(domain, "input".to_owned(), Value::String(input.clone()));
     result.set_property(
+        domain,
         "groups".to_owned(),
         regexp_groups_object(input, &captures, unicode, group_names),
     );
     if has_indices {
         result.set_property(
+            domain,
             "indices".to_owned(),
             regexp_indices_array(
                 input,
@@ -984,6 +990,7 @@ fn regexp_match_array(
                 &captures,
                 unicode,
                 group_names,
+                domain,
             ),
         );
     }
@@ -999,6 +1006,7 @@ fn regexp_indices_array(
     captures: &[Option<(usize, usize)>],
     unicode: bool,
     group_names: &[Option<String>],
+    domain: &crate::property::atom::AtomDomain,
 ) -> Value {
     let mut entries = Vec::with_capacity(1 + captures.len());
     entries.push(index_pair_value(input, Some(whole), unicode));
@@ -1024,7 +1032,7 @@ fn regexp_indices_array(
         }
         Value::Object(object)
     };
-    indices.set_property("groups".to_owned(), groups);
+    indices.set_property(domain, "groups".to_owned(), groups);
     Value::Array(indices)
 }
 

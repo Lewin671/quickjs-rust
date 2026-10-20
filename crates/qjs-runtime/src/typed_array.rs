@@ -129,8 +129,9 @@ pub(crate) fn install_typed_arrays(
 
     let typed_array_intrinsic =
         Function::new_native(Some("TypedArray"), 0, NativeFunction::TypedArray, true);
-    typed_array_intrinsic.properties.borrow_mut().insert(
-        "prototype".to_owned(),
+    typed_array_intrinsic.properties.borrow_mut().insert_in(
+        env.realm().atoms(),
+        "prototype",
         Property::fixed_non_enumerable(Value::Object(typed_array_prototype.clone())),
     );
     typed_array_prototype.define_non_enumerable(
@@ -197,7 +198,7 @@ fn install_typed_array_static_methods(intrinsic: &Function) {
         ("of", 0, NativeFunction::TypedArrayOf),
     ] {
         intrinsic.properties.borrow_mut().insert(
-            name.to_owned(),
+            name,
             Property::non_enumerable(Value::Function(Function::new_native(
                 Some(name),
                 length,
@@ -353,8 +354,9 @@ fn install_typed_array_constructor(
     // Concrete constructors inherit from %TypedArray% (a function prototype).
     let _ = constructor
         .set_internal_prototype_slot(Some(Prototype::Function(typed_array_intrinsic.clone())));
-    constructor.properties.borrow_mut().insert(
-        "BYTES_PER_ELEMENT".to_owned(),
+    constructor.properties.borrow_mut().insert_in(
+        env.realm().atoms(),
+        "BYTES_PER_ELEMENT",
         Property::fixed_non_enumerable(Value::Number(bytes)),
     );
     prototype.define_non_enumerable(
@@ -365,8 +367,9 @@ fn install_typed_array_constructor(
         "BYTES_PER_ELEMENT".to_owned(),
         Property::fixed_non_enumerable(Value::Number(bytes)),
     );
-    constructor.properties.borrow_mut().insert(
-        "prototype".to_owned(),
+    constructor.properties.borrow_mut().insert_in(
+        env.realm().atoms(),
+        "prototype",
         Property::fixed_non_enumerable(Value::Object(prototype)),
     );
 
@@ -407,7 +410,7 @@ fn install_uint8_array_prototype_methods(prototype: &ObjectRef) {
 fn install_uint8_array_static_methods(constructor: &Function) {
     let mut properties = constructor.properties.borrow_mut();
     properties.insert(
-        "fromBase64".to_owned(),
+        "fromBase64",
         Property::non_enumerable(Value::Function(Function::new_native(
             Some("fromBase64"),
             1,
@@ -416,7 +419,7 @@ fn install_uint8_array_static_methods(constructor: &Function) {
         ))),
     );
     properties.insert(
-        "fromHex".to_owned(),
+        "fromHex",
         Property::non_enumerable(Value::Function(Function::new_native(
             Some("fromHex"),
             1,

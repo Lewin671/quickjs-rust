@@ -7,9 +7,10 @@
 //! A fast path may treat `elements[i]` as the value of index `i` only after
 //! checking that `i` is not a hole.
 
+use crate::property::atom::AtomDomain;
 use std::{
     cell::{Cell, OnceCell, Ref, RefCell, RefMut},
-    collections::{BTreeSet, HashMap},
+    collections::BTreeSet,
     fmt,
     rc::Rc,
 };
@@ -91,7 +92,7 @@ impl Drop for ArrayData {
 #[derive(Default)]
 struct ArrayColdData {
     holes: RefCell<BTreeSet<usize>>,
-    properties: RefCell<HashMap<String, Property>>,
+    properties: RefCell<crate::property::named_table::NamedTable>,
     symbol_properties: RefCell<Vec<(ObjectRef, Property)>>,
     prototype: RefCell<Option<Option<Prototype>>>,
 }
@@ -252,7 +253,7 @@ impl ArrayRef {
                 cold.properties
                     .borrow()
                     .keys()
-                    .filter_map(|key| array_index_property_key(key))
+                    .filter_map(array_index_property_key)
                     .filter(|index| *index < len),
             );
         }
@@ -801,7 +802,16 @@ impl ArrayRef {
 
     pub(crate) fn set(&self, index: usize, value: Value) {
         if index > MAX_ARRAY_INDEX {
-            self.set_property(index.to_string(), value);
+            let mut properties = self.0.cold().properties.borrow_mut();
+            if let Some(mut property) = properties.get_mut(&index.to_string()) {
+                if property.writable {
+                    property.value = value;
+                }
+                return;
+            }
+            if self.0.extensible.get() {
+                properties.insert(index.to_string(), Property::enumerable(value));
+            }
             return;
         }
         if index >= self.0.length.get() {
@@ -874,7 +884,7 @@ impl ArrayRef {
             cold.properties
                 .borrow()
                 .keys()
-                .filter_map(|key| array_index_property_key(key))
+                .filter_map(array_index_property_key)
                 .filter(|index| *index >= length && *index <= MAX_ARRAY_INDEX)
                 .collect()
         });
@@ -887,9 +897,11 @@ impl ArrayRef {
         None
     }
 
-    pub(crate) fn set_property(&self, key: String, value: Value) {
+    /// Sets a named own property. `domain` is the realm domain the named
+    /// table takes at its first install.
+    pub(crate) fn set_property(&self, domain: &AtomDomain, key: String, value: Value) {
         let mut properties = self.0.cold().properties.borrow_mut();
-        if let Some(property) = properties.get_mut(&key) {
+        if let Some(mut property) = properties.get_mut(&key) {
             if property.writable {
                 property.value = value;
             }
@@ -898,10 +910,12 @@ impl ArrayRef {
         if !self.0.extensible.get() {
             return;
         }
-        properties.insert(key, Property::enumerable(value));
+        properties.insert_hinted(Some(domain), key, Property::enumerable(value));
     }
 
-    pub(crate) fn define_property(&self, key: String, property: Property) {
+    /// Defines an own property; a named one takes `domain` at the table's
+    /// first install.
+    pub(crate) fn define_property(&self, domain: &AtomDomain, key: String, property: Property) {
         if let Some(index) = array_index_property_key(&key) {
             if index >= self.0.length.get() {
                 if !self.0.length_writable.get() {
@@ -916,7 +930,11 @@ impl ArrayRef {
                 }
                 if index >= MAX_DENSE_STORAGE_LENGTH {
                     drop(elements);
-                    self.0.cold().properties.borrow_mut().insert(key, property);
+                    self.0.cold().properties.borrow_mut().insert_hinted(
+                        Some(domain),
+                        key,
+                        property,
+                    );
                     return;
                 }
                 let old_len = elements.len();
@@ -926,7 +944,11 @@ impl ArrayRef {
                 self.0.cold().holes.borrow_mut().insert(index);
             }
         }
-        self.0.cold().properties.borrow_mut().insert(key, property);
+        self.0
+            .cold()
+            .properties
+            .borrow_mut()
+            .insert_hinted(Some(domain), key, property);
     }
 
     pub(crate) fn define_symbol_property(&self, symbol: ObjectRef, property: Property) {
@@ -965,7 +987,7 @@ impl ArrayRef {
                 .borrow()
                 .iter()
                 .filter(|(_, property)| property.enumerable)
-                .map(|(key, _)| key.clone())
+                .map(|(key, _)| key.to_owned())
                 .collect()
         });
         keys.sort();
@@ -974,7 +996,7 @@ impl ArrayRef {
 
     pub(crate) fn property_names(&self) -> Vec<String> {
         let mut names: Vec<_> = self.0.cold_if_present().map_or_else(Vec::new, |cold| {
-            cold.properties.borrow().keys().cloned().collect()
+            cold.properties.borrow().keys().map(str::to_owned).collect()
         });
         names.sort();
         names
@@ -1006,7 +1028,7 @@ impl ArrayRef {
                     cold.properties
                         .borrow()
                         .keys()
-                        .filter_map(|key| array_index_property_key(key))
+                        .filter_map(array_index_property_key)
                         .filter(|index| *index >= length && *index <= MAX_ARRAY_INDEX)
                         .collect()
                 });
@@ -1059,9 +1081,9 @@ impl ArrayRef {
             }
             // Named (non-index) own properties live in the `properties` map and
             // must also become non-configurable when the array is sealed.
-            for (_, property) in cold.properties.borrow_mut().iter_mut() {
-                property.make_non_configurable();
-            }
+            cold.properties
+                .borrow_mut()
+                .bulk(crate::property::layout::BulkEdit::Seal);
         }
         self.0.sealed.set(true);
     }
@@ -1076,9 +1098,9 @@ impl ArrayRef {
             for (_, property) in cold.symbol_properties.borrow_mut().iter_mut() {
                 property.freeze_data();
             }
-            for (_, property) in cold.properties.borrow_mut().iter_mut() {
-                property.freeze_data();
-            }
+            cold.properties
+                .borrow_mut()
+                .bulk(crate::property::layout::BulkEdit::Freeze);
         }
         self.0.frozen.set(true);
         self.0.length_writable.set(false);
@@ -1324,6 +1346,7 @@ mod tests {
 
         assert!(array.delete_index(1));
         array.define_property(
+            &crate::property::atom::AtomDomain::new(),
             "2".to_owned(),
             Property::data(Value::Number(19.0), false, false, false),
         );
@@ -1365,6 +1388,7 @@ mod tests {
 
         let described = ArrayRef::new(vec![Value::Number(1.0)]);
         described.define_property(
+            &crate::property::atom::AtomDomain::new(),
             "0".to_owned(),
             Property::data(Value::Number(1.0), false, true, false),
         );
@@ -1472,6 +1496,7 @@ mod tests {
 
         let described = ArrayRef::new_with_length(1);
         described.define_property(
+            &crate::property::atom::AtomDomain::new(),
             "0".to_owned(),
             Property::data(Value::Number(7.0), true, true, true),
         );

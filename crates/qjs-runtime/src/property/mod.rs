@@ -6,6 +6,7 @@ pub(crate) mod atom;
 mod function;
 mod key;
 pub(crate) mod layout;
+pub(crate) mod named_table;
 mod prototype;
 
 pub(crate) use array::{

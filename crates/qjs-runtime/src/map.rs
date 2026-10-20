@@ -86,8 +86,9 @@ pub(crate) fn install_map(env: &mut CallEnv, global_this: &Value, object_prototy
         NativeFunction::MapPrototypeValues,
     );
     symbol::define_well_known_iterator_alias(env, &map_prototype, "entries");
-    map_function.properties.borrow_mut().insert(
-        "prototype".to_owned(),
+    map_function.properties.borrow_mut().insert_in(
+        env.realm().atoms(),
+        "prototype",
         Property::fixed_non_enumerable(Value::Object(map_prototype)),
     );
     symbol::define_species_accessor(env, &map_function);
@@ -491,7 +492,7 @@ fn map_prototype(env: &CallEnv) -> Option<ObjectRef> {
 
 fn define_map_function(function: &Function, key: &str, length: usize, native: NativeFunction) {
     function.properties.borrow_mut().insert(
-        key.to_owned(),
+        key,
         Property::non_enumerable(Value::Function(Function::new_native(
             Some(key),
             length,

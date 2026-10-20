@@ -92,8 +92,9 @@ pub(crate) fn install_object(env: &mut CallEnv, global_this: &Value) -> ObjectRe
             true,
         ),
     );
-    object_function.properties.borrow_mut().insert(
-        "prototype".to_owned(),
+    object_function.properties.borrow_mut().insert_in(
+        env.realm().atoms(),
+        "prototype",
         Property::fixed_non_enumerable(Value::Object(object_prototype.clone())),
     );
     define_object_function(&object_function, "assign", 2, NativeFunction::ObjectAssign);
@@ -217,7 +218,7 @@ fn define_object_prototype_function(
 
 fn define_object_function(function: &Function, key: &str, length: usize, native: NativeFunction) {
     function.properties.borrow_mut().insert(
-        key.to_owned(),
+        key,
         Property::non_enumerable(Value::Function(Function::new_native(
             Some(key),
             length,

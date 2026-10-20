@@ -116,8 +116,9 @@ pub(crate) fn install_set(env: &mut CallEnv, global_this: &Value, object_prototy
     );
     set_prototype.define_non_enumerable("values".to_owned(), values_function);
     symbol::define_well_known_iterator_alias(env, &set_prototype, "values");
-    set_function.properties.borrow_mut().insert(
-        "prototype".to_owned(),
+    set_function.properties.borrow_mut().insert_in(
+        env.realm().atoms(),
+        "prototype",
         Property::fixed_non_enumerable(Value::Object(set_prototype)),
     );
     symbol::define_species_accessor(env, &set_function);

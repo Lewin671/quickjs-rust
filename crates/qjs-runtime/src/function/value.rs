@@ -353,11 +353,11 @@ impl NativeContext {
 /// `String.fromCharCode` and every other read of a constructor's property
 /// hashes the name here.
 pub(crate) struct LazyFunctionProperties(
-    RefCell<Option<Box<crate::value::name_hash::NameMap<String, Property>>>>,
+    RefCell<Option<Box<crate::property::named_table::NamedTable>>>,
 );
 
 impl LazyFunctionProperties {
-    pub(crate) fn borrow(&self) -> Ref<'_, crate::value::name_hash::NameMap<String, Property>> {
+    pub(crate) fn borrow(&self) -> Ref<'_, crate::property::named_table::NamedTable> {
         self.ensure_allocated();
         Ref::map(self.0.borrow(), |properties| {
             properties
@@ -366,15 +366,18 @@ impl LazyFunctionProperties {
         })
     }
 
-    pub(crate) fn borrow_mut(
-        &self,
-    ) -> RefMut<'_, crate::value::name_hash::NameMap<String, Property>> {
+    pub(crate) fn borrow_mut(&self) -> RefMut<'_, crate::property::named_table::NamedTable> {
         self.ensure_allocated();
         RefMut::map(self.0.borrow_mut(), |properties| {
             properties
                 .as_deref_mut()
                 .expect("function properties initialized before borrowing")
         })
+    }
+
+    /// The domain of the installed named table, if it has one.
+    fn domain(&self) -> Option<crate::property::atom::AtomDomain> {
+        self.0.try_borrow().ok()?.as_deref()?.domain().cloned()
     }
 
     fn ensure_allocated(&self) {
@@ -840,10 +843,20 @@ impl Function {
         matches!(self.native, Some(NativeFunction::UninitializedLexical))
     }
 
+    /// The domain this function's named table takes at its first install:
+    /// its creation realm's. A native function has none; its installer
+    /// supplies the realm's.
+    fn named_domain(&self) -> Option<&crate::property::atom::AtomDomain> {
+        self.realm.as_ref().map(|realm| realm.atoms())
+    }
+
     /// The atom domain a store created with this function as its
     /// prototype uses: its creation realm's.
     pub(crate) fn atom_domain(&self) -> Option<crate::property::atom::AtomDomain> {
-        self.realm.as_ref().map(|realm| realm.atoms().clone())
+        match &self.realm {
+            Some(realm) => Some(realm.atoms().clone()),
+            None => self.properties.domain(),
+        }
     }
 
     pub(crate) fn native_kind(&self) -> Option<NativeFunction> {
@@ -1019,20 +1032,21 @@ impl Function {
             return;
         }
 
+        let domain = self.named_domain();
         let mut properties = self.properties.borrow_mut();
         self.auxiliary.with_cold_mut(|cold| {
             let mut insert_at = 0;
+            if had_length && !properties.contains_key("length") {
+                properties.insert_hinted(domain, "length", self.default_length_property());
+            }
             if had_length {
-                properties
-                    .entry("length".to_owned())
-                    .or_insert_with(|| self.default_length_property());
                 cold.property_order.insert(insert_at, "length".to_owned());
                 insert_at += 1;
             }
+            if had_name && !properties.contains_key("name") {
+                properties.insert_hinted(domain, "name", self.default_name_property());
+            }
             if had_name {
-                properties
-                    .entry("name".to_owned())
-                    .or_insert_with(|| self.default_name_property());
                 cold.property_order.insert(insert_at, "name".to_owned());
             }
         });
@@ -1069,8 +1083,9 @@ impl Function {
         let prototype =
             ObjectRef::with_prototype(HashMap::new(), object_prototype(&self.creation_env()));
         prototype.define_non_enumerable("constructor".to_owned(), Value::Function(self.clone()));
-        self.properties.borrow_mut().insert(
-            "prototype".to_owned(),
+        self.properties.borrow_mut().insert_hinted(
+            self.named_domain(),
+            "prototype",
             Property::data(Value::Object(prototype), false, true, false),
         );
     }
@@ -1098,9 +1113,9 @@ impl Function {
         self.ensure_default_prototype();
         self.prevent_extensions();
         self.auxiliary.sealed.set(true);
-        for property in self.properties.borrow_mut().values_mut() {
-            property.make_non_configurable();
-        }
+        self.properties
+            .borrow_mut()
+            .bulk(crate::property::layout::BulkEdit::Seal);
         self.auxiliary.with_cold_mut(|cold| {
             for (_, property) in &mut cold.symbol_properties {
                 property.make_non_configurable();
@@ -1132,9 +1147,9 @@ impl Function {
         self.prevent_extensions();
         self.auxiliary.sealed.set(true);
         self.auxiliary.frozen.set(true);
-        for property in self.properties.borrow_mut().values_mut() {
-            property.freeze_data();
-        }
+        self.properties
+            .borrow_mut()
+            .bulk(crate::property::layout::BulkEdit::Freeze);
         self.auxiliary.with_cold_mut(|cold| {
             for (_, property) in &mut cold.symbol_properties {
                 property.freeze_data();
@@ -1169,10 +1184,10 @@ impl Function {
             // writing directly to the compatibility property table. Treat
             // that entry as the same original slot; otherwise the untouched
             // standard default is non-writable and needs no materialization.
-            if let Some(property) = self.properties.borrow_mut().get_mut(&key) {
-                if property.writable {
-                    property.value = value;
-                }
+            if let Some(mut property) = self.properties.borrow_mut().get_mut(&key)
+                && property.writable
+            {
+                property.value = value;
             }
             return;
         }
@@ -1180,8 +1195,10 @@ impl Function {
             self.ensure_default_prototype();
         }
         let mut properties = self.properties.borrow_mut();
-        if let Some(property) = properties.get_mut(&key) {
-            if property.writable {
+        if properties.contains_key(&key) {
+            if let Some(mut property) = properties.get_mut(&key)
+                && property.writable
+            {
                 property.value = value;
             }
             drop(properties);
@@ -1194,7 +1211,8 @@ impl Function {
         self.materialize_default_prototype_order();
         self.auxiliary
             .with_cold_mut(|cold| cold.property_order.push(key.clone()));
-        properties.insert(key.clone(), Property::enumerable(value));
+        let domain = self.named_domain();
+        properties.insert_hinted(domain, key.as_str(), Property::enumerable(value));
         drop(properties);
         self.refresh_dynamic_function_realm_override(&key);
     }
@@ -1209,7 +1227,9 @@ impl Function {
         if key == "prototype" && self.auxiliary.lazy_default_prototype.replace(false) {
             // Replacing the unobserved default: its order slot was recorded
             // above, and no reference to the default object can exist.
-            self.properties.borrow_mut().insert(key, property);
+            self.properties
+                .borrow_mut()
+                .insert_hinted(self.named_domain(), key, property);
             return;
         }
         let mut properties = self.properties.borrow_mut();
@@ -1217,7 +1237,7 @@ impl Function {
             self.auxiliary
                 .with_cold_mut(|cold| cold.property_order.push(key.clone()));
         }
-        properties.insert(key.clone(), property);
+        properties.insert_hinted(self.named_domain(), key.as_str(), property);
         drop(properties);
         self.refresh_dynamic_function_realm_override(&key);
     }
@@ -1319,9 +1339,9 @@ impl Function {
                 continue;
             }
             if let Some(index) = array_index_property_key(key) {
-                indices.push((index, key.clone()));
+                indices.push((index, key.to_owned()));
             } else {
-                fallback_strings.push(key.clone());
+                fallback_strings.push(key.to_owned());
             }
         }
 
@@ -1759,239 +1779,4 @@ fn array_index_property_key(key: &str) -> Option<u32> {
 }
 
 #[cfg(test)]
-mod tests {
-    use std::{mem, rc::Rc};
-
-    use super::{Function, FunctionData};
-    use crate::{NativeFunction, Value, eval};
-
-    #[test]
-    fn cloning_function_reuses_the_backing_allocation() {
-        let function = Function::new_native(
-            Some("shared"),
-            0,
-            NativeFunction::UninitializedLexical,
-            false,
-        );
-        let cloned = function.clone();
-
-        assert!(Rc::ptr_eq(&function.0, &cloned.0));
-        assert!(function.ptr_eq(&cloned));
-        assert_eq!(
-            mem::size_of::<Function>(),
-            mem::size_of::<Rc<FunctionData>>()
-        );
-        assert!(function.auxiliary.cold.borrow().is_none());
-    }
-
-    #[test]
-    fn ordinary_function_header_keeps_cold_identity_state_out_of_line() {
-        let auxiliary_size = mem::size_of::<super::FunctionAuxiliaryState>();
-        let function_data_size = mem::size_of::<FunctionData>();
-        assert_eq!(
-            mem::size_of::<super::NativeContext>(),
-            mem::size_of::<Rc<()>>(),
-            "lazy native context must remain pointer-sized"
-        );
-        assert_eq!(
-            mem::size_of::<super::ModuleImports>(),
-            mem::size_of::<Rc<()>>(),
-            "shared module imports must remain pointer-sized"
-        );
-        assert!(
-            mem::size_of::<super::LazyFunctionProperties>() <= 16,
-            "lazy function property header must stay within two machine words"
-        );
-        assert!(
-            auxiliary_size <= 48,
-            "function auxiliary header grew to {auxiliary_size} bytes"
-        );
-        assert!(
-            function_data_size <= 296,
-            "function object grew to {function_data_size} bytes"
-        );
-    }
-
-    #[test]
-    fn user_functions_keep_empty_function_maps_unallocated() {
-        let value = eval("function make() { return function value() {}; } make();")
-            .expect("function expression should evaluate");
-        let Value::Function(function) = value else {
-            panic!("expected function value");
-        };
-        assert!(!function.native_context.is_allocated());
-        assert!(!function.properties.is_allocated());
-
-        let mut native = Function::new_native(
-            Some("capturing"),
-            0,
-            NativeFunction::UninitializedLexical,
-            false,
-        );
-        assert!(!native.native_context.is_allocated());
-        native.insert_native_context("captured".to_owned(), Value::Number(1.0));
-        assert!(native.native_context.is_allocated());
-        assert_eq!(
-            native.native_context.get("captured"),
-            Some(&Value::Number(1.0))
-        );
-        native.define_property(
-            "explicit".to_owned(),
-            crate::Property::enumerable(Value::Number(2.0)),
-        );
-        assert!(native.properties.is_allocated());
-    }
-
-    #[test]
-    fn cloned_function_handles_keep_identity_state_and_source_shared() {
-        let function = Function::new_native(
-            Some("shared"),
-            0,
-            NativeFunction::UninitializedLexical,
-            false,
-        );
-        let cloned = function.clone();
-        cloned.define_property(
-            "shared".to_owned(),
-            crate::Property::enumerable(Value::Number(1.0)),
-        );
-        assert!(Rc::ptr_eq(&function.0, &cloned.0));
-        assert!(function.ptr_eq(&cloned));
-        assert_eq!(
-            function
-                .own_property("shared")
-                .map(|property| property.value),
-            Some(Value::Number(1.0))
-        );
-
-        let Value::Function(function) = eval("(function shared() {})")
-            .expect("function expression with retained source should evaluate")
-        else {
-            panic!("expected function value");
-        };
-        let cloned = function.clone();
-        assert!(Rc::ptr_eq(&function.0, &cloned.0));
-        assert_eq!(
-            cloned.source_text().as_deref(),
-            Some("function shared() {}")
-        );
-    }
-
-    #[test]
-    fn default_name_and_length_stay_implicit_until_descriptor_mutation() {
-        let function = Function::new_native(
-            Some("shared"),
-            2,
-            NativeFunction::UninitializedLexical,
-            false,
-        );
-
-        assert!(function.properties.borrow().is_empty());
-        assert_eq!(
-            function
-                .own_property("length")
-                .map(|property| property.value),
-            Some(Value::Number(2.0))
-        );
-        assert_eq!(
-            function.own_property("name").map(|property| property.value),
-            Some(Value::String("shared".to_owned().into()))
-        );
-        assert_eq!(function.own_property_names(), ["length", "name"]);
-
-        function.define_property(
-            "name".to_owned(),
-            crate::Property::data(
-                Value::String("renamed".to_owned().into()),
-                false,
-                false,
-                true,
-            ),
-        );
-        assert_eq!(function.properties.borrow().len(), 2);
-        assert_eq!(function.own_property_names(), ["length", "name"]);
-    }
-
-    #[test]
-    fn deleting_and_redefining_an_implicit_default_moves_it_to_the_end() {
-        assert_eq!(
-            eval(
-                "var f = function value(a) {}; delete f.name; Object.defineProperty(f, 'name', { value: 'again', configurable: true }); Object.getOwnPropertyNames(f).join('|');"
-            ),
-            Ok(Value::String("length|prototype|name".to_owned().into()))
-        );
-    }
-
-    #[test]
-    fn install_time_override_and_implicit_default_are_one_property_slot() {
-        let function = Function::new_native(
-            Some("initial"),
-            0,
-            NativeFunction::UninitializedLexical,
-            false,
-        );
-        function.properties.borrow_mut().insert(
-            "name".to_owned(),
-            crate::Property::data(
-                Value::String("installed".to_owned().into()),
-                false,
-                false,
-                true,
-            ),
-        );
-
-        assert_eq!(
-            function.own_property("name").map(|property| property.value),
-            Some(Value::String("installed".to_owned().into()))
-        );
-        assert_eq!(
-            function
-                .own_property_names()
-                .into_iter()
-                .filter(|key| key == "name")
-                .count(),
-            1
-        );
-        assert!(function.delete_own_property("name"));
-        assert!(function.own_property("name").is_none());
-    }
-
-    #[test]
-    fn compiled_function_materializes_default_prototype_on_observation() {
-        assert_eq!(
-            eval(
-                "var f = function (value) { return value; }; f.prototype.constructor === f && Object.getOwnPropertyNames(f).includes('prototype') && !delete f.prototype;"
-            ),
-            Ok(Value::Boolean(true))
-        );
-    }
-
-    #[test]
-    fn compiled_function_keeps_default_prototype_order_implicit_until_observation() {
-        let function = eval("function make() { return function value() {}; } make();")
-            .expect("function expression should evaluate");
-        let Value::Function(function) = function else {
-            panic!("expected function value");
-        };
-
-        assert!(function.auxiliary.lazy_default_prototype.get());
-        assert!(function.property_order().is_empty());
-        assert_eq!(
-            function.own_property_names(),
-            ["length", "name", "prototype"]
-        );
-        assert_eq!(function.property_order(), ["prototype"]);
-    }
-
-    #[test]
-    fn later_properties_follow_an_unobserved_default_prototype_slot() {
-        assert_eq!(
-            eval(
-                "var f = function value() {}; f.assigned = 1; Object.defineProperty(f, 'defined', { value: 2, configurable: true }); Object.getOwnPropertyNames(f).join('|');"
-            ),
-            Ok(Value::String(
-                "length|name|prototype|assigned|defined".to_owned().into()
-            ))
-        );
-    }
-}
+mod tests;

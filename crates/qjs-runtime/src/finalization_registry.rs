@@ -33,8 +33,9 @@ pub(crate) fn install_finalization_registry(
         1,
         NativeFunction::FinalizationRegistryPrototypeUnregister,
     );
-    function.properties.borrow_mut().insert(
-        "prototype".to_owned(),
+    function.properties.borrow_mut().insert_in(
+        env.realm().atoms(),
+        "prototype",
         Property::fixed_non_enumerable(Value::Object(prototype)),
     );
 

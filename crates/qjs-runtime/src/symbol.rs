@@ -60,8 +60,9 @@ pub(crate) fn install_symbol(env: &mut CallEnv, global_this: &Value, object_prot
             ),
         );
     }
-    symbol_function.properties.borrow_mut().insert(
-        "for".to_owned(),
+    symbol_function.properties.borrow_mut().insert_in(
+        env.realm().atoms(),
+        "for",
         Property::non_enumerable(Value::Function(Function::new_native(
             Some("for"),
             1,
@@ -69,8 +70,9 @@ pub(crate) fn install_symbol(env: &mut CallEnv, global_this: &Value, object_prot
             false,
         ))),
     );
-    symbol_function.properties.borrow_mut().insert(
-        "keyFor".to_owned(),
+    symbol_function.properties.borrow_mut().insert_in(
+        env.realm().atoms(),
+        "keyFor",
         Property::non_enumerable(Value::Function(Function::new_native(
             Some("keyFor"),
             1,
@@ -114,8 +116,9 @@ pub(crate) fn install_symbol(env: &mut CallEnv, global_this: &Value, object_prot
             true,
         ),
     );
-    symbol_function.properties.borrow_mut().insert(
-        "prototype".to_owned(),
+    symbol_function.properties.borrow_mut().insert_in(
+        env.realm().atoms(),
+        "prototype",
         Property::fixed_non_enumerable(Value::Object(symbol_prototype)),
     );
 
@@ -133,10 +136,7 @@ fn install_well_known_symbols(symbol_function: &Function, symbol_prototype: &Obj
             Some(symbol_prototype.clone()),
             Value::String(format!("Symbol.{name}").into()),
         ));
-        properties.insert(
-            name.to_string(),
-            Property::data(symbol, false, false, false),
-        );
+        properties.insert(name, Property::data(symbol, false, false, false));
     }
 }
 

@@ -126,6 +126,7 @@ impl Vm<'_> {
         self.apply_array_literal_prototype_override(&raw_array);
         raw_array.freeze();
         cooked_array.define_property(
+            self.current.realm.atoms(),
             "raw".to_owned(),
             Property::fixed_non_enumerable(Value::Array(raw_array)),
         );

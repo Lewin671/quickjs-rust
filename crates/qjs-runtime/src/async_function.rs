@@ -50,8 +50,9 @@ pub(crate) fn install_async_function(
         true,
     );
     let _ = async_function.set_internal_prototype_slot(function_constructor_as_prototype_slot(env));
-    async_function.properties.borrow_mut().insert(
-        "prototype".to_owned(),
+    async_function.properties.borrow_mut().insert_in(
+        env.realm().atoms(),
+        "prototype",
         Property::data(
             Value::Object(async_function_prototype.clone()),
             false,

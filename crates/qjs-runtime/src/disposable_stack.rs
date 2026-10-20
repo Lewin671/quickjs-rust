@@ -88,8 +88,9 @@ pub(crate) fn install_disposable_stack(
         NativeFunction::DisposableStackPrototypeUse,
     );
 
-    function.properties.borrow_mut().insert(
-        "prototype".to_owned(),
+    function.properties.borrow_mut().insert_in(
+        env.realm().atoms(),
+        "prototype",
         Property::fixed_non_enumerable(Value::Object(prototype)),
     );
 
@@ -168,8 +169,9 @@ fn install_async_disposable_stack(
         1,
         NativeFunction::AsyncDisposableStackPrototypeUse,
     );
-    function.properties.borrow_mut().insert(
-        "prototype".to_owned(),
+    function.properties.borrow_mut().insert_in(
+        env.realm().atoms(),
+        "prototype",
         Property::fixed_non_enumerable(Value::Object(prototype)),
     );
 

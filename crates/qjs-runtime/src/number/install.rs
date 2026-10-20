@@ -69,8 +69,9 @@ pub(crate) fn install_number(env: &mut CallEnv, global_this: &Value, object_prot
             false,
         )),
     );
-    number_function.properties.borrow_mut().insert(
-        "prototype".to_owned(),
+    number_function.properties.borrow_mut().insert_in(
+        env.realm().atoms(),
+        "prototype",
         Property::fixed_non_enumerable(Value::Object(number_prototype)),
     );
     define_number_constant(&number_function, "EPSILON", f64::EPSILON);
@@ -120,12 +121,14 @@ pub(crate) fn install_number(env: &mut CallEnv, global_this: &Value, object_prot
         NativeFunction::ParseInt,
         false,
     ));
-    number_function.properties.borrow_mut().insert(
-        "parseFloat".to_owned(),
+    number_function.properties.borrow_mut().insert_in(
+        env.realm().atoms(),
+        "parseFloat",
         Property::non_enumerable(parse_float_value.clone()),
     );
-    number_function.properties.borrow_mut().insert(
-        "parseInt".to_owned(),
+    number_function.properties.borrow_mut().insert_in(
+        env.realm().atoms(),
+        "parseInt",
         Property::non_enumerable(parse_int_value.clone()),
     );
     let number_value = Value::Function(number_function);
@@ -147,14 +150,14 @@ pub(crate) fn install_number(env: &mut CallEnv, global_this: &Value, object_prot
 
 fn define_number_constant(function: &Function, key: &str, value: f64) {
     function.properties.borrow_mut().insert(
-        key.to_owned(),
+        key,
         Property::data(Value::Number(value), false, false, false),
     );
 }
 
 fn define_function_property(function: &Function, key: &str, length: usize, native: NativeFunction) {
     function.properties.borrow_mut().insert(
-        key.to_owned(),
+        key,
         Property::non_enumerable(Value::Function(Function::new_native(
             Some(key),
             length,

@@ -58,8 +58,9 @@ pub(crate) fn install_weak_map(
         2,
         NativeFunction::WeakMapPrototypeSet,
     );
-    weak_map_function.properties.borrow_mut().insert(
-        "prototype".to_owned(),
+    weak_map_function.properties.borrow_mut().insert_in(
+        env.realm().atoms(),
+        "prototype",
         crate::Property::fixed_non_enumerable(Value::Object(weak_map_prototype)),
     );
 

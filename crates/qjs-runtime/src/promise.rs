@@ -100,8 +100,9 @@ pub(crate) fn install_promise(env: &mut CallEnv, global_this: &Value, object_pro
     promise_prototype.define_non_enumerable("catch".to_owned(), Value::Function(promise_catch));
     promise_prototype.define_non_enumerable("finally".to_owned(), Value::Function(promise_finally));
     promise_prototype.define_non_enumerable("then".to_owned(), Value::Function(promise_then));
-    promise_function.properties.borrow_mut().insert(
-        "prototype".to_owned(),
+    promise_function.properties.borrow_mut().insert_in(
+        env.realm().atoms(),
+        "prototype",
         Property::fixed_non_enumerable(Value::Object(promise_prototype.clone())),
     );
     symbol::define_species_accessor(env, &promise_function);
@@ -112,8 +113,9 @@ pub(crate) fn install_promise(env: &mut CallEnv, global_this: &Value, object_pro
         &promise_prototype,
         &object_prototype,
     );
-    promise_function.properties.borrow_mut().insert(
-        "all".to_owned(),
+    promise_function.properties.borrow_mut().insert_in(
+        env.realm().atoms(),
+        "all",
         Property::non_enumerable(Value::Function(promise_all)),
     );
 
@@ -178,10 +180,10 @@ fn promise_static_function(
 }
 
 fn define_promise_static(promise_function: &Function, name: &str, function: Function) {
-    promise_function.properties.borrow_mut().insert(
-        name.to_owned(),
-        Property::non_enumerable(Value::Function(function)),
-    );
+    promise_function
+        .properties
+        .borrow_mut()
+        .insert(name, Property::non_enumerable(Value::Function(function)));
 }
 
 pub(crate) fn native_promise(

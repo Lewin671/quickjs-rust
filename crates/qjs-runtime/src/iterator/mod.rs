@@ -246,16 +246,19 @@ pub(crate) fn install_iterator(
     // The `Iterator` constructor: not directly constructable, subclassable.
     let iterator_function =
         Function::new_native(Some("Iterator"), 0, NativeFunction::Iterator, true);
-    iterator_function.properties.borrow_mut().insert(
-        "prototype".to_owned(),
+    iterator_function.properties.borrow_mut().insert_in(
+        env.realm().atoms(),
+        "prototype",
         Property::fixed_non_enumerable(Value::Object(iterator_prototype.clone())),
     );
-    iterator_function.properties.borrow_mut().insert(
-        "__quickjsRustRealmIteratorPrototype".to_owned(),
+    iterator_function.properties.borrow_mut().insert_in(
+        env.realm().atoms(),
+        "__quickjsRustRealmIteratorPrototype",
         Property::fixed_non_enumerable(Value::Object(iterator_prototype.clone())),
     );
-    iterator_function.properties.borrow_mut().insert(
-        "from".to_owned(),
+    iterator_function.properties.borrow_mut().insert_in(
+        env.realm().atoms(),
+        "from",
         Property::non_enumerable(Value::Function(Function::new_native(
             Some("from"),
             1,
@@ -263,8 +266,9 @@ pub(crate) fn install_iterator(
             false,
         ))),
     );
-    iterator_function.properties.borrow_mut().insert(
-        "concat".to_owned(),
+    iterator_function.properties.borrow_mut().insert_in(
+        env.realm().atoms(),
+        "concat",
         Property::non_enumerable(Value::Function(Function::new_native(
             Some("concat"),
             0,
@@ -272,8 +276,9 @@ pub(crate) fn install_iterator(
             false,
         ))),
     );
-    iterator_function.properties.borrow_mut().insert(
-        "zip".to_owned(),
+    iterator_function.properties.borrow_mut().insert_in(
+        env.realm().atoms(),
+        "zip",
         Property::non_enumerable(Value::Function(Function::new_native(
             Some("zip"),
             1,
@@ -281,8 +286,9 @@ pub(crate) fn install_iterator(
             false,
         ))),
     );
-    iterator_function.properties.borrow_mut().insert(
-        "zipKeyed".to_owned(),
+    iterator_function.properties.borrow_mut().insert_in(
+        env.realm().atoms(),
+        "zipKeyed",
         Property::non_enumerable(Value::Function(Function::new_native(
             Some("zipKeyed"),
             1,

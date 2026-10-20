@@ -87,8 +87,9 @@ pub(crate) fn install_function(
     );
     function_prototype.define_property("arguments".to_owned(), restricted_property.clone());
     function_prototype.define_property("caller".to_owned(), restricted_property);
-    function_constructor.properties.borrow_mut().insert(
-        "prototype".to_owned(),
+    function_constructor.properties.borrow_mut().insert_in(
+        env.realm().atoms(),
+        "prototype",
         Property::fixed_non_enumerable(Value::Function(function_prototype)),
     );
 

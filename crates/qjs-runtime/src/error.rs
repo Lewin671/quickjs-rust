@@ -42,12 +42,14 @@ pub(crate) fn install_error(env: &mut CallEnv, global_this: &Value, object_proto
     let is_error_function =
         Function::new_native(Some("isError"), 1, NativeFunction::ErrorIsError, false);
     define_function_name(&is_error_function, "isError");
-    error_function.properties.borrow_mut().insert(
-        "isError".to_owned(),
+    error_function.properties.borrow_mut().insert_in(
+        env.realm().atoms(),
+        "isError",
         Property::non_enumerable(Value::Function(is_error_function)),
     );
-    error_function.properties.borrow_mut().insert(
-        "prototype".to_owned(),
+    error_function.properties.borrow_mut().insert_in(
+        env.realm().atoms(),
+        "prototype",
         Property::fixed_non_enumerable(Value::Object(error_prototype)),
     );
     define_function_name(&error_function, "Error");
@@ -448,8 +450,9 @@ fn install_native_error(
         "message".to_owned(),
         Value::String(crate::JsString::default()),
     );
-    function.properties.borrow_mut().insert(
-        "prototype".to_owned(),
+    function.properties.borrow_mut().insert_in(
+        env.realm().atoms(),
+        "prototype",
         Property::fixed_non_enumerable(Value::Object(prototype)),
     );
     define_function_name(&function, name);
@@ -477,7 +480,7 @@ fn native_error_name(native: NativeFunction) -> Option<&'static str> {
 
 fn define_function_name(function: &Function, name: &str) {
     function.properties.borrow_mut().insert(
-        "name".to_owned(),
+        "name",
         Property::data(Value::String(name.to_owned().into()), false, false, true),
     );
 }

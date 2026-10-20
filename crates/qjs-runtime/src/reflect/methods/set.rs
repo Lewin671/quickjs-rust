@@ -194,10 +194,7 @@ fn set_receiver_data_property(
                 None if !function.is_extensible() => return Ok(false),
                 None => Property::enumerable(value),
             };
-            function
-                .properties
-                .borrow_mut()
-                .insert(key.to_owned(), descriptor);
+            function.properties.borrow_mut().insert(key, descriptor);
             Ok(true)
         }
         Value::Map(map) => {
