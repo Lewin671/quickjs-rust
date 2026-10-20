@@ -60,6 +60,8 @@ Fields (`schema` is `1` on every line):
 - `local-exact`: the default label of `test262-burndown.sh --report`.
 - `local-exact-agents`, `local-exact-release-agents`: local scans labelled
   by hand with `--source`; the script does not check a label.
+- `local-imac`: an exact scan run on the x86_64 iMac measurement host
+  through the bench queue, with a release binary and the `agents` feature.
 
 ## Recording
 

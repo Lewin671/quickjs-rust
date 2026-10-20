@@ -1,0 +1,65 @@
+{
+  "schema_version": 3,
+  "unit_kind": "leaf",
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "regexp-lazy-quantifier-steps-v5-remeasure",
+  "base_sha": "351004f386f4c2c1d870467ae6e1e481952a330c",
+  "queue": {
+    "candidate_sha": "351004f386f4c2c1d870467ae6e1e481952a330c",
+    "sha256": "424a1e79700353a842d5d6bb53cc03c285388a77b43695c9c95300541fddea56"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "development/papaparse/csv"
+    ],
+    "rank_ceiling": 1,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "T058: first-match traversal of a lazily quantified single-code-point atom (literal, class, dot, escape, property) tries the quantifier minimum first and steps the atom one repetition at a time only after the continuation fails, instead of scanning the atom's longest run before the first attempt. Greedy quantifiers keep the existing longest-run scan. The replace builtin's literal-source '(.+)' shortcut is removed; the general prepared global loop answers that program.",
+    "generality": "Admission depends only on the parsed atom kind and the quantifier's laziness, bounds and width in the compiled pattern: every lazy quantifier over any single-code-point atom, in every flag combination and every API (exec, test, match, matchAll, replace, split, search). No pattern source, library or benchmark shape is recognized; the change removes a source-text comparison.",
+    "semantic_risks": [
+      "Lazy priority order: count min first, then min+1, ..., bounded by max and by the first atom failure",
+      "Minimum repetitions must all succeed before the first continuation attempt; a short run fails without trying the continuation",
+      "Unicode and v modes advance by code point (surrogate pairs) and legacy \\u escapes can consume two units without u",
+      "Captures and backreferences inside the continuation must see the same state as before; failed attempts restore the index",
+      "Sticky and global lastIndex results and empty-match advancement must be unchanged",
+      "Removing the '(.+)' shortcut must keep replace results and lastIndex identical, including the replace-math stress case's length/OOM behavior"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "papaparse--csv/receipt.json",
+      "sha256": "bd02ec4aec879c90411fe9ffc560b82e6823868f609fabb5f37ff675fe672aec",
+      "base_sha": "351004f386f4c2c1d870467ae6e1e481952a330c",
+      "opportunity_ids": [
+        "development/papaparse/csv"
+      ],
+      "shared_cost": "iMac job 20261017T135712Z-t057-stage1-v3-profiles, exact queue image c7f0f66a, 60 s sample over two complete passes (50158 main-thread samples). RegExp.prototype[Symbol.replace] is 41967 inclusive; its stack-top samples are SimpleAtom::step 26751 and class_match_positive 11411, from the lazy replace new RegExp(q + '([^]*?)' + q, 'gm') at workload line 1108, whose first-match traversal scans each lazy run to the end of the subject before trying the minimum.",
+      "inclusive_fraction": 0.8367
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "development/papaparse/csv"
+    ],
+    "target_max_candidate_over_base": 0.7,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  },
+  "layout_gate": {
+    "policy_path": "benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v5.json",
+    "policy_sha256": "f3e8ef40b8b45601b5b86edaf4b47c2d9d904d0045eb024e837f1c447a52bec4",
+    "mechanism_class": "cpu-work",
+    "memory_wall_targets": [],
+    "panel_required": true,
+    "panel_pairs": 5,
+    "held_out_pairs": 30,
+    "formal_blocks": 30
+  }
+}

@@ -1,0 +1,261 @@
+# T058: V6 current-base unit rejected on its sole valid screen
+
+- Status: closed-rejected; single valid attempt exhausted, no promotion.
+- Implementation: present at `9e415ff4`; rejection is not a revert claim.
+- Verified at: `88bec228`, 2026-10-19 UTC; fetched r2 raw panel/verdict, hashes, queue statuses and undisturbed log checked.
+- Evidence: this record; workspace `outputs/imac-bench/20261019T211315Z-t058-v6-selection-k6-r2/` is a local artifact, not retained in Git.
+- Unresolved: root cause diagnosis/fix is separate engineering work; darkroom has an unresolved instruction alert.
+- Next action: none for this frozen unit. Diagnose under [T058](../T058-regexp-lazy-quantifiers.md); no re-decision, budget reset, new plan or acceptance.
+
+## Frozen result
+
+R2 selection `20261019T211315Z-t058-v6-selection-k6-r2`: exit 3,
+undisturbed (three light monitor rows, zero heavy), verdict `reject`.
+Failures: `sentinel/recursive_call_tree: consistent instruction excess exceeds median hard cap`
+and `sentinel/recursive_call_tree: panel instruction hard cap exceeded`.
+The natural instruction median is 1.0496374966, minimum 1.0494946693,
+against the 1.01 event ceiling and 1.03 median hard cap; wall median
+1.0281961176 is below wall band 1.0501274308. The instruction hard cap
+rejects independently of the beneficial portfolio or nonpersistent wall cost.
+All 30 recursive instruction pairs across K=6 are above the hard cap.
+
+The first v6 selection was DISTURBED and remains wholly invalid; r2 is the
+sole valid screen and spends `max_attempts: 1`. This proposal is rejected.
+Do not re-decide it, reset its budget or use diagnostic work to promote it.
+Original attempts 1/2 retain their earlier incomplete/inconclusive standing.
+The v6 plan and its queue/profile/policy bytes stay frozen.
+
+`external/kraken-1.1/imaging-darkroom`: natural instruction median
+1.0109617861, minimum 1.0072309076; wall median 1.0623088898 below
+1.0703122657. It is `incomplete` from an inconsistent instruction alert,
+not a second proven hard-cap rejection. The all-layout medians below retain
+the mixed instruction observations; a portfolio gain cannot waive them.
+
+| Layout | Recursive instructions | Recursive wall | Darkroom instructions | Darkroom wall | Portfolio wall |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 0 | 1.049637497 | 1.028196118 | 1.010961786 | 1.062308890 | 0.972642899 |
+| 1 | 1.049532839 | 1.009957746 | 1.009740599 | 0.993638806 | 0.969170927 |
+| 2 | 1.049558689 | 1.026135652 | 1.009081753 | 1.014799164 | 0.973287792 |
+| 3 | 1.049390910 | 0.885405745 | 1.010935031 | 1.015752290 | 0.969584358 |
+| 4 | 1.049501528 | 1.001761616 | 1.010537322 | 1.035934699 | 0.973549447 |
+| 5 | 1.049511814 | 1.029929650 | 1.009726242 | 0.994837239 | 0.967872646 |
+
+SHA-256 bindings:
+
+- `out/attempt/verdict.json`: `f53a541427acce14937284f8aa6c2a4efac9e87bb669f5fbb024763b88c8b5bc`.
+- `out/attempt/screen/panel.json`: `6366c205bbc58a86a3076330f83f967c06b61adcb8bec3c04f4316fefa2b2718`.
+- `out/attempt/screen/complete.json`: `97fd76eff03ca06ec47ee2f309e5680efaae39ba8f3a66037111d60621622cf4`.
+- `log`: `a7244c329709716679e1645ed555fa84dc6130994f560266768f91c6dfedd355`.
+- `intruders.log`: `fb6bc7418f0b226bfc3301977fb625c206ded2a1f46eb92b99b0ed59cbf9b4b4`.
+
+Exact source pair: base `a68a9f46`, candidate `9e415ff4`. Natural image hashes:
+base `897eaa88f9b10fb684ce9b65e63e842113ae7ef82fac0e6e58fc6b337c2204a9`,
+candidate `6acf3c5286c48a07283696349dd3fa7f358d582b8fcc56294a5e21c0072c64f8`.
+Plan commit `979741ca`, unit SHA-256
+`a0f3b6864ff015a56e9f8fd04c23799c19a252040e7299f355b61d3b4bcdfedf`.
+
+Later r2 jobs all exited 2 on prerequisites without measuring:
+`20261019T211316Z-t058-v6-acceptance-formal30-r2`,
+`20261019T211317Z-t058-v6-formal-power-r2`,
+`20261019T211318Z-t058-v6-heldout-k6-r2`,
+`20261019T211319Z-t058-v6-test262-exact-r2`,
+`20261019T211320Z-t058-v6-promotion-decide-r2`.
+No formal decision or exact-scan burndown was produced.
+
+## Earlier prospective and dispatch record (historical snapshot)
+
+# T058: Current-base RegExp lazy-quantifier proposal under v6
+
+- Status: active; v6 evidence/plan completed; first selection DISTURBED, no rejection; complete r2 selection/acceptance chain queued.
+- Implementation: present on rebased candidate `9e415ff4`; its runtime diff from current main is T058 alone. No new runtime edits.
+- Verified at: clean rebase onto `a68a9f46` at `9e415ff4`; runtime/proposal at `c7c43e05` plus dispatch documentation passed full `check.sh` on 2026-10-19. Attempt-2 hashes/logs checked; final staged fast gate covers handoff metadata.
+- Evidence: [attempt 1](T058-attempt1-incomplete.md), [attempt 2](T058-attempt2-inconclusive.md), [prospective contract](../proposals/T058-current-base-v6.json).
+- Unresolved: clean complete selection and all acceptance; first selection is invalid load evidence, all five later jobs stopped before measuring. Frozen plan and old decisions unchanged.
+- Next action: inspect all r2 statuses/logs below before reading their decision; any queue-reported DISTURBED requires whole-job replacement, regardless of exit code.
+
+## Goal and attribution
+
+Keep lazy single-code-point RegExp repetition incremental and remove the
+literal-source replace/Date shortcuts; the original implementation, semantic
+risks and correctness history live in the attempt-2 archive. RGI_Emoji
+property-of-strings support remains separate work.
+
+[T062](T062-formal-precision-rule.md#prospective-scope-and-t058)
+allows a fresh proposal only with a new current-base comparison, opportunity
+queue, exact-image profile and newly validated/frozen plan. Existing plans
+remain immutable and both old outcomes remain inconclusive. This proposal
+uses current main `a68a9f469a1c36c8080b71e1546851a30f448da6` as its base and
+rebased `9e415ff45cb909e41d182dc3d6f03d3c1007b3f9` as candidate. Both include
+T057 and T062; only T058's RegExp implementation/tests differ in engine
+paths. No improvement from T057 is credited to T058. No old timing, profile,
+queue or exact-candidate correctness entry can verify this source pair.
+
+## Prospective choices
+
+The committed contract is a proposal, not a schema-3 unit with fabricated
+future hashes. A chained job fills only measured queue/profile bindings,
+records actual sampled branch counts, validates the schema-3 unit and
+commits it on an isolated iMac `agent/t058-regexp-lazy/claude` worktree.
+Acceptance refuses to start without that commit, its exact plan bytes and
+successful validation. The commit is also exported as a small Git bundle for
+the coordinator to import; neither origin nor this local branch is pushed.
+If fresh evidence does not justify this proposal, all dependent jobs stop.
+
+| Choice | Frozen value and reason |
+| --- | --- |
+| New priority | Fresh formal30 current-main queue, compared with preceding `89a13699`; identical runtime here is acceptable for queue generation. Papaparse must still rank 1 in development; no override or replacement target if it does not. |
+| Profile | Exact current-main queue image; two complete papaparse passes, macOS sample 60 s at 1 ms. Keep stdout/raw/receipt; require lazy-scan atom and RegExp replace frames. This diagnostic sampling is never acceptance timing. |
+| Plan/policy | New schema-3 `regexp-lazy-quantifier-current-base-v6`; policy v6 SHA-256 `be123f7c5cfd46aa863467256eb8bf6947ff64f72541efc371f05a36c5535a31`, the newly required prospective policy. V5 bands/schedule remain unchanged. |
+| Target/payoff | Only `development/papaparse/csv`, <=0.70 plus reciprocal B_i and all-pair improvement. These original choices stay fixed; fresh evidence may stop the proposal, never loosen them. |
+| Mechanism/controls | Same general `cpu-work` traversal, no memory-wall targets; all other 85 selection cases, six sentinels and all lane/portfolio/instruction gates. No resource waiver is introduced. |
+| Layouts | Fresh audited base/candidate K=6 at 0/16/64/240/512/1008, workers-4, selection 5 pairs/layout. Mandatory full panel avoids post-result layout selection. |
+| Held-out | All nine programs, fresh 30 pairs at every layout, workers-4; unchanged persistence and bootstrap precision gates, never priority input. |
+| Formal/power | One fresh 30-block workers-4 bundle after a passing screen; v6 exact median >=97.5% interval at fixed looks 30 and 240. Extend only unresolved cases directly to 240 via `--plan`; crossing intervals at cap remain incomplete. Joint lanes/held-out keep their original rules. |
+| Budget | One fixed current-base candidate, `max_attempts: 1`; no implementation variation or favorable rerun. This is a new evidence-bound proposal allowed by T062, not an extension/reset of the exhausted old unit. |
+| Recovery | Current workspace instruction: every queue-reported DISTURBED job is replaced whole, with no pair salvage or pooling; at most three load-only replacements. No non-load retry or extra valid attempt. |
+| Correctness | Fresh exact-candidate zero-gap Test262 scan for `9e415ff4`, separate from local full checks; original `392ca717` entry is inadmissible for the new pair. |
+
+Queue/profile hashes were unknown when these prospective choices were
+committed. The materializer has no discretion over targets, thresholds, offsets, rule,
+source pair or budgets. It records a lower-bound inclusive fraction from
+the largest sampled replace branch divided by main-thread samples; overlapping
+frames are not summed. Guard failure blocks acceptance and preserves output.
+
+## Jobs and result reading
+
+Submitted on 2026-10-19 at 17:43 UTC after status showed idle. Tooling and
+prospective contract commit: `c7c43e05`; contract SHA-256
+`d9f61ce3f3a66816faf7643fbd4954721aced28876b4ada44b317bbc17552aa8`.
+All jobs use workspace `scripts/imac-bench.sh`; timing jobs use `--timing`.
+
+| Job ID | Purpose / output under its `out/` |
+| --- | --- |
+| `20261019T174302Z-t058-v6-current-base-formal30` | Fresh current-base comparison; `bundle/summary.json` and sealed raw |
+| `20261019T174303Z-t058-v6-fresh-queue-profile` | Fresh `queue.json`, raw sample, `profile-summary.json`, `profiles/papaparse--csv/receipt.json` |
+| `20261019T174304Z-t058-v6-validate-freeze-plan` | Validate and commit new schema-3 plan; `unit.json`, `validation.json`, `frozen-plan.json`, `frozen-plan.bundle` |
+| `20261019T174305Z-t058-v6-selection-k6` | Build/audit fresh six-layout matrices and screen; `attempt/screen/complete.json`, `attempt/verdict.json` |
+| `20261019T174305Z-t058-v6-acceptance-formal30` | New candidate/base acceptance; `bundle/summary.json` |
+| `20261019T174306Z-t058-v6-formal-power` | V6 fixed-look continuation with `--plan`; `power/power.json` |
+| `20261019T174307Z-t058-v6-heldout-k6` | Fresh full K=6 held-out; `heldout/panel.json` |
+| `20261019T174308Z-t058-v6-test262-exact` | Fresh exact-candidate scan; `test262/`, `burndown-entry.json` |
+| `20261019T174309Z-t058-v6-promotion-decide` | New-unit replay only; `decision.json`, `decision.stdout`, `--require-retained` |
+
+Baseline, profiling, selection, formal, power and held-out are timed. Freeze,
+correctness and decision are non-timing and still serialized by the queue.
+Every job checks its prerequisites; canonical formal DISTURBED logs stop the
+chain. The current workspace rule also invalidates a whole queue job whenever
+it reports DISTURBED; recovered pairs cannot salvage that job.
+Fresh queue generation keeps the standard 0.5 NG opportunity ratio. The freeze
+job never changes choices from its contract, and acceptance verifies its
+Git-committed plan bytes, proposal ancestry, queue/profile hashes and validation.
+The plan now exists in the completed freeze job and runner commit `979741ca`;
+its bundle has not been integrated into this local branch.
+New queue/profile and all acceptance output paths are exclusive. Spotlight/
+photo/media disable flags and daemon states are recorded without STOP/CONT
+or service changes. No completion is awaited.
+
+Allow about 5-6 hours of iMac occupancy: fresh queue comparison 45-60 min,
+profiling/freezing a few minutes, build/audit overhead, selection K=6 about
+61-74 min, formal about 45-60 min, held-out K=6 about 101-125 min, exact
+correctness about 28-30 min, power/decision several minutes. The lower panel
+figures are attempt-2 observations (3673/6061 s), not a promise for new images;
+upper figures come from T060/T061. Queue waiting, quieting, precision work
+and load-only replacements are additional.
+
+Coordinator: fetch all new jobs, first verify fresh queue/profile priority,
+base/candidate and the freeze job's validation, `unit.json`, commit/hash and
+`frozen-plan.bundle`. Fetch its owner branch into a temporary ref and
+cherry-pick only the plan/index commit onto this branch; preserve its frozen
+bytes. Then inspect every prerequisite's status and the decision job's
+`out/decision.json`: `decision`, `decision_readiness`, reasons and bound hashes.
+Only complete clean `retained` evidence can support the new source pair.
+A failed priority/profile/freeze guard, valid rejection or inconclusive result
+stops this proposal. No old attempt is re-decided under v6 or pooled.
+
+## V6 first selection disturbed; whole-job replacement
+
+Queue status and original command/log/load files verified on 2026-10-19
+UTC at `82d3b5be`; iMac clock confirmed 2026-10-20 05:12 CST (UTC+8).
+Fresh comparison, profile and freeze jobs each exited 0 without DISTURBED;
+they remain the evidence/plan prerequisites. Freeze validation is `valid`,
+runner commit `979741ca847348cd761a368929a8f77da9aab8e7`, unit SHA-256
+`a0f3b6864ff015a56e9f8fd04c23799c19a252040e7299f355b61d3b4bcdfedf`;
+queue SHA-256 `8adb73f995b3bc3cf1e83098cfe48799f14618ea23200e251fca69b1a7bea258`,
+profile receipt `6ba549699da84ac3d84a359a83136845e58e16bf824a2ba50e0f34c68f97ada7`.
+The completed freeze job remains `20261019T174304Z-t058-v6-validate-freeze-plan`.
+
+`20261019T174305Z-t058-v6-selection-k6` exited 1 after 3336 s:
+`DISTURBED: worker pair caps failed: DISTURBED: invalid pairs exceed 20% cap`.
+Its wrapper also reported DISTURBED (one >=200% sample). Intruders include
+XProtect remediators, mds and syspolicyd around the known 03:00-03:20 iMac
+window. The heavy sample is 19:08:43 UTC / 03:08:43 CST, aggregate 230.3%.
+Log SHA-256 `eb3bf19fb3d6e13249c5e124e33667430d7b63e289e9e4d8fa67f05b1c798bfa`;
+intruders SHA-256 `3d00222f28cd4c99c8eebfd449ad04fe51da13ca307b82fc5c5cb1284fc45db7`.
+All original output is retained as disturbed evidence; no pair, natural
+screen or partial panel is carried into r2. This is not a valid rejection,
+not a spent valid screen, and not a choice among acceptance results.
+It is the first whole-job load replacement under this v6 proposal; the
+single valid-attempt budget and every frozen choice remain unchanged.
+
+The five downstream jobs listed above exited 2 at prerequisites, without
+measurement: acceptance-formal30 0 s (selection), formal-power 0 s (formal),
+heldout-k6 1 s (selection), test262-exact 0 s (selection), promotion-decide
+0 s (selection). No formal, continuation, held-out, exact scan or decision
+was collected; there is no burndown entry to record from that chain.
+
+R2 submitted in dependency order at 21:13 UTC / 05:13 CST after a second
+status check showed idle. All six submitted `command.sh` files were read back
+from the iMac and verified byte-for-byte against their originals after
+reversing only old-to-r2 prerequisite ID substitutions. Selection is exactly
+unchanged, SHA-256 `cf4d2221df348dec7f87cc1755a9e793dbb388b7b75868f3516bff0384b8de92`.
+Tooling `c7c43e05`, source refs, timing flags and the original freeze binding
+are unchanged. Exclusive new `$BENCH_OUT` paths force full new collection.
+
+| R2 job ID | Command SHA-256 |
+| --- | --- |
+| `20261019T211315Z-t058-v6-selection-k6-r2` | `cf4d2221df348dec7f87cc1755a9e793dbb388b7b75868f3516bff0384b8de92` |
+| `20261019T211316Z-t058-v6-acceptance-formal30-r2` | `a65b5de69d5f6f8ac43e3b0c5cc716a2a8d2154fa75ade16b85e93b752344004` |
+| `20261019T211317Z-t058-v6-formal-power-r2` | `2263bc116e0b51e44faedd493e377b38041e0842663be69c7bf3d908d5492130` |
+| `20261019T211318Z-t058-v6-heldout-k6-r2` | `e3061ea35d59dbe079a0389e4d9703eabcb63a1f9903cd4755a63e701518d443` |
+| `20261019T211319Z-t058-v6-test262-exact-r2` | `8b35a95b8fe387008e7e1e270284adb0cbebc433135b39238404d1aa7ab6f6e1` |
+| `20261019T211320Z-t058-v6-promotion-decide-r2` | `368ec2e3df5c274d7fb79f6583f74a5cf77a5ba790c98cbdb10077f15af79c8e` |
+
+First four jobs are timed; exact Test262 and decision remain non-timing.
+All shell/Python programs passed syntax checks, and normalized command-byte
+comparisons passed for all six jobs. No completion was awaited. Expected
+remaining occupancy: roughly 4-5 hours for full fresh selection/build/audit,
+formal, power, held-out, exact correctness and decision; queue quieting,
+precision work and any permitted further load replacement add time.
+Check every r2 log for DISTURBED regardless of exit before using the final
+decision; an outer queue warning invalidates the whole job. No per-pair
+salvage, continuation of the disturbed panel or old/new sample pooling.
+This record changes only task metadata; staged context/fast checks verify
+it. The full engine/tooling gate remains verified at `c7c43e05` as above.
+
+## Scope and checks
+
+Own this task, its two index entries, new attempt-2 archive and prospective
+contract; the queued freeze adds only its new performance-unit plan/index.
+No engine/dependency/third_party/benchmark-tool implementation changes.
+The local full `check.sh` and staged fast gate must pass before handoff;
+plan-specific `validate-unit` runs on the fresh original-host artifacts
+before its remote commit. Exact scan writes a burndown entry for coordinator
+recording after completion; no current full-scan count is claimed early.
+
+Handoff verification (2026-10-19 UTC):
+`PYTHONDONTWRITEBYTECODE=1 CARGO_INCREMENTAL=0 ./scripts/check.sh` passed:
+2,312 runtime tests, feature lint/tests (21 agents, 24 counters), all other
+workspace crates, 659 benchmark-tool tests, 35 script tests, all committed
+unit-plan/context/size/hook/syntax gates, and all 5,170 curated Test262 cases.
+The recording/proposal commits change no engine source, so the staged fast
+gate selects context checks rather than a new semantic slice; the full
+curated semantic subset still ran. Every dispatched shell command and Python
+heredoc passed syntax checks before submission. New plan validation completed
+in the freeze job; clean acceptance remains pending the replacement chain.
+
+Local disposable `target/debug` (2.4 GiB) was removed after checks; canonical
+performance images and all measurement evidence remain. Initial free data
+volume: local 86 GiB, iMac 101 GiB. No origin push or merge. After the new
+exact scan completes, record its retained full-scan entry with
+`scripts/test262-burndown.sh --entry <fetched-burndown-entry.json>`; partial
+scans are never recorded as complete. Do not use the old candidate entry.

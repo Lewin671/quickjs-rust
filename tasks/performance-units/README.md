@@ -35,6 +35,10 @@ nothing about whether the code exists.
 
 | Plan (`<name>.json`) | Task | Base | Recorded outcome |
 | --- | --- | --- | --- |
+| `regexp-lazy-quantifier-current-base-v6` (runner plan `979741ca`) | T058 | `a68a9f46` 2026-10-19 | rejected on sole valid K=6 screen: recursive instruction hard cap; first disturbed run invalid, no reset/re-decision; [record](../archive/T058-v6-rejection.md) |
+| `regexp-lazy-quantifier-bounded-helper-v6` (runner plan `6747434f`) | T058 | `a68a9f46` 2026-10-19 | retained (`ready_for_unit_gates`) on its sole attempt: K=6 selection pass, papaparse/csv formal 0.0806, held-out pass, Test262 zero gap; candidate `736200aa`; [record](../archive/T058-regexp-lazy-quantifiers.md) |
+| `regexp-lazy-quantifier-steps-v5-remeasure` | T058 | `351004f3` 2026-10-19 | closed inconclusive: sole bitops formal width 3.7343% at 240; all jobs clean, decision exit 1; old unit exhausted, no v6 re-decision |
+| `regexp-lazy-quantifier-steps` | T058 | `351004f3` 2026-10-17 | attempt 1 closed incomplete: formal cap half-width 3.5433%, no promotion; r2 held-out/decision cancelled; original plan unchanged, one remaining attempt bound below |
 | `string-handles-ascii-search-boundaries` | T057 | `351004f3` 2026-10-17 | attempt 1: PROMOTE under v4 after clean replacement K=6 held-out panel and precise formal continuation; candidate `026476d5`, integrated into main; [T057](../T057-string-code-units.md) |
 | `interpreter-core-v2-atoms-layouts` | T056 | `351004f3` 2026-10-17 | stage 1 single screen (`a8c533ef`): v3 raw `reject` (development lane, layouts 0 and 2); governing v4-successor replay `pass` (lane event nonpersistent); no formal stage decision yet |
 | `compact-named-read-single-hot-probe` | T049 | `21e55fe2` 2026-10-16 | one screen failed: target 0.9822 and four controls exceeded 1.03; budget exhausted, runtime reverted, no formal run |

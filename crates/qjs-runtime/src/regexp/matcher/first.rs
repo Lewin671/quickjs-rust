@@ -269,6 +269,16 @@ impl<'a> FirstMatcher<'a> {
                 return self.match_pattern(quantifier.next_pc, end_pc, state, continuation);
             }
 
+            if !quantifier.greedy {
+                return self.match_lazy_simple_atom(
+                    &matcher,
+                    quantifier,
+                    end_pc,
+                    state,
+                    continuation,
+                );
+            }
+
             if matcher.has_fixed_width_one(self.options) {
                 let entry_index = state.index;
                 let Some(highest) = simple_atom_max_count(
@@ -281,19 +291,10 @@ impl<'a> FirstMatcher<'a> {
                 ) else {
                     return false;
                 };
-                if quantifier.greedy {
-                    for count in (quantifier.min..=highest).rev() {
-                        state.index = entry_index + count;
-                        if self.match_pattern(quantifier.next_pc, end_pc, state, continuation) {
-                            return true;
-                        }
-                    }
-                } else {
-                    for count in quantifier.min..=highest {
-                        state.index = entry_index + count;
-                        if self.match_pattern(quantifier.next_pc, end_pc, state, continuation) {
-                            return true;
-                        }
+                for count in (quantifier.min..=highest).rev() {
+                    state.index = entry_index + count;
+                    if self.match_pattern(quantifier.next_pc, end_pc, state, continuation) {
+                        return true;
                     }
                 }
                 return false;
@@ -321,21 +322,11 @@ impl<'a> FirstMatcher<'a> {
             let lowest = quantifier.min;
             let highest = self.simple_boundary_scratch[boundary_slot].len() - 1;
             let mut matched = false;
-            if quantifier.greedy {
-                for count in (lowest..=highest).rev() {
-                    state.index = self.simple_boundary_scratch[boundary_slot][count];
-                    if self.match_pattern(quantifier.next_pc, end_pc, state, continuation) {
-                        matched = true;
-                        break;
-                    }
-                }
-            } else {
-                for count in lowest..=highest {
-                    state.index = self.simple_boundary_scratch[boundary_slot][count];
-                    if self.match_pattern(quantifier.next_pc, end_pc, state, continuation) {
-                        matched = true;
-                        break;
-                    }
+            for count in (lowest..=highest).rev() {
+                state.index = self.simple_boundary_scratch[boundary_slot][count];
+                if self.match_pattern(quantifier.next_pc, end_pc, state, continuation) {
+                    matched = true;
+                    break;
                 }
             }
             self.simple_boundary_depth -= 1;
@@ -383,6 +374,51 @@ impl<'a> FirstMatcher<'a> {
             *state = candidate;
             return true;
         }
+        false
+    }
+
+    /// Lazy repetition of a single-code-point atom in priority order.
+    ///
+    /// The minimum repetitions are stepped first; a short run fails without
+    /// trying the continuation. Each further repetition is stepped only after
+    /// the continuation failed at the previous count, so the scan never reads
+    /// past the returned match's last repetition plus one atom test. Greedy
+    /// repetition still needs the longest run first and stays on the scans
+    /// above.
+    fn match_lazy_simple_atom(
+        &mut self,
+        matcher: &super::fast_scan::SimpleAtom<'_>,
+        quantifier: super::Quantifier,
+        end_pc: usize,
+        state: &mut MatchState,
+        continuation: Option<usize>,
+    ) -> bool {
+        debug_assert!(!quantifier.greedy);
+        let entry_index = state.index;
+        let mut index = entry_index;
+        for _ in 0..quantifier.min {
+            match matcher.step(self.text, index, self.properties, self.options) {
+                Some(next) if next != index => index = next,
+                _ => return false,
+            }
+        }
+        let max = quantifier.max.unwrap_or(usize::MAX);
+        let mut count = quantifier.min;
+        loop {
+            state.index = index;
+            if self.match_pattern(quantifier.next_pc, end_pc, state, continuation) {
+                return true;
+            }
+            if count >= max {
+                break;
+            }
+            match matcher.step(self.text, index, self.properties, self.options) {
+                Some(next) if next != index => index = next,
+                _ => break,
+            }
+            count += 1;
+        }
+        state.index = entry_index;
         false
     }
 
