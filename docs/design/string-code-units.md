@@ -24,8 +24,9 @@ performance result or freeze a performance plan.
   GetMethod, species, custom exec, callback and lastIndex observation order.
   Share immutable data; never cache an observable property lookup.
 - Cached ASCII classification makes byte/unit/scalar coordinates identical
-  only on the ASCII branch. Never combine unit lengths with scalar offsets
-  on the legacy non-ASCII search branch.
+  only on the ASCII branch. String search, literal split and replacement
+  ranges decode UTF-16 locally for non-ASCII input, including half-pair matches;
+  no per-string unit view is introduced by this correctness fix.
 - Mutation invalidates dependent metadata, or explicitly composes it from
   the appended suffix. Aliases retain their old value and caches. Preserve
   the existing unique append path and slot/shared-cell binding model.
@@ -77,22 +78,20 @@ cold. A future slice policy must bound retained parent size/ratio so tiny
 tokens do not pin entire documents. Ropes remain optional and separately
 measured; ordinary transforming output remains output-proportional work.
 
-## Existing semantic differences to resolve
+## Correctness boundary
 
-The investigation at `b481894d` reported these base differences against the
-pinned NG binary. Reproduce them against ES2025 and upstream tests before
-changing semantics; these observations are not a new conformance scan.
+String search positions, literal split and string-needle replacement use
+UTF-16 units, including matching a lone surrogate inside a stored pair.
+ASCII retains the byte paths. String-pattern search/match delegate to RegExp;
+`at` returns one unit and String iteration returns code points.
+[T057](../../tasks/T057-string-code-units.md) owns base reproductions and checks.
+This local correctness repair does not implement the stage-2 view/cache plan.
 
-| Expression / operation | Reported Rust / NG | Planned owner |
-| --- | --- | --- |
-| `'😀x'.indexOf('x')` | 1 / 2 | Stage 2, unit result coordinates. |
-| `'😀x'.startsWith('x', 2)` | false / true | Stage 2, unit boundaries. |
-| `'😀'.includes('\uDE00')` | false / true | Stage 2, half-surrogate search. |
-| `'😀'.split('')` first-unit codes | [55357] / [55357,56832] | Stage 2, unit separator semantics. |
-| `/./uy`, subject `'😀x'`, lastIndex 1: index/length/new lastIndex | [2,1,3] / [1,1,2] | Stage 3, independently confirm interior-pair behavior before changing matcher coordinates. |
-
-Stage 1 must fix a difference with focused tests if its changed path touches
-that behavior; otherwise retain the explicit later-stage boundary.
+RegExp's interior-pair coordinate behavior remains stage 3 work: at the
+initial investigation, `/./uy` on `'😀x'` with lastIndex 1 yielded
+index/length/new lastIndex [2,1,3] vs NG [1,1,2]. Reproduce and confirm against
+ES2025 before changing matcher coordinates; this String fix makes no claim
+about that independent boundary.
 
 ## Verification contract
 

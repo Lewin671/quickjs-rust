@@ -1,3 +1,5 @@
+//! String sequences; literal split decodes UTF-16 only for non-ASCII input.
+
 use crate::JsString;
 use crate::{
     ArrayRef, PropertyKey, RuntimeError, Value, call_function, has_property_key, property_value,
@@ -136,6 +138,11 @@ pub(crate) fn native_string_prototype_split(
     let separator = to_js_string_with_env(separator_value, env)?;
     if limit == 0 {
         return Ok(Value::Array(ArrayRef::new(Vec::new())));
+    }
+    if !value.is_ascii() {
+        return Ok(Value::Array(ArrayRef::new(
+            super::search::split_code_units(&value, &separator, limit),
+        )));
     }
     let parts = if separator.is_empty() {
         value

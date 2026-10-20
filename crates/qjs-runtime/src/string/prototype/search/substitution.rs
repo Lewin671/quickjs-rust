@@ -1,4 +1,9 @@
-use crate::Value;
+//! Replacement substitutions count and select UTF-16 units, including half pairs.
+
+use crate::{
+    Value,
+    string::{code_units, push_code_unit, string_code_unit_len},
+};
 
 pub(super) fn substitution_length(
     replacement: &str,
@@ -8,19 +13,19 @@ pub(super) fn substitution_length(
     captures: &[Value],
 ) -> Option<usize> {
     let mut length = 0usize;
-    let matched_len = matched.chars().count();
+    let matched_len = string_code_unit_len(matched);
     let suffix_len = input_len.saturating_sub(position + matched_len);
     let capture_lengths: Vec<_> = captures
         .iter()
         .map(|capture| match capture {
-            Value::String(capture) => capture.chars().count(),
+            Value::String(capture) => string_code_unit_len(capture),
             _ => 0,
         })
         .collect();
     let mut chars = replacement.chars().peekable();
     while let Some(character) = chars.next() {
         if character != '$' {
-            length = length.checked_add(1)?;
+            length = length.checked_add(character_unit_len(character))?;
             continue;
         }
         let Some(next) = chars.next() else {
@@ -39,7 +44,7 @@ pub(super) fn substitution_length(
                     next,
                 )?)?
             }
-            _ => length = length.checked_add(2)?,
+            _ => length = length.checked_add(1 + character_unit_len(next))?,
         }
     }
     Some(length)
@@ -70,7 +75,7 @@ pub(super) fn get_substitution(
             '`' => crate::string::push_js_str(&mut result, &input_char_slice(input, 0, position)),
             '\'' => crate::string::push_js_str(
                 &mut result,
-                &input_char_slice(input, position + matched.chars().count(), input_len),
+                &input_char_slice(input, position + string_code_unit_len(matched), input_len),
             ),
             '0'..='9' => substitute_capture(&mut result, &mut chars, captures, next),
             _ => {
@@ -142,8 +147,30 @@ fn push_capture(result: &mut String, captures: &[Value], index: usize) {
     }
 }
 
+fn character_unit_len(character: char) -> usize {
+    if crate::string::surrogate_escape_code_unit(character).is_some() {
+        1
+    } else {
+        character.len_utf16()
+    }
+}
+
 fn input_char_slice(input: &str, start: usize, end: usize) -> String {
-    input.chars().skip(start).take(end - start).collect()
+    if input.is_ascii() {
+        return input
+            .chars()
+            .skip(start)
+            .take(end.saturating_sub(start))
+            .collect();
+    }
+    let mut result = String::new();
+    for unit in code_units(input)
+        .skip(start)
+        .take(end.saturating_sub(start))
+    {
+        push_code_unit(&mut result, unit);
+    }
+    result
 }
 
 #[cfg(test)]
@@ -161,7 +188,7 @@ mod tests {
                 &replacement,
                 &matched,
                 0,
-                matched.chars().count(),
+                string_code_unit_len(&matched),
                 &captures
             ),
             Some(1usize << 31)

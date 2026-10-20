@@ -1,3 +1,6 @@
+//! String search and replacement protocols; match records use UTF-16 positions.
+//! ASCII keeps byte search/copy paths; non-ASCII helpers decode units locally.
+
 use crate::{
     JsString, PropertyKey, RuntimeError, Value, call_function, construct_function, property_value,
     property_value_key, regexp, symbol, to_js_string_value_with_env, to_js_string_with_env,
@@ -9,6 +12,8 @@ use super::super::indexing::{
 };
 
 mod errors;
+mod units;
+pub(super) use units::split_code_units;
 mod substitution;
 mod symbol_method;
 use crate::CallEnv;
@@ -32,23 +37,8 @@ fn search_length(value: &JsString) -> usize {
     if value.is_ascii() {
         value.len()
     } else {
-        value.chars().count()
+        crate::string::js_string_code_unit_len(value)
     }
-}
-
-/// Byte offset of character `index`, clamped to the end of the buffer. Used
-/// instead of rebuilding the remainder of the receiver as a fresh string.
-///
-/// ASCII text answers from the memoized classification, so a cursor search
-/// over a retained document costs no subject scan per call. Other text keeps
-/// the legacy scalar coordinates [`search_length`] also counts in.
-fn byte_offset_for_char_index(text: &JsString, index: usize) -> usize {
-    if text.is_ascii() {
-        return index.min(text.len());
-    }
-    text.char_indices()
-        .nth(index)
-        .map_or(text.len(), |(offset, _)| offset)
 }
 
 pub(crate) fn native_string_prototype_ends_with(
@@ -65,7 +55,10 @@ pub(crate) fn native_string_prototype_ends_with(
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
         env,
     )?;
-    let boundary = byte_offset_for_char_index(&value, end);
+    if !value.is_ascii() {
+        return Ok(Value::Boolean(units::ends_with(&value, &search, end)));
+    }
+    let boundary = end;
     Ok(Value::Boolean(value[..boundary].ends_with(search.as_str())))
 }
 
@@ -83,7 +76,12 @@ pub(crate) fn native_string_prototype_includes(
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
         env,
     )?;
-    let boundary = byte_offset_for_char_index(&value, start);
+    if !value.is_ascii() {
+        return Ok(Value::Boolean(
+            units::find(&value, &search, start).is_some(),
+        ));
+    }
+    let boundary = start;
     Ok(Value::Boolean(value[boundary..].contains(search.as_str())))
 }
 
@@ -102,16 +100,16 @@ pub(crate) fn native_string_prototype_index_of(
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
         env,
     )?;
-    let boundary = byte_offset_for_char_index(&value, start);
+    if !value.is_ascii() {
+        return Ok(Value::Number(
+            units::find(&value, &search, start).map_or(-1.0, |index| index as f64),
+        ));
+    }
+    let boundary = start;
     let Some(byte_index) = value[boundary..].find(search.as_str()) else {
         return Ok(Value::Number(-1.0));
     };
-    let char_offset = if value.is_ascii() {
-        byte_index
-    } else {
-        value[boundary..boundary + byte_index].chars().count()
-    };
-    Ok(Value::Number((start + char_offset) as f64))
+    Ok(Value::Number((start + byte_index) as f64))
 }
 
 pub(crate) fn native_string_prototype_last_index_of(
@@ -124,6 +122,16 @@ pub(crate) fn native_string_prototype_last_index_of(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
         env,
     )?;
+    if !value.is_ascii() {
+        let position = string_last_search_position(
+            crate::string::string_code_unit_len(&value),
+            argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+            env,
+        )?;
+        return Ok(Value::Number(
+            units::rfind(&value, &search, position).map_or(-1.0, |index| index as f64),
+        ));
+    }
     let chars: Vec<_> = value.chars().collect();
     let search_chars: Vec<_> = search.chars().collect();
     let position = string_last_search_position(
@@ -363,7 +371,10 @@ pub(crate) fn native_string_prototype_starts_with(
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
         env,
     )?;
-    let boundary = byte_offset_for_char_index(&value, start);
+    if !value.is_ascii() {
+        return Ok(Value::Boolean(units::starts_with(&value, &search, start)));
+    }
+    let boundary = start;
     Ok(Value::Boolean(
         value[boundary..].starts_with(search.as_str()),
     ))
@@ -406,7 +417,10 @@ fn regexp_replace_all(
     replace_matches(input, matches, replacement, env)
 }
 
-fn string_match_positions(input: &str, search: &str) -> Vec<StringMatch> {
+fn string_match_positions(input: &JsString, search: &str) -> Vec<StringMatch> {
+    if !input.is_ascii() {
+        return units::match_positions(input, search, false);
+    }
     let input_len = input.chars().count();
     if search.is_empty() {
         return (0..=input_len)
@@ -445,7 +459,12 @@ fn string_match_positions(input: &str, search: &str) -> Vec<StringMatch> {
     matches
 }
 
-fn string_first_match_position(input: &str, search: &str) -> Option<StringMatch> {
+fn string_first_match_position(input: &JsString, search: &str) -> Option<StringMatch> {
+    if !input.is_ascii() {
+        return units::match_positions(input, search, true)
+            .into_iter()
+            .next();
+    }
     if search.is_empty() {
         return Some(StringMatch {
             start: 0,
@@ -487,7 +506,7 @@ fn regexp_match_positions(
             break;
         };
         let start = regexp_match_index(&Value::Array(array.clone()), env)?;
-        let end = start + matched.chars().count();
+        let end = start + crate::string::string_code_unit_len(&matched);
         let captures = (1..array.len())
             .map(|index| array.get(index).unwrap_or(Value::Undefined))
             .collect();
@@ -531,7 +550,7 @@ fn regexp_first_match_position(
         .collect();
     Ok(Some(StringMatch {
         start,
-        end: start + matched.chars().count(),
+        end: start + crate::string::string_code_unit_len(&matched),
         matched: matched.to_string(),
         captures,
     }))
@@ -543,6 +562,9 @@ fn replace_matches(
     replacement: Replacement,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
+    if !input.is_ascii() {
+        return units::replace_matches(input, matches, replacement, env);
+    }
     let mut result = String::new();
     let mut result_len = 0usize;
     // Counted once per replacement, not once per match.
@@ -588,7 +610,10 @@ fn replace_matches(
             }
         };
         if replacement_is_function {
-            result_len = checked_string_length(result_len, replacement_string.chars().count())?;
+            result_len = checked_string_length(
+                result_len,
+                crate::string::string_code_unit_len(&replacement_string),
+            )?;
         }
         crate::string::push_js_str(&mut result, &replacement_string);
         // Step the cursor over the matched text so the next kept region starts
@@ -638,7 +663,7 @@ fn preflight_literal_replacement_length(
     matches: &[StringMatch],
     replacement: &str,
 ) -> Result<(), RuntimeError> {
-    let replacement_len = replacement.chars().count();
+    let replacement_len = crate::string::string_code_unit_len(replacement);
     let matched_len = matches.iter().try_fold(0usize, |sum, string_match| {
         sum.checked_add(string_match.end.saturating_sub(string_match.start))
     });
