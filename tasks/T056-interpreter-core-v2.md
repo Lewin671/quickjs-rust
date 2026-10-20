@@ -172,6 +172,11 @@ work-count obligations listed in that design before any screen.
 Decided plan parameters (frozen only with the fresh queue/receipts): migration, stages A (layout replacement)
 and B (routing, final); cumulative 1.025; payoff 0.97 or 1/B_i; rank ceiling 5; `max_attempts` 2; a frozen,
 block-only non-timing instruction pre-gate over all 86 policy cases before each screen, recorded here.
+Pre-gate cutoff: `max(1.03, I_i)`, the existing hard cap. Plan-before-implementation statements: the mechanism
+summary discloses the diagnostic prototype and its measured ratios; budget, payoff and rank ceiling reuse the
+existing values, not values derived from the diagnosis; the candidate is reimplemented on a post-T063 base whose
+plan commit is an ancestor of every runtime commit, with no diagnostic-branch cherry-picks; diagnostic samples are
+never profile receipts.
 
 ### New-shape work-count obligations (perf-counters, before any timed screen)
 

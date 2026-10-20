@@ -119,7 +119,7 @@ Stage 2 added a domain, a two-word state and a counter to `PropertyStorage`, whi
 
 **Target: at most 120 bytes**, locked by the size test. It is reached with:
 - the one-pointer `LayoutNode`, which adds 8 bytes to `PropertyStorage`;
-- the eight flags packed into one `Cell<u8>` bit set (7 bools plus 2 bits of brand). This frees 7 bytes;
+- the eight flags packed into one `Cell<u16>` bit set (7 bools plus 2 bits of brand, 9 bits). This frees 6 bytes;
 - the `u8` edit counter placed in the freed space;
 - the domain moved into the shape and dictionary nodes.
 
