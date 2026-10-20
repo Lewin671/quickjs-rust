@@ -36,6 +36,7 @@ nothing about whether the code exists.
 | Plan (`<name>.json`) | Task | Base | Recorded outcome |
 | --- | --- | --- | --- |
 | `regexp-lazy-quantifier-current-base-v6` (runner plan `979741ca`) | T058 | `a68a9f46` 2026-10-19 | rejected on sole valid K=6 screen: recursive instruction hard cap; first disturbed run invalid, no reset/re-decision; [record](../archive/T058-v6-rejection.md) |
+| `regexp-lazy-quantifier-bounded-helper-v6` | T058 | `a68a9f46` 2026-10-19 | new fixed-candidate queue/profile validated; v6 one-attempt K=6 plan frozen, candidate `736200aa`; all acceptance pending |
 | `regexp-lazy-quantifier-steps-v5-remeasure` | T058 | `351004f3` 2026-10-19 | closed inconclusive: sole bitops formal width 3.7343% at 240; all jobs clean, decision exit 1; old unit exhausted, no v6 re-decision |
 | `regexp-lazy-quantifier-steps` | T058 | `351004f3` 2026-10-17 | attempt 1 closed incomplete: formal cap half-width 3.5433%, no promotion; r2 held-out/decision cancelled; original plan unchanged, one remaining attempt bound below |
 | `string-handles-ascii-search-boundaries` | T057 | `351004f3` 2026-10-17 | attempt 1: PROMOTE under v4 after clean replacement K=6 held-out panel and precise formal continuation; candidate `026476d5`, integrated into main; [T057](../T057-string-code-units.md) |

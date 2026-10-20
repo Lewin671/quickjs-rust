@@ -1,0 +1,67 @@
+{
+  "schema_version": 3,
+  "unit_kind": "leaf",
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "regexp-lazy-quantifier-bounded-helper-v6",
+  "base_sha": "a68a9f469a1c36c8080b71e1546851a30f448da6",
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "development/papaparse/csv"
+    ],
+    "rank_ceiling": 1,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "T058: first-match traversal of a lazily quantified single-code-point atom (literal, class, dot, escape, property) tries the quantifier minimum first and steps the atom one repetition at a time only after the continuation fails, instead of scanning the atom's longest run before the first attempt. Greedy quantifiers keep the existing longest-run scan. The replace builtin's literal-source '(.+)' shortcut is removed; the general prepared global loop answers that program. The fixed candidate also initializes the numeric helper register file with scalar copies for its existing bounded arities 0 through 4, avoiding a dynamic-length library copy whose code generation changed when T058 was compiled with T057.",
+    "generality": "Admission depends only on the parsed atom kind and the quantifier's laziness, bounds and width in the compiled pattern: every lazy quantifier over any single-code-point atom, in every flag combination and every API (exec, test, match, matchAll, replace, split, search). No pattern source, library or benchmark shape is recognized; the change removes a source-text comparison. Numeric helper admission and the MAX_HELPER_ARITY=4 limit are unchanged; explicit copies apply to every admitted helper, independent of program names, source text, recursion shape or benchmark identity.",
+    "semantic_risks": [
+      "Lazy priority order: count min first, then min+1, ..., bounded by max and by the first atom failure",
+      "Minimum repetitions must all succeed before the first continuation attempt; a short run fails without trying the continuation",
+      "Unicode and v modes advance by code point (surrogate pairs) and legacy \\u escapes can consume two units without u",
+      "Captures and backreferences inside the continuation must see the same state as before; failed attempts restore the index",
+      "Sticky and global lastIndex results and empty-match advancement must be unchanged",
+      "Removing the '(.+)' shortcut must keep replace results and lastIndex identical, including the replace-math stress case's length/OOM behavior",
+      "Bounded helper setup preserves argument order and exact f64 bits, including negative zero, NaN payloads and infinities; untouched local registers keep the existing undefined encoding",
+      "Unsupported internal helper arities return None; a compile-time assertion binds the explicit cases to the existing arity limit; call dispatch and shared upvalue/binding semantics are unchanged"
+    ]
+  },
+  "fast_gate": {
+    "target_ids": [
+      "development/papaparse/csv"
+    ],
+    "target_max_candidate_over_base": 0.7,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  },
+  "layout_gate": {
+    "policy_path": "benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v6.json",
+    "policy_sha256": "be123f7c5cfd46aa863467256eb8bf6947ff64f72541efc371f05a36c5535a31",
+    "mechanism_class": "cpu-work",
+    "memory_wall_targets": [],
+    "panel_required": true,
+    "panel_pairs": 5,
+    "held_out_pairs": 30,
+    "formal_blocks": 30
+  },
+  "queue": {
+    "candidate_sha": "a68a9f469a1c36c8080b71e1546851a30f448da6",
+    "sha256": "1e768cd150a6bb14c904886290dfb1740603c172b9ebc36ac7dca53d78ace29c"
+  },
+  "profile_evidence": [
+    {
+      "source": "papaparse--csv/receipt.json",
+      "sha256": "f933e9b65d3c0eb02fc1633ffc046587b955c3d531191e93ad3685a0c7bda821",
+      "base_sha": "a68a9f469a1c36c8080b71e1546851a30f448da6",
+      "opportunity_ids": [
+        "development/papaparse/csv"
+      ],
+      "shared_cost": "Fresh current-main exact-image profile: 50158 main-thread samples; largest inclusive RegExp replace branch 46355, largest SimpleAtom step branch 28663. Two full papaparse passes; max branch counts are not summed. Current-base matcher still scans a lazy atom maximum before its minimum continuation; candidate changes lazy RegExp traversal and removes shortcuts, with a general fixed 0-4 argument setup for the existing numeric-helper ABI. The accepted helper fix is separately supported by exact x86 diagnosis and does not rely on this RegExp profile to claim helper cost.",
+      "inclusive_fraction": 0.9241795924877387
+    }
+  ]
+}
