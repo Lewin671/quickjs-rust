@@ -552,3 +552,5 @@ Raw evidence: workspace `outputs/imac-bench/20261020T210106Z-t056-m1a-chain-sele
 Next: diagnose executor/codegen placement and real tree/unpack instruction work, then have the lead run
 prospectively declared diagnostic triage before deciding whether to spend the sole remaining attempt.
 No new timing job is authorized for the implementation owner.
+
+Attempt-1 follow-up: [diagnosis and repair contract](T056-m1-stageA-attempt1-diagnosis.md).

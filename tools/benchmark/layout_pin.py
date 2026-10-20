@@ -40,6 +40,7 @@ from .layout_targets import (
     WIDE_EXECUTOR_FALLBACK,
     INTERPRETER_EXECUTOR,
     INTERPRETER_EXECUTOR_FALLBACK,
+    DIRECT_EXECUTOR_TARGETS,
     CALLEES,
     CALLEE_OFFSETS,
     SELECTED_SPELLINGS,
@@ -292,9 +293,16 @@ def findings_for(symbols: TextSymbols, listed: Sequence[str]) -> tuple[Finding, 
     """
     binaries = SymbolIndex(symbols.names)
     order = SymbolIndex(listed)
+    def matches(index, target):
+        entries = index.match(target)
+        # A closure nested inside an outlined execute is a deopt helper,
+        # not that declaration's dispatch body. Historical run wrappers
+        # remain valid alternatives when no direct execute was emitted.
+        return tuple(entry for entry in entries if not entry.symbol.wrapped) \
+            if target in DIRECT_EXECUTOR_TARGETS else entries
     findings = []
     for role, targets in ROLE_TARGETS:
-        matched = [(target, binaries.match(target), order.match(target)) for target in targets]
+        matched = [(target, matches(binaries, target), matches(order, target)) for target in targets]
         chosen = (next((row for row in matched if row[1]), None)
                   or next((row for row in matched if row[2]), None) or matched[0])
         binary, aliases = definitions(chosen[1], symbols)

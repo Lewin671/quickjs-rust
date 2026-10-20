@@ -253,6 +253,7 @@ python3 -m tools.benchmark.layout_audit --binary "$binary" --strict
 ```
 
 Repeat pin/relink until stable; add changed hot callees to `layout_targets.py`.
+An outlined `execute<Frame>` outranks legacy wrappers; its nested deopt closures are not dispatchers.
 `layout-scan.sh --offsets 0x0,0x200,0x400` restores the native order on exit;
 its canary wins cannot adopt production layout. Keep baseline placements
 while comparing implementations; production placement requires the whole

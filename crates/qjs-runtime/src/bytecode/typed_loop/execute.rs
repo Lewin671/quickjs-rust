@@ -6,6 +6,8 @@
 //! the residency bound, or a guard failure — and all three rebuild the operand
 //! stack the interpreter expects from the [`DeoptSite`] of the operation that
 //! stopped, so a region with side effects is safe to abandon halfway.
+//! Entry owns pooled scratch; dispatch borrows its register banks and receiver
+//! slices directly, keeping the scalar bank independent of the owner layout.
 
 use std::rc::Rc;
 
@@ -143,7 +145,16 @@ fn run<F: LoopFrame>(vm: &mut F, program: &TypedLoopProgram) -> Outcome {
             }
             perform_hoisted_reads(vm, program, &mut scratch.registers, &mut scratch.boxed)
         })
-        .map(|()| execute(vm, program, &mut scratch))
+        .map(|()| {
+            execute(
+                vm,
+                program,
+                &mut scratch.registers.0,
+                &scratch.receivers,
+                &mut scratch.boxed,
+                &scratch.sloppy_global_writes,
+            )
+        })
         .unwrap_or(Outcome::Declined);
     if program.deferred_global_publication && !matches!(outcome, Outcome::Declined) {
         publish_deferred_globals(vm, program, &scratch);
@@ -191,15 +202,18 @@ fn reg(register: u16) -> usize {
     usize::from(register) & (REGISTER_FILE - 1)
 }
 
+// Entry owns the scratch bundle, but the dispatch loop receives its storage
+// directly. Its scalar register bank is an independent mutable borrow, not
+// a pointer it must repeatedly recover through the scratch owner.
+#[inline(never)]
 fn execute<F: LoopFrame>(
     vm: &mut F,
     program: &TypedLoopProgram,
-    scratch: &mut TypedLoopScratch,
+    registers: &mut [Typed; REGISTER_FILE],
+    receivers: &[crate::ArrayRef],
+    boxed: &mut [Value],
+    sloppy_global_writes: &[super::super::vm_bindings::TypedLoopSloppyGlobalWrite],
 ) -> Outcome {
-    let registers: &mut [Typed; REGISTER_FILE] = &mut scratch.registers.0;
-    let receivers = &scratch.receivers;
-    let boxed = &mut scratch.boxed;
-    let sloppy_global_writes = &scratch.sloppy_global_writes;
     // Borrowed for the whole region: the program owns these across activations,
     // so a site stays warm across entries of a short inner loop.
     let mut shape_caches = program.shape_caches.borrow_mut();

@@ -200,13 +200,14 @@ impl ObjectRef {
     /// [`Self::shared_data_slot_value`] of a number in a `Small` store: the
     /// typed loop tier's read of a numeric field (`body.x`), without cloning a
     /// `Value` to unpack it again.
-    #[inline]
+    // Keep the shape/fallback guards outside the typed dispatch loop. Their
+    // size otherwise changes that loop even for scalar-only programs.
+    #[inline(never)]
     pub(crate) fn shared_data_slot_number(&self, way: &SharedSlot) -> Option<f64> {
         if self.0.module_namespace_exotic.get() {
             return None;
         }
-        // Small stores only: this read is inlined into the typed-loop
-        // executor, and a second encoding here grows that executor's hot arm.
+        // Keep the existing Small-only admission of the numeric cache.
         let storage = self.0.properties.borrow();
         let slot = way.slot;
         if !(way.small && way.on_shape(&storage)) {
@@ -227,7 +228,7 @@ impl ObjectRef {
     /// [`Self::shared_data_slot_write`] of a number over a writable data
     /// property of a `Small` store: the typed loop tier's field update
     /// (`body.vx -= ...`). `false`, having written nothing, for anything else.
-    #[inline]
+    #[inline(never)]
     pub(crate) fn shared_data_slot_write_number(&self, way: &SharedSlot, number: f64) -> bool {
         if self.0.module_namespace_exotic.get() {
             return false;

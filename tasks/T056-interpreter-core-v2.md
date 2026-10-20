@@ -3,23 +3,23 @@
 - Status: active; M1 stage 1 integrated into main (`ab9c29b6`); the M1.2 shape `873c9bc5`
   was rejected on its sole screen and is closed; its replacement is frozen as plan
   [`interpreter-core-v2-layout-edges`](performance-units/interpreter-core-v2-layout-edges.json); stage A is
-  implemented on `agent/t056-m1-stage-a/claude` (plan `50b42547`); `0a9af81b` is rejected by a valid K=6
-  screen: attempt 1/2 spent, one remains across A+B. Diagnose before the lead considers the final attempt.
+  implemented on `agent/t056-m1-stage-a/claude` (plan `50b42547`); valid K=6 failure of `0a9af81b` spent
+  attempt 1/2. A codegen/lookup repair is present and locally gated; one attempt remains across A+B.
 - Implementation: stage 1 on main. Stage A on its branch, not on main; the rejected M1.2 candidate stays on
   `agent/t056-m1-stage2/codex`; the write-site add replay removed from stage A stays on
   `agent/t056-add-transition-replay/claude`.
-- Verified at: corrected stage A `0a9af81b`: focused/fast/full gates, 255 NG fixtures, 42,672/42,672 configured
-  Test262 cases, CI success and 86/86 pre-gate; valid K=6 rejection job `20261020T210106Z` (see [record](archive/T056-m1-stageA-record.md)).
+- Verified at: repair working tree over `e87fa8c5`: full gate, 255 NG fixtures, 5170 subset, strict pin audit
+  and eight-case canonical instruction diagnosis (see [repair evidence](archive/T056-m1-stageA-attempt1-diagnosis.md)); fresh exact/triage/pre-gate pending.
 - Evidence: [part 1](archive/T056-unit0-part1-evidence.md), [part 2](archive/T056-unit0-part2-evidence.md),
   [M1 stage 1](archive/T056-m1-stage1-evidence.md), [M1.2 rejection](archive/T056-m1-stage2-evidence.md),
   [M1.2 diagnosis](archive/T056-m1-stage2-diagnosis.md), [stage A record](archive/T056-m1-stageA-record.md),
   [M2 design inputs](archive/T056-m2-design-inputs.md);
   plans [`interpreter-core-v2-atoms-layouts`](performance-units/interpreter-core-v2-atoms-layouts.json) (closed),
   [`interpreter-core-v2-layout-edges`](performance-units/interpreter-core-v2-layout-edges.json).
-- Unresolved: five persistent wall regressions; prior `72c2e5db` arm64 raytrace-field diagnostic was 1.0374x.
-  M2 (five cost-first stages) still needs fresh post-M1 profiles.
-- Next action: diagnose codegen/placement and tree/unpack instruction costs; prepare fixed diagnostic triage
-  and a new-image 86-case pre-gate. The lead alone submits timing; only one frozen attempt remains.
+- Unresolved: repaired-image full configured Test262, 86-case pre-gate and diagnostic wall triage before
+  deciding on the final attempt; arm64 repair timing unmeasured. M2 still needs fresh post-M1 profiles.
+- Next action: the lead runs the prepared fresh correctness, 86-case pre-gate and T061 diagnostic jobs,
+  inspects all five failed cases plus targets, then decides on the sole remaining attempt. No automatic timing.
 
 ## Goal and scope
 

@@ -10,17 +10,21 @@ _EXECUTE = f"{_BYTECODE}::typed_loop::execute"
 _WIDE_FRAME = f"{_BYTECODE}::compact_fn::wide::loop_frame::WideLoopFrame"
 _VM = f"{_BYTECODE}::vm::Vm"
 
-# The wide tier's dispatch loop, as a canonical name. The compiler either
-# keeps it out of line as `run<WideLoopFrame>` or inlines it into
-# `try_run_typed_loop<WideLoopFrame>`; the first with a live definition wins.
-# Either name pins the same loop, and a `{closure}` wrapper around it does not
-# change the name.
+# Historical wide dispatch spellings: older compilers inline execute into
+# run's closure or into try_run_typed_loop. An explicit execute declaration
+# is preferred below; a closure nested inside execute is only a helper and
+# cannot replace that declaration as the dispatch target.
 WIDE_EXECUTOR = f"{_EXECUTE}::run::<{_WIDE_FRAME}>"
 WIDE_EXECUTOR_FALLBACK = f"{_EXECUTE}::try_run_typed_loop::<{_WIDE_FRAME}>"
+# A deliberately outlined dispatch has its own declaration. Its deopt
+# closures are helpers, whereas legacy run closures can own the whole loop.
+WIDE_DISPATCH = f"{_EXECUTE}::execute::<{_WIDE_FRAME}>"
 # The same dispatch loop instantiated for the interpreter's own top-level
 # loops, pinned ahead of its wide twin.
 INTERPRETER_EXECUTOR = f"{_EXECUTE}::run::<{_VM}>"
 INTERPRETER_EXECUTOR_FALLBACK = f"{_EXECUTE}::try_run_typed_loop::<{_VM}>"
+INTERPRETER_DISPATCH = f"{_EXECUTE}::execute::<{_VM}>"
+DIRECT_EXECUTOR_TARGETS = frozenset((WIDE_DISPATCH, INTERPRETER_DISPATCH))
 
 # The executor's hot callees, in their pinned order. Each owns a fixed-size
 # slot so that a callee growing does not move the ones after it. The first
@@ -44,6 +48,9 @@ CALLEES = (
     f"{_BYTECODE}::compact_fn::numeric_plan::run",
     f"<{_BYTECODE}::typed_loop::helper_graph::numeric::NumProgram>::run",
     f"<{_BYTECODE}::named_property_cache::NamedPropertyCache>::probe",
+    f"{_BYTECODE}::compact_fn::wide::activation::run",
+    f"<{RUNTIME_CRATE}::value::object::ObjectRef>::shared_data_slot_number",
+    f"<{RUNTIME_CRATE}::value::object::ObjectRef>::shared_data_slot_write_number",
 )
 # A callee's own alignment is independent of the executor's current window.
 CALLEE_OFFSETS = {f"{_EXECUTE}::call_leaf": 0x580}
@@ -69,8 +76,8 @@ TAIL_CALLEES = (
 # callee is a slot of its own.
 EXECUTOR_ROLES = ("wide executor", "interpreter executor")
 ROLE_TARGETS = (
-    ("wide executor", (WIDE_EXECUTOR, WIDE_EXECUTOR_FALLBACK)),
-    ("interpreter executor", (INTERPRETER_EXECUTOR, INTERPRETER_EXECUTOR_FALLBACK)),
+    ("wide executor", (WIDE_DISPATCH, WIDE_EXECUTOR, WIDE_EXECUTOR_FALLBACK)),
+    ("interpreter executor", (INTERPRETER_DISPATCH, INTERPRETER_EXECUTOR, INTERPRETER_EXECUTOR_FALLBACK)),
     *((("callee"), (name,)) for name in CALLEES),
     *((("tail callee"), (name,)) for name in TAIL_CALLEES),
 )

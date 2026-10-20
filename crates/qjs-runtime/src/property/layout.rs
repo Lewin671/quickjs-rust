@@ -475,9 +475,17 @@ impl Shape {
             }
             return self.first_lookups(key);
         }
-        self.fields
-            .iter()
-            .position(|field| text_matches(field.text(), key))
+        // This bounded probe is the hot path for small stores. Keep its
+        // scan in this body: Iterator::position can become a separately
+        // instantiated call when unrelated code changes its inline budget.
+        let mut slot = 0;
+        while slot < self.fields.len() {
+            if text_matches(self.fields[slot].text(), key) {
+                return Some(slot);
+            }
+            slot += 1;
+        }
+        None
     }
 
     /// A large shape's first probes scan its fields; the index is built once
@@ -505,7 +513,7 @@ impl Shape {
     }
 
     /// The child an existing append edge leads to, without interning.
-    #[inline]
+    #[inline(always)]
     fn append_edge(&self, key: &str, attributes: Attributes) -> Option<Layout> {
         let edges = self.edges.borrow();
         let edge = edges.appends.iter().rev().find(|edge| {

@@ -1,8 +1,8 @@
 """Tests for the layout targets, selection, pinning and audit.
 
 The fixtures give a small engine with the same shape as the real one: the
-current build's closure spellings for the two executor instantiations, every
-pinned callee except the two the engine does not have, and an order file in an
+legacy build's closure spellings for the two executor instantiations, its
+callees (newer targets are reported absent), and an order file in an
 older build's spelling. Every test here is a property the tool has to hold for
 the layout to mean anything -- raw staleness, ambiguity, and which names the
 head is allowed to write.
@@ -31,7 +31,7 @@ EXECUTOR = layout_pin.WIDE_EXECUTOR
 INTERPRETER = layout_pin.INTERPRETER_EXECUTOR
 CALL_LEAF = layout_pin.CALLEES[3]
 TAIL_DROP = layout_pin.TAIL_CALLEES[1]
-# Two pinned callees the current engine does not have: one is a historical
+# Two legacy callees absent from the fixture: one is a historical
 # target a rewrite may drop, the other is simply gone.
 BOXED_EQUALITY = f"{layout_pin.CALLEES[11]}"
 GET_NAMED = layout_pin.CALLEES[12]
@@ -181,6 +181,22 @@ class DefinitionTests(unittest.TestCase):
 
 
 class FindingTests(unittest.TestCase):
+    def test_direct_dispatch_is_preferred_over_entry_and_deopt_wrappers(self):
+        direct = ("__RINvNtNtNtCs93CNxA9ZQ5c_11qjs_runtime8bytecode10typed_loop7execute7execute"
+                  "NtNtNtNtB6_10compact_fn4wide10loop_frame13WideLoopFrameEB8_")
+        deopt = ("__RNCINvNtNtNtCs93CNxA9ZQ5c_11qjs_runtime8bytecode10typed_loop7execute7execute"
+                 "NtNtNtNtB8_10compact_fn4wide10loop_frame13WideLoopFrameE0Ba_")
+        direct_vm = ("__RINvNtNtNtCs93CNxA9ZQ5c_11qjs_runtime8bytecode10typed_loop7execute7execute"
+                     "NtNtB6_2vm2VmEB8_")
+        symbols = fx.read_symbols(fx.ENGINE + ((deopt, 0x70), (direct, 0x3500), (direct_vm, 0x3600)))
+        wide = finding_for(symbols, "wide executor")
+        self.assertEqual(wide.chosen.text, direct)
+        self.assertFalse(wide.ambiguous)
+        self.assertEqual(finding_for(symbols, "interpreter executor").chosen.text, direct_vm)
+        # With only the deopt closure, the old run body still owns dispatch.
+        legacy = fx.read_symbols(fx.ENGINE + ((deopt, 0x70),))
+        self.assertEqual(finding_for(legacy, "wide executor").chosen.text, fx.WIDE_CLOSURE)
+
     def test_executors_are_found_through_the_closure_wrapper(self):
         symbols = fx.read_symbols()
         wide = finding_for(symbols, "wide executor")
@@ -253,7 +269,7 @@ class FindingTests(unittest.TestCase):
         missing = [finding for finding in layout_pin.findings_for(symbols, fx.ENGINE_ORDER)
                    if finding.role == "callee" and not finding.in_binary]
         self.assertEqual([finding.target for finding in missing],
-                         [layout_pin.WIDE_EXECUTOR_FALLBACK, BOXED_EQUALITY])
+                         [layout_pin.WIDE_EXECUTOR_FALLBACK, BOXED_EQUALITY, *layout_pin.CALLEES[16:]])
         self.assertTrue(all(not finding.in_binary for finding in missing))
         # The order file names an old spelling of the first one; nothing names
         # the second at all. Either way the head may not write them.
@@ -408,7 +424,7 @@ class OrderFileTests(unittest.TestCase):
         self.assertEqual(report.executor_problems(), ())
         self.assertEqual(report.strict_problems(), ())
         self.assertTrue(report.ok())
-        # The informational findings are still there: two optional callees are
+        # The informational findings are still there: optional callees are
         # gone and the tail duplicate cannot be pinned.
         problems = report.problems()
         self.assertTrue(any(BOXED_EQUALITY in problem for problem in problems))
@@ -507,7 +523,7 @@ class ReportTests(unittest.TestCase):
                 report = layout_pin.audit(Path("qjs"), order)
         self.assertEqual(report.summary(), report.summary())
         self.assertEqual(report.problems(), report.problems())
-        self.assertIn("callees 14/16 in the binary", report.summary())
+        self.assertIn("callees 14/19 in the binary", report.summary())
         self.assertEqual(report.ordered()[0].role, "wide executor")
         self.assertEqual(len(report.ordered()),
                          len(layout_pin.CALLEES) + len(layout_pin.TAIL_CALLEES) + 2)
