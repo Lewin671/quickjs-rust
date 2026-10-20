@@ -303,7 +303,9 @@ class RunnerTests(unittest.TestCase):
         manifest = load_manifest(ROOT / "benchmarks/manifest.json")
         case = replace(
             manifest.cases[0], initial_iterations=1, max_iterations=1,
-            min_window_ms=1, warmup_runs=1, timeout_seconds=1,
+            # Not under test: the first launch of a just-written engine can take
+            # seconds on a host launching other new executables.
+            min_window_ms=1, warmup_runs=1, timeout_seconds=60,
         )
         output = io.StringIO()
         run = BenchmarkRun(manifest, [engine], [case], 1, 1, JsonlWriter(output), ROOT)
@@ -624,7 +626,8 @@ class RunnerTests(unittest.TestCase):
             replace(
                 case, initial_iterations=1, max_iterations=1, min_window_ms=1,
                 startup_max_fraction=Fraction(1, 10), warmup_runs=0,
-                timeout_seconds=1,
+                # Not under test; see test_warmup_failure_writes_not_run_measurement.
+                timeout_seconds=60,
             )
             for case in manifest.cases
         ]

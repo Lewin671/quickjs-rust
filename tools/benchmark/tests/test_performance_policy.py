@@ -34,6 +34,7 @@ from tools.benchmark.hosted_preview import (
     PUSH_INTEGRITY_SCOPE,
     PUSH_MODE,
 )
+from tools.benchmark.tests.bounded import run_bounded
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -337,9 +338,9 @@ class PerformancePolicyTests(unittest.TestCase):
 
 class PerformancePolicyCliTests(unittest.TestCase):
     def _run(self, args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
+        return run_bounded(
             [str(ROOT / "scripts/performance-policy-audit.sh"), *args],
-            cwd=cwd, capture_output=True, text=True, timeout=15, check=False,
+            cwd=cwd, capture_output=True, text=True, check=False,
         )
 
     def test_default_is_repo_root_independent_and_deterministic(self) -> None:
@@ -429,9 +430,9 @@ class PerformancePolicyCliTests(unittest.TestCase):
                 **os.environ, "PYTHONPATH": str(directory), "SHADOW_MARKER": str(marker),
             }
             for script in ("performance-policy-audit.sh", "external-corpus-audit.sh"):
-                result = subprocess.run(
+                result = run_bounded(
                     [str(ROOT / "scripts" / script)], cwd=directory, env=environment,
-                    capture_output=True, text=True, timeout=15, check=False,
+                    capture_output=True, text=True, check=False,
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertFalse(marker.exists())
@@ -772,19 +773,25 @@ class SentinelProtocolBindingTests(unittest.TestCase):
         policy = load_policy(ROOT / "benchmarks/performance-policy.json")
         cross_check_repository(policy, ROOT)
 
-        manifest_path = ROOT / "benchmarks/generic-sentinels-manifest.json"
-        original = manifest_path.read_text(encoding="utf-8")
-        try:
-            drifted = json.loads(original)
-            drifted["reference_engine"]["revision"] = "0" * 40
-            manifest_path.write_text(json.dumps(drifted, indent=2) + "\n", encoding="utf-8")
+        # The drift is injected at load time instead of by rewriting the
+        # tracked manifest: an in-place rewrite is visible to any other suite
+        # sharing the checkout (and survives an interrupted test).
+        import dataclasses
+        from unittest import mock
+
+        from tools.benchmark import performance_policy as policy_module
+
+        real_load = policy_module.load_manifest
+
+        def drifted_load(path):
+            manifest = real_load(path)
+            if Path(path).name == "generic-sentinels-manifest.json":
+                return dataclasses.replace(manifest, reference_revision="0" * 40)
+            return manifest
+
+        with mock.patch.object(policy_module, "load_manifest", drifted_load):
             with self.assertRaisesRegex(
                 PerformancePolicyError, "does not match generic-sentinel manifest"
             ):
                 cross_check_repository(policy, ROOT)
-        finally:
-            manifest_path.write_text(original, encoding="utf-8")
-
-        # Restoring must leave the repository passing again, so a failure here
-        # is the test's own cleanup rather than a real drift.
         cross_check_repository(policy, ROOT)

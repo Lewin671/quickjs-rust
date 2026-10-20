@@ -6,7 +6,6 @@ import io
 import json
 import os
 import shutil
-import subprocess
 import tempfile
 import time
 import unittest
@@ -22,9 +21,11 @@ from tools.benchmark.resource_process import ResourceProcessResult
 from tools.benchmark.resource_report import write_resource_report
 from tools.benchmark.resource_runner import ResourceJsonlWriter, ResourceRun
 from tools.benchmark.resource_runner import ResourceRunError
+from tools.benchmark.resource_wall_process import run_fresh_process
 from tools.benchmark.resource_schema import load_resource_manifest
 from tools.benchmark.resource_validation import ResourceReportError, validate_resource_run
 from tools.benchmark.snapshots import SnapshotError
+from tools.benchmark.tests.bounded import run_bounded
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -121,8 +122,12 @@ class ResourceSystemTests(unittest.TestCase):
             kwargs["wall_runner"] = wall_runner
         if rss_runner is not None:
             kwargs["rss_runner"] = rss_runner
-        if admission_runner is not None:
-            kwargs["admission_runner"] = admission_runner
+        # Admission is a real launch only where a test asks for one: each real
+        # launch of a new snapshot pays macOS's first-exec assessment, which is
+        # slow and load-dependent and not what these tests check.
+        kwargs["admission_runner"] = admission_runner or (
+            lambda argv, timeout: self._wall_result(argv, duration=1, stdout="")
+        )
         ResourceRun(
             self.manifest, lane, engines, blocks or lane.initial_blocks, lane.seed,
             ResourceJsonlWriter(output), ROOT,
@@ -261,7 +266,8 @@ class ResourceSystemTests(unittest.TestCase):
         digest = hashlib.sha256(binary.read_bytes()).hexdigest()
         engine = Engine("candidate", "qjs-file", "qjs-rust", binary, digest, None)
         path, rows = self._run(
-            "fresh_process_latency/wall_ns_per_process", [engine]
+            "fresh_process_latency/wall_ns_per_process", [engine],
+            admission_runner=run_fresh_process,
         )
         validate_resource_run(path, self.manifest)
         samples = rows[1:-1]
@@ -625,11 +631,11 @@ class ResourceSystemTests(unittest.TestCase):
                 platform_name=self.manifest.profile.platform,
                 machine_name=self.manifest.profile.machine,
             )
-        cli = subprocess.run(
+        cli = run_bounded(
             [str(ROOT / "scripts/resource-benchmark.sh"), "--lane", "size",
              "--candidate", str(binary), "--candidate-identity", "quickjs-ng",
              "--candidate-receipt", str(receipt.path), "--output", str(self.temp / "attack.jsonl")],
-            capture_output=True, text=True, timeout=10, check=False,
+            capture_output=True, text=True, check=False,
         )
         self.assertEqual(cli.returncode, 2)
         self.assertIn("candidate: identity must be 'qjs-rust'", cli.stderr)
@@ -742,10 +748,10 @@ class ResourceSystemTests(unittest.TestCase):
         cli_rows = json.loads(json.dumps(fresh_rows))
         cli_rows[1]["value"] = huge
         cli_input = self._write_rows("huge-cli.jsonl", cli_rows)
-        cli = subprocess.run(
+        cli = run_bounded(
             [str(ROOT / "scripts/resource-benchmark-report.sh"),
              "--input", str(cli_input), "--output", str(self.temp / "huge-report.json")],
-            capture_output=True, text=True, timeout=10, check=False,
+            capture_output=True, text=True, check=False,
         )
         self.assertEqual(cli.returncode, 2)
         self.assertNotIn("Traceback", cli.stderr)

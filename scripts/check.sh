@@ -102,8 +102,10 @@ if [ "${QJS_CHECK_SPLIT_RUNTIME_TESTS:-0}" = "1" ]; then
 else
   qjs_check_stage "workspace tests" "$CARGO_BIN" test --workspace
 fi
+# GIT_OPTIONAL_LOCKS=0: the tools' `git status` probes run with short timeouts;
+# killed on a stalled host they must not leave the checkout's index.lock behind.
 qjs_check_stage "benchmark tool tests" \
-  env PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$ROOT_DIR" \
+  env PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$ROOT_DIR" GIT_OPTIONAL_LOCKS=0 \
   python3 -m unittest discover -s "$ROOT_DIR/tools/benchmark/tests" -v
 qjs_check_stage "performance unit plans" qjs_check_performance_units
 qjs_check_stage "agent context" "$ROOT_DIR/scripts/check-context.py"

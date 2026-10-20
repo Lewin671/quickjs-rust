@@ -33,6 +33,7 @@ from tools.benchmark.hosted_preview import (
 from tools.benchmark.preview_summary import HOW_TO_READ
 from tools.benchmark.receipts import load_receipt
 from tools.benchmark.schema import load_manifest, sha256_file
+from tools.benchmark.tests.bounded import run_bounded
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -340,12 +341,12 @@ class PreviewPreparationTests(unittest.TestCase):
                 PreviewError, f"{re.escape(str(source))}.*dirty after build"
             ):
                 verify_source(args)
-            result = subprocess.run(
+            result = run_bounded(
                 [
                     sys.executable, "-m", "tools.benchmark.preview", "verify-source",
                     "--source", str(source), "--revision", revision,
                 ],
-                cwd=ROOT, capture_output=True, text=True, timeout=10, check=False,
+                cwd=ROOT, capture_output=True, text=True, check=False,
             )
             self.assertEqual(result.returncode, 2)
             self.assertIn(str(source), result.stderr)
@@ -438,7 +439,7 @@ class HostedPreviewControlTests(unittest.TestCase):
         pr_number: int = 126,
         head_ref: str = "feature/performance-change",
     ) -> dict[str, object]:
-        result = subprocess.run(
+        result = run_bounded(
             [
                 sys.executable, "-m", "tools.benchmark.hosted_preview", "admit",
                 "--event-name", event_name, "--head-repository", head,
@@ -446,7 +447,7 @@ class HostedPreviewControlTests(unittest.TestCase):
                 "--base-ref", base_ref, "--pr-number", str(pr_number),
                 "--head-ref", head_ref,
             ],
-            cwd=ROOT, capture_output=True, text=True, timeout=10, check=False,
+            cwd=ROOT, capture_output=True, text=True, check=False,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         return json.loads(result.stdout)
@@ -457,7 +458,7 @@ class HostedPreviewControlTests(unittest.TestCase):
         before_sha: str = "1" * 40, after_sha: str = "2" * 40,
         workflow_sha: str = "2" * 40,
     ) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
+        return run_bounded(
             [
                 sys.executable, "-m", "tools.benchmark.hosted_preview", "admit-push",
                 "--event-name", event_name, "--repository", repository,
@@ -465,7 +466,7 @@ class HostedPreviewControlTests(unittest.TestCase):
                 "--before-sha", before_sha, "--after-sha", after_sha,
                 "--workflow-sha", workflow_sha, "--require-mode", PUSH_MODE,
             ],
-            cwd=ROOT, capture_output=True, text=True, timeout=10, check=False,
+            cwd=ROOT, capture_output=True, text=True, check=False,
         )
 
     def _admit_dispatch(
@@ -476,7 +477,7 @@ class HostedPreviewControlTests(unittest.TestCase):
         base_revision: str = "1" * 40,
         workflow_sha: str = "2" * 40,
     ) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
+        return run_bounded(
             [
                 sys.executable, "-m", "tools.benchmark.hosted_preview",
                 "admit-dispatch", "--event-name", event_name,
@@ -486,7 +487,7 @@ class HostedPreviewControlTests(unittest.TestCase):
                 "--workflow-sha", workflow_sha,
                 "--require-mode", MANUAL_MODE,
             ],
-            cwd=ROOT, capture_output=True, text=True, timeout=10, check=False,
+            cwd=ROOT, capture_output=True, text=True, check=False,
         )
 
     def test_executable_pr_admission_contract(self) -> None:
@@ -602,9 +603,9 @@ class HostedPreviewControlTests(unittest.TestCase):
                 "PR_NUMBER": "126",
                 "PR_HEAD_REF": hostile_ref,
             }
-            result = subprocess.run(
+            result = run_bounded(
                 ["bash", "-c", command], cwd=ROOT, env=environment,
-                capture_output=True, text=True, timeout=10, check=False,
+                capture_output=True, text=True, check=False,
             )
             self.assertEqual(result.returncode, 2, result.stderr)
             self.assertIn("head ref", result.stderr)
@@ -613,7 +614,7 @@ class HostedPreviewControlTests(unittest.TestCase):
     def test_stage_status_is_recorded_per_stage_with_its_phase(self) -> None:
         with tempfile.TemporaryDirectory() as directory_name:
             output = Path(directory_name) / "evidence"
-            result = subprocess.run(
+            result = run_bounded(
                 [
                     sys.executable, "-m", "tools.benchmark.preview", "status",
                     "--stage", "build",
@@ -625,7 +626,7 @@ class HostedPreviewControlTests(unittest.TestCase):
                     "--reference-revision", "d" * 40,
                     "--message", "mock candidate build failed",
                 ],
-                cwd=ROOT, capture_output=True, text=True, timeout=10, check=False,
+                cwd=ROOT, capture_output=True, text=True, check=False,
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(sorted(path.name for path in output.iterdir()), ["build-status.json"])

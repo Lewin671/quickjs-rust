@@ -9,6 +9,7 @@ import unittest
 from pathlib import Path
 
 from tools.benchmark.build_cache import load_spec, ready_entry
+from tools.benchmark.tests.bounded import run_bounded
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -149,9 +150,9 @@ exec "$TEST_REAL_PYTHON" "$@"
                     "--base-repo", "https://github.com/example/repo.git",
                     "--output", str(output), "--build-cache-root", str(selected_cache),
                 ]
-                result = subprocess.run(
+                result = run_bounded(
                     command, env=environment, capture_output=True, text=True,
-                    timeout=30, check=False,
+                    check=False,
                 )
                 cache_file = output / "build-cache.json"
                 if not require_provenance:
@@ -214,7 +215,7 @@ exec "$TEST_REAL_PYTHON" "$@"
                 stage: str, run: str, candidate_sha: str = CANDIDATE_SHA
             ) -> tuple[subprocess.CompletedProcess[str], Path]:
                 output = harness / f"target/{run}/{stage}-evidence"
-                result = subprocess.run(
+                result = run_bounded(
                     [
                         "bash", str(preview_script), "--stage", stage,
                         "--binaries", str(harness / f"target/{run}/binaries"),
@@ -225,7 +226,7 @@ exec "$TEST_REAL_PYTHON" "$@"
                         "--output", str(output),
                     ],
                     env=environment, capture_output=True, text=True,
-                    timeout=30, check=False,
+                    check=False,
                 )
                 return result, output
 
@@ -272,7 +273,7 @@ exec "$TEST_REAL_PYTHON" "$@"
             )
 
             # A lane takes no source tree: it cannot be pointed at one.
-            sourced = subprocess.run(
+            sourced = run_bounded(
                 [
                     "bash", str(preview_script), "--stage", "broad-1",
                     "--binaries", str(harness / "target/first/binaries"),
@@ -283,7 +284,7 @@ exec "$TEST_REAL_PYTHON" "$@"
                     "--base-repo", "https://github.com/example/repo.git",
                     "--output", str(harness / "target/sourced/evidence"),
                 ],
-                env=environment, capture_output=True, text=True, timeout=30, check=False,
+                env=environment, capture_output=True, text=True, check=False,
             )
             self.assertEqual(sourced.returncode, 2)
             self.assertIn("takes no source or cache path", sourced.stderr)

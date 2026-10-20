@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import copy
 import json
-import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -13,6 +12,7 @@ from tools.benchmark.external_corpora import (
     registry_summary,
     require_admitted,
 )
+from tools.benchmark.tests.bounded import run_bounded
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -252,12 +252,12 @@ class ExternalCorpusRegistryTests(unittest.TestCase):
 class ExternalCorpusCliTests(unittest.TestCase):
     def test_wrapper_is_repo_root_independent_and_output_is_deterministic(self) -> None:
         with tempfile.TemporaryDirectory() as directory_name:
-            result = subprocess.run(
+            result = run_bounded(
                 [str(ROOT / "scripts/external-corpus-audit.sh")],
                 cwd=directory_name,
                 capture_output=True,
                 text=True,
-                timeout=10,
+                
                 check=False,
             )
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -278,7 +278,7 @@ class ExternalCorpusCliTests(unittest.TestCase):
         ]
         with tempfile.TemporaryDirectory() as directory_name:
             for corpus_id in corpus_ids:
-                result = subprocess.run(
+                result = run_bounded(
                     [
                         str(ROOT / "scripts/external-corpus-audit.sh"),
                         "--require-admitted", corpus_id,
@@ -286,7 +286,7 @@ class ExternalCorpusCliTests(unittest.TestCase):
                     cwd=directory_name,
                     capture_output=True,
                     text=True,
-                    timeout=10,
+                    
                     check=False,
                 )
                 with self.subTest(corpus_id=corpus_id):
@@ -298,7 +298,7 @@ class ExternalCorpusCliTests(unittest.TestCase):
 
     def test_custom_registry_cannot_be_combined_with_require_admitted(self) -> None:
         with tempfile.TemporaryDirectory() as directory_name:
-            result = subprocess.run(
+            result = run_bounded(
                 [
                     str(ROOT / "scripts/external-corpus-audit.sh"),
                     "--registry", str(REGISTRY),
@@ -307,7 +307,7 @@ class ExternalCorpusCliTests(unittest.TestCase):
                 cwd=directory_name,
                 capture_output=True,
                 text=True,
-                timeout=10,
+                
                 check=False,
             )
         self.assertEqual(result.returncode, 2)
@@ -334,7 +334,7 @@ class ExternalCorpusCliTests(unittest.TestCase):
             for index, data in enumerate(mutations):
                 registry = directory / f"invalid-{index}.json"
                 registry.write_text(json.dumps(data), encoding="utf-8")
-                result = subprocess.run(
+                result = run_bounded(
                     [
                         str(ROOT / "scripts/external-corpus-audit.sh"),
                         "--registry", str(registry),
@@ -342,7 +342,7 @@ class ExternalCorpusCliTests(unittest.TestCase):
                     cwd=directory,
                     capture_output=True,
                     text=True,
-                    timeout=10,
+                    
                     check=False,
                 )
                 with self.subTest(index=index):
@@ -357,12 +357,12 @@ class ExternalCorpusCliTests(unittest.TestCase):
         attacks = (("--unknown",), ("--registry",), ("--require-admitted",))
         with tempfile.TemporaryDirectory() as directory_name:
             for attack in attacks:
-                result = subprocess.run(
+                result = run_bounded(
                     [str(ROOT / "scripts/external-corpus-audit.sh"), *attack],
                     cwd=directory_name,
                     capture_output=True,
                     text=True,
-                    timeout=10,
+                    
                     check=False,
                 )
                 with self.subTest(attack=attack):
@@ -381,18 +381,18 @@ class ExternalCorpusCliTests(unittest.TestCase):
                 str(ROOT / "scripts/external-corpus-audit.sh"),
                 "--registry", str(REGISTRY), "--output", str(output),
             ]
-            first = subprocess.run(
+            first = run_bounded(
                 command, cwd=directory, capture_output=True, text=True,
-                timeout=10, check=False,
+                check=False,
             )
             self.assertEqual(first.returncode, 0, first.stderr)
             summary = json.loads(output.read_text(encoding="utf-8"))
             self.assertEqual(summary["admitted_count"], 0)
             original = output.read_bytes()
 
-            second = subprocess.run(
+            second = run_bounded(
                 command, cwd=directory, capture_output=True, text=True,
-                timeout=10, check=False,
+                check=False,
             )
             self.assertEqual(second.returncode, 2)
             self.assertEqual(output.read_bytes(), original)

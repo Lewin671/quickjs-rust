@@ -4,7 +4,6 @@ import io
 import json
 import shutil
 import statistics
-import subprocess
 import tempfile
 import unittest
 from dataclasses import replace
@@ -20,6 +19,7 @@ from tools.benchmark.report import ReportError, build_report
 from tools.benchmark.raw_validation import _replay_setup
 from tools.benchmark.runner import BenchmarkRun, JsonlWriter
 from tools.benchmark.schema import load_manifest
+from tools.benchmark.tests.bounded import run_bounded
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -880,21 +880,21 @@ class ReportTests(unittest.TestCase):
             "--analysis-manifest", str(ROOT / "benchmarks/analysis.json"),
             "--input", str(self.input), "--output", str(output),
         ]
-        completed = subprocess.run(command, capture_output=True, text=True, timeout=30, check=False)
+        completed = run_bounded(command, capture_output=True, text=True, check=False)
         self.assertEqual(completed.returncode, 0, completed.stderr)
         self.assertEqual(json.loads(output.read_text())["schema_id"], "quickjs-benchmark-report")
-        rejected = subprocess.run(command, capture_output=True, text=True, timeout=30, check=False)
+        rejected = run_bounded(command, capture_output=True, text=True, check=False)
         self.assertEqual(rejected.returncode, 2)
         self.assertIn("refusing to overwrite", rejected.stderr)
 
         invalid_output = self.directory / "invalid.json"
         self.input.write_text("{}\n", encoding="utf-8")
-        invalid = subprocess.run(
+        invalid = run_bounded(
             [
                 str(ROOT / "scripts/benchmark-report.sh"),
                 "--input", str(self.input), "--output", str(invalid_output),
             ],
-            capture_output=True, text=True, timeout=10, check=False,
+            capture_output=True, text=True, check=False,
         )
         self.assertEqual(invalid.returncode, 2)
         self.assertFalse(invalid_output.exists())

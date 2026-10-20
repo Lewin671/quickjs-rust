@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -12,6 +11,7 @@ from tools.benchmark.resource_schema import (
     ResourceManifestError,
     load_resource_manifest,
 )
+from tools.benchmark.tests.bounded import run_bounded
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -104,9 +104,9 @@ class ResourceSchemaTests(unittest.TestCase):
 
     def test_resource_shell_dry_run_selects_exactly_one_lane(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            result = subprocess.run(
+            result = run_bounded(
                 [str(ROOT / "scripts/resource-benchmark.sh"), "--lane", "fresh", "--dry-run"],
-                cwd=directory, capture_output=True, text=True, timeout=10, check=False,
+                cwd=directory, capture_output=True, text=True, check=False,
             )
         self.assertEqual(result.returncode, 0, result.stderr)
         plan = json.loads(result.stdout)
