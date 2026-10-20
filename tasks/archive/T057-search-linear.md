@@ -159,3 +159,14 @@ ratio <=1.010 identifies a placement effect and does not block; above 1.010
 requires fixing added work and repeating the comparison. Freeze the rule
 before collecting that screen. This follows T057's prior correctness screen;
 the owner makes no latency or whole-portfolio neutrality claim.
+
+## Regression screen (frozen by the lead, 2026-10-20, before measuring)
+
+Same rule as the T057 correctness screen: one undisturbed 30-block workers-4
+three-engine comparison, base `fa96320f`, candidate `9578dcee897b`. Each
+broad/sentinel/external/development lane geomean at most 1.010; no case's 95%
+interval lower bound above 1.030. A failed case or lane gets a no-timing
+instruction follow-up on the exact compare binaries: ratio at most 1.010 is a
+placement effect and does not block; above it, the added work is fixed and the
+comparison repeated. The arm64 +1.07% `property_dynamic_read` instruction
+note is diagnostic only; x86_64 instructions decide.
