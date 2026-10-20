@@ -120,3 +120,18 @@ this owner. This change adds constant seam work on appends and code-unit
 emission; repeat retains Rust's bulk path when its seam cannot merge. Debug
 construction alone adds a full validation scan. Existing non-ASCII search
 coordinate and half-surrogate search differences remain later T057 work.
+
+### Lead regression-screen decision (2026-10-20, before any formal result)
+
+Fixed before the formal run; quick triage `20261020T084226Z-t063-quick-triage`
+(base `cb8ec3ad`, candidate `41f4ee96`) was already queued as a diagnostic early
+stop and cannot pass the change. Instead of the full v6 acceptance chain
+(~4.2 h, sized for claimed wins), this correctness fix gets one 30-block
+workers-4 three-engine `compare`, base `cb8ec3ad`, candidate `41f4ee96`
+(runtime identical to `8e5a2c3f`). It passes when the job is not DISTURBED,
+each lane geomean candidate/base is at most 1.010, and no case has a 95%
+interval lower bound above 1.030. A case or lane that fails gets a no-timing
+instruction count against the base: instruction ratio at most 1.010 marks a
+placement effect and does not block; above it, the extra work is fixed and the
+compare is rerun. The quick-triage outcome only decides whether the compare is
+worth queuing; neither the thresholds nor this rule change after a result.
