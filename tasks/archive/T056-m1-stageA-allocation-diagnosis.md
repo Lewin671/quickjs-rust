@@ -4,7 +4,7 @@
   new-image exact correctness and wall remain lead work. No acceptance attempt.
 - Implementation:112-byte object header; absent write probes do not create
   transient shape indexes; object-only typed getter is separated from arrays.
-- Verified at: source f84fec3c + crates/tools patch065fb10d, canonical3466c37a;
+- Verified at: dfff3bb6 / canonical3466c37a (committed reproduction055658Z);
   local full gate/NG255 and86/86 pass; identities and limits below.
 - Evidence: [completed8f chain](T056-m1-stageA-aligned-scratch.md),
   [type/class/event inventory](T056-m1-stageA-allocation-inventory.md),
@@ -31,6 +31,8 @@ module-namespace and typed-array hot checks retain separate bytes. The count
 and flags together recover a whole word: payload120 ->112, Rc request136 ->128,
 host usable class144 ->128. Packing flags alone does not cross the alignment
 boundary (prior T019 and the previous120-byte guard already established that).
+An outside safe-enum prototype moved metadata beside the descriptor Vec,
+but its payload still occupied40 bytes, giving no header reduction.
 Pair values remain inline; no rejected pair-boxing experiment is revived.
 
 The measured growing-object path repeatedly asks whether a write's own key
@@ -117,6 +119,15 @@ after those checks; the linker order was mechanically re-pinned for the final
 image. Context, diagnostic script syntax and staged fast gate pass (selected Test26265).
 The complete8f exact entry (42672/42672,53572 pinned corpus) is appended once
 to burndown; it is not attributed to this new image.
+
+Committed build-only job `20261021T055658Z-t056-allocation-committed-image`
+is done0/no DISTURBED,71s, reproducing the exact final SHA from
+`dfff3bb6bf3db01fb52a7612ed1144900b5f08c5`; both executor and all15 callee
+residues are checked again. Runtime commit is pushed only to its owner branch.
+Full gate passed before push; QJS_SKIP_PRE_PUSH=1 skipped its duplicate run;
+pre-commit ran the fast gate again. CI39552469487 was queued at preparation,
+not claimed green. The packet's static/local validation passes, including
+source identity, all28 cases, prerequisite rejection and night/DST guards.
 
 The next workspace packet is `tmp/t056-m1a-allocation-verify`: fresh-image
 full correctness with8 disjoint exact shards, then bound86, then all28

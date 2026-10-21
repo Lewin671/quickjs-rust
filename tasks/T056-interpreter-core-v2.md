@@ -7,7 +7,7 @@
   `agent/t056-m1-stage2/codex`; the write-site add replay removed from stage A stays on
   `agent/t056-add-transition-replay/claude`.
 - Verified at:8f7d97c7 exact42672/42672 and bound86 pass; lead triage improves local/branch/heterogeneous,
-  but unpack1.0389 remains. Allocation follow-up source f84fec3c+065fb10d / image3466c37a passes full/NG255/subset5170/86.
+  but unpack1.0389 remains. Follow-up dfff3bb6 / image3466c37a (committed reproduction055658Z) passes full/NG255/subset5170/86.
 - Evidence: [part 1](archive/T056-unit0-part1-evidence.md), [part 2](archive/T056-unit0-part2-evidence.md),
   [M1 stage 1](archive/T056-m1-stage1-evidence.md), [M1.2 rejection](archive/T056-m1-stage2-evidence.md),
   [M1.2 diagnosis](archive/T056-m1-stage2-diagnosis.md), [stage A record](archive/T056-m1-stageA-record.md),
