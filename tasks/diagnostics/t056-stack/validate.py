@@ -9,7 +9,7 @@ from tools.benchmark import screen as s
 from tools.benchmark.process import ProcessResult
 from tools.benchmark.layout_policy import load_policy
 from tools.benchmark.statistics import paired_block_bootstrap
-cfg=json.loads((ROOT/'config.json').read_text());queue=Path(os.environ.get('T056_DIAGNOSTIC_QUEUE','/Users/qingyingliu/Code/co-work-space/outputs/imac-bench'))
+cfg=json.loads((ROOT/'config-unsigned.json').read_text());queue=Path(os.environ.get('T056_DIAGNOSTIC_QUEUE','/Users/qingyingliu/Code/co-work-space/outputs/imac-bench'))
 for name,h in cfg['files'].items():assert chain.sha(ROOT/name)==h
 for f in ROOT.glob('*.py'):ast.parse(f.read_text(),filename=str(f))
 for name in ('numeric-audit-8f.json','numeric-audit-dfff.json'):
@@ -47,7 +47,7 @@ for zone in ('Asia/Shanghai','America/Los_Angeles'):
 window.HOST_ZONE=oldzone
 stamp=datetime.datetime(2026,10,21,tzinfo=datetime.timezone.utc).timestamp();assert not watch.expired('queued',stamp+99999) and not watch.expired('running 2026-10-21T00:00:00Z',stamp+1499) and watch.expired('running 2026-10-21T00:00:00Z',stamp+1500)
 unit=json.loads(chain.PLAN.read_text());policy=load_policy(Path(unit['layout_gate']['policy_path']),unit['layout_gate']['policy_sha256'],live=False);original_load=load_policy
-q=json.loads((queue/cfg['snapshot_job']/'out/snapshots.json').read_text());case_map={}
+q=json.loads((queue/cfg['snapshot_job']/'out/snapshots.json').read_text());assert all(m['unsigned_header_and_all_other_file_bytes_identical'] for m in q['images'].values());case_map={}
 def fake_cases(ids,cache,work):
  result=[]
  for i,name in enumerate(ids):

@@ -1,0 +1,15 @@
+{
+  "snapshot_job": "20261021T100055Z-t056-stack-unsigned-qualification",
+  "snapshot_sha256": "487b06cecdb6b702834376d0cc8a8a1648f42142431c570f6de4428cf9d250fb",
+  "canonical_job": "20261021T063231Z-t056-m1a-allocation-triage",
+  "correctness_job": "20261021T060648Z-t056-m1a-allocation-correctness",
+  "pregate_job": "20261021T062918Z-t056-m1a-allocation-pregate86",
+  "files": {
+    "collect.py": "9b33b7aff5fd258068a4ff972a259d574630331c3e0eeaf46069e83e0009a826",
+    "protocol.py": "8696a1d3b75ebf45825dbcc89686d9909d3a46207dc2fad21be78ff86f851d0d",
+    "phase.py": "e392d9f5ed7edd0509e6b34f6f2eec647b05021a3bf7594f8522e7d75071d5af",
+    "analyze.py": "bfe3f792b6623964b73d9d95bc6b4d319617ff58e116f9398bf58b5a6955c7c6",
+    "chain_common.py": "24f2e1551c457b6e5d37f70229d3ec2f85e49cc4a3da563ad4fb31a6f411e7d5",
+    "window.py": "e72ed58abf7c4ac3881c780b4574581918a216c3ec7b615e92190adc3087a809"
+  }
+}

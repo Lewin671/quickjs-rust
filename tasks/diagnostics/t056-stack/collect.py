@@ -28,7 +28,7 @@ qroot=done(cfg['snapshot_job']);assert sha(qroot/'snapshots.json')==cfg['snapsho
 root=done(cfg['canonical_job']);paths={};snapshots={};roles=p.roles()
 for side,version in [('b','base'),('c','allocation')]:
  canonical=root/'triage'/('base000' if side=='b' else 'cand000')/'qjs';assert sha(canonical)==p.HASHES[side]
- meta=q['images'][version];assert meta['canonical_sha256']==p.HASHES[side] and meta['mapped_sections_unchanged'] and meta['caller_and_prologue_bytes_identical']
+ meta=q['images'][version];assert meta['canonical_sha256']==p.HASHES[side] and meta['mapped_sections_unchanged'] and meta['caller_and_prologue_bytes_identical'] and meta['unsigned_header_and_all_other_file_bytes_identical']
  snap=qroot/(version+'-snapshot');assert sha(snap)==meta['snapshot_sha256'];snapshots[side]=snap
  for role in [side,side+'aa']:
   target=out/'binaries'/role/'qjs';target.parent.mkdir(parents=True);shutil.copy2(canonical,target);paths[role]=target

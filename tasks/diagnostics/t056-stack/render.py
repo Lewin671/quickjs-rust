@@ -6,7 +6,7 @@ ROOT=Path(__file__).resolve().parent
 def render():
  body='set -euo pipefail\nexport PYTHONDONTWRITEBYTECODE=1\nexport PYTHONPATH="$BENCH_OUT:$PWD${PYTHONPATH:+:$PYTHONPATH}"\npython3 - <<\'FILES\'\nfrom pathlib import Path\nimport base64,os\nout=Path(os.environ["BENCH_OUT"])\n'
  for name in ('collect.py','protocol.py','phase.py','analyze.py','chain_common.py','window.py','config.json'):
-  encoded=base64.b64encode((ROOT/name).read_bytes()).decode()
+  encoded=base64.b64encode((ROOT/('config-unsigned.json' if name=='config.json' else name)).read_bytes()).decode()
   body+='with (out/'+repr(name)+').open("xb") as stream: stream.write(base64.b64decode('+repr(encoded)+'))\n'
  body+='FILES\npython3 "$BENCH_OUT/collect.py"\n'
  wrapper=(ROOT/'window.py').read_text()

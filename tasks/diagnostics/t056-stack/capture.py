@@ -48,13 +48,14 @@ for role,(rev,expected,entry) in roles.items():
  # instruction before the first header lies in the terminal bridge region.
  assert original[h:h+6]==bytes.fromhex('493b7b1073e4')
  patched=bytearray(original);patched[h:h+10]=b'\xe9'+struct.pack('<i',helper-header-5)+b'\x90'*5;patched[v:v+len(bridge)]=bridge;image.write_bytes(patched)
- subprocess.run(['codesign','--force','--sign','-',str(image)],check=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+ status=subprocess.run(['codesign','-d',str(source)],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+ assert status.returncode!=0 and b'not signed' in status.stderr,'this probe requires the original unsigned x86 image'
  signed=image.read_bytes();newsegs=sections(image)
- assert newsegs==segs,'signing changed mapped section layout'
- assert signed[text[3]:h]==original[text[3]:h] and signed[h+10:v]==original[h+10:v]
- assert signed[v+len(bridge):text[3]+text[1]]==original[v+len(bridge):text[3]+text[1]]
+ assert newsegs==segs and len(signed)==len(original),'mapped sections or file length changed'
+ assert signed[:h]==original[:h] and signed[h+10:v]==original[h+10:v]
+ assert signed[v+len(bridge):]==original[v+len(bridge):]
  # Callers and every original text byte except these two regions are exact.
- results['images'][role]={'revision':rev,'canonical_sha256':expected,'snapshot_sha256':hashlib.sha256(signed).hexdigest(),'entry':entry,'header':header,'bridge':helper,'header_original_hex':original[h:h+10].hex(),'text_bytes_changed_only_in_ranges':[[header,10],[helper,len(bridge)]],'mapped_sections_unchanged':True,'caller_and_prologue_bytes_identical':True}
+ results['images'][role]={'revision':rev,'canonical_sha256':expected,'snapshot_sha256':hashlib.sha256(signed).hexdigest(),'entry':entry,'header':header,'bridge':helper,'header_original_hex':original[h:h+10].hex(),'text_bytes_changed_only_in_ranges':[[header,10],[helper,len(bridge)]],'mapped_sections_unchanged':True,'caller_and_prologue_bytes_identical':True,'unsigned_header_and_all_other_file_bytes_identical':True}
  shutil.copy2(image,active)
  for case in cases:
   for pad in grid:

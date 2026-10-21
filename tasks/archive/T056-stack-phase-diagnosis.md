@@ -30,21 +30,23 @@ local .92–.94；unpack1.03–1.06，zone0使双方约.81，说明其allocator�
 在同函数尚未执行的handler区域放短桥。到达桥前，调用者、函数入口、prologue和全部原始路径字节不变；
 桥先用`push %rsp`保存进入桥时的原RSP，再保存RBP/R9/R11、原`[rbp-0x30]`、ops指针和长度，
 直接write syscall导出56B并exit。它没有logger调用、额外原生帧或运行时分配；临时push发生在保存原RSP之后。
-重签名前后所有映射section地址/长度/文件偏移不变，text除这两个区域逐字节相同。
+canonical原本未签名；最终快照也保持未签名，整个文件除两个patch区域逐字节相同（含header/长度），
+所有映射section地址/长度/文件偏移不变。早期ad-hoc签名副本可能改变启动元数据，不再用于证明canonical相位；
+它们的原始记录保留，新renderer只接受unsigned资格。
 镜像只跑到第一轮头，**不作计时或语义测试镜像**。保存RSP不是桥降栈后的值。
 
-`20261021T092005Z-t056-stack-snapshot-v2`：每版本global/local各N与2N，12个样本。
+`20261021T100055Z-t056-stack-unsigned-qualification`：三版本global/local各29个phase、N与2N，共348个样本。
 固定active路径、环境、未知空padding键；N=23,068,672/46,137,344均8位；argv字节数、环境各键长度、
 条目数及有序hash保留。真实首样本：
 
 | 镜像 | 用例 | 原RSP | RBP | 唯一循环栈读地址 RBP−0x30 | bank |
 | --- | --- | --- | --- | --- | --- |
-| f58 | global | `0x7ff7b0a38d50` | `0x7ff7b0a38ef0` | `0x7ff7b0a38ec0` | `0x7f8a6c87e400` |
-| f58 | local | `0x7ff7bcefad50` | `0x7ff7bcefaef0` | `0x7ff7bcefaec0` | `0x7fdea288b400` |
-| 8f | global | `0x7ff7b616ad70` | `0x7ff7b616af00` | `0x7ff7b616aed0` | `0x7ff15b084000` |
-| 8f | local | `0x7ff7bd4dbd70` | `0x7ff7bd4dbf00` | `0x7ff7bd4dbed0` | `0x7fc14009e000` |
-| dfff | global | `0x7ff7b2f22d70` | `0x7ff7b2f22f00` | `0x7ff7b2f22ed0` | `0x7fe7a9884000` |
-| dfff | local | `0x7ff7bfa94d70` | `0x7ff7bfa94f00` | `0x7ff7bfa94ed0` | `0x7fe38789e000` |
+| f58 | global | `0x7ff7b0648db0` | `0x7ff7b0648f50` | `0x7ff7b0648f20` | `0x7f90fd87e400` |
+| f58 | local | `0x7ff7b7f93db0` | `0x7ff7b7f93f50` | `0x7ff7b7f93f20` | `0x7f7bec08b400` |
+| 8f | global | `0x7ff7bcf97dd0` | `0x7ff7bcf97f60` | `0x7ff7bcf97f30` | `0x7f97b3884000` |
+| 8f | local | `0x7ff7bae17dd0` | `0x7ff7bae17f60` | `0x7ff7bae17f30` | `0x7f94e189e000` |
+| dfff | global | `0x7ff7b9b90dd0` | `0x7ff7b9b90f60` | `0x7ff7b9b90f30` | `0x7ff6f9084000` |
+| dfff | local | `0x7ff7be13edd0` | `0x7ff7be13ef60` | `0x7ff7be13ef30` | `0x7fd8b389e000` |
 
 同环境下N/2N低位一致，8f/dfff也一致。prologue：五个callee-save push共0x28，
 f58再`sub rsp,0x178`，8f/dfff均`sub rsp,0x168`，故热头`RBP−RSP`分别0x1a0/0x190。
@@ -52,7 +54,7 @@ f58再`sub rsp,0x178`，8f/dfff均`sub rsp,0x168`，故热头`RBP−RSP`分别0x
 这些循环内不调用native regexp；`call_native_family`等帧大小变化不能直接外推到这条调用链。
 
 没有测kernel入口RSP，而是直接保存目标热头原RSP，因此不靠估算初始栈推导。地址适用于所封存环境，
-**不是旧timing进程实址**。后续092318Z/093204Z通过相同`/usr/bin/time -l`父进程再确认相位；
+**不是旧timing进程实址**。最终unsigned资格通过相同`/usr/bin/time -l`父进程确认相位；
 job路径/环境和case id的1字节差别足以跨16B对齐边界，不能把固定call depth等同于跨所有启动参数固定相位。
 
 ## 哪些访问真的逐轮发生
@@ -73,7 +75,7 @@ job路径/环境和case id的1字节差别足以跨16B对齐边界，不能把�
 | dispatch重读program字段 | ops指针8B、length8B | `R11+8`、`R11+16`，R11并非机器栈 |
 
 r5(global)与r5/r6(local)为入口seed，不写回每轮；global cell/Realm也不逐轮读。
-对上表首样本，机器栈读的ec0/ed0与bank活跃写区间（base400起、新版本000起）在**逐字节、4B、8B
+对上表首样本，机器栈读的f20/f30与bank活跃写区间（base400起、新版本000起）在**逐字节、4B、8B
 granule**均不重合。没有循环栈store，因此反向“栈store→bank load”也无逐轮候选。
 Intel文档描述store后load的4K部分地址别名及相关事件；这里的4/8B检查是按真实访问宽度作保守筛查，
 不是声称公开资料给出了Comet Lake标量比较器的完整精度，也不把AVX示例的固定周期直接套给8B标量。
@@ -87,11 +89,11 @@ load位于相同0x8f。这保留了其他数据流/内存依赖预测的调查�
 
 ## 栈相位资格与待执行探针
 
-`20261021T093204Z-t056-stack-geometry-final` done0/4s：348个地址样本，29个共同padding长度；
+`20261021T100055Z-t056-stack-unsigned-qualification` done0/4s：348个地址样本，29个共同padding长度；
 所有组栈槽按`−padding mod4096`移动，N/2N一致；每版本global/local都覆盖实际重合与不重合。
-例如dfff global在3712/3744/3776，local在3760/3792出现8B-granule候选重合；这些是**地址预测，不是wall结果**。
-base global的58次中1次bank/program/ops低位变化；8f local的program有1次变化；dfff local的ops有2次变化。
-dfff global三项均稳定。故“未知env padding不增加引擎分配”不等于“冻结所有独立进程heap地址”。
+例如dfff global/local均在3824/3856/3888出现8B-granule候选重合；这些是**地址预测，不是wall结果**。
+base global/local三项均稳定；8f local有1次program/ops变化，dfff local亦有1次；
+8f/dfff global三项均稳定。故“未知env padding不增加引擎分配”不等于“冻结所有独立进程heap地址”。
 全部异常保留，不删除、不重试；探针将现场重新记录分布并限制可反证的范围。
 
 [Lead协议](../diagnostics/t056-stack/README.md)：先按现场地址封存共同粗/细网格，最多30点、4对、
@@ -154,9 +156,9 @@ header-only约1.0121，adapter-only约1.0002；不可相加。新计数证实跳
 不能用再改一次header尺寸、挑inline标注或重开已拒绝的add-replay来代替前瞻计划。
 这些均是待冻结原型的方向，本轮不实施，不花最后attempt。
 
-## 本轮核验
+## 本轮核验（unsigned修正）
 
 e5172755生产树未变；`./scripts/check.sh`通过（含5170 subset）。更正后的两版本字节审计通过；
-collector用fake process/counters/phase走完4个block，并检查flat/sensitive/heap-confounded分支、
-A/A、env、全部16B相位的几何覆盖、DST和25分钟守卫；[报告](../diagnostics/t056-stack/validation.json)不是计时结果。
+unsigned资格完整通过；collector用fake process/counters/phase走完4个block，并检查flat/sensitive/heap-confounded分支、
+A/A、env、全部16B相位的几何覆盖、DST和25分钟守卫；[报告](../diagnostics/t056-stack/validation-unsigned.json)不是计时结果。
 context、staged fast、whitespace检查通过。无生产代码、依赖、公开API或冻结policy变化。

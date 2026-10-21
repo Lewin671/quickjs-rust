@@ -1,0 +1,15 @@
+{
+  "checked_parent": "6679222d",
+  "production_unchanged": true,
+  "production_revision": "dfff3bb6bf3db01fb52a7612ed1144900b5f08c5",
+  "snapshot_job": "20261021T100055Z-t056-stack-unsigned-qualification",
+  "snapshot_raw_sha256": "487b06cecdb6b702834376d0cc8a8a1648f42142431c570f6de4428cf9d250fb",
+  "actual_producer_sha256": "d1abd0c2dc8e02368dd0094b904d5afcd5c20297f4d58fdea515239b28365ed3",
+  "unsigned_header_and_all_other_bytes_preserved": true,
+  "snapshot_rows": 348,
+  "geometry_phases": 29,
+  "validation": "actual collector, fake processes/counters/phase only",
+  "previous_full_pre_push_gate": "6679222d passed, including subset5170",
+  "timing_submissions": 0,
+  "attempts_consumed": 0
+}

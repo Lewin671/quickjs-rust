@@ -9,18 +9,24 @@ Production remains dfff. No timing job or acceptance attempt is submitted here.
 - `capture.py`/`render_capture.py`: non-timing terminal image-copy snapshot.
   Original canonical caller/prologue/text remains exact except10B at first
   dispatch and the terminal bridge in an unexecuted handler region. No logger
-  call, engine allocation or added native frame. `push %rsp` saves the original
+  call, engine allocation or added native frame. Original canonical images are
+  unsigned; snapshots must stay unsigned. File headers and **all bytes outside
+  the two patch regions** are exact, including file length. `push %rsp` saves the original
   header RSP before temporary pushes. Bridge writes56B then exits; it is never
-  a timing/semantics image. Resigning must preserve all mapped sections.
+  a timing/semantics image. There is no resigning step; a signed source is refused.
 - `20261021T092005Z-t056-stack-snapshot-v2`:12 valid N/2N snapshots; first version
   `091853Z` failed its expected branch encoding guard before execution.
 - `20261021T092318Z-t056-stack-phase-map`:240 snapshots, coarse/fine pilot;
   the coarse256B step alone can skip a narrow alias window.
 - `20261021T093012Z-t056-stack-geometry-qualification`: first address-only grid.
-- `20261021T093204Z-t056-stack-geometry-final`: finalgeometry29 phases/348 rows,
-  done0/4s. `snapshot-evidence.json` retains all registers/launch sizes and
+- `20261021T100055Z-t056-stack-unsigned-qualification`:29 phases/348 rows,
+  done0/4s. `unsigned-snapshot-evidence.json` retains all registers/launch sizes and
   deduplicates env length maps; its raw_job_snapshot_sha256 matches the original
-  indented runner file. No environment secret values are retained.
+  indented runner file. No environment secret values are retained. Earlier ad-hoc-signed snapshots
+  (`092005Z`, `092318Z`, `093012Z`, `093204Z`) and `snapshot-evidence.json` are
+  historical diagnostics only: resigning could alter startup metadata. They
+  cannot qualify canonical phase. The new renderer binds `config-unsigned.json`;
+  the old config.json/validation.json are retained records and must not be used.
 - `audit.py`/`extract-paths.py`: read-only audit of canonical images. The updated
   finite-number Increment branch is18 instructions/86B, not the old selected
   Decrement17/81. Both new audits match all selected paths modulo relocations.
@@ -67,8 +73,8 @@ Recheck all phases, both cases and N/2N: RSP/slot must move by−pad modulo4096;
 N/2N phase must agree; group must include predicted overlaps and clean points.
 Track bank/program/ops low-bit histograms and all exceptions. Candidate bank
 must stay fixed. Do not remove anomalous processes, substitute offsets or retry.
-The completed qualification observed rare heap-offset changes on base/local
-paths; candidate global was stable. If candidate-global program/ops move during
+The completed qualification observed rare heap-offset changes on local paths;
+base and candidate global were stable. If candidate-global program/ops move during
 live calibration, a flat result cannot reject the hypothesis. Empty has no
 claimed bank/typed path; it is a whole-process setup/launch control, never
 subtracted from internal increments or unpack.
@@ -111,7 +117,7 @@ Host-local03:00–05:00 excluded with15-minute margin and30-minute admission
 headroom; /etc/localtime overrides inherited TZ. Same measurement lock and
 load monitor as prior diagnostics; any heavy event invalidates the whole probe.
 
-Sealed `config.json` binds original canonical/correctness86 receipts, snapshot
+Sealed `config-unsigned.json` binds original canonical/correctness86 receipts, snapshot
 image hashes, collector/protocol/helpers. `validate.py` parses rendered code,
 checks geometry for every16B-aligned phase, uses real sealed receipts/binaries
 with **fake** subprocess/counters/phase reads through the actual collector,

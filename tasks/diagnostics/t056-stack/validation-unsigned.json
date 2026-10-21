@@ -1,0 +1,18 @@
+{
+  "scope": "fake processes/counters/phase only, no engine executable or timing submission",
+  "complete": {
+    "cases": 3,
+    "phases": 28,
+    "blocks": 4,
+    "units": 1344,
+    "seconds": 9.313801290933043,
+    "diagnostic_only": true,
+    "decision_evidence": false,
+    "attempts_consumed": 0,
+    "all_outputs_match": true
+  },
+  "geometry_all_256_aligned_seed_pairs_tested": true,
+  "actual_collector_completed": true,
+  "environment_AA_inodes_raw_effects_verified": true,
+  "quiet_window_DST_and_25min_watchdog": true
+}
