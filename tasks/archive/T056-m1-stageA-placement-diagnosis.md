@@ -259,3 +259,11 @@ entry-versus-interior pinning and array dimensions, but cannot choose between co
 actual data/stack placement, backend dependencies and measurement-context interactions without
 those probes. If native C/B does not reproduce serially, investigate schedule/path interactions;
 non-reproduction is not a dismissal of the valid four-worker rejection/triage.
+
+Final target verification: non-timing exact-image profile job
+`20261021T012836Z-t056-placement-scalar-profiles`, done 0 in 8s, uses N=100,000,000 on each
+of the three scalar cases. Base main-thread/typed-body samples are local 954/954,
+branch 1566/1565, global 766/765; candidate 1026/1025, 1634/1634, 687/687 respectively.
+All three execute in the WideLoopFrame body selected by the fixed-slot builder (base run closure,
+candidate execute), so the probe does not repeat T050's initial ordinary-VM misattribution.
+These are attribution samples, not retired-instruction counts or a substitute timing comparison.
