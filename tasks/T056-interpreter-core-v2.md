@@ -7,16 +7,17 @@
   `agent/t056-m1-stage2/codex`; the write-site add replay removed from stage A stays on
   `agent/t056-add-transition-replay/claude`.
 - Verified at: dfff3bb6/image3466c37a exact42672/42672, full/NG255/subset5170 and bound86 pass;
-  lead123327Z AA eligible, minimal bad subset count+flags; address capture/probe qualification130515Z done0.
+  lead123327Z minimal bad subset count+flags; ops135119Z no phase effect, formally inconclusive;
+  JCC builds140336Z NG255/outputs pass, audit141235Z confirms flag leaves all4 __text pairs identical.
 - Evidence: [stage A record](archive/T056-m1-stageA-record.md),
   [allocation follow-up](archive/T056-m1-stageA-allocation-diagnosis.md),
-  [architecture review](archive/T056-architecture-review.md), [stack/startup diagnosis](archive/T056-stack-phase-diagnosis.md), [PMU/FP diagnosis](archive/T056-pmu-attribution.md), [source bisection](archive/T056-source-bisect.md), [header factors/full-loop accounting](archive/T056-header-subparts.md), [dispatch addresses](archive/T056-dispatch-address.md), [M2 inputs](archive/T056-m2-design-inputs.md);
+  [architecture review](archive/T056-architecture-review.md), [stack/startup diagnosis](archive/T056-stack-phase-diagnosis.md), [PMU/FP diagnosis](archive/T056-pmu-attribution.md), [source bisection](archive/T056-source-bisect.md), [header factors/full-loop accounting](archive/T056-header-subparts.md), [dispatch addresses](archive/T056-dispatch-address.md), [JCC policy diagnosis](archive/T056-jcc-policy.md), [M2 inputs](archive/T056-m2-design-inputs.md);
   plans [`interpreter-core-v2-atoms-layouts`](performance-units/interpreter-core-v2-atoms-layouts.json) (closed),
   [`interpreter-core-v2-layout-edges`](performance-units/interpreter-core-v2-layout-edges.json).
-- Unresolved: fast/slow relative-PC families and ops600/900 covary; no unique hardware cause.
-  All152 instructions/operands enumerated; no repeated ObjectData/poll/publication access; PMU blocked.
-- Next action: lead runs the [≤15min ops-address confirmation](diagnostics/t056-dispatch-address/README.md); sham/neutrality before interpretation.
-  No owner timing/production change; last attempt unspent.
+- Unresolved: relative-PC family cause unknown; sampled ops600/900 rejected by lead, formal controls failed.
+  A5 absent from Intel JCC table; LLVM flag ineffective on Mach-O, hot boundary counts4/5/6/4; PMU blocked.
+- Next action: qualify general Mach-O branch alignment before [prepared≤15min diagnostic](diagnostics/t056-jcc/README.md).
+  Current images/config reject timing; no owner timing/production change; last attempt unspent.
 
 ## Goal and scope
 

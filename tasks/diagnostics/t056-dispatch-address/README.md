@@ -3,6 +3,10 @@
 [Record](../../archive/T056-dispatch-address.md) owns observations, limitations,
 conditional general fix and criteria. Production remains dfff; no owner timing.
 
+Lead confirmation135119Z completed done0. Its formal verdict remains inconclusive;
+600/900 contrasts show no threshold effect. Do not resubmit this completed job;
+see [JCC follow-up](../t056-jcc/README.md) for the current blocked next step.
+
 `inputs.json` binds count/flags/count_flags and8f/dfff canonical hashes and original
 paths. `capture.py` produces unsigned terminal copies preserving headers/sections,
 all bytes outside two patch ranges and original caller/frame layout. The result
@@ -24,7 +28,8 @@ Original ops low12 is600 vs900 by class, while local900 is fast; program/bank
 modes agree, program+8 vs bank+8 has the same low12 overlap in all originals.
 Heap constants/received cell are entry-only. Deferred publication flag istrue,
 but sink vector is empty and the wrapper runs once; no hidden per-iteration
-poll/publication/ObjectData access. Two coupled factors remain, no unique cause.
+poll/publication/ObjectData access. Lead confirmation leaves the PC families
+unresolved while sampled ops phase has no threshold effect; failed neutrality/AA/anchors prevent a formal causal verdict.
 
 ## Qualified confirmation copies
 
@@ -46,7 +51,7 @@ remain fixed. Repeated152 bytes/PCs/RIP targets are all unchanged. No signature,
 header, function extent, heap allocation before entry or per-iteration code edit.
 Only the qualified numeric global/local programs may run these diagnostic copies.
 
-## Lead-only single job (≤15min)
+## Completed lead-only job (≤15min; historical command)
 
 ```sh
 python3 tasks/diagnostics/t056-dispatch-address/render.py > /tmp/t056-ops-confirmation.sh

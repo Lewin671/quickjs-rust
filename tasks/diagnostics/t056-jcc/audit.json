@@ -1,0 +1,10 @@
+{
+  "diagnostic_only": true,
+  "timing": false,
+  "all_hot_boundaries_clear": false,
+  "timing_ready": false,
+  "qualification_rule": "NG/output pass alone is insufficient; no lead timing until all four hot boundary counts are zero",
+  "raw_job_sha256": "9879817ad595e7ef89eb6b4480016ff0db2e9a9a3e0441288db403fce7132e8e",
+  "raw_job": "20261021T141235Z-t056-jcc-audit-complete",
+  "images": {"base_jcc":"audits/base_jcc.json","aligned_jcc":"audits/aligned_jcc.json","candidate_jcc":"audits/candidate_jcc.json","count_flags_jcc":"audits/count_flags_jcc.json"}
+}

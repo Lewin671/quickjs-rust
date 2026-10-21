@@ -1,0 +1,79 @@
+{
+  "diagnostic_only": true,
+  "timing": false,
+  "fusion_scope": "adjacent CMP/TEST + supported Jcc candidate; no claim of actual uop fusion or DSB residency",
+  "end_rule": "end-exclusive floor(start/32) != floor((branch_pc+length)/32); includes exact end on boundary",
+  "K6_job": "20261021T082252Z-t056-code-layout-qualification",
+  "K6_qualification_sha256": "45032fad785f1a7c4bc2fa14f40d271adcf775dbbd781ba63e076d4b476bf1d0",
+  "roles": {
+    "aligned": {
+      "original_sha256": "b0b84489a3f6fd673b06dc4bdc71c8f176387a231ca19fe1da5ea48ca4ee0fd5",
+      "path_sha256": "294d8587f1ec8ec0196e105b9c1d3782d1ea47063a7f64f50a6ab20dcc3a135e",
+      "offsets": {
+        "0": {"record":"originals/aligned-0.json","dynamic_branches":29,"affected_dynamic":5,"affected_unique":4,"individual_dynamic":5,"pair_only_dynamic":0},
+        "16": {"record":"originals/aligned-16.json","dynamic_branches":29,"affected_dynamic":5,"affected_unique":4,"individual_dynamic":2,"pair_only_dynamic":3},
+        "64": {"record":"originals/aligned-64.json","dynamic_branches":29,"affected_dynamic":5,"affected_unique":4,"individual_dynamic":5,"pair_only_dynamic":0},
+        "240": {"record":"originals/aligned-240.json","dynamic_branches":29,"affected_dynamic":5,"affected_unique":4,"individual_dynamic":2,"pair_only_dynamic":3},
+        "512": {"record":"originals/aligned-512.json","dynamic_branches":29,"affected_dynamic":5,"affected_unique":4,"individual_dynamic":5,"pair_only_dynamic":0},
+        "1008": {"record":"originals/aligned-1008.json","dynamic_branches":29,"affected_dynamic":5,"affected_unique":4,"individual_dynamic":2,"pair_only_dynamic":3}
+      }
+    },
+    "count": {
+      "original_sha256": "661969a50fb0bc36f73e6fe1af20e78218c2ceffb63d62a4903c7c61a67858ea",
+      "path_sha256": "20816bc361bcbf5d2a6bf56fb4e9cdf6f5b25f6ed089065d0bc8a9071383c583",
+      "offsets": {
+        "0": {"record":"originals/count-0.json","dynamic_branches":29,"affected_dynamic":5,"affected_unique":4,"individual_dynamic":5,"pair_only_dynamic":0},
+        "16": {"record":"originals/count-16.json","dynamic_branches":29,"affected_dynamic":5,"affected_unique":4,"individual_dynamic":2,"pair_only_dynamic":3},
+        "64": {"record":"originals/count-64.json","dynamic_branches":29,"affected_dynamic":5,"affected_unique":4,"individual_dynamic":5,"pair_only_dynamic":0},
+        "240": {"record":"originals/count-240.json","dynamic_branches":29,"affected_dynamic":5,"affected_unique":4,"individual_dynamic":2,"pair_only_dynamic":3},
+        "512": {"record":"originals/count-512.json","dynamic_branches":29,"affected_dynamic":5,"affected_unique":4,"individual_dynamic":5,"pair_only_dynamic":0},
+        "1008": {"record":"originals/count-1008.json","dynamic_branches":29,"affected_dynamic":5,"affected_unique":4,"individual_dynamic":2,"pair_only_dynamic":3}
+      }
+    },
+    "flags": {
+      "original_sha256": "100cda383a0f5146e2f9e025f273edfb1d622fe0754e9d84bef10954732a7152",
+      "path_sha256": "8e2507e7c95897dcafac70a6bfec40a52f66642544b87311897dd97cd02c1ccf",
+      "offsets": {
+        "0": {"record":"originals/flags-0.json","dynamic_branches":29,"affected_dynamic":5,"affected_unique":4,"individual_dynamic":5,"pair_only_dynamic":0},
+        "16": {"record":"originals/flags-16.json","dynamic_branches":29,"affected_dynamic":5,"affected_unique":4,"individual_dynamic":2,"pair_only_dynamic":3},
+        "64": {"record":"originals/flags-64.json","dynamic_branches":29,"affected_dynamic":5,"affected_unique":4,"individual_dynamic":5,"pair_only_dynamic":0},
+        "240": {"record":"originals/flags-240.json","dynamic_branches":29,"affected_dynamic":5,"affected_unique":4,"individual_dynamic":2,"pair_only_dynamic":3},
+        "512": {"record":"originals/flags-512.json","dynamic_branches":29,"affected_dynamic":5,"affected_unique":4,"individual_dynamic":5,"pair_only_dynamic":0},
+        "1008": {"record":"originals/flags-1008.json","dynamic_branches":29,"affected_dynamic":5,"affected_unique":4,"individual_dynamic":2,"pair_only_dynamic":3}
+      }
+    },
+    "count_flags": {
+      "original_sha256": "52ed87e969884aed7cb6d2ccd047f484dd41c26c31c28a94bbebba6201bcfeca",
+      "path_sha256": "0c2ab79ac9e301df6215c2d18d3aa0d1928cc62e10df48f8c062ae35b6db2222",
+      "offsets": {
+        "0": {"record":"originals/count_flags-0.json","dynamic_branches":29,"affected_dynamic":4,"affected_unique":3,"individual_dynamic":4,"pair_only_dynamic":0},
+        "16": {"record":"originals/count_flags-16.json","dynamic_branches":29,"affected_dynamic":6,"affected_unique":5,"individual_dynamic":6,"pair_only_dynamic":0},
+        "64": {"record":"originals/count_flags-64.json","dynamic_branches":29,"affected_dynamic":4,"affected_unique":3,"individual_dynamic":4,"pair_only_dynamic":0},
+        "240": {"record":"originals/count_flags-240.json","dynamic_branches":29,"affected_dynamic":6,"affected_unique":5,"individual_dynamic":6,"pair_only_dynamic":0},
+        "512": {"record":"originals/count_flags-512.json","dynamic_branches":29,"affected_dynamic":4,"affected_unique":3,"individual_dynamic":4,"pair_only_dynamic":0},
+        "1008": {"record":"originals/count_flags-1008.json","dynamic_branches":29,"affected_dynamic":6,"affected_unique":5,"individual_dynamic":6,"pair_only_dynamic":0}
+      }
+    },
+    "candidate": {
+      "original_sha256": "3466c37a62f2fb6d764d0123212749ff810138ca05fcad336ce1afa05bdb1e3f",
+      "path_sha256": "28e6325a5f58727801d0220645c5b3896021d4a28d9f104b64de19dbe0dea3df",
+      "offsets": {
+        "0": {"record":"originals/candidate-0.json","dynamic_branches":29,"affected_dynamic":6,"affected_unique":5,"individual_dynamic":6,"pair_only_dynamic":0},
+        "16": {"record":"originals/candidate-16.json","dynamic_branches":29,"affected_dynamic":4,"affected_unique":3,"individual_dynamic":4,"pair_only_dynamic":0},
+        "64": {"record":"originals/candidate-64.json","dynamic_branches":29,"affected_dynamic":6,"affected_unique":5,"individual_dynamic":6,"pair_only_dynamic":0},
+        "240": {"record":"originals/candidate-240.json","dynamic_branches":29,"affected_dynamic":4,"affected_unique":3,"individual_dynamic":4,"pair_only_dynamic":0},
+        "512": {"record":"originals/candidate-512.json","dynamic_branches":29,"affected_dynamic":6,"affected_unique":5,"individual_dynamic":6,"pair_only_dynamic":0},
+        "1008": {"record":"originals/candidate-1008.json","dynamic_branches":29,"affected_dynamic":4,"affected_unique":3,"individual_dynamic":4,"pair_only_dynamic":0}
+      }
+    }
+  },
+  "cross_2x2": {
+    "job": "20261021T085751Z-t056-code-layout-cross",
+    "candidate_code0": "candidate-0",
+    "candidate_code1": "candidate-16",
+    "zone0_and_zone1": "same image PCs/bytes; environment does not alter static geometry",
+    "base": "f58 is a different body; cross-geometry.json lists all29 branches for all four actual code images, both zone cells"
+  },
+  "prediction_supported": false,
+  "reason": "fast family has5 affected dynamic branches at either phase, slow family4/6; fast has more than one slow phase, and shares numeric-tag crossing with dfff at natural phase"
+}

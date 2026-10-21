@@ -1,0 +1,50 @@
+{
+  "rust_revision": "59807616e1fa2540724bfbac14d7976d7e4a3860",
+  "submodule_lookup": "https://api.github.com/repos/rust-lang/rust/contents/src/llvm-project?ref=59807616e1fa2540724bfbac14d7976d7e4a3860",
+  "llvm_submodule_revision": "1cb4e3833c1919c2e6fb579a23ac0e2b22587b7e",
+  "source_selection": "pinned rustc1.95.0/LLVM22.1.2 reported inside actual build job, not ambient SSH rustc1.99.0",
+  "files": {
+    "llvm/lib/Target/X86/MCTargetDesc/X86AsmBackend.cpp": {
+      "url": "https://raw.githubusercontent.com/rust-lang/llvm-project/1cb4e3833c1919c2e6fb579a23ac0e2b22587b7e/llvm/lib/Target/X86/MCTargetDesc/X86AsmBackend.cpp",
+      "sha256": "6d645a9bf9011d12a95405fae928c1f39294846baa7c8c74ff0610ee0249d5dc",
+      "snippets": [
+        {
+          "line": 1524,
+          "excerpt": "void X86ELFStreamer::emitInstruction(const MCInst &Inst,\n                                     const MCSubtargetInfo &STI) {\n  X86_MC::emitInstruction(*this, Inst, STI);\n}\n\nMCStreamer *llvm::createX86ELFStreamer(const Triple &T, MCContext &Context,\n                                       std::unique_ptr<MCAsmBackend> &&MAB,"
+        },
+        {
+          "line": 452,
+          "excerpt": "void X86_MC::emitInstruction(MCObjectStreamer &S, const MCInst &Inst,\n                             const MCSubtargetInfo &STI) {\n  bool AutoPadding = S.getAllowAutoPadding();\n  if (LLVM_LIKELY(!AutoPadding && !X86PadForAlign)) {\n    S.MCObjectStreamer::emitInstruction(Inst, STI);\n    return;\n  }"
+        },
+        {
+          "line": 423,
+          "excerpt": "bool X86AsmBackend::canPadBranches(MCObjectStreamer &OS) const {\n  if (!OS.getAllowAutoPadding())\n    return false;\n  assert(allowAutoPadding() && \"incorrect initialization!\");\n\n  // We only pad in text section.\n  if (!OS.getCurrentSectionOnly()->isText())"
+        }
+      ],
+      "defines_X86_streamer_override": true
+    },
+    "llvm/lib/MC/MCMachOStreamer.cpp": {
+      "url": "https://raw.githubusercontent.com/rust-lang/llvm-project/1cb4e3833c1919c2e6fb579a23ac0e2b22587b7e/llvm/lib/MC/MCMachOStreamer.cpp",
+      "sha256": "d9ca3a3148203b951a6738d9019cf8a066b2e04d80a07d5abe8ec4672764821e",
+      "snippets": [
+        {
+          "line": 48,
+          "excerpt": "class MCMachOStreamer : public MCObjectStreamer {\nprivate:\n  /// LabelSections - true if each section change should emit a linker local\n  /// label for use in relocations for assembler local references. Obviates the\n  /// need for local relocations. False by default.\n  bool LabelSections;\n"
+        }
+      ],
+      "defines_X86_streamer_override": false
+    },
+    "llvm/lib/MC/MCObjectStreamer.cpp": {
+      "url": "https://raw.githubusercontent.com/rust-lang/llvm-project/1cb4e3833c1919c2e6fb579a23ac0e2b22587b7e/llvm/lib/MC/MCObjectStreamer.cpp",
+      "sha256": "1af717a1bce53a668e9234743bca4ca9bcf48055e84a298e689439a17160cf84",
+      "snippets": [
+        {
+          "line": 394,
+          "excerpt": "void MCObjectStreamer::emitInstruction(const MCInst &Inst,\n                                       const MCSubtargetInfo &STI) {\n  MCStreamer::emitInstruction(Inst, STI);\n\n  MCSection *Sec = getCurrentSectionOnly();\n  Sec->setHasInstructions(true);\n"
+        }
+      ],
+      "defines_X86_streamer_override": false
+    }
+  },
+  "inference": "Mach-O uses generic MCObjectStreamer path instead of X86ELFStreamer branch alignment hooks. All4 actual __text byte comparisons independently show ineffective requested flag on this host."
+}

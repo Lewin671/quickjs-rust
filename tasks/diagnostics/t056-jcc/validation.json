@@ -1,0 +1,30 @@
+{
+  "diagnostic_only": true,
+  "timing_submitted": false,
+  "actual_qualification": "blocked, four __text pairs identical, boundary counts4/5/6/4",
+  "original_geometry_records": 30,
+  "real_NG_checks": 2040,
+  "real_all8_workload_checks": true,
+  "real_receipts_and_binary_hashes": true,
+  "mock_calls": {
+    "success": 960,
+    "actual-blocked": 0,
+    "actual-audit": 0,
+    "wrong-output": 14,
+    "timeout": 1,
+    "disturbed": 960,
+    "expired": 0,
+    "bad-hash": 0,
+    "owner": 0
+  },
+  "success_fixture": "synthetic zero-boundary receipt in isolated temporary queue; never actual qualification",
+  "checks": [
+    "raw bytes/PC/geometry of four flagged 152 paths",
+    "all30 original K6 geometry records; crossing/end/adjacency edge cases",
+    "matched recipe ratios/interaction/AA/suppression/null routing",
+    "actual blocked config stops before any process",
+    "full360units/600measured+360preflight simulated",
+    "hash/output/timeout/load/deadline/owner failures",
+    "shell render/15min watchdog/DST/quiet-window"
+  ]
+}

@@ -1,0 +1,223 @@
+{
+  "timing": false,
+  "diagnostic_only": true,
+  "attempts_consumed": 0,
+  "flag": "-Cllvm-args=-x86-branches-within-32B-boundaries",
+  "original_recipe": {
+    "cargo_args": [
+      "--locked",
+      "--release",
+      "-p",
+      "qjs-cli",
+      "--features",
+      "agents",
+      "--config=profile.release.opt-level=3",
+      "--config=profile.release.lto=\"fat\"",
+      "--config=profile.release.codegen-units=16",
+      "--config=profile.release.panic=\"abort\""
+    ],
+    "environment": {"CARGO_INCREMENTAL":"0","CARGO_ENCODED_RUSTFLAGS":"-Csymbol-mangling-version=v0\u001f-Cllvm-args=-align-all-functions=4"},
+    "binary": "qjs"
+  },
+  "toolchain": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: x86_64-apple-darwin\nrelease: 1.95.0\nLLVM version: 22.1.2\n",
+  "cpu": "machdep.cpu.family: 6\nmachdep.cpu.model: 165\nmachdep.cpu.stepping: 5\nmachdep.cpu.signature: 656981\nmachdep.cpu.microcode_version: 240\nmachdep.cpu.brand_string: Intel(R) Core(TM) i7-10700 CPU @ 2.90GHz\n",
+  "all_outputs_match": true,
+  "parent_job": "20261021T120731Z-t056-header-layout-qualification",
+  "parent_images_sha256": "e451cd6ac4a5668dc946ad3cf2843854beae70f3f6cb9fb1aada728de3e15549",
+  "producer_sha256": "31acbb5b62d7d7fa20d31dde247029f29510caad579cd56d5e120e05d3b3532b",
+  "workloads": {
+    "broad/global_read": {"sha256":"e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c","case_id":"global_read","kind":"internal"},
+    "broad/local_read": {"sha256":"e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c","case_id":"local_read","kind":"internal"},
+    "broad/branch_arithmetic": {"sha256":"e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c","case_id":"branch_arithmetic","kind":"internal"},
+    "external/sunspider-1.0/string-unpack-code": {"sha256":"e7ad696c046275bff5d00a8f537a5396b9061136d2d0d79fe599c57660c46000","case_id":null,"kind":"whole"},
+    "sentinel/heterogeneous_property_read": {"sha256":"19b1060789fc96ae941c60ae35995c3b185de319acaf9ce53515bfdb824baf7a","case_id":"heterogeneous_property_read","kind":"internal"}
+  },
+  "images": {
+    "base": {
+      "binary_sha256": "b0dfc65d0c026d62aa64ef3d69a089eb73b51088c84af75b44617ea2a1737f0e",
+      "bytes": 5983148,
+      "text_bytes": 4821792,
+      "source": {"revision":"f58c696e8379261ed726f0cea1051ed6d34f431a"},
+      "mitigated": false,
+      "ng_fixtures": 255,
+      "ng_log_sha256": "5dce06575094b4a5bf29a535e33344a606a2608f857facf2da2834c8d9141dac",
+      "outputs": {
+        "broad/global_read:23068672": "{\"operations\": 23068672, \"checksum\": 23068672}",
+        "broad/global_read:46137344": "{\"operations\": 46137344, \"checksum\": 46137344}",
+        "broad/local_read:23068672": "{\"operations\": 46137344, \"checksum\": 69206016}",
+        "broad/local_read:46137344": "{\"operations\": 92274688, \"checksum\": 138412032}",
+        "broad/branch_arithmetic:13182098": "{\"operations\": 13182098, \"checksum\": 13182098}",
+        "broad/branch_arithmetic:26364196": "{\"operations\": 26364196, \"checksum\": 26364196}",
+        "external/sunspider-1.0/string-unpack-code:None": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n",
+        "sentinel/heterogeneous_property_read:2883584": "{\"operations\": 8650752, \"checksum\": 4157529784320}",
+        "sentinel/heterogeneous_property_read:5767168": "{\"operations\": 17301504, \"checksum\": 16630116253696}"
+      },
+      "empty": "0\n"
+    },
+    "base_jcc": {
+      "binary_sha256": "ba6c0d6681195441c67d0c8f233d53de58e44c398ed2aea582a9865d4878d09c",
+      "bytes": 5983148,
+      "text_bytes": 4821792,
+      "source": {"revision":"f58c696e8379261ed726f0cea1051ed6d34f431a"},
+      "mitigated": true,
+      "ng_fixtures": 255,
+      "ng_log_sha256": "5dce06575094b4a5bf29a535e33344a606a2608f857facf2da2834c8d9141dac",
+      "outputs": {
+        "broad/global_read:23068672": "{\"operations\": 23068672, \"checksum\": 23068672}",
+        "broad/global_read:46137344": "{\"operations\": 46137344, \"checksum\": 46137344}",
+        "broad/local_read:23068672": "{\"operations\": 46137344, \"checksum\": 69206016}",
+        "broad/local_read:46137344": "{\"operations\": 92274688, \"checksum\": 138412032}",
+        "broad/branch_arithmetic:13182098": "{\"operations\": 13182098, \"checksum\": 13182098}",
+        "broad/branch_arithmetic:26364196": "{\"operations\": 26364196, \"checksum\": 26364196}",
+        "external/sunspider-1.0/string-unpack-code:None": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n",
+        "sentinel/heterogeneous_property_read:2883584": "{\"operations\": 8650752, \"checksum\": 4157529784320}",
+        "sentinel/heterogeneous_property_read:5767168": "{\"operations\": 17301504, \"checksum\": 16630116253696}"
+      },
+      "empty": "0\n"
+    },
+    "aligned": {
+      "binary_sha256": "b0b84489a3f6fd673b06dc4bdc71c8f176387a231ca19fe1da5ea48ca4ee0fd5",
+      "bytes": 6068028,
+      "text_bytes": 4890864,
+      "source": {"revision":"8f7d97c71b34e2bec52e2c6df87f4ba4ac51641a"},
+      "mitigated": false,
+      "ng_fixtures": 255,
+      "ng_log_sha256": "5dce06575094b4a5bf29a535e33344a606a2608f857facf2da2834c8d9141dac",
+      "outputs": {
+        "broad/global_read:23068672": "{\"operations\": 23068672, \"checksum\": 23068672}",
+        "broad/global_read:46137344": "{\"operations\": 46137344, \"checksum\": 46137344}",
+        "broad/local_read:23068672": "{\"operations\": 46137344, \"checksum\": 69206016}",
+        "broad/local_read:46137344": "{\"operations\": 92274688, \"checksum\": 138412032}",
+        "broad/branch_arithmetic:13182098": "{\"operations\": 13182098, \"checksum\": 13182098}",
+        "broad/branch_arithmetic:26364196": "{\"operations\": 26364196, \"checksum\": 26364196}",
+        "external/sunspider-1.0/string-unpack-code:None": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n",
+        "sentinel/heterogeneous_property_read:2883584": "{\"operations\": 8650752, \"checksum\": 4157529784320}",
+        "sentinel/heterogeneous_property_read:5767168": "{\"operations\": 17301504, \"checksum\": 16630116253696}"
+      },
+      "empty": "0\n"
+    },
+    "aligned_jcc": {
+      "binary_sha256": "ed78c675ff068edeabef4ad3e235883b52109af4e598db01eac9a8c6617241db",
+      "bytes": 6068028,
+      "text_bytes": 4890864,
+      "source": {"revision":"8f7d97c71b34e2bec52e2c6df87f4ba4ac51641a"},
+      "mitigated": true,
+      "ng_fixtures": 255,
+      "ng_log_sha256": "5dce06575094b4a5bf29a535e33344a606a2608f857facf2da2834c8d9141dac",
+      "outputs": {
+        "broad/global_read:23068672": "{\"operations\": 23068672, \"checksum\": 23068672}",
+        "broad/global_read:46137344": "{\"operations\": 46137344, \"checksum\": 46137344}",
+        "broad/local_read:23068672": "{\"operations\": 46137344, \"checksum\": 69206016}",
+        "broad/local_read:46137344": "{\"operations\": 92274688, \"checksum\": 138412032}",
+        "broad/branch_arithmetic:13182098": "{\"operations\": 13182098, \"checksum\": 13182098}",
+        "broad/branch_arithmetic:26364196": "{\"operations\": 26364196, \"checksum\": 26364196}",
+        "external/sunspider-1.0/string-unpack-code:None": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n",
+        "sentinel/heterogeneous_property_read:2883584": "{\"operations\": 8650752, \"checksum\": 4157529784320}",
+        "sentinel/heterogeneous_property_read:5767168": "{\"operations\": 17301504, \"checksum\": 16630116253696}"
+      },
+      "empty": "0\n"
+    },
+    "candidate": {
+      "binary_sha256": "3466c37a62f2fb6d764d0123212749ff810138ca05fcad336ce1afa05bdb1e3f",
+      "bytes": 5986812,
+      "text_bytes": 4808784,
+      "source": {"revision":"dfff3bb6bf3db01fb52a7612ed1144900b5f08c5"},
+      "mitigated": false,
+      "ng_fixtures": 255,
+      "ng_log_sha256": "5dce06575094b4a5bf29a535e33344a606a2608f857facf2da2834c8d9141dac",
+      "outputs": {
+        "broad/global_read:23068672": "{\"operations\": 23068672, \"checksum\": 23068672}",
+        "broad/global_read:46137344": "{\"operations\": 46137344, \"checksum\": 46137344}",
+        "broad/local_read:23068672": "{\"operations\": 46137344, \"checksum\": 69206016}",
+        "broad/local_read:46137344": "{\"operations\": 92274688, \"checksum\": 138412032}",
+        "broad/branch_arithmetic:13182098": "{\"operations\": 13182098, \"checksum\": 13182098}",
+        "broad/branch_arithmetic:26364196": "{\"operations\": 26364196, \"checksum\": 26364196}",
+        "external/sunspider-1.0/string-unpack-code:None": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n",
+        "sentinel/heterogeneous_property_read:2883584": "{\"operations\": 8650752, \"checksum\": 4157529784320}",
+        "sentinel/heterogeneous_property_read:5767168": "{\"operations\": 17301504, \"checksum\": 16630116253696}"
+      },
+      "empty": "0\n"
+    },
+    "candidate_jcc": {
+      "binary_sha256": "7f9343a4ade503f80d195039b70dbaf2c0899827938240c88eac8d85a916469d",
+      "bytes": 5986812,
+      "text_bytes": 4808784,
+      "source": {"revision":"dfff3bb6bf3db01fb52a7612ed1144900b5f08c5"},
+      "mitigated": true,
+      "ng_fixtures": 255,
+      "ng_log_sha256": "5dce06575094b4a5bf29a535e33344a606a2608f857facf2da2834c8d9141dac",
+      "outputs": {
+        "broad/global_read:23068672": "{\"operations\": 23068672, \"checksum\": 23068672}",
+        "broad/global_read:46137344": "{\"operations\": 46137344, \"checksum\": 46137344}",
+        "broad/local_read:23068672": "{\"operations\": 46137344, \"checksum\": 69206016}",
+        "broad/local_read:46137344": "{\"operations\": 92274688, \"checksum\": 138412032}",
+        "broad/branch_arithmetic:13182098": "{\"operations\": 13182098, \"checksum\": 13182098}",
+        "broad/branch_arithmetic:26364196": "{\"operations\": 26364196, \"checksum\": 26364196}",
+        "external/sunspider-1.0/string-unpack-code:None": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n",
+        "sentinel/heterogeneous_property_read:2883584": "{\"operations\": 8650752, \"checksum\": 4157529784320}",
+        "sentinel/heterogeneous_property_read:5767168": "{\"operations\": 17301504, \"checksum\": 16630116253696}"
+      },
+      "empty": "0\n"
+    },
+    "count_flags": {
+      "binary_sha256": "52ed87e969884aed7cb6d2ccd047f484dd41c26c31c28a94bbebba6201bcfeca",
+      "bytes": 5986788,
+      "text_bytes": 4819696,
+      "source": {
+        "revision": "8f7d97c71b34e2bec52e2c6df87f4ba4ac51641a",
+        "header_files_sha256": {
+          "crates/qjs-runtime/src/value/object.rs": "e19c30d0bafe228b27b5f3cc680dfa99015916bdee881d110b31a715c4a1f878",
+          "crates/qjs-runtime/src/value/object/class_fields.rs": "d4a8fc7a49ee044fb422b292836f8247a0a6ebb5e3def5b052104a3d23e1f373",
+          "crates/qjs-runtime/src/value/object/flags.rs": "81c8b92400ccff47e10d9816822969ce1a821c068f3ef2d9142b4c6f117e8efa",
+          "crates/qjs-runtime/src/value/object/tests.rs": "60807b2aebb6c6644f519cb7950a34307ee4e70f569c37d3e2f3d2ca93602f6a"
+        }
+      },
+      "mitigated": false,
+      "ng_fixtures": 255,
+      "ng_log_sha256": "5dce06575094b4a5bf29a535e33344a606a2608f857facf2da2834c8d9141dac",
+      "outputs": {
+        "broad/global_read:23068672": "{\"operations\": 23068672, \"checksum\": 23068672}",
+        "broad/global_read:46137344": "{\"operations\": 46137344, \"checksum\": 46137344}",
+        "broad/local_read:23068672": "{\"operations\": 46137344, \"checksum\": 69206016}",
+        "broad/local_read:46137344": "{\"operations\": 92274688, \"checksum\": 138412032}",
+        "broad/branch_arithmetic:13182098": "{\"operations\": 13182098, \"checksum\": 13182098}",
+        "broad/branch_arithmetic:26364196": "{\"operations\": 26364196, \"checksum\": 26364196}",
+        "external/sunspider-1.0/string-unpack-code:None": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n",
+        "sentinel/heterogeneous_property_read:2883584": "{\"operations\": 8650752, \"checksum\": 4157529784320}",
+        "sentinel/heterogeneous_property_read:5767168": "{\"operations\": 17301504, \"checksum\": 16630116253696}"
+      },
+      "empty": "0\n"
+    },
+    "count_flags_jcc": {
+      "binary_sha256": "fdf379416eea6697e2442c26247df88d8959ffdb27f8c43f221cecbab4d4c2c8",
+      "bytes": 5986788,
+      "text_bytes": 4819696,
+      "source": {
+        "revision": "8f7d97c71b34e2bec52e2c6df87f4ba4ac51641a",
+        "header_files_sha256": {
+          "crates/qjs-runtime/src/value/object.rs": "e19c30d0bafe228b27b5f3cc680dfa99015916bdee881d110b31a715c4a1f878",
+          "crates/qjs-runtime/src/value/object/class_fields.rs": "d4a8fc7a49ee044fb422b292836f8247a0a6ebb5e3def5b052104a3d23e1f373",
+          "crates/qjs-runtime/src/value/object/flags.rs": "81c8b92400ccff47e10d9816822969ce1a821c068f3ef2d9142b4c6f117e8efa",
+          "crates/qjs-runtime/src/value/object/tests.rs": "60807b2aebb6c6644f519cb7950a34307ee4e70f569c37d3e2f3d2ca93602f6a"
+        }
+      },
+      "mitigated": true,
+      "ng_fixtures": 255,
+      "ng_log_sha256": "5dce06575094b4a5bf29a535e33344a606a2608f857facf2da2834c8d9141dac",
+      "outputs": {
+        "broad/global_read:23068672": "{\"operations\": 23068672, \"checksum\": 23068672}",
+        "broad/global_read:46137344": "{\"operations\": 46137344, \"checksum\": 46137344}",
+        "broad/local_read:23068672": "{\"operations\": 46137344, \"checksum\": 69206016}",
+        "broad/local_read:46137344": "{\"operations\": 92274688, \"checksum\": 138412032}",
+        "broad/branch_arithmetic:13182098": "{\"operations\": 13182098, \"checksum\": 13182098}",
+        "broad/branch_arithmetic:26364196": "{\"operations\": 26364196, \"checksum\": 26364196}",
+        "external/sunspider-1.0/string-unpack-code:None": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n",
+        "sentinel/heterogeneous_property_read:2883584": "{\"operations\": 8650752, \"checksum\": 4157529784320}",
+        "sentinel/heterogeneous_property_read:5767168": "{\"operations\": 17301504, \"checksum\": 16630116253696}"
+      },
+      "empty": "0\n"
+    }
+  },
+  "raw_job_sha256": "4ce78fe6b5de47fab07987e2a56a4f21145d87b523e7e9b58dc8d049aeeca80e",
+  "raw_job": "20261021T140336Z-t056-jcc-build"
+}
