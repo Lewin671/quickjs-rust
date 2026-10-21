@@ -232,3 +232,22 @@ The copied ZoneInfo night-window guard and completed-job/no-DISTURBED checks
 remain intact. Renderers only print commands. No timing job, probe B, final
 K=6 attempt, main integration or main push was submitted by the owner.
 Valid attempts remain one spent and one remaining across A+B.
+
+
+## Committed-source binding
+
+Runtime commit **d130c77b7b2e216a3f8e6cf68892ee28dd632c22** is pushed only
+to `agent/t056-m1-stage-a/claude`. Build-only job
+`20261021T023955Z-t056-codegen-committed-image` completed exit 0 in 72 s and
+reproduced canonical SHA 66ffb46f from that committed source; its strict
+layout audit passes. This binds the pre-commit full-check/instruction evidence
+to the committed image; it is not the new full-exact correctness job.
+The staged fast gate and pre-commit hook both passed, including their 65-case
+focused Test262 slice. The manual full gate passed before owner-branch push;
+the duplicate pre-push run was skipped with QJS_SKIP_PRE_PUSH=1.
+
+`tmp/t056-m1a-codegen-verify/` binds d130c77b and image 66ffb46f. Local static
+validation passes all rendered shell/Python syntax, old-receipt rejection,
+Shanghai/LA/DST night windows, 27-case inventory and frozen source/unit checks;
+the packet manifest verifies every file. All three lead job IDs remain empty.
+No new-image full exact or wall result is claimed at this handoff.

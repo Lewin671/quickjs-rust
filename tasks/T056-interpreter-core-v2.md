@@ -8,7 +8,7 @@
 - Implementation: stage 1 on main. Stage A on its branch, not on main; the rejected M1.2 candidate stays on
   `agent/t056-m1-stage2/codex`; the write-site add replay removed from stage A stays on
   `agent/t056-add-transition-replay/claude`.
-- Verified at: codegen snapshot b904285a + patch 201ecc13 / image 66ffb46f: local full gate, 255 NG,
+- Verified at: codegen repair d130c77b reproduces snapshot 201ecc13 / image 66ffb46f: local full/fast gates, 255 NG,
   5170 subset, strict pin and 86/86 instructions pass; exact 42,672/42,672 and CI 39515915868 cover only older repair 4842f823.
 - Evidence: [part 1](archive/T056-unit0-part1-evidence.md), [part 2](archive/T056-unit0-part2-evidence.md),
   [M1 stage 1](archive/T056-m1-stage1-evidence.md), [M1.2 rejection](archive/T056-m1-stage2-evidence.md),
