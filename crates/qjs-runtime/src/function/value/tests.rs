@@ -240,3 +240,13 @@ fn later_properties_follow_an_unobserved_default_prototype_slot() {
         ))
     );
 }
+
+#[test]
+fn intrinsic_batches_preserve_function_defaults_order_and_global_bindings() {
+    assert_eq!(
+        eval("Object.getOwnPropertyNames(Object).slice(0, 7).join('|');").unwrap(),
+        Value::String("length|name|prototype|assign|create|defineProperty|defineProperties".into())
+    );
+    assert_eq!(eval("var d = Object.getOwnPropertyDescriptor(Object, 'keys'); [Object.keys.name, Object.keys.length, d.enumerable, d.configurable, d.writable, isFinite === globalThis.isFinite, Object.getOwnPropertyDescriptor(globalThis, 'NaN').writable].join('|');").unwrap(), Value::String("keys|1|false|true|true|true|false".into()));
+    assert_eq!(eval("Object.getOwnPropertyNames(Object.prototype).join('|');").unwrap(), Value::String("constructor|hasOwnProperty|isPrototypeOf|propertyIsEnumerable|toLocaleString|toString|valueOf|__defineGetter__|__defineSetter__|__lookupGetter__|__lookupSetter__|__proto__".into()));
+}

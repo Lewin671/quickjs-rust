@@ -219,15 +219,18 @@ impl AtomDomain {
         crate::diagnostics::count!(property_atom_interns);
         let canonical = canonical_property_text(text);
         let mut table = self.0.table.borrow_mut();
-        if let Some(entry) = table
-            .entries
-            .get(canonical.as_ref())
-            .and_then(Weak::upgrade)
-        {
-            return Ok(Atom(entry));
-        }
+        let text = match table.entries.get_key_value(canonical.as_ref()) {
+            Some((text, weak)) => {
+                if let Some(entry) = weak.upgrade() {
+                    return Ok(Atom(entry));
+                }
+                // A reclaimed atom leaves its canonical key in the weak table.
+                // Reuse that allocation; the new atom still receives a fresh id.
+                Rc::clone(text)
+            }
+            None => Rc::from(canonical.as_ref()),
+        };
         let id = table.allocate_id()?;
-        let text: Rc<str> = Rc::from(canonical.as_ref());
         let array_index = array_index_property_key(&text)
             .and_then(|index| u32::try_from(index).ok())
             .unwrap_or(NO_ARRAY_INDEX);
@@ -237,9 +240,7 @@ impl AtomDomain {
             array_index,
             domain: Rc::downgrade(&self.0),
         });
-        // A dead entry for the same text keeps its old key allocation on a
-        // plain insert; replace the pair so the key shares the new text.
-        table.entries.remove(text.as_ref());
+        // An existing table key already shares this text; no remove probe is needed.
         table.sweep_if_due();
         table.entries.insert(text, Rc::downgrade(&entry));
         table.created += 1;

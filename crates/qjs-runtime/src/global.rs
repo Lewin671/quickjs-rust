@@ -35,183 +35,129 @@ pub(super) fn install_globals(env: &mut CallEnv, global_this: &Value) {
     env.insert_realm("undefined".to_owned(), Value::Undefined);
     env.insert_realm("globalThis".to_owned(), global_this.clone());
     if let Value::Object(global_object) = global_this {
-        global_object.define_property(
-            "NaN".to_owned(),
-            Property::data(Value::Number(f64::NAN), false, false, false),
-        );
-        global_object.define_property(
-            "Infinity".to_owned(),
-            Property::data(Value::Number(f64::INFINITY), false, false, false),
-        );
-        global_object.define_property(
-            "undefined".to_owned(),
-            Property::data(Value::Undefined, false, false, false),
-        );
+        global_object.define_properties_ordered(vec![
+            (
+                Rc::from("NaN"),
+                Property::data(Value::Number(f64::NAN), false, false, false),
+            ),
+            (
+                Rc::from("Infinity"),
+                Property::data(Value::Number(f64::INFINITY), false, false, false),
+            ),
+            (
+                Rc::from("undefined"),
+                Property::data(Value::Undefined, false, false, false),
+            ),
+        ]);
         global_object.define_property(
             "globalThis".to_owned(),
             Property::data(global_this.clone(), false, true, true),
         );
-        global_object.define_property(
-            "NaN".to_owned(),
-            Property::data(Value::Number(f64::NAN), false, false, false),
-        );
-        global_object.define_property(
-            "Infinity".to_owned(),
-            Property::data(Value::Number(f64::INFINITY), false, false, false),
-        );
-        global_object.define_property(
-            "undefined".to_owned(),
-            Property::data(Value::Undefined, false, false, false),
-        );
     }
 
-    define_global_function(
+    define_global_functions(
         env,
         global_this,
-        "isFinite",
-        1,
-        NativeFunction::GlobalIsFinite,
+        &[
+            ("isFinite", 1, NativeFunction::GlobalIsFinite),
+            ("isNaN", 1, NativeFunction::GlobalIsNaN),
+            ("decodeURI", 1, NativeFunction::DecodeUri),
+            ("decodeURIComponent", 1, NativeFunction::DecodeUriComponent),
+            ("encodeURI", 1, NativeFunction::EncodeUri),
+            ("encodeURIComponent", 1, NativeFunction::EncodeUriComponent),
+            ("eval", 1, NativeFunction::Eval),
+            ("print", 1, NativeFunction::Print),
+            (
+                "__quickjsRustAssertSameValue",
+                3,
+                NativeFunction::Test262AssertSameValue,
+            ),
+            (
+                "__quickjsRustVerifyProperty",
+                4,
+                NativeFunction::Test262VerifyProperty,
+            ),
+            ("escape", 1, NativeFunction::Escape),
+            ("unescape", 1, NativeFunction::Unescape),
+        ],
     );
-    define_global_function(env, global_this, "isNaN", 1, NativeFunction::GlobalIsNaN);
-    define_global_function(env, global_this, "decodeURI", 1, NativeFunction::DecodeUri);
-    define_global_function(
-        env,
-        global_this,
-        "decodeURIComponent",
-        1,
-        NativeFunction::DecodeUriComponent,
-    );
-    define_global_function(env, global_this, "encodeURI", 1, NativeFunction::EncodeUri);
-    define_global_function(
-        env,
-        global_this,
-        "encodeURIComponent",
-        1,
-        NativeFunction::EncodeUriComponent,
-    );
-    define_global_function(env, global_this, "eval", 1, NativeFunction::Eval);
-    define_global_function(env, global_this, "print", 1, NativeFunction::Print);
-    define_global_function(
-        env,
-        global_this,
-        "__quickjsRustAssertSameValue",
-        3,
-        NativeFunction::Test262AssertSameValue,
-    );
-    define_global_function(
-        env,
-        global_this,
-        "__quickjsRustVerifyProperty",
-        4,
-        NativeFunction::Test262VerifyProperty,
-    );
-    define_global_function(env, global_this, "escape", 1, NativeFunction::Escape);
-    define_global_function(env, global_this, "unescape", 1, NativeFunction::Unescape);
     define_is_html_dda(env, global_this);
-    define_global_function(
+    define_global_functions(
         env,
         global_this,
-        "__quickjsRustDetachArrayBuffer",
-        1,
-        NativeFunction::DetachArrayBuffer,
-    );
-    define_global_function(
-        env,
-        global_this,
-        "__quickjsRustEvalScript",
-        1,
-        NativeFunction::EvalScript,
-    );
-    define_global_function(
-        env,
-        global_this,
-        "__quickjsRustBuildString",
-        1,
-        NativeFunction::Test262BuildString,
-    );
-    define_global_function(
-        env,
-        global_this,
-        "__quickjsRustToNumbers",
-        1,
-        NativeFunction::Test262ToNumbers,
-    );
-    define_global_function(
-        env,
-        global_this,
-        "__quickjsRustCompareArray",
-        2,
-        NativeFunction::Test262CompareArray,
-    );
-    define_global_function(
-        env,
-        global_this,
-        "__quickjsRustAssertIteratorResult",
-        3,
-        NativeFunction::Test262AssertIteratorResult,
-    );
-    define_global_function(
-        env,
-        global_this,
-        "__quickjsRustAssertPackedArray",
-        1,
-        NativeFunction::Test262AssertPackedArray,
-    );
-    define_global_function(
-        env,
-        global_this,
-        "__quickjsRustAssertNullProtoMutableObject",
-        1,
-        NativeFunction::Test262AssertNullProtoMutableObject,
-    );
-    define_global_function(
-        env,
-        global_this,
-        "__quickjsRustAssertNativeFunction",
-        1,
-        NativeFunction::Test262AssertNativeFn,
-    );
-    define_global_function(
-        env,
-        global_this,
-        "__quickjsRustAssertRegExpSourceLoop",
-        1,
-        NativeFunction::Test262AssertRegExpSourceLoop,
-    );
-    define_global_function(
-        env,
-        global_this,
-        "__quickjsRustAssertRegExpWhitespaceLoop",
-        0,
-        NativeFunction::Test262AssertRegExpWhitespaceLoop,
-    );
-    define_global_function(
-        env,
-        global_this,
-        "__quickjsRustAssertUriLoop",
-        1,
-        NativeFunction::Test262AssertUriLoop,
-    );
-    define_global_function(
-        env,
-        global_this,
-        "__quickjsRustAssertStringSubstrNumberLoop",
-        0,
-        NativeFunction::Test262AssertStringSubstrNumberLoop,
-    );
-    define_global_function(
-        env,
-        global_this,
-        "__quickjsRustAssertArrayBufferSliceToImmutableArgumentCoercion",
-        0,
-        NativeFunction::Test262AssertArrayBufferSliceToImmutableArgumentCoercion,
-    );
-    define_global_function(
-        env,
-        global_this,
-        "__quickjsRustAssertLineCommentUnicodeLoop",
-        0,
-        NativeFunction::Test262AssertLineCommentUnicodeLoop,
+        &[
+            (
+                "__quickjsRustDetachArrayBuffer",
+                1,
+                NativeFunction::DetachArrayBuffer,
+            ),
+            ("__quickjsRustEvalScript", 1, NativeFunction::EvalScript),
+            (
+                "__quickjsRustBuildString",
+                1,
+                NativeFunction::Test262BuildString,
+            ),
+            (
+                "__quickjsRustToNumbers",
+                1,
+                NativeFunction::Test262ToNumbers,
+            ),
+            (
+                "__quickjsRustCompareArray",
+                2,
+                NativeFunction::Test262CompareArray,
+            ),
+            (
+                "__quickjsRustAssertIteratorResult",
+                3,
+                NativeFunction::Test262AssertIteratorResult,
+            ),
+            (
+                "__quickjsRustAssertPackedArray",
+                1,
+                NativeFunction::Test262AssertPackedArray,
+            ),
+            (
+                "__quickjsRustAssertNullProtoMutableObject",
+                1,
+                NativeFunction::Test262AssertNullProtoMutableObject,
+            ),
+            (
+                "__quickjsRustAssertNativeFunction",
+                1,
+                NativeFunction::Test262AssertNativeFn,
+            ),
+            (
+                "__quickjsRustAssertRegExpSourceLoop",
+                1,
+                NativeFunction::Test262AssertRegExpSourceLoop,
+            ),
+            (
+                "__quickjsRustAssertRegExpWhitespaceLoop",
+                0,
+                NativeFunction::Test262AssertRegExpWhitespaceLoop,
+            ),
+            (
+                "__quickjsRustAssertUriLoop",
+                1,
+                NativeFunction::Test262AssertUriLoop,
+            ),
+            (
+                "__quickjsRustAssertStringSubstrNumberLoop",
+                0,
+                NativeFunction::Test262AssertStringSubstrNumberLoop,
+            ),
+            (
+                "__quickjsRustAssertArrayBufferSliceToImmutableArgumentCoercion",
+                0,
+                NativeFunction::Test262AssertArrayBufferSliceToImmutableArgumentCoercion,
+            ),
+            (
+                "__quickjsRustAssertLineCommentUnicodeLoop",
+                0,
+                NativeFunction::Test262AssertLineCommentUnicodeLoop,
+            ),
+        ],
     );
     #[cfg(feature = "agents")]
     install_agent_globals(env, global_this);
@@ -222,53 +168,60 @@ pub(super) fn install_globals(env: &mut CallEnv, global_this: &Value) {
 /// name to build the `$262.agent` object.
 #[cfg(feature = "agents")]
 fn install_agent_globals(env: &mut CallEnv, global_this: &Value) {
-    for (key, length, native) in [
-        ("__quickjsRustAgentStart", 1, NativeFunction::AgentStart),
-        (
-            "__quickjsRustAgentBroadcast",
-            1,
-            NativeFunction::AgentBroadcast,
-        ),
-        (
-            "__quickjsRustAgentGetReport",
-            0,
-            NativeFunction::AgentGetReport,
-        ),
-        ("__quickjsRustAgentReport", 1, NativeFunction::AgentReport),
-        ("__quickjsRustAgentSleep", 1, NativeFunction::AgentSleep),
-        (
-            "__quickjsRustAgentMonotonicNow",
-            0,
-            NativeFunction::AgentMonotonicNow,
-        ),
-        (
-            "__quickjsRustAgentReceiveBroadcast",
-            1,
-            NativeFunction::AgentReceiveBroadcast,
-        ),
-        ("__quickjsRustAgentLeaving", 0, NativeFunction::AgentLeaving),
-    ] {
-        define_global_function(env, global_this, key, length, native);
-    }
+    define_global_functions(
+        env,
+        global_this,
+        &[
+            ("__quickjsRustAgentStart", 1, NativeFunction::AgentStart),
+            (
+                "__quickjsRustAgentBroadcast",
+                1,
+                NativeFunction::AgentBroadcast,
+            ),
+            (
+                "__quickjsRustAgentGetReport",
+                0,
+                NativeFunction::AgentGetReport,
+            ),
+            ("__quickjsRustAgentReport", 1, NativeFunction::AgentReport),
+            ("__quickjsRustAgentSleep", 1, NativeFunction::AgentSleep),
+            (
+                "__quickjsRustAgentMonotonicNow",
+                0,
+                NativeFunction::AgentMonotonicNow,
+            ),
+            (
+                "__quickjsRustAgentReceiveBroadcast",
+                1,
+                NativeFunction::AgentReceiveBroadcast,
+            ),
+            ("__quickjsRustAgentLeaving", 0, NativeFunction::AgentLeaving),
+        ],
+    );
 }
 
-fn define_global_function(
+fn define_global_functions(
     env: &mut CallEnv,
     global_this: &Value,
-    key: &str,
-    length: usize,
-    native: NativeFunction,
+    methods: &[(&str, usize, NativeFunction)],
 ) {
-    let value = Value::Function(Function::new_native(
-        env.realm().atoms(),
-        Some(key),
-        length,
-        native,
-        false,
-    ));
-    env.insert_realm(key.to_owned(), value.clone());
+    let domain = env.realm().atoms().clone();
+    let entries = methods
+        .iter()
+        .map(|(key, length, native)| {
+            let value = Value::Function(Function::new_native(
+                &domain,
+                Some(key),
+                *length,
+                *native,
+                false,
+            ));
+            env.insert_realm((*key).to_owned(), value.clone());
+            (Rc::from(*key), Property::non_enumerable(value))
+        })
+        .collect();
     if let Value::Object(global_object) = global_this {
-        global_object.define_non_enumerable(key.to_owned(), value);
+        global_object.define_properties_ordered(entries);
     }
 }
 

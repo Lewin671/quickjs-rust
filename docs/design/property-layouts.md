@@ -53,12 +53,12 @@ The layout **replaces** payload lookup authority in the same stage; it is not la
 
 ## Complete host descriptor batches
 
-Intrinsic method tables publish one complete ordered descriptor batch, avoiding unobservable prefix shapes.
+Intrinsic object/function method tables and global helper groups publish complete ordered descriptor batches, avoiding unobservable prefix shapes.
 Canonicalize/deduplicate keys (first position, last descriptor), then publish the final immutable layout and payload.
 The weak content cache shares final layouts; insertion prunes dead same-hash entries, and later appends use bounded owned edges.
 Batches above128 fields become dictionaries. Preserve symbols/prototypes/index count and invalidate caches;
 numeric/globalThis installs and unordered stores use sequential semantics. Resolve aliases after publication.
-No construction mode/header field is added, and ordinary adds never rebuild the whole layout.
+Function batches extend installed descriptors; receiver hooks retain implicit defaults. Ordinary adds never rebuild the whole layout, and no construction mode is added.
 
 ## Transitions are edges
 

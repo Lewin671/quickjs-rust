@@ -1,0 +1,5 @@
+{
+  "kind": "hot/cold refinement before editing",
+  "observation": "Header-only job220159Z: same selected normalized numeric bytes, but partial relative-PC changes of3\u20136 bytes; unpack1044428930 vs parent1041795853 instructions. Sparse exact counts are cold, but common index-presence/prototype guards should not read through cold storage.",
+  "architecture": "An individual inline Cell<bool> summarizes whether the cold native-width count is nonzero. Keep it independent of ObjectFlags (no bit packing or count narrowing). Only centralized add/remove methods mutate the exact count and summary together, with no observer between them. Key order and prototype interception use the summary; cold absent means exact count zero. Header must remain <=112B and typed PC paths must be checked again."
+}

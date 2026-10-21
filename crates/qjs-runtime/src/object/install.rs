@@ -19,66 +19,50 @@ pub(crate) fn install_object(env: &mut CallEnv, global_this: &Value) -> ObjectRe
         "constructor".to_owned(),
         Value::Function(object_function.clone()),
     );
-    define_object_prototype_function(
-        &object_prototype,
-        "hasOwnProperty",
-        1,
-        NativeFunction::ObjectPrototypeHasOwnProperty,
-    );
-    define_object_prototype_function(
-        &object_prototype,
-        "isPrototypeOf",
-        1,
-        NativeFunction::ObjectPrototypeIsPrototypeOf,
-    );
-    define_object_prototype_function(
-        &object_prototype,
-        "propertyIsEnumerable",
-        1,
-        NativeFunction::ObjectPrototypePropertyIsEnumerable,
-    );
-    define_object_prototype_function(
-        &object_prototype,
-        "toLocaleString",
-        0,
-        NativeFunction::ObjectPrototypeToLocaleString,
-    );
-    define_object_prototype_function(
-        &object_prototype,
-        "toString",
-        0,
-        NativeFunction::ObjectPrototypeToString,
-    );
-    define_object_prototype_function(
-        &object_prototype,
-        "valueOf",
-        0,
-        NativeFunction::ObjectPrototypeValueOf,
-    );
-    define_object_prototype_function(
-        &object_prototype,
-        "__defineGetter__",
-        2,
-        NativeFunction::ObjectPrototypeDefineGetter,
-    );
-    define_object_prototype_function(
-        &object_prototype,
-        "__defineSetter__",
-        2,
-        NativeFunction::ObjectPrototypeDefineSetter,
-    );
-    define_object_prototype_function(
-        &object_prototype,
-        "__lookupGetter__",
-        1,
-        NativeFunction::ObjectPrototypeLookupGetter,
-    );
-    define_object_prototype_function(
-        &object_prototype,
-        "__lookupSetter__",
-        1,
-        NativeFunction::ObjectPrototypeLookupSetter,
-    );
+    object_prototype.define_native_methods(&[
+        (
+            "hasOwnProperty",
+            1,
+            NativeFunction::ObjectPrototypeHasOwnProperty,
+        ),
+        (
+            "isPrototypeOf",
+            1,
+            NativeFunction::ObjectPrototypeIsPrototypeOf,
+        ),
+        (
+            "propertyIsEnumerable",
+            1,
+            NativeFunction::ObjectPrototypePropertyIsEnumerable,
+        ),
+        (
+            "toLocaleString",
+            0,
+            NativeFunction::ObjectPrototypeToLocaleString,
+        ),
+        ("toString", 0, NativeFunction::ObjectPrototypeToString),
+        ("valueOf", 0, NativeFunction::ObjectPrototypeValueOf),
+        (
+            "__defineGetter__",
+            2,
+            NativeFunction::ObjectPrototypeDefineGetter,
+        ),
+        (
+            "__defineSetter__",
+            2,
+            NativeFunction::ObjectPrototypeDefineSetter,
+        ),
+        (
+            "__lookupGetter__",
+            1,
+            NativeFunction::ObjectPrototypeLookupGetter,
+        ),
+        (
+            "__lookupSetter__",
+            1,
+            NativeFunction::ObjectPrototypeLookupSetter,
+        ),
+    ]);
     object_prototype.define_property(
         "__proto__".to_owned(),
         Property::accessor(
@@ -105,167 +89,74 @@ pub(crate) fn install_object(env: &mut CallEnv, global_this: &Value) -> ObjectRe
         "prototype",
         Property::fixed_non_enumerable(Value::Object(object_prototype.clone())),
     );
-    define_object_function(
-        env.realm().atoms(),
-        &object_function,
-        "assign",
-        2,
-        NativeFunction::ObjectAssign,
-    );
-    define_object_function(
-        env.realm().atoms(),
-        &object_function,
-        "create",
-        2,
-        NativeFunction::ObjectCreate,
-    );
-    define_object_function(
-        env.realm().atoms(),
-        &object_function,
-        "defineProperty",
-        3,
-        NativeFunction::ObjectDefineProperty,
-    );
-    define_object_function(
-        env.realm().atoms(),
-        &object_function,
-        "defineProperties",
-        2,
-        NativeFunction::ObjectDefineProperties,
-    );
-    define_object_function(
-        env.realm().atoms(),
-        &object_function,
-        "getPrototypeOf",
-        1,
-        NativeFunction::ObjectGetPrototypeOf,
-    );
-    define_object_function(
-        env.realm().atoms(),
-        &object_function,
-        "getOwnPropertyDescriptor",
-        2,
-        NativeFunction::ObjectGetOwnPropertyDescriptor,
-    );
-    define_object_function(
-        env.realm().atoms(),
-        &object_function,
-        "getOwnPropertyDescriptors",
-        1,
-        NativeFunction::ObjectGetOwnPropertyDescriptors,
-    );
-    define_object_function(
-        env.realm().atoms(),
-        &object_function,
-        "getOwnPropertyNames",
-        1,
-        NativeFunction::ObjectGetOwnPropertyNames,
-    );
-    define_object_function(
-        env.realm().atoms(),
-        &object_function,
-        "getOwnPropertySymbols",
-        1,
-        NativeFunction::ObjectGetOwnPropertySymbols,
-    );
-    define_object_function(
-        env.realm().atoms(),
-        &object_function,
-        "fromEntries",
-        1,
-        NativeFunction::ObjectFromEntries,
-    );
-    define_object_function(
-        env.realm().atoms(),
-        &object_function,
-        "groupBy",
-        2,
-        NativeFunction::ObjectGroupBy,
-    );
-    define_object_function(
-        env.realm().atoms(),
-        &object_function,
-        "freeze",
-        1,
-        NativeFunction::ObjectFreeze,
-    );
-    define_object_function(
-        env.realm().atoms(),
-        &object_function,
-        "hasOwn",
-        2,
-        NativeFunction::ObjectHasOwn,
-    );
-    define_object_function(
-        env.realm().atoms(),
-        &object_function,
-        "is",
-        2,
-        NativeFunction::ObjectIs,
-    );
-    define_object_function(
-        env.realm().atoms(),
-        &object_function,
-        "isExtensible",
-        1,
-        NativeFunction::ObjectIsExtensible,
-    );
-    define_object_function(
-        env.realm().atoms(),
-        &object_function,
-        "isFrozen",
-        1,
-        NativeFunction::ObjectIsFrozen,
-    );
-    define_object_function(
-        env.realm().atoms(),
-        &object_function,
-        "isSealed",
-        1,
-        NativeFunction::ObjectIsSealed,
-    );
-    define_object_function(
-        env.realm().atoms(),
-        &object_function,
-        "preventExtensions",
-        1,
-        NativeFunction::ObjectPreventExtensions,
-    );
-    define_object_function(
-        env.realm().atoms(),
-        &object_function,
-        "seal",
-        1,
-        NativeFunction::ObjectSeal,
-    );
-    define_object_function(
-        env.realm().atoms(),
-        &object_function,
-        "setPrototypeOf",
-        2,
-        NativeFunction::ObjectSetPrototypeOf,
-    );
-    define_object_function(
-        env.realm().atoms(),
-        &object_function,
-        "entries",
-        1,
-        NativeFunction::ObjectEntries,
-    );
-    define_object_function(
-        env.realm().atoms(),
-        &object_function,
-        "keys",
-        1,
-        NativeFunction::ObjectKeys,
-    );
-    define_object_function(
-        env.realm().atoms(),
-        &object_function,
-        "values",
-        1,
-        NativeFunction::ObjectValues,
-    );
+    let methods = [
+        ("assign", 2, NativeFunction::ObjectAssign),
+        ("create", 2, NativeFunction::ObjectCreate),
+        ("defineProperty", 3, NativeFunction::ObjectDefineProperty),
+        (
+            "defineProperties",
+            2,
+            NativeFunction::ObjectDefineProperties,
+        ),
+        ("getPrototypeOf", 1, NativeFunction::ObjectGetPrototypeOf),
+        (
+            "getOwnPropertyDescriptor",
+            2,
+            NativeFunction::ObjectGetOwnPropertyDescriptor,
+        ),
+        (
+            "getOwnPropertyDescriptors",
+            1,
+            NativeFunction::ObjectGetOwnPropertyDescriptors,
+        ),
+        (
+            "getOwnPropertyNames",
+            1,
+            NativeFunction::ObjectGetOwnPropertyNames,
+        ),
+        (
+            "getOwnPropertySymbols",
+            1,
+            NativeFunction::ObjectGetOwnPropertySymbols,
+        ),
+        ("fromEntries", 1, NativeFunction::ObjectFromEntries),
+        ("groupBy", 2, NativeFunction::ObjectGroupBy),
+        ("freeze", 1, NativeFunction::ObjectFreeze),
+        ("hasOwn", 2, NativeFunction::ObjectHasOwn),
+        ("is", 2, NativeFunction::ObjectIs),
+        ("isExtensible", 1, NativeFunction::ObjectIsExtensible),
+        ("isFrozen", 1, NativeFunction::ObjectIsFrozen),
+        ("isSealed", 1, NativeFunction::ObjectIsSealed),
+        (
+            "preventExtensions",
+            1,
+            NativeFunction::ObjectPreventExtensions,
+        ),
+        ("seal", 1, NativeFunction::ObjectSeal),
+        ("setPrototypeOf", 2, NativeFunction::ObjectSetPrototypeOf),
+        ("entries", 1, NativeFunction::ObjectEntries),
+        ("keys", 1, NativeFunction::ObjectKeys),
+        ("values", 1, NativeFunction::ObjectValues),
+    ];
+    let entries = methods
+        .into_iter()
+        .map(|(key, length, native)| {
+            (
+                std::rc::Rc::from(key),
+                Property::non_enumerable(Value::Function(Function::new_native(
+                    env.realm().atoms(),
+                    Some(key),
+                    length,
+                    native,
+                    false,
+                ))),
+            )
+        })
+        .collect();
+    object_function
+        .properties
+        .borrow_mut()
+        .insert_batch_in(env.realm().atoms(), entries);
 
     let object_value = Value::Function(object_function);
     env.insert_realm("Object".to_owned(), object_value.clone());
@@ -274,36 +165,4 @@ pub(crate) fn install_object(env: &mut CallEnv, global_this: &Value) -> ObjectRe
     }
 
     object_prototype
-}
-
-fn define_object_prototype_function(
-    prototype: &ObjectRef,
-    key: &str,
-    length: usize,
-    native: NativeFunction,
-) -> Function {
-    let function =
-        Function::new_native(&prototype.store_domain(), Some(key), length, native, false);
-    prototype.define_non_enumerable(key.to_owned(), Value::Function(function.clone()));
-    function
-}
-
-fn define_object_function(
-    atoms: &crate::property::atom::AtomDomain,
-    function: &Function,
-    key: &str,
-    length: usize,
-    native: NativeFunction,
-) {
-    function.properties.borrow_mut().insert_in(
-        atoms,
-        key,
-        Property::non_enumerable(Value::Function(Function::new_native(
-            atoms,
-            Some(key),
-            length,
-            native,
-            false,
-        ))),
-    );
 }

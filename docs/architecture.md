@@ -162,6 +162,8 @@ Defined in `value/mod.rs`, `value/object.rs`, `value/property.rs` and
 - `ObjectData` holds the fields every object needs inline. Rare state
   (own-index counts, symbol-keyed properties, generator state, private names,
   ArrayBuffer and TypedArray slots) sits behind a lazily allocated `ObjectColdData` box.
+  An inline boolean summarizes the cold native-width index count for O(1) hot
+  prototype/order checks; centralized mutations maintain both before an observer.
 - String-keyed properties live in a `PropertyStorage`
   (`value/object/storage.rs`): one layout pointer (`property/layout.rs`)
   that owns every key, slot, attribute and the order, beside a keyless

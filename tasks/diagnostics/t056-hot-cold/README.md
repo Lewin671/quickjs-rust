@@ -9,3 +9,7 @@ for empty/unpack on those images, and maps every requested size through the actu
 host's `malloc_good_size`. Raw histories and full stack groups remain in the queue;
 the owning task records conclusions, revisions, numbers and hashes.
 Neither is timing evidence, a PMU-helper call, or a frozen acceptance attempt.
+
+[Owning record](../../archive/T056-hot-cold-preparation.md) separates header-only
+8dc59 diagnostics (`header-*.json`) from the future final repaired image. The
+inline summary and general instruction work follow their separate pre-edit plans.

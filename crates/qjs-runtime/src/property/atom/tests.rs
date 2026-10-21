@@ -112,6 +112,22 @@ fn reclaimed_atoms_get_fresh_ids() {
 }
 
 #[test]
+fn reclaimed_atom_reuses_only_text_and_gets_a_fresh_identity() {
+    let domain = AtomDomain::new();
+    let first = domain.intern("reclaimed").expect("intern");
+    let old_text = std::rc::Rc::clone(first.text());
+    let old_id = first.id();
+    drop(first);
+    assert_eq!(domain.live_count(), 0);
+    let second = domain.intern("reclaimed").expect("intern");
+    assert!(second.id() > old_id);
+    assert!(std::rc::Rc::ptr_eq(&old_text, second.text()));
+    assert!(second.belongs_to(&domain));
+    assert_eq!(domain.created_count(), 2);
+    assert_eq!(domain.table_len(), 1);
+}
+
+#[test]
 fn key_churn_retention_is_bounded_by_live_atoms() {
     let domain = AtomDomain::new();
     let kept = domain.intern("kept").expect("intern");

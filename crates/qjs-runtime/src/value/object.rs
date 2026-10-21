@@ -387,6 +387,8 @@ struct ObjectData {
     /// valid, so a slot-keyed read cache survives ordinary field assignment --
     /// the case `property_revision` deliberately cannot express.
     layout_revision: Cell<u64>,
+    /// Hot summary of the sparse cold count, maintained with that count.
+    has_index_properties: Cell<bool>,
     flags: ObjectFlags,
     // Hot exotic checks keep single-byte boolean loads.
     typed_array_exotic: Cell<bool>,
@@ -475,6 +477,7 @@ impl ObjectData {
         self.cold.get_or_init(Box::default).as_ref()
     }
 
+    #[cfg(test)]
     fn index_property_count(&self) -> usize {
         self.cold_if_present()
             .map_or(0, |cold| cold.index_property_count.get())
@@ -485,7 +488,15 @@ impl ObjectData {
             let cold = self.cold();
             cold.index_property_count
                 .set(cold.index_property_count.get() + count);
+            self.has_index_properties.set(true);
         }
+    }
+
+    fn remove_index_property(&self) {
+        let cold = self.cold();
+        let count = cold.index_property_count.get() - 1;
+        cold.index_property_count.set(count);
+        self.has_index_properties.set(count != 0);
     }
 
     fn cold_if_present(&self) -> Option<&ObjectColdData> {
@@ -868,6 +879,7 @@ impl ObjectRef {
             properties: RefCell::new(storage),
             property_revision: Cell::new(0),
             layout_revision: Cell::new(0),
+            has_index_properties: Cell::new(false),
             flags: ObjectFlags::new(),
             typed_array_exotic: Cell::new(false),
             module_namespace_exotic: Cell::new(false),
@@ -1126,7 +1138,7 @@ impl ObjectRef {
     /// non-writable data property.
     pub(crate) fn has_own_index_property(&self) -> bool {
         let _ = self.properties();
-        self.0.index_property_count() > 0
+        self.0.has_index_properties.get()
     }
 
     /// Whether creating a new indexed property on an object with this
@@ -1629,9 +1641,7 @@ impl ObjectRef {
             self.bump_property_revision();
         }
         if removed.is_some() && is_array_index_key(key) {
-            let cold = self.0.cold();
-            cold.index_property_count
-                .set(cold.index_property_count.get() - 1);
+            self.0.remove_index_property();
         }
         true
     }

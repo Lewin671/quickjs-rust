@@ -13,6 +13,8 @@
 //! goes through [`NamedTable::get_mut`]'s guard or a bulk edit, which
 //! republishes the layout before the borrow ends.
 
+mod batch;
+
 use std::ops::{Deref, DerefMut};
 
 use super::atom::AtomDomain;
