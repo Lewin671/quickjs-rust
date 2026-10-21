@@ -1,0 +1,541 @@
+{
+  "diagnostic_only": true,
+  "timing": false,
+  "acceptance": false,
+  "attempts_consumed": 0,
+  "candidate": "005b8dd4df01c6a97698e62d2c15067d51e12b6c",
+  "helper_sha256": "accbe2c4ab6ab146fb44d96b18a9d6dba61843c9665356480dc47f9c164f3796",
+  "images": {
+    "base": "b0dfc65d0c026d62aa64ef3d69a089eb73b51088c84af75b44617ea2a1737f0e",
+    "candidate": "51a0a51ecd4a5275afed68c87db77711789fe840bd48e70d8d1ce776982ee4e6",
+    "aligned": "b0b84489a3f6fd673b06dc4bdc71c8f176387a231ca19fe1da5ea48ca4ee0fd5",
+    "previous": "3466c37a62f2fb6d764d0123212749ff810138ca05fcad336ce1afa05bdb1e3f"
+  },
+  "snapshot_sha256": "ff3278a115428e31bbfe72d2603960ec33521071345a9b0daa4f9a36715083b4",
+  "instruction_ratios": [
+    {
+      "case": "broad/array_allocation",
+      "instructions": 1.0008894225551166,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/array_dynamic_read",
+      "instructions": 0.9998825490401739,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/array_index_of",
+      "instructions": 0.9681484491091044,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/array_read",
+      "instructions": 0.9975741088187821,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/array_write",
+      "instructions": 0.9940885971944616,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/branch_arithmetic",
+      "instructions": 0.999894154505555,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/captured_read",
+      "instructions": 0.9999892806144872,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/captured_write",
+      "instructions": 0.9902071196042075,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/closure_allocation_call",
+      "instructions": 0.9971569714348074,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/dynamic_method_call",
+      "instructions": 0.99357060396652,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/empty_loop",
+      "instructions": 0.9999414957372482,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/function_call_reordered",
+      "instructions": 0.99989753520192,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/function_call_two_args",
+      "instructions": 1.0000793403788197,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/global_read",
+      "instructions": 1.0000021499332166,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/local_read",
+      "instructions": 0.9999793150323164,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/many_locals_call",
+      "instructions": 0.9999540816759397,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/math_abs",
+      "instructions": 0.9999648155043539,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/method_call",
+      "instructions": 0.9803289342398673,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/object_allocation",
+      "instructions": 1.000899847766439,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/plain_function_call",
+      "instructions": 0.9999893798978693,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/property_dynamic_read",
+      "instructions": 0.9268823892087507,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/property_read",
+      "instructions": 0.9976543879830079,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/property_write",
+      "instructions": 0.9945984477435297,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/string_slice",
+      "instructions": 1.0075166526350636,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/top_level_function_call",
+      "instructions": 0.9859289522699981,
+      "limit": 1.03
+    },
+    {
+      "case": "development/big.js/arith",
+      "instructions": 0.9860553001795871,
+      "limit": 1.03
+    },
+    {
+      "case": "development/diff/compare",
+      "instructions": 0.9683964890698262,
+      "limit": 1.03
+    },
+    {
+      "case": "development/graphlib/paths",
+      "instructions": 1.0169524957205036,
+      "limit": 1.03
+    },
+    {
+      "case": "development/immutable/persistent",
+      "instructions": 0.9874183882491485,
+      "limit": 1.03
+    },
+    {
+      "case": "development/js-yaml/document",
+      "instructions": 1.0021694796119383,
+      "limit": 1.03
+    },
+    {
+      "case": "development/lodash/transform",
+      "instructions": 0.9877500426042215,
+      "limit": 1.03
+    },
+    {
+      "case": "development/matter-js/simulate",
+      "instructions": 0.9627327236434674,
+      "limit": 1.03
+    },
+    {
+      "case": "development/meriyah/parse",
+      "instructions": 0.9672913867087221,
+      "limit": 1.03
+    },
+    {
+      "case": "development/moment/dates",
+      "instructions": 0.9659231661555437,
+      "limit": 1.03
+    },
+    {
+      "case": "development/papaparse/csv",
+      "instructions": 0.9807120330109422,
+      "limit": 1.03
+    },
+    {
+      "case": "external/jetstream3-js-subset/cdjs",
+      "instructions": 0.998437405087782,
+      "limit": 1.03
+    },
+    {
+      "case": "external/jetstream3-js-subset/gaussian-blur",
+      "instructions": 0.9998765513422747,
+      "limit": 1.03
+    },
+    {
+      "case": "external/jetstream3-js-subset/hash-map",
+      "instructions": 0.995423123540199,
+      "limit": 1.03
+    },
+    {
+      "case": "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "instructions": 1.0105215742647928,
+      "limit": 1.03
+    },
+    {
+      "case": "external/jetstream3-js-subset/stanford-crypto-aes",
+      "instructions": 0.9860489949726802,
+      "limit": 1.03
+    },
+    {
+      "case": "external/kraken-1.1/ai-astar",
+      "instructions": 0.9873915929878452,
+      "limit": 1.03
+    },
+    {
+      "case": "external/kraken-1.1/audio-beat-detection",
+      "instructions": 0.9961869738890272,
+      "limit": 1.03
+    },
+    {
+      "case": "external/kraken-1.1/audio-dft",
+      "instructions": 1.011271199015855,
+      "limit": 1.03
+    },
+    {
+      "case": "external/kraken-1.1/audio-fft",
+      "instructions": 0.9960368288931172,
+      "limit": 1.03
+    },
+    {
+      "case": "external/kraken-1.1/audio-oscillator",
+      "instructions": 0.9998783064131593,
+      "limit": 1.03
+    },
+    {
+      "case": "external/kraken-1.1/imaging-darkroom",
+      "instructions": 0.9967943120284855,
+      "limit": 1.03
+    },
+    {
+      "case": "external/kraken-1.1/imaging-desaturate",
+      "instructions": 1.001003968149919,
+      "limit": 1.03
+    },
+    {
+      "case": "external/kraken-1.1/imaging-gaussian-blur",
+      "instructions": 0.9876034920054013,
+      "limit": 1.03
+    },
+    {
+      "case": "external/kraken-1.1/json-parse-financial",
+      "instructions": 0.95624239405756,
+      "limit": 1.03
+    },
+    {
+      "case": "external/kraken-1.1/json-stringify-tinderbox",
+      "instructions": 0.9712006382875192,
+      "limit": 1.03
+    },
+    {
+      "case": "external/kraken-1.1/stanford-crypto-aes",
+      "instructions": 0.9826181385833029,
+      "limit": 1.03
+    },
+    {
+      "case": "external/kraken-1.1/stanford-crypto-ccm",
+      "instructions": 0.9964941495542122,
+      "limit": 1.03
+    },
+    {
+      "case": "external/kraken-1.1/stanford-crypto-pbkdf2",
+      "instructions": 0.9908222187425983,
+      "limit": 1.03
+    },
+    {
+      "case": "external/kraken-1.1/stanford-crypto-sha256-iterative",
+      "instructions": 0.9953262691012094,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/3d-cube",
+      "instructions": 0.9743269448258822,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/3d-morph",
+      "instructions": 1.0031273056374341,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/3d-raytrace",
+      "instructions": 0.9984084501927851,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/access-binary-trees",
+      "instructions": 0.9872620117833912,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/access-fannkuch",
+      "instructions": 0.9847615356627673,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/access-nbody",
+      "instructions": 1.0104526365693765,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/access-nsieve",
+      "instructions": 0.9988221870996865,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/bitops-3bit-bits-in-byte",
+      "instructions": 1.0055940000827164,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/bitops-bits-in-byte",
+      "instructions": 1.0051746901578011,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/bitops-bitwise-and",
+      "instructions": 1.0068109139885888,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/bitops-nsieve-bits",
+      "instructions": 1.001986598267678,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/controlflow-recursive",
+      "instructions": 1.0093492580868897,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/crypto-aes",
+      "instructions": 0.9855748154819052,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/crypto-md5",
+      "instructions": 0.9995211698692975,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/crypto-sha1",
+      "instructions": 1.00344870844707,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/date-format-tofte",
+      "instructions": 0.992911079586764,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/date-format-xparb",
+      "instructions": 0.9646727691311079,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/math-cordic",
+      "instructions": 0.9893425840312845,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/math-partial-sums",
+      "instructions": 0.9925048841377805,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/math-spectral-norm",
+      "instructions": 1.0155031941566188,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/regexp-dna",
+      "instructions": 0.9999864814031459,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/string-base64",
+      "instructions": 0.9918761530448585,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/string-fasta",
+      "instructions": 0.9785776105289475,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/string-tagcloud",
+      "instructions": 0.9537253558000037,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/string-unpack-code",
+      "instructions": 1.0108678535685556,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/string-validate-input",
+      "instructions": 0.9998579490271805,
+      "limit": 1.03
+    },
+    {
+      "case": "sentinel/capturing_closure_call",
+      "instructions": 0.990923996600052,
+      "limit": 1.03
+    },
+    {
+      "case": "sentinel/heterogeneous_property_read",
+      "instructions": 0.8223687143408392,
+      "limit": 1.03
+    },
+    {
+      "case": "sentinel/polymorphic_call_site",
+      "instructions": 0.990432874877975,
+      "limit": 1.03
+    },
+    {
+      "case": "sentinel/prototype_method_call",
+      "instructions": 1.0052897883167078,
+      "limit": 1.03
+    },
+    {
+      "case": "sentinel/recursive_call_tree",
+      "instructions": 0.9999597082381332,
+      "limit": 1.03
+    },
+    {
+      "case": "sentinel/string_key_map_churn",
+      "instructions": 0.9923533591883081,
+      "limit": 1.03
+    }
+  ],
+  "blocked": [],
+  "canonical_totals": {
+    "base": {
+      "empty": [
+        13848211,
+        13847875,
+        13844748
+      ],
+      "unpack": [
+        1030918029,
+        1031120277,
+        1030895235
+      ],
+      "cli_only": [
+        8659225,
+        8643332,
+        8646172
+      ]
+    },
+    "candidate": {
+      "empty": [
+        14867409,
+        14863677,
+        14861328
+      ],
+      "unpack": [
+        1042960040,
+        1041763337,
+        1041936794
+      ],
+      "cli_only": [
+        8691736,
+        8697213,
+        8688899
+      ]
+    },
+    "aligned": {
+      "empty": [
+        15318666,
+        15341065,
+        15314072
+      ],
+      "unpack": [
+        1033303881,
+        1033300212,
+        1033259634
+      ],
+      "cli_only": [
+        8677312,
+        8659946,
+        8666785
+      ]
+    },
+    "previous": {
+      "empty": [
+        15336963,
+        15327600,
+        15335520
+      ],
+      "unpack": [
+        1043454810,
+        1045275693,
+        1043589120
+      ],
+      "cli_only": [
+        8684086,
+        8660885,
+        8656322
+      ]
+    }
+  },
+  "canonical_medians": {
+    "base": {
+      "empty": 13847875,
+      "unpack": 1030918029,
+      "cli_only": 8646172
+    },
+    "candidate": {
+      "empty": 14863677,
+      "unpack": 1041936794,
+      "cli_only": 8691736
+    },
+    "aligned": {
+      "empty": 15318666,
+      "unpack": 1033300212,
+      "cli_only": 8666785
+    },
+    "previous": {
+      "empty": 15335520,
+      "unpack": 1043589120,
+      "cli_only": 8660885
+    }
+  },
+  "scope": "86-case instruction snapshot only; wall fields in raw screen JSON are never timing/acceptance evidence. Lead must still run fresh full correctness and bound86 before timing."
+}

@@ -1,0 +1,28 @@
+{
+  "diagnostic_only": true,
+  "attempts_consumed": 0,
+  "protocol_revision": "8f898dd96239d392c168bdd20049d073b3b47ff4",
+  "qualification_job": "20261021T183100Z-t056-pragmatic-final-k6-qualification",
+  "qualification_sha256": "97948f1fc0a5c04a2152456f2096e5bfb13abb8a7903ca862744b4eef5056c73",
+  "files": {
+    "collect.py": "9216f5d14c7af3086187b753f9e1f1be355e27d52d5615f67ee8d753910c510a",
+    "protocol.py": "372f992f3e39fe358d9d92ca998671758480bdae4964bbd49c64ab4b2b2847a3",
+    "analyze.py": "8c622a737e8959eb3d0ccce077bb42aa968543a2952f436ca83ee1e58198606c",
+    "chain_common.py": "9828cf661034d8b08459c8278ec529a578564427f846630672bcb1f9080ccc82",
+    "window.py": "dc08b5e964de55237a48e732f4b0c12c6616bea200445e941c7dd42940b09d53"
+  },
+  "prerequisites": "Runtime arguments CORRECTNESS_JOB PREGATE_JOB TRIAGE_JOB, each bound to exact candidate/image/unit/helper. Never substitute historical receipts.",
+  "budget_basis": {
+    "reference_job": "20261021T040650Z-t056-m1a-data-probe",
+    "reference_units": 540,
+    "reference_seconds": 401.0238,
+    "units": 480,
+    "reserve_factor": 1.4,
+    "setup_seconds": 180,
+    "projected_seconds": 679.05184,
+    "collect_seconds": 1560,
+    "body_seconds": 1680,
+    "running_seconds": 1800
+  },
+  "scope": "Four-case K6 mini, five pairs, base/candidate AA, unchanged numerical routing and AA rules; diagnostic only."
+}

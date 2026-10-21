@@ -1,0 +1,224 @@
+{
+  "diagnostic_only": true,
+  "timing": false,
+  "instrumented_events_only": true,
+  "binary_sha256": "c03bd9617cf439bf4e108a68aeb1f6716ddbe826caad308beb78eed38d6beabc",
+  "stages": [
+    {
+      "stage": "object.install_object",
+      "shapes": 42,
+      "fields": 391,
+      "probes": 37
+    },
+    {
+      "stage": "function.install_function",
+      "shapes": 11,
+      "fields": 49,
+      "probes": 11
+    },
+    {
+      "stage": "global.install_globals",
+      "shapes": 42,
+      "fields": 935,
+      "probes": 43
+    },
+    {
+      "stage": "bigint.install_bigint",
+      "shapes": 7,
+      "fields": 58,
+      "probes": 8
+    },
+    {
+      "stage": "number.install_number",
+      "shapes": 26,
+      "fields": 302,
+      "probes": 26
+    },
+    {
+      "stage": "string.install_string",
+      "shapes": 10,
+      "fields": 218,
+      "probes": 10
+    },
+    {
+      "stage": "symbol.install_symbol",
+      "shapes": 26,
+      "fields": 242,
+      "probes": 38
+    },
+    {
+      "stage": "iterator.install_iterator",
+      "shapes": 20,
+      "fields": 150,
+      "probes": 28
+    },
+    {
+      "stage": "array_buffer.install_array_buffer",
+      "shapes": 13,
+      "fields": 129,
+      "probes": 15
+    },
+    {
+      "stage": "array_buffer.install_shared_array_buffer",
+      "shapes": 4,
+      "fields": 66,
+      "probes": 8
+    },
+    {
+      "stage": "typed_array.install_typed_arrays",
+      "shapes": 32,
+      "fields": 749,
+      "probes": 69
+    },
+    {
+      "stage": "data_view.install_data_view",
+      "shapes": 5,
+      "fields": 98,
+      "probes": 6
+    },
+    {
+      "stage": "disposable_stack.install_disposable_stack",
+      "shapes": 11,
+      "fields": 174,
+      "probes": 18
+    },
+    {
+      "stage": "atomics.install_atomics",
+      "shapes": 15,
+      "fields": 169,
+      "probes": 14
+    },
+    {
+      "stage": "bigint.install_bigint_well_known_symbols",
+      "shapes": 3,
+      "fields": 7,
+      "probes": 0
+    },
+    {
+      "stage": "string.install_string_well_known_symbols",
+      "shapes": 1,
+      "fields": 3,
+      "probes": 0
+    },
+    {
+      "stage": "boolean.install_boolean",
+      "shapes": 5,
+      "fields": 77,
+      "probes": 6
+    },
+    {
+      "stage": "date.install_date",
+      "shapes": 11,
+      "fields": 303,
+      "probes": 9
+    },
+    {
+      "stage": "regexp.install_regexp",
+      "shapes": 18,
+      "fields": 203,
+      "probes": 18
+    },
+    {
+      "stage": "error.install_error",
+      "shapes": 17,
+      "fields": 684,
+      "probes": 57
+    },
+    {
+      "stage": "json.install_json",
+      "shapes": 5,
+      "fields": 89,
+      "probes": 5
+    },
+    {
+      "stage": "promise.install_promise",
+      "shapes": 12,
+      "fields": 133,
+      "probes": 14
+    },
+    {
+      "stage": "proxy.install_proxy",
+      "shapes": 3,
+      "fields": 83,
+      "probes": 3
+    },
+    {
+      "stage": "map.install_map",
+      "shapes": 16,
+      "fields": 187,
+      "probes": 16
+    },
+    {
+      "stage": "weak_map.install_weak_map",
+      "shapes": 7,
+      "fields": 110,
+      "probes": 9
+    },
+    {
+      "stage": "finalization_registry.install_finalization_registry",
+      "shapes": 3,
+      "fields": 89,
+      "probes": 5
+    },
+    {
+      "stage": "weak_ref.install_weak_ref",
+      "shapes": 2,
+      "fields": 87,
+      "probes": 4
+    },
+    {
+      "stage": "weak_set.install_weak_set",
+      "shapes": 4,
+      "fields": 95,
+      "probes": 6
+    },
+    {
+      "stage": "set.install_set",
+      "shapes": 17,
+      "fields": 249,
+      "probes": 19
+    },
+    {
+      "stage": "math.install_math",
+      "shapes": 3,
+      "fields": 141,
+      "probes": 1
+    },
+    {
+      "stage": "reflect.install_reflect",
+      "shapes": 15,
+      "fields": 192,
+      "probes": 14
+    },
+    {
+      "stage": "array.install_array",
+      "shapes": 25,
+      "fields": 318,
+      "probes": 24
+    },
+    {
+      "stage": "typed_array.alias_array_prototype_to_string",
+      "shapes": 1,
+      "fields": 4,
+      "probes": 1
+    },
+    {
+      "stage": "async_function.install_async_function",
+      "shapes": 1,
+      "fields": 1,
+      "probes": 2
+    },
+    {
+      "stage": "async_generator.install_async_generator",
+      "shapes": 6,
+      "fields": 13,
+      "probes": 7
+    },
+    {
+      "stage": "generator.install_generator",
+      "shapes": 0,
+      "fields": 0,
+      "probes": 7
+    }
+  ]
+}

@@ -1,0 +1,137 @@
+{
+  "job": "20261021T180208Z-t056-pragmatic-startup-history",
+  "qualified_instruction_bisect": false,
+  "scope": "One cold sample of already cached historical images; absent early commits were not built. No source-cause or performance conclusion is drawn from these numbers.",
+  "rows": [
+    {
+      "revision": "f58c696e8379261ed726f0cea1051ed6d34f431a",
+      "exists": true,
+      "instructions": 13901024
+    },
+    {
+      "revision": "3506f4dbd0cf92dcb438abdec1e33fd89259db21",
+      "exists": false,
+      "instructions": null
+    },
+    {
+      "revision": "b1686896d5df85645851f0c91f33a789663e2b2f",
+      "exists": false,
+      "instructions": null
+    },
+    {
+      "revision": "1979fcb7a5e9d25cc2f72f8001aef27f2fd97442",
+      "exists": false,
+      "instructions": null
+    },
+    {
+      "revision": "83601f83c86f54f0bdd8083d87e7c20a36821938",
+      "exists": false,
+      "instructions": null
+    },
+    {
+      "revision": "9d5f96fb034aac81c2b19a0273d37963d8aad29a",
+      "exists": false,
+      "instructions": null
+    },
+    {
+      "revision": "a31e87fa6650f95503d750e332f97746a63f72d2",
+      "exists": false,
+      "instructions": null
+    },
+    {
+      "revision": "0abd79766e52739115b7501b80e248dbcdfeab7e",
+      "exists": false,
+      "instructions": null
+    },
+    {
+      "revision": "7d8f18db166c217cef0aaaef18bbf2fc49eb739d",
+      "exists": false,
+      "instructions": null
+    },
+    {
+      "revision": "9049dfc6cddb749996ff9768330e9412e867bd12",
+      "exists": false,
+      "instructions": null
+    },
+    {
+      "revision": "a72b0a5137de96cf22d28ec2421e5d2e1d15cfed",
+      "exists": false,
+      "instructions": null
+    },
+    {
+      "revision": "ccbc2378d79c3b0ebaead88eb7b86b766ba05847",
+      "exists": false,
+      "instructions": null
+    },
+    {
+      "revision": "38af1bc3e8070a7cf7f75ac60d114af0131ec91d",
+      "exists": true,
+      "instructions": 20260219
+    },
+    {
+      "revision": "ff850af85f6dcbd574e9a43d83099a1eacf59f0f",
+      "exists": true,
+      "instructions": 20618122
+    },
+    {
+      "revision": "0c27ebd61b36b262887c1f8454514da67f6d60f7",
+      "exists": false,
+      "instructions": null
+    },
+    {
+      "revision": "bd5c340b4595cf3b912b195d64462999a1ed0d65",
+      "exists": true,
+      "instructions": 20839828
+    },
+    {
+      "revision": "55ac897ea5670f621a763d4500e0f4e376b27c2a",
+      "exists": true,
+      "instructions": 20780893
+    },
+    {
+      "revision": "1244c8dd027e557617916788eddb19f10cb18917",
+      "exists": true,
+      "instructions": 20859505
+    },
+    {
+      "revision": "36570fbfb716bbf7c3511ed855f960f50b4ae9b4",
+      "exists": true,
+      "instructions": 20667945
+    },
+    {
+      "revision": "5d3e04bdb5f9261726d219c09d7c525ae903c50d",
+      "exists": true,
+      "instructions": 20391678
+    },
+    {
+      "revision": "72c2e5db2f041dcbc4e798cbfa63c36c7f3ec6f9",
+      "exists": true,
+      "instructions": 20865885
+    },
+    {
+      "revision": "0a9af81bebcef80e9239954f8db191a71f10316e",
+      "exists": true,
+      "instructions": 20820747
+    },
+    {
+      "revision": "94408090e3fdea93cb1904bda445b14192112bb0",
+      "exists": true,
+      "instructions": 15419396
+    },
+    {
+      "revision": "4842f8230e061624db86cec21f5f612dbcbba3bc",
+      "exists": true,
+      "instructions": 20856361
+    },
+    {
+      "revision": "d130c77b7b2e216a3f8e6cf68892ee28dd632c22",
+      "exists": true,
+      "instructions": 15391547
+    },
+    {
+      "revision": "8f7d97c71b34e2bec52e2c6df87f4ba4ac51641a",
+      "exists": true,
+      "instructions": 15374821
+    }
+  ]
+}

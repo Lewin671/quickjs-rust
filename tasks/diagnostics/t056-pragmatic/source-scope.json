@@ -1,0 +1,26 @@
+{
+  "candidate": "8f898dd96239d392c168bdd20049d073b3b47ff4",
+  "parent_runtime": "dfff3bb6bf3db01fb52a7612ed1144900b5f08c5",
+  "base": "f58c696e8379261ed726f0cea1051ed6d34f431a",
+  "changed_engine_paths_since_parent": [
+    "crates/qjs-runtime/src/array/install.rs",
+    "crates/qjs-runtime/src/data_view.rs",
+    "crates/qjs-runtime/src/date/install.rs",
+    "crates/qjs-runtime/src/math.rs",
+    "crates/qjs-runtime/src/property/layout.rs",
+    "crates/qjs-runtime/src/property/layout/tests.rs",
+    "crates/qjs-runtime/src/string/install.rs",
+    "crates/qjs-runtime/src/typed_array.rs",
+    "crates/qjs-runtime/src/value/object.rs",
+    "crates/qjs-runtime/src/value/object/class_fields.rs",
+    "crates/qjs-runtime/src/value/object/descriptor_batch.rs",
+    "crates/qjs-runtime/src/value/object/descriptor_batch/tests.rs",
+    "crates/qjs-runtime/src/value/object/storage.rs",
+    "crates/qjs-runtime/src/value/object/tests.rs"
+  ],
+  "frozen_plan_sha256": "d184dbcc122a060a219b367ffe3f3bb02c216f542f75f51eee1925387ef23284",
+  "parser_lexer_ast_cargo_changes": false,
+  "header": "Field order/types exactly match historical qualified flags_order120B; local exact-size test passes. No additional header/alignment fields changed.",
+  "owner_timing_submissions": 0,
+  "pmu_calls_after_closure": 0
+}

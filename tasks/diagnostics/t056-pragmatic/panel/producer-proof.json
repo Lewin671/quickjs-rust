@@ -1,0 +1,8 @@
+{
+  "job": "20261021T183100Z-t056-pragmatic-final-k6-qualification",
+  "executed_producer_sha256": "8dd79e41ab708c907f122117c4396af5a477572a9eb199198c727ad753e084a6",
+  "reproducer_sha256": "33811fed0ce1df3806a6770cf7c6a53a7885c085a17d55f93b609c202437fd3e",
+  "same_ast_without_module_docstring": true,
+  "ast_sha256": "c6d2ad66a885c076a3b09e60298bac5cb86fd26ff4d73aeabbfdd8de6a3c77ec",
+  "difference": "Current reproducer module docstring names the new candidate; executed producer still had the historical dfff label. Executable logic and protocol inputs match."
+}

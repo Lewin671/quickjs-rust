@@ -1,0 +1,23 @@
+{
+  "scope": "FAKE processes/counters and local guards only; no engine executable or timing job",
+  "matrices": [
+    {
+      "kind": "mini",
+      "layouts": 6,
+      "cases": 4,
+      "blocks": 5,
+      "case_role_blocks": 480,
+      "seconds": 2.474932249984704,
+      "diagnostic_only": true,
+      "decision_evidence": false,
+      "attempts_consumed": 0,
+      "all_outputs_match": true
+    }
+  ],
+  "routing_boundary_tests": true,
+  "environment_resets_and_inode_AA": true,
+  "quiet_window_DST_and_30min_cap": true,
+  "rendered_syntax": true,
+  "real_qualified_image_hashes": true,
+  "prerequisites": "Mocked in collector simulation; real rejection/identity guards separately validated by lead/validate-local.py"
+}
