@@ -1,0 +1,12 @@
+{
+  "job": "20261021T170331Z-t056-kpc-v3-install-ready",
+  "status": "done 0",
+  "privileged_run": false,
+  "installation_performed": false,
+  "sudoers_parse": "passed nonroot visudo -cf",
+  "install_shell_syntax": "passed sh -n",
+  "files": {
+    "install-user.sh": "c17077b57264cfd5472f917b6cc5b8fb980339a381fd5e35c998f267509fbb8e",
+    "qjs-kpc.sudoers": "dabcc824785d0ba7e745ba2dca7e0e7699efbd79119adb24a10bf61b890fbbe8"
+  }
+}

@@ -1,137 +1,128 @@
-# Headless Monterey Intel PMU helper v2
+# Headless Monterey Intel PMU helper v3
 
-[Current diagnosis](../../../archive/T056-kpc-setup-failure.md);
-[v1 preparation history](../../../archive/T056-kpc-tool.md).
-Engine source/recipe and the last acceptance attempt remain unchanged.
+[Current record](../../../archive/T056-kpc-counting.md);
+[v2/PET history](../../../archive/T056-kpc-setup-failure.md).
+Diagnostic tooling only; engine, recipe, frozen plans and last attempt unchanged.
 
-**v1 is installed and sudo works.** Lead153553Z and the authorized short root
-probe153934Z fail before the child gate/config verification. Old JSON cannot
-identify the specific API or readback comparison; no target or PMU evidence was
-collected. v2 requires one user reinstall because sudoers pins the binary digest.
-No agent installation or v2 root execution has occurred.
+v2 is installed and its real root config/count setup works. It cannot reliably
+acquire ktrace from launchd-managed tailspind. v3 removes all KDEBUG/PET/sampler
+calls and uses KPC all-CPU counting. **Tailspin can be re-enabled now**; no daemon
+stop or OS setting change is required. A foreign forced/programmed PMU user is
+refused without reset. Actual v3 root getter/cleanup awaits install and smoke;
+source analysis and nonroot tests are not hardware proof.
 
-## Changes and remaining uncertainty
+## Counter scope and lifecycle
 
-- Every setup/drain API/policy failure now records `failed_step`, return code,
-  captured errno, completed setup steps, initial trace owner/flags and actual
-  readback. Cleanup has separate first-error fields; it never erases setup error.
-- Cleanup no longer calls KPERF setters after a failure before KPERF setup: those
-  setters can create ownership just to clean a KDEBUG-only session. After our
-  KPERF write attempts, reset our action/timer/sampling state with `kperf_reset`,
-  remove only our KDEBUG session, verify our ownership was released. Foreign
-  owner refusal remains strict. `nolog=0` on an uninitialized buffer is not
-  treated as active tracing.
-- Default cycles/instructions now use KPEP's named architectural programmable
-  fallbacks, USER on/OS off. No assumed mapping from a KPC fixed-config word to
-  IA32_FIXED_CTR_CTRL. Four programmable slots hold cycles/instructions+two
-  extra events. Exact readback remains mandatory. The old path is available
-  only with explicit `--fixed-diagnostic` to distinguish the suspected fixed
-  ABI issue after reinstall. That suspicion is **not** a verified root cause.
-- Coverage uses `child_window_ns`, from gate release to observed completion,
-  excluding PMU ownership setup/cleanup. The old210ms failed-setup interval is
-  not target execution and must not be a coverage denominator.
+Six production C modules load only KPC/KPEP APIs. KPEP USER-only configurable
+classes2 supplies cycles/instructions plus two extras in four slots. No assumed
+fixed-control ABI, thread counting, PET actions/timers, ktrace ownership or trace
+buffer. `aggregate.c` remains only for the v2 parser regression test, not linked
+into the installed executable. The approved21 events and18 exclusions remain.
 
-Private interface access still needs real v2 root validation. v1 observations
-are in `failure-v1.json`; no specific failed API is invented from its null counts.
+Fork the child before claiming counters; it drops credentials and waits at a
+pipe gate. Parent snapshots the original programmable config/counting mask,
+claims forced counters, programs audited events, verifies exact readback and
+starts counting. Read all CPUs before releasing the gate and after observing
+child exit. Then take another pair of snapshots around a child-free sleep of
+that child's observed duration. Cleanup on success/failure clears counting,
+restores the original config and any pre-existing unforced fixed-only mask,
+releases force and checks released/restored state. Foreign programmable/thread
+counting is refused. Each cleanup operation is tried despite an earlier error;
+`cleanup_ok:false` stops the protocol. Signals request cleanup; internal alarms
+bound the child+idle pair and have a final hard-exit backstop.
 
-## Scope and root boundary
+The all-CPU private ABI is bounded by256 CPUs ×32 counters, with hw.ncpu equal
+to hw.logicalcpu_max and stable shape each read. Sentinel checks reject a missing
+or wider payload. Falling counters, changed shape and sum overflow reject counts.
+JSON preserves four raw per-CPU snapshots with read begin/end timestamps, summed
+and per-CPU event deltas, matched idle deltas, original mask, readback, child
+stdout/status and separate first setup/cleanup errors. Reads are sequential
+cross-CPU snapshots, not an atomic simultaneous sample.
 
-PID-filtered lightweight PET sums each observed thread's first-to-last sampled
-interval. JSON always says `full_lifetime_counts:false`,
-`all_threads_covered:false`. Short-lived/unobserved threads and lifetime ends
-cannot be recovered. No self-thread, whole-CPU or rusage substitute is used.
+`scope:system_wide_user_cpu_delta`, `pid_filtered:false`: background processes
+and the helper's user-space polling are included. This is not child attribution.
+The collector reports duration-normalized idle fractions for every event, raw
+N/2N increments, idle-adjusted increments and CPI separately. The5% cycle/
+instruction idle flag is a prospective descriptive qualification, not assumed
+quietness or acceptance. Negative/oversized idle fractions and negative rare
+increments are preserved. Idle subtraction cannot recover PID attribution or
+perfectly remove time-varying background/helper polling. No DSB/JCC causal claim.
 
-Only the child calls `execve`, after clearing supplementary groups, setting
-nonzero validated SUDO gid/uid, checking all IDs and checking root cannot be
-regained. Parent clears environment before loading absolute system frameworks;
-child has only TZ=UTC/LC_ALL=C, cwd=/, stdin=/dev/null. All nonstandard actual
-FDs close, including FDs above a lowered limit. No shell, arbitrary environment,
-register or output-path option. Root paths/ACLs and installed digest are guarded.
-stdout/stderr32KiB each, threads/trace records bounded; overflow/drop rejects.
-Normal/error cleanup restores our counter snapshot, releases forced counters
-and removes only our trace. Signals request cleanup; private alarm bounds runs.
-Hard-exit/kernel-owner teardown remains untested as root. No SIP/OS changes.
-
-CLI:
+Root boundary unchanged: validated nonzero SUDO_UID/GID matching account primary
+group, root-owned install paths and ACL checks, fixed absolute framework/program
+paths, empty parent environment, child TZ=UTC/LC_ALL=C, cwd=/, stdin=/dev/null,
+no supplementary groups or regained root, close actual inherited FDs, bounded
+stdout/stderr, no output-file or raw-register options, no shell API. The helper
+writes only pipes/stdout; the nonroot collector owns artifacts. Timeout1..10000ms
+includes setup/child, followed by at most a matched idle window; parent alarm
+is2×ceil(timeout seconds)+2, emergency exit2s later. Collector allows26s/call.
 
 ```text
 qjs-kpc --events cycles,instructions,EVENT,EVENT -- /absolute/program args...
 qjs-kpc --describe --events cycles,instructions,EVENT,EVENT
-qjs-kpc --fixed-diagnostic --events cycles,instructions -- /absolute/program args...
 qjs-kpc --list-events
 ```
 
-`--env TZ=UTC`/`--env LC_ALL=C` are the only env flags. `--timeout-ms` is1..10000.
-`--list-events` means database presence, not measured-event support. All21
-approved encodings/CMask/edge corrections are unchanged;16 auxiliary-MSR
-FRONTEND_RETIRED variants and2 absent names remain explicitly unavailable.
+Only `--env TZ=UTC`/`--env LC_ALL=C` are accepted. Fixed diagnostic mode is removed.
+See the [source record](source-references-v3.json) for Monterey root-read-check
+and all-CPU ABI references, and the archive for the v2 failure explanation.
 
-## Nonroot verification
+## Verified preparation
 
-`20261021T155348Z-t056-kpc-v2-final` done0/11s: clang14/CLT warnings-as-errors,
-PIE/stack protector, seven-module static analysis; prior FD/identity/parser tests,
-new trace-backend fault injection/repeated-session/foreign-owner tests, and JSON
-programmable-index/setup-vs-cleanup error serialization. Both default2+2 and
-explicit fixed2+4 descriptors pass. These are not privileged API/runtime proof.
-[qualification-v2.json](qualification-v2.json) preserves exact sources/commands.
+Non-timing `20261021T170020Z-t056-kpc-v3-qualified` done0/10s:
+clang14/CLT strict warnings/PIE/stack protector, six-module static analysis,
+credential/FD/parser tests, real nonroot process gate/env/timeout/output-overflow
+cleanup tests, counter API fault injection and JSON serialization. Every injected
+setup/read failure releases successfully acquired counters in the mock. Foreign
+ownership causes no writes; baseline restoration, repeated sessions, shape,
+decreasing/overflow counters and cleanup errors are tested. This does not prove
+kernel cleanup under real root; failed cleanup is explicitly invalid.
 
-`20261021T155433Z-t056-kpc-v2-groups` done0:21 events,11 exact allocation-checked
-user-only groups. [groups-v2.json](groups-v2.json). v1 qualification/groups/config
-remain frozen historical snapshots. Current render uses `config-v2.json` and
-embeds v2 snapshots under the collector's generic filenames.
-
-Reviewed v2 SHA-256:
+[qualification-v3.json](qualification-v3.json), [groups-v3.json](groups-v3.json)
+(job170125Z done0), [validation-v3.json](validation-v3.json) (354 fake helper calls
+plus8 nonroot warmups), [install-validation-v3.json](install-validation-v3.json).
+v1/v2 snapshots remain frozen. Current rendering embeds v3 snapshots under the
+collector's generic filenames. Binary SHA-256:
 
 ```text
-a8021d9adc7a0c583f32920832fafd34450fe462476b4d2f726a206a83f06673
+4b5776d1126490ddd9d3b6b8394cbe9b43c3406752534fb0704c501cfb81eafe
 ```
 
 ## User reinstall on the iMac
 
-Review the installer, then execute it:
+Review and run the prepared installer (requires the user's sudo password):
 
 ```sh
-cat "$HOME/Code/co-work-space/tmp/bench-queue/20261021T155544Z-t056-kpc-v2-install-ready/out/install-user.sh"
-sh "$HOME/Code/co-work-space/tmp/bench-queue/20261021T155544Z-t056-kpc-v2-install-ready/out/install-user.sh"
+cat "$HOME/Code/co-work-space/tmp/bench-queue/20261021T170331Z-t056-kpc-v3-install-ready/out/install-user.sh"
+sh "$HOME/Code/co-work-space/tmp/bench-queue/20261021T170331Z-t056-kpc-v3-install-ready/out/install-user.sh"
 ```
 
-It verifies this binary digest, validates sudoers, copies the reviewed executable
-root:wheel0755 to `/usr/local/libexec/qjs-kpc`, replaces only its digest-bound
-NOPASSWD/NOSETENV rule root:wheel0440, then validates all sudoers. Existing sudo
-password is required; install/shell access is not made passwordless. Final rule
-passed nonroot `visudo -cf` in155544Z; no installed file was changed by that job.
-Uninstall is unchanged:
+It verifies the reviewed binary, validates the rule, installs root:wheel0755
+`/usr/local/libexec/qjs-kpc` and digest-bound NOSETENV/NOPASSWD rule0440, and checks
+sudoers. No agent/job performs installation or broadens shell/install privilege.
+Uninstall: remove `/private/etc/sudoers.d/qjs-kpc` and `/usr/local/libexec/qjs-kpc`
+with sudo, then run `sudo /usr/sbin/visudo -cf /private/etc/sudoers`.
 
-```sh
-sudo /bin/rm -f /private/etc/sudoers.d/qjs-kpc /usr/local/libexec/qjs-kpc
-sudo /usr/sbin/visudo -cf /private/etc/sudoers
-```
+## Short root smoke after reinstall, no timing
 
-## Short root diagnosis after reinstall, no timing
-
-This authorized debug step uses only the exact installed v2 digest. It runs
-`/usr/bin/id -u` with default cycles/instructions, default+DSB and explicit fixed
-mode. No engine benchmark. Each call≤5s; failed cleanup stops immediately.
-Returns full stage/errno/readback JSON even when setup fails; successful calls
-must print the invoking nonroot uid. Insufficient samples from `id` are normal.
+Owner may submit this debug-only job after exact digest installation. Two
+`id -u` captures (cycles/instructions and +DSB) require successful all-CPU getter,
+valid counters, config readback, correct nonroot UID and cleanup. No benchmark.
+Any failed capture/cleanup stops; never reset a foreign profiler or kill daemons.
 
 ```sh
 python3 tasks/diagnostics/t056-pmu/kpc-tool/render.py smoke > /tmp/t056-kpc-smoke.sh
 /Users/qingyingliu/Code/co-work-space/scripts/imac-bench.sh run \
-  --repo "$PWD" --ref HEAD --name t056-kpc-v2-smoke \
+  --repo "$PWD" --ref HEAD --name t056-kpc-v3-smoke \
   -- bash -c "$(cat /tmp/t056-kpc-smoke.sh)"
 ```
 
-Owner may submit only this **non-timing** short debug job, after user reinstall.
-The smoke refuses the old installed hash and never edits sudoers or permissions.
-
 ## Lead-only single ≤15min measurement, after successful smoke
 
-Six canonical images (f58,8f,count,flags,count_flags,dfff), base/dfff A/A clones,
-global/local,11 groups, one paired block and N23,068,672/2N:176 units,
-352 measurements+2 real uid/env checks; group parity reverses N/2N order. Groups changed prospectively because
-user-filtered cycles/instructions occupy two slots. No formal precision claim.
-Old failed run is not retried/relabelled as acceptance; the attempt budget stays.
+Six canonical images+base/dfff A/A clones, global/local,11 groups, one block,
+N11,534,336/2N:176 units,352 measured child/idle pairs,2 uid/env checks and8
+unprivileged warmups. Group parity reverses N/2N; each role uses the same active
+path and independent inode. This is prospective diagnostic evidence only.
 
 ```sh
 python3 tasks/diagnostics/t056-pmu/kpc-tool/render.py > /tmp/t056-kpc-counters.sh
@@ -145,22 +136,18 @@ python3 tasks/diagnostics/t056-pmu/kpc-tool/render.py > /tmp/t056-kpc-counters.s
 python3 tasks/diagnostics/t056-pmu/kpc-tool/watch.py JOB_ID
 ```
 
-No owner timing. Exact installed hash/receipts/images, counter backend/indices/
-registers and actual nonroot uid/env are checked before measurement. Any observed
-thread<10 samples, observed span/child-window<0.70, malformed output, permission,
-readback, cleanup, deadline or load failure stops without retries/deletion.
-Negative rare-event deltas stay negative/uninterpretable. CPI describes sampled
-user windows, never whole lifetimes or a JCC verdict. A/A is descriptive only.
+Source/images/helper/receipts/frozen plan/correctness/86-case seals remain. CPU
+matrix sums, raw monotonic deltas, config/readback and idle/work midpoint-span
+ratio0.95..1.05 are checked. Background>5% is retained/flagged, not silently
+removed or called small. Malformed rows, permissions, UID/output, counter shape,
+cleanup, deadline or load failure stops with all partial evidence, no retries.
 
-Prior workload throughput plus0.211s/root setup per352 calls projects254.431s;
-2x+120=628.862s<720 collect/840 body/890 runner/900 watchdog, including quieting.
-03–05 host local and15min-before03 excluded,20min admission. Hard timeout remains
-authoritative; root throughput is not yet qualified. Partial data is not a decision.
+Halved work with matched idle preserves prior projected workload180.159s;
+354×0.211s setup,2× reserve+120s preparation+5s warmups gives634.706s<720 collect.
+Root throughput is unverified; deadlines override projections. Body840/runner890/
+watch900 include quieting,03–05 host-local/15min-before03 exclusion and20min
+admission remain. Owner never submits timing or consumes an acceptance attempt.
 
 ```sh
 PYTHONDONTWRITEBYTECODE=1 python3 tasks/diagnostics/t056-pmu/kpc-tool/validate.py
 ```
-
-Verifies actual v2 compiled receipts/21 encodings,354 fake calls through the real
-collector, missing-install/permission/uid/output/counter/coverage/deadline/load
-failures and negative deltas. It never runs sudo or installs anything.

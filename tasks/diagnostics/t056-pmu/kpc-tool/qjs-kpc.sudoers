@@ -1,4 +1,4 @@
 Defaults!/usr/local/libexec/qjs-kpc env_reset, !setenv
 Defaults!/usr/local/libexec/qjs-kpc env_keep = "TERM"
 Defaults!/usr/local/libexec/qjs-kpc env_delete += "DYLD_* LD_*"
-qingyingliu ALL=(root) NOPASSWD: NOSETENV: sha256:a8021d9adc7a0c583f32920832fafd34450fe462476b4d2f726a206a83f06673 /usr/local/libexec/qjs-kpc
+qingyingliu ALL=(root) NOPASSWD: NOSETENV: sha256:4b5776d1126490ddd9d3b6b8394cbe9b43c3406752534fb0704c501cfb81eafe /usr/local/libexec/qjs-kpc

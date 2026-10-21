@@ -1,0 +1,29 @@
+{
+  "source": "lead feedback-kpc-v2.md",
+  "source_sha256": "1d170f2c626913eedfd01c5a3b830a8e4ef77e48df08b254053e4260befd67b2",
+  "installed_v2_sha256": "a8021d9adc7a0c583f32920832fafd34450fe462476b4d2f726a206a83f06673",
+  "evidence_type": "lead-reported real root non-timing observations, not owner reproduction",
+  "observations": [
+    {
+      "target": "/usr/bin/id -u",
+      "capture_complete": true,
+      "uid": 501,
+      "configuration_readback_verified": true,
+      "samples": 0
+    },
+    {
+      "failed_step": "idle.foreign_owner",
+      "owner": "launchd-managed tailspind; relaunched after user stopped it"
+    },
+    {
+      "target": "perl CPU loop while tailspind stopped",
+      "failed_step": "drain.record_integrity",
+      "samples": 1,
+      "child_window_ns": 56000,
+      "cleanup_ok": true
+    }
+  ],
+  "raw_trace_available": false,
+  "counter_evidence_valid": false,
+  "specific_parser_branch_confirmed": false
+}

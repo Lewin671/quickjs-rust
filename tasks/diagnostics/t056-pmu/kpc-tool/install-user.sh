@@ -1,11 +1,11 @@
 #!/bin/sh
 # Prepared for the user to inspect/run on the iMac; never run by the agent/job.
 set -eu
-binary="$HOME/Code/co-work-space/tmp/bench-queue/20261021T155348Z-t056-kpc-v2-final/out/qjs-kpc"
+binary="$HOME/Code/co-work-space/tmp/bench-queue/20261021T170020Z-t056-kpc-v3-qualified/out/qjs-kpc"
 rule="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/qjs-kpc.sudoers"
 test "$(/usr/bin/id -un)" = qingyingliu
 test "$(/usr/bin/stat -f '%u:%Lp' /usr/local)" = '0:755'
-/usr/bin/printf 'a8021d9adc7a0c583f32920832fafd34450fe462476b4d2f726a206a83f06673  %s\n' "$binary" | /usr/bin/shasum -a 256 -c -
+/usr/bin/printf '4b5776d1126490ddd9d3b6b8394cbe9b43c3406752534fb0704c501cfb81eafe  %s\n' "$binary" | /usr/bin/shasum -a 256 -c -
 /usr/bin/sudo /usr/sbin/visudo -cf "$rule"
 /usr/bin/sudo /usr/bin/install -d -o root -g wheel -m 0755 /usr/local/libexec
 /usr/bin/sudo /usr/bin/install -o root -g wheel -m 0755 "$binary" /usr/local/libexec/qjs-kpc

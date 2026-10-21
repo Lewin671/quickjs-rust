@@ -30,7 +30,7 @@ assert read(qualified/'qualification.json')['binary_sha256']==cfg['helper_sha256
 packed=done(cfg['groups_job']);assert sha(packed/'groups.json')==cfg['groups_sha256']
 assert read(packed/'groups.json')['binary_sha256']==cfg['helper_sha256']
 root=done(cfg['images_job']);images=read(root/'images.json');assert sha(root/'images.json')==cfg['images_sha256']
-groups=read(out/'groups.json')['groups'];assert len(groups)==11
+groups=read(out/'groups.json')['groups'];assert len(groups)==11 and groups==read(packed/'groups.json')['groups']
 paths={}
 for role in p.ROLES:
  name=role.removesuffix('_aa');source=root/'binaries'/name/'qjs';assert sha(source)==cfg['images'][name]
@@ -42,11 +42,11 @@ for key in p.ENV_KEYS:os.environ.pop(key,None)
 os.environ.update(TZ='UTC',LC_ALL='C')
 active=out/'active/qjs';active.parent.mkdir();nxt=active.with_name('next');raw=(out/'raw.jsonl').open('x');current={};rows=[];checks={}
 def call(argv):
- value=run_process(argv,p.remaining(deadline,time.monotonic(),15));raw.write(json.dumps({**current,'argv':argv,'result':dataclasses.asdict(value)})+'\n');raw.flush();assert not value.timed_out and value.exit_code==0 and not value.stdout_truncated and not value.stderr_truncated;return json.loads(value.stdout)
+ value=run_process(argv,p.remaining(deadline,time.monotonic(),26));raw.write(json.dumps({**current,'argv':argv,'result':dataclasses.asdict(value)})+'\n');raw.flush();assert not value.timed_out and value.exit_code==0 and not value.stdout_truncated and not value.stderr_truncated;return json.loads(value.stdout)
 def argv(events,target):return ['/usr/bin/sudo','-n','--',str(helper),'--events',','.join(['cycles','instructions',*events]),'--env','TZ=UTC','--env','LC_ALL=C','--',*map(str,target)]
-request={'artifact_type':'t056-kpc-counters','diagnostic_only':True,'decision_evidence':False,'attempts_consumed':0,'images':cfg['images'],'helper_sha256':cfg['helper_sha256'],'cases':p.CASES,'roles':p.ROLES,'groups':groups,'blocks':p.BLOCKS,'count':p.COUNT,'host':host,'rule':p.RULE,'configuration':cfg,'ownership':'root helper handles only own gated child and idle ktrace session; fixed env and uid/gid drop; no install from job','scope':'sampled intervals, no complete lifetime/all-thread guarantee'}
+request={'artifact_type':'t056-kpc-counters','diagnostic_only':True,'decision_evidence':False,'attempts_consumed':0,'images':cfg['images'],'helper_sha256':cfg['helper_sha256'],'cases':p.CASES,'roles':p.ROLES,'groups':groups,'blocks':p.BLOCKS,'count':p.COUNT,'host':host,'rule':p.RULE,'configuration':cfg,'ownership':'root helper handles only own gated child and exclusively forced PMU counters; fixed env and uid/gid drop; no install from job','scope':'system-wide USER-only CPU deltas with equal-duration idle control, no PID filter'}
 (out/'request.json').write_text(json.dumps(request,indent=2)+'\n')
-with measurement_lock('T056 kpc sampled counter diagnostic'):
+with measurement_lock('T056 kpc system-wide counter diagnostic'):
  monitor=Monitor.from_queue();current['phase']='privilege-check'
  identity=call(argv([],['/usr/bin/id','-u']));environment=call(argv([],['/usr/bin/env']))
  for result in (identity,environment):
@@ -55,6 +55,12 @@ with measurement_lock('T056 kpc sampled counter diagnostic'):
  assert identity['child_stdout'].strip()==str(os.getuid()) and os.getuid()!=0
  assert set(environment['child_stdout'].splitlines())=={'TZ=UTC','LC_ALL=C'}
  (out/'privilege-check.json').write_text(json.dumps({'identity':identity,'environment':environment},indent=2)+'\n')
+ for role in p.ROLES:
+  nxt.unlink(missing_ok=True);os.link(paths[role],nxt);os.replace(nxt,active);current.update(phase='warmup',role=role)
+  command=s._argv(active,cases[0],p.COUNT);result=run_process(command,p.remaining(deadline,time.monotonic(),10))
+  raw.write(json.dumps({**current,'argv':command,'result':dataclasses.asdict(result)})+'\n');raw.flush()
+  assert result.exit_code==0 and not result.timed_out and not result.stdout_truncated and not result.stderr_truncated
+  s._check_output(cases[0],result.stdout)
  for block in range(p.BLOCKS):
   for group in p.order(groups,block):
    for ci,case in enumerate(p.order(cases,block,group['id'])):
@@ -72,4 +78,4 @@ with measurement_lock('T056 kpc sampled counter diagnostic'):
    print('BLOCK',block+1,'GROUP',group['id'],'complete',flush=True)
  load=monitor.snapshot();(out/'load.json').write_text(json.dumps(load,indent=2)+'\n');assert not heavy_samples(load['text'],load['anchor']),'DISTURBED; retain whole job, no retry'
  summary=counters.summarize(rows);(out/'summary.json').write_text(json.dumps(summary,indent=2)+'\n');p.remaining(deadline,time.monotonic(),1)
-raw.close();(out/'complete.json').write_text(json.dumps({'diagnostic_only':True,'decision_evidence':False,'attempts_consumed':0,'groups':11,'events':21,'case_role_blocks':176,'measured_execs':352,'privilege_checks':2,'seconds':time.monotonic()-start,'full_lifetime_counts':False,'all_thread_coverage':False})+'\n')
+raw.close();(out/'complete.json').write_text(json.dumps({'diagnostic_only':True,'decision_evidence':False,'attempts_consumed':0,'groups':11,'events':21,'case_role_blocks':176,'measured_execs':352,'privilege_checks':2,'unprivileged_warmups':8,'seconds':time.monotonic()-start,'pid_attribution':False,'matched_idle_controls':352})+'\n')

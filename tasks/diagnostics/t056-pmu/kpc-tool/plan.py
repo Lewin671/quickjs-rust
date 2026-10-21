@@ -2,7 +2,7 @@
 import hashlib,json,os,subprocess
 from pathlib import Path
 out=Path(os.environ['BENCH_OUT']);assert 'no-timing' in (out.parent/'status').read_text()
-root=Path(os.environ['BENCH_QUEUE'])/'20261021T155348Z-t056-kpc-v2-final';assert (root/'status').read_text().strip()=='done 0'
+root=Path(os.environ['BENCH_QUEUE'])/'20261021T170020Z-t056-kpc-v3-qualified';assert (root/'status').read_text().strip()=='done 0'
 report=json.loads((root/'out/qualification.json').read_text());binary=root/'out/qjs-kpc';sha=lambda p:hashlib.sha256(Path(p).read_bytes()).hexdigest();assert sha(binary)==report['binary_sha256']
 inventory=json.loads((out/'event-inventory.json').read_text());groups=[];current=[];checks=[]
 def describe(names):

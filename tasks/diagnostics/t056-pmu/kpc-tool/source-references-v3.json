@@ -1,0 +1,36 @@
+{
+  "xnu_revision": "xnu-8020.140.41",
+  "root_hardware_getter_verified": false,
+  "v2_root_fact": "Lead reports v2 programmable configuration/readback/count enable succeeded; v3 CPU getter not exposed by installed digest.",
+  "sources": {
+    "kpc_sysctl": {
+      "url": "https://github.com/apple-oss-distributions/xnu/blob/xnu-8020.140.41/bsd/kern/kern_kpc.c",
+      "sha256": "c31a63c12b3cea08d9cd32b700358b89cc6cc33eda678231a3bdbce1d83e0710",
+      "observation": "KPC sysctl uses ktrace_read_check, not ktrace_configure; all-CPU counter request returns count plus current CPU header."
+    },
+    "force_ownership": {
+      "url": "https://github.com/apple-oss-distributions/xnu/blob/xnu-8020.140.41/osfmk/kern/kpc_common.c",
+      "sha256": "5022555d143710cdd4bed0f6534314988d270cd237731da1e92f27d03fbbfad3",
+      "observation": "Foreign forced task is refused; successful acquire/release updates owning task and notifies power manager."
+    },
+    "pet_payload": {
+      "url": "https://github.com/apple-oss-distributions/xnu/blob/xnu-8020.140.41/osfmk/kperf/kperf_kpc.c",
+      "sha256": "1a010a18e992a500e5607857694742b2b9073c60ab5d3f697c4155cae0879fdb",
+      "observation": "Fallback initializes counterc32; failed thread getter keeps width, zeroes buffer, logs eight DATA rows."
+    },
+    "thread_fallback": {
+      "url": "https://github.com/apple-oss-distributions/xnu/blob/xnu-8020.140.41/osfmk/kern/kpc_thread.c",
+      "sha256": "8a91b465106ba1ef3528b7e011f0ff655f916a342ed5a90c8e7738f7beb98c8e",
+      "observation": "Missing thread kpc_buf returns EINVAL without changing inoutcount; AST lazily allocates buffers."
+    },
+    "ktrace_permission": {
+      "url": "https://github.com/apple-oss-distributions/xnu/blob/xnu-8020.140.41/bsd/kern/kern_ktrace.c",
+      "observation": "ktrace_read_check grants root independently of the owning trace PID; no trace acquisition.",
+      "sha256": "0d3f7281093f6f2afa11346276aba6bb8202336970765410be80ca46e14ea71e"
+    },
+    "private_api_abi": {
+      "url": "https://gist.github.com/ibireme/173517c208c7dc333ba962c1f0d67d12",
+      "observation": "kpc_get_cpu_counters(bool all_cpus,uint32 classes,int *current_cpu,uint64 *buf),0 success; buffer ncpu*counter_count; KPC sysctl wrapper."
+    }
+  }
+}

@@ -1,0 +1,379 @@
+{
+  "diagnostic_only": true,
+  "timing": false,
+  "privileged_run": false,
+  "install_performed": false,
+  "hardware_counter_evidence": false,
+  "binary_sha256": "4b5776d1126490ddd9d3b6b8394cbe9b43c3406752534fb0704c501cfb81eafe",
+  "source_sha256": {
+    "drop-unit.c": "08d0fb0cb92ea69a222bd8b71b61595f7e6566e5df0b743253c5abc3fd3312e5",
+    "json.c": "fdec35cf989695e15fe6e70468be3ec3af6410fcd7db91e60344961960f2d2b8",
+    "events-approved.h": "83c840b876de84702ea1ce071a9bed964069d35f881e84442dea6a0c2a12c033",
+    "process.c": "48ed2a1e08f1f4aa98ae531d26cdf81019a08f3489fda6199c1b319d2ae5a5a4",
+    "count-unit.c": "fa182e57b53d3e4e671ec84bf52bed048a67847d0c6841ae24327fc286c7cb01",
+    "json-unit.c": "9e4c3d945e1916e2f7878958e2446560d590e0cd7350fabc27246f26366d33b2",
+    "main.c": "cae9d1534d98ce84917fef637c377714bd1ab895605815a12867493aec75fae4",
+    "count.c": "40b1eb2dc6a894aefdc2307248a08855d695f8496e24d21dd79a85aa3786fac0",
+    "tool.h": "cca7011ea85df462c164c4e0228cb8b9523beda49303af93ad81fb75ca23df35",
+    "events.c": "3041ef3190d0d020996a8129b9ed7cb2dcbdbc5d7e1b6c50f709751845e61c53",
+    "security.c": "44578e630d6c6a93142c4ed5533d3b5c0e2d0dd546bd757826715f9a6258f568",
+    "process-unit.c": "6af8474834743aecdaf60386b67deb9c7b5ccc4a42757b1de51ab499ff4c92ab",
+    "aggregate.c": "f91aadfc087c2cbe2a8536aa8ef7f86f618a5f89fe9896372c92b33bb2fa59bb",
+    "qualify.py": "fa0f8345eabb134c52693e2c91092f9457d4ac8229bd7fa6cc74e895426774a3",
+    "unit.c": "d71265f12ff7876903b497a489cef3329c5466e4d0df8e399b48489974a4016a"
+  },
+  "clang": {
+    "argv": [
+      "/usr/bin/clang",
+      "--version"
+    ],
+    "status": 0,
+    "stdout": "Apple clang version 14.0.0 (clang-1400.0.29.202)\nTarget: x86_64-apple-darwin21.6.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin\n",
+    "stderr": ""
+  },
+  "build": {
+    "argv": [
+      "/usr/bin/clang",
+      "-std=c11",
+      "-D_DARWIN_C_SOURCE",
+      "-O2",
+      "-mmacosx-version-min=12.0",
+      "-fstack-protector-strong",
+      "-fPIE",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-Wformat=2",
+      "-Wshadow",
+      "-Wconversion",
+      "-Wcast-qual",
+      "-Wstrict-prototypes",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T170020Z-t056-kpc-v3-qualified/out/src/main.c",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T170020Z-t056-kpc-v3-qualified/out/src/security.c",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T170020Z-t056-kpc-v3-qualified/out/src/events.c",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T170020Z-t056-kpc-v3-qualified/out/src/count.c",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T170020Z-t056-kpc-v3-qualified/out/src/process.c",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T170020Z-t056-kpc-v3-qualified/out/src/json.c",
+      "-Wl,-pie",
+      "-o",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T170020Z-t056-kpc-v3-qualified/out/qjs-kpc"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "checks": {
+    "json-unit": {
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T170020Z-t056-kpc-v3-qualified/out/json-unit"
+      ],
+      "status": 0,
+      "stdout": "{\"counter_backend\":\"kpep_programmable_user\",\"version\":\"qjs-kpc-3\",\"scope\":\"system_wide_user_cpu_delta\",\"pid\":0,\"capture_complete\":true,\"counters_valid\":true,\"child_status\":0,\"timed_out\":false,\"elapsed_ns\":0,\"child_window_ns\":0,\"idle_window_ns\":0,\"cpu_count\":1,\"counter_count\":4,\"initial_counting_mask\":0,\"user_only_requested\":true,\"pid_filtered\":false,\"full_lifetime_counts\":false,\"child_stdout\":\"\",\"child_stderr\":\"\",\"events\":[{\"name\":\"CPU_CLK_UNHALTED.THREAD\",\"index\":0,\"count\":50,\"idle_count\":2,\"per_cpu\":[50],\"idle_per_cpu\":[2]},{\"name\":\"INST_RETIRED.ANY\",\"index\":1,\"count\":100,\"idle_count\":4,\"per_cpu\":[100],\"idle_per_cpu\":[4]}],\"cycles\":50,\"instructions\":100,\"failed_step\":null,\"failed_return\":0,\"failed_errno\":0,\"cleanup_failed_step\":null,\"cleanup_return\":0,\"cleanup_errno\":0,\"completed_setup_steps\":0,\"configuration_readback_verified\":true,\"readback\":null,\"config\":[\"0x0\",\"0x0\",\"0x0\",\"0x0\"],\"encoding_crosswalk_applied\":true,\"snapshots\":{\"before\":{\"begin_ns\":0,\"end_ns\":0,\"current_cpu\":0,\"per_cpu\":[[0,0,0,0]]},\"after\":{\"begin_ns\":0,\"end_ns\":0,\"current_cpu\":0,\"per_cpu\":[[50,100,0,0]]},\"idle_before\":{\"begin_ns\":0,\"end_ns\":0,\"current_cpu\":0,\"per_cpu\":[[0,0,0,0]]},\"idle_after\":{\"begin_ns\":0,\"end_ns\":0,\"current_cpu\":0,\"per_cpu\":[[2,4,0,0]]}},\"cleanup_ok\":true}\n{\"counter_backend\":\"kpep_programmable_user\",\"version\":\"qjs-kpc-3\",\"scope\":\"system_wide_user_cpu_delta\",\"pid\":0,\"capture_complete\":false,\"counters_valid\":false,\"child_status\":0,\"timed_out\":false,\"elapsed_ns\":0,\"child_window_ns\":0,\"idle_window_ns\":0,\"cpu_count\":1,\"counter_count\":4,\"initial_counting_mask\":0,\"user_only_requested\":true,\"pid_filtered\":false,\"full_lifetime_counts\":false,\"child_stdout\":\"\",\"child_stderr\":\"\",\"events\":[{\"name\":\"CPU_CLK_UNHALTED.THREAD\",\"index\":0,\"count\":null,\"idle_count\":null,\"per_cpu\":[null],\"idle_per_cpu\":[null]},{\"name\":\"INST_RETIRED.ANY\",\"index\":1,\"count\":null,\"idle_count\":null,\"per_cpu\":[null],\"idle_per_cpu\":[null]}],\"cycles\":null,\"instructions\":null,\"failed_step\":\"setup.config_equal\",\"failed_return\":100,\"failed_errno\":0,\"cleanup_failed_step\":\"cleanup.kpc_force_all_ctrs_set\",\"cleanup_return\":-1,\"cleanup_errno\":5,\"completed_setup_steps\":0,\"configuration_readback_verified\":true,\"readback\":[\"0x23\",\"0x0\",\"0x0\",\"0x0\"],\"config\":[\"0x0\",\"0x0\",\"0x0\",\"0x0\"],\"encoding_crosswalk_applied\":true,\"snapshots\":{\"before\":{\"begin_ns\":0,\"end_ns\":0,\"current_cpu\":0,\"per_cpu\":[[0,0,0,0]]},\"after\":{\"begin_ns\":0,\"end_ns\":0,\"current_cpu\":0,\"per_cpu\":[[50,100,0,0]]},\"idle_before\":{\"begin_ns\":0,\"end_ns\":0,\"current_cpu\":0,\"per_cpu\":[[0,0,0,0]]},\"idle_after\":{\"begin_ns\":0,\"end_ns\":0,\"current_cpu\":0,\"per_cpu\":[[2,4,0,0]]}},\"cleanup_ok\":false}\n",
+      "stderr": ""
+    },
+    "count-unit": {
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T170020Z-t056-kpc-v3-qualified/out/count-unit"
+      ],
+      "status": 0,
+      "stdout": "count-unit: all setup/read failures release; foreign ownership, baseline restore, bounds, overflow, cleanup diagnostics, repeat: pass\n",
+      "stderr": ""
+    },
+    "drop-unit": {
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T170020Z-t056-kpc-v3-qualified/out/drop-unit"
+      ],
+      "status": 0,
+      "stdout": "drop-unit: group clear -> gid -> uid -> no-root-regain, every failure rejects: pass\n",
+      "stderr": ""
+    },
+    "unit": {
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T170020Z-t056-kpc-v3-qualified/out/unit"
+      ],
+      "status": 0,
+      "stdout": "unit: identity bounds,64-bit TIDs, interleaved/split records, missing/falling counters: pass\n",
+      "stderr": ""
+    },
+    "help": {
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T170020Z-t056-kpc-v3-qualified/out/qjs-kpc",
+        "--help"
+      ],
+      "status": 0,
+      "stdout": "qjs-kpc: Intel Comet Lake system-wide user counter diagnostic, with matched idle control\nUsage: qjs-kpc --events cycles,instructions,EVENT,... [--env TZ=UTC] [--env LC_ALL=C] [--timeout-ms 1..10000] -- /absolute/program args...\n       qjs-kpc --describe --events cycles,instructions,EVENT,...\n       qjs-kpc --list-events\nCycles/instructions use two of four KPEP user-only programmable counters. Counts include background work.\nChild runs as nonroot SUDO_UID/GID, no supplementary groups, cwd=/, fixed TZ=UTC LC_ALL=C.\n",
+      "stderr": ""
+    },
+    "list": {
+      "status": 0,
+      "events": 321
+    },
+    "unprivileged": {
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T170020Z-t056-kpc-v3-qualified/out/qjs-kpc",
+        "--events",
+        "cycles,instructions",
+        "--",
+        "/usr/bin/id",
+        "-u"
+      ],
+      "status": 1,
+      "stdout": "{\"version\":\"qjs-kpc-3\",\"error\":\"root via sudo with nonzero SUDO_UID/GID required\",\"capture_complete\":false,\"counters_valid\":false}\n",
+      "stderr": ""
+    },
+    "bad-env": {
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T170020Z-t056-kpc-v3-qualified/out/qjs-kpc",
+        "--events",
+        "cycles,instructions",
+        "--env",
+        "DYLD_INSERT_LIBRARIES=/tmp/evil",
+        "--",
+        "/usr/bin/id"
+      ],
+      "status": 1,
+      "stdout": "{\"version\":\"qjs-kpc-3\",\"error\":\"only TZ=UTC and LC_ALL=C are permitted\",\"capture_complete\":false,\"counters_valid\":false}\n",
+      "stderr": ""
+    },
+    "process-success": {
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T170020Z-t056-kpc-v3-qualified/out/process-unit",
+        "success"
+      ],
+      "status": 0,
+      "stdout": "process-unit: real unprivileged gate/process cleanup: pass\n",
+      "stderr": ""
+    },
+    "process-env": {
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T170020Z-t056-kpc-v3-qualified/out/process-unit",
+        "env"
+      ],
+      "status": 0,
+      "stdout": "process-unit: real unprivileged gate/process cleanup: pass\n",
+      "stderr": ""
+    },
+    "process-timeout": {
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T170020Z-t056-kpc-v3-qualified/out/process-unit",
+        "timeout"
+      ],
+      "status": 0,
+      "stdout": "process-unit: real unprivileged gate/process cleanup: pass\n",
+      "stderr": ""
+    },
+    "process-overflow": {
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T170020Z-t056-kpc-v3-qualified/out/process-unit",
+        "overflow"
+      ],
+      "status": 0,
+      "stdout": "process-unit: real unprivileged gate/process cleanup: pass\n",
+      "stderr": ""
+    },
+    "process-setup-failure": {
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T170020Z-t056-kpc-v3-qualified/out/process-unit",
+        "setup-failure"
+      ],
+      "status": 0,
+      "stdout": "process-unit: real unprivileged gate/process cleanup: pass\n",
+      "stderr": ""
+    },
+    "programmable": {
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T170020Z-t056-kpc-v3-qualified/out/qjs-kpc",
+        "--describe",
+        "--events",
+        "cycles,instructions,IDQ.DSB_UOPS,IDQ.MITE_UOPS"
+      ],
+      "status": 0,
+      "stdout": "{\"counter_backend\":\"kpep_programmable_user\",\"version\":\"qjs-kpc-3\",\"database\":\"cometlake\",\"user_only_requested\":true,\"classes\":2,\"counter_count\":4,\"events\":[{\"name\":\"CPU_CLK_UNHALTED.THREAD\",\"index\":0},{\"name\":\"INST_RETIRED.ANY\",\"index\":1},{\"name\":\"IDQ.DSB_UOPS\",\"index\":2},{\"name\":\"IDQ.MITE_UOPS\",\"index\":3}],\"config\":[\"0x41003c\",\"0x4100c0\",\"0x410879\",\"0x410479\"]}\n",
+      "stderr": ""
+    },
+    "static": {
+      "main.c": {
+        "argv": [
+          "/usr/bin/clang",
+          "-std=c11",
+          "-D_DARWIN_C_SOURCE",
+          "-O2",
+          "-mmacosx-version-min=12.0",
+          "-fstack-protector-strong",
+          "-fPIE",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-Wformat=2",
+          "-Wshadow",
+          "-Wconversion",
+          "-Wcast-qual",
+          "-Wstrict-prototypes",
+          "--analyze",
+          "-Xanalyzer",
+          "-analyzer-output=text",
+          "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T170020Z-t056-kpc-v3-qualified/out/src/main.c"
+        ],
+        "status": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      "security.c": {
+        "argv": [
+          "/usr/bin/clang",
+          "-std=c11",
+          "-D_DARWIN_C_SOURCE",
+          "-O2",
+          "-mmacosx-version-min=12.0",
+          "-fstack-protector-strong",
+          "-fPIE",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-Wformat=2",
+          "-Wshadow",
+          "-Wconversion",
+          "-Wcast-qual",
+          "-Wstrict-prototypes",
+          "--analyze",
+          "-Xanalyzer",
+          "-analyzer-output=text",
+          "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T170020Z-t056-kpc-v3-qualified/out/src/security.c"
+        ],
+        "status": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      "events.c": {
+        "argv": [
+          "/usr/bin/clang",
+          "-std=c11",
+          "-D_DARWIN_C_SOURCE",
+          "-O2",
+          "-mmacosx-version-min=12.0",
+          "-fstack-protector-strong",
+          "-fPIE",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-Wformat=2",
+          "-Wshadow",
+          "-Wconversion",
+          "-Wcast-qual",
+          "-Wstrict-prototypes",
+          "--analyze",
+          "-Xanalyzer",
+          "-analyzer-output=text",
+          "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T170020Z-t056-kpc-v3-qualified/out/src/events.c"
+        ],
+        "status": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      "count.c": {
+        "argv": [
+          "/usr/bin/clang",
+          "-std=c11",
+          "-D_DARWIN_C_SOURCE",
+          "-O2",
+          "-mmacosx-version-min=12.0",
+          "-fstack-protector-strong",
+          "-fPIE",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-Wformat=2",
+          "-Wshadow",
+          "-Wconversion",
+          "-Wcast-qual",
+          "-Wstrict-prototypes",
+          "--analyze",
+          "-Xanalyzer",
+          "-analyzer-output=text",
+          "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T170020Z-t056-kpc-v3-qualified/out/src/count.c"
+        ],
+        "status": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      "process.c": {
+        "argv": [
+          "/usr/bin/clang",
+          "-std=c11",
+          "-D_DARWIN_C_SOURCE",
+          "-O2",
+          "-mmacosx-version-min=12.0",
+          "-fstack-protector-strong",
+          "-fPIE",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-Wformat=2",
+          "-Wshadow",
+          "-Wconversion",
+          "-Wcast-qual",
+          "-Wstrict-prototypes",
+          "--analyze",
+          "-Xanalyzer",
+          "-analyzer-output=text",
+          "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T170020Z-t056-kpc-v3-qualified/out/src/process.c"
+        ],
+        "status": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      "json.c": {
+        "argv": [
+          "/usr/bin/clang",
+          "-std=c11",
+          "-D_DARWIN_C_SOURCE",
+          "-O2",
+          "-mmacosx-version-min=12.0",
+          "-fstack-protector-strong",
+          "-fPIE",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-Wformat=2",
+          "-Wshadow",
+          "-Wconversion",
+          "-Wcast-qual",
+          "-Wstrict-prototypes",
+          "--analyze",
+          "-Xanalyzer",
+          "-analyzer-output=text",
+          "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T170020Z-t056-kpc-v3-qualified/out/src/json.c"
+        ],
+        "status": 0,
+        "stdout": "",
+        "stderr": ""
+      }
+    },
+    "libraries": {
+      "argv": [
+        "/usr/bin/otool",
+        "-L",
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T170020Z-t056-kpc-v3-qualified/out/qjs-kpc"
+      ],
+      "status": 0,
+      "stdout": "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T170020Z-t056-kpc-v3-qualified/out/qjs-kpc:\n\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1319.0.0)\n",
+      "stderr": ""
+    },
+    "load_commands": {
+      "status": 0,
+      "LC_RPATH": false
+    }
+  },
+  "cpu": {
+    "argv": [
+      "/usr/sbin/sysctl",
+      "machdep.cpu.family",
+      "machdep.cpu.model",
+      "machdep.cpu.stepping",
+      "machdep.cpu.microcode_version"
+    ],
+    "status": 0,
+    "stdout": "machdep.cpu.family: 6\nmachdep.cpu.model: 165\nmachdep.cpu.stepping: 5\nmachdep.cpu.microcode_version: 240\n",
+    "stderr": ""
+  }
+}

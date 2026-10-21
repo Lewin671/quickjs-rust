@@ -28,8 +28,11 @@ int main(void) {
  TraceRow missing={0};missing.timestamp=600;missing.arg[4]=1;missing.debugid=0x25060021;
  aggregate_row(&a,&missing);assert(!aggregate_total(&a,sums));
  Aggregate malformed={0};malformed.counter_count=7;missing.debugid=0x25060022;aggregate_row(&malformed,&missing);assert(malformed.invalid);
- Aggregate one={0};one.counter_count=3;sample(&one,2,100,1); /* Extra continuation is invalid at3 counters. */
- assert(one.invalid);
+ Aggregate one={0};one.counter_count=4;sample(&one,2,100,1); /* Extra continuation is invalid at3 counters. */
+ assert(one.invalid&&one.samples==1); /* v2 failure signature with wider payload. */
+ Aggregate fallback={0};fallback.counter_count=4;TraceRow zero={0};zero.arg[4]=42;
+ for(unsigned i=0;i<8;i++){zero.timestamp=100+i;zero.debugid=0x25060020u|(i==0?1u:i==7?2u:0u);aggregate_row(&fallback,&zero);}
+ assert(fallback.invalid&&fallback.samples==1); /* XNU failure fallback:32 zero counters. */
  int fd=open("/dev/null",O_RDONLY);assert(fd>=0);int high=fcntl(fd,F_DUPFD,200);assert(high>=200);
  struct rlimit old,small;assert(getrlimit(RLIMIT_NOFILE,&old)==0);small=old;small.rlim_cur=128;assert(setrlimit(RLIMIT_NOFILE,&small)==0);
  assert(close_extra());errno=0;assert(fcntl(high,F_GETFD)==-1&&errno==EBADF);assert(setrlimit(RLIMIT_NOFILE,&old)==0);

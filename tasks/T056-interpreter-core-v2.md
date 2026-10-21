@@ -8,16 +8,16 @@
   `agent/t056-add-transition-replay/claude`.
 - Verified at: dfff3bb6/image3466c37a exact42672/42672, full/NG255/subset5170 and bound86 pass;
   lead123327Z minimal bad subset count+flags; ops135119Z no phase effect, formally inconclusive;
-  JCC flag leaves4 text pairs identical; installed kpc-v1 fails before gate; v2 nonroot155348Z/installer155544Z pass.
+  JCC flag leaves4 text pairs identical; v2 root config works but tailspind owns ktrace; v3 nonroot170020Z/groups170125Z/installer170331Z, full+5170/fast gates pass.
 - Evidence: [stage A record](archive/T056-m1-stageA-record.md),
   [allocation follow-up](archive/T056-m1-stageA-allocation-diagnosis.md),
-  [architecture review](archive/T056-architecture-review.md), [stack/startup diagnosis](archive/T056-stack-phase-diagnosis.md), [PMU/FP diagnosis](archive/T056-pmu-attribution.md), [source bisection](archive/T056-source-bisect.md), [header factors/full-loop accounting](archive/T056-header-subparts.md), [dispatch addresses](archive/T056-dispatch-address.md), [JCC policy diagnosis](archive/T056-jcc-policy.md), [PMU helper](archive/T056-kpc-tool.md), [PMU setup failure/v2](archive/T056-kpc-setup-failure.md), [M2 inputs](archive/T056-m2-design-inputs.md);
+  [architecture review](archive/T056-architecture-review.md), [stack/startup diagnosis](archive/T056-stack-phase-diagnosis.md), [PMU/FP diagnosis](archive/T056-pmu-attribution.md), [source bisection](archive/T056-source-bisect.md), [header factors/full-loop accounting](archive/T056-header-subparts.md), [dispatch addresses](archive/T056-dispatch-address.md), [JCC policy diagnosis](archive/T056-jcc-policy.md), [PMU helper](archive/T056-kpc-tool.md), [PMU setup failure/v2](archive/T056-kpc-setup-failure.md), [PMU counting v3](archive/T056-kpc-counting.md), [M2 inputs](archive/T056-m2-design-inputs.md);
   plans [`interpreter-core-v2-atoms-layouts`](performance-units/interpreter-core-v2-atoms-layouts.json) (closed),
   [`interpreter-core-v2-layout-edges`](performance-units/interpreter-core-v2-layout-edges.json).
 - Unresolved: relative-PC family cause unknown; sampled ops600/900 rejected by lead, formal controls failed.
-  sudo root works; exact v1 setup API unknown; v2 PMU access awaits reinstall, PET covers sampled intervals only.
-- Next action: user [reinstalls v2](diagnostics/t056-pmu/kpc-tool/README.md), owner runs short non-timing smoke; lead timing after success.
-  No automatic install/owner timing/production change; full lifetime counts unavailable; last attempt unspent.
+  v3 root CPU getter/cleanup and background qualification await install/smoke; counts are system-wide, not PID-scoped.
+- Next action: user [reinstalls v3](diagnostics/t056-pmu/kpc-tool/README.md), owner runs short non-timing smoke; lead timing after success.
+  Tailspin may be re-enabled now. No automatic install/owner timing/production change; last attempt unspent.
 
 ## Goal and scope
 
