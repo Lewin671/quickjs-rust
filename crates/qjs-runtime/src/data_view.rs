@@ -94,7 +94,7 @@ pub(crate) fn install_data_view(
 
     // get*/set* methods. The getters take 1 declared argument (byteOffset);
     // the setters take 2 (byteOffset, value).
-    for (name, length, native) in [
+    prototype.define_native_methods(&[
         ("getInt8", 1, NativeFunction::DataViewPrototypeGetInt8),
         ("getUint8", 1, NativeFunction::DataViewPrototypeGetUint8),
         ("getInt16", 1, NativeFunction::DataViewPrototypeGetInt16),
@@ -133,18 +133,7 @@ pub(crate) fn install_data_view(
             2,
             NativeFunction::DataViewPrototypeSetBigUint64,
         ),
-    ] {
-        prototype.define_non_enumerable(
-            name.to_owned(),
-            Value::Function(Function::new_native(
-                env.realm().atoms(),
-                Some(name),
-                length,
-                native,
-                false,
-            )),
-        );
-    }
+    ]);
 
     // %DataView.prototype%[Symbol.toStringTag] is a plain data property
     // { value: "DataView", writable: false, enumerable: false, configurable: true }.

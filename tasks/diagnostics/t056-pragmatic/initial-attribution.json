@@ -1,0 +1,233 @@
+{
+  "diagnostic_only": true,
+  "timing": false,
+  "instrumented_events_only": true,
+  "binary_sha256": "514bf90704e2fb1d4f599d6ea800272f93ec88b864aa91b651ee59cf3424467f",
+  "stages": [
+    {
+      "stage": "object.install_object",
+      "shapes": 42,
+      "fields": 391,
+      "probes": 37
+    },
+    {
+      "stage": "function.install_function",
+      "shapes": 11,
+      "fields": 49,
+      "probes": 11
+    },
+    {
+      "stage": "global.install_globals",
+      "shapes": 42,
+      "fields": 935,
+      "probes": 43
+    },
+    {
+      "stage": "bigint.install_bigint",
+      "shapes": 7,
+      "fields": 58,
+      "probes": 8
+    },
+    {
+      "stage": "number.install_number",
+      "shapes": 26,
+      "fields": 302,
+      "probes": 26
+    },
+    {
+      "stage": "string.install_string",
+      "shapes": 58,
+      "fields": 1499,
+      "probes": 58
+    },
+    {
+      "stage": "symbol.install_symbol",
+      "shapes": 26,
+      "fields": 242,
+      "probes": 38
+    },
+    {
+      "stage": "iterator.install_iterator",
+      "shapes": 20,
+      "fields": 150,
+      "probes": 28
+    },
+    {
+      "stage": "array_buffer.install_array_buffer",
+      "shapes": 13,
+      "fields": 129,
+      "probes": 15
+    },
+    {
+      "stage": "array_buffer.install_shared_array_buffer",
+      "shapes": 4,
+      "fields": 66,
+      "probes": 8
+    },
+    {
+      "stage": "typed_array.install_typed_arrays",
+      "shapes": 63,
+      "fields": 1346,
+      "probes": 100
+    },
+    {
+      "stage": "data_view.install_data_view",
+      "shapes": 27,
+      "fields": 425,
+      "probes": 28
+    },
+    {
+      "stage": "disposable_stack.install_disposable_stack",
+      "shapes": 11,
+      "fields": 174,
+      "probes": 18
+    },
+    {
+      "stage": "atomics.install_atomics",
+      "shapes": 15,
+      "fields": 169,
+      "probes": 14
+    },
+    {
+      "stage": "bigint.install_bigint_well_known_symbols",
+      "shapes": 3,
+      "fields": 7,
+      "probes": 0
+    },
+    {
+      "stage": "string.install_string_well_known_symbols",
+      "shapes": 1,
+      "fields": 3,
+      "probes": 0
+    },
+    {
+      "stage": "boolean.install_boolean",
+      "shapes": 5,
+      "fields": 77,
+      "probes": 6
+    },
+    {
+      "stage": "date.install_date",
+      "shapes": 53,
+      "fields": 1218,
+      "probes": 52
+    },
+    {
+      "stage": "regexp.install_regexp",
+      "shapes": 18,
+      "fields": 203,
+      "probes": 18
+    },
+    {
+      "stage": "error.install_error",
+      "shapes": 17,
+      "fields": 684,
+      "probes": 57
+    },
+    {
+      "stage": "json.install_json",
+      "shapes": 5,
+      "fields": 89,
+      "probes": 5
+    },
+    {
+      "stage": "promise.install_promise",
+      "shapes": 12,
+      "fields": 133,
+      "probes": 14
+    },
+    {
+      "stage": "proxy.install_proxy",
+      "shapes": 3,
+      "fields": 83,
+      "probes": 3
+    },
+    {
+      "stage": "map.install_map",
+      "shapes": 16,
+      "fields": 187,
+      "probes": 16
+    },
+    {
+      "stage": "weak_map.install_weak_map",
+      "shapes": 7,
+      "fields": 110,
+      "probes": 9
+    },
+    {
+      "stage": "finalization_registry.install_finalization_registry",
+      "shapes": 3,
+      "fields": 89,
+      "probes": 5
+    },
+    {
+      "stage": "weak_ref.install_weak_ref",
+      "shapes": 2,
+      "fields": 87,
+      "probes": 4
+    },
+    {
+      "stage": "weak_set.install_weak_set",
+      "shapes": 4,
+      "fields": 95,
+      "probes": 6
+    },
+    {
+      "stage": "set.install_set",
+      "shapes": 17,
+      "fields": 249,
+      "probes": 19
+    },
+    {
+      "stage": "math.install_math",
+      "shapes": 47,
+      "fields": 1135,
+      "probes": 46
+    },
+    {
+      "stage": "reflect.install_reflect",
+      "shapes": 15,
+      "fields": 192,
+      "probes": 14
+    },
+    {
+      "stage": "array.install_array",
+      "shapes": 62,
+      "fields": 1068,
+      "probes": 61
+    },
+    {
+      "stage": "typed_array.alias_array_prototype_to_string",
+      "shapes": 1,
+      "fields": 4,
+      "probes": 1
+    },
+    {
+      "stage": "async_function.install_async_function",
+      "shapes": 1,
+      "fields": 1,
+      "probes": 2
+    },
+    {
+      "stage": "async_generator.install_async_generator",
+      "shapes": 6,
+      "fields": 13,
+      "probes": 7
+    },
+    {
+      "stage": "generator.install_generator",
+      "shapes": 0,
+      "fields": 0,
+      "probes": 7
+    }
+  ],
+  "job": "20261021T175023Z-t056-pragmatic-startup-events",
+  "base_revision": "0a7bb6e5efbc8f2f7269842bb984cae4fb4e92e7",
+  "input_files_sha256": {
+    "crates/qjs-runtime/src/property/layout.rs": "11c1a31c796169f342382815a3e29abfbf0a5505e12faba467a852573d336b30",
+    "crates/qjs-runtime/src/value/object.rs": "551aa1c81805329a45ab642b3f3d04866751bc507b6fcd59dc59d32ceb861d1c",
+    "crates/qjs-runtime/src/value/object/class_fields.rs": "ce8daedf8efd46ea337fbf47caa4c0852e48dae83dc83638c52a30f959703152",
+    "crates/qjs-runtime/src/value/object/tests.rs": "b0ae7521f516e747d90c538cc9e8986a6010ff2b104fbffc8e9107545037e90c"
+  },
+  "scope": "Initial header/lookup candidate, before native descriptor batching. Instrumented events only; no timing or canonical instruction result."
+}

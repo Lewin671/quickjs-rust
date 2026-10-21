@@ -22,7 +22,8 @@
 //! - **Keys are compared, not re-interned.** An append that follows an edge
 //!   compares the key's text with the edge's atom (pointer first) and interns
 //!   nothing; only a miss interns. Shapes of up to [`LINEAR_LOOKUP_LIMIT`]
-//!   fields probe linearly and hash nothing; larger nodes hash once.
+//!   fields probe linearly and hash nothing; larger nodes build an index after
+//!   repeated read or write probes, including misses.
 
 use std::cell::RefCell;
 use std::fmt;
@@ -249,7 +250,7 @@ pub(crate) struct Shape {
     counted: bool,
     fields: Box<[Field]>,
     /// Text index for shapes past the linear-lookup limit, built at the
-    /// shape's first probe: shapes an object only passes through while it
+    /// shape's repeated probes: shapes an object only passes through while it
     /// grows are never probed and never pay for one.
     index: std::cell::OnceCell<Box<NameMap<Rc<str>, u32>>>,
     /// Probes made by linear scan before the index is built.
@@ -506,24 +507,6 @@ impl Shape {
         index.get(key).map(|&slot| slot as usize)
     }
 
-    /// A failed write probe normally appends and leaves this shape. Do not
-    /// build an index on that transient layout; successful repeated writes
-    /// warm the same lazy index as reads, without probing a second time.
-    #[inline(never)]
-    fn first_write_lookups(&self, key: &str) -> Option<usize> {
-        let slot = self
-            .fields
-            .iter()
-            .position(|field| text_matches(field.text(), key))?;
-        let probes = self.unindexed_probes.get();
-        if probes < INDEX_AFTER_PROBES {
-            self.unindexed_probes.set(probes + 1);
-        } else {
-            self.index.get_or_init(|| build_index(&self.fields));
-        }
-        Some(slot)
-    }
-
     /// Whether this shape has exactly `encoding` and `fields`.
     fn has_content(&self, encoding: Encoding, fields: &[Field]) -> bool {
         crate::diagnostics::count!(property_field_vector_compares);
@@ -754,15 +737,10 @@ impl LayoutNode {
         }
     }
 
-    /// Resolves a write slot without warming a shape index on an absent key.
+    /// Reads and writes share the same bounded probe budget, including
+    /// misses: repeated absent-key probes of a shared shape also amortize.
     #[inline]
     pub(crate) fn lookup_for_write(&self, key: &str) -> Option<usize> {
-        if let Self::Shape(shape) = self
-            && shape.fields.len() > LINEAR_LOOKUP_LIMIT
-            && shape.index.get().is_none()
-        {
-            return shape.first_write_lookups(key);
-        }
         self.lookup(key)
     }
 
@@ -1090,6 +1068,42 @@ impl ContentCache {
             .or_default()
             .push(Rc::downgrade(shape));
     }
+}
+
+/// Publishes a complete distinct-key descriptor batch, without constructing
+/// unobservable prefix shapes. The weak content cache retains no extra shape;
+/// subsequent incremental edits still use this node's bounded owned edges.
+pub(crate) fn layout_for_descriptor_batch<'a>(
+    domain: &AtomDomain,
+    encoding: Encoding,
+    keys: impl IntoIterator<Item = (&'a str, Attributes)>,
+) -> Layout {
+    let fields: Vec<_> = keys
+        .into_iter()
+        .map(|(key, attributes)| Field::new(domain.intern_key(key), attributes))
+        .collect();
+    if fields.is_empty() {
+        return domain.root(encoding);
+    }
+    let hash = content_hash(encoding, &fields);
+    if let Some(cached) = domain.cached_shape(hash, |candidate| {
+        matches!(&**candidate, LayoutNode::Shape(shape) if shape.has_content(encoding, &fields))
+    }) { return cached; }
+    let shape = Rc::new(LayoutNode::Shape(Shape::new(
+        domain.clone(),
+        encoding,
+        fields.into_boxed_slice(),
+        hash,
+        false,
+    )));
+    domain.cache_shape(hash, &shape);
+    // Large complete batches obey the same dictionary boundary as appends.
+    if shape.len() > SHAPE_FIELD_LIMIT {
+        let mut layout = shape;
+        LayoutEdit::to_dictionary(&mut layout);
+        return layout;
+    }
+    shape
 }
 
 /// Builds the layout of a store whose keys arrive in order, appending each

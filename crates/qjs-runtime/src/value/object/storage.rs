@@ -4,7 +4,8 @@
 //! The payload holds no keys. `Slots` holds one descriptor per slot for the
 //! `Small`, `Dynamic` and `Shaped` encodings; `Pair` holds the two values of
 //! a two-key literal, whose attributes are implied. Every structural edit
-//! goes through [`LayoutEdit`] and mirrors its slot change in the payload
+//! goes through [`LayoutEdit`] (or one complete host-batch publication) and
+//! mirrors its slot change in the payload
 //! under the same `&mut` borrow, so no reader can see the two disagree: for
 //! every slot, the layout field's descriptor attributes equal those of the
 //! payload descriptor, and the store's encoding copy equals the layout's.
@@ -15,7 +16,8 @@ use std::rc::Rc;
 
 use crate::property::atom::AtomDomain;
 use crate::property::layout::{
-    Attributes, BulkEdit, Encoding, Field, Layout, LayoutEdit, SlotRemoval, layout_for_keys,
+    Attributes, BulkEdit, Encoding, Field, Layout, LayoutEdit, SlotRemoval,
+    layout_for_descriptor_batch, layout_for_keys,
 };
 use crate::{Property, Value};
 
@@ -79,6 +81,32 @@ impl PropertyStorage {
             Encoding::Small
         };
         let layout = layout_for_keys(
+            domain,
+            encoding,
+            entries
+                .iter()
+                .map(|(key, property)| (key.as_ref(), Attributes::of(property))),
+        );
+        let payload = Payload::Slots(entries.into_iter().map(|(_, property)| property).collect());
+        Self {
+            encoding: layout.encoding(),
+            layout,
+            payload,
+            edits: 0,
+        }
+    }
+
+    /// One publication for a complete, normalized, distinct-key descriptor batch.
+    pub(super) fn from_descriptor_batch(
+        domain: &AtomDomain,
+        entries: Vec<(Rc<str>, Property)>,
+    ) -> Self {
+        let encoding = if entries.len() > crate::property::layout::LINEAR_LOOKUP_LIMIT {
+            Encoding::Dynamic
+        } else {
+            Encoding::Small
+        };
+        let layout = layout_for_descriptor_batch(
             domain,
             encoding,
             entries

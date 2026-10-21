@@ -62,9 +62,9 @@ fn ordinary_object_keeps_cold_state_unallocated() {
     assert!(object.own_property_symbols().is_empty());
     assert!(object.to_string_tag().is_none());
     assert!(object.0.cold.get().is_none());
-    // The u32 index count and shared boolean byte recover one whole header
-    // word; packing flags alone would leave alignment padding unchanged.
-    assert!(mem::size_of::<ObjectData>() <= 112);
+    // Packed cold flags remain; the native-width index count deliberately
+    // keeps the existing header at120 bytes.
+    assert_eq!(mem::size_of::<ObjectData>(), 120);
     assert!(mem::size_of::<std::cell::RefCell<super::PropertyStorage>>() <= 56);
 }
 

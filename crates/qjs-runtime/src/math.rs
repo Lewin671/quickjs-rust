@@ -6,7 +6,7 @@ use std::{
 
 use crate::CallEnv;
 use crate::{
-    Function, NativeFunction, ObjectRef, Property, RuntimeError, Value,
+    NativeFunction, ObjectRef, Property, RuntimeError, Value,
     array::for_each_iterable_value_with_env, symbol, to_number_with_env, to_uint32_number,
 };
 
@@ -15,81 +15,94 @@ pub(super) fn install_math(env: &mut CallEnv, global_this: &Value, object_protot
         ObjectRef::with_prototype(env.realm().atoms(), HashMap::new(), Some(object_prototype));
     math_object.set_to_string_tag("Math");
     symbol::define_well_known_to_string_tag(env, &math_object, "Math");
-    define_math_constant(&math_object, "E", std::f64::consts::E);
-    define_math_constant(&math_object, "LN10", std::f64::consts::LN_10);
-    define_math_constant(&math_object, "LN2", std::f64::consts::LN_2);
-    define_math_constant(&math_object, "LOG10E", std::f64::consts::LOG10_E);
-    define_math_constant(&math_object, "LOG2E", std::f64::consts::LOG2_E);
-    define_math_constant(&math_object, "PI", std::f64::consts::PI);
-    define_math_constant(&math_object, "SQRT1_2", std::f64::consts::FRAC_1_SQRT_2);
-    define_math_constant(&math_object, "SQRT2", std::f64::consts::SQRT_2);
-    define_math_function(&math_object, "abs", 1, NativeFunction::MathAbs);
-    define_math_function(&math_object, "acos", 1, NativeFunction::MathAcos);
-    define_math_function(&math_object, "acosh", 1, NativeFunction::MathAcosh);
-    define_math_function(&math_object, "asin", 1, NativeFunction::MathAsin);
-    define_math_function(&math_object, "asinh", 1, NativeFunction::MathAsinh);
-    define_math_function(&math_object, "atan", 1, NativeFunction::MathAtan);
-    define_math_function(&math_object, "atan2", 2, NativeFunction::MathAtan2);
-    define_math_function(&math_object, "atanh", 1, NativeFunction::MathAtanh);
-    define_math_function(&math_object, "cbrt", 1, NativeFunction::MathCbrt);
-    define_math_function(&math_object, "ceil", 1, NativeFunction::MathCeil);
-    define_math_function(&math_object, "clz32", 1, NativeFunction::MathClz32);
-    define_math_function(&math_object, "cos", 1, NativeFunction::MathCos);
-    define_math_function(&math_object, "cosh", 1, NativeFunction::MathCosh);
-    define_math_function(&math_object, "exp", 1, NativeFunction::MathExp);
-    define_math_function(&math_object, "expm1", 1, NativeFunction::MathExpm1);
-    define_math_function(&math_object, "f16round", 1, NativeFunction::MathF16round);
-    define_math_function(&math_object, "floor", 1, NativeFunction::MathFloor);
-    define_math_function(&math_object, "fround", 1, NativeFunction::MathFround);
-    define_math_function(&math_object, "hypot", 2, NativeFunction::MathHypot);
-    define_math_function(&math_object, "imul", 2, NativeFunction::MathImul);
-    define_math_function(&math_object, "log", 1, NativeFunction::MathLog);
-    define_math_function(&math_object, "log1p", 1, NativeFunction::MathLog1p);
-    define_math_function(&math_object, "log10", 1, NativeFunction::MathLog10);
-    define_math_function(&math_object, "log2", 1, NativeFunction::MathLog2);
-    define_math_function(&math_object, "max", 2, NativeFunction::MathMax);
-    define_math_function(&math_object, "min", 2, NativeFunction::MathMin);
-    define_math_function(&math_object, "pow", 2, NativeFunction::MathPow);
-    define_math_function(&math_object, "random", 0, NativeFunction::MathRandom);
-    define_math_function(&math_object, "round", 1, NativeFunction::MathRound);
-    define_math_function(&math_object, "sign", 1, NativeFunction::MathSign);
-    define_math_function(&math_object, "sin", 1, NativeFunction::MathSin);
-    define_math_function(&math_object, "sinh", 1, NativeFunction::MathSinh);
-    define_math_function(&math_object, "sqrt", 1, NativeFunction::MathSqrt);
-    define_math_function(
-        &math_object,
-        "sumPrecise",
-        1,
-        NativeFunction::MathSumPrecise,
-    );
-    define_math_function(&math_object, "tan", 1, NativeFunction::MathTan);
-    define_math_function(&math_object, "tanh", 1, NativeFunction::MathTanh);
-    define_math_function(&math_object, "trunc", 1, NativeFunction::MathTrunc);
+    math_object.define_properties_ordered(vec![
+        (
+            std::rc::Rc::from("E"),
+            Property::data(Value::Number(std::f64::consts::E), false, false, false),
+        ),
+        (
+            std::rc::Rc::from("LN10"),
+            Property::data(Value::Number(std::f64::consts::LN_10), false, false, false),
+        ),
+        (
+            std::rc::Rc::from("LN2"),
+            Property::data(Value::Number(std::f64::consts::LN_2), false, false, false),
+        ),
+        (
+            std::rc::Rc::from("LOG10E"),
+            Property::data(
+                Value::Number(std::f64::consts::LOG10_E),
+                false,
+                false,
+                false,
+            ),
+        ),
+        (
+            std::rc::Rc::from("LOG2E"),
+            Property::data(Value::Number(std::f64::consts::LOG2_E), false, false, false),
+        ),
+        (
+            std::rc::Rc::from("PI"),
+            Property::data(Value::Number(std::f64::consts::PI), false, false, false),
+        ),
+        (
+            std::rc::Rc::from("SQRT1_2"),
+            Property::data(
+                Value::Number(std::f64::consts::FRAC_1_SQRT_2),
+                false,
+                false,
+                false,
+            ),
+        ),
+        (
+            std::rc::Rc::from("SQRT2"),
+            Property::data(Value::Number(std::f64::consts::SQRT_2), false, false, false),
+        ),
+    ]);
+    math_object.define_native_methods(&[
+        ("abs", 1, NativeFunction::MathAbs),
+        ("acos", 1, NativeFunction::MathAcos),
+        ("acosh", 1, NativeFunction::MathAcosh),
+        ("asin", 1, NativeFunction::MathAsin),
+        ("asinh", 1, NativeFunction::MathAsinh),
+        ("atan", 1, NativeFunction::MathAtan),
+        ("atan2", 2, NativeFunction::MathAtan2),
+        ("atanh", 1, NativeFunction::MathAtanh),
+        ("cbrt", 1, NativeFunction::MathCbrt),
+        ("ceil", 1, NativeFunction::MathCeil),
+        ("clz32", 1, NativeFunction::MathClz32),
+        ("cos", 1, NativeFunction::MathCos),
+        ("cosh", 1, NativeFunction::MathCosh),
+        ("exp", 1, NativeFunction::MathExp),
+        ("expm1", 1, NativeFunction::MathExpm1),
+        ("f16round", 1, NativeFunction::MathF16round),
+        ("floor", 1, NativeFunction::MathFloor),
+        ("fround", 1, NativeFunction::MathFround),
+        ("hypot", 2, NativeFunction::MathHypot),
+        ("imul", 2, NativeFunction::MathImul),
+        ("log", 1, NativeFunction::MathLog),
+        ("log1p", 1, NativeFunction::MathLog1p),
+        ("log10", 1, NativeFunction::MathLog10),
+        ("log2", 1, NativeFunction::MathLog2),
+        ("max", 2, NativeFunction::MathMax),
+        ("min", 2, NativeFunction::MathMin),
+        ("pow", 2, NativeFunction::MathPow),
+        ("random", 0, NativeFunction::MathRandom),
+        ("round", 1, NativeFunction::MathRound),
+        ("sign", 1, NativeFunction::MathSign),
+        ("sin", 1, NativeFunction::MathSin),
+        ("sinh", 1, NativeFunction::MathSinh),
+        ("sqrt", 1, NativeFunction::MathSqrt),
+        ("sumPrecise", 1, NativeFunction::MathSumPrecise),
+        ("tan", 1, NativeFunction::MathTan),
+        ("tanh", 1, NativeFunction::MathTanh),
+        ("trunc", 1, NativeFunction::MathTrunc),
+    ]);
     let math_value = Value::Object(math_object);
     env.insert_realm("Math".to_owned(), math_value.clone());
     if let Value::Object(global_object) = global_this {
         global_object.define_non_enumerable("Math".to_owned(), math_value);
     }
-}
-
-fn define_math_constant(object: &ObjectRef, key: &str, value: f64) {
-    object.define_property(
-        key.to_owned(),
-        Property::data(Value::Number(value), false, false, false),
-    );
-}
-
-fn define_math_function(object: &ObjectRef, key: &str, length: usize, native: NativeFunction) {
-    object.define_non_enumerable(
-        key.to_owned(),
-        Value::Function(Function::new_native(
-            &object.store_domain(),
-            Some(key),
-            length,
-            native,
-            false,
-        )),
-    );
 }
 
 pub(super) fn native_math_unary(

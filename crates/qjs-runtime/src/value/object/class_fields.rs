@@ -41,7 +41,7 @@ impl ObjectRef {
         for (key, value) in fields {
             let property = Property::enumerable(value.clone());
             if properties.insert(key, property).is_none() {
-                added_indices += u32::from(is_array_index_key(key));
+                added_indices += usize::from(is_array_index_key(key));
             }
         }
         self.0

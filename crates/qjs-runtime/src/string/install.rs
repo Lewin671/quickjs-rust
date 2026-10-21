@@ -94,9 +94,7 @@ pub(crate) fn install_string(env: &mut CallEnv, global_this: &Value, object_prot
         "constructor".to_owned(),
         Value::Function(string_function.clone()),
     );
-    for (name, length, native) in STRING_PROTOTYPE_METHODS {
-        define_object_method(&string_prototype, name, *length, *native);
-    }
+    string_prototype.define_native_methods(STRING_PROTOTYPE_METHODS);
     define_object_alias(&string_prototype, "trimLeft", "trimStart");
     define_object_alias(&string_prototype, "trimRight", "trimEnd");
     string_function.properties.borrow_mut().insert_in(
@@ -148,19 +146,6 @@ pub(crate) fn install_string_well_known_symbols(env: &CallEnv) {
             NativeFunction::StringPrototypeIterator,
             false,
         ))),
-    );
-}
-
-fn define_object_method(object: &ObjectRef, key: &str, length: usize, native: NativeFunction) {
-    object.define_non_enumerable(
-        key.to_owned(),
-        Value::Function(Function::new_native(
-            &object.store_domain(),
-            Some(key),
-            length,
-            native,
-            false,
-        )),
     );
 }
 

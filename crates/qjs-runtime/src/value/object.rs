@@ -26,6 +26,7 @@ use super::{Property, Value};
 
 mod array_buffer_methods;
 mod class_fields;
+mod descriptor_batch;
 mod flags;
 mod key_order;
 mod ordered_data_builder;
@@ -390,8 +391,8 @@ struct ObjectData {
     /// are added and removed so `has_own_index_property` is an O(1) check; this
     /// keeps the `array[i] = x` fast path from scanning a prototype's keys on
     /// every write.
-    /// Valid array-index keys are 0..=u32::MAX-1, so their count fits u32.
-    index_property_count: Cell<u32>,
+    /// Keep its native width independent of the packed cold-flag byte.
+    index_property_count: Cell<usize>,
     flags: ObjectFlags,
     // Hot exotic checks keep single-byte boolean loads.
     typed_array_exotic: Cell<bool>,
@@ -857,9 +858,7 @@ impl ObjectRef {
             properties: RefCell::new(storage),
             property_revision: Cell::new(0),
             layout_revision: Cell::new(0),
-            index_property_count: Cell::new(
-                u32::try_from(index_property_count).expect("unique array-index keys fit u32"),
-            ),
+            index_property_count: Cell::new(index_property_count),
             flags: ObjectFlags::new(),
             typed_array_exotic: Cell::new(false),
             module_namespace_exotic: Cell::new(false),

@@ -1,0 +1,56 @@
+{
+  "job": "20261021T174256Z-t056-kpc-counters",
+  "closed": true,
+  "helper_still_installed": true,
+  "no_further_helper_calls": true,
+  "raw_sha256": "4bb3fe027ef17fd0aabbb95078382e86c872e1173a5145f35a101bedf72850d9",
+  "measured": [
+    {
+      "role": "base",
+      "case": "broad/global_read",
+      "size": "N",
+      "unit_attempt": 1,
+      "exit": 1,
+      "failed_step": "read.delta_integrity",
+      "cleanup_ok": true,
+      "child_status": 0,
+      "idle_work_ratio": 1.0131114515140227
+    },
+    {
+      "role": "base",
+      "case": "broad/global_read",
+      "size": "N",
+      "unit_attempt": 2,
+      "exit": 0,
+      "failed_step": null,
+      "cleanup_ok": true,
+      "child_status": 0,
+      "idle_work_ratio": 1.001117974493271
+    },
+    {
+      "role": "base",
+      "case": "broad/global_read",
+      "size": "N",
+      "unit_attempt": 3,
+      "exit": 1,
+      "failed_step": "read.delta_integrity",
+      "cleanup_ok": true,
+      "child_status": 0,
+      "idle_work_ratio": 1.0797271230298753
+    }
+  ],
+  "quality": {
+    "planned_captures": 352,
+    "measured_helper_calls": 2,
+    "invalid_observations": 2,
+    "invalid_per_planned_capture": 0.005681818181818182,
+    "observed_invalid_fraction": 1.0,
+    "discarded_unit_seconds": 0.8555360828759149,
+    "retried_units": 1,
+    "max_unit_attempts": 3,
+    "max_invalid_per_planned_capture": 0.05,
+    "max_invalid_observations": 17,
+    "retry_seconds_limit": 68
+  },
+  "cause_limit": "Discontinuities confirmed. Other KPC/kperf client or PMI reload is a hypothesis; no end configuration evidence identifies tailspin. Third capture aborts before recovery classification on idle/work ratio. No data correction or additional attempt."
+}

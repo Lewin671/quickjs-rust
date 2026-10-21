@@ -11,13 +11,13 @@
   JCC flag leaves4 text pairs identical; installed v3 root smoke works with tailspin enabled; lead172024Z got2 valid captures then discontinuity/clean release; collector recovery fake/full+5170/fast pass.
 - Evidence: [stage A record](archive/T056-m1-stageA-record.md),
   [allocation follow-up](archive/T056-m1-stageA-allocation-diagnosis.md),
-  [architecture review](archive/T056-architecture-review.md), [stack/startup diagnosis](archive/T056-stack-phase-diagnosis.md), [PMU/FP diagnosis](archive/T056-pmu-attribution.md), [source bisection](archive/T056-source-bisect.md), [header factors/full-loop accounting](archive/T056-header-subparts.md), [dispatch addresses](archive/T056-dispatch-address.md), [JCC policy diagnosis](archive/T056-jcc-policy.md), [PMU helper](archive/T056-kpc-tool.md), [PMU setup failure/v2](archive/T056-kpc-setup-failure.md), [PMU counting v3](archive/T056-kpc-counting.md), [collector recovery](archive/T056-kpc-collection-retry.md), [M2 inputs](archive/T056-m2-design-inputs.md);
+  [architecture review](archive/T056-architecture-review.md), [stack/startup diagnosis](archive/T056-stack-phase-diagnosis.md), [PMU/FP diagnosis](archive/T056-pmu-attribution.md), [source bisection](archive/T056-source-bisect.md), [header factors/full-loop accounting](archive/T056-header-subparts.md), [dispatch addresses](archive/T056-dispatch-address.md), [JCC policy diagnosis](archive/T056-jcc-policy.md), [PMU helper](archive/T056-kpc-tool.md), [PMU setup failure/v2](archive/T056-kpc-setup-failure.md), [PMU counting v3](archive/T056-kpc-counting.md), [collector recovery](archive/T056-kpc-collection-retry.md), [PMU closure](archive/T056-pmu-closure.md), [pragmatic candidate](archive/T056-pragmatic-stageA.md), [M2 inputs](archive/T056-m2-design-inputs.md);
   plans [`interpreter-core-v2-atoms-layouts`](performance-units/interpreter-core-v2-atoms-layouts.json) (closed),
   [`interpreter-core-v2-layout-edges`](performance-units/interpreter-core-v2-layout-edges.json).
 - Unresolved: relative-PC family cause unknown; sampled ops600/900 rejected by lead, formal controls failed.
-  Counter discontinuity cause/mid-window config unknown; collector-only bounded pair recovery prepared, actual success unverified.
-- Next action: lead runs [bounded v3 collector](diagnostics/t056-pmu/kpc-tool/README.md) using final installed digest; no more reinstall/sudo action.
-  Tailspin is enabled. No owner root/timing/production change; last attempt unspent.
+  PMU closed after174256Z; exact hardware cause unknown. New120B pragmatic candidate is present; canonical86 qualification pending.
+- Next action: finish [pragmatic candidate](archive/T056-pragmatic-stageA.md) gates and prepare lead correctness→86→triage→four-case K=6.
+  PMU helper stays installed, no further calls/sudo/reinstall. No owner timing; last attempt unspent.
 
 ## Goal and scope
 

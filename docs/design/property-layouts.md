@@ -1,16 +1,8 @@
 # Property layouts: construction, transitions and retention
 
-How an ordinary named-property store keeps its layout authority current without rebuilding it; refines
-[interpreter-core-v2](interpreter-core-v2.md#properties-atoms-and-layouts-are-the-ordinary-lookup-authority).
+How an ordinary named-property store keeps its layout authority current without rebuilding it; refines [interpreter-core-v2](interpreter-core-v2.md#properties-atoms-and-layouts-are-the-ordinary-lookup-authority).
 [T056](../../tasks/T056-interpreter-core-v2.md) owns status, evidence, plans and the work-count tests that
 check these rules; no performance result here.
-
-## Why the first M1.2 shape was closed
-
-The rejected stage-2 shape republished layouts by value (whole-field copy, compare and hash per append), cached
-shapes only weakly, gave builders and function tables private domains and hashed text probes twice; instructions
-tracked wall time (up to 5.6x). The [diagnosis record](../../tasks/archive/T056-m1-stage2-diagnosis.md) owns the
-mechanisms, ablations and jobs. The rules below remove each mechanism as a new implementation shape.
 
 ## Dependency and replacement
 
@@ -58,6 +50,15 @@ The layout **replaces** payload lookup authority in the same stage; it is not la
     (`strong=1`, `weak=0`) and editable in place. A true dictionary copy receives a fresh identity.
   - A monotonic `u64` id per domain was rejected because it needs either a domain lookup or a stored domain to
     compare ids across domains.
+
+## Complete host descriptor batches
+
+Intrinsic method tables publish one complete ordered descriptor batch, avoiding unobservable prefix shapes.
+Canonicalize/deduplicate keys (first position, last descriptor), then publish the final immutable layout and payload.
+The existing weak content cache shares final layouts without retention; later appends still use bounded owned edges.
+Batches above128 fields become dictionaries. Preserve symbols/prototypes/index count and invalidate caches;
+numeric/globalThis installs and unordered stores use sequential semantics. Resolve aliases after publication.
+No construction mode/header field is added, and ordinary adds never rebuild the whole layout.
 
 ## Transitions are edges
 
@@ -117,8 +118,9 @@ hit per field.
 - Shapes with up to 12 fields compare field text linearly, pointer first and then bytes. There is no domain probe
   and no per-shape index.
 - Larger shapes and dictionaries keep one index keyed by atom text, so a probe hashes once. A large shape builds
-  its index after four linear read or successful-write probes. Absent write probes do not warm or build it:
-  a following append leaves that shape. Writes still use an existing index, and a probe never repeats its lookup.
+  its index after four linear read or write probes, including misses. A one-pass growing shape still
+  sees only one probe; repeated absent-key probes on a shared shape amortize through the same index.
+  Writes use an existing index, and a probe never repeats its lookup.
 - Append edges keep the appended field's text inline, so a hit compares the key without following the atom.
   Objects and function/array named tables use a hit as proof that the key is absent from the parent: no field
   probe precedes that hit. Misses and replacements retain the ordinary lookup path.

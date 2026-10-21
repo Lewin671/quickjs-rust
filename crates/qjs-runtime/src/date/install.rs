@@ -18,252 +18,109 @@ pub(crate) fn install_date(env: &mut CallEnv, global_this: &Value, object_protot
         "constructor".to_owned(),
         Value::Function(date_function.clone()),
     );
-    define_date_prototype_function(
-        &date_prototype,
-        "getTime",
-        0,
-        NativeFunction::DatePrototypeGetTime,
-    );
-    define_date_prototype_function(
-        &date_prototype,
-        "getTimezoneOffset",
-        0,
-        NativeFunction::DatePrototypeGetTimezoneOffset,
-    );
-    define_date_prototype_function(
-        &date_prototype,
-        "getYear",
-        0,
-        NativeFunction::DatePrototypeGetYear,
-    );
-    define_date_prototype_function(
-        &date_prototype,
-        "getFullYear",
-        0,
-        NativeFunction::DatePrototypeGetUtcFullYear,
-    );
-    define_date_prototype_function(
-        &date_prototype,
-        "getMonth",
-        0,
-        NativeFunction::DatePrototypeGetUtcMonth,
-    );
-    define_date_prototype_function(
-        &date_prototype,
-        "getDate",
-        0,
-        NativeFunction::DatePrototypeGetUtcDate,
-    );
-    define_date_prototype_function(
-        &date_prototype,
-        "getDay",
-        0,
-        NativeFunction::DatePrototypeGetUtcDay,
-    );
-    define_date_prototype_function(
-        &date_prototype,
-        "getHours",
-        0,
-        NativeFunction::DatePrototypeGetUtcHours,
-    );
-    define_date_prototype_function(
-        &date_prototype,
-        "getMinutes",
-        0,
-        NativeFunction::DatePrototypeGetUtcMinutes,
-    );
-    define_date_prototype_function(
-        &date_prototype,
-        "getSeconds",
-        0,
-        NativeFunction::DatePrototypeGetUtcSeconds,
-    );
-    define_date_prototype_function(
-        &date_prototype,
-        "getMilliseconds",
-        0,
-        NativeFunction::DatePrototypeGetUtcMilliseconds,
-    );
-    define_date_prototype_function(
-        &date_prototype,
-        "setYear",
-        1,
-        NativeFunction::DatePrototypeSetYear,
-    );
-    define_date_prototype_function(
-        &date_prototype,
-        "getUTCDate",
-        0,
-        NativeFunction::DatePrototypeGetUtcDate,
-    );
-    define_date_prototype_function(
-        &date_prototype,
-        "getUTCDay",
-        0,
-        NativeFunction::DatePrototypeGetUtcDay,
-    );
-    define_date_prototype_function(
-        &date_prototype,
-        "getUTCFullYear",
-        0,
-        NativeFunction::DatePrototypeGetUtcFullYear,
-    );
-    define_date_prototype_function(
-        &date_prototype,
-        "getUTCHours",
-        0,
-        NativeFunction::DatePrototypeGetUtcHours,
-    );
-    define_date_prototype_function(
-        &date_prototype,
-        "getUTCMilliseconds",
-        0,
-        NativeFunction::DatePrototypeGetUtcMilliseconds,
-    );
-    define_date_prototype_function(
-        &date_prototype,
-        "getUTCMinutes",
-        0,
-        NativeFunction::DatePrototypeGetUtcMinutes,
-    );
-    define_date_prototype_function(
-        &date_prototype,
-        "getUTCMonth",
-        0,
-        NativeFunction::DatePrototypeGetUtcMonth,
-    );
-    define_date_prototype_function(
-        &date_prototype,
-        "getUTCSeconds",
-        0,
-        NativeFunction::DatePrototypeGetUtcSeconds,
-    );
-    define_date_prototype_function(
-        &date_prototype,
-        "setTime",
-        1,
-        NativeFunction::DatePrototypeSetTime,
-    );
-    define_date_prototype_function(
-        &date_prototype,
-        "setFullYear",
-        3,
-        NativeFunction::DatePrototypeSetUtcFullYear,
-    );
-    define_date_prototype_function(
-        &date_prototype,
-        "setMonth",
-        2,
-        NativeFunction::DatePrototypeSetUtcMonth,
-    );
-    define_date_prototype_function(
-        &date_prototype,
-        "setDate",
-        1,
-        NativeFunction::DatePrototypeSetUtcDate,
-    );
-    define_date_prototype_function(
-        &date_prototype,
-        "setHours",
-        4,
-        NativeFunction::DatePrototypeSetUtcHours,
-    );
-    define_date_prototype_function(
-        &date_prototype,
-        "setMinutes",
-        3,
-        NativeFunction::DatePrototypeSetUtcMinutes,
-    );
-    define_date_prototype_function(
-        &date_prototype,
-        "setSeconds",
-        2,
-        NativeFunction::DatePrototypeSetUtcSeconds,
-    );
-    define_date_prototype_function(
-        &date_prototype,
-        "setMilliseconds",
-        1,
-        NativeFunction::DatePrototypeSetUtcMilliseconds,
-    );
-    define_date_prototype_function(
-        &date_prototype,
-        "setUTCDate",
-        1,
-        NativeFunction::DatePrototypeSetUtcDate,
-    );
-    define_date_prototype_function(
-        &date_prototype,
-        "setUTCFullYear",
-        3,
-        NativeFunction::DatePrototypeSetUtcFullYear,
-    );
-    define_date_prototype_function(
-        &date_prototype,
-        "setUTCHours",
-        4,
-        NativeFunction::DatePrototypeSetUtcHours,
-    );
-    define_date_prototype_function(
-        &date_prototype,
-        "setUTCMilliseconds",
-        1,
-        NativeFunction::DatePrototypeSetUtcMilliseconds,
-    );
-    define_date_prototype_function(
-        &date_prototype,
-        "setUTCMinutes",
-        3,
-        NativeFunction::DatePrototypeSetUtcMinutes,
-    );
-    define_date_prototype_function(
-        &date_prototype,
-        "setUTCMonth",
-        2,
-        NativeFunction::DatePrototypeSetUtcMonth,
-    );
-    define_date_prototype_function(
-        &date_prototype,
-        "setUTCSeconds",
-        2,
-        NativeFunction::DatePrototypeSetUtcSeconds,
-    );
-    define_date_prototype_function(
-        &date_prototype,
-        "toDateString",
-        0,
-        NativeFunction::DatePrototypeToDateString,
-    );
-    define_date_prototype_function(
-        &date_prototype,
-        "toLocaleString",
-        0,
-        NativeFunction::DatePrototypeToString,
-    );
-    define_date_prototype_function(
-        &date_prototype,
-        "toLocaleDateString",
-        0,
-        NativeFunction::DatePrototypeToDateString,
-    );
-    define_date_prototype_function(
-        &date_prototype,
-        "toLocaleTimeString",
-        0,
-        NativeFunction::DatePrototypeToTimeString,
-    );
-    define_date_prototype_function(
-        &date_prototype,
-        "toISOString",
-        0,
-        NativeFunction::DatePrototypeToISOString,
-    );
-    define_date_prototype_function(
-        &date_prototype,
-        "toJSON",
-        1,
-        NativeFunction::DatePrototypeToJson,
-    );
+    date_prototype.define_native_methods(&[
+        ("getTime", 0, NativeFunction::DatePrototypeGetTime),
+        (
+            "getTimezoneOffset",
+            0,
+            NativeFunction::DatePrototypeGetTimezoneOffset,
+        ),
+        ("getYear", 0, NativeFunction::DatePrototypeGetYear),
+        (
+            "getFullYear",
+            0,
+            NativeFunction::DatePrototypeGetUtcFullYear,
+        ),
+        ("getMonth", 0, NativeFunction::DatePrototypeGetUtcMonth),
+        ("getDate", 0, NativeFunction::DatePrototypeGetUtcDate),
+        ("getDay", 0, NativeFunction::DatePrototypeGetUtcDay),
+        ("getHours", 0, NativeFunction::DatePrototypeGetUtcHours),
+        ("getMinutes", 0, NativeFunction::DatePrototypeGetUtcMinutes),
+        ("getSeconds", 0, NativeFunction::DatePrototypeGetUtcSeconds),
+        (
+            "getMilliseconds",
+            0,
+            NativeFunction::DatePrototypeGetUtcMilliseconds,
+        ),
+        ("setYear", 1, NativeFunction::DatePrototypeSetYear),
+        ("getUTCDate", 0, NativeFunction::DatePrototypeGetUtcDate),
+        ("getUTCDay", 0, NativeFunction::DatePrototypeGetUtcDay),
+        (
+            "getUTCFullYear",
+            0,
+            NativeFunction::DatePrototypeGetUtcFullYear,
+        ),
+        ("getUTCHours", 0, NativeFunction::DatePrototypeGetUtcHours),
+        (
+            "getUTCMilliseconds",
+            0,
+            NativeFunction::DatePrototypeGetUtcMilliseconds,
+        ),
+        (
+            "getUTCMinutes",
+            0,
+            NativeFunction::DatePrototypeGetUtcMinutes,
+        ),
+        ("getUTCMonth", 0, NativeFunction::DatePrototypeGetUtcMonth),
+        (
+            "getUTCSeconds",
+            0,
+            NativeFunction::DatePrototypeGetUtcSeconds,
+        ),
+        ("setTime", 1, NativeFunction::DatePrototypeSetTime),
+        (
+            "setFullYear",
+            3,
+            NativeFunction::DatePrototypeSetUtcFullYear,
+        ),
+        ("setMonth", 2, NativeFunction::DatePrototypeSetUtcMonth),
+        ("setDate", 1, NativeFunction::DatePrototypeSetUtcDate),
+        ("setHours", 4, NativeFunction::DatePrototypeSetUtcHours),
+        ("setMinutes", 3, NativeFunction::DatePrototypeSetUtcMinutes),
+        ("setSeconds", 2, NativeFunction::DatePrototypeSetUtcSeconds),
+        (
+            "setMilliseconds",
+            1,
+            NativeFunction::DatePrototypeSetUtcMilliseconds,
+        ),
+        ("setUTCDate", 1, NativeFunction::DatePrototypeSetUtcDate),
+        (
+            "setUTCFullYear",
+            3,
+            NativeFunction::DatePrototypeSetUtcFullYear,
+        ),
+        ("setUTCHours", 4, NativeFunction::DatePrototypeSetUtcHours),
+        (
+            "setUTCMilliseconds",
+            1,
+            NativeFunction::DatePrototypeSetUtcMilliseconds,
+        ),
+        (
+            "setUTCMinutes",
+            3,
+            NativeFunction::DatePrototypeSetUtcMinutes,
+        ),
+        ("setUTCMonth", 2, NativeFunction::DatePrototypeSetUtcMonth),
+        (
+            "setUTCSeconds",
+            2,
+            NativeFunction::DatePrototypeSetUtcSeconds,
+        ),
+        ("toDateString", 0, NativeFunction::DatePrototypeToDateString),
+        ("toLocaleString", 0, NativeFunction::DatePrototypeToString),
+        (
+            "toLocaleDateString",
+            0,
+            NativeFunction::DatePrototypeToDateString,
+        ),
+        (
+            "toLocaleTimeString",
+            0,
+            NativeFunction::DatePrototypeToTimeString,
+        ),
+        ("toISOString", 0, NativeFunction::DatePrototypeToISOString),
+        ("toJSON", 1, NativeFunction::DatePrototypeToJson),
+    ]);
     if let Some(to_primitive) = symbol::to_primitive_symbol(env) {
         date_prototype.define_symbol_property(
             to_primitive,
@@ -281,18 +138,10 @@ pub(crate) fn install_date(env: &mut CallEnv, global_this: &Value, object_protot
             ),
         );
     }
-    define_date_prototype_function(
-        &date_prototype,
-        "toString",
-        0,
-        NativeFunction::DatePrototypeToString,
-    );
-    define_date_prototype_function(
-        &date_prototype,
-        "toTimeString",
-        0,
-        NativeFunction::DatePrototypeToTimeString,
-    );
+    date_prototype.define_native_methods(&[
+        ("toString", 0, NativeFunction::DatePrototypeToString),
+        ("toTimeString", 0, NativeFunction::DatePrototypeToTimeString),
+    ]);
     let to_utc_string = Value::Function(Function::new_native(
         env.realm().atoms(),
         Some("toUTCString"),

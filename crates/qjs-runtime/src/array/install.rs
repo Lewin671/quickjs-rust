@@ -24,223 +24,53 @@ pub(crate) fn install_array(env: &mut CallEnv, global_this: &Value, object_proto
         "constructor".to_owned(),
         Value::Function(array_function.clone()),
     );
-    define_array_prototype_function(&array_prototype, "at", 1, NativeFunction::ArrayPrototypeAt);
-    define_array_prototype_function(
-        &array_prototype,
-        "concat",
-        1,
-        NativeFunction::ArrayPrototypeConcat,
-    );
-    define_array_prototype_function(
-        &array_prototype,
-        "copyWithin",
-        2,
-        NativeFunction::ArrayPrototypeCopyWithin,
-    );
-    define_array_prototype_function(
-        &array_prototype,
-        "entries",
-        0,
-        NativeFunction::ArrayPrototypeEntries,
-    );
-    define_array_prototype_function(
-        &array_prototype,
-        "every",
-        1,
-        NativeFunction::ArrayPrototypeEvery,
-    );
-    define_array_prototype_function(
-        &array_prototype,
-        "fill",
-        1,
-        NativeFunction::ArrayPrototypeFill,
-    );
-    define_array_prototype_function(
-        &array_prototype,
-        "flat",
-        0,
-        NativeFunction::ArrayPrototypeFlat,
-    );
-    define_array_prototype_function(
-        &array_prototype,
-        "flatMap",
-        1,
-        NativeFunction::ArrayPrototypeFlatMap,
-    );
-    define_array_prototype_function(
-        &array_prototype,
-        "filter",
-        1,
-        NativeFunction::ArrayPrototypeFilter,
-    );
-    define_array_prototype_function(
-        &array_prototype,
-        "find",
-        1,
-        NativeFunction::ArrayPrototypeFind,
-    );
-    define_array_prototype_function(
-        &array_prototype,
-        "findIndex",
-        1,
-        NativeFunction::ArrayPrototypeFindIndex,
-    );
-    define_array_prototype_function(
-        &array_prototype,
-        "findLast",
-        1,
-        NativeFunction::ArrayPrototypeFindLast,
-    );
-    define_array_prototype_function(
-        &array_prototype,
-        "findLastIndex",
-        1,
-        NativeFunction::ArrayPrototypeFindLastIndex,
-    );
-    define_array_prototype_function(
-        &array_prototype,
-        "forEach",
-        1,
-        NativeFunction::ArrayPrototypeForEach,
-    );
-    define_array_prototype_function(
-        &array_prototype,
-        "includes",
-        1,
-        NativeFunction::ArrayPrototypeIncludes,
-    );
-    define_array_prototype_function(
-        &array_prototype,
-        "join",
-        1,
-        NativeFunction::ArrayPrototypeJoin,
-    );
-    define_array_prototype_function(
-        &array_prototype,
-        "indexOf",
-        1,
-        NativeFunction::ArrayPrototypeIndexOf,
-    );
-    define_array_prototype_function(
-        &array_prototype,
-        "keys",
-        0,
-        NativeFunction::ArrayPrototypeKeys,
-    );
-    define_array_prototype_function(
-        &array_prototype,
-        "lastIndexOf",
-        1,
-        NativeFunction::ArrayPrototypeLastIndexOf,
-    );
-    define_array_prototype_function(
-        &array_prototype,
-        "map",
-        1,
-        NativeFunction::ArrayPrototypeMap,
-    );
-    define_array_prototype_function(
-        &array_prototype,
-        "pop",
-        0,
-        NativeFunction::ArrayPrototypePop,
-    );
-    define_array_prototype_function(
-        &array_prototype,
-        "push",
-        1,
-        NativeFunction::ArrayPrototypePush,
-    );
-    define_array_prototype_function(
-        &array_prototype,
-        "reduce",
-        1,
-        NativeFunction::ArrayPrototypeReduce,
-    );
-    define_array_prototype_function(
-        &array_prototype,
-        "reduceRight",
-        1,
-        NativeFunction::ArrayPrototypeReduceRight,
-    );
-    define_array_prototype_function(
-        &array_prototype,
-        "reverse",
-        0,
-        NativeFunction::ArrayPrototypeReverse,
-    );
-    define_array_prototype_function(
-        &array_prototype,
-        "shift",
-        0,
-        NativeFunction::ArrayPrototypeShift,
-    );
-    define_array_prototype_function(
-        &array_prototype,
-        "slice",
-        2,
-        NativeFunction::ArrayPrototypeSlice,
-    );
-    define_array_prototype_function(
-        &array_prototype,
-        "some",
-        1,
-        NativeFunction::ArrayPrototypeSome,
-    );
-    define_array_prototype_function(
-        &array_prototype,
-        "sort",
-        1,
-        NativeFunction::ArrayPrototypeSort,
-    );
-    define_array_prototype_function(
-        &array_prototype,
-        "splice",
-        2,
-        NativeFunction::ArrayPrototypeSplice,
-    );
-    define_array_prototype_function(
-        &array_prototype,
-        "toString",
-        0,
-        NativeFunction::ArrayPrototypeToString,
-    );
-    define_array_prototype_function(
-        &array_prototype,
-        "toLocaleString",
-        0,
-        NativeFunction::ArrayPrototypeToLocaleString,
-    );
-    define_array_prototype_function(
-        &array_prototype,
-        "toReversed",
-        0,
-        NativeFunction::ArrayPrototypeToReversed,
-    );
-    define_array_prototype_function(
-        &array_prototype,
-        "toSpliced",
-        2,
-        NativeFunction::ArrayPrototypeToSpliced,
-    );
-    define_array_prototype_function(
-        &array_prototype,
-        "toSorted",
-        1,
-        NativeFunction::ArrayPrototypeToSorted,
-    );
-    define_array_prototype_function(
-        &array_prototype,
-        "unshift",
-        1,
-        NativeFunction::ArrayPrototypeUnshift,
-    );
-    define_array_prototype_function(
-        &array_prototype,
-        "values",
-        0,
-        NativeFunction::ArrayPrototypeValues,
-    );
+    array_prototype.define_native_methods(&[
+        ("at", 1, NativeFunction::ArrayPrototypeAt),
+        ("concat", 1, NativeFunction::ArrayPrototypeConcat),
+        ("copyWithin", 2, NativeFunction::ArrayPrototypeCopyWithin),
+        ("entries", 0, NativeFunction::ArrayPrototypeEntries),
+        ("every", 1, NativeFunction::ArrayPrototypeEvery),
+        ("fill", 1, NativeFunction::ArrayPrototypeFill),
+        ("flat", 0, NativeFunction::ArrayPrototypeFlat),
+        ("flatMap", 1, NativeFunction::ArrayPrototypeFlatMap),
+        ("filter", 1, NativeFunction::ArrayPrototypeFilter),
+        ("find", 1, NativeFunction::ArrayPrototypeFind),
+        ("findIndex", 1, NativeFunction::ArrayPrototypeFindIndex),
+        ("findLast", 1, NativeFunction::ArrayPrototypeFindLast),
+        (
+            "findLastIndex",
+            1,
+            NativeFunction::ArrayPrototypeFindLastIndex,
+        ),
+        ("forEach", 1, NativeFunction::ArrayPrototypeForEach),
+        ("includes", 1, NativeFunction::ArrayPrototypeIncludes),
+        ("join", 1, NativeFunction::ArrayPrototypeJoin),
+        ("indexOf", 1, NativeFunction::ArrayPrototypeIndexOf),
+        ("keys", 0, NativeFunction::ArrayPrototypeKeys),
+        ("lastIndexOf", 1, NativeFunction::ArrayPrototypeLastIndexOf),
+        ("map", 1, NativeFunction::ArrayPrototypeMap),
+        ("pop", 0, NativeFunction::ArrayPrototypePop),
+        ("push", 1, NativeFunction::ArrayPrototypePush),
+        ("reduce", 1, NativeFunction::ArrayPrototypeReduce),
+        ("reduceRight", 1, NativeFunction::ArrayPrototypeReduceRight),
+        ("reverse", 0, NativeFunction::ArrayPrototypeReverse),
+        ("shift", 0, NativeFunction::ArrayPrototypeShift),
+        ("slice", 2, NativeFunction::ArrayPrototypeSlice),
+        ("some", 1, NativeFunction::ArrayPrototypeSome),
+        ("sort", 1, NativeFunction::ArrayPrototypeSort),
+        ("splice", 2, NativeFunction::ArrayPrototypeSplice),
+        ("toString", 0, NativeFunction::ArrayPrototypeToString),
+        (
+            "toLocaleString",
+            0,
+            NativeFunction::ArrayPrototypeToLocaleString,
+        ),
+        ("toReversed", 0, NativeFunction::ArrayPrototypeToReversed),
+        ("toSpliced", 2, NativeFunction::ArrayPrototypeToSpliced),
+        ("toSorted", 1, NativeFunction::ArrayPrototypeToSorted),
+        ("unshift", 1, NativeFunction::ArrayPrototypeUnshift),
+        ("values", 0, NativeFunction::ArrayPrototypeValues),
+    ]);
     symbol::define_well_known_iterator_alias(env, &array_prototype, "values");
     // Share %Array.prototype.values% so an arguments object's
     // `[Symbol.iterator]` is the same function object (spec %ArrayProto_values%).

@@ -1,0 +1,13 @@
+{
+  "diagnostic_only": true,
+  "base_runtime": "dfff3bb6bf3db01fb52a7612ed1144900b5f08c5",
+  "acceptance_plan_unchanged": "interpreter-core-v2-layout-edges",
+  "remaining_attempts": 1,
+  "owner_timing_allowed": false,
+  "header": "Keep packed cold flags, restore native-width index_property_count; retain existing declaration order, other headers and scalar alignment. ObjectData120B. Existing subpart results flags_order global0.996488/local0.968720 vs count_order1.002008/0.970059 are diagnostic, not a new timing selection.",
+  "lookup": "Large shapes share a four-linear-probe budget for reads/writes including misses; fifth probe builds the index. A one-pass growth shape is still not indexed. No key/source/workload matching.",
+  "startup": "Explicit complete ordered descriptor batches for intrinsic method tables publish one immutable final layout, using the existing weak content cache. Ordinary incremental mutations retain owned bounded append edges. No global construction mode, header field, environment snapshot, parser/tier change, FFI or dependency. Normalize/deduplicate keys before publication; keep first key position and last descriptor; preserve symbols/prototypes and invalidate existing caches. Numeric/globalThis special cases use existing sequential semantics.",
+  "migration": ["Add final-batch layout/storage API with invariants and focused tests.", "Switch large native method tables at existing installation boundaries, before aliases or readers.", "Verify event/field work and canonical instructions offline; no padding/inline tuning or hardware-root work."],
+  "qualification": "Focused runtime tests, full gate, NG255/subset5170, canonical86-case non-timing iMac instruction snapshot; prepare fresh correctness->86->triage and four-case K6 diagnostic with original AA/routing thresholds. Do not submit timing or consume final attempt.",
+  "known_risk": "Count+flags changed56 relative PCs of equal-instruction numeric loop; ops/bank/stack/zone, uniform shifts and JCC boundary counts did not explain it. Kernel isolation remains M2 follow-up, not implemented here. PMU closed; final helper stays installed, no more calls/install/sudo actions."
+}

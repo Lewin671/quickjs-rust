@@ -271,7 +271,7 @@ fn install_typed_array_prototype_accessors(env: &CallEnv, prototype: &ObjectRef)
 /// Installs the shared `%TypedArray.prototype%` methods (ES2023 23.2.3),
 /// brand-checked through their receiver.
 fn install_typed_array_prototype_methods(env: &CallEnv, prototype: &ObjectRef) {
-    for (name, length, native) in [
+    prototype.define_native_methods(&[
         ("at", 1, NativeFunction::TypedArrayPrototypeAt),
         ("indexOf", 1, NativeFunction::TypedArrayPrototypeIndexOf),
         (
@@ -327,9 +327,7 @@ fn install_typed_array_prototype_methods(env: &CallEnv, prototype: &ObjectRef) {
         ),
         ("toSorted", 1, NativeFunction::TypedArrayPrototypeToSorted),
         ("with", 2, NativeFunction::TypedArrayPrototypeWith),
-    ] {
-        define_prototype_method(prototype, name, length, native);
-    }
+    ]);
     // %TypedArray.prototype%[Symbol.iterator] is the same function object as
     // `values`.
     symbol::define_well_known_iterator_alias(env, prototype, "values");
