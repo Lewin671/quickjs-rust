@@ -1,0 +1,42 @@
+{
+  "diagnostic_only": true,
+  "installation_verified": false,
+  "privileged_access_verified": false,
+  "qualification_job": "20261021T145905Z-t056-kpc-tool-audit-final",
+  "qualification_sha256": "1777c30b9172bda5408d6987d11b48804353014a73e3e4e77290fea19db49736",
+  "helper_sha256": "e3d2bc4c7af7dab8c1181b78ca291429c9ef275e44b20a828e1ca01f1a7ec065",
+  "groups_job": "20261021T145945Z-t056-kpc-groups-final",
+  "groups_sha256": "6f964c2c7206e4ebe4880029c3c84ea1d14f69781e23be8d5ca9043e65856c2e",
+  "images_job": "20261021T120731Z-t056-header-layout-qualification",
+  "images_sha256": "e451cd6ac4a5668dc946ad3cf2843854beae70f3f6cb9fb1aada728de3e15549",
+  "images": {
+    "base": "b0dfc65d0c026d62aa64ef3d69a089eb73b51088c84af75b44617ea2a1737f0e",
+    "aligned": "b0b84489a3f6fd673b06dc4bdc71c8f176387a231ca19fe1da5ea48ca4ee0fd5",
+    "count": "661969a50fb0bc36f73e6fe1af20e78218c2ceffb63d62a4903c7c61a67858ea",
+    "flags": "100cda383a0f5146e2f9e025f273edfb1d622fe0754e9d84bef10954732a7152",
+    "count_flags": "52ed87e969884aed7cb6d2ccd047f484dd41c26c31c28a94bbebba6201bcfeca",
+    "candidate": "3466c37a62f2fb6d764d0123212749ff810138ca05fcad336ce1afa05bdb1e3f"
+  },
+  "workload_sha256": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
+  "correctness_job": "20261021T060648Z-t056-m1a-allocation-correctness",
+  "pregate_job": "20261021T062918Z-t056-m1a-allocation-pregate86",
+  "throughput": {
+    "reference": "20261021T135119Z-t056-ops-confirmation",
+    "units": 170,
+    "seconds": 174.01714727201033,
+    "planned_units": 192,
+    "scaled_seconds": 196.5370133895646,
+    "reserve_factor": 2,
+    "setup_seconds": 120,
+    "budgeted_seconds": 513.0740267791292,
+    "collect_seconds": 720
+  },
+  "files": {
+    "collect.py": "1337a2a234f5d0c94ca2a7427662a2029b32329cfe74b34e0fafeca76afbd91a",
+    "protocol.py": "14283c9f1d8bd826dfb5105a4f9f35e18e65268c9dcc318b0848c52a34c66cf7",
+    "counters.py": "3aa46a2adf476c613dc001e4bfdb9adfaf77b9685554704ff1e9fc838d8f154e",
+    "chain_common.py": "24f2e1551c457b6e5d37f70229d3ec2f85e49cc4a3da563ad4fb31a6f411e7d5",
+    "window.py": "daf187949c5be104ead5e727353406a6670b8f54adaa9a1ad300fa4d9ab7b2f6",
+    "groups.json": "9204ff644a3e2a803ad8fd7123604f2a53fedc497bb76f198f19aafcd8599af4"
+  }
+}

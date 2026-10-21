@@ -1,0 +1,11 @@
+{
+  "job": "20261021T150720Z-t056-kpc-install-ready",
+  "agent_installed": false,
+  "privileged_execution": false,
+  "visudo_nonroot_syntax": "parsed OK",
+  "log_sha256": "77090853ae9b8b4db9b3b8cc55ba1fbee7ef5d26d8ef0481177f2f4e71a7a6c0",
+  "files_sha256": {
+    "install-user.sh": "758465c14fe4345406e2b3fddcf4daf95ec4b377683f939667f21086d7982cd7",
+    "qjs-kpc.sudoers": "590a4e820c1f8fc268e4462f2e3833116d257893eed94c5b3b798898fd2169a1"
+  }
+}

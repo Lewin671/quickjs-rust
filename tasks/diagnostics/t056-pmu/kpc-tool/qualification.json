@@ -1,0 +1,313 @@
+{
+  "diagnostic_only": true,
+  "timing": false,
+  "privileged_run": false,
+  "install_performed": false,
+  "hardware_counter_evidence": false,
+  "binary_sha256": "e3d2bc4c7af7dab8c1181b78ca291429c9ef275e44b20a828e1ca01f1a7ec065",
+  "source_sha256": {
+    "drop-unit.c": "08d0fb0cb92ea69a222bd8b71b61595f7e6566e5df0b743253c5abc3fd3312e5",
+    "json.c": "d0265595cc8dddd224182b5eb6f7b4ba3e688ff21a1ab75f9b4582b401eb47a7",
+    "events-approved.h": "83c840b876de84702ea1ce071a9bed964069d35f881e84442dea6a0c2a12c033",
+    "trace.c": "1ce289d9646f5bf293fffcae72f930159be086da2645e39b31bbda7a7888db22",
+    "plan.py": "7c81c2746563ace5687030dcc41222669553e3f9e505858770b30794782f1f17",
+    "process.c": "699703d55aa57798d73df6c84843847ed921d84c5582802e10351f44558d17bc",
+    "main.c": "40060e652d2477e91bf40d0d7f2b3cefb7f4d222fb3806d5e211715831607aec",
+    "tool.h": "ccf4e39a36bc4c9eae2482d746562d7c93ce69980f6285f70f9eb886ca8f021b",
+    "events.c": "3dc10d01784e744629dec46ecb7c9554c0b3180964c3b6af028f8fb59f5e1017",
+    "security.c": "44578e630d6c6a93142c4ed5533d3b5c0e2d0dd546bd757826715f9a6258f568",
+    "aggregate.c": "f91aadfc087c2cbe2a8536aa8ef7f86f618a5f89fe9896372c92b33bb2fa59bb",
+    "qualify.py": "b73c4ed9c2fd751eaef1a692dc817208e1a9ec17895880807602f7d54b7a1b21",
+    "unit.c": "8f8bcaea10cb76ad76e8ec90a16aefe0c0eb2d27ebea62f2d7e343cc307caa82",
+    "inventory.py": "6aeb966ea41e9c6daf63e4ec66770c73da9e11ad6ad36f173b771413f9223272"
+  },
+  "clang": {
+    "argv": ["/usr/bin/clang","--version"],
+    "status": 0,
+    "stdout": "Apple clang version 14.0.0 (clang-1400.0.29.202)\nTarget: x86_64-apple-darwin21.6.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin\n",
+    "stderr": ""
+  },
+  "build": {
+    "argv": [
+      "/usr/bin/clang",
+      "-std=c11",
+      "-D_DARWIN_C_SOURCE",
+      "-O2",
+      "-mmacosx-version-min=12.0",
+      "-fstack-protector-strong",
+      "-fPIE",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-Wformat=2",
+      "-Wshadow",
+      "-Wconversion",
+      "-Wcast-qual",
+      "-Wstrict-prototypes",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T145905Z-t056-kpc-tool-audit-final/out/source/main.c",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T145905Z-t056-kpc-tool-audit-final/out/source/security.c",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T145905Z-t056-kpc-tool-audit-final/out/source/events.c",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T145905Z-t056-kpc-tool-audit-final/out/source/aggregate.c",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T145905Z-t056-kpc-tool-audit-final/out/source/trace.c",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T145905Z-t056-kpc-tool-audit-final/out/source/process.c",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T145905Z-t056-kpc-tool-audit-final/out/source/json.c",
+      "-Wl,-pie",
+      "-o",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T145905Z-t056-kpc-tool-audit-final/out/qjs-kpc"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "checks": {
+    "drop-unit": {
+      "argv": ["/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T145905Z-t056-kpc-tool-audit-final/out/drop-unit"],
+      "status": 0,
+      "stdout": "drop-unit: group clear -> gid -> uid -> no-root-regain, every failure rejects: pass\n",
+      "stderr": ""
+    },
+    "unit": {
+      "argv": ["/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T145905Z-t056-kpc-tool-audit-final/out/unit"],
+      "status": 0,
+      "stdout": "unit: identity bounds,64-bit TIDs, interleaved/split records, missing/falling counters: pass\n",
+      "stderr": ""
+    },
+    "help": {
+      "argv": ["/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T145905Z-t056-kpc-tool-audit-final/out/qjs-kpc","--help"],
+      "status": 0,
+      "stdout": "qjs-kpc: Intel Comet Lake PET counter diagnostic (observed thread intervals, NOT whole-process totals)\nUsage: qjs-kpc --events cycles,instructions,EVENT,... [--env TZ=UTC] [--env LC_ALL=C] [--timeout-ms 1..10000] -- /absolute/program args...\n       qjs-kpc --describe --events cycles,instructions,EVENT,...\n       qjs-kpc --list-events\nChild runs as nonroot SUDO_UID/GID, no supplementary groups, cwd=/, fixed TZ=UTC LC_ALL=C.\n",
+      "stderr": ""
+    },
+    "list": {"status":0,"events":321},
+    "unprivileged": {
+      "argv": ["/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T145905Z-t056-kpc-tool-audit-final/out/qjs-kpc","--events","cycles,instructions","--","/usr/bin/id","-u"],
+      "status": 1,
+      "stdout": "{\"version\":\"qjs-kpc-1\",\"error\":\"root via sudo with nonzero SUDO_UID/GID required\",\"capture_complete\":false,\"counters_valid\":false}\n",
+      "stderr": ""
+    },
+    "bad-env": {
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T145905Z-t056-kpc-tool-audit-final/out/qjs-kpc",
+        "--events",
+        "cycles,instructions",
+        "--env",
+        "DYLD_INSERT_LIBRARIES=/tmp/evil",
+        "--",
+        "/usr/bin/id"
+      ],
+      "status": 1,
+      "stdout": "{\"version\":\"qjs-kpc-1\",\"error\":\"only TZ=UTC and LC_ALL=C are permitted\",\"capture_complete\":false,\"counters_valid\":false}\n",
+      "stderr": ""
+    },
+    "fixed_plus_four": {
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T145905Z-t056-kpc-tool-audit-final/out/qjs-kpc",
+        "--describe",
+        "--events",
+        "cycles,instructions,IDQ.DSB_UOPS,IDQ.MITE_UOPS,IDQ.MS_UOPS,DSB2MITE_SWITCHES.PENALTY_CYCLES"
+      ],
+      "status": 0,
+      "stdout": "{\"version\":\"qjs-kpc-1\",\"database\":\"cometlake\",\"user_only_requested\":true,\"classes\":3,\"counter_count\":7,\"events\":[{\"name\":\"CPU_CLK_UNHALTED.THREAD\",\"index\":1},{\"name\":\"INST_RETIRED.ANY\",\"index\":0},{\"name\":\"IDQ.DSB_UOPS\",\"index\":3},{\"name\":\"IDQ.MITE_UOPS\",\"index\":4},{\"name\":\"IDQ.MS_UOPS\",\"index\":5},{\"name\":\"DSB2MITE_SWITCHES.PENALTY_CYCLES\",\"index\":6}],\"config\":[\"0x22\",\"0x410879\",\"0x410479\",\"0x413079\",\"0x4102ab\"]}\n",
+      "stderr": ""
+    },
+    "static": {
+      "main.c": {
+        "argv": [
+          "/usr/bin/clang",
+          "-std=c11",
+          "-D_DARWIN_C_SOURCE",
+          "-O2",
+          "-mmacosx-version-min=12.0",
+          "-fstack-protector-strong",
+          "-fPIE",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-Wformat=2",
+          "-Wshadow",
+          "-Wconversion",
+          "-Wcast-qual",
+          "-Wstrict-prototypes",
+          "--analyze",
+          "-Xanalyzer",
+          "-analyzer-output=text",
+          "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T145905Z-t056-kpc-tool-audit-final/out/source/main.c"
+        ],
+        "status": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      "security.c": {
+        "argv": [
+          "/usr/bin/clang",
+          "-std=c11",
+          "-D_DARWIN_C_SOURCE",
+          "-O2",
+          "-mmacosx-version-min=12.0",
+          "-fstack-protector-strong",
+          "-fPIE",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-Wformat=2",
+          "-Wshadow",
+          "-Wconversion",
+          "-Wcast-qual",
+          "-Wstrict-prototypes",
+          "--analyze",
+          "-Xanalyzer",
+          "-analyzer-output=text",
+          "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T145905Z-t056-kpc-tool-audit-final/out/source/security.c"
+        ],
+        "status": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      "events.c": {
+        "argv": [
+          "/usr/bin/clang",
+          "-std=c11",
+          "-D_DARWIN_C_SOURCE",
+          "-O2",
+          "-mmacosx-version-min=12.0",
+          "-fstack-protector-strong",
+          "-fPIE",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-Wformat=2",
+          "-Wshadow",
+          "-Wconversion",
+          "-Wcast-qual",
+          "-Wstrict-prototypes",
+          "--analyze",
+          "-Xanalyzer",
+          "-analyzer-output=text",
+          "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T145905Z-t056-kpc-tool-audit-final/out/source/events.c"
+        ],
+        "status": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      "aggregate.c": {
+        "argv": [
+          "/usr/bin/clang",
+          "-std=c11",
+          "-D_DARWIN_C_SOURCE",
+          "-O2",
+          "-mmacosx-version-min=12.0",
+          "-fstack-protector-strong",
+          "-fPIE",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-Wformat=2",
+          "-Wshadow",
+          "-Wconversion",
+          "-Wcast-qual",
+          "-Wstrict-prototypes",
+          "--analyze",
+          "-Xanalyzer",
+          "-analyzer-output=text",
+          "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T145905Z-t056-kpc-tool-audit-final/out/source/aggregate.c"
+        ],
+        "status": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      "trace.c": {
+        "argv": [
+          "/usr/bin/clang",
+          "-std=c11",
+          "-D_DARWIN_C_SOURCE",
+          "-O2",
+          "-mmacosx-version-min=12.0",
+          "-fstack-protector-strong",
+          "-fPIE",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-Wformat=2",
+          "-Wshadow",
+          "-Wconversion",
+          "-Wcast-qual",
+          "-Wstrict-prototypes",
+          "--analyze",
+          "-Xanalyzer",
+          "-analyzer-output=text",
+          "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T145905Z-t056-kpc-tool-audit-final/out/source/trace.c"
+        ],
+        "status": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      "process.c": {
+        "argv": [
+          "/usr/bin/clang",
+          "-std=c11",
+          "-D_DARWIN_C_SOURCE",
+          "-O2",
+          "-mmacosx-version-min=12.0",
+          "-fstack-protector-strong",
+          "-fPIE",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-Wformat=2",
+          "-Wshadow",
+          "-Wconversion",
+          "-Wcast-qual",
+          "-Wstrict-prototypes",
+          "--analyze",
+          "-Xanalyzer",
+          "-analyzer-output=text",
+          "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T145905Z-t056-kpc-tool-audit-final/out/source/process.c"
+        ],
+        "status": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      "json.c": {
+        "argv": [
+          "/usr/bin/clang",
+          "-std=c11",
+          "-D_DARWIN_C_SOURCE",
+          "-O2",
+          "-mmacosx-version-min=12.0",
+          "-fstack-protector-strong",
+          "-fPIE",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-Wformat=2",
+          "-Wshadow",
+          "-Wconversion",
+          "-Wcast-qual",
+          "-Wstrict-prototypes",
+          "--analyze",
+          "-Xanalyzer",
+          "-analyzer-output=text",
+          "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T145905Z-t056-kpc-tool-audit-final/out/source/json.c"
+        ],
+        "status": 0,
+        "stdout": "",
+        "stderr": ""
+      }
+    },
+    "libraries": {
+      "argv": ["/usr/bin/otool","-L","/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T145905Z-t056-kpc-tool-audit-final/out/qjs-kpc"],
+      "status": 0,
+      "stdout": "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T145905Z-t056-kpc-tool-audit-final/out/qjs-kpc:\n\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1319.0.0)\n",
+      "stderr": ""
+    },
+    "load_commands": {"status":0,"LC_RPATH":false}
+  },
+  "cpu": {
+    "argv": ["/usr/sbin/sysctl","machdep.cpu.family","machdep.cpu.model","machdep.cpu.stepping","machdep.cpu.microcode_version"],
+    "status": 0,
+    "stdout": "machdep.cpu.family: 6\nmachdep.cpu.model: 165\nmachdep.cpu.stepping: 5\nmachdep.cpu.microcode_version: 240\n",
+    "stderr": ""
+  },
+  "raw_job": "20261021T145905Z-t056-kpc-tool-audit-final",
+  "raw_job_sha256": "1777c30b9172bda5408d6987d11b48804353014a73e3e4e77290fea19db49736"
+}

@@ -1,0 +1,20 @@
+{
+  "intel_mapfile_url": "https://raw.githubusercontent.com/intel/perfmon/main/mapfile.csv",
+  "intel_mapfile_sha256": "c04836afb8bfe5f941fb54c39d07651a71aa1e7d7a5b1eafd75a6b94bb351aed",
+  "matched_cpu_rows": [
+    {
+      "Family-model": "GenuineIntel-6-A5",
+      "Version": "V59",
+      "Filename": "/SKL/events/skylake_core.json",
+      "EventType": "core",
+      "Core Type": "",
+      "Native Model ID": "",
+      "Core Role Name": ""
+    }
+  ],
+  "xnu_revision": "xnu-8020.140.41",
+  "self_only_api": "https://github.com/apple-oss-distributions/xnu/blob/xnu-8020.140.41/bsd/kern/kern_kpc.c",
+  "sampled_thread_counters": "https://github.com/apple-oss-distributions/xnu/blob/xnu-8020.140.41/osfmk/kperf/kperf_kpc.c",
+  "demo_reference": "https://gist.github.com/ibireme/173517c208c7dc333ba962c1f0d67d12",
+  "reference_role": "API ABI and PET mechanism references; local C implements bounded decoding and security boundary, not complete lifetime totals"
+}
