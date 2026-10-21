@@ -1,0 +1,102 @@
+{
+  "parts": [
+    "count",
+    "flags",
+    "order"
+  ],
+  "roles": {
+    "count": {
+      "parts": [
+        "count"
+      ],
+      "files": {
+        "crates/qjs-runtime/src/value/object.rs": "1604b4e6793fbf0d72ec1291a1b871a5666e9108c09a510fd36bda60e06e11fb",
+        "crates/qjs-runtime/src/value/object/class_fields.rs": "b8b3f860841095b6d21e61c16ff92030470cad2c6e57a76f474c1fe9ddeafbf7",
+        "crates/qjs-runtime/src/value/object/flags.rs": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "crates/qjs-runtime/src/value/object/tests.rs": "60807b2aebb6c6644f519cb7950a34307ee4e70f569c37d3e2f3d2ca93602f6a"
+      }
+    },
+    "flags": {
+      "parts": [
+        "flags"
+      ],
+      "files": {
+        "crates/qjs-runtime/src/value/object.rs": "443eb7fa49b71177aa2d1dcf004e1eef99f33f52db34f1c9065aa6326782f7f7",
+        "crates/qjs-runtime/src/value/object/class_fields.rs": "ce8daedf8efd46ea337fbf47caa4c0852e48dae83dc83638c52a30f959703152",
+        "crates/qjs-runtime/src/value/object/flags.rs": "81c8b92400ccff47e10d9816822969ce1a821c068f3ef2d9142b4c6f117e8efa",
+        "crates/qjs-runtime/src/value/object/tests.rs": "60807b2aebb6c6644f519cb7950a34307ee4e70f569c37d3e2f3d2ca93602f6a"
+      }
+    },
+    "order": {
+      "parts": [
+        "order"
+      ],
+      "files": {
+        "crates/qjs-runtime/src/value/object.rs": "1e396bdb65bc3f2abc433581f221c44a91beb41e89cae038eebacc5506c5f6cc",
+        "crates/qjs-runtime/src/value/object/class_fields.rs": "c75fc3735b4b41d8d291234f3c6da8bf4adfac06476e33a1063d29f8e25407f3",
+        "crates/qjs-runtime/src/value/object/flags.rs": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "crates/qjs-runtime/src/value/object/tests.rs": "60807b2aebb6c6644f519cb7950a34307ee4e70f569c37d3e2f3d2ca93602f6a"
+      }
+    },
+    "count_flags": {
+      "parts": [
+        "count",
+        "flags"
+      ],
+      "files": {
+        "crates/qjs-runtime/src/value/object.rs": "e19c30d0bafe228b27b5f3cc680dfa99015916bdee881d110b31a715c4a1f878",
+        "crates/qjs-runtime/src/value/object/class_fields.rs": "d4a8fc7a49ee044fb422b292836f8247a0a6ebb5e3def5b052104a3d23e1f373",
+        "crates/qjs-runtime/src/value/object/flags.rs": "81c8b92400ccff47e10d9816822969ce1a821c068f3ef2d9142b4c6f117e8efa",
+        "crates/qjs-runtime/src/value/object/tests.rs": "60807b2aebb6c6644f519cb7950a34307ee4e70f569c37d3e2f3d2ca93602f6a"
+      }
+    },
+    "count_order": {
+      "parts": [
+        "count",
+        "order"
+      ],
+      "files": {
+        "crates/qjs-runtime/src/value/object.rs": "c1c89af2dcba7b53b0ec24860cb6cfa0a663b4d4841fb8b13560bc2aa42a4053",
+        "crates/qjs-runtime/src/value/object/class_fields.rs": "b8b3f860841095b6d21e61c16ff92030470cad2c6e57a76f474c1fe9ddeafbf7",
+        "crates/qjs-runtime/src/value/object/flags.rs": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "crates/qjs-runtime/src/value/object/tests.rs": "60807b2aebb6c6644f519cb7950a34307ee4e70f569c37d3e2f3d2ca93602f6a"
+      }
+    },
+    "flags_order": {
+      "parts": [
+        "flags",
+        "order"
+      ],
+      "files": {
+        "crates/qjs-runtime/src/value/object.rs": "26ac764e44310f9353d5518e618becb1ecc7fbe5e2b2cbee135297786fbc9b2d",
+        "crates/qjs-runtime/src/value/object/class_fields.rs": "ce8daedf8efd46ea337fbf47caa4c0852e48dae83dc83638c52a30f959703152",
+        "crates/qjs-runtime/src/value/object/flags.rs": "81c8b92400ccff47e10d9816822969ce1a821c068f3ef2d9142b4c6f117e8efa",
+        "crates/qjs-runtime/src/value/object/tests.rs": "60807b2aebb6c6644f519cb7950a34307ee4e70f569c37d3e2f3d2ca93602f6a"
+      }
+    },
+    "full_a": {
+      "parts": [
+        "count",
+        "flags",
+        "order"
+      ],
+      "files": {
+        "crates/qjs-runtime/src/value/object.rs": "20e49402e0a83e284c11c1a29dc421372997dc9d459f5cf54f7c017f454ad065",
+        "crates/qjs-runtime/src/value/object/class_fields.rs": "d4a8fc7a49ee044fb422b292836f8247a0a6ebb5e3def5b052104a3d23e1f373",
+        "crates/qjs-runtime/src/value/object/flags.rs": "81c8b92400ccff47e10d9816822969ce1a821c068f3ef2d9142b4c6f117e8efa",
+        "crates/qjs-runtime/src/value/object/tests.rs": "fcb74f96b7a18a9b2213a164a0db43c74bde061fb2f216b51813c775735ff413"
+      }
+    },
+    "aligned": {
+      "parts": [],
+      "files": {
+        "crates/qjs-runtime/src/value/object.rs": "56b08612518588764d2a2e916941b58b51e3b18ff6e34754dfc6f55d4b14c3cd",
+        "crates/qjs-runtime/src/value/object/class_fields.rs": "c75fc3735b4b41d8d291234f3c6da8bf4adfac06476e33a1063d29f8e25407f3",
+        "crates/qjs-runtime/src/value/object/flags.rs": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "crates/qjs-runtime/src/value/object/tests.rs": "60807b2aebb6c6644f519cb7950a34307ee4e70f569c37d3e2f3d2ca93602f6a"
+      }
+    }
+  },
+  "base": "8f7d97c71b34e2bec52e2c6df87f4ba4ac51641a",
+  "parent_hunks_sha256": "08079d6977c431fef6a4b85c055e0708e5d01fc083ab3c3fe6904efce59a0360"
+}

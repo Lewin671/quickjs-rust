@@ -1,0 +1,162 @@
+{
+  "count": {
+    "size": 120,
+    "alignment": 8,
+    "fields": {
+      "properties": {"offset":0,"bytes":56},
+      "property_revision": {"offset":56,"bytes":8},
+      "layout_revision": {"offset":64,"bytes":8},
+      "prototype": {"offset":72,"bytes":24},
+      "cold": {"offset":96,"bytes":8},
+      "index_property_count": {"offset":104,"bytes":4},
+      "extensible": {"offset":108,"bytes":1},
+      "raw_json": {"offset":109,"bytes":1},
+      "array_prototype_exotic": {"offset":110,"bytes":1},
+      "typed_array_exotic": {"offset":111,"bytes":1},
+      "symbol_brand": {"offset":112,"bytes":1},
+      "immutable_prototype_exotic": {"offset":113,"bytes":1},
+      "module_namespace_exotic": {"offset":114,"bytes":1},
+      "string_indices_pending": {"offset":115,"bytes":1}
+    },
+    "Rc_request_bytes": 136,
+    "source_log_sha256": "4138fed9522350528f5461bf03c513c6cfc9a3e67fa9c26839bba67eb383aab5"
+  },
+  "flags": {
+    "size": 120,
+    "alignment": 8,
+    "fields": {
+      "properties": {"offset":0,"bytes":56},
+      "property_revision": {"offset":56,"bytes":8},
+      "layout_revision": {"offset":64,"bytes":8},
+      "index_property_count": {"offset":72,"bytes":8},
+      "prototype": {"offset":80,"bytes":24},
+      "cold": {"offset":104,"bytes":8},
+      "flags": {"offset":112,"bytes":1},
+      "typed_array_exotic": {"offset":113,"bytes":1},
+      "symbol_brand": {"offset":114,"bytes":1},
+      "module_namespace_exotic": {"offset":115,"bytes":1}
+    },
+    "Rc_request_bytes": 136,
+    "source_log_sha256": "9a06ac04c45bfa01fa7b0e937e2a6cf39ff5b864993139d4bb4b5abd226be3fc"
+  },
+  "order": {
+    "size": 120,
+    "alignment": 8,
+    "fields": {
+      "properties": {"offset":0,"bytes":56},
+      "property_revision": {"offset":56,"bytes":8},
+      "layout_revision": {"offset":64,"bytes":8},
+      "index_property_count": {"offset":72,"bytes":8},
+      "prototype": {"offset":80,"bytes":24},
+      "cold": {"offset":104,"bytes":8},
+      "extensible": {"offset":112,"bytes":1},
+      "raw_json": {"offset":113,"bytes":1},
+      "array_prototype_exotic": {"offset":114,"bytes":1},
+      "immutable_prototype_exotic": {"offset":115,"bytes":1},
+      "string_indices_pending": {"offset":116,"bytes":1},
+      "typed_array_exotic": {"offset":117,"bytes":1},
+      "module_namespace_exotic": {"offset":118,"bytes":1},
+      "symbol_brand": {"offset":119,"bytes":1}
+    },
+    "Rc_request_bytes": 136,
+    "source_log_sha256": "626b0728d76a98970e7efaaf855331580122829223d29c9c27ee50f7f943ebdd"
+  },
+  "count_flags": {
+    "size": 112,
+    "alignment": 8,
+    "fields": {
+      "properties": {"offset":0,"bytes":56},
+      "property_revision": {"offset":56,"bytes":8},
+      "layout_revision": {"offset":64,"bytes":8},
+      "prototype": {"offset":72,"bytes":24},
+      "cold": {"offset":96,"bytes":8},
+      "index_property_count": {"offset":104,"bytes":4},
+      "flags": {"offset":108,"bytes":1},
+      "typed_array_exotic": {"offset":109,"bytes":1},
+      "symbol_brand": {"offset":110,"bytes":1},
+      "module_namespace_exotic": {"offset":111,"bytes":1}
+    },
+    "Rc_request_bytes": 128,
+    "source_log_sha256": "0a6f8cb5b8d0a0275cd770b94392c4802a555d0c06c961c04cbb16ecbafe2723"
+  },
+  "count_order": {
+    "size": 120,
+    "alignment": 8,
+    "fields": {
+      "properties": {"offset":0,"bytes":56},
+      "property_revision": {"offset":56,"bytes":8},
+      "layout_revision": {"offset":64,"bytes":8},
+      "prototype": {"offset":72,"bytes":24},
+      "cold": {"offset":96,"bytes":8},
+      "index_property_count": {"offset":104,"bytes":4},
+      "extensible": {"offset":108,"bytes":1},
+      "raw_json": {"offset":109,"bytes":1},
+      "array_prototype_exotic": {"offset":110,"bytes":1},
+      "immutable_prototype_exotic": {"offset":111,"bytes":1},
+      "string_indices_pending": {"offset":112,"bytes":1},
+      "typed_array_exotic": {"offset":113,"bytes":1},
+      "module_namespace_exotic": {"offset":114,"bytes":1},
+      "symbol_brand": {"offset":115,"bytes":1}
+    },
+    "Rc_request_bytes": 136,
+    "source_log_sha256": "678d8fce9f0cda8dfae373a003bfdadec0060d1874a9eba1096c9ff2b0a2b0fd"
+  },
+  "flags_order": {
+    "size": 120,
+    "alignment": 8,
+    "fields": {
+      "properties": {"offset":0,"bytes":56},
+      "property_revision": {"offset":56,"bytes":8},
+      "layout_revision": {"offset":64,"bytes":8},
+      "index_property_count": {"offset":72,"bytes":8},
+      "prototype": {"offset":80,"bytes":24},
+      "cold": {"offset":104,"bytes":8},
+      "flags": {"offset":112,"bytes":1},
+      "typed_array_exotic": {"offset":113,"bytes":1},
+      "module_namespace_exotic": {"offset":114,"bytes":1},
+      "symbol_brand": {"offset":115,"bytes":1}
+    },
+    "Rc_request_bytes": 136,
+    "source_log_sha256": "f9aea8fc5842ecf45c44c52133124afaebbf1eac89d92d67a0b53cd14412b900"
+  },
+  "full_a": {
+    "size": 112,
+    "alignment": 8,
+    "fields": {
+      "properties": {"offset":0,"bytes":56},
+      "property_revision": {"offset":56,"bytes":8},
+      "layout_revision": {"offset":64,"bytes":8},
+      "prototype": {"offset":72,"bytes":24},
+      "cold": {"offset":96,"bytes":8},
+      "index_property_count": {"offset":104,"bytes":4},
+      "flags": {"offset":108,"bytes":1},
+      "typed_array_exotic": {"offset":109,"bytes":1},
+      "module_namespace_exotic": {"offset":110,"bytes":1},
+      "symbol_brand": {"offset":111,"bytes":1}
+    },
+    "Rc_request_bytes": 128,
+    "source_log_sha256": "53cec939a872f11021f9347c2693427012a2ab82584902bc3f0bccff399a3c12"
+  },
+  "aligned": {
+    "size": 120,
+    "alignment": 8,
+    "fields": {
+      "properties": {"offset":0,"bytes":56},
+      "property_revision": {"offset":56,"bytes":8},
+      "layout_revision": {"offset":64,"bytes":8},
+      "index_property_count": {"offset":72,"bytes":8},
+      "prototype": {"offset":80,"bytes":24},
+      "cold": {"offset":104,"bytes":8},
+      "extensible": {"offset":112,"bytes":1},
+      "raw_json": {"offset":113,"bytes":1},
+      "array_prototype_exotic": {"offset":114,"bytes":1},
+      "typed_array_exotic": {"offset":115,"bytes":1},
+      "symbol_brand": {"offset":116,"bytes":1},
+      "immutable_prototype_exotic": {"offset":117,"bytes":1},
+      "module_namespace_exotic": {"offset":118,"bytes":1},
+      "string_indices_pending": {"offset":119,"bytes":1}
+    },
+    "Rc_request_bytes": 136,
+    "source_log_sha256": "63f1f4366448200ae93ad6742bb6a1e9c217c4d030d67ac0e0e31d6b5ebce5eb"
+  }
+}

@@ -1,0 +1,102 @@
+{
+  "diagnostic_only": true,
+  "timing": false,
+  "canonical_binary_sha256": {
+    "base": "b0dfc65d0c026d62aa64ef3d69a089eb73b51088c84af75b44617ea2a1737f0e",
+    "aligned": "b0b84489a3f6fd673b06dc4bdc71c8f176387a231ca19fe1da5ea48ca4ee0fd5",
+    "candidate": "3466c37a62f2fb6d764d0123212749ff810138ca05fcad336ce1afa05bdb1e3f"
+  },
+  "fp_snapshot_source": "20261021T104647Z-t056-fp-state-v3",
+  "lead_source": "20261021T114227Z-t056-source-bisect",
+  "producer_sha256": {
+    "walk.py": "61a5fc5d9119194c6ea1bf08a8f5c4e6c89bed07f2d03bdd0cd95b60a7305283",
+    "mechanism.py": "bf1483f96b091ff5f537850f8866982d38108bc6d1c9cb9e6995e9dba77f8cd8",
+    "evidence_io.py": "355f2553e54aa0ac1da6e227fca99a0bc0f61479a3f4924c69de243db534aba3"
+  },
+  "input_assembly_sha256": {
+    "base": "f4afe4c30197f41aa6d571568794e5d6d1f01cb5a5a11e0283b9332f7441a266",
+    "aligned": "afa640cd9d4dcff7613b35f8c92f5d51f4098c30abf045a8fde50512fa68faf9",
+    "candidate": "e23275a80189721fbf0126f8f9623858f672e5a5405a8aebd8fd5a7bd38c1783"
+  },
+  "loops": {
+    "base": {"broad/global_read":"loops/base-global_read.json","broad/local_read":"loops/base-local_read.json"},
+    "aligned": {"broad/global_read":"loops/aligned-global_read.json","broad/local_read":"loops/aligned-local_read.json"},
+    "candidate": {"broad/global_read":"loops/candidate-global_read.json","broad/local_read":"loops/candidate-local_read.json"}
+  },
+  "accounting": {
+    "base:broad/global_read": {
+      "loop_instructions_per_iteration": 152,
+      "N": 23068672,
+      "predicted_increment": 3506438144,
+      "measured_increment_by_block": [3508129354,3508095726,3507995936,3508279597,3507746265],
+      "median_measured_increment": 3508095726,
+      "model_over_measured_increment": 0.9995274980703306,
+      "median_N_whole_instructions": 3539455665,
+      "known_repeated_loop_over_whole_N": 0.9906715393198745,
+      "caveat": "coverage estimate from exact taken-path model and process retired counts; residual includes outside work, OS/counter scope/noise. Instruction fraction is not time fraction; cannot rule out rare long outside stalls without hardware/time attribution."
+    },
+    "base:broad/local_read": {
+      "loop_instructions_per_iteration": 197,
+      "N": 23068672,
+      "predicted_increment": 4544528384,
+      "measured_increment_by_block": [4546785752,4546573592,4546639504,4546437262,4546609961],
+      "median_measured_increment": 4546609961,
+      "model_over_measured_increment": 0.999542169436601,
+      "median_N_whole_instructions": 4577909998,
+      "known_repeated_loop_over_whole_N": 0.9927080674337014,
+      "caveat": "coverage estimate from exact taken-path model and process retired counts; residual includes outside work, OS/counter scope/noise. Instruction fraction is not time fraction; cannot rule out rare long outside stalls without hardware/time attribution."
+    },
+    "aligned:broad/global_read": {
+      "loop_instructions_per_iteration": 152,
+      "N": 23068672,
+      "predicted_increment": 3506438144,
+      "measured_increment_by_block": [3507903328,3507864632,3507918670,3508108161,3508050899],
+      "median_measured_increment": 3507918670,
+      "model_over_measured_increment": 0.9995779474556632,
+      "median_N_whole_instructions": 3541045543,
+      "known_repeated_loop_over_whole_N": 0.9902267421924542,
+      "caveat": "coverage estimate from exact taken-path model and process retired counts; residual includes outside work, OS/counter scope/noise. Instruction fraction is not time fraction; cannot rule out rare long outside stalls without hardware/time attribution."
+    },
+    "aligned:broad/local_read": {
+      "loop_instructions_per_iteration": 197,
+      "N": 23068672,
+      "predicted_increment": 4544528384,
+      "measured_increment_by_block": [4546247482,4546379166,4546330012,4546548858,4546318013],
+      "median_measured_increment": 4546330012,
+      "model_over_measured_increment": 0.9996037181649277,
+      "median_N_whole_instructions": 4579561752,
+      "known_repeated_loop_over_whole_N": 0.9923500179935995,
+      "caveat": "coverage estimate from exact taken-path model and process retired counts; residual includes outside work, OS/counter scope/noise. Instruction fraction is not time fraction; cannot rule out rare long outside stalls without hardware/time attribution."
+    },
+    "candidate:broad/global_read": {
+      "loop_instructions_per_iteration": 152,
+      "N": 23068672,
+      "predicted_increment": 3506438144,
+      "measured_increment_by_block": [3508921920,3508669071,3508622315,3508752317,3508752373],
+      "median_measured_increment": 3508752317,
+      "model_over_measured_increment": 0.9993404570083823,
+      "median_N_whole_instructions": 3541741175,
+      "known_repeated_loop_over_whole_N": 0.9900322521450202,
+      "caveat": "coverage estimate from exact taken-path model and process retired counts; residual includes outside work, OS/counter scope/noise. Instruction fraction is not time fraction; cannot rule out rare long outside stalls without hardware/time attribution."
+    },
+    "candidate:broad/local_read": {
+      "loop_instructions_per_iteration": 197,
+      "N": 23068672,
+      "predicted_increment": 4544528384,
+      "measured_increment_by_block": [4546369279,4546482756,4546487986,4546524926,4546501343],
+      "median_measured_increment": 4546487986,
+      "model_over_measured_increment": 0.9995689855541169,
+      "median_N_whole_instructions": 4579470701,
+      "known_repeated_loop_over_whole_N": 0.9923697483221435,
+      "caveat": "coverage estimate from exact taken-path model and process retired counts; residual includes outside work, OS/counter scope/noise. Instruction fraction is not time fraction; cannot rule out rare long outside stalls without hardware/time attribution."
+    }
+  },
+  "loop_files_sha256": {
+    "loops/base-global_read.json": "1b8320defd97c6a7411bb4f8fe29a7d846e23a766ea44d6f33924b6daab9f314",
+    "loops/base-local_read.json": "0414c7860d0956c4d76a4f839237836b6667c8fb2afa417d287b92a62b16a73d",
+    "loops/aligned-global_read.json": "bb296692d47c1ab14dd9363e54ea2b1be87b98f32c8523947f5a7b7fe2c2913c",
+    "loops/aligned-local_read.json": "87413e0f82fa02b3acf1b87289e9330ad6416f348a785da7a55682cf8f7dc638",
+    "loops/candidate-global_read.json": "6fabb5f616aa513bb5ec2c18a5c8f608faefc632a81342e2ea3f36a8dbc0233c",
+    "loops/candidate-local_read.json": "3faada6157b2621d487d1895339515b150c5156966a711faace8b9d87ef482c5"
+  }
+}

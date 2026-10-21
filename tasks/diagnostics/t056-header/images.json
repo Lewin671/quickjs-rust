@@ -1,0 +1,128 @@
+{
+  "diagnostic_only": true,
+  "timing": false,
+  "images": {
+    "base": {"binary_sha256":"b0dfc65d0c026d62aa64ef3d69a089eb73b51088c84af75b44617ea2a1737f0e","parent_role":"base","canonical_recipe":true},
+    "aligned": {"binary_sha256":"b0b84489a3f6fd673b06dc4bdc71c8f176387a231ca19fe1da5ea48ca4ee0fd5","parent_role":"aligned","canonical_recipe":true},
+    "candidate": {"binary_sha256":"3466c37a62f2fb6d764d0123212749ff810138ca05fcad336ce1afa05bdb1e3f","parent_role":"candidate","canonical_recipe":true},
+    "full_a": {"binary_sha256":"23ffd979b63cea03149e235ee3677d1f8e86f169b82ad5fd3265f55eb5f516fe","parent_role":"plus_a","canonical_recipe":true},
+    "count": {
+      "parts": ["count"],
+      "files_sha256": {
+        "crates/qjs-runtime/src/value/object.rs": "1604b4e6793fbf0d72ec1291a1b871a5666e9108c09a510fd36bda60e06e11fb",
+        "crates/qjs-runtime/src/value/object/class_fields.rs": "b8b3f860841095b6d21e61c16ff92030470cad2c6e57a76f474c1fe9ddeafbf7",
+        "crates/qjs-runtime/src/value/object/flags.rs": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "crates/qjs-runtime/src/value/object/tests.rs": "60807b2aebb6c6644f519cb7950a34307ee4e70f569c37d3e2f3d2ca93602f6a"
+      },
+      "binary_sha256": "661969a50fb0bc36f73e6fe1af20e78218c2ceffb63d62a4903c7c61a67858ea",
+      "canonical_recipe": true,
+      "build_log_sha256": "50020bfe50304eb6fe6cb70c8ddeb9dd184c39b4d3ab7a132fdb7f5bb9ee0694"
+    },
+    "flags": {
+      "parts": ["flags"],
+      "files_sha256": {
+        "crates/qjs-runtime/src/value/object.rs": "443eb7fa49b71177aa2d1dcf004e1eef99f33f52db34f1c9065aa6326782f7f7",
+        "crates/qjs-runtime/src/value/object/class_fields.rs": "ce8daedf8efd46ea337fbf47caa4c0852e48dae83dc83638c52a30f959703152",
+        "crates/qjs-runtime/src/value/object/flags.rs": "81c8b92400ccff47e10d9816822969ce1a821c068f3ef2d9142b4c6f117e8efa",
+        "crates/qjs-runtime/src/value/object/tests.rs": "60807b2aebb6c6644f519cb7950a34307ee4e70f569c37d3e2f3d2ca93602f6a"
+      },
+      "binary_sha256": "100cda383a0f5146e2f9e025f273edfb1d622fe0754e9d84bef10954732a7152",
+      "canonical_recipe": true,
+      "build_log_sha256": "ef1644716a1a953095c3130bec1f95ef81a869f8bf6c83e757a37a23860d707a"
+    },
+    "order": {
+      "parts": ["order"],
+      "files_sha256": {
+        "crates/qjs-runtime/src/value/object.rs": "1e396bdb65bc3f2abc433581f221c44a91beb41e89cae038eebacc5506c5f6cc",
+        "crates/qjs-runtime/src/value/object/class_fields.rs": "c75fc3735b4b41d8d291234f3c6da8bf4adfac06476e33a1063d29f8e25407f3",
+        "crates/qjs-runtime/src/value/object/flags.rs": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "crates/qjs-runtime/src/value/object/tests.rs": "60807b2aebb6c6644f519cb7950a34307ee4e70f569c37d3e2f3d2ca93602f6a"
+      },
+      "binary_sha256": "03850a911afd141ff6ea85d0379149bb59d8faf3a629432db7dd65fd4df913b2",
+      "canonical_recipe": true,
+      "build_log_sha256": "24575df03ee26a1c06e048803cad43aec004a41f9dff43a82f5b36701c9aebb3"
+    },
+    "count_flags": {
+      "parts": ["count","flags"],
+      "files_sha256": {
+        "crates/qjs-runtime/src/value/object.rs": "e19c30d0bafe228b27b5f3cc680dfa99015916bdee881d110b31a715c4a1f878",
+        "crates/qjs-runtime/src/value/object/class_fields.rs": "d4a8fc7a49ee044fb422b292836f8247a0a6ebb5e3def5b052104a3d23e1f373",
+        "crates/qjs-runtime/src/value/object/flags.rs": "81c8b92400ccff47e10d9816822969ce1a821c068f3ef2d9142b4c6f117e8efa",
+        "crates/qjs-runtime/src/value/object/tests.rs": "60807b2aebb6c6644f519cb7950a34307ee4e70f569c37d3e2f3d2ca93602f6a"
+      },
+      "binary_sha256": "52ed87e969884aed7cb6d2ccd047f484dd41c26c31c28a94bbebba6201bcfeca",
+      "canonical_recipe": true,
+      "build_log_sha256": "4f4c04e51f924889170627b042640de225cd3d080e8478f008616c115b2a80ba"
+    },
+    "count_order": {
+      "parts": ["count","order"],
+      "files_sha256": {
+        "crates/qjs-runtime/src/value/object.rs": "c1c89af2dcba7b53b0ec24860cb6cfa0a663b4d4841fb8b13560bc2aa42a4053",
+        "crates/qjs-runtime/src/value/object/class_fields.rs": "b8b3f860841095b6d21e61c16ff92030470cad2c6e57a76f474c1fe9ddeafbf7",
+        "crates/qjs-runtime/src/value/object/flags.rs": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "crates/qjs-runtime/src/value/object/tests.rs": "60807b2aebb6c6644f519cb7950a34307ee4e70f569c37d3e2f3d2ca93602f6a"
+      },
+      "binary_sha256": "4f9e3a8615da30914ef67b199308883813a67459c551b410d20c6b64e82ecad7",
+      "canonical_recipe": true,
+      "build_log_sha256": "806850ee04354ea7c8eea2102d6e0e1c8151bdc45378f40642caf56ba13e1c18"
+    },
+    "flags_order": {
+      "parts": ["flags","order"],
+      "files_sha256": {
+        "crates/qjs-runtime/src/value/object.rs": "26ac764e44310f9353d5518e618becb1ecc7fbe5e2b2cbee135297786fbc9b2d",
+        "crates/qjs-runtime/src/value/object/class_fields.rs": "ce8daedf8efd46ea337fbf47caa4c0852e48dae83dc83638c52a30f959703152",
+        "crates/qjs-runtime/src/value/object/flags.rs": "81c8b92400ccff47e10d9816822969ce1a821c068f3ef2d9142b4c6f117e8efa",
+        "crates/qjs-runtime/src/value/object/tests.rs": "60807b2aebb6c6644f519cb7950a34307ee4e70f569c37d3e2f3d2ca93602f6a"
+      },
+      "binary_sha256": "a8568a65f5e1bfd1f8ed5bfbf54b61d505f28c84ba4f4e566d544dd59bd7ba0b",
+      "canonical_recipe": true,
+      "build_log_sha256": "a3f9bd8a40ce66a1d53c3549cd4ea63520bf96c1be7007fc7c882fba63829388"
+    }
+  },
+  "audits": {
+    "base": "audits/base.json",
+    "aligned": "audits/aligned.json",
+    "candidate": "audits/candidate.json",
+    "full_a": "audits/full_a.json",
+    "count": "audits/count.json",
+    "flags": "audits/flags.json",
+    "order": "audits/order.json",
+    "count_flags": "audits/count_flags.json",
+    "count_order": "audits/count_order.json",
+    "flags_order": "audits/flags_order.json"
+  },
+  "recipe": {
+    "cargo_args": [
+      "--locked",
+      "--release",
+      "-p",
+      "qjs-cli",
+      "--features",
+      "agents",
+      "--config=profile.release.opt-level=3",
+      "--config=profile.release.lto=\"fat\"",
+      "--config=profile.release.codegen-units=16",
+      "--config=profile.release.panic=\"abort\""
+    ],
+    "environment": {"CARGO_INCREMENTAL":"0","CARGO_ENCODED_RUSTFLAGS":"-Csymbol-mangling-version=v0\u001f-Cllvm-args=-align-all-functions=4"},
+    "binary": "qjs"
+  },
+  "parts_sha256": "28246787510ddc7340d7117460aff63d233e5f811a98e811b21941083b3d21f1",
+  "all_outputs_match": true,
+  "checksums": {
+    "broad/global_read:23068672": "{\"operations\": 23068672, \"checksum\": 23068672}",
+    "broad/global_read:46137344": "{\"operations\": 46137344, \"checksum\": 46137344}",
+    "broad/local_read:23068672": "{\"operations\": 46137344, \"checksum\": 69206016}",
+    "broad/local_read:46137344": "{\"operations\": 92274688, \"checksum\": 138412032}"
+  },
+  "producer_sha256": {
+    "parts.py": "80db9628b805ce84db494d50774c809087c6474b745d29a52b5987a630144e3e",
+    "bisect_partition.py": "8bf5b57ba2431d27dcdff078a3e03548f165560981baf29bc2dd2b4753a2d74e",
+    "build.py": "68838489560314d78f6269f3c1afffeb7e9513fb2795bfc794f6e0fddc593943",
+    "audit.py": "0f5aee5c37b1662bcd1f5a4f62c984d4918f009282cfd956737b96f3ceb1f2b2",
+    "extract-paths.py": "2b53c459b86ee4692229b8e6b6b8d7c6b08b26936246e35da22f5d73218714fd"
+  },
+  "parent_images_sha256": "cd33530c9bdbf1df9b0c47ac34a2d136ce0b0b468da7c62781687fc57b3fee05",
+  "toolchain": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: x86_64-apple-darwin\nrelease: 1.95.0\nLLVM version: 22.1.2\n",
+  "raw_job_sha256": "e451cd6ac4a5668dc946ad3cf2843854beae70f3f6cb9fb1aada728de3e15549"
+}

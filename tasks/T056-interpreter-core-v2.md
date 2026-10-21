@@ -7,16 +7,16 @@
   `agent/t056-m1-stage2/codex`; the write-site add replay removed from stage A stays on
   `agent/t056-add-transition-replay/claude`.
 - Verified at: dfff3bb6/image3466c37a exact42672/42672, full/NG255/subset5170 and bound86 pass;
-  lead063231Z triage global1.4271/instructions1.0002; 112221Z eight ablations done0; all11 images pass output/hot-path checks.
+  lead114227Z a-only threshold match (AA inconclusive); header images/audits and fresh layouts120731Z done0.
 - Evidence: [stage A record](archive/T056-m1-stageA-record.md),
   [allocation follow-up](archive/T056-m1-stageA-allocation-diagnosis.md),
-  [architecture review](archive/T056-architecture-review.md), [stack/startup diagnosis](archive/T056-stack-phase-diagnosis.md), [PMU/FP diagnosis](archive/T056-pmu-attribution.md), [source bisection](archive/T056-source-bisect.md), [M2 inputs](archive/T056-m2-design-inputs.md);
+  [architecture review](archive/T056-architecture-review.md), [stack/startup diagnosis](archive/T056-stack-phase-diagnosis.md), [PMU/FP diagnosis](archive/T056-pmu-attribution.md), [source bisection](archive/T056-source-bisect.md), [header factors/full-loop accounting](archive/T056-header-subparts.md), [M2 inputs](archive/T056-m2-design-inputs.md);
   plans [`interpreter-core-v2-atoms-layouts`](performance-units/interpreter-core-v2-atoms-layouts.json) (closed),
   [`interpreter-core-v2-layout-edges`](performance-units/interpreter-core-v2-layout-edges.json).
-- Unresolved: global remains large across tested code/zone/stack phases. Stack-alias explanation rejected by lead;
-  frozen stack probe still inconclusive due AA precision. Scalar bits/op list/executor agree; hardware cause unknown.
-- Next action: lead runs the [≤25min source bisection](diagnostics/t056-bisect/README.md); bidirectional group trigger before mechanism work.
-  PMU remains blocked; no owner timing/production fix or further placement guesses; last attempt unspent.
+- Unresolved: lead114227Z uniquely matches header group a; automatic verdict remains inconclusive due AA.
+  Full repeated loop is152 instructions, no ObjectData/RefCell access; hardware cause remains unknown.
+- Next action: lead runs the [≤15min header-factor matrix](diagnostics/t056-header/README.md); inspect singleton/interaction before fixes.
+  PMU blocked; no owner timing/production change; last attempt unspent.
 
 ## Goal and scope
 

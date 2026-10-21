@@ -1,0 +1,30 @@
+{
+  "build_job": "20261021T120731Z-t056-header-layout-qualification",
+  "initial_image_job": "20261021T115238Z-t056-header-subparts-build",
+  "images_sha256": "e451cd6ac4a5668dc946ad3cf2843854beae70f3f6cb9fb1aada728de3e15549",
+  "layouts_sha256": "605a5151d8337610d20df002bde8cdb7a81efafada364780aa88d2f00bd70eac",
+  "correctness_job": "20261021T060648Z-t056-m1a-allocation-correctness",
+  "pregate_job": "20261021T062918Z-t056-m1a-allocation-pregate86",
+  "workload_sha256": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
+  "binary_sha256": {
+    "base": "b0dfc65d0c026d62aa64ef3d69a089eb73b51088c84af75b44617ea2a1737f0e",
+    "aligned": "b0b84489a3f6fd673b06dc4bdc71c8f176387a231ca19fe1da5ea48ca4ee0fd5",
+    "candidate": "3466c37a62f2fb6d764d0123212749ff810138ca05fcad336ce1afa05bdb1e3f",
+    "full_a": "23ffd979b63cea03149e235ee3677d1f8e86f169b82ad5fd3265f55eb5f516fe",
+    "count": "661969a50fb0bc36f73e6fe1af20e78218c2ceffb63d62a4903c7c61a67858ea",
+    "flags": "100cda383a0f5146e2f9e025f273edfb1d622fe0754e9d84bef10954732a7152",
+    "order": "03850a911afd141ff6ea85d0379149bb59d8faf3a629432db7dd65fd4df913b2",
+    "count_flags": "52ed87e969884aed7cb6d2ccd047f484dd41c26c31c28a94bbebba6201bcfeca",
+    "count_order": "4f9e3a8615da30914ef67b199308883813a67459c551b410d20c6b64e82ecad7",
+    "flags_order": "a8568a65f5e1bfd1f8ed5bfbf54b61d505f28c84ba4f4e566d544dd59bd7ba0b"
+  },
+  "files": {
+    "collect.py": "20f84ec6f1c62426f81622722b6dd352df4d38a24e8526c7107f957ba6f9cfff",
+    "protocol.py": "d3a5e7a7b71529617451283945c128a23092721eef0a57a84bad48e6bac4a5fe",
+    "analyze.py": "5b376f562646705bb540d095f01e817383b9f45dc88500f8fcabbb39cce8d3c4",
+    "chain_common.py": "24f2e1551c457b6e5d37f70229d3ec2f85e49cc4a3da563ad4fb31a6f411e7d5",
+    "window.py": "daf187949c5be104ead5e727353406a6670b8f54adaa9a1ad300fa4d9ab7b2f6",
+    "parts.json": "28246787510ddc7340d7117460aff63d233e5f811a98e811b21941083b3d21f1"
+  },
+  "images_record_sha256": "e05228af6ebf8e61f05b3602b5f8c42a3fcf2e15a1ca08961a16e63103a8cc20"
+}

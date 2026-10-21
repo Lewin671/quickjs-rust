@@ -1,0 +1,30 @@
+{
+  "diagnostic_only": true,
+  "hardware_profiled": false,
+  "timing_submitted": false,
+  "production_tree": "dfff3bb6 unchanged at 3df764e4",
+  "mock_process_calls": {
+    "trigger": 390,
+    "wrong-output": 8,
+    "timeout": 1,
+    "disturbed": 390,
+    "expired": 0,
+    "bad-hash": 0,
+    "owner": 0
+  },
+  "whole_loop_replays": 24,
+  "global_instructions_per_iteration": 152,
+  "local_instructions_per_iteration": 197,
+  "no_architectural_ObjectData_access_or_partial_overlap_in_repeated_loop": true,
+  "verified": [
+    "factor source hashes and old/full reconstruction",
+    "rendered shell and embedded Python",
+    "real images/receipts/source and byte audits",
+    "eight fresh independent type-layout probes",
+    "whole-path table-driven replay, memory widths and unknown-input rejection",
+    "factorial singleton/pair/triple patterns, AA/anchor/incomplete rejection",
+    "five blocks/13 roles/130 units/260 measured+130 preflight",
+    "output/timeout/disturbance/hash/deadline/owner rejection",
+    "15min/DST/quiet window"
+  ]
+}
