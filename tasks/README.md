@@ -14,7 +14,7 @@ it to `archive/` with `git mv` and move its row below.
 | Task | Status | What it is |
 | --- | --- | --- |
 | [T057](T057-string-code-units.md) string code units | active | Stage-1 PROMOTE under v4; integrated into main; stages 2 onward require new plans. |
-| [T056](T056-interpreter-core-v2.md) interpreter core v2 | active | M1 stage1 on main; stage A rejected on valid K=6 (1/2 spent). dfff passes exact42,672 and86 but diagnostic global wall1.427 at equal instructions; architecture review proposes owned hot state and a small execution kernel; lead independent review and prepared robustness probe precede further implementation or last attempt. |
+| [T056](T056-interpreter-core-v2.md) interpreter core v2 | active | M1 stage1 on main; stage A rejected on valid K=6 (1/2 spent). dfff exact42,672/86 pass, natural global1.427 at equal instructions. Independent review puts code/kernel isolation first, data ownership in M2; qualified lead-only diagnostic K=6 mini-panel and code×zone2×2 prepared, no timing submitted. Last attempt unspent. |
 | [T018](T018-broad-performance.md) broad performance | active | The performance campaign contract and its targets against QuickJS-NG. Start performance work here, then follow [the workflow](../docs/performance-workflow.md). |
 | [T040](T040-imac-general-performance.md) x86_64 general optimization | active | Fresh current-main comparison and exact-binary profiles, followed by independent general runtime units. |
 | [T045](T045-typed-loop-boxed-demand-provenance.md) boxed demand provenance | active | Ordinary identity-flow joins lose boxed demand; exact profiles and seed diagnosis precede a compiler-only unit. |

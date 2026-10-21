@@ -1,0 +1,121 @@
+{
+  "diagnostic_only": true,
+  "timing": false,
+  "build_job": "20261021T082252Z-t056-code-layout-qualification",
+  "build_sha256": "45032fad785f1a7c4bc2fa14f40d271adcf775dbbd781ba63e076d4b476bf1d0",
+  "cells": [
+    {
+      "side": "b",
+      "code": 0,
+      "zone": 0,
+      "image_sha256": "b0dfc65d0c026d62aa64ef3d69a089eb73b51088c84af75b44617ea2a1737f0e",
+      "ng_fixtures": 255,
+      "outputs": {
+        "broad/global_read": "QJS_BENCH_RESULT {\"case_id\":\"global_read\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "broad/local_read": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":1000,\"operations\":2000,\"checksum\":3000}\n",
+        "external/sunspider-1.0/string-unpack-code": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n",
+        "diagnostic/empty": "0\n"
+      },
+      "log_sha256": "5dce06575094b4a5bf29a535e33344a606a2608f857facf2da2834c8d9141dac"
+    },
+    {
+      "side": "b",
+      "code": 0,
+      "zone": 1,
+      "image_sha256": "b0dfc65d0c026d62aa64ef3d69a089eb73b51088c84af75b44617ea2a1737f0e",
+      "ng_fixtures": 255,
+      "outputs": {
+        "broad/global_read": "QJS_BENCH_RESULT {\"case_id\":\"global_read\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "broad/local_read": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":1000,\"operations\":2000,\"checksum\":3000}\n",
+        "external/sunspider-1.0/string-unpack-code": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n",
+        "diagnostic/empty": "0\n"
+      },
+      "log_sha256": "5dce06575094b4a5bf29a535e33344a606a2608f857facf2da2834c8d9141dac"
+    },
+    {
+      "side": "b",
+      "code": 1,
+      "zone": 0,
+      "image_sha256": "922d6fe2634125a860d53be4ee13a56d84ec339730f3157e36be5882fecee534",
+      "ng_fixtures": 255,
+      "outputs": {
+        "broad/global_read": "QJS_BENCH_RESULT {\"case_id\":\"global_read\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "broad/local_read": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":1000,\"operations\":2000,\"checksum\":3000}\n",
+        "external/sunspider-1.0/string-unpack-code": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n",
+        "diagnostic/empty": "0\n"
+      },
+      "log_sha256": "5dce06575094b4a5bf29a535e33344a606a2608f857facf2da2834c8d9141dac"
+    },
+    {
+      "side": "b",
+      "code": 1,
+      "zone": 1,
+      "image_sha256": "922d6fe2634125a860d53be4ee13a56d84ec339730f3157e36be5882fecee534",
+      "ng_fixtures": 255,
+      "outputs": {
+        "broad/global_read": "QJS_BENCH_RESULT {\"case_id\":\"global_read\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "broad/local_read": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":1000,\"operations\":2000,\"checksum\":3000}\n",
+        "external/sunspider-1.0/string-unpack-code": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n",
+        "diagnostic/empty": "0\n"
+      },
+      "log_sha256": "5dce06575094b4a5bf29a535e33344a606a2608f857facf2da2834c8d9141dac"
+    },
+    {
+      "side": "c",
+      "code": 0,
+      "zone": 0,
+      "image_sha256": "3466c37a62f2fb6d764d0123212749ff810138ca05fcad336ce1afa05bdb1e3f",
+      "ng_fixtures": 255,
+      "outputs": {
+        "broad/global_read": "QJS_BENCH_RESULT {\"case_id\":\"global_read\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "broad/local_read": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":1000,\"operations\":2000,\"checksum\":3000}\n",
+        "external/sunspider-1.0/string-unpack-code": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n",
+        "diagnostic/empty": "0\n"
+      },
+      "log_sha256": "5dce06575094b4a5bf29a535e33344a606a2608f857facf2da2834c8d9141dac"
+    },
+    {
+      "side": "c",
+      "code": 0,
+      "zone": 1,
+      "image_sha256": "3466c37a62f2fb6d764d0123212749ff810138ca05fcad336ce1afa05bdb1e3f",
+      "ng_fixtures": 255,
+      "outputs": {
+        "broad/global_read": "QJS_BENCH_RESULT {\"case_id\":\"global_read\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "broad/local_read": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":1000,\"operations\":2000,\"checksum\":3000}\n",
+        "external/sunspider-1.0/string-unpack-code": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n",
+        "diagnostic/empty": "0\n"
+      },
+      "log_sha256": "5dce06575094b4a5bf29a535e33344a606a2608f857facf2da2834c8d9141dac"
+    },
+    {
+      "side": "c",
+      "code": 1,
+      "zone": 0,
+      "image_sha256": "fee547b0ee97e2f44d81dcf29f3d852407c23ddf55798f29b1b6a42ef12db11c",
+      "ng_fixtures": 255,
+      "outputs": {
+        "broad/global_read": "QJS_BENCH_RESULT {\"case_id\":\"global_read\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "broad/local_read": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":1000,\"operations\":2000,\"checksum\":3000}\n",
+        "external/sunspider-1.0/string-unpack-code": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n",
+        "diagnostic/empty": "0\n"
+      },
+      "log_sha256": "5dce06575094b4a5bf29a535e33344a606a2608f857facf2da2834c8d9141dac"
+    },
+    {
+      "side": "c",
+      "code": 1,
+      "zone": 1,
+      "image_sha256": "fee547b0ee97e2f44d81dcf29f3d852407c23ddf55798f29b1b6a42ef12db11c",
+      "ng_fixtures": 255,
+      "outputs": {
+        "broad/global_read": "QJS_BENCH_RESULT {\"case_id\":\"global_read\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "broad/local_read": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":1000,\"operations\":2000,\"checksum\":3000}\n",
+        "external/sunspider-1.0/string-unpack-code": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n",
+        "diagnostic/empty": "0\n"
+      },
+      "log_sha256": "5dce06575094b4a5bf29a535e33344a606a2608f857facf2da2834c8d9141dac"
+    }
+  ],
+  "all_outputs_match": true
+}

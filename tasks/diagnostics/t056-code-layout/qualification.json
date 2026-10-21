@@ -1,0 +1,431 @@
+{
+  "diagnostic_only": true,
+  "timing": false,
+  "base_build_job": "20261020T210104Z-t056-m1a-chain-ready",
+  "base_identity_sha256": "c2f76fcf3d2d6eb9165c502f050f73b2722d37fc9aa8dfa16fb8a832fc8ef51c",
+  "offsets": [
+    0,
+    16,
+    64,
+    240,
+    512,
+    1008
+  ],
+  "cases": [
+    "broad/global_read",
+    "broad/local_read",
+    "broad/branch_arithmetic",
+    "external/sunspider-1.0/string-unpack-code",
+    "sentinel/heterogeneous_property_read",
+    "broad/array_read",
+    "broad/captured_read",
+    "external/sunspider-1.0/bitops-bitwise-and",
+    "diagnostic/empty"
+  ],
+  "images": {
+    "b0": {
+      "sha256": "b0dfc65d0c026d62aa64ef3d69a089eb73b51088c84af75b44617ea2a1737f0e",
+      "revision": "f58c696e8379261ed726f0cea1051ed6d34f431a",
+      "offset": 0,
+      "audit": {
+        "natural": true
+      }
+    },
+    "b1": {
+      "sha256": "922d6fe2634125a860d53be4ee13a56d84ec339730f3157e36be5882fecee534",
+      "revision": "f58c696e8379261ed726f0cea1051ed6d34f431a",
+      "offset": 16,
+      "audit": {
+        "actual_uniform_shift": 16,
+        "address_drift": 0,
+        "body_drift": 0,
+        "declared_nops_verified": true,
+        "functions": 4203,
+        "pad_bytes": 16,
+        "section_relative_shift": 16,
+        "text_section_shift": 0
+      }
+    },
+    "b2": {
+      "sha256": "8e8627aeb0f7b534e6300f519fcebbde4e8f748c14babcdd86a1b4d63f08d964",
+      "revision": "f58c696e8379261ed726f0cea1051ed6d34f431a",
+      "offset": 64,
+      "audit": {
+        "actual_uniform_shift": 64,
+        "address_drift": 0,
+        "body_drift": 0,
+        "declared_nops_verified": true,
+        "functions": 4203,
+        "pad_bytes": 64,
+        "section_relative_shift": 64,
+        "text_section_shift": 0
+      }
+    },
+    "b3": {
+      "sha256": "ca29c934b55c6fa160af3b79996173463d0cd7246e7e23f0fce20b1459d87ecd",
+      "revision": "f58c696e8379261ed726f0cea1051ed6d34f431a",
+      "offset": 240,
+      "audit": {
+        "actual_uniform_shift": 240,
+        "address_drift": 0,
+        "body_drift": 0,
+        "declared_nops_verified": true,
+        "functions": 4203,
+        "pad_bytes": 240,
+        "section_relative_shift": 240,
+        "text_section_shift": 0
+      }
+    },
+    "b4": {
+      "sha256": "59b4b86849f45967143e17ebbaff031ccf02019a603dac856998974108482ecf",
+      "revision": "f58c696e8379261ed726f0cea1051ed6d34f431a",
+      "offset": 512,
+      "audit": {
+        "actual_uniform_shift": 12800,
+        "address_drift": 0,
+        "body_drift": 0,
+        "declared_nops_verified": true,
+        "functions": 4203,
+        "pad_bytes": 512,
+        "section_relative_shift": 512,
+        "text_section_shift": 12288
+      }
+    },
+    "b5": {
+      "sha256": "72af51ba5afc2d6a4a5c43ac8beaf0e5b4daba1d4879b8660be36cbaa986661f",
+      "revision": "f58c696e8379261ed726f0cea1051ed6d34f431a",
+      "offset": 1008,
+      "audit": {
+        "actual_uniform_shift": 13296,
+        "address_drift": 0,
+        "body_drift": 0,
+        "declared_nops_verified": true,
+        "functions": 4203,
+        "pad_bytes": 1008,
+        "section_relative_shift": 1008,
+        "text_section_shift": 12288
+      }
+    },
+    "c0": {
+      "sha256": "3466c37a62f2fb6d764d0123212749ff810138ca05fcad336ce1afa05bdb1e3f",
+      "revision": "dfff3bb6bf3db01fb52a7612ed1144900b5f08c5",
+      "offset": 0,
+      "audit": {
+        "natural": true
+      }
+    },
+    "c1": {
+      "sha256": "fee547b0ee97e2f44d81dcf29f3d852407c23ddf55798f29b1b6a42ef12db11c",
+      "revision": "dfff3bb6bf3db01fb52a7612ed1144900b5f08c5",
+      "offset": 16,
+      "audit": {
+        "functions": 4223,
+        "pad_bytes": 16,
+        "actual_uniform_shift": 16,
+        "text_section_shift": 0,
+        "section_relative_shift": 16,
+        "declared_nops_verified": true,
+        "body_drift": 0,
+        "address_drift": 0
+      }
+    },
+    "c2": {
+      "sha256": "9043aabb48b1d27652adc7c3f898ac6d9d0ef95691516484e8b9ee800b4a33f5",
+      "revision": "dfff3bb6bf3db01fb52a7612ed1144900b5f08c5",
+      "offset": 64,
+      "audit": {
+        "functions": 4223,
+        "pad_bytes": 64,
+        "actual_uniform_shift": 64,
+        "text_section_shift": 0,
+        "section_relative_shift": 64,
+        "declared_nops_verified": true,
+        "body_drift": 0,
+        "address_drift": 0
+      }
+    },
+    "c3": {
+      "sha256": "8ae6087903d95227385d8b602aca01aff3066db3c0016dc97f8c4d0fa387e9d9",
+      "revision": "dfff3bb6bf3db01fb52a7612ed1144900b5f08c5",
+      "offset": 240,
+      "audit": {
+        "functions": 4223,
+        "pad_bytes": 240,
+        "actual_uniform_shift": 240,
+        "text_section_shift": 0,
+        "section_relative_shift": 240,
+        "declared_nops_verified": true,
+        "body_drift": 0,
+        "address_drift": 0
+      }
+    },
+    "c4": {
+      "sha256": "214c4fcdd02c01bd1161f4d6a5d41edec82982d2979997596e9dd48d3b7f6636",
+      "revision": "dfff3bb6bf3db01fb52a7612ed1144900b5f08c5",
+      "offset": 512,
+      "audit": {
+        "functions": 4223,
+        "pad_bytes": 512,
+        "actual_uniform_shift": 512,
+        "text_section_shift": 0,
+        "section_relative_shift": 512,
+        "declared_nops_verified": true,
+        "body_drift": 0,
+        "address_drift": 0
+      }
+    },
+    "c5": {
+      "sha256": "86707b25f1192e9802140bfcbefbe302a647e32af00c5fd31150553b6f562749",
+      "revision": "dfff3bb6bf3db01fb52a7612ed1144900b5f08c5",
+      "offset": 1008,
+      "audit": {
+        "functions": 4223,
+        "pad_bytes": 1008,
+        "actual_uniform_shift": 1008,
+        "text_section_shift": 0,
+        "section_relative_shift": 1008,
+        "declared_nops_verified": true,
+        "body_drift": 0,
+        "address_drift": 0
+      }
+    }
+  },
+  "qualification": [
+    {
+      "image": "b0",
+      "ng_fixtures": 255,
+      "outputs": {
+        "broad/global_read": "QJS_BENCH_RESULT {\"case_id\":\"global_read\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "broad/local_read": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":1000,\"operations\":2000,\"checksum\":3000}\n",
+        "broad/branch_arithmetic": "QJS_BENCH_RESULT {\"case_id\":\"branch_arithmetic\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "external/sunspider-1.0/string-unpack-code": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n",
+        "sentinel/heterogeneous_property_read": "QJS_BENCH_RESULT {\"case_id\":\"heterogeneous_property_read\",\"iterations\":1000,\"operations\":3000,\"checksum\":500500}\n",
+        "broad/array_read": "QJS_BENCH_RESULT {\"case_id\":\"array_read\",\"iterations\":1000,\"operations\":4000,\"checksum\":10000}\n",
+        "broad/captured_read": "QJS_BENCH_RESULT {\"case_id\":\"captured_read\",\"iterations\":1000,\"operations\":1000,\"checksum\":506500}\n",
+        "external/sunspider-1.0/bitops-bitwise-and": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n",
+        "diagnostic/empty": "0\n"
+      },
+      "ng_log_sha256": "5dce06575094b4a5bf29a535e33344a606a2608f857facf2da2834c8d9141dac"
+    },
+    {
+      "image": "b1",
+      "ng_fixtures": 255,
+      "outputs": {
+        "broad/global_read": "QJS_BENCH_RESULT {\"case_id\":\"global_read\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "broad/local_read": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":1000,\"operations\":2000,\"checksum\":3000}\n",
+        "broad/branch_arithmetic": "QJS_BENCH_RESULT {\"case_id\":\"branch_arithmetic\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "external/sunspider-1.0/string-unpack-code": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n",
+        "sentinel/heterogeneous_property_read": "QJS_BENCH_RESULT {\"case_id\":\"heterogeneous_property_read\",\"iterations\":1000,\"operations\":3000,\"checksum\":500500}\n",
+        "broad/array_read": "QJS_BENCH_RESULT {\"case_id\":\"array_read\",\"iterations\":1000,\"operations\":4000,\"checksum\":10000}\n",
+        "broad/captured_read": "QJS_BENCH_RESULT {\"case_id\":\"captured_read\",\"iterations\":1000,\"operations\":1000,\"checksum\":506500}\n",
+        "external/sunspider-1.0/bitops-bitwise-and": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n",
+        "diagnostic/empty": "0\n"
+      },
+      "ng_log_sha256": "5dce06575094b4a5bf29a535e33344a606a2608f857facf2da2834c8d9141dac"
+    },
+    {
+      "image": "b2",
+      "ng_fixtures": 255,
+      "outputs": {
+        "broad/global_read": "QJS_BENCH_RESULT {\"case_id\":\"global_read\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "broad/local_read": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":1000,\"operations\":2000,\"checksum\":3000}\n",
+        "broad/branch_arithmetic": "QJS_BENCH_RESULT {\"case_id\":\"branch_arithmetic\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "external/sunspider-1.0/string-unpack-code": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n",
+        "sentinel/heterogeneous_property_read": "QJS_BENCH_RESULT {\"case_id\":\"heterogeneous_property_read\",\"iterations\":1000,\"operations\":3000,\"checksum\":500500}\n",
+        "broad/array_read": "QJS_BENCH_RESULT {\"case_id\":\"array_read\",\"iterations\":1000,\"operations\":4000,\"checksum\":10000}\n",
+        "broad/captured_read": "QJS_BENCH_RESULT {\"case_id\":\"captured_read\",\"iterations\":1000,\"operations\":1000,\"checksum\":506500}\n",
+        "external/sunspider-1.0/bitops-bitwise-and": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n",
+        "diagnostic/empty": "0\n"
+      },
+      "ng_log_sha256": "5dce06575094b4a5bf29a535e33344a606a2608f857facf2da2834c8d9141dac"
+    },
+    {
+      "image": "b3",
+      "ng_fixtures": 255,
+      "outputs": {
+        "broad/global_read": "QJS_BENCH_RESULT {\"case_id\":\"global_read\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "broad/local_read": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":1000,\"operations\":2000,\"checksum\":3000}\n",
+        "broad/branch_arithmetic": "QJS_BENCH_RESULT {\"case_id\":\"branch_arithmetic\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "external/sunspider-1.0/string-unpack-code": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n",
+        "sentinel/heterogeneous_property_read": "QJS_BENCH_RESULT {\"case_id\":\"heterogeneous_property_read\",\"iterations\":1000,\"operations\":3000,\"checksum\":500500}\n",
+        "broad/array_read": "QJS_BENCH_RESULT {\"case_id\":\"array_read\",\"iterations\":1000,\"operations\":4000,\"checksum\":10000}\n",
+        "broad/captured_read": "QJS_BENCH_RESULT {\"case_id\":\"captured_read\",\"iterations\":1000,\"operations\":1000,\"checksum\":506500}\n",
+        "external/sunspider-1.0/bitops-bitwise-and": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n",
+        "diagnostic/empty": "0\n"
+      },
+      "ng_log_sha256": "5dce06575094b4a5bf29a535e33344a606a2608f857facf2da2834c8d9141dac"
+    },
+    {
+      "image": "b4",
+      "ng_fixtures": 255,
+      "outputs": {
+        "broad/global_read": "QJS_BENCH_RESULT {\"case_id\":\"global_read\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "broad/local_read": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":1000,\"operations\":2000,\"checksum\":3000}\n",
+        "broad/branch_arithmetic": "QJS_BENCH_RESULT {\"case_id\":\"branch_arithmetic\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "external/sunspider-1.0/string-unpack-code": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n",
+        "sentinel/heterogeneous_property_read": "QJS_BENCH_RESULT {\"case_id\":\"heterogeneous_property_read\",\"iterations\":1000,\"operations\":3000,\"checksum\":500500}\n",
+        "broad/array_read": "QJS_BENCH_RESULT {\"case_id\":\"array_read\",\"iterations\":1000,\"operations\":4000,\"checksum\":10000}\n",
+        "broad/captured_read": "QJS_BENCH_RESULT {\"case_id\":\"captured_read\",\"iterations\":1000,\"operations\":1000,\"checksum\":506500}\n",
+        "external/sunspider-1.0/bitops-bitwise-and": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n",
+        "diagnostic/empty": "0\n"
+      },
+      "ng_log_sha256": "5dce06575094b4a5bf29a535e33344a606a2608f857facf2da2834c8d9141dac"
+    },
+    {
+      "image": "b5",
+      "ng_fixtures": 255,
+      "outputs": {
+        "broad/global_read": "QJS_BENCH_RESULT {\"case_id\":\"global_read\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "broad/local_read": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":1000,\"operations\":2000,\"checksum\":3000}\n",
+        "broad/branch_arithmetic": "QJS_BENCH_RESULT {\"case_id\":\"branch_arithmetic\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "external/sunspider-1.0/string-unpack-code": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n",
+        "sentinel/heterogeneous_property_read": "QJS_BENCH_RESULT {\"case_id\":\"heterogeneous_property_read\",\"iterations\":1000,\"operations\":3000,\"checksum\":500500}\n",
+        "broad/array_read": "QJS_BENCH_RESULT {\"case_id\":\"array_read\",\"iterations\":1000,\"operations\":4000,\"checksum\":10000}\n",
+        "broad/captured_read": "QJS_BENCH_RESULT {\"case_id\":\"captured_read\",\"iterations\":1000,\"operations\":1000,\"checksum\":506500}\n",
+        "external/sunspider-1.0/bitops-bitwise-and": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n",
+        "diagnostic/empty": "0\n"
+      },
+      "ng_log_sha256": "5dce06575094b4a5bf29a535e33344a606a2608f857facf2da2834c8d9141dac"
+    },
+    {
+      "image": "c0",
+      "ng_fixtures": 255,
+      "outputs": {
+        "broad/global_read": "QJS_BENCH_RESULT {\"case_id\":\"global_read\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "broad/local_read": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":1000,\"operations\":2000,\"checksum\":3000}\n",
+        "broad/branch_arithmetic": "QJS_BENCH_RESULT {\"case_id\":\"branch_arithmetic\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "external/sunspider-1.0/string-unpack-code": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n",
+        "sentinel/heterogeneous_property_read": "QJS_BENCH_RESULT {\"case_id\":\"heterogeneous_property_read\",\"iterations\":1000,\"operations\":3000,\"checksum\":500500}\n",
+        "broad/array_read": "QJS_BENCH_RESULT {\"case_id\":\"array_read\",\"iterations\":1000,\"operations\":4000,\"checksum\":10000}\n",
+        "broad/captured_read": "QJS_BENCH_RESULT {\"case_id\":\"captured_read\",\"iterations\":1000,\"operations\":1000,\"checksum\":506500}\n",
+        "external/sunspider-1.0/bitops-bitwise-and": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n",
+        "diagnostic/empty": "0\n"
+      },
+      "ng_log_sha256": "5dce06575094b4a5bf29a535e33344a606a2608f857facf2da2834c8d9141dac"
+    },
+    {
+      "image": "c1",
+      "ng_fixtures": 255,
+      "outputs": {
+        "broad/global_read": "QJS_BENCH_RESULT {\"case_id\":\"global_read\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "broad/local_read": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":1000,\"operations\":2000,\"checksum\":3000}\n",
+        "broad/branch_arithmetic": "QJS_BENCH_RESULT {\"case_id\":\"branch_arithmetic\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "external/sunspider-1.0/string-unpack-code": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n",
+        "sentinel/heterogeneous_property_read": "QJS_BENCH_RESULT {\"case_id\":\"heterogeneous_property_read\",\"iterations\":1000,\"operations\":3000,\"checksum\":500500}\n",
+        "broad/array_read": "QJS_BENCH_RESULT {\"case_id\":\"array_read\",\"iterations\":1000,\"operations\":4000,\"checksum\":10000}\n",
+        "broad/captured_read": "QJS_BENCH_RESULT {\"case_id\":\"captured_read\",\"iterations\":1000,\"operations\":1000,\"checksum\":506500}\n",
+        "external/sunspider-1.0/bitops-bitwise-and": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n",
+        "diagnostic/empty": "0\n"
+      },
+      "ng_log_sha256": "5dce06575094b4a5bf29a535e33344a606a2608f857facf2da2834c8d9141dac"
+    },
+    {
+      "image": "c2",
+      "ng_fixtures": 255,
+      "outputs": {
+        "broad/global_read": "QJS_BENCH_RESULT {\"case_id\":\"global_read\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "broad/local_read": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":1000,\"operations\":2000,\"checksum\":3000}\n",
+        "broad/branch_arithmetic": "QJS_BENCH_RESULT {\"case_id\":\"branch_arithmetic\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "external/sunspider-1.0/string-unpack-code": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n",
+        "sentinel/heterogeneous_property_read": "QJS_BENCH_RESULT {\"case_id\":\"heterogeneous_property_read\",\"iterations\":1000,\"operations\":3000,\"checksum\":500500}\n",
+        "broad/array_read": "QJS_BENCH_RESULT {\"case_id\":\"array_read\",\"iterations\":1000,\"operations\":4000,\"checksum\":10000}\n",
+        "broad/captured_read": "QJS_BENCH_RESULT {\"case_id\":\"captured_read\",\"iterations\":1000,\"operations\":1000,\"checksum\":506500}\n",
+        "external/sunspider-1.0/bitops-bitwise-and": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n",
+        "diagnostic/empty": "0\n"
+      },
+      "ng_log_sha256": "5dce06575094b4a5bf29a535e33344a606a2608f857facf2da2834c8d9141dac"
+    },
+    {
+      "image": "c3",
+      "ng_fixtures": 255,
+      "outputs": {
+        "broad/global_read": "QJS_BENCH_RESULT {\"case_id\":\"global_read\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "broad/local_read": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":1000,\"operations\":2000,\"checksum\":3000}\n",
+        "broad/branch_arithmetic": "QJS_BENCH_RESULT {\"case_id\":\"branch_arithmetic\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "external/sunspider-1.0/string-unpack-code": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n",
+        "sentinel/heterogeneous_property_read": "QJS_BENCH_RESULT {\"case_id\":\"heterogeneous_property_read\",\"iterations\":1000,\"operations\":3000,\"checksum\":500500}\n",
+        "broad/array_read": "QJS_BENCH_RESULT {\"case_id\":\"array_read\",\"iterations\":1000,\"operations\":4000,\"checksum\":10000}\n",
+        "broad/captured_read": "QJS_BENCH_RESULT {\"case_id\":\"captured_read\",\"iterations\":1000,\"operations\":1000,\"checksum\":506500}\n",
+        "external/sunspider-1.0/bitops-bitwise-and": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n",
+        "diagnostic/empty": "0\n"
+      },
+      "ng_log_sha256": "5dce06575094b4a5bf29a535e33344a606a2608f857facf2da2834c8d9141dac"
+    },
+    {
+      "image": "c4",
+      "ng_fixtures": 255,
+      "outputs": {
+        "broad/global_read": "QJS_BENCH_RESULT {\"case_id\":\"global_read\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "broad/local_read": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":1000,\"operations\":2000,\"checksum\":3000}\n",
+        "broad/branch_arithmetic": "QJS_BENCH_RESULT {\"case_id\":\"branch_arithmetic\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "external/sunspider-1.0/string-unpack-code": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n",
+        "sentinel/heterogeneous_property_read": "QJS_BENCH_RESULT {\"case_id\":\"heterogeneous_property_read\",\"iterations\":1000,\"operations\":3000,\"checksum\":500500}\n",
+        "broad/array_read": "QJS_BENCH_RESULT {\"case_id\":\"array_read\",\"iterations\":1000,\"operations\":4000,\"checksum\":10000}\n",
+        "broad/captured_read": "QJS_BENCH_RESULT {\"case_id\":\"captured_read\",\"iterations\":1000,\"operations\":1000,\"checksum\":506500}\n",
+        "external/sunspider-1.0/bitops-bitwise-and": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n",
+        "diagnostic/empty": "0\n"
+      },
+      "ng_log_sha256": "5dce06575094b4a5bf29a535e33344a606a2608f857facf2da2834c8d9141dac"
+    },
+    {
+      "image": "c5",
+      "ng_fixtures": 255,
+      "outputs": {
+        "broad/global_read": "QJS_BENCH_RESULT {\"case_id\":\"global_read\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "broad/local_read": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":1000,\"operations\":2000,\"checksum\":3000}\n",
+        "broad/branch_arithmetic": "QJS_BENCH_RESULT {\"case_id\":\"branch_arithmetic\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "external/sunspider-1.0/string-unpack-code": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n",
+        "sentinel/heterogeneous_property_read": "QJS_BENCH_RESULT {\"case_id\":\"heterogeneous_property_read\",\"iterations\":1000,\"operations\":3000,\"checksum\":500500}\n",
+        "broad/array_read": "QJS_BENCH_RESULT {\"case_id\":\"array_read\",\"iterations\":1000,\"operations\":4000,\"checksum\":10000}\n",
+        "broad/captured_read": "QJS_BENCH_RESULT {\"case_id\":\"captured_read\",\"iterations\":1000,\"operations\":1000,\"checksum\":506500}\n",
+        "external/sunspider-1.0/bitops-bitwise-and": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n",
+        "diagnostic/empty": "0\n"
+      },
+      "ng_log_sha256": "5dce06575094b4a5bf29a535e33344a606a2608f857facf2da2834c8d9141dac"
+    }
+  ],
+  "producer_sha256": "f0e9983d471f708682d5ec1ecd0fdc7ec176401c7d4eab19a1633ae766a2bc21",
+  "host": {
+    "system": "Darwin",
+    "machine": "x86_64",
+    "os": "12.6",
+    "hardware": "iMac20,1",
+    "cpu": "Intel(R) Core(TM) i7-10700 CPU @ 2.90GHz",
+    "memory": "34359738368",
+    "rustc": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: x86_64-apple-darwin\nrelease: 1.95.0\nLLVM version: 22.1.2",
+    "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+    "linker": "Apple clang version 14.0.0 (clang-1400.0.29.202)\nTarget: x86_64-apple-darwin21.6.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin",
+    "recipe": {
+      "cargo_args": [
+        "--locked",
+        "--release",
+        "-p",
+        "qjs-cli",
+        "--features",
+        "agents",
+        "--config=profile.release.opt-level=3",
+        "--config=profile.release.lto=\"fat\"",
+        "--config=profile.release.codegen-units=16",
+        "--config=profile.release.panic=\"abort\""
+      ],
+      "environment": {
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_ENCODED_RUSTFLAGS": "-Csymbol-mangling-version=v0\u001f-Cllvm-args=-align-all-functions=4"
+      },
+      "binary": "qjs"
+    },
+    "build_environment": {},
+    "cargo_configuration": {
+      "cargo_home": "/Users/qingyingliu/.cargo",
+      "configs": []
+    },
+    "manifests": {
+      "benchmarks/manifest.json": "73cf9d522ba668e3d00b10170875d22a60f43212dd71bb4d290ff599884247c6",
+      "benchmarks/generic-sentinels-manifest.json": "ff3132906d183565fcf2c01f0e495a0cfb3c1ba1157e5af39e42b4567be3fc26",
+      "benchmarks/external-preview.json": "740f0ca71bb11fc550f244f8f4ae4f3b91eca276920bce0bd31c81b64d060219",
+      "benchmarks/held-out-preview.json": "276e5b5e8b8359a46e6949079fcb05d7a996e38f8ef9934b708e6321562c6451",
+      "rust-toolchain.toml": "80fd9457547f340dddb065165021df33dc8aa4a4bbf79a068dc189c5947d9e9d"
+    }
+  },
+  "all_outputs_match": true
+}

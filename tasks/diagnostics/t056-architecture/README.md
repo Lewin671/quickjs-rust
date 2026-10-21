@@ -3,8 +3,9 @@
 [Chinese review](../../archive/T056-architecture-review.md) owns conclusions,
 limits and the migration proposal. No production implementation is added here.
 All completed jobs below used the serialized iMac runner **without --timing**;
-their elapsed times are not performance measurements. The prospective timing
-probe below is **lead-only and has not been submitted by this owner**.
+their elapsed times are not performance measurements. The data-first timing probe below is retained as historical preparation.
+The current lead sequence is the [code-layout mini-panel, then code×zone](../t056-code-layout/README.md);
+none of these timing probes has been submitted by this owner.
 
 ## Completed non-timing evidence
 
@@ -67,7 +68,7 @@ is fixed. `hot-type-sizes.json` retains relevant sizes/alignments from the
 previous base/8f compiler inventory; the corresponding type definitions are
 unchanged by dfff. `validation.json` records the local fake-process verification.
 
-## Prospective lead-only robustness probe (at most25 running minutes)
+## Historical data-first robustness probe (not the next lead job)
 
 **Question:** does changing unrelated live allocation sizes change the wall
 cost of the same interpreter image, and does that effect differ between8f and

@@ -1,0 +1,18 @@
+{
+  "protocol_revision": "b847ed4d54d61dafe7fc09d3b3512f781909d258",
+  "qualification_job": "20261021T082252Z-t056-code-layout-qualification",
+  "qualification_sha256": "45032fad785f1a7c4bc2fa14f40d271adcf775dbbd781ba63e076d4b476bf1d0",
+  "zone_job": "20261021T083025Z-t056-code-zone-qualification",
+  "correctness_job": "20261021T060648Z-t056-m1a-allocation-correctness",
+  "pregate_job": "20261021T062918Z-t056-m1a-allocation-pregate86",
+  "triage_job": "20261021T063231Z-t056-m1a-allocation-triage",
+  "triage_sha256": "ca396e60101edb3c8eaf099b28c33c4fb3e9379c35f60a51511e7ab9cbc6b9e4",
+  "files": {
+    "collect.py": "e06d7370ccb2fc1a20246d82c31c5fa9701837d99bed8364b5319cdb9d08201a",
+    "protocol.py": "43f12d3e6981749e397a4f2d4122dd5e11da91fb95ada09dcaf406a615209ec8",
+    "analyze.py": "743181b715c10cb3b189a207412e444c020a273a6b96ad7743ec3c0ef2a26e00",
+    "chain_common.py": "24f2e1551c457b6e5d37f70229d3ec2f85e49cc4a3da563ad4fb31a6f411e7d5",
+    "window.py": "dc08b5e964de55237a48e732f4b0c12c6616bea200445e941c7dd42940b09d53"
+  },
+  "zone_sha256": "06d3ea6df67f3593d96b29abb93dfabfb077aa051b4c12c59d7571452ec1b80a"
+}

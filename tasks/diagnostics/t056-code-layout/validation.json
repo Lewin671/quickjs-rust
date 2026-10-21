@@ -1,0 +1,34 @@
+{
+  "scope": "FAKE processes/counters and local guards only; no engine executable or timing job",
+  "matrices": [
+    {
+      "kind": "mini",
+      "layouts": 6,
+      "cases": 9,
+      "blocks": 5,
+      "case_role_blocks": 1080,
+      "seconds": 5.634312791982666,
+      "diagnostic_only": true,
+      "decision_evidence": false,
+      "attempts_consumed": 0,
+      "all_outputs_match": true
+    },
+    {
+      "kind": "cross",
+      "layouts": 1,
+      "cases": 4,
+      "blocks": 15,
+      "case_role_blocks": 960,
+      "seconds": 4.939054917078465,
+      "diagnostic_only": true,
+      "decision_evidence": false,
+      "attempts_consumed": 0,
+      "all_outputs_match": true
+    }
+  ],
+  "routing_boundary_tests": true,
+  "environment_resets_and_inode_AA": true,
+  "quiet_window_DST_and_30min_cap": true,
+  "rendered_syntax": true,
+  "real_qualified_image_hashes_and_prerequisites": true
+}

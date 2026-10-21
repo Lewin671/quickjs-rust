@@ -5,14 +5,15 @@
 - Verified at: b1ecbaf6 的生产树；base=f58c696e、aligned=8f7d97c7、allocation=dfff3bb6 的独立 iMac 诊断见下表。
 - Evidence: [机器可读地址与字节审计](../diagnostics/t056-architecture/address-evidence.json)、[复现及 lead 探针](../diagnostics/t056-architecture/README.md)。
 - Unresolved: global_read 的 42.7% wall 回退尚无硬件因果归属；不把低 12 位相同当作证明。
-- Next action: lead 取得独立模型设计评审，再决定是否运行已准备的稳健性诊断、冻结架构原型；本轮不实施、不提交 timing/K=6。
+- Next action: lead 先跑已准备的诊断K=6 mini-panel；按预注册规则决定是否考虑在未改dfff上用最后attempt，或转代码×数据2×2。无生产修改、无owner timing提交。
 
 ## 判断与阶段决定
 
-**应暂停最后一次 K=6，先验证热状态布局与执行内核的结构边界。**
-继续调整某个对象头、标量数组偏移、order file 或 inline 标注，不能成为 T056 的架构答案。
-这些改动已经使回退在 local、unpack、global 之间迁移。它们说明现有测量对布局敏感，
-但还不能证明所有回退具有同一个 malloc/4K-alias 根因。
+**等指令布局回退的主架构方向是代码/构建侧的小内核隔离；数据 packet 留给M2。**
+独立评审（lead转交dsh/deepseek-flash意见）与本次补查支持这个优先级。
+不能把单次natural triage的1.427当作跨布局持续回退，也没有证据要求先实现HotExecutionPacket。
+下一步用未改dfff对base的诊断K=6辨别布局敏感性；它不是acceptance，不消耗attempt。
+数据/allocator确有影响，但[既有local_read zone对照](T056-m1-stageA-aligned-scratch.md)约1.070对1.005，不能拿来解释global的43%。
 
 最新 lead 链：`20261021T060648Z-t056-m1a-allocation-correctness` 完整 exact 42,672/42,672、
 NG255/subset5170/full pass；`20261021T062918Z-t056-m1a-allocation-pregate86` 86/86；
@@ -21,11 +22,11 @@ NG255/subset5170/full pass；`20261021T062918Z-t056-m1a-allocation-pregate86` 86
 local .948、branch .949、heterogeneous .898；unpack wall **1.0381 [1.0247,1.0688]**、
 instructions **1.0119**。这些是 lead 的原镜像结果，不是本轮带日志镜像的 wall。
 
-Stage A 仍是未集成的属性布局实验，不能因已投入修补而晋级。建议把“布局所有权和稳健性”列为
-继续该阶段的前置条件，与已有 [M2 设计](../../docs/design/interpreter-core-v2.md) 的 frame/context
-迁移合并评审；原型按新的前瞻计划实施，不在旧计划下无限调参。
-如果 lead 要先收窄 A，只能在测量前明确修订范围和兼容关系；不能删除失败控制、重置 attempt，
-也不能把旧 K=6 解释为新范围的通过。有效 attempt 1/2 已用，A+B 共剩一次。
+Stage A仍未集成。先执行[预注册诊断](../diagnostics/t056-code-layout/README.md)：
+若global excess在至少5/6布局消失，lead可考虑把最后attempt用于**未改dfff**，仍须原冻结计划的完整门槛；
+若持续则不花attempt，先代码×数据2×2；噪声/混合结果也不支持直接花attempt。
+不删除失败控制，不调整旧band，不改写K=6历史。有效attempt1/2已用，A+B共剩一次。
+若需要内核实现，另冻结前瞻架构单元，不能在旧阶段无限调参。
 
 ## 热状态所有权：已有连续窗口，不是从零开始
 
@@ -124,6 +125,19 @@ Update读取的−1.0常量从 `0x1004b0708` 到 `0x10049c648`。
 malloc size class、free list、活对象历史或热数据相对地址。链接变化可能间接移动只读段，
 所以也不应声称它“严格只变指令缓存”。当前面板缺乏**受控的数据布局维度**。
 
+## 必须纳入的代码布局先例
+
+| 记录 | 实测事实 | 推论边界 |
+| --- | --- | --- |
+| [T050](T050-vm-layout-causality.md#results-and-conclusion) | 只移动WideLoopFrame热循环、固定其余共享函数：global1.129073、local1.082748、branch1.083914；对应instructions1.000041/1.000045/1.000033；global A/A0.999176 | 代码位置本身可复制这类回退的方向/大部分幅度；不是已证明某个cache/predictor或当前43%的根因 |
+| [T058 attempt1](T058-attempt1-incomplete.md) | top_level_function_call natural1.4316；五对1.046/1.018/1.491/1.526/1.432；K=6六布局为1.4316/1.0354/1.0113/1.0112/1.0413/1.0189 | 约43%的natural事件也可能在其余5布局消退；单natural不能证明持续，仍须panel |
+| [T054](T054-execution-layout-regions.md#sole-neutrality-screen-and-rejection) | 所有4205函数原页余数保留，却有recursive_call_tree1.067917、instructions1.000096，sentinel lane1.007214超1.005而拒绝 | entry/residue pinning不等于中性；五对有波动，不能把6.8%当成已隔离原因或普遍幅度 |
+
+当前实址清单也要准确区分：8f/dfff的scalar/realm/wide-local页内模式相同，**typed ops是600对900**，
+不是所有数据低12位都相同；unpack首组主要流低位相同。它们没有给出bank冲突的因果证据。
+结合canonical热字节等价而内部块/跳表/常量位置变化，先验证代码侧是更有证据的路径，
+而非断言所有数据因素已排除。K=6只平移现有body，不能检验重新编译后的内联图隔离程度。
+
 ## 成熟引擎的具体对照
 
 | 引擎 | 已有设计事实 | 对本项目的含义 |
@@ -137,44 +151,41 @@ malloc size class、free list、活对象历史或热数据相对地址。链接
 这些引擎仍会受 heap/code/cache 布局影响；借鉴的是可解释的栈所有权和内核 ABI，不能照搬 C alloca、
 汇编或声称成熟引擎免疫布局。本项目可先用 safe Rust Box/片段完成，不以 unsafe、NaN boxing 或 GC 为前提。
 
-## 目标：一个执行上下文的布局所有权，以及小而固定的内核
+## 目标A：从冷类型和fat-LTO图中隔离小热内核（主线）
 
-沿用 [ExecutionContext/FrameStore/FrameId](../../docs/design/interpreter-core-v2.md)，由 context
-拥有分段、固定 backing 的解释器栈/arena。一个帧的 header、local/register window、operand window
-在同一分配段内；typed 区域不再从每个 program 的独立 Box/Vec 池重新拼出热状态。
-段大小和布局来自执行数据的类型、容量和对齐约束，不来自某个 benchmark 名称/字节码模板。
-FrameId 带 generation；扩大、reentry、suspend、deopt 在显式 safepoint 归还所有 slice，再借新窗口。
-捕获值仍指向唯一 Upvalue；不能使 `Vec` 内裸地址跨增长存活，也不能复制权威 cell。
+当前Cargo release是fat LTO、codegen-units=16；LLVM仍能跨原有crate/CGU看见大部分运行时代码。
+内核需要显式、窄的Rust ABI：ops base、零基scalar/boxed窗口、pc/limit、固定宽度冷服务handle，
+返回类型化的Exit/Deopt/ServiceRequest。对象/Realm/CallEnv实体与其enum匹配不进入内核定义。
+FrameId在入口/退出/safepoint解析一次；不能每op重新查帧、算动态base或调trait object。
+数字和wide opcode/dispatch保持分开。结构性冷墙在真正离开kernel时调用，不能每个数值op都过桥。
 
-热内核只接收 ops base、零基寄存器窗口、pc/limit 和冷服务 handle。FrameId 在入口/退出/
-safepoint 解一次；**不得每 op 重新查帧、加动态 base、建立 trait object 或重做整窗清零**。
-数字和 wide 的 opcode/dispatch 仍分开；不把 generic object/native slow path 内联进数值大 match。
-对象和 realm 通过固定宽度 handle/typed view 过边界，让 ObjectData/CallEnv 的无关字段变化不改热
-参数形状和寄存器活跃区间。用字节/spill 审计检验这个边界，不能以新增 inline 标注替代它。
+| 可评估选项（未实施） | 成本/限制 | 非计时字节与placement审计必须证明 |
+| --- | --- | --- |
+| kernel独立crate或非LTO代码生成边界，runtime只依赖窄kernel IR/退出请求 | 新crate/API迁移和代码复制；fat LTO下仅换crate**不构成隔离**。需后续构建配方资格，不能暗改当前recipe。kernel不能反向依赖runtime，禁止FFI | 冷ObjectData/CallEnv字段大小等中性变体不改变kernel指令/内部块/常量引用/栈spill；依赖和跨边界call清单；若LTO重新合并则失败 |
+| 同crate小非泛型kernel + `#[inline(never)]`服务边界；调用者处理退出后再进入 | call/return、入口保存恢复、失去特化；`inline(never)`不阻止全部IPO/clone/常量传播，不能声称绝对隔离 | 解析实际cold call目标、clone/合并符号、热闭包大小和spill；中性冷代码变动前后逐块比对，禁止给局部热点持续堆标注代替分层 |
+| kernel专用codegen单元/对象与可审计布局清单 | Rust模块不是CGU保证，fat LTO会再合并；可能需独立编译单元及额外构建维护 | pinned toolchain实际CGU/object归属、最终链接后的kernel完整性；审计dispatch header、handler入口/尾部、每跳表项目标和RIP常量相对位置，不能仅看函数entry余数 |
+| 构建层LLVM loop/block对齐策略（先确认pinned backend支持） | NOP/代码体积、I-cache压力和别处回退；跨平台/版本支持不同；不能试一堆偏移选赢家 | 对齐前后全部内核块布局/填充、跳距/分支跨界、只读表位置和总text增长；保留机器可读目标映射，单一前瞻策略再跑完整诊断 |
+| 独立threaded handler函数/dispatch表 | Rust fn-pointer call可能无法尾调用、增加间接分支/栈增长、失去跨op优化；不使用computed-goto/unsafe/FFI | 核实每handler控制流、尾调用是否真实、最深native栈及每op call/return数量、寄存器保存；audit不同冷类型构建的body/表布局；若每op累计Rust栈则拒绝 |
 
-LinkedCode 拥有已解码 ops 和小型 per-site feedback：可用同一个有界 chunk 的固定区/索引，
-而不是一个装着许多 Vec/Rc 的 struct 就叫“共址”。immutable code 可共享；realm相关反馈必须按
-realm/context 隔离，避免共享代码把不同 realm 的 shape/cell 混起来。大/稀疏 cache 放冷 side table。
-全局在链接/入口解析为稳定 cell handle，保留 global deletion、accessor、eval/with 的现有失效协议。
-循环语义允许时才 seed/hoist；不能为了稳定地址缓存可被 getter/回调修改的值。
+优先评审“小非泛型kernel+真实冷服务边界”，必要时升级编译边界；上述不是五次获准性能尝试。
+先冻结一种一般化结构、内存/指令/复制预算与中性变化审计，再实现。字节稳定不能证明更快；
+但若中性冷类型变化仍重排热块，便没有达到此架构目标。最终性能仍需完整K=6/原计划，不靠pin一个好地址。
 
-这会减少独立热 backing、使帧内偏移与 unrelated ObjectData 大小无关，避免每次 malloc 邻域决定
-register/operand 相对位置。它**不是全部硬件布局不变的保证**：外部 JS heap、机器栈、只读常量和代码仍在。
-仅把两个4KiB数组并排会让同偏移落在同一页内余数，甚至加重4K假相关；“一个 arena”本身不够。
+## 目标B：ExecutionContext数据所有权（M2，不是global43%的已知修复）
 
-最小原型可先做一个有界 **HotExecutionPacket**：固定 header、decoded-op 小窗、所需 boxed/operand
-小窗，最后放完整256×16 scalar bank。由声明的最大同时触及 footprint 决定 admission，
-使小区域真正活跃的 op字段/register前缀落在同一页内的**不重叠区间**；未用 scalar tail 可跨页。
-完整bank保留现有索引不变量；safe Rust 借不同字段。大程序走一般分段窗口，不按 global/local 名称特判。
-这不是再挑一个赢的 bank offset：物理布局由字段/边界推导并在扰动前冻结，不能搜索最佳 padding。
-原型约束若不能覆盖常用区域，应改整体分段布局而非永久把引擎限制为小循环。
+沿用[ExecutionContext/FrameStore/FrameId](../../docs/design/interpreter-core-v2.md)，context拥有分段固定backing；
+帧头、local/register、operand窗口有共同生命周期。LinkedCode对小反馈采用真正共同backing或索引，
+不是装着多个Vec就叫共址；immutable code共享，realm/context反馈隔离。稳定global handle仍指向
+唯一Upvalue，保留删除/accessor/eval/with失效协议；不重引入每调用name-keyed快照。
 
-成本：每 context/code 的 decoded copy 与反馈内存、可能从4KiB增至约8KiB的小包、入口搬运、
-段增长和回收复杂度、cache维护；code/shared metadata 与 per-context写反馈的重复。
-T021 的 window-base 每访问成本与 T023 arena 的失败已有历史，必须重用
-[frame activation 的 driver/窗口约定](../../docs/design/frame-activation.md)，不能复活被测慢的路径。
-getter/proxy/native回调前释放可变借用；不能跨可执行JS持有 RefCell borrow。
-closure、递归、generator/async suspend、throw/unwind、eval/with、cross-realm 都需要迁移验证。
+数据packet可减少独立热流和malloc邻域依赖，但现有数值内环仅ops+scalar，不能预期它修复当前global。
+不先实现HotExecutionPacket、不为它选择赢的offset；是否需要它由代码×数据受控试验决定。
+一个arena也可能让多个页内同offset流发生假相关，不能承诺硬件免疫。
+成本包括段/反馈内存、decoded拷贝、入口搬运、增长/reentry/回收协议。
+按[frame activation约定](../../docs/design/frame-activation.md)只借零基窗口一次，避免T021逐访问base成本；
+增长/suspend/deopt前归还slice，cell身份不变，getter/proxy/native回调前释放可变/RefCell借用。
+捕获、递归、generator/async、throw、eval/with、cross-realm都要验证；numeric packet也不能替代unpack的
+native regexp/string和短回调路径。M2不以unsafe、NaN boxing、GC或新依赖为先决条件。
 
 ## unpack-code：指令增加的已知归属与边界
 
@@ -205,34 +216,23 @@ dfff 前者0x308，出现 `native_regexp_prototype_replace`0x2f8，后两者已�
 另一条路径。把 unpack 当架构范围的独立检验；若它仍敏感，须补 native-boundary/call窗口和代码图归属，
 不能宣布 scalar 变稳就完成了整个任务。
 
-## 里程碑、反证条件与测量变化
+## 里程碑与测量顺序
 
-1. **设计评审和现状诊断**（本轮）。保留原失败；lead 独立评审小内核/共同布局是否覆盖实际热流。
-   已准备15-block、A/A的≤25分钟探针，仅测8f与dfff，不实现新架构，不申请 acceptance。
-2. **前瞻冻结最小原型**。先固定 HotABI/布局约束、一般化 admission、instruction/复制/内存预算。
-   同一窗口只解一次 base。先做真实 footprint/活期分析，不靠 allocator lucky address。
-3. **同镜像分配扰动反证**。固定64个无关活块，尺寸128/144/1536；两套 A/A、代码/输出身份、
-   空程序和 canonical-vs-diagnostic 偏差控制全保留。先在当前实现看到数据地址变化及可检测敏感性，
-   才能用该因子证明原型削弱了它。若旧版本对该因子不敏感、AA噪声过大或因子没有移动相关流，
-   结论是 probe不足，不能“原型修复”。原型需新配置/资格，不能替换旧记录镜像冒充同一试验。
-4. **扩大到 native/短回调/general call**。让 unpack/local/global 同时对固定扰动稳健；保留
-   branch/heterogeneous 控制和真实大程序。对冷类型尺寸等中性重构重新构建，审计内核 body/spill；
-   这检验同镜像数据扰动不能覆盖的 inlining/codegen 敏感性。
-5. **再决定 A 的最后 K=6**。仅在先验预算、正确性和稳健性均足够时继续；不能用诊断胜负替代86、
-   exact和完整selection/formal。仍不通过则关闭/重塑阶段，保留结构学习而非继续调位置。
-
-未来布局方法应考虑 **code×data 因子**：相同代码镜像内改变无关分配历史/大小，跨代码位置保持因子
-对称，报告交互项和A/A；布局 panel 也要记录入口/2N关键地址及活跃范围。
-受控因子不等于穷尽 heap随机化，更不应寻找最佳分配种子。现有 K=6/v6 冻结证据不改；
-只有经独立资格与噪声带校准后，才能把数据维度纳入后续政策。N/2N的差分取消固定工作量，
-不保证两次进程具有相同数据布局；本次global两N低位相同，不能推广到所有输入。
-
-探针的具体命令、镜像SHA、预算、夜间排除窗口与不完整结果处理由
-[diagnostic README](../diagnostics/t056-architecture/README.md) 唯一维护。本轮未提交任何 timing 任务。
+1. lead运行未改dfff vs f58的诊断K=6 mini-panel（6布局×5对、双方A/A、9固定用例）；
+   [README](../diagnostics/t056-code-layout/README.md)预注册excess消退/持续/不明确规则和≤30分钟预算。
+2. 消退≥5/6只允许lead**考虑**花最后attempt，不能生成acceptance。持续则不花，先运行已准备的
+   代码×数据2×2：同一编译body的code0/16B平移 × MallocNanoZone0/1，global/local/empty/unpack，
+   每格双方A/A。所有因子在结果前固定，不能换“更显著”的zone/pad。混合/噪声结果也不支持直接花attempt。
+3. 若需要代码内核修改，先冻结主线A的窄ABI与编译隔离原型；非计时中性冷类型变化审计通过，
+   再做完整正确性和前瞻性能单元。若2×2发现数据交互，再细化M2所有权原型，不从natural直接推演packet。
+4. 后续方法可资格化code×data panel及A/A交互噪声带；不修改已冻结v6、K=6偏移、旧结果和attempt预算。
+   N/2N差分不保证数据地址一样；需要记录实际活跃流。2×2同code格内只改环境，不重编译；code格之间
+   是relocation-normalized相同body的两镜像，不能称整个文件SHA一样，也不能据此断言纯I-cache原因。
 
 ## 本轮核验
 
-b1ecbaf6的生产树未变；本轮 `./scripts/check.sh` 全部通过（含5170个subset）。
-最终文档的 `check-context.py`、diff whitespace检查通过；诊断byte audit重新执行通过。
-collector的真实流程用fake process/counters完成15×6×12单元；验证报告已提交在diagnostic目录。
-无新依赖、公开API、运行时代码或policy变更。上面的架构仍是提案，风险与反证条件并未因工具通过而消失。
+本次修订基于b847ed4d，生产树仍等于dfff；`./scripts/check.sh`全部通过（含5170 subset）。
+非计时qualification382s：12个布局镜像均NG255/输出相同、body/address审计通过；zone资格18s：8格均NG255/输出相同。
+真实collector用fake process/counters完成mini1080与cross960单元、路由/AA/环境/夜间和超时守卫；
+[版本化报告](../diagnostics/t056-code-layout/validation.json)明确不是timing。文档context、staged fast及whitespace核验通过。
+无生产代码、依赖、公开API、policy或attempt变化；架构选项未实现，两个lead-only timing任务均未提交。

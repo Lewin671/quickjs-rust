@@ -1,0 +1,10 @@
+{
+  "production_revision": "dfff3bb6bf3db01fb52a7612ed1144900b5f08c5",
+  "checked_tree_parent": "b847ed4d",
+  "production_unchanged": true,
+  "full_check_exit": 0,
+  "full_check_log_sha256": "7fdb84dc95e9628d029678c67103659bd3a7d21ed97c6ebcc968c2725357c4f1",
+  "subset_cases": 5170,
+  "timing_submissions": 0,
+  "attempts_consumed": 0
+}

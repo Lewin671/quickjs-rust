@@ -14,9 +14,10 @@
   plans [`interpreter-core-v2-atoms-layouts`](performance-units/interpreter-core-v2-atoms-layouts.json) (closed),
   [`interpreter-core-v2-layout-edges`](performance-units/interpreter-core-v2-layout-edges.json).
 - Unresolved: equal-instruction placement regressions; real-address diagnosis does not establish a global-cell4K alias.
-  Proposed owned hot-state layout is not implemented; arm64 timing unmeasured.
-- Next action: lead obtains independent architecture review, then considers the prepared A/A robustness probe;
-  no owner timing/final K=6; last attempt remains unspent. No further placement point fix in this review.
+  Code-side kernel isolation is primary; data ownership is M2, neither implemented; arm64 timing unmeasured.
+- Next action: independent review received; lead runs the [diagnostic K=6 mini-panel](diagnostics/t056-code-layout/README.md),
+  then follows its preregistered rule (unchanged dfff last attempt may be considered, or code×zone2×2).
+  No owner timing/production change; last attempt remains unspent.
 
 ## Goal and scope
 
