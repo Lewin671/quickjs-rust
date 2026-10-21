@@ -645,3 +645,14 @@ target moves within each implementation), 13 matching workload outputs on seven 
 255 NG fixtures passing on each of the five links. See the placement record for hashes, failed
 analysis attempts, type sizes, string profiles and two prepared lead-only causal probes. Runtime
 remains 4842f823; no new timing job, production repair or screen attempt was submitted.
+
+
+## Probe A and numeric dispatch boundary follow-up
+
+Lead's placement job `20261021T013452Z-t056-placement-code-probe` is incomplete
+(9/13, 1800 s budget exceeded, exit 1, no DISTURBED); its outcome and the wrong
+15–25 minute estimate are recorded in [placement diagnosis](T056-m1-stageA-placement-diagnosis.md#probe-a-returned-incomplete-move-to-code-generation).
+No missing pairs are added and probe B is not requested. The new source
+boundaries, static hot-path comparison and per-image evidence live in
+[codegen diagnosis](T056-m1-stageA-codegen-diagnosis.md). The final attempt
+remains unsubmitted; one valid attempt is spent and one remains across A+B.

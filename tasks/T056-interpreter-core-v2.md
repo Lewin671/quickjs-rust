@@ -4,22 +4,22 @@
   was rejected on its sole screen and is closed; its replacement is frozen as plan
   [`interpreter-core-v2-layout-edges`](performance-units/interpreter-core-v2-layout-edges.json); stage A is
   implemented on `agent/t056-m1-stage-a/claude` (plan `50b42547`); valid K=6 failure of `0a9af81b` spent
-  attempt 1/2. Its numeric-slot follow-up is present and locally gated; one attempt remains across A+B.
+  attempt 1/2. Its numeric-slot/codegen follow-up is present; one attempt remains across A+B.
 - Implementation: stage 1 on main. Stage A on its branch, not on main; the rejected M1.2 candidate stays on
   `agent/t056-m1-stage2/codex`; the write-site add replay removed from stage A stays on
   `agent/t056-add-transition-replay/claude`.
-- Verified at: repair 4842f823: full/fast gates, 255 NG fixtures, 5170 subset, strict pin audit
-  and canonical 86/86 instruction pre-gate (see [repair evidence](archive/T056-m1-stageA-attempt1-diagnosis.md)); fresh exact 42,672/42,672 and CI 39515915868 pass (same image).
+- Verified at: codegen snapshot b904285a + patch 201ecc13 / image 66ffb46f: local full gate, 255 NG,
+  5170 subset, strict pin and 86/86 instructions pass; exact 42,672/42,672 and CI 39515915868 cover only older repair 4842f823.
 - Evidence: [part 1](archive/T056-unit0-part1-evidence.md), [part 2](archive/T056-unit0-part2-evidence.md),
   [M1 stage 1](archive/T056-m1-stage1-evidence.md), [M1.2 rejection](archive/T056-m1-stage2-evidence.md),
   [M1.2 diagnosis](archive/T056-m1-stage2-diagnosis.md), [stage A record](archive/T056-m1-stageA-record.md),
-  [M2 design inputs](archive/T056-m2-design-inputs.md);
+  [codegen diagnosis](archive/T056-m1-stageA-codegen-diagnosis.md), [M2 inputs](archive/T056-m2-design-inputs.md);
   plans [`interpreter-core-v2-atoms-layouts`](performance-units/interpreter-core-v2-atoms-layouts.json) (closed),
   [`interpreter-core-v2-layout-edges`](performance-units/interpreter-core-v2-layout-edges.json).
-- Unresolved: lead triage still has local_read wall 1.0728 at equal instructions;
-  [placement diagnosis](archive/T056-m1-stageA-placement-diagnosis.md) precedes any final attempt; arm64 timing unmeasured.
-- Next action: lead runs the statically audited 13-case code-placement probe, then optional five-case
-  data-state probe if unresolved. No owner timing; no production fix or final-screen submission yet.
+- Unresolved: old-image local_read wall excess reproduced in incomplete probe A (9/13, budget exceeded);
+  codegen repair restores a 360-byte typed frame; fresh bound exact/pre-gate/wall receipts are pending; arm64 unmeasured.
+- Next action: lead runs the new codegen image's bound correctness, 86-case pre-gate and T061 triage;
+  no owner timing, no probe B, no final K=6 submission until diagnostics justify the remaining attempt.
 
 ## Goal and scope
 

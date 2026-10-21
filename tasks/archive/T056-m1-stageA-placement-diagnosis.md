@@ -267,3 +267,46 @@ branch 1566/1565, global 766/765; candidate 1026/1025, 1634/1634, 687/687 respec
 All three execute in the WideLoopFrame body selected by the fixed-slot builder (base run closure,
 candidate execute), so the probe does not repeat T050's initial ordinary-VM misattribution.
 These are attribution samples, not retired-instruction counts or a substitute timing comparison.
+
+
+## Probe A returned incomplete; move to code generation
+
+Lead job `20261021T013452Z-t056-placement-code-probe` returned **exit 1 after
+1829 seconds**, without DISTURBED. The 1800-second budget check stopped it
+with 9/13 cases complete (15 blocks each); nbody, moment, diff and meriyah
+are missing. The estimate of 15–25 minutes was wrong. There is no
+`complete.json`; the nine rows of `effects.json` are exploratory evidence,
+not a completed gate. Preserve every pair; do not append missing pairs or
+rerun selected cases to complete this job.
+
+| Completed case | canonical C/B wall median | candidate swap/ref | candidate +4096/ref | base swap/ref |
+| --- | ---: | ---: | ---: | ---: |
+| local_read | 1.06975 [1.06363, 1.07768] | 0.99630 | 1.00062 | 0.94077 [0.93113, 0.94471] |
+| branch_arithmetic | 1.046 | 0.999 | 0.998 | 0.951 |
+| global_read | 0.905 | 1.032 | — | 0.905 |
+| unpack | 1.034 | neutral | neutral | neutral |
+| bitwise-and | 1.019 | neutral | neutral | neutral |
+| class-fields | 1.005 | neutral | neutral | neutral |
+
+Within-source instruction ratios round to 1.000. Local A/A medians are
+0.996 (base) and 0.999 (candidate). String-slice C/B is 1.011 but base A/A
+is 1.023, so that row is noisy. Intervals above are the original unadjusted
+paired exploratory bootstrap, not acceptance bounds. The raw receipt and
+all stderr/stdout remain in the named job's output; effects SHA-256 is
+`d975aebae4bd58896968b1b0671142db1fd5fb2275951973e943640213db2cd3`.
+
+Candidate swaps do not remove its scalar excess; moving base to the
+candidate's dispatch-head residue makes base faster. These tested placements
+do not support a badly placed candidate as the explanation. This does not
+exclude every possible code-position effect. Lead stops probe B: allocator/
+environment intervention is not justified by these results, and the original
+B guard still requires a complete A. Do not relax that guard or submit B.
+The next experiment splits layout validation and generic Value replacement
+from the inline numeric-slot fast path, then audits actual hot control flow
+and instruction counts. The final attempt remains unsubmitted (one of two
+spent); this incomplete diagnostic does not change that budget.
+
+
+The follow-up hot-path diff, rejected ABI experiments and outlined production
+boundary are recorded in [codegen diagnosis](T056-m1-stageA-codegen-diagnosis.md).
+That record owns the new image and its verification status.

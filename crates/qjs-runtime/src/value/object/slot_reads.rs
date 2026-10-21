@@ -6,7 +6,9 @@
 //! object, a literal site's layout, or the interned name the layout holds at
 //! that slot. The layout owns names and attributes; the payload holds values.
 //! Which encodings each reader admits is unchanged from the payload-keyed
-//! stores these readers replaced, so caches keep their coverage.
+//! stores these readers replaced, so caches keep their coverage. Numeric
+//! shape hits inline only guards and descriptor payload access; shape misses
+//! reborrow in outlined helpers so layout walking stays outside dispatch.
 
 use std::rc::Rc;
 
@@ -207,22 +209,25 @@ impl ObjectRef {
         if self.0.module_namespace_exotic.get() {
             return None;
         }
-        // Keep the existing Small-only admission of the numeric cache.
         let storage = self.0.properties.borrow();
-        let slot = way.slot;
         if !(way.small && way.on_shape(&storage)) {
-            let field = storage.layout.small_field(slot)?;
-            if !Rc::ptr_eq(field.text(), &way.key) || field.attributes.is_accessor() {
-                return None;
-            }
+            drop(storage);
+            return self.shared_data_slot_number_after_miss(way);
         }
-        match &storage.payload {
-            Payload::Slots(properties) => match properties.get(slot)?.value {
-                Value::Number(number) => Some(number),
-                _ => None,
-            },
-            Payload::Pair(_) => None,
+        small_slot_number(&storage, way.slot)
+    }
+
+    // The cached shape missed: all layout walking belongs outside dispatch.
+    // Reborrow here so the hot caller need not carry a borrow across this call.
+    #[cold]
+    #[inline(never)]
+    fn shared_data_slot_number_after_miss(&self, way: &SharedSlot) -> Option<f64> {
+        let storage = self.0.properties.borrow();
+        let field = storage.layout.small_field(way.slot)?;
+        if !Rc::ptr_eq(field.text(), &way.key) || field.attributes.is_accessor() {
+            return None;
         }
+        small_slot_number(&storage, way.slot)
     }
 
     /// [`Self::shared_data_slot_write`] of a number over a writable data
@@ -233,28 +238,34 @@ impl ObjectRef {
         if self.0.module_namespace_exotic.get() {
             return false;
         }
-        let written = {
-            let mut storage = self.0.properties.borrow_mut();
-            let slot = way.slot;
-            if !(way.small && way.writable && way.on_shape(&storage)) {
-                let Some(field) = storage.layout.small_field(slot) else {
-                    return false;
-                };
-                if !Rc::ptr_eq(field.text(), &way.key)
-                    || !field.attributes.is_writable()
-                    || field.attributes.is_accessor()
-                {
-                    return false;
-                }
-            }
-            match storage.value_mut(slot) {
-                Some(value) => {
-                    *value = Value::Number(number);
-                    true
-                }
-                None => false,
-            }
+        let mut storage = self.0.properties.borrow_mut();
+        if !(way.small && way.writable && way.on_shape(&storage)) {
+            drop(storage);
+            return self.shared_data_slot_write_number_after_miss(way, number);
+        }
+        let written = write_small_slot_number(&mut storage, way.slot, number);
+        drop(storage);
+        if written {
+            self.bump_value_revision();
+        }
+        written
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn shared_data_slot_write_number_after_miss(&self, way: &SharedSlot, number: f64) -> bool {
+        let mut storage = self.0.properties.borrow_mut();
+        let Some(field) = storage.layout.small_field(way.slot) else {
+            return false;
         };
+        if !Rc::ptr_eq(field.text(), &way.key)
+            || !field.attributes.is_writable()
+            || field.attributes.is_accessor()
+        {
+            return false;
+        }
+        let written = write_small_slot_number(&mut storage, way.slot, number);
+        drop(storage);
         if written {
             self.bump_value_revision();
         }
@@ -425,4 +436,41 @@ impl ObjectRef {
             Encoding::Pair => "pair",
         }
     }
+}
+
+// Small layouts always use descriptor slots. Keep Pair's generic replacement
+// graph out of these Small-only numeric readers/writers.
+#[inline(always)]
+fn small_slot_number(storage: &PropertyStorage, slot: usize) -> Option<f64> {
+    let Payload::Slots(properties) = &storage.payload else {
+        return None;
+    };
+    match properties.get(slot)?.value {
+        Value::Number(number) => Some(number),
+        _ => None,
+    }
+}
+
+#[inline(always)]
+fn write_small_slot_number(storage: &mut PropertyStorage, slot: usize, number: f64) -> bool {
+    let Payload::Slots(properties) = &mut storage.payload else {
+        return false;
+    };
+    let Some(property) = properties.get_mut(slot) else {
+        return false;
+    };
+    if let Value::Number(current) = &mut property.value {
+        *current = number;
+    } else {
+        replace_with_number(&mut property.value, number);
+    }
+    true
+}
+
+// Replacing a number never drops owned data. Other old values need the full
+// Value destructor, which must not be expanded into numeric loop dispatch.
+#[cold]
+#[inline(never)]
+fn replace_with_number(value: &mut Value, number: f64) {
+    *value = Value::Number(number);
 }

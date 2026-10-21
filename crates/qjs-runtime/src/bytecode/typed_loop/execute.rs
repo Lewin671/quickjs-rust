@@ -6,8 +6,8 @@
 //! the residency bound, or a guard failure — and all three rebuild the operand
 //! stack the interpreter expects from the [`DeoptSite`] of the operation that
 //! stopped, so a region with side effects is safe to abandon halfway.
-//! Entry owns pooled scratch; dispatch borrows its register banks and receiver
-//! slices directly, keeping the scalar bank independent of the owner layout.
+//! Entry owns pooled scratch. Dispatch borrows its scalar and object banks;
+//! numeric property hits inline only their guards and payload access.
 
 use std::rc::Rc;
 
@@ -145,18 +145,10 @@ fn run<F: LoopFrame>(vm: &mut F, program: &TypedLoopProgram) -> Outcome {
             }
             perform_hoisted_reads(vm, program, &mut scratch.registers, &mut scratch.boxed)
         })
-        .map(|()| {
-            execute(
-                vm,
-                program,
-                &mut scratch.registers.0,
-                &mut ObjectBanks {
-                    receivers: &scratch.receivers,
-                    boxed: &mut scratch.boxed,
-                    sloppy_global_writes: &scratch.sloppy_global_writes,
-                },
-            )
-        })
+        .map(
+            #[inline(never)]
+            |()| execute(vm, program, &mut scratch),
+        )
         .unwrap_or(Outcome::Declined);
     if program.deferred_global_publication && !matches!(outcome, Outcome::Declined) {
         publish_deferred_globals(vm, program, &scratch);
@@ -204,30 +196,19 @@ fn reg(register: u16) -> usize {
     usize::from(register) & (REGISTER_FILE - 1)
 }
 
-/// Boxed/receiver banks travel together; only the scalar bank needs a live
-/// independent pointer on every dispatch. Slice metadata stays behind this
-/// borrowed handle instead of competing with the scalar bank for registers.
-struct ObjectBanks<'a> {
-    receivers: &'a [crate::ArrayRef],
-    boxed: &'a mut [Value],
-    sloppy_global_writes: &'a [super::super::vm_bindings::TypedLoopSloppyGlobalWrite],
-}
-
-// Entry owns the scratch bundle, but the dispatch loop receives its storage
-// directly. Its scalar register bank is an independent mutable borrow, not
-// a pointer it must repeatedly recover through the scratch owner.
-#[inline(never)]
+// The entry closure owns the dispatch boundary. Inlining here keeps its
+// three captured references together; outlining the closure above prevents
+// seeding and teardown from entering the dispatch function's live ranges.
+#[inline(always)]
 fn execute<F: LoopFrame>(
     vm: &mut F,
     program: &TypedLoopProgram,
-    registers: &mut [Typed; REGISTER_FILE],
-    banks: &mut ObjectBanks<'_>,
+    scratch: &mut TypedLoopScratch,
 ) -> Outcome {
-    let ObjectBanks {
-        receivers,
-        boxed,
-        sloppy_global_writes,
-    } = banks;
+    let registers: &mut [Typed; REGISTER_FILE] = &mut scratch.registers.0;
+    let receivers = &scratch.receivers;
+    let boxed = &mut scratch.boxed;
+    let sloppy_global_writes = &scratch.sloppy_global_writes;
     // Borrowed for the whole region: the program owns these across activations,
     // so a site stays warm across entries of a short inner loop.
     let mut shape_caches = program.shape_caches.borrow_mut();
@@ -430,25 +411,14 @@ fn execute<F: LoopFrame>(
                         registers[reg(dst)] = Typed::Number(number);
                         continue;
                     }
-                    let Some(value) =
-                        get_named_object(receiver, &program.names[name as usize], shapes)
-                            .as_ref()
-                            .and_then(Typed::from_value)
-                    else {
-                        deopt_here!(op);
-                    };
-                    registers[reg(dst)] = value;
-                    continue;
                 }
-                let Some(value) = get_named(
+                let Some(value) = get_named_typed(
                     &boxed[object as usize],
                     &program.names[name as usize],
                     &mut shape_caches[cache as usize],
                     &intrinsics,
-                    Some(vm.loop_env()),
-                )
-                .as_ref()
-                .and_then(Typed::from_value) else {
+                    vm.loop_env(),
+                ) else {
                     deopt_here!(op);
                 };
                 registers[reg(dst)] = value;
@@ -468,10 +438,10 @@ fn execute<F: LoopFrame>(
                 {
                     continue;
                 }
-                if !set_named(
+                if !set_named_typed(
                     &boxed[object as usize],
                     &program.names[name as usize],
-                    &registers[reg(value)].to_value(),
+                    registers[reg(value)],
                     &mut shape_caches[cache as usize],
                 ) {
                     deopt_here!(op);
@@ -1395,6 +1365,36 @@ pub(super) fn ordinary_data_property(object: &crate::ObjectRef, name: &str) -> O
         }
     }
     None
+}
+
+// Numeric slot hits above never construct an owned Value. A miss can clone
+// objects, resolve layouts, and drop arbitrary values: keep that graph and
+// its temporaries outside the scalar executor's register allocation.
+#[cold]
+#[inline(never)]
+fn get_named_typed(
+    receiver: &Value,
+    name: &Rc<str>,
+    shapes: &mut super::ShapeWays,
+    intrinsics: &Intrinsics,
+    env: &crate::function::CallEnv,
+) -> Option<Typed> {
+    let value = match receiver {
+        Value::Object(object) => get_named_object(object, name, shapes),
+        _ => get_named(receiver, name, shapes, intrinsics, Some(env)),
+    };
+    value.as_ref().and_then(Typed::from_value)
+}
+
+#[cold]
+#[inline(never)]
+fn set_named_typed(
+    receiver: &Value,
+    name: &Rc<str>,
+    value: Typed,
+    shapes: &mut super::ShapeWays,
+) -> bool {
+    set_named(receiver, name, &value.to_value(), shapes)
 }
 
 /// Overwrites an existing own data property, declining a read-only property, an

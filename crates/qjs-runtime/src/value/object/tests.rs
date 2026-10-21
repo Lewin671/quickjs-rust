@@ -114,6 +114,33 @@ fn objects_of_one_domain_share_each_interned_property_name() {
 }
 
 #[test]
+fn numeric_slot_writes_revalidate_attributes_and_release_the_old_value() {
+    let object = ObjectRef::new(HashMap::new());
+    let old = ObjectRef::new(HashMap::new());
+    object.set("x".to_owned(), Value::Object(old.clone()));
+    let cached = object.shared_data_slot("x").unwrap();
+    assert_eq!(Rc::strong_count(&old.0), 2);
+    assert!(object.shared_data_slot_write_number(&cached, 3.0));
+    assert_eq!(Rc::strong_count(&old.0), 1);
+    assert_eq!(object.shared_data_slot_number(&cached), Some(3.0));
+
+    // Appending moves the shape, but the original data slot still validates.
+    object.set("y".to_owned(), Value::Number(4.0));
+    assert!(object.shared_data_slot_write_number(&cached, 5.0));
+    assert_eq!(object.shared_data_slot_number(&cached), Some(5.0));
+    object.define_property(
+        "x".to_owned(),
+        Property::data(Value::Number(6.0), true, false, true),
+    );
+    assert!(!object.shared_data_slot_write_number(&cached, 7.0));
+    assert_eq!(object.shared_data_slot_number(&cached), Some(6.0));
+    assert!(object.delete_own_property("x"));
+    assert_eq!(object.shared_data_slot_number(&cached), None);
+    assert!(!object.shared_data_slot_write_number(&cached, 8.0));
+    assert_eq!(object.get("y"), Some(Value::Number(4.0)));
+}
+
+#[test]
 fn cached_dictionary_edits_stay_in_place_and_copy_no_fields() {
     let object = ObjectRef::new(HashMap::new());
     for index in 0..150 {
