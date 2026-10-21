@@ -16,10 +16,10 @@
   [M2 design inputs](archive/T056-m2-design-inputs.md);
   plans [`interpreter-core-v2-atoms-layouts`](performance-units/interpreter-core-v2-atoms-layouts.json) (closed),
   [`interpreter-core-v2-layout-edges`](performance-units/interpreter-core-v2-layout-edges.json).
-- Unresolved: diagnostic wall triage before
-  deciding on the final attempt; arm64 repair timing unmeasured. M2 still needs fresh post-M1 profiles.
-- Next action: the lead uses the bound packet to verify the sequential pre-gate receipt and run T061
-  triage over 27 cases, then decides on the final screen attempt. No automatic timing.
+- Unresolved: lead triage still has local_read wall 1.0728 at equal instructions;
+  [placement diagnosis](archive/T056-m1-stageA-placement-diagnosis.md) precedes any final attempt; arm64 timing unmeasured.
+- Next action: statically audit the isolated placement matrix, then the lead runs its frozen diagnostic
+  probes. No timing submission by the owner; the sole remaining screen stays unspent.
 
 ## Goal and scope
 

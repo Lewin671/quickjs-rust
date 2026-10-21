@@ -628,3 +628,14 @@ cases with every fixed control. Its correctness job is complete; the sequential 
 lead-only timing triage commands remain prepared/unsubmitted. No timing job or attempt 2 was submitted.
 Wall repair is unverified, and the adverse ordinary-wide synthetic add cost is retained in the
 linked diagnosis. One attempt remains across A+B; stage A has not advanced.
+
+## Lead triage after numeric repair: wall excess unresolved
+
+Lead instruction pre-gate `20261021T000300Z-t056-m1a-last-pregate86` passes all86 on 4842f823.
+T061 `20261021T000303Z-t056-m1a-last-diagnostic-triage` completes 27 cases/five pairs, unclear: local_read
+wall1.0728 [1.0553,1.0943] at instructions1.0001, branch1.0361 at instructions1.0000; global0.8928.
+Unpack1.0385 and string_slice1.0393 also need diagnosis; dynamic0.9406 and moment/diff/meriyah
+0.9493/0.9968/0.9528 retain wall gains. No new screen was spent. The lead blocks the last attempt
+until local/branch equal-instruction excess is explained and removed generally.
+[Interior-code/data-layout evidence and prospective probes](T056-m1-stageA-placement-diagnosis.md)
+replace the earlier next-action of simply running triage; no production repair is yet verified.
