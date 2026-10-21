@@ -4,8 +4,8 @@
 - Implementation: 生产代码仍为 dfff3bb6；本轮仅诊断生产器、证据和 lead-only 协议。
 - Verified at: e5172755 的生产树；canonical f58/8f/dfff 镜像哈希与既有 receipts 一致。
 - Evidence: [地址/代码/计数及探针](../diagnostics/t056-stack/README.md)；[lead 两次诊断结果](../diagnostics/t056-stack/layout-results.json)。
-- Unresolved: 旧计时进程的实际机器栈相位未记录；本轮布局保真快照不支持“dfff 栈槽移动后碰 bank”的直接解释，但尚未提交栈相位计时。
-- Next action: lead 运行已准备的 ≤25min 栈相位探针；满足地址覆盖和精度条件才反证/支持假说。最后一次 attempt 不动。
+- Unresolved: 旧计时进程实址未记录；lead新相位实验反证栈-bank解释，但原自动判定受AA精度限制仍inconclusive。
+- Next action: 转[PMU/FP诊断](T056-pmu-attribution.md)；停止栈placement猜测，最后一次attempt不动。
 
 ## 已完成的 lead 诊断
 
@@ -87,7 +87,7 @@ Intel文档描述store后load的4K部分地址别名及相关事件；这里的4
 所以它不是两版本差异的现成解释。其store指令PC内部偏移却变了：8f的0x29ca→dfff0x29be，
 load位于相同0x8f。这保留了其他数据流/内存依赖预测的调查方向，不能把未见栈冲突等同于排除所有4K问题。
 
-## 栈相位资格与待执行探针
+## 栈相位资格与已执行探针
 
 `20261021T100055Z-t056-stack-unsigned-qualification` done0/4s：348个地址样本，29个共同padding长度；
 所有组栈槽按`−padding mod4096`移动，N/2N一致；每版本global/local都覆盖实际重合与不重合。
@@ -98,10 +98,9 @@ base global/local三项均稳定；8f local有1次program/ops变化，dfff local
 
 [Lead协议](../diagnostics/t056-stack/README.md)：先按现场地址封存共同粗/细网格，最多30点、4对、
 global/local/empty、两版本各自A/A；只改变同名未知env值长度，代码/bytecode/zone不变。
-≤25min；尚未提交计时。平坦结果只有在预测hit/clean覆盖、候选global热heap低位稳定、AA/指令/CI均合格时，
-才反证**该条件下**的栈-bank别名解释；强相关仅支持栈相位敏感性，不自动证明硬件根因或旧natural回退。
-若被证实，应评审机器帧内register window与spill的共同物理布局；仅把bank搬到另一个heap arena
-并不固定它与机器栈的相对offset。若被反证，不应为这个假说先实施frame/packet迁移。
+≤25min协议已由lead执行：`20261021T101153Z-t056-stack-phase-probe` done0/1049s。
+30相位大幅global回退持续，lead据此关闭栈-bank解释；原自动评估仍因AA精度为inconclusive，未改规则。
+完整数字、限制及下一步见[后续PMU/FP记录](T056-pmu-attribution.md)。
 
 ## empty：新增约1.42M指令在stage A初始化路径
 

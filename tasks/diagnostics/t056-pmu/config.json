@@ -1,0 +1,14 @@
+{
+  "canonical_job": "20261021T063231Z-t056-m1a-allocation-triage",
+  "aligned_job": "20261021T050618Z-t056-m1a-aligned-triage",
+  "correctness_job": "20261021T060648Z-t056-m1a-allocation-correctness",
+  "pregate_job": "20261021T062918Z-t056-m1a-allocation-pregate86",
+  "event_plan_sha256": "12f524d5026f1a2c25dfb80ed20b9bd0ca77ba969f0570fd7b68d603eb456dfd",
+  "files": {
+    "collect.py": "cba438251a9ed67408c6b21d5fa48c7d5ab276e8a5695cc427d9c2d364826768",
+    "protocol.py": "1955a82f4c7fbaf47db489c2c56fb0ca27b61d9618de872e69eb3654603201cc",
+    "xctrace_backend.py": "3e7282773bad6699e5f870e9d13e689eb6e780cc11151d8a6a1b8887762a8edc",
+    "chain_common.py": "24f2e1551c457b6e5d37f70229d3ec2f85e49cc4a3da563ad4fb31a6f411e7d5",
+    "window.py": "194619924886a8c3ea482ab4cf114d04aa95684840d28fd4592f10dc788d51e4"
+  }
+}

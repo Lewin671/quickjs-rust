@@ -1,0 +1,458 @@
+{
+  "intel_source": "https://raw.githubusercontent.com/intel/perfmon/main/SKL/events/skylake_core.json",
+  "intel_file_sha256": "1c79986fe874bd860f7b428b0660172d93b555ca40242edda36c4ae1cf489ce2",
+  "intel_header": {
+    "Copyright": "Copyright (c) 2001 - 2024 Intel Corporation. All rights reserved.",
+    "Info": "Performance Monitoring Events for 6th Generation Intel(R) Core(TM) Processor - V59",
+    "DatePublished": "04/04/2024",
+    "Version": "59",
+    "Legend": ""
+  },
+  "cpuid_map": "GenuineIntel-6-A5,V59,/SKL/events/skylake_core.json,core",
+  "cpuid_map_source": "https://raw.githubusercontent.com/intel/perfmon/main/mapfile.csv",
+  "events": [
+    {
+      "requested": "CPU_CLK_UNHALTED.THREAD",
+      "intel": {
+        "EventCode": "0x00",
+        "UMask": "0x02",
+        "CounterMask": "0",
+        "EdgeDetect": "0",
+        "Invert": "0",
+        "Counter": "Fixed counter 1",
+        "Errata": "null"
+      },
+      "apple_name": "CPU_CLK_UNHALTED.THREAD",
+      "apple_fields": {
+        "fallback": "CPU_CLK_UNHALTED.THREAD_P",
+        "counters_mask": 2,
+        "fixed_counter": 1,
+        "umask": 2
+      },
+      "requires_encoding_verification": true
+    },
+    {
+      "requested": "INST_RETIRED.ANY",
+      "intel": {
+        "EventCode": "0x00",
+        "UMask": "0x01",
+        "CounterMask": "0",
+        "EdgeDetect": "0",
+        "Invert": "0",
+        "Counter": "Fixed counter 0",
+        "Errata": "null"
+      },
+      "apple_name": "INST_RETIRED.ANY",
+      "apple_fields": {
+        "fallback": "INST_RETIRED.ANY_P",
+        "counters_mask": 1,
+        "fixed_counter": 0,
+        "umask": 1
+      },
+      "requires_encoding_verification": true
+    },
+    {
+      "requested": "UOPS_ISSUED.ANY",
+      "intel": {
+        "EventCode": "0x0E",
+        "UMask": "0x01",
+        "CounterMask": "0",
+        "EdgeDetect": "0",
+        "Invert": "0",
+        "Counter": "0,1,2,3",
+        "Errata": "null"
+      },
+      "apple_name": "UOPS_ISSUED.ANY",
+      "apple_fields": {
+        "number": 14,
+        "umask": 1
+      },
+      "requires_encoding_verification": true
+    },
+    {
+      "requested": "UOPS_RETIRED.RETIRE_SLOTS",
+      "intel": {
+        "EventCode": "0xC2",
+        "UMask": "0x02",
+        "CounterMask": "0",
+        "EdgeDetect": "0",
+        "Invert": "0",
+        "Counter": "0,1,2,3",
+        "Errata": "null"
+      },
+      "apple_name": "UOPS_RETIRED.SLOTS",
+      "apple_fields": {
+        "number": 194,
+        "umask": 2
+      },
+      "requires_encoding_verification": true
+    },
+    {
+      "requested": "MACHINE_CLEARS.COUNT",
+      "intel": {
+        "EventCode": "0xC3",
+        "UMask": "0x01",
+        "CounterMask": "1",
+        "EdgeDetect": "1",
+        "Invert": "0",
+        "Counter": "0,1,2,3",
+        "Errata": "null"
+      },
+      "apple_name": "MACHINE_CLEARS.COUNT",
+      "apple_fields": {
+        "number": 195,
+        "umask": 1
+      },
+      "requires_encoding_verification": true
+    },
+    {
+      "requested": "MACHINE_CLEARS.MEMORY_ORDERING",
+      "intel": {
+        "EventCode": "0xC3",
+        "UMask": "0x02",
+        "CounterMask": "0",
+        "EdgeDetect": "0",
+        "Invert": "0",
+        "Counter": "0,1,2,3",
+        "Errata": "SKL089"
+      },
+      "apple_name": "MACHINE_CLEARS.MEMORY_ORDERING",
+      "apple_fields": {
+        "number": 195,
+        "umask": 2
+      },
+      "requires_encoding_verification": true
+    },
+    {
+      "requested": "MACHINE_CLEARS.SMC",
+      "intel": {
+        "EventCode": "0xC3",
+        "UMask": "0x04",
+        "CounterMask": "0",
+        "EdgeDetect": "0",
+        "Invert": "0",
+        "Counter": "0,1,2,3",
+        "Errata": "null"
+      },
+      "apple_name": "MACHINE_CLEARS.SMC",
+      "apple_fields": {
+        "number": 195,
+        "umask": 4
+      },
+      "requires_encoding_verification": true
+    },
+    {
+      "requested": "LD_BLOCKS.STORE_FORWARD",
+      "intel": {
+        "EventCode": "0x03",
+        "UMask": "0x02",
+        "CounterMask": "0",
+        "EdgeDetect": "0",
+        "Invert": "0",
+        "Counter": "0,1,2,3",
+        "Errata": "null"
+      },
+      "apple_name": "LD_BLOCKS.STORE_FORWARD",
+      "apple_fields": {
+        "number": 3,
+        "umask": 2
+      },
+      "requires_encoding_verification": true
+    },
+    {
+      "requested": "LD_BLOCKS_PARTIAL.ADDRESS_ALIAS",
+      "intel": {
+        "EventCode": "0x07",
+        "UMask": "0x01",
+        "CounterMask": "0",
+        "EdgeDetect": "0",
+        "Invert": "0",
+        "Counter": "0,1,2,3",
+        "Errata": "null"
+      },
+      "apple_name": "LD_BLOCKS_PARTIAL.ADDRESS_ALIAS",
+      "apple_fields": {
+        "number": 7,
+        "umask": 1
+      },
+      "requires_encoding_verification": true
+    },
+    {
+      "requested": "FP_ASSIST.ANY",
+      "intel": {
+        "EventCode": "0xCA",
+        "UMask": "0x1E",
+        "CounterMask": "1",
+        "EdgeDetect": "0",
+        "Invert": "0",
+        "Counter": "0,1,2,3",
+        "Errata": "null"
+      },
+      "apple_name": null,
+      "apple_fields": {},
+      "apple_different_event": {
+        "name": "ASSISTS.FP",
+        "fields": {
+          "number": 193,
+          "umask": 2
+        },
+        "equivalent": false
+      },
+      "requires_encoding_verification": true
+    },
+    {
+      "requested": "BR_MISP_RETIRED.ALL_BRANCHES",
+      "intel": {
+        "EventCode": "0xC5",
+        "UMask": "0x00",
+        "CounterMask": "0",
+        "EdgeDetect": "0",
+        "Invert": "0",
+        "Counter": "0,1,2,3",
+        "Errata": "null"
+      },
+      "apple_name": "BR_MISP_RETIRED.ALL_BRANCHES",
+      "apple_fields": {
+        "number": 197,
+        "umask": 0
+      },
+      "requires_encoding_verification": true
+    },
+    {
+      "requested": "IDQ.DSB_UOPS",
+      "intel": {
+        "EventCode": "0x79",
+        "UMask": "0x08",
+        "CounterMask": "0",
+        "EdgeDetect": "0",
+        "Invert": "0",
+        "Counter": "0,1,2,3",
+        "Errata": "null"
+      },
+      "apple_name": "IDQ.DSB_UOPS",
+      "apple_fields": {
+        "number": 121,
+        "umask": 8
+      },
+      "requires_encoding_verification": true
+    },
+    {
+      "requested": "IDQ.MITE_UOPS",
+      "intel": {
+        "EventCode": "0x79",
+        "UMask": "0x04",
+        "CounterMask": "0",
+        "EdgeDetect": "0",
+        "Invert": "0",
+        "Counter": "0,1,2,3",
+        "Errata": "null"
+      },
+      "apple_name": "IDQ.MITE_UOPS",
+      "apple_fields": {
+        "number": 121,
+        "umask": 4
+      },
+      "requires_encoding_verification": true
+    },
+    {
+      "requested": "DSB2MITE_SWITCHES.COUNT",
+      "intel": {
+        "EventCode": "0xAB",
+        "UMask": "0x01",
+        "CounterMask": "0",
+        "EdgeDetect": "0",
+        "Invert": "0",
+        "Counter": "0,1,2,3",
+        "Errata": "null"
+      },
+      "apple_name": "DSB2MITE_SWITCHES.COUNT",
+      "apple_fields": {
+        "number": 171,
+        "umask": 2
+      },
+      "requires_encoding_verification": true
+    },
+    {
+      "requested": "DSB2MITE_SWITCHES.PENALTY_CYCLES",
+      "intel": {
+        "EventCode": "0xAB",
+        "UMask": "0x02",
+        "CounterMask": "0",
+        "EdgeDetect": "0",
+        "Invert": "0",
+        "Counter": "0,1,2,3",
+        "Errata": "null"
+      },
+      "apple_name": "DSB2MITE_SWITCHES.PENALTY_CYCLES",
+      "apple_fields": {
+        "number": 171,
+        "umask": 2
+      },
+      "requires_encoding_verification": true
+    },
+    {
+      "requested": "ICACHE_64B.IFTAG_MISS",
+      "intel": {
+        "EventCode": "0x83",
+        "UMask": "0x02",
+        "CounterMask": "0",
+        "EdgeDetect": "0",
+        "Invert": "0",
+        "Counter": "0,1,2,3",
+        "Errata": "null"
+      },
+      "apple_name": "ICACHE_64B.IFTAG_MISS",
+      "apple_fields": {
+        "number": 131,
+        "umask": 2
+      },
+      "requires_encoding_verification": true
+    },
+    {
+      "requested": "ITLB_MISSES.WALK_COMPLETED",
+      "intel": {
+        "EventCode": "0x85",
+        "UMask": "0x0e",
+        "CounterMask": "0",
+        "EdgeDetect": "0",
+        "Invert": "0",
+        "Counter": "0,1,2,3",
+        "Errata": "null"
+      },
+      "apple_name": "ITLB_MISSES.WALK_COMPLETED",
+      "apple_fields": {
+        "number": 133,
+        "umask": 14
+      },
+      "requires_encoding_verification": true
+    },
+    {
+      "requested": "ITLB_MISSES.STLB_HIT",
+      "intel": {
+        "EventCode": "0x85",
+        "UMask": "0x20",
+        "CounterMask": "0",
+        "EdgeDetect": "0",
+        "Invert": "0",
+        "Counter": "0,1,2,3",
+        "Errata": "null"
+      },
+      "apple_name": "ITLB_MISSES.STLB_HIT",
+      "apple_fields": {
+        "number": 133,
+        "umask": 32
+      },
+      "requires_encoding_verification": true
+    },
+    {
+      "requested": "L1D.REPLACEMENT",
+      "intel": {
+        "EventCode": "0x51",
+        "UMask": "0x01",
+        "CounterMask": "0",
+        "EdgeDetect": "0",
+        "Invert": "0",
+        "Counter": "0,1,2,3",
+        "Errata": "null"
+      },
+      "apple_name": "L1D.REPLACEMENT",
+      "apple_fields": {
+        "number": 81,
+        "umask": 1
+      },
+      "requires_encoding_verification": true
+    },
+    {
+      "requested": "MEM_LOAD_RETIRED.L1_MISS",
+      "intel": {
+        "EventCode": "0xD1",
+        "UMask": "0x08",
+        "CounterMask": "0",
+        "EdgeDetect": "0",
+        "Invert": "0",
+        "Counter": "0,1,2,3",
+        "Errata": "null"
+      },
+      "apple_name": "MEM_LOAD_RETIRED.L1_MISS",
+      "apple_fields": {
+        "number": 209,
+        "umask": 8
+      },
+      "requires_encoding_verification": true
+    },
+    {
+      "requested": "CYCLE_ACTIVITY.STALLS_TOTAL",
+      "intel": {
+        "EventCode": "0xA3",
+        "UMask": "0x04",
+        "CounterMask": "4",
+        "EdgeDetect": "0",
+        "Invert": "0",
+        "Counter": "0,1,2,3",
+        "Errata": "null"
+      },
+      "apple_name": "CYCLE_ACTIVITY.STALLS_TOTAL",
+      "apple_fields": {
+        "number": 163,
+        "umask": 4
+      },
+      "requires_encoding_verification": true
+    },
+    {
+      "requested": "CYCLE_ACTIVITY.STALLS_L1D_MISS",
+      "intel": {
+        "EventCode": "0xA3",
+        "UMask": "0x0C",
+        "CounterMask": "12",
+        "EdgeDetect": "0",
+        "Invert": "0",
+        "Counter": "0,1,2,3",
+        "Errata": "null"
+      },
+      "apple_name": "CYCLE_ACTIVITY.STALLS_L1D_MISS",
+      "apple_fields": {
+        "number": 163,
+        "umask": 12
+      },
+      "requires_encoding_verification": true
+    },
+    {
+      "requested": "CYCLE_ACTIVITY.STALLS_L2_MISS",
+      "intel": {
+        "EventCode": "0xA3",
+        "UMask": "0x05",
+        "CounterMask": "5",
+        "EdgeDetect": "0",
+        "Invert": "0",
+        "Counter": "0,1,2,3",
+        "Errata": "null"
+      },
+      "apple_name": "CYCLE_ACTIVITY.STALLS_L2_MISS",
+      "apple_fields": {
+        "number": 163,
+        "umask": 5
+      },
+      "requires_encoding_verification": true
+    },
+    {
+      "requested": "CYCLE_ACTIVITY.STALLS_MEM_ANY",
+      "intel": {
+        "EventCode": "0xA3",
+        "UMask": "0x14",
+        "CounterMask": "20",
+        "EdgeDetect": "0",
+        "Invert": "0",
+        "Counter": "0,1,2,3",
+        "Errata": "null"
+      },
+      "apple_name": "CYCLE_ACTIVITY.STALLS_MEM_ANY",
+      "apple_fields": {
+        "number": 163,
+        "umask": 20
+      },
+      "requires_encoding_verification": true
+    }
+  ],
+  "catalog_only": true,
+  "no_register_programming_performed": true
+}

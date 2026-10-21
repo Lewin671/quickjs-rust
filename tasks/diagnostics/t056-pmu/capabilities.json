@@ -1,0 +1,147 @@
+{
+  "timing": false,
+  "read_only": true,
+  "platform": "macOS-12.6-x86_64-i386-64bit-Mach-O",
+  "commands": {
+    "xcode": {
+      "argv": [
+        "xcode-select",
+        "-p"
+      ],
+      "exit": 0,
+      "stdout": "/Library/Developer/CommandLineTools\n",
+      "stderr": ""
+    },
+    "xctrace": {
+      "argv": [
+        "xcrun",
+        "--find",
+        "xctrace"
+      ],
+      "exit": 72,
+      "stdout": "",
+      "stderr": "xcrun: error: unable to find utility \"xctrace\", not a developer tool or in PATH\n"
+    },
+    "templates": {
+      "argv": [
+        "xcrun",
+        "xctrace",
+        "list",
+        "templates"
+      ],
+      "exit": 72,
+      "stdout": "",
+      "stderr": "xcrun: error: unable to find utility \"xctrace\", not a developer tool or in PATH\n"
+    },
+    "sudo_noninteractive": {
+      "argv": [
+        "sudo",
+        "-n",
+        "/usr/bin/id",
+        "-u"
+      ],
+      "exit": 1,
+      "stdout": "",
+      "stderr": "sudo: a password is required\n"
+    },
+    "security": {
+      "argv": [
+        "/usr/sbin/csrutil",
+        "status"
+      ],
+      "error": "[Errno 2] No such file or directory: '/usr/sbin/csrutil'"
+    },
+    "cpu": {
+      "argv": [
+        "/usr/sbin/sysctl",
+        "machdep.cpu.brand_string",
+        "machdep.cpu.family",
+        "machdep.cpu.model",
+        "machdep.cpu.stepping"
+      ],
+      "exit": 0,
+      "stdout": "machdep.cpu.brand_string: Intel(R) Core(TM) i7-10700 CPU @ 2.90GHz\nmachdep.cpu.family: 6\nmachdep.cpu.model: 165\nmachdep.cpu.stepping: 5\n",
+      "stderr": ""
+    }
+  },
+  "libraries": {
+    "kperf": {
+      "loaded": true,
+      "symbols": {
+        "kpc_pmu_version": true,
+        "kpc_get_counting": true,
+        "kpc_get_thread_counting": true,
+        "kpc_get_counter_count": true,
+        "kpc_get_config_count": true,
+        "kpc_get_thread_counters": true,
+        "kpc_set_config": true,
+        "kpc_set_counting": true,
+        "kpc_set_thread_counting": true,
+        "kpc_force_all_ctrs_set": true,
+        "kpc_force_all_ctrs_get": true
+      },
+      "kpc_pmu_version": 0,
+      "kpc_get_counting": 0,
+      "kpc_get_thread_counting": 4294967295,
+      "kpc_get_counter_count": {
+        "1": 3,
+        "2": 4,
+        "3": 7,
+        "4": 0
+      },
+      "kpc_get_config_count": {
+        "1": 1,
+        "2": 4,
+        "3": 5,
+        "4": 0
+      }
+    },
+    "kperfdata": {
+      "loaded": true,
+      "symbols": {
+        "kpep_db_create": true,
+        "kpep_db_free": true,
+        "kpep_db_events_count": true,
+        "kpep_db_events": true,
+        "kpep_config_create": true,
+        "kpep_config_add_event": true,
+        "kpep_config_kpc": true,
+        "kpep_config_kpc_map": true
+      }
+    }
+  },
+  "kpep_files": [
+    "/usr/share/kpep/cpu_100000c_1_67ceee93.plist",
+    "/usr/share/kpep/haswell.plist",
+    "/usr/share/kpep/cpu_100000c_1_37a09642.plist",
+    "/usr/share/kpep/a7.plist",
+    "/usr/share/kpep/cpu_7_8_f817246.plist",
+    "/usr/share/kpep/cpu_7_8_582ed09c.plist",
+    "/usr/share/kpep/icelake.plist",
+    "/usr/share/kpep/cometlake.plist",
+    "/usr/share/kpep/kabylake.plist",
+    "/usr/share/kpep/cpu_100000c_2_1b588bb3.plist",
+    "/usr/share/kpep/cpu_7_8_1cf8a03e.plist",
+    "/usr/share/kpep/broadwell.plist",
+    "/usr/share/kpep/cpu_100000c_2_7d34b9f.plist",
+    "/usr/share/kpep/a12.plist",
+    "/usr/share/kpep/a10.plist",
+    "/usr/share/kpep/cpu_7_8_10b282dc.plist",
+    "/usr/share/kpep/a8.plist",
+    "/usr/share/kpep/cpu_7_8_37fc219f.plist",
+    "/usr/share/kpep/a14.plist",
+    "/usr/share/kpep/cpu_7_4_1f65e835.plist",
+    "/usr/share/kpep/ivybridge.plist",
+    "/usr/share/kpep/cpu_100000c_1_2c91a47e.plist",
+    "/usr/share/kpep/a11.plist",
+    "/usr/share/kpep/cpu_100000c_2_462504d2.plist",
+    "/usr/share/kpep/a9.plist",
+    "/usr/share/kpep/a13.plist",
+    "/usr/share/kpep/cpu_100000c_1_92fb37c8.plist",
+    "/usr/share/kpep/cpu_100000c_1_e81e7ef6.plist",
+    "/usr/share/kpep/skylake.plist",
+    "/usr/share/kpep/cpu_7_8_38435547.plist",
+    "/usr/share/kpep/cpu_100000c_2_da33d83d.plist",
+    "/usr/share/kpep/a15.plist"
+  ]
+}

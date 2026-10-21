@@ -1,0 +1,14 @@
+{
+  "kpc_get_thread_counters": {
+    "return": -1,
+    "errno": 1
+  },
+  "kpc_force_all_ctrs_get": {
+    "return": -1,
+    "errno": 1
+  },
+  "self_rusage_v4": {
+    "return": 0,
+    "errno": 0
+  }
+}

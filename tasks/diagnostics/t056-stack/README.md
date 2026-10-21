@@ -2,7 +2,10 @@
 
 [Diagnosis](../../archive/T056-stack-phase-diagnosis.md) owns conclusions,
 addresses, corrected Increment audit, startup attribution and proposed fixes.
-Production remains dfff. No timing job or acceptance attempt is submitted here.
+Production remains dfff. Lead completed the stack probe in1049s; see
+[PMU/FP follow-up](../../archive/T056-pmu-attribution.md). Lead rejects the stack
+hypothesis; the frozen automatic verdict stays inconclusive due A/A precision.
+No acceptance attempt was consumed; do not rerun placement guesses.
 
 ## Evidence producers and identities
 

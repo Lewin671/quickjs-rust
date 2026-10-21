@@ -1,0 +1,29 @@
+{
+  "diagnostic_only": true,
+  "hardware_profiled": false,
+  "pmu_samples": 0,
+  "mock_capture_counts": {
+    "success": 32,
+    "blocked": 0,
+    "no-schema": 1,
+    "empty-table": 1,
+    "timeout": 0,
+    "wrong-checksum": 1,
+    "success-legacy": 32
+  },
+  "verified": [
+    "source seals",
+    "frozen correctness/86-case receipts",
+    "three actual canonical file hashes",
+    "24 scalar snapshots/6 logical traces",
+    "stack assessment preserved",
+    "rendered shell/embedded Python",
+    "current/legacy xctrace export",
+    "32-trace real collector control flow",
+    "owner no-timing/blocked/absent-schema/empty-table/timeout/checksum rejection",
+    "unsafe schema rejection",
+    "owned process signal escalation",
+    "20min/quiet-window/DST guards"
+  ],
+  "production_tree": "dfff3bb6 (unchanged at 2ec4b673)"
+}

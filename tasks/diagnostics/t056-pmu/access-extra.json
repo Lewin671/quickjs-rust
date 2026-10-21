@@ -1,0 +1,23 @@
+{
+  "read_only": true,
+  "timing": false,
+  "xctrace_candidates": [],
+  "rusage_cycles_trusted_by_existing_repo_probe": false,
+  "sudo_list": {
+    "exit": 1,
+    "stdout": "",
+    "stderr": "sudo: a password is required\n"
+  },
+  "job": "20261021T105828Z-t056-pmu-extra-capabilities",
+  "raw_sha256": "1030137605b1a21201b71480fad60315b3c4f800a1aaaedb9fd3ba8d96f69f3b",
+  "sip": {
+    "status": "enabled",
+    "source_job": "20261021T103456Z-t056-pmu-catalog",
+    "log_sha256": "66f91c0100a3ac6812c8519e1a2c423454823698897bf586e477a4df886c3121",
+    "command": [
+      "/usr/bin/csrutil",
+      "status"
+    ],
+    "returncode": 0
+  }
+}
