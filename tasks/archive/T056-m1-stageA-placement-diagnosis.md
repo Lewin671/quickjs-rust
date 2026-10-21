@@ -54,6 +54,12 @@ invariant. This is an observed difference, not proof that header residue 22 is u
 T050 proved a typed-body placement effect on older code; T054 rejected global region preservation.
 Neither historical result proves the cause on 4842f823 or authorizes an offset search.
 
+An additional check of the exact rejected 0a9af81b image (SHA 1970bb69, recorded previously)
+finds entry 0x10046e630, header entry+0x86 = 0x10046e6b6: mod32=22, mod64=54. Its original
+local_read wall excess therefore occurred even with the same header mod32 as the base. A simple
+"header mod32 alone" explanation is insufficient for the rejection history. The current reciprocal
+move tests broader interior placement on 4842f823; it is not a declaration that residue 22 is the fix.
+
 ## Static data layout and limits
 
 Non-timing job `20261021T002216Z-t056-placement-type-facts` passes. It compiles immutable
