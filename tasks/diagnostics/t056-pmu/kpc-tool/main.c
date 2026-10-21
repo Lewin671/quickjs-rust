@@ -19,11 +19,12 @@ int main(int argc,char **argv) {
  struct rlimit core={0,0};if(setrlimit(RLIMIT_CORE,&core))return fail("cannot disable core files");
  if(chdir("/"))return fail("cannot set fixed working directory");
  if(argc==2&&!strcmp(argv[1],"--help")){
-  puts("qjs-kpc: Intel Comet Lake PET counter diagnostic (observed thread intervals, NOT whole-process totals)\nUsage: qjs-kpc --events cycles,instructions,EVENT,... [--env TZ=UTC] [--env LC_ALL=C] [--timeout-ms 1..10000] -- /absolute/program args...\n       qjs-kpc --describe --events cycles,instructions,EVENT,...\n       qjs-kpc --list-events\nChild runs as nonroot SUDO_UID/GID, no supplementary groups, cwd=/, fixed TZ=UTC LC_ALL=C.");return 0;
+  puts("qjs-kpc: Intel Comet Lake PET counter diagnostic (observed thread intervals, NOT whole-process totals)\nUsage: qjs-kpc --events cycles,instructions,EVENT,... [--env TZ=UTC] [--env LC_ALL=C] [--timeout-ms 1..10000] -- /absolute/program args...\n       qjs-kpc --describe --events cycles,instructions,EVENT,...\n       qjs-kpc --list-events\nDefault cycles/instructions use KPEP user-only programmable counters; --fixed-diagnostic retains the unverified fixed-control path.\nChild runs as nonroot SUDO_UID/GID, no supplementary groups, cwd=/, fixed TZ=UTC LC_ALL=C.");return 0;
  }
- bool list=argc==2&&!strcmp(argv[1],"--list-events"),describe=false;
+ bool list=argc==2&&!strcmp(argv[1],"--list-events"),describe=false,fixed_diagnostic=false;
  const char *event_list=NULL;unsigned timeout=10000;int command=-1;
  if(!list)for(int i=1;i<argc;i++){
+  if(!strcmp(argv[i],"--fixed-diagnostic")&&!fixed_diagnostic){fixed_diagnostic=true;continue;}
   if(!strcmp(argv[i],"--describe")&&!describe){describe=true;continue;}
   if(!strcmp(argv[i],"--events")&&!event_list&&i+1<argc){event_list=argv[++i];continue;}
   if(!strcmp(argv[i],"--env")&&i+1<argc){const char *value=argv[++i];if(strcmp(value,"TZ=UTC")&&strcmp(value,"LC_ALL=C"))return fail("only TZ=UTC and LC_ALL=C are permitted");continue;}
@@ -41,10 +42,10 @@ int main(int argc,char **argv) {
   if(!secure_path("/usr/local/libexec/qjs-kpc",false))return fail("installed helper must be a root-owned regular file");
   if(argv[command][0]!='/')return fail("child program must use an absolute path");
  }
- Api api={0};Events events={0};
+ Api api={0};Events events={0};events.fixed_diagnostic=fixed_diagnostic;
  if(!api_load(&api))return fail("required system private-framework symbols unavailable");
  if(list)return events_list(&api)?0:fail("event database unavailable or unsupported CPU");
- if(!events_prepare(&api,&events,event_list))return fail("unsupported CPU/event/group; requires cycles,instructions and at most4 programmable events");
+ if(!events_prepare(&api,&events,event_list))return fail("unsupported CPU/event/group; requires cycles,instructions and at most2 extra events (4 only with --fixed-diagnostic)");
  if(describe){events_describe(&events);return 0;}
  Run *run=calloc(1,sizeof(*run));if(!run)return fail("allocation failed");
  bool complete=run_child(&api,&events,run,argv+command,(uid_t)uid,(gid_t)gid,timeout);

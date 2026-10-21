@@ -1,0 +1,45 @@
+{
+  "diagnostic_only": true,
+  "installation_verified": false,
+  "privileged_access_verified": false,
+  "qualification_job": "20261021T155348Z-t056-kpc-v2-final",
+  "qualification_sha256": "2c5f9b42102b273cd2bec8dbf6a28a93007167e3ec170241a4f05e051be76c25",
+  "helper_sha256": "a8021d9adc7a0c583f32920832fafd34450fe462476b4d2f726a206a83f06673",
+  "groups_job": "20261021T155433Z-t056-kpc-v2-groups",
+  "groups_sha256": "d4ae5998c48f2fce5bb554cee387a6f86edc2bbb795bdb05317be257363bd578",
+  "images_job": "20261021T120731Z-t056-header-layout-qualification",
+  "images_sha256": "e451cd6ac4a5668dc946ad3cf2843854beae70f3f6cb9fb1aada728de3e15549",
+  "images": {
+    "base": "b0dfc65d0c026d62aa64ef3d69a089eb73b51088c84af75b44617ea2a1737f0e",
+    "aligned": "b0b84489a3f6fd673b06dc4bdc71c8f176387a231ca19fe1da5ea48ca4ee0fd5",
+    "count": "661969a50fb0bc36f73e6fe1af20e78218c2ceffb63d62a4903c7c61a67858ea",
+    "flags": "100cda383a0f5146e2f9e025f273edfb1d622fe0754e9d84bef10954732a7152",
+    "count_flags": "52ed87e969884aed7cb6d2ccd047f484dd41c26c31c28a94bbebba6201bcfeca",
+    "candidate": "3466c37a62f2fb6d764d0123212749ff810138ca05fcad336ce1afa05bdb1e3f"
+  },
+  "workload_sha256": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
+  "correctness_job": "20261021T060648Z-t056-m1a-allocation-correctness",
+  "pregate_job": "20261021T062918Z-t056-m1a-allocation-pregate86",
+  "throughput": {
+    "reference": "20261021T135119Z-t056-ops-confirmation",
+    "units": 170,
+    "seconds": 174.01714727201033,
+    "planned_units": 176,
+    "scaled_seconds": 254.43092894043423,
+    "reserve_factor": 2,
+    "setup_seconds": 120,
+    "budgeted_seconds": 628.8618578808685,
+    "collect_seconds": 720,
+    "root_setup_seconds_per_exec": 0.211
+  },
+  "files": {
+    "collect.py": "64360ec51abd97996b799199472a18b5615510439a53784cc45d26a244c8e4c1",
+    "protocol.py": "3a583c746e3089d841c8729d4a06cb67969cd22957ec3aa170eb412706eec97d",
+    "counters.py": "3e4f041f57804841448c045205b41a761129776192c0dbec1e3b1ff445eb6edd",
+    "chain_common.py": "24f2e1551c457b6e5d37f70229d3ec2f85e49cc4a3da563ad4fb31a6f411e7d5",
+    "window.py": "daf187949c5be104ead5e727353406a6670b8f54adaa9a1ad300fa4d9ab7b2f6",
+    "groups.json": "cc33bad3ec85c3aba406dadef861fa5f0b8707f00a985fec80b3807be736109b"
+  },
+  "counter_backend": "kpep_programmable_user",
+  "root_status": "v1 installed and failed before gate; v2 requires user reinstall and short root smoke"
+}

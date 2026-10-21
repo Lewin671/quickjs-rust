@@ -1,0 +1,11 @@
+{
+  "job": "20261021T155544Z-t056-kpc-v2-install-ready",
+  "agent_installed": false,
+  "root_v2_executed": false,
+  "visudo_syntax": "parsed OK",
+  "log_sha256": "603563e6ee7bfe2591a8ed61ff06a8e8b8f3c1c0ccac5aabe53ba1355b73a3cb",
+  "files_sha256": {
+    "install-user.sh": "88278628465e2c05b04f41570a75b897d5e243e1bc805807d654dd323017316f",
+    "qjs-kpc.sudoers": "1915de553a18a8351e1d5d1a374ac8cf22b2c05ed4d00dee593535a6db537317"
+  }
+}

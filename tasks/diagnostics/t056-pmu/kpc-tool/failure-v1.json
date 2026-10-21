@@ -1,0 +1,59 @@
+{
+  "lead_job": "20261021T153553Z-t056-kpc-counters",
+  "lead_raw_sha256": "cabbe221d6a1f66301f5aae4c6eb0543353a0c4ce1df91a586bb44b0848cf9c2",
+  "first_privilege_check": {
+    "phase": "privilege-check",
+    "argv": ["/usr/bin/sudo","-n","--","/usr/local/libexec/qjs-kpc","--events","cycles,instructions","--env","TZ=UTC","--env","LC_ALL=C","--","/usr/bin/id","-u"],
+    "result": {
+      "started_at": "2026-10-21T15:36:55.656118+00:00",
+      "timer_started_ns": 778961125901373,
+      "timer_finished_ns": 778962487358703,
+      "duration_ns": 1361457330,
+      "exit_code": 1,
+      "timed_out": false,
+      "stdout": "{\"version\":\"qjs-kpc-1\",\"pid\":64413,\"capture_complete\":false,\"counters_valid\":false,\"child_status\":137,\"timed_out\":false,\"elapsed_ns\":210368000,\"scope\":\"sum_of_observed_thread_intervals\",\"all_threads_covered\":false,\"full_lifetime_counts\":false,\"sample_period_ns\":1000000,\"user_only_requested\":true,\"child_stdout\":\"\",\"child_stderr\":\"\",\"events\":[{\"name\":\"CPU_CLK_UNHALTED.THREAD\",\"index\":1,\"count\":null},{\"name\":\"INST_RETIRED.ANY\",\"index\":0,\"count\":null}],\"configuration_readback_verified\":false,\"cycles\":null,\"instructions\":null,\"config\":[\"0x22\"],\"encoding_crosswalk_applied\":true,\"threads\":[],\"records\":0,\"samples\":0,\"cleanup_ok\":true}\n",
+      "stderr": "",
+      "stdout_truncated": false,
+      "stderr_truncated": false,
+      "instructions": null,
+      "cycles": null
+    }
+  },
+  "probe_job": "20261021T153934Z-t056-kpc-installed-probe",
+  "probe_raw_sha256": "3b89c93da7aae02e4f48d7555e6c02dda91084c25c5e00f9f097b89e2224a787",
+  "probe": {
+    "timing": false,
+    "installed_binary_sha256": "e3d2bc4c7af7dab8c1181b78ca291429c9ef275e44b20a828e1ca01f1a7ec065",
+    "rows": [
+      {
+        "argv": ["/usr/local/libexec/qjs-kpc","--describe","--events","cycles,instructions"],
+        "exit": 0,
+        "stdout": "{\"version\":\"qjs-kpc-1\",\"database\":\"cometlake\",\"user_only_requested\":true,\"classes\":1,\"counter_count\":3,\"events\":[{\"name\":\"CPU_CLK_UNHALTED.THREAD\",\"index\":1},{\"name\":\"INST_RETIRED.ANY\",\"index\":0}],\"config\":[\"0x22\"]}\n",
+        "stderr": ""
+      },
+      {
+        "argv": ["/usr/bin/sudo","-n","--","/usr/local/libexec/qjs-kpc","--describe","--events","cycles,instructions,IDQ.DSB_UOPS"],
+        "exit": 0,
+        "stdout": "{\"version\":\"qjs-kpc-1\",\"database\":\"cometlake\",\"user_only_requested\":true,\"classes\":3,\"counter_count\":7,\"events\":[{\"name\":\"CPU_CLK_UNHALTED.THREAD\",\"index\":1},{\"name\":\"INST_RETIRED.ANY\",\"index\":0},{\"name\":\"IDQ.DSB_UOPS\",\"index\":3}],\"config\":[\"0x22\",\"0x410879\",\"0x0\",\"0x0\",\"0x0\"]}\n",
+        "stderr": ""
+      },
+      {
+        "argv": ["/usr/bin/sudo","-n","--","/usr/local/libexec/qjs-kpc","--events","cycles,instructions","--timeout-ms","1000","--","/usr/bin/id","-u"],
+        "exit": 1,
+        "stdout": "{\"version\":\"qjs-kpc-1\",\"pid\":64487,\"capture_complete\":false,\"counters_valid\":false,\"child_status\":137,\"timed_out\":false,\"elapsed_ns\":210200000,\"scope\":\"sum_of_observed_thread_intervals\",\"all_threads_covered\":false,\"full_lifetime_counts\":false,\"sample_period_ns\":1000000,\"user_only_requested\":true,\"child_stdout\":\"\",\"child_stderr\":\"\",\"events\":[{\"name\":\"CPU_CLK_UNHALTED.THREAD\",\"index\":1,\"count\":null},{\"name\":\"INST_RETIRED.ANY\",\"index\":0,\"count\":null}],\"configuration_readback_verified\":false,\"cycles\":null,\"instructions\":null,\"config\":[\"0x22\"],\"encoding_crosswalk_applied\":true,\"threads\":[],\"records\":0,\"samples\":0,\"cleanup_ok\":true}\n",
+        "stderr": ""
+      },
+      {
+        "argv": ["/usr/bin/sudo","-n","--","/usr/local/libexec/qjs-kpc","--events","cycles,instructions,IDQ.DSB_UOPS","--timeout-ms","1000","--","/usr/bin/id","-u"],
+        "exit": 1,
+        "stdout": "{\"version\":\"qjs-kpc-1\",\"pid\":64490,\"capture_complete\":false,\"counters_valid\":false,\"child_status\":137,\"timed_out\":false,\"elapsed_ns\":210339000,\"scope\":\"sum_of_observed_thread_intervals\",\"all_threads_covered\":false,\"full_lifetime_counts\":false,\"sample_period_ns\":1000000,\"user_only_requested\":true,\"child_stdout\":\"\",\"child_stderr\":\"\",\"events\":[{\"name\":\"CPU_CLK_UNHALTED.THREAD\",\"index\":1,\"count\":null},{\"name\":\"INST_RETIRED.ANY\",\"index\":0,\"count\":null},{\"name\":\"IDQ.DSB_UOPS\",\"index\":3,\"count\":null}],\"configuration_readback_verified\":false,\"cycles\":null,\"instructions\":null,\"config\":[\"0x22\",\"0x410879\",\"0x0\",\"0x0\",\"0x0\"],\"encoding_crosswalk_applied\":true,\"threads\":[],\"records\":0,\"samples\":0,\"cleanup_ok\":true}\n",
+        "stderr": ""
+      },
+      {"read_only_sysctl":["kern.kdebug"],"exit":1,"stdout":"","stderr":"sysctl: couldn't find format of oid 'kern.kdebug': No such file or directory\n"},
+      {"read_only_sysctl":["ktrace.state","ktrace.owning_pid","kperf.sampling"],"exit":0,"stdout":"ktrace.state: 1\nktrace.owning_pid: 64489\n","stderr":""}
+    ]
+  },
+  "scope": "authorized short root calls of installed v1 only, no owner timing or benchmark loop",
+  "proved": "root helper runs, fails before config_verified/gate; no trace_drain or target execution. Old output cannot identify which pre-verification API/compare failed.",
+  "inference_not_verified": "manual fixed-control0x22 ABI is suspect; v2 default removes assumption, retains explicit diagnostic comparison; root runtime pending reinstall"
+}

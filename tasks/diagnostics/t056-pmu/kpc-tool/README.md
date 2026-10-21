@@ -1,127 +1,137 @@
-# Headless Monterey Intel PMU helper
+# Headless Monterey Intel PMU helper v2
 
-[Evidence and limits](../../../archive/T056-kpc-tool.md). Reviewed source lives
-here; no engine files, dependencies, build policy or acceptance attempt changed.
-The user approved this narrow helper installation; **the user installs it**.
-No root execution, sudoers change or PMU measurement was performed by the agent.
+[Current diagnosis](../../../archive/T056-kpc-setup-failure.md);
+[v1 preparation history](../../../archive/T056-kpc-tool.md).
+Engine source/recipe and the last acceptance attempt remain unchanged.
 
-## What it measures
+**v1 is installed and sudo works.** Lead153553Z and the authorized short root
+probe153934Z fail before the child gate/config verification. Old JSON cannot
+identify the specific API or readback comparison; no target or PMU evidence was
+collected. v2 requires one user reinstall because sudoers pins the binary digest.
+No agent installation or v2 root execution has occurred.
 
-`kpc_get_thread_counters(tid)` cannot read an external child: Monterey XNU rejects
-nonzero tid. This implementation uses kperf lightweight PET, a PID-filtered
-thread-counter action and an exclusively owned kdebug buffer. It sums each
-**observed thread's first-to-last sampled interval**, including every observed
-thread or rejecting insufficient/truncated/decreasing data. It cannot prove
-that short-lived threads were observed or include their complete lifetimes.
-JSON always says `full_lifetime_counts:false`, `all_threads_covered:false`.
-This is an explicit limitation relative to the brief's complete-child total;
-no self-thread, whole-CPU, rusage or sample-weight substitute is presented.
+## Changes and remaining uncertainty
+
+- Every setup/drain API/policy failure now records `failed_step`, return code,
+  captured errno, completed setup steps, initial trace owner/flags and actual
+  readback. Cleanup has separate first-error fields; it never erases setup error.
+- Cleanup no longer calls KPERF setters after a failure before KPERF setup: those
+  setters can create ownership just to clean a KDEBUG-only session. After our
+  KPERF write attempts, reset our action/timer/sampling state with `kperf_reset`,
+  remove only our KDEBUG session, verify our ownership was released. Foreign
+  owner refusal remains strict. `nolog=0` on an uninitialized buffer is not
+  treated as active tracing.
+- Default cycles/instructions now use KPEP's named architectural programmable
+  fallbacks, USER on/OS off. No assumed mapping from a KPC fixed-config word to
+  IA32_FIXED_CTR_CTRL. Four programmable slots hold cycles/instructions+two
+  extra events. Exact readback remains mandatory. The old path is available
+  only with explicit `--fixed-diagnostic` to distinguish the suspected fixed
+  ABI issue after reinstall. That suspicion is **not** a verified root cause.
+- Coverage uses `child_window_ns`, from gate release to observed completion,
+  excluding PMU ownership setup/cleanup. The old210ms failed-setup interval is
+  not target execution and must not be a coverage denominator.
+
+Private interface access still needs real v2 root validation. v1 observations
+are in `failure-v1.json`; no specific failed API is invented from its null counts.
+
+## Scope and root boundary
+
+PID-filtered lightweight PET sums each observed thread's first-to-last sampled
+interval. JSON always says `full_lifetime_counts:false`,
+`all_threads_covered:false`. Short-lived/unobserved threads and lifetime ends
+cannot be recovered. No self-thread, whole-CPU or rusage substitute is used.
+
+Only the child calls `execve`, after clearing supplementary groups, setting
+nonzero validated SUDO gid/uid, checking all IDs and checking root cannot be
+regained. Parent clears environment before loading absolute system frameworks;
+child has only TZ=UTC/LC_ALL=C, cwd=/, stdin=/dev/null. All nonstandard actual
+FDs close, including FDs above a lowered limit. No shell, arbitrary environment,
+register or output-path option. Root paths/ACLs and installed digest are guarded.
+stdout/stderr32KiB each, threads/trace records bounded; overflow/drop rejects.
+Normal/error cleanup restores our counter snapshot, releases forced counters
+and removes only our trace. Signals request cleanup; private alarm bounds runs.
+Hard-exit/kernel-owner teardown remains untested as root. No SIP/OS changes.
 
 CLI:
 
 ```text
-qjs-kpc --events cycles,instructions,EVENT,... -- /absolute/program args...
-qjs-kpc --describe --events cycles,instructions,EVENT,...
+qjs-kpc --events cycles,instructions,EVENT,EVENT -- /absolute/program args...
+qjs-kpc --describe --events cycles,instructions,EVENT,EVENT
+qjs-kpc --fixed-diagnostic --events cycles,instructions -- /absolute/program args...
 qjs-kpc --list-events
-qjs-kpc --help
 ```
 
-`--env TZ=UTC` and `--env LC_ALL=C` are the only permitted environment flags;
-these two variables are always the entire child's environment. `--timeout-ms`
-is1..10000 (default10000); child cwd is `/`, stdin `/dev/null`. Output is one
-JSON record containing child stdout/stderr, child status, configured event
-names/indices/registers, cycles/instructions, per-thread spans/sample counts,
-interval counter sums, coverage limits and cleanup status. Insufficient data
-has null counters, not fabricated zeros. stdout/stderr are bounded32KiB each,
-FDs/threads/records have fixed bounds; overflow or dropped trace data rejects.
-`capture_complete` means child/cleanup completed, not valid counters or coverage.
+`--env TZ=UTC`/`--env LC_ALL=C` are the only env flags. `--timeout-ms` is1..10000.
+`--list-events` means database presence, not measured-event support. All21
+approved encodings/CMask/edge corrections are unchanged;16 auxiliary-MSR
+FRONTEND_RETIRED variants and2 absent names remain explicitly unavailable.
 
-## Privilege boundary to inspect
+## Nonroot verification
 
-- C parent never executes caller input. Only `process.c` calls `execve`, after
-  clearing supplementary groups, setting primary gid/uid from nonzero SUDO IDs,
-  verifying all real/effective IDs and verifying root cannot be regained.
-  SUDO gid must match the account's primary group. Direct root/missing IDs fail.
-- Environment is cleared before loading only absolute Apple system frameworks.
-  No shell, PATH search, arbitrary library path, event register or output path
-  option. All nonstandard FDs are enumerated/closed even when the inherited FD
-  number exceeds a lowered RLIMIT_NOFILE. No explicit file writes except stdout;
-  core files disabled. The unprivileged command retains its normal file rights.
-- Root path ancestors and helper must be root-owned, without group/world write
-  or writable allow ACLs. New directory/root:wheel0755, helper0755; not setuid.
-  sudoers matches this binary path **and SHA-256**, `NOSETENV`, reset environment.
-- Only this CPU (family6/A5/step5), fixed trusted Comet Lake database and21
-  crosswalked event names are accepted for measurement. Raw-register CLI absent.
-  Fixed0/1 use user-only0x22; programmed events clear OS/AnyThread/PMI bits.
-  Named CMask/edge corrections are static in `events-approved.h` and checked
-  against Intel's encodings. Readback must match before child release.
-- Refuses an existing trace owner, sampling, forced counters or active action/
-  timer. Acquires ktrace without first resetting it; only own session is removed.
-  Saves/restores prior counter configuration/classes and releases forced counters
-  on normal/error exits. Signals request cleanup; a private alarm kills the
-  blocked child and has a second-stage hard exit. SIGKILL/hard-exit restoration
-  relies on kernel owner teardown and is **not privileged-tested**.
-- No child descendants are measured. Arbitrary descendant/thread lifecycle
-  completeness is not implemented. This is a diagnostic helper, not a daemon.
+`20261021T155348Z-t056-kpc-v2-final` done0/11s: clang14/CLT warnings-as-errors,
+PIE/stack protector, seven-module static analysis; prior FD/identity/parser tests,
+new trace-backend fault injection/repeated-session/foreign-owner tests, and JSON
+programmable-index/setup-vs-cleanup error serialization. Both default2+2 and
+explicit fixed2+4 descriptors pass. These are not privileged API/runtime proof.
+[qualification-v2.json](qualification-v2.json) preserves exact sources/commands.
 
-## Verified without root
+`20261021T155433Z-t056-kpc-v2-groups` done0:21 events,11 exact allocation-checked
+user-only groups. [groups-v2.json](groups-v2.json). v1 qualification/groups/config
+remain frozen historical snapshots. Current render uses `config-v2.json` and
+embeds v2 snapshots under the collector's generic filenames.
 
-`20261021T145905Z-t056-kpc-tool-audit-final`: done0/7s on iMac20,1,
-macOS12.6, i7-10700, Apple clang14.0.0/CommandLineTools. Warnings-as-errors,
-stack protector/PIE, all seven C modules' static analyzer, `--help`, database
-listing, nonroot/invalid-env refusal,64-bit/interleaved/incomplete trace tests,
-FD-above-lowered-limit closure and mock credential-success/every-failure tests.
-No root behavior is claimed from mocks. `qualification.json` seals sources,
-compiler command/output and exact executable SHA-256:
+Reviewed v2 SHA-256:
 
 ```text
-e3d2bc4c7af7dab8c1181b78ca291429c9ef275e44b20a828e1ca01f1a7ec065
+a8021d9adc7a0c583f32920832fafd34450fe462476b4d2f726a206a83f06673
 ```
 
-`20261021T145945Z-t056-kpc-groups-final`: done0,6 groups/21 events, all exact
-config words/indices checked without PMU access. `groups.json` and
-`event-inventory.json` retain all supported/unavailable names.16 FRONTEND_RETIRED
-names need auxiliary MSR/PEBS selectors unsupported here. UOPS_RETIRED.RETIRE_SLOTS
-and RESOURCE_STALLS.ANY are absent; no silent alias or guessed encoding.
-`--list-events` reports database presence, **not** support for measurement.
+## User reinstall on the iMac
 
-## Exact user installation on the iMac
-
-The prepared assets are already on the iMac. Read the14-line installer, then run:
+Review the installer, then execute it:
 
 ```sh
-cat "$HOME/Code/co-work-space/tmp/bench-queue/20261021T150720Z-t056-kpc-install-ready/out/install-user.sh"
-sh "$HOME/Code/co-work-space/tmp/bench-queue/20261021T150720Z-t056-kpc-install-ready/out/install-user.sh"
+cat "$HOME/Code/co-work-space/tmp/bench-queue/20261021T155544Z-t056-kpc-v2-install-ready/out/install-user.sh"
+sh "$HOME/Code/co-work-space/tmp/bench-queue/20261021T155544Z-t056-kpc-v2-install-ready/out/install-user.sh"
 ```
 
-It verifies the binary digest, validates the rule with `sudo visudo -cf`, copies
-only the reviewed binary to `/usr/local/libexec/qjs-kpc` root:wheel0755 and the
-rule to `/private/etc/sudoers.d/qjs-kpc` root:wheel0440, then validates the entire
-sudoers configuration. It prompts for the user's existing sudo password; it
-never makes `install`, a shell or another executable passwordless. `/usr/local`
-was verified root:wheel0755 on this iMac; installer and runtime reject unsafe
-ownership/modes rather than changing that ancestor. Runtime also checks ACLs.
-
-The exact rule is [qjs-kpc.sudoers](qjs-kpc.sudoers). Its final form passed
-**nonroot** `/usr/sbin/visudo -cf` in job150720Z; no installed rule was changed.
-User-side root validation still runs in the installer.
-
-Uninstall only these two installed files:
+It verifies this binary digest, validates sudoers, copies the reviewed executable
+root:wheel0755 to `/usr/local/libexec/qjs-kpc`, replaces only its digest-bound
+NOPASSWD/NOSETENV rule root:wheel0440, then validates all sudoers. Existing sudo
+password is required; install/shell access is not made passwordless. Final rule
+passed nonroot `visudo -cf` in155544Z; no installed file was changed by that job.
+Uninstall is unchanged:
 
 ```sh
 sudo /bin/rm -f /private/etc/sudoers.d/qjs-kpc /usr/local/libexec/qjs-kpc
 sudo /usr/sbin/visudo -cf /private/etc/sudoers
 ```
 
-## Lead-only single measurement job, ≤15min
+## Short root diagnosis after reinstall, no timing
 
-After user installation, the job first verifies the installed hash, frozen unit/
-original correctness+86-case receipts and all six canonical images. Under the
-quiet-host measurement lock it runs `/usr/bin/id -u` and `/usr/bin/env` through
-the helper, checks actual nonroot uid/fixed environment/config readback/cleanup,
-then profiles global_read/local_read for base,8f,count,flags,count_flags,dfff
-plus separate-inode base/dfff A/A copies. Six event groups, two paired blocks,
-N=23,068,672 and2N:192 units/384 measurements+2 privilege checks. No builds.
+This authorized debug step uses only the exact installed v2 digest. It runs
+`/usr/bin/id -u` with default cycles/instructions, default+DSB and explicit fixed
+mode. No engine benchmark. Each call≤5s; failed cleanup stops immediately.
+Returns full stage/errno/readback JSON even when setup fails; successful calls
+must print the invoking nonroot uid. Insufficient samples from `id` are normal.
+
+```sh
+python3 tasks/diagnostics/t056-pmu/kpc-tool/render.py smoke > /tmp/t056-kpc-smoke.sh
+/Users/qingyingliu/Code/co-work-space/scripts/imac-bench.sh run \
+  --repo "$PWD" --ref HEAD --name t056-kpc-v2-smoke \
+  -- bash -c "$(cat /tmp/t056-kpc-smoke.sh)"
+```
+
+Owner may submit only this **non-timing** short debug job, after user reinstall.
+The smoke refuses the old installed hash and never edits sudoers or permissions.
+
+## Lead-only single ≤15min measurement, after successful smoke
+
+Six canonical images (f58,8f,count,flags,count_flags,dfff), base/dfff A/A clones,
+global/local,11 groups, one paired block and N23,068,672/2N:176 units,
+352 measurements+2 real uid/env checks; group parity reverses N/2N order. Groups changed prospectively because
+user-filtered cycles/instructions occupy two slots. No formal precision claim.
+Old failed run is not retried/relabelled as acceptance; the attempt budget stays.
 
 ```sh
 python3 tasks/diagnostics/t056-pmu/kpc-tool/render.py > /tmp/t056-kpc-counters.sh
@@ -135,28 +145,22 @@ python3 tasks/diagnostics/t056-pmu/kpc-tool/render.py > /tmp/t056-kpc-counters.s
 python3 tasks/diagnostics/t056-pmu/kpc-tool/watch.py JOB_ID
 ```
 
-No owner submission. Privileged access remains unverified until the first real
-root checks. Missing install, permission, wrong uid/env/output, invalid config,
-truncated/dropped data, fewer than10 samples in any observed thread, or observed
-span/helper interval below0.70 stops the whole job without retries/selection.
-Raw JSON is retained. N/2N startup subtraction is of **sampled intervals**, not
-complete lifetimes. Negative rare-event deltas remain negative/uninterpretable;
-no clamp. CPI is observed-window user-space cycles/instructions. A/A is a
-10% descriptive guard; no formal acceptance, PMU cause or JCC verdict.
+No owner timing. Exact installed hash/receipts/images, counter backend/indices/
+registers and actual nonroot uid/env are checked before measurement. Any observed
+thread<10 samples, observed span/child-window<0.70, malformed output, permission,
+readback, cleanup, deadline or load failure stops without retries/deletion.
+Negative rare-event deltas stay negative/uninterpretable. CPI describes sampled
+user windows, never whole lifetimes or a JCC verdict. A/A is descriptive only.
 
-Previous measured throughput projects196.537s;2x+120=513.074s<720 collection.
-Body840/runner890/watch900s include quieting, exclude queue wait. Host-local
-03–05 plus15min-before03 excluded;20min admission. The helper itself bounds each
-run with its alarm. Timeout, load disturbance or malformed output preserves
-partial evidence and stops. No security settings or SIP changes.
-
-Recheck locally, using fetched named outputs:
+Prior workload throughput plus0.211s/root setup per352 calls projects254.431s;
+2x+120=628.862s<720 collect/840 body/890 runner/900 watchdog, including quieting.
+03–05 host local and15min-before03 excluded,20min admission. Hard timeout remains
+authoritative; root throughput is not yet qualified. Partial data is not a decision.
 
 ```sh
 PYTHONDONTWRITEBYTECODE=1 python3 tasks/diagnostics/t056-pmu/kpc-tool/validate.py
 ```
 
-It verifies actual compiled-source/binary/encoding receipts and386 fake helper
-calls through the real collector, zero-call missing-install rejection, credential/
-permission/coverage/output/counter/timeout/load/deadline failures, negative
-counter preservation and shell syntax. It never invokes sudo or installs files.
+Verifies actual v2 compiled receipts/21 encodings,354 fake calls through the real
+collector, missing-install/permission/uid/output/counter/coverage/deadline/load
+failures and negative deltas. It never runs sudo or installs anything.

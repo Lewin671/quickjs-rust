@@ -12,13 +12,19 @@ binary=out/'qjs-kpc';build=run(['/usr/bin/clang',*flags,*[str(root/s) for s in s
 (out/'build.json').write_text(json.dumps(build,indent=2)+'\n');assert build['status']==0,build
 unit=out/'unit';u=run(['/usr/bin/clang',*flags,str(root/'unit.c'),str(root/'security.c'),str(root/'aggregate.c'),'-o',str(unit)]);assert u['status']==0,u
 mock=out/'drop-unit';definitions=['-D'+x+'=test_'+x for x in ('setgroups','setgid','setuid','getuid','geteuid','getgid','getegid')];m=run(['/usr/bin/clang',*flags,*definitions,str(root/'drop-unit.c'),str(root/'security.c'),'-o',str(mock)]);assert m['status']==0,m
-checks={'drop-unit':run([str(mock)]),'unit':run([str(unit)]),'help':run([str(binary),'--help']),'list':run([str(binary),'--list-events']),'unprivileged':run([str(binary),'--events','cycles,instructions','--','/usr/bin/id','-u']),'bad-env':run([str(binary),'--events','cycles,instructions','--env','DYLD_INSERT_LIBRARIES=/tmp/evil','--','/usr/bin/id'])}
-for name in ('unit','drop-unit','help','list'):assert checks[name]['status']==0,checks[name]
+trace=out/'trace-unit';m=run(['/usr/bin/clang',*flags,'-Dsysctl=test_sysctl','-Dsysctlbyname=test_sysctlbyname','-Dgetpid=test_getpid',str(root/'trace-unit.c'),str(root/'trace.c'),str(root/'aggregate.c'),'-o',str(trace)]);assert m['status']==0,m
+json_unit=out/'json-unit';m=run(['/usr/bin/clang',*flags,str(root/'json-unit.c'),str(root/'json.c'),str(root/'aggregate.c'),'-o',str(json_unit)]);assert m['status']==0,m
+checks={'json-unit':run([str(json_unit)]),'trace-unit':run([str(trace)]),'drop-unit':run([str(mock)]),'unit':run([str(unit)]),'help':run([str(binary),'--help']),'list':run([str(binary),'--list-events']),'unprivileged':run([str(binary),'--events','cycles,instructions','--','/usr/bin/id','-u']),'bad-env':run([str(binary),'--events','cycles,instructions','--env','DYLD_INSERT_LIBRARIES=/tmp/evil','--','/usr/bin/id'])}
+for name in ('unit','json-unit','trace-unit','drop-unit','help','list'):assert checks[name]['status']==0,checks[name]
 for name in ('unprivileged','bad-env'):assert checks[name]['status']!=0 and not json.loads(checks[name]['stdout'])['capture_complete']
+values=[json.loads(line) for line in checks['json-unit']['stdout'].splitlines()];assert values[0]['cycles']==50 and values[0]['instructions']==100 and values[0]['counter_backend']=='kpep_programmable_user'
+assert values[1]['failed_step']=='setup.config_equal' and values[1]['readback'][0]=='0x23' and values[1]['cleanup_failed_step']=='cleanup.kperf_reset' and values[1]['cycles'] is None
 events=json.loads(checks['list']['stdout']);(out/'catalog.json').write_text(json.dumps(events,indent=2)+'\n')
 checks['list']={'status':0,'events':len(events['events'])}
-checks['fixed_plus_four']=run([str(binary),'--describe','--events','cycles,instructions,IDQ.DSB_UOPS,IDQ.MITE_UOPS,IDQ.MS_UOPS,DSB2MITE_SWITCHES.PENALTY_CYCLES']);assert checks['fixed_plus_four']['status']==0
+checks['fixed_plus_four']=run([str(binary),'--describe','--fixed-diagnostic','--events','cycles,instructions,IDQ.DSB_UOPS,IDQ.MITE_UOPS,IDQ.MS_UOPS,DSB2MITE_SWITCHES.PENALTY_CYCLES']);assert checks['fixed_plus_four']['status']==0
 description=json.loads(checks['fixed_plus_four']['stdout']);assert description['classes']==3 and description['counter_count']==7 and description['config'][0]=='0x22'
+checks['programmable']=run([str(binary),'--describe','--events','cycles,instructions,IDQ.DSB_UOPS,IDQ.MITE_UOPS']);assert checks['programmable']['status']==0
+description=json.loads(checks['programmable']['stdout']);assert description['classes']==2 and description['counter_count']==4 and len(description['config'])==4 and description['config'][:2]==['0x41003c','0x4100c0']
 checks['static']={}
 for source in sources:
  check=run(['/usr/bin/clang',*flags,'--analyze','-Xanalyzer','-analyzer-output=text',str(root/source)]);checks['static'][source]=check;assert check['status']==0 and 'warning:' not in check['stderr'],check

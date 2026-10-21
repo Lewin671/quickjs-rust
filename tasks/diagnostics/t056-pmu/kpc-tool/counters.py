@@ -4,6 +4,7 @@ import protocol as p
 
 def check(value,description):
  assert value['capture_complete'] and value['cleanup_ok'] and value['child_status']==0 and not value['timed_out']
+ assert value['counter_backend']=='kpep_programmable_user'
  assert value['counters_valid'] and value['configuration_readback_verified'] and value['encoding_crosswalk_applied']
  assert value['scope']=='sum_of_observed_thread_intervals' and value['all_threads_covered'] is False and value['full_lifetime_counts'] is False
  assert value['config']==description['config']
@@ -11,7 +12,7 @@ def check(value,description):
  assert all(isinstance(e['count'],int) and e['count']>=0 for e in value['events'])
  assert value['cycles']>0 and value['instructions']>0
  assert value['threads'] and all(t['samples']>=10 for t in value['threads'])
- assert sum(t['observed_span_ns'] for t in value['threads'])/value['elapsed_ns']>=.70
+ assert sum(t['observed_span_ns'] for t in value['threads'])/value['child_window_ns']>=.70
  return {e['name']:e['count'] for e in value['events']}
 
 def delta(samples):

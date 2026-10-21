@@ -1,0 +1,32 @@
+{
+  "diagnostic_only": true,
+  "privileged_execution_performed": false,
+  "installation_performed": false,
+  "hardware_evidence": false,
+  "nonroot_tool_receipt": "20261021T155348Z-t056-kpc-v2-final",
+  "crosswalk_events": 21,
+  "version": "qjs-kpc-2",
+  "groups": 11,
+  "mock_calls": {
+    "success": 354,
+    "uninstalled": 0,
+    "permission": 1,
+    "wrong-uid": 2,
+    "bad-output": 13,
+    "bad-counters": 3,
+    "coverage": 3,
+    "expired": 0,
+    "timeout": 1,
+    "disturbed": 354
+  },
+  "scope": "354 fake helper calls exercise real Python collector. Actual C backend/root PMU access remain untested; full-lifetime/all-thread completeness is not implemented.",
+  "checks": [
+    "C/H/qualifier and binary seals",
+    "clang warnings-as-errors/static analyzer/unit and mocked credentials receipts",
+    "all21 exact event encodings including CMask/edge and fixed0x22",
+    "no shell API; drop before only execve",
+    "render/deadline/budget/install shell syntax",
+    "N2N/AA/all rows/negative events retained",
+    "missing-install/permission/UID/output/counter/coverage/timeout/load/deadline rejection"
+  ]
+}

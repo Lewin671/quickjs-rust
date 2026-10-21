@@ -1,0 +1,527 @@
+{
+  "diagnostic_only": true,
+  "timing": false,
+  "privileged": false,
+  "hardware_access_verified": false,
+  "binary_sha256": "a8021d9adc7a0c583f32920832fafd34450fe462476b4d2f726a206a83f06673",
+  "qualification_job": "20261021T155348Z-t056-kpc-v2-final",
+  "qualification_sha256": "2c5f9b42102b273cd2bec8dbf6a28a93007167e3ec170241a4f05e051be76c25",
+  "inventory_sha256": "5ad7b0dfd635ca1dddd74d913fa1b6a89dd87860ff50440ed40413cbda663bb1",
+  "groups": [
+    {
+      "id": 0,
+      "events": ["IDQ.DSB_UOPS","IDQ.MITE_UOPS"],
+      "description": {
+        "counter_backend": "kpep_programmable_user",
+        "version": "qjs-kpc-2",
+        "database": "cometlake",
+        "user_only_requested": true,
+        "classes": 2,
+        "counter_count": 4,
+        "events": [{"name":"CPU_CLK_UNHALTED.THREAD","index":0},{"name":"INST_RETIRED.ANY","index":1},{"name":"IDQ.DSB_UOPS","index":2},{"name":"IDQ.MITE_UOPS","index":3}],
+        "config": ["0x41003c","0x4100c0","0x410879","0x410479"]
+      }
+    },
+    {
+      "id": 1,
+      "events": ["IDQ.MS_UOPS","DSB2MITE_SWITCHES.PENALTY_CYCLES"],
+      "description": {
+        "counter_backend": "kpep_programmable_user",
+        "version": "qjs-kpc-2",
+        "database": "cometlake",
+        "user_only_requested": true,
+        "classes": 2,
+        "counter_count": 4,
+        "events": [{"name":"CPU_CLK_UNHALTED.THREAD","index":0},{"name":"INST_RETIRED.ANY","index":1},{"name":"IDQ.MS_UOPS","index":2},{"name":"DSB2MITE_SWITCHES.PENALTY_CYCLES","index":3}],
+        "config": ["0x41003c","0x4100c0","0x413079","0x4102ab"]
+      }
+    },
+    {
+      "id": 2,
+      "events": ["BR_MISP_RETIRED.ALL_BRANCHES","BACLEARS.ANY"],
+      "description": {
+        "counter_backend": "kpep_programmable_user",
+        "version": "qjs-kpc-2",
+        "database": "cometlake",
+        "user_only_requested": true,
+        "classes": 2,
+        "counter_count": 4,
+        "events": [{"name":"CPU_CLK_UNHALTED.THREAD","index":0},{"name":"INST_RETIRED.ANY","index":1},{"name":"BR_MISP_RETIRED.ALL_BRANCHES","index":2},{"name":"BACLEARS.ANY","index":3}],
+        "config": ["0x41003c","0x4100c0","0x4100c5","0x4101e6"]
+      }
+    },
+    {
+      "id": 3,
+      "events": ["MACHINE_CLEARS.COUNT","MACHINE_CLEARS.MEMORY_ORDERING"],
+      "description": {
+        "counter_backend": "kpep_programmable_user",
+        "version": "qjs-kpc-2",
+        "database": "cometlake",
+        "user_only_requested": true,
+        "classes": 2,
+        "counter_count": 4,
+        "events": [{"name":"CPU_CLK_UNHALTED.THREAD","index":0},{"name":"INST_RETIRED.ANY","index":1},{"name":"MACHINE_CLEARS.COUNT","index":2},{"name":"MACHINE_CLEARS.MEMORY_ORDERING","index":3}],
+        "config": ["0x41003c","0x4100c0","0x14501c3","0x4102c3"]
+      }
+    },
+    {
+      "id": 4,
+      "events": ["MACHINE_CLEARS.SMC","LD_BLOCKS.STORE_FORWARD"],
+      "description": {
+        "counter_backend": "kpep_programmable_user",
+        "version": "qjs-kpc-2",
+        "database": "cometlake",
+        "user_only_requested": true,
+        "classes": 2,
+        "counter_count": 4,
+        "events": [{"name":"CPU_CLK_UNHALTED.THREAD","index":0},{"name":"INST_RETIRED.ANY","index":1},{"name":"MACHINE_CLEARS.SMC","index":2},{"name":"LD_BLOCKS.STORE_FORWARD","index":3}],
+        "config": ["0x41003c","0x4100c0","0x4104c3","0x410203"]
+      }
+    },
+    {
+      "id": 5,
+      "events": ["LD_BLOCKS_PARTIAL.ADDRESS_ALIAS","UOPS_ISSUED.ANY"],
+      "description": {
+        "counter_backend": "kpep_programmable_user",
+        "version": "qjs-kpc-2",
+        "database": "cometlake",
+        "user_only_requested": true,
+        "classes": 2,
+        "counter_count": 4,
+        "events": [{"name":"CPU_CLK_UNHALTED.THREAD","index":0},{"name":"INST_RETIRED.ANY","index":1},{"name":"LD_BLOCKS_PARTIAL.ADDRESS_ALIAS","index":2},{"name":"UOPS_ISSUED.ANY","index":3}],
+        "config": ["0x41003c","0x4100c0","0x410107","0x41010e"]
+      }
+    },
+    {
+      "id": 6,
+      "events": ["ICACHE_64B.IFTAG_MISS","CYCLE_ACTIVITY.STALLS_TOTAL"],
+      "description": {
+        "counter_backend": "kpep_programmable_user",
+        "version": "qjs-kpc-2",
+        "database": "cometlake",
+        "user_only_requested": true,
+        "classes": 2,
+        "counter_count": 4,
+        "events": [{"name":"CPU_CLK_UNHALTED.THREAD","index":0},{"name":"INST_RETIRED.ANY","index":1},{"name":"ICACHE_64B.IFTAG_MISS","index":2},{"name":"CYCLE_ACTIVITY.STALLS_TOTAL","index":3}],
+        "config": ["0x41003c","0x4100c0","0x410283","0x44104a3"]
+      }
+    },
+    {
+      "id": 7,
+      "events": ["LSD.UOPS","ITLB_MISSES.STLB_HIT"],
+      "description": {
+        "counter_backend": "kpep_programmable_user",
+        "version": "qjs-kpc-2",
+        "database": "cometlake",
+        "user_only_requested": true,
+        "classes": 2,
+        "counter_count": 4,
+        "events": [{"name":"CPU_CLK_UNHALTED.THREAD","index":0},{"name":"INST_RETIRED.ANY","index":1},{"name":"LSD.UOPS","index":2},{"name":"ITLB_MISSES.STLB_HIT","index":3}],
+        "config": ["0x41003c","0x4100c0","0x4101a8","0x412085"]
+      }
+    },
+    {
+      "id": 8,
+      "events": ["ITLB_MISSES.WALK_ACTIVE","ITLB_MISSES.WALK_COMPLETED"],
+      "description": {
+        "counter_backend": "kpep_programmable_user",
+        "version": "qjs-kpc-2",
+        "database": "cometlake",
+        "user_only_requested": true,
+        "classes": 2,
+        "counter_count": 4,
+        "events": [{"name":"CPU_CLK_UNHALTED.THREAD","index":0},{"name":"INST_RETIRED.ANY","index":1},{"name":"ITLB_MISSES.WALK_ACTIVE","index":2},{"name":"ITLB_MISSES.WALK_COMPLETED","index":3}],
+        "config": ["0x41003c","0x4100c0","0x1411085","0x410e85"]
+      }
+    },
+    {
+      "id": 9,
+      "events": ["ITLB_MISSES.WALK_COMPLETED_2M_4M","ITLB_MISSES.WALK_COMPLETED_4K"],
+      "description": {
+        "counter_backend": "kpep_programmable_user",
+        "version": "qjs-kpc-2",
+        "database": "cometlake",
+        "user_only_requested": true,
+        "classes": 2,
+        "counter_count": 4,
+        "events": [
+          {"name":"CPU_CLK_UNHALTED.THREAD","index":0},
+          {"name":"INST_RETIRED.ANY","index":1},
+          {"name":"ITLB_MISSES.WALK_COMPLETED_2M_4M","index":2},
+          {"name":"ITLB_MISSES.WALK_COMPLETED_4K","index":3}
+        ],
+        "config": ["0x41003c","0x4100c0","0x410485","0x410285"]
+      }
+    },
+    {
+      "id": 10,
+      "events": ["ITLB_MISSES.WALK_PENDING"],
+      "description": {
+        "counter_backend": "kpep_programmable_user",
+        "version": "qjs-kpc-2",
+        "database": "cometlake",
+        "user_only_requested": true,
+        "classes": 2,
+        "counter_count": 4,
+        "events": [{"name":"CPU_CLK_UNHALTED.THREAD","index":0},{"name":"INST_RETIRED.ANY","index":1},{"name":"ITLB_MISSES.WALK_PENDING","index":2}],
+        "config": ["0x41003c","0x4100c0","0x411085","0x0"]
+      }
+    }
+  ],
+  "group_packing_checks": [
+    {"events":["IDQ.DSB_UOPS"],"status":0},
+    {"events":["IDQ.DSB_UOPS","IDQ.MITE_UOPS"],"status":0},
+    {"events":["IDQ.DSB_UOPS","IDQ.MITE_UOPS"],"status":0},
+    {"events":["IDQ.MS_UOPS"],"status":0},
+    {"events":["IDQ.MS_UOPS","DSB2MITE_SWITCHES.PENALTY_CYCLES"],"status":0},
+    {"events":["IDQ.MS_UOPS","DSB2MITE_SWITCHES.PENALTY_CYCLES"],"status":0},
+    {"events":["BR_MISP_RETIRED.ALL_BRANCHES"],"status":0},
+    {"events":["BR_MISP_RETIRED.ALL_BRANCHES","BACLEARS.ANY"],"status":0},
+    {"events":["BR_MISP_RETIRED.ALL_BRANCHES","BACLEARS.ANY"],"status":0},
+    {"events":["MACHINE_CLEARS.COUNT"],"status":0},
+    {"events":["MACHINE_CLEARS.COUNT","MACHINE_CLEARS.MEMORY_ORDERING"],"status":0},
+    {"events":["MACHINE_CLEARS.COUNT","MACHINE_CLEARS.MEMORY_ORDERING"],"status":0},
+    {"events":["MACHINE_CLEARS.SMC"],"status":0},
+    {"events":["MACHINE_CLEARS.SMC","LD_BLOCKS.STORE_FORWARD"],"status":0},
+    {"events":["MACHINE_CLEARS.SMC","LD_BLOCKS.STORE_FORWARD"],"status":0},
+    {"events":["LD_BLOCKS_PARTIAL.ADDRESS_ALIAS"],"status":0},
+    {"events":["LD_BLOCKS_PARTIAL.ADDRESS_ALIAS","UOPS_ISSUED.ANY"],"status":0},
+    {"events":["LD_BLOCKS_PARTIAL.ADDRESS_ALIAS","UOPS_ISSUED.ANY"],"status":0},
+    {"events":["ICACHE_64B.IFTAG_MISS"],"status":0},
+    {"events":["ICACHE_64B.IFTAG_MISS","CYCLE_ACTIVITY.STALLS_TOTAL"],"status":0},
+    {"events":["ICACHE_64B.IFTAG_MISS","CYCLE_ACTIVITY.STALLS_TOTAL"],"status":0},
+    {"events":["LSD.UOPS"],"status":0},
+    {"events":["LSD.UOPS","ITLB_MISSES.STLB_HIT"],"status":0},
+    {"events":["LSD.UOPS","ITLB_MISSES.STLB_HIT"],"status":0},
+    {"events":["ITLB_MISSES.WALK_ACTIVE"],"status":0},
+    {"events":["ITLB_MISSES.WALK_ACTIVE","ITLB_MISSES.WALK_COMPLETED"],"status":0},
+    {"events":["ITLB_MISSES.WALK_ACTIVE","ITLB_MISSES.WALK_COMPLETED"],"status":0},
+    {"events":["ITLB_MISSES.WALK_COMPLETED_2M_4M"],"status":0},
+    {"events":["ITLB_MISSES.WALK_COMPLETED_2M_4M","ITLB_MISSES.WALK_COMPLETED_4K"],"status":0},
+    {"events":["ITLB_MISSES.WALK_COMPLETED_2M_4M","ITLB_MISSES.WALK_COMPLETED_4K"],"status":0},
+    {"events":["ITLB_MISSES.WALK_PENDING"],"status":0},
+    {"events":["ITLB_MISSES.WALK_PENDING"],"status":0}
+  ],
+  "unsupported": [
+    {
+      "name": "UOPS_RETIRED.RETIRE_SLOTS",
+      "apple": null,
+      "intel": {"EventCode":"0xC2","UMask":"0x02","CounterMask":"0","EdgeDetect":"0","Invert":"0","AnyThread":"0","MSRIndex":"0","MSRValue":"0","PEBS":"0","TakenAlone":"0","Counter":"0,1,2,3"},
+      "supported": false,
+      "reason": "absent from local kpep database; no silent alias or fabricated encoding"
+    },
+    {
+      "name": "RESOURCE_STALLS.ANY",
+      "apple": null,
+      "intel": {"EventCode":"0xa2","UMask":"0x01","CounterMask":"0","EdgeDetect":"0","Invert":"0","AnyThread":"0","MSRIndex":"0","MSRValue":"0","PEBS":"0","TakenAlone":"0","Counter":"0,1,2,3"},
+      "supported": false,
+      "reason": "absent from local kpep database; no silent alias or fabricated encoding"
+    },
+    {
+      "name": "FRONTEND_RETIRED.DSB_MISS",
+      "apple": {"number":198,"umask":1},
+      "intel": {
+        "EventCode": "0xC6",
+        "UMask": "0x01",
+        "CounterMask": "0",
+        "EdgeDetect": "0",
+        "Invert": "0",
+        "AnyThread": "0",
+        "MSRIndex": "0x3F7",
+        "MSRValue": "0x11",
+        "PEBS": "1",
+        "TakenAlone": "1",
+        "Counter": "0,1,2,3"
+      },
+      "supported": false,
+      "reason": "requires auxiliary MSR/PEBS selector not exposed by this tool; names alone insufficient"
+    },
+    {
+      "name": "FRONTEND_RETIRED.ITLB_MISS",
+      "apple": {"number":198,"umask":1},
+      "intel": {
+        "EventCode": "0xC6",
+        "UMask": "0x01",
+        "CounterMask": "0",
+        "EdgeDetect": "0",
+        "Invert": "0",
+        "AnyThread": "0",
+        "MSRIndex": "0x3F7",
+        "MSRValue": "0x14",
+        "PEBS": "1",
+        "TakenAlone": "1",
+        "Counter": "0,1,2,3"
+      },
+      "supported": false,
+      "reason": "requires auxiliary MSR/PEBS selector not exposed by this tool; names alone insufficient"
+    },
+    {
+      "name": "FRONTEND_RETIRED.L1I_MISS",
+      "apple": {"number":198,"umask":1},
+      "intel": {
+        "EventCode": "0xC6",
+        "UMask": "0x01",
+        "CounterMask": "0",
+        "EdgeDetect": "0",
+        "Invert": "0",
+        "AnyThread": "0",
+        "MSRIndex": "0x3F7",
+        "MSRValue": "0x12",
+        "PEBS": "1",
+        "TakenAlone": "1",
+        "Counter": "0,1,2,3"
+      },
+      "supported": false,
+      "reason": "requires auxiliary MSR/PEBS selector not exposed by this tool; names alone insufficient"
+    },
+    {
+      "name": "FRONTEND_RETIRED.L2_MISS",
+      "apple": {"number":198,"umask":1},
+      "intel": {
+        "EventCode": "0xC6",
+        "UMask": "0x01",
+        "CounterMask": "0",
+        "EdgeDetect": "0",
+        "Invert": "0",
+        "AnyThread": "0",
+        "MSRIndex": "0x3F7",
+        "MSRValue": "0x13",
+        "PEBS": "1",
+        "TakenAlone": "1",
+        "Counter": "0,1,2,3"
+      },
+      "supported": false,
+      "reason": "requires auxiliary MSR/PEBS selector not exposed by this tool; names alone insufficient"
+    },
+    {
+      "name": "FRONTEND_RETIRED.LATENCY_GE_1",
+      "apple": {"number":198,"umask":1},
+      "intel": {
+        "EventCode": "0xc6",
+        "UMask": "0x01",
+        "CounterMask": "0",
+        "EdgeDetect": "0",
+        "Invert": "0",
+        "AnyThread": "0",
+        "MSRIndex": "0x3F7",
+        "MSRValue": "0x400106",
+        "PEBS": "2",
+        "TakenAlone": "1",
+        "Counter": "0,1,2,3"
+      },
+      "supported": false,
+      "reason": "requires auxiliary MSR/PEBS selector not exposed by this tool; names alone insufficient"
+    },
+    {
+      "name": "FRONTEND_RETIRED.LATENCY_GE_128",
+      "apple": {"number":198,"umask":1},
+      "intel": {
+        "EventCode": "0xC6",
+        "UMask": "0x01",
+        "CounterMask": "0",
+        "EdgeDetect": "0",
+        "Invert": "0",
+        "AnyThread": "0",
+        "MSRIndex": "0x3F7",
+        "MSRValue": "0x408006",
+        "PEBS": "1",
+        "TakenAlone": "1",
+        "Counter": "0,1,2,3"
+      },
+      "supported": false,
+      "reason": "requires auxiliary MSR/PEBS selector not exposed by this tool; names alone insufficient"
+    },
+    {
+      "name": "FRONTEND_RETIRED.LATENCY_GE_16",
+      "apple": {"number":198,"umask":1},
+      "intel": {
+        "EventCode": "0xC6",
+        "UMask": "0x01",
+        "CounterMask": "0",
+        "EdgeDetect": "0",
+        "Invert": "0",
+        "AnyThread": "0",
+        "MSRIndex": "0x3F7",
+        "MSRValue": "0x401006",
+        "PEBS": "1",
+        "TakenAlone": "1",
+        "Counter": "0,1,2,3"
+      },
+      "supported": false,
+      "reason": "requires auxiliary MSR/PEBS selector not exposed by this tool; names alone insufficient"
+    },
+    {
+      "name": "FRONTEND_RETIRED.LATENCY_GE_2",
+      "apple": {"number":198,"umask":1},
+      "intel": {
+        "EventCode": "0xC6",
+        "UMask": "0x01",
+        "CounterMask": "0",
+        "EdgeDetect": "0",
+        "Invert": "0",
+        "AnyThread": "0",
+        "MSRIndex": "0x3F7",
+        "MSRValue": "0x400206",
+        "PEBS": "1",
+        "TakenAlone": "1",
+        "Counter": "0,1,2,3"
+      },
+      "supported": false,
+      "reason": "requires auxiliary MSR/PEBS selector not exposed by this tool; names alone insufficient"
+    },
+    {
+      "name": "FRONTEND_RETIRED.LATENCY_GE_256",
+      "apple": {"number":198,"umask":1},
+      "intel": {
+        "EventCode": "0xC6",
+        "UMask": "0x01",
+        "CounterMask": "0",
+        "EdgeDetect": "0",
+        "Invert": "0",
+        "AnyThread": "0",
+        "MSRIndex": "0x3F7",
+        "MSRValue": "0x410006",
+        "PEBS": "1",
+        "TakenAlone": "1",
+        "Counter": "0,1,2,3"
+      },
+      "supported": false,
+      "reason": "requires auxiliary MSR/PEBS selector not exposed by this tool; names alone insufficient"
+    },
+    {
+      "name": "FRONTEND_RETIRED.LATENCY_GE_2_BUBBLES_GE_1",
+      "apple": {"number":198,"umask":1},
+      "intel": {
+        "EventCode": "0xC6",
+        "UMask": "0x01",
+        "CounterMask": "0",
+        "EdgeDetect": "0",
+        "Invert": "0",
+        "AnyThread": "0",
+        "MSRIndex": "0x3F7",
+        "MSRValue": "0x100206",
+        "PEBS": "1",
+        "TakenAlone": "1",
+        "Counter": "0,1,2,3"
+      },
+      "supported": false,
+      "reason": "requires auxiliary MSR/PEBS selector not exposed by this tool; names alone insufficient"
+    },
+    {
+      "name": "FRONTEND_RETIRED.LATENCY_GE_32",
+      "apple": {"number":198,"umask":1},
+      "intel": {
+        "EventCode": "0xC6",
+        "UMask": "0x01",
+        "CounterMask": "0",
+        "EdgeDetect": "0",
+        "Invert": "0",
+        "AnyThread": "0",
+        "MSRIndex": "0x3F7",
+        "MSRValue": "0x402006",
+        "PEBS": "1",
+        "TakenAlone": "1",
+        "Counter": "0,1,2,3"
+      },
+      "supported": false,
+      "reason": "requires auxiliary MSR/PEBS selector not exposed by this tool; names alone insufficient"
+    },
+    {
+      "name": "FRONTEND_RETIRED.LATENCY_GE_4",
+      "apple": {"number":198,"umask":1},
+      "intel": {
+        "EventCode": "0xC6",
+        "UMask": "0x01",
+        "CounterMask": "0",
+        "EdgeDetect": "0",
+        "Invert": "0",
+        "AnyThread": "0",
+        "MSRIndex": "0x3F7",
+        "MSRValue": "0x400406",
+        "PEBS": "1",
+        "TakenAlone": "1",
+        "Counter": "0,1,2,3"
+      },
+      "supported": false,
+      "reason": "requires auxiliary MSR/PEBS selector not exposed by this tool; names alone insufficient"
+    },
+    {
+      "name": "FRONTEND_RETIRED.LATENCY_GE_512",
+      "apple": {"number":198,"umask":1},
+      "intel": {
+        "EventCode": "0xC6",
+        "UMask": "0x01",
+        "CounterMask": "0",
+        "EdgeDetect": "0",
+        "Invert": "0",
+        "AnyThread": "0",
+        "MSRIndex": "0x3F7",
+        "MSRValue": "0x420006",
+        "PEBS": "1",
+        "TakenAlone": "1",
+        "Counter": "0,1,2,3"
+      },
+      "supported": false,
+      "reason": "requires auxiliary MSR/PEBS selector not exposed by this tool; names alone insufficient"
+    },
+    {
+      "name": "FRONTEND_RETIRED.LATENCY_GE_64",
+      "apple": {"number":198,"umask":1},
+      "intel": {
+        "EventCode": "0xC6",
+        "UMask": "0x01",
+        "CounterMask": "0",
+        "EdgeDetect": "0",
+        "Invert": "0",
+        "AnyThread": "0",
+        "MSRIndex": "0x3F7",
+        "MSRValue": "0x404006",
+        "PEBS": "1",
+        "TakenAlone": "1",
+        "Counter": "0,1,2,3"
+      },
+      "supported": false,
+      "reason": "requires auxiliary MSR/PEBS selector not exposed by this tool; names alone insufficient"
+    },
+    {
+      "name": "FRONTEND_RETIRED.LATENCY_GE_8",
+      "apple": {"number":198,"umask":1},
+      "intel": {
+        "EventCode": "0xC6",
+        "UMask": "0x01",
+        "CounterMask": "0",
+        "EdgeDetect": "0",
+        "Invert": "0",
+        "AnyThread": "0",
+        "MSRIndex": "0x3F7",
+        "MSRValue": "0x400806",
+        "PEBS": "1",
+        "TakenAlone": "1",
+        "Counter": "0,1,2,3"
+      },
+      "supported": false,
+      "reason": "requires auxiliary MSR/PEBS selector not exposed by this tool; names alone insufficient"
+    },
+    {
+      "name": "FRONTEND_RETIRED.STLB_MISS",
+      "apple": {"number":198,"umask":1},
+      "intel": {
+        "EventCode": "0xC6",
+        "UMask": "0x01",
+        "CounterMask": "0",
+        "EdgeDetect": "0",
+        "Invert": "0",
+        "AnyThread": "0",
+        "MSRIndex": "0x3F7",
+        "MSRValue": "0x15",
+        "PEBS": "1",
+        "TakenAlone": "1",
+        "Counter": "0,1,2,3"
+      },
+      "supported": false,
+      "reason": "requires auxiliary MSR/PEBS selector not exposed by this tool; names alone insufficient"
+    }
+  ],
+  "raw_job": "20261021T155433Z-t056-kpc-v2-groups",
+  "raw_job_sha256": "d4ae5998c48f2fce5bb554cee387a6f86edc2bbb795bdb05317be257363bd578"
+}

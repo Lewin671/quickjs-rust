@@ -1,8 +1,8 @@
 # T056 hardware attribution handoff
 
 Current authorized path: [user-installed headless kpc helper](kpc-tool/README.md).
-Its root use remains unverified; it measures observed thread intervals, not
-complete lifetimes. The xctrace protocol below is historical and must not be
+Installed v1 fails setup before gate; reviewed v2 awaits reinstall/root smoke.
+It measures observed thread intervals, not complete lifetimes. The xctrace protocol below is historical and must not be
 resubmitted merely to rediscover its recorded access failure.
 
 [Record](../../archive/T056-pmu-attribution.md) owns conclusions and limits.

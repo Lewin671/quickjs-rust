@@ -30,7 +30,7 @@ static bool drain(int fd,char *text,size_t *used) {
 static void close_pipe(int p[2]) {if(p[0]>=0)close(p[0]);if(p[1]>=0)close(p[1]);}
 bool run_child(Api *a,const Events *e,Run *r,char *const *argv,uid_t uid,gid_t gid,unsigned timeout_ms) {
  int output[2]={-1,-1},error[2]={-1,-1},gate[2]={-1,-1};bool ok=false,exited=false;
- uint64_t begin=now();if(!begin)return false;
+ uint64_t command_begin=0;uint64_t begin=now();if(!begin)return false;
  struct sigaction action={0};action.sa_handler=stop;sigemptyset(&action.sa_mask);
  if(sigaction(SIGTERM,&action,NULL)||sigaction(SIGINT,&action,NULL)||sigaction(SIGHUP,&action,NULL)||sigaction(SIGALRM,&action,NULL))return false;
  alarm((timeout_ms+999)/1000+1);
@@ -57,6 +57,7 @@ bool run_child(Api *a,const Events *e,Run *r,char *const *argv,uid_t uid,gid_t g
  (void)setpgid(r->pid,r->pid);
  if(fcntl(output[0],F_SETFL,O_NONBLOCK)||fcntl(error[0],F_SETFL,O_NONBLOCK))goto done;
  if(!trace_begin(a,e,r)||stopping)goto done;
+ command_begin=now();
  if(write(gate[1],"G",1)!=1)goto done;
  close(gate[1]);gate[1]=-1;
  for(;;){
@@ -73,6 +74,8 @@ bool run_child(Api *a,const Events *e,Run *r,char *const *argv,uid_t uid,gid_t g
  if(!trace_drain(r)||!drain(output[0],r->output,&r->out_len)||!drain(error[0],r->error,&r->err_len))goto done;
  ok=true;
  done:
+ if(command_begin)r->child_window_ns=now()-command_begin;
+ if(!ok&&!r->failed_step)(void)trace_result(r,"process.before_or_after_gate",-1,errno,false);
  if(r->pid>0&&!exited){
   (void)kill(-r->pid,SIGKILL);(void)kill(r->pid,SIGKILL);
   while(waitpid(r->pid,&r->status,0)<0&&errno==EINTR){}

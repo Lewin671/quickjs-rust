@@ -8,21 +8,21 @@ from tools.benchmark import screen as s
 from tools.benchmark.process import ProcessResult
 from tools.benchmark.layout_policy import load_policy
 read=lambda f:json.loads(Path(f).read_text());sha=lambda f:hashlib.sha256(Path(f).read_bytes()).hexdigest()
-queue=REPO.parents[2]/'outputs/imac-bench';cfg=read(ROOT/'config.json');source=queue/cfg['qualification_job']/'out';report=read(source/'qualification.json');groups=read(ROOT/'groups.json')['groups']
+queue=REPO.parents[2]/'outputs/imac-bench';cfg=read(ROOT/'config-v2.json');source=queue/cfg['qualification_job']/'out';report=read(source/'qualification.json');groups=read(ROOT/'groups-v2.json')['groups']
 assert not report['privileged_run'] and not report['install_performed'] and not report['hardware_counter_evidence']
 assert sha(source/'qjs-kpc')==cfg['helper_sha256'] and sha(source/'qualification.json')==cfg['qualification_sha256']
 for name,h in report['source_sha256'].items():
- if name.endswith(('.c','.h')) or name=='qualify.py':assert sha(ROOT/name)==h
-for name,h in cfg['files'].items():assert sha(ROOT/name)==h
+ if name.endswith(('.c','.h')) or name=='qualify.py':assert sha(ROOT/('groups-v2.json' if name=='groups.json' else name))==h
+for name,h in cfg['files'].items():assert sha(ROOT/('groups-v2.json' if name=='groups.json' else name))==h
 assert all(v['status']==0 and not v['stderr'] for v in report['checks']['static'].values())
 assert report['checks']['unit']['status']==report['checks']['drop-unit']['status']==0
-assert len(groups)==6 and sum(len(g['events']) for g in groups)==21
+assert len(groups)==11 and sum(len(g['events']) for g in groups)==21
 inventory=read(ROOT/'event-inventory.json');assert sum(not r['supported'] for r in inventory['events'])==18
 for g in groups:
- assert len(g['events'])<=4 and g['description']['counter_count']==7 and g['description']['config'][0]=='0x22'
+ assert len(g['events'])<=2 and g['description']['counter_count']==4 and g['description']['classes']==2
  for e in g['description']['events']:
-  if e['index']<3:continue
-  rule=next(r['intel'] for r in inventory['events'] if r['name']==e['name']);value=int(g['description']['config'][e['index']-2],0)
+  if e['name'] in ('CPU_CLK_UNHALTED.THREAD','INST_RETIRED.ANY'):continue
+  rule=next(r['intel'] for r in inventory['events'] if r['name']==e['name']);value=int(g['description']['config'][e['index']],0)
   assert value&0xffff==int(rule['EventCode'],0)|(int(rule['UMask'],0)<<8)
   assert value>>24==int(rule['CounterMask']) and bool(value&(1<<18))==bool(int(rule['EdgeDetect']))
   assert value&(1<<16) and not value&((1<<17)|(1<<20)|(1<<21))
@@ -41,7 +41,7 @@ simulations={}
 for mode in ('success','uninstalled','permission','wrong-uid','bad-output','bad-counters','coverage','expired','timeout','disturbed'):
  with tempfile.TemporaryDirectory(prefix='.simulation-',dir=ROOT) as temp:
   out=Path(temp)/'out';out.mkdir();(out.parent/'status').write_text('running 2026-10-21T00:00:00Z');(out/'config.json').write_text(json.dumps(cfg))
-  for name in cfg['files']:(out/name).write_bytes((ROOT/name).read_bytes())
+  for name in cfg['files']:(out/name).write_bytes((ROOT/('groups-v2.json' if name=='groups.json' else name)).read_bytes())
   helper=source/'qjs-kpc' if mode!='uninstalled' else Path(temp)/'missing';realstat=Path.stat;calls=[]
   def patched_stat(self,*args,**kw):
    v=realstat(self,*args,**kw)
@@ -50,8 +50,8 @@ for mode in ('success','uninstalled','permission','wrong-uid','bad-output','bad-
    return v
   def fake(argv,timeout):
    assert 0<timeout<=15;calls.append(argv);separator=max(i for i,x in enumerate(argv) if x=='--');target=argv[separator+1:]
-   if target[0]=='/usr/bin/id':value={'capture_complete':True,'cleanup_ok':True,'configuration_readback_verified':True,'child_status':0,'child_stdout':str(os.getuid()+int(mode=='wrong-uid'))+'\n'}
-   elif target[0]=='/usr/bin/env':value={'capture_complete':True,'cleanup_ok':True,'configuration_readback_verified':True,'child_status':0,'child_stdout':'TZ=UTC\nLC_ALL=C\n'}
+   if target[0]=='/usr/bin/id':value={'counter_backend':'kpep_programmable_user','capture_complete':True,'cleanup_ok':True,'configuration_readback_verified':True,'child_status':0,'child_stdout':str(os.getuid()+int(mode=='wrong-uid'))+'\n'}
+   elif target[0]=='/usr/bin/env':value={'counter_backend':'kpep_programmable_user','capture_complete':True,'cleanup_ok':True,'configuration_readback_verified':True,'child_status':0,'child_stdout':'TZ=UTC\nLC_ALL=C\n'}
    else:
     role=next(r for r in p.ROLES if (out/'binaries'/r/'qjs').stat().st_ino==Path(target[0]).stat().st_ino);n=int(target[-1]);scale=1 if n==p.COUNT else 2
     names=argv[argv.index('--events')+1].split(',')[2:];g=next(g for g in groups if g['events']==names);slow=1.45 if role.removesuffix('_aa') in ('count_flags','candidate') else 1.
@@ -59,7 +59,7 @@ for mode in ('success','uninstalled','permission','wrong-uid','bad-output','bad-
     for e in g['description']['events']:
      count=scale*100000000+10000 if e['name']=='INST_RETIRED.ANY' else int(scale*100000000*slow)+10000 if e['name']=='CPU_CLK_UNHALTED.THREAD' else scale*1000+10
      events.append({**e,'count':count})
-    value={'capture_complete':True,'cleanup_ok':True,'child_status':0,'timed_out':False,'counters_valid':mode!='bad-counters','configuration_readback_verified':True,'encoding_crosswalk_applied':True,'scope':'sum_of_observed_thread_intervals','all_threads_covered':False,'full_lifetime_counts':False,'config':g['description']['config'],'events':events,'cycles':events[0]['count'],'instructions':events[1]['count'],'threads':[{'samples':100,'observed_span_ns':100000000 if mode!='coverage' else 10}],'elapsed_ns':110000000,'child_stdout':s.RESULT_PREFIX+json.dumps({'operations':n,'checksum':n})+'\n'}
+    value={'counter_backend':'kpep_programmable_user','capture_complete':True,'cleanup_ok':True,'child_status':0,'timed_out':False,'counters_valid':mode!='bad-counters','configuration_readback_verified':True,'encoding_crosswalk_applied':True,'scope':'sum_of_observed_thread_intervals','all_threads_covered':False,'full_lifetime_counts':False,'config':g['description']['config'],'events':events,'cycles':events[0]['count'],'instructions':events[1]['count'],'threads':[{'samples':100,'observed_span_ns':100000000 if mode!='coverage' else 10}],'child_window_ns':110000000,'elapsed_ns':400000000,'child_stdout':s.RESULT_PREFIX+json.dumps({'operations':n,'checksum':n})+'\n'}
     if mode=='bad-output' and role=='candidate':value['child_stdout']='WRONG\n'
    return ProcessResult(started_at='SIMULATED',timer_started_ns=0,timer_finished_ns=100000000,duration_ns=100000000,exit_code=1 if mode=='permission' else 0,timed_out=mode=='timeout',stdout=json.dumps(value),stderr='',stdout_truncated=False,stderr_truncated=False)
   monitor=types.SimpleNamespace(snapshot=lambda:{'text':'00:00:00 250 intruder\n' if mode=='disturbed' else '','anchor':datetime.datetime(2026,10,21,tzinfo=datetime.timezone.utc).timestamp()})
@@ -72,10 +72,10 @@ for mode in ('success','uninstalled','permission','wrong-uid','bad-output','bad-
     if mode=='success':raise
    else:assert mode=='success',mode
   if mode=='success':
-   assert len(calls)==386 and read(out/'complete.json')['measured_execs']==384
-   rows=read(out/'rows.json');assert len(rows)==24
+   assert len(calls)==354 and read(out/'complete.json')['measured_execs']==352
+   rows=read(out/'rows.json');assert len(rows)==22
    broken=copy.deepcopy(rows[0]['samples']['base']);event=next(e for e in broken['2N']['events'] if e['name'] not in ('INST_RETIRED.ANY','CPU_CLK_UNHALTED.THREAD'));event['count']=0;delta=counters.delta(broken);assert delta['negative_events'] and any(v is None for v in delta['events_per_instruction'].values())
   else:assert not (out/'complete.json').exists()
   if mode in ('uninstalled','expired'):assert not calls
   simulations[mode]=len(calls)
-(ROOT/'validation.json').write_text(json.dumps({'diagnostic_only':True,'privileged_execution_performed':False,'installation_performed':False,'hardware_evidence':False,'nonroot_tool_receipt':cfg['qualification_job'],'crosswalk_events':21,'groups':6,'mock_calls':simulations,'scope':'386 fake helper calls exercise real Python collector. Actual C backend/root PMU access remain untested; full-lifetime/all-thread completeness is not implemented.','checks':['C/H/qualifier and binary seals','clang warnings-as-errors/static analyzer/unit and mocked credentials receipts','all21 exact event encodings including CMask/edge and fixed0x22','no shell API; drop before only execve','render/deadline/budget/install shell syntax','N2N/AA/all rows/negative events retained','missing-install/permission/UID/output/counter/coverage/timeout/load/deadline rejection']},indent=2)+'\n');print('VALIDATED, no real root execution',simulations)
+(ROOT/'validation-v2.json').write_text(json.dumps({'diagnostic_only':True,'privileged_execution_performed':False,'installation_performed':False,'hardware_evidence':False,'nonroot_tool_receipt':cfg['qualification_job'],'crosswalk_events':21,'version':'qjs-kpc-2','groups':11,'mock_calls':simulations,'scope':'354 fake helper calls exercise real Python collector. Actual C backend/root PMU access remain untested; full-lifetime/all-thread completeness is not implemented.','checks':['C/H/qualifier and binary seals','clang warnings-as-errors/static analyzer/unit and mocked credentials receipts','all21 exact event encodings including CMask/edge and fixed0x22','no shell API; drop before only execve','render/deadline/budget/install shell syntax','N2N/AA/all rows/negative events retained','missing-install/permission/UID/output/counter/coverage/timeout/load/deadline rejection']},indent=2)+'\n');print('VALIDATED, no real root execution',simulations)

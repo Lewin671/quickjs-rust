@@ -2,23 +2,23 @@
 import hashlib,json,os,subprocess
 from pathlib import Path
 out=Path(os.environ['BENCH_OUT']);assert 'no-timing' in (out.parent/'status').read_text()
-root=Path(os.environ['BENCH_QUEUE'])/'20261021T145905Z-t056-kpc-tool-audit-final';assert (root/'status').read_text().strip()=='done 0'
+root=Path(os.environ['BENCH_QUEUE'])/'20261021T155348Z-t056-kpc-v2-final';assert (root/'status').read_text().strip()=='done 0'
 report=json.loads((root/'out/qualification.json').read_text());binary=root/'out/qjs-kpc';sha=lambda p:hashlib.sha256(Path(p).read_bytes()).hexdigest();assert sha(binary)==report['binary_sha256']
 inventory=json.loads((out/'event-inventory.json').read_text());groups=[];current=[];checks=[]
 def describe(names):
  q=subprocess.run([str(binary),'--describe','--events',','.join(['cycles','instructions',*names])],text=True,capture_output=True,timeout=10)
  checks.append({'events':names,'status':q.returncode})
  if q.returncode:return None
- d=json.loads(q.stdout);assert d['classes']==3 and d['counter_count']==7 and d['config'][0]=='0x22'
+ d=json.loads(q.stdout);assert d['classes']==2 and d['counter_count']==4 and d['config'][:2]==['0x41003c','0x4100c0']
  for n in names:
-  official=next(x['intel'] for x in inventory['events'] if x['name']==n);mapping=next(e['index'] for e in d['events'] if e['name']==n);value=int(d['config'][mapping-2],0)
+  official=next(x['intel'] for x in inventory['events'] if x['name']==n);mapping=next(e['index'] for e in d['events'] if e['name']==n);value=int(d['config'][mapping],0)
   want=int(official['EventCode'],0)|(int(official['UMask'],0)<<8)|(1<<16)|(1<<22)|(int(official['CounterMask'])<<24)|(int(official['EdgeDetect'])<<18)|(int(official['Invert'])<<23)
   assert value==want,(n,hex(value),hex(want))
  return d
 for row in inventory['events']:
  if not row['supported']:continue
  candidate=current+[row['name']]
- if len(candidate)<=4 and describe(candidate):current=candidate;continue
+ if len(candidate)<=2 and describe(candidate):current=candidate;continue
  assert current;groups.append({'id':len(groups),'events':current,'description':describe(current)});current=[row['name']];assert describe(current)
 if current:groups.append({'id':len(groups),'events':current,'description':describe(current)})
 assert sum(len(g['events']) for g in groups)==sum(r['supported'] for r in inventory['events'])

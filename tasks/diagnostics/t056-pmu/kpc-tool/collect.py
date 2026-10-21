@@ -30,7 +30,7 @@ assert read(qualified/'qualification.json')['binary_sha256']==cfg['helper_sha256
 packed=done(cfg['groups_job']);assert sha(packed/'groups.json')==cfg['groups_sha256']
 assert read(packed/'groups.json')['binary_sha256']==cfg['helper_sha256']
 root=done(cfg['images_job']);images=read(root/'images.json');assert sha(root/'images.json')==cfg['images_sha256']
-groups=read(out/'groups.json')['groups'];assert len(groups)==6
+groups=read(out/'groups.json')['groups'];assert len(groups)==11
 paths={}
 for role in p.ROLES:
  name=role.removesuffix('_aa');source=root/'binaries'/name/'qjs';assert sha(source)==cfg['images'][name]
@@ -49,7 +49,9 @@ request={'artifact_type':'t056-kpc-counters','diagnostic_only':True,'decision_ev
 with measurement_lock('T056 kpc sampled counter diagnostic'):
  monitor=Monitor.from_queue();current['phase']='privilege-check'
  identity=call(argv([],['/usr/bin/id','-u']));environment=call(argv([],['/usr/bin/env']))
- for result in (identity,environment):assert result['capture_complete'] and result['cleanup_ok'] and result['configuration_readback_verified'] and result['child_status']==0
+ for result in (identity,environment):
+  assert result['counter_backend']=='kpep_programmable_user'
+  assert result['capture_complete'] and result['cleanup_ok'] and result['configuration_readback_verified'] and result['child_status']==0
  assert identity['child_stdout'].strip()==str(os.getuid()) and os.getuid()!=0
  assert set(environment['child_stdout'].splitlines())=={'TZ=UTC','LC_ALL=C'}
  (out/'privilege-check.json').write_text(json.dumps({'identity':identity,'environment':environment},indent=2)+'\n')
@@ -59,7 +61,7 @@ with measurement_lock('T056 kpc sampled counter diagnostic'):
     row={'block':block,'group':group['id'],'case':case.id,'samples':{}}
     for role in p.order(p.ROLES,block,ci+group['id']):
      nxt.unlink(missing_ok=True);os.link(paths[role],nxt);os.replace(nxt,active);values={}
-     for label,n in (reversed([('N',p.COUNT),('2N',2*p.COUNT)]) if block%2 else [('N',p.COUNT),('2N',2*p.COUNT)]):
+     for label,n in (reversed([('N',p.COUNT),('2N',2*p.COUNT)]) if (block+group['id'])%2 else [('N',p.COUNT),('2N',2*p.COUNT)]):
       current.update(phase='measured',block=block,group=group['id'],case=case.id,role=role,size=label)
       value=call(argv(group['events'],s._argv(active,case,n)));counters.check(value,group['description']);output=s._check_output(case,value['child_stdout']);key=(case.id,label)
       if key in checks:assert checks[key]==output
@@ -70,4 +72,4 @@ with measurement_lock('T056 kpc sampled counter diagnostic'):
    print('BLOCK',block+1,'GROUP',group['id'],'complete',flush=True)
  load=monitor.snapshot();(out/'load.json').write_text(json.dumps(load,indent=2)+'\n');assert not heavy_samples(load['text'],load['anchor']),'DISTURBED; retain whole job, no retry'
  summary=counters.summarize(rows);(out/'summary.json').write_text(json.dumps(summary,indent=2)+'\n');p.remaining(deadline,time.monotonic(),1)
-raw.close();(out/'complete.json').write_text(json.dumps({'diagnostic_only':True,'decision_evidence':False,'attempts_consumed':0,'groups':6,'events':21,'case_role_blocks':192,'measured_execs':384,'privilege_checks':2,'seconds':time.monotonic()-start,'full_lifetime_counts':False,'all_thread_coverage':False})+'\n')
+raw.close();(out/'complete.json').write_text(json.dumps({'diagnostic_only':True,'decision_evidence':False,'attempts_consumed':0,'groups':11,'events':21,'case_role_blocks':176,'measured_execs':352,'privilege_checks':2,'seconds':time.monotonic()-start,'full_lifetime_counts':False,'all_thread_coverage':False})+'\n')
