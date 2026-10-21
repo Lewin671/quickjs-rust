@@ -1,17 +1,17 @@
 # T056 stage A: outlining numeric property misses
 
-- Status: diagnostic follow-up to the incomplete placement probe; final wall
-  regression and complete new-image correctness remain unverified.
+- Status: codegen repair verified for correctness/instructions; lead triage
+  confirms local_read wall remains. The frame/spill hypothesis did not explain it.
 - Implementation: stage-A branch only; shared numeric shape hits stay inline,
   layout revalidation and boxed typed-property fallbacks are outlined.
-- Verified at: b904285a + final patch 201ecc13 / image 66ffb46f: local full gate,
-  255 NG fixtures, strict reference pin and 86/86 instruction diagnosis pass.
+- Verified at: d130c77b / image66ffb46f: local full/fast gates and pin audit,
+  lead complete exact42,672/42,672, bound86/86 pass and T061 done0/unclear.
 - Evidence: [placement outcome](T056-m1-stageA-placement-diagnosis.md#probe-a-returned-incomplete-move-to-code-generation),
   [earlier numeric repair](T056-m1-stageA-attempt1-diagnosis.md#nbody-follow-up-numeric-calls-and-scalar-spills).
-- Unresolved: fresh committed-image exact/pre-gate/triage receipts; wall effect.
-  The previous 42,672-pass exact receipt belongs only to image 807867f6.
-- Next action: lead runs the new bound verification packet in sequence. Do not
-  submit the remaining K=6 attempt until diagnostics justify it.
+- Unresolved: local_read wall1.0660; data/launch cause and common root with
+  unpack/heterogeneous reads remain unverified.
+- Next action: follow the [data/launch diagnosis](T056-m1-stageA-data-diagnosis.md)
+  and its bounded lead probe; do not submit the remaining K=6 attempt yet.
 
 ## What the old hot paths actually do
 
@@ -123,8 +123,9 @@ sampling only; sample counts are attribution, not instruction or wall ratios.
   effect; the samples do not prove allocator/env state caused the old excess.
 
 The final complete instruction inventory must check all three explicitly;
-no isolated profile percentage is an acceptance result. Probe B remains
-unsubmitted; its original completion guard is not relaxed.
+no isolated profile percentage is an acceptance result. The old probe B remains
+unsubmitted and its completion guard unchanged; the prospective d130 protocol
+is owned by [data/launch diagnosis](T056-m1-stageA-data-diagnosis.md).
 
 
 ## Final dispatch boundary before reference re-pin
@@ -213,8 +214,9 @@ agents 21, diagnostics 29, benchmark-tool tests 663, script tests 35 and
 Test262 subset 5170. `./scripts/compare-qjs.sh` passed 255 fixtures; 26 focused
 typed-loop tests and the new object ownership/attribute test also passed.
 Context, formatting and whitespace checks pass. Complete new-image exact
-42,672-case correctness is deliberately prepared for the lead, not claimed
-from the old image; no new burndown entry is appended before it completes.
+42,672-case correctness was subsequently completed by the lead for d130,
+with the new entry now appended. The new triage still leaves local_read wall
+unfixed; [data/launch diagnosis](T056-m1-stageA-data-diagnosis.md) owns those receipts.
 
 Lead packet: `tmp/t056-m1a-codegen-verify/README.md` under the shared workspace.
 It binds the committed source, exact image SHA above, unchanged unit d184dbcc,
@@ -249,5 +251,6 @@ the duplicate pre-push run was skipped with QJS_SKIP_PRE_PUSH=1.
 `tmp/t056-m1a-codegen-verify/` binds d130c77b and image 66ffb46f. Local static
 validation passes all rendered shell/Python syntax, old-receipt rejection,
 Shanghai/LA/DST night windows, 27-case inventory and frozen source/unit checks;
-the packet manifest verifies every file. All three lead job IDs remain empty.
-No new-image full exact or wall result is claimed at this handoff.
+the packet manifest verifies every file. All three lead jobs have now completed;
+their IDs/results are owned by [data/launch diagnosis](T056-m1-stageA-data-diagnosis.md).
+The smaller frame is verified; a local_read wall fix is disproved by that triage.

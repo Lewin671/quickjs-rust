@@ -8,18 +8,18 @@
 - Implementation: stage 1 on main. Stage A on its branch, not on main; the rejected M1.2 candidate stays on
   `agent/t056-m1-stage2/codex`; the write-site add replay removed from stage A stays on
   `agent/t056-add-transition-replay/claude`.
-- Verified at: codegen repair d130c77b reproduces snapshot 201ecc13 / image 66ffb46f: local full/fast gates, 255 NG,
-  5170 subset, strict pin and 86/86 instructions pass; exact 42,672/42,672 and CI 39515915868 cover only older repair 4842f823.
+- Verified at: d130c77b / image 66ffb46f: local full/fast gates, NG255/subset5170, strict pin; lead exact
+  42,672/42,672 and bound86/86 pass; T061030903 is unclear, local_read wall1.0660 despite byte-equivalent scalar code.
 - Evidence: [part 1](archive/T056-unit0-part1-evidence.md), [part 2](archive/T056-unit0-part2-evidence.md),
   [M1 stage 1](archive/T056-m1-stage1-evidence.md), [M1.2 rejection](archive/T056-m1-stage2-evidence.md),
   [M1.2 diagnosis](archive/T056-m1-stage2-diagnosis.md), [stage A record](archive/T056-m1-stageA-record.md),
-  [codegen diagnosis](archive/T056-m1-stageA-codegen-diagnosis.md), [M2 inputs](archive/T056-m2-design-inputs.md);
+  [codegen](archive/T056-m1-stageA-codegen-diagnosis.md), [data/launch diagnosis](archive/T056-m1-stageA-data-diagnosis.md), [M2 inputs](archive/T056-m2-design-inputs.md);
   plans [`interpreter-core-v2-atoms-layouts`](performance-units/interpreter-core-v2-atoms-layouts.json) (closed),
   [`interpreter-core-v2-layout-edges`](performance-units/interpreter-core-v2-layout-edges.json).
-- Unresolved: old-image local_read wall excess reproduced in incomplete probe A (9/13, budget exceeded);
-  codegen repair restores a 360-byte typed frame; fresh bound exact/pre-gate/wall receipts are pending; arm64 unmeasured.
-- Next action: lead runs the new codegen image's bound correctness, 86-case pre-gate and T061 triage;
-  no owner timing, no probe B, no final K=6 submission until diagnostics justify the remaining attempt.
+- Unresolved: d130 local_read, unpack and heterogeneous-property wall excess; frame/spill hypothesis does not
+  explain local_read; data/launch factors and common cause remain unmeasured; arm64 unmeasured.
+- Next action: lead runs the versioned three-case data/env/same-image bank probe, 15 blocks and25-minute cap;
+  no owner timing or final K=6 submission; the last attempt remains unspent.
 
 ## Goal and scope
 

@@ -1,0 +1,21 @@
+{
+  "case_ids": [
+    "broad/local_read",
+    "sentinel/heterogeneous_property_read",
+    "external/sunspider-1.0/string-unpack-code"
+  ],
+  "correctness_job": "20261021T024349Z-t056-m1a-codegen-correctness",
+  "pregate_job": "20261021T030549Z-t056-m1a-codegen-pregate86",
+  "triage_job": "20261021T030903Z-t056-m1a-codegen-triage",
+  "triage_result_sha256": "e8782a3a8daabe26fcc06aa40a12f1c0e4aff80010eba50a3638d4fc6cb610e4",
+  "qualification_job": "20261021T034036Z-t056-data-window-qualify",
+  "qualification_sha256": "0dbfb015cdb3d56c858d64661bcda643f909abda9b98fe2c41c3ec4df98d24d8",
+  "build_job": "20261021T033544Z-t056-data-window-bank-build",
+  "build_identity_sha256": "042ba8371418c4475b08ba4d5adfe0ece66e7067b6597e3992283b3df8834c5f",
+  "canonical_byte_audit_sha256": "c0aa75b88441906216ac7ccc9bcc3a58199f4aaf05f9a81742f6e2bf7a03336f",
+  "collector_sha256": "ea22e8e30e138a91a942288949b083cba3bdeb2ae6292f90498b7963ccd3c8e0",
+  "protocol_sha256": "55a365ff00fc54119ed47767fdfa85fde4e81fe013dc55e9fa86c910a58db36e",
+  "protocol_revision": "ad4a0f6141c659500154cb3b3ac772314a63caec",
+  "bank_instruction_job": "20261021T035429Z-t056-data-bank-instruction-smoke",
+  "bank_instruction_sha256": "3fd4f2820764e95466534858433de8c79431f7660f466a0a464483528f4363cd"
+}
