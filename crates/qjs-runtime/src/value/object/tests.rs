@@ -294,6 +294,10 @@ fn literal_slot_survives_value_writes_and_misses_on_accessors() {
     );
     let (cached_shape, slot) = object.literal_data_slot("b").expect("literal slot");
     assert_eq!(slot, 1);
+    assert_eq!(
+        object.literal_data_slot_number(&cached_shape, slot),
+        Some(2.0)
+    );
     assert!(matches!(
         object.write_existing_own_data_property("b", &Value::Number(5.0)),
         OwnDataPropertyWrite::Written
@@ -303,12 +307,26 @@ fn literal_slot_survives_value_writes_and_misses_on_accessors() {
         Some(Value::Number(5.0))
     );
     assert!(object.literal_data_slot("b").is_some());
+    assert_eq!(
+        object.literal_data_slot_number(&cached_shape, slot),
+        Some(5.0)
+    );
+    assert!(matches!(
+        object.write_existing_own_data_property("b", &Value::Boolean(true)),
+        OwnDataPropertyWrite::Written
+    ));
+    assert_eq!(object.literal_data_slot_number(&cached_shape, slot), None);
+    assert_eq!(
+        object.literal_data_slot_value(&cached_shape, slot),
+        Some(Value::Boolean(true))
+    );
 
     object.define_property(
         "b".to_owned(),
         Property::accessor(Some(Value::Undefined), None, true, true),
     );
     assert_eq!(object.literal_data_slot_value(&cached_shape, slot), None);
+    assert_eq!(object.literal_data_slot_number(&cached_shape, slot), None);
     assert!(object.literal_data_slot("b").is_none());
 }
 

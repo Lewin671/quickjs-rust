@@ -1,4 +1,7 @@
-# T056：d130 数据与启动状态探针（仅 lead 提交）
+# T056：d130 数据与启动状态探针（已完成，历史协议）
+
+job `20261021T040650Z-t056-m1a-data-probe` 已 done0：540/540 单元、401秒、无 DISTURBED。
+结果与限制见[后续记录](../../archive/T056-m1-stageA-aligned-scratch.md)。以下命令保留用于审计，不重跑本探针。
 
 此协议用于诊断 `d130c77b` / canonical `66ffb46f` 的 local_read wall 回退。
 [诊断记录](../../archive/T056-m1-stageA-data-diagnosis.md)拥有结论、CPU/机器码证据和前置 job；
@@ -31,7 +34,7 @@ Bank因子不会用于另外两个case，避免把诊断镜像的代码变化混
 前置已完成：d130完整exact、绑定86-case预门、原生T061 triage；同镜像bank两种状态的smoke、
 NG255和typed-loop tests；bank64/bank00指令增量约1.000005/1.000031。配置逐项绑定这些receipt和SHA。
 所有前置必须done0、无DISTURBED；旧484和不完整probe A不能满足新协议。
-本探针尚未提交。`render.py`只打印脚本文本，不执行、不联网、不提交job。
+本探针已完成。`render.py`只打印脚本文本，不执行、不联网、不提交job。
 
 ## 预算
 

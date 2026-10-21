@@ -1379,6 +1379,16 @@ fn get_named_typed(
     intrinsics: &Intrinsics,
     env: &crate::function::CallEnv,
 ) -> Option<Typed> {
+    // Literal hits are a regular typed read, not a cold resolution. Keep
+    // their numeric payload in this helper, avoiding get_named_object's
+    // owned Value ABI/clone/drop round trip. Layout misses keep the full path.
+    if let Value::Object(object) = receiver {
+        for (shape, slot) in shapes.entries() {
+            if let Some(number) = object.literal_data_slot_number(shape, *slot) {
+                return Some(Typed::Number(number));
+            }
+        }
+    }
     let value = match receiver {
         Value::Object(object) => get_named_object(object, name, shapes),
         _ => get_named(receiver, name, shapes, intrinsics, Some(env)),

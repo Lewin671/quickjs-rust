@@ -98,10 +98,13 @@ tool and artifact meanings are in [benchmarking.md](benchmarking.md).
   call-heavy cases with identical execution counts. Measure the band with a
   semantically neutral rebuild of the base, and judge a control regression
   inside it, with every other hot function byte-identical, on the aggregate.
-- **Hand a dispatch loop the storage, not its owner.** Reaching a register
-  file through its owning struct adds a pointer load the loop cannot keep
-  in a register. When instructions fall and cycles rise, suspect an extra
-  indirection before alignment.
+- **Keep the scalar-bank pointer live through dispatch.** Pass it directly
+  or recover it once from its owner; inspect the executed path for reloads.
+  Fewer instructions do not excuse an extra loop-carried indirection.
+- **Give hot scalar scratch its own aligned allocation and pool it.** Malloc
+  neighbourhood can make wall time depend on unrelated object sizes at equal
+  instructions. Keep allocation and code-placement controls separate; this
+  sensitivity alone does not prove a cache-line or aliasing mechanism.
 - **Measure dispatch inlining boundaries.** Growing one `match` arm changes
   allocation and placement for other arms. Outline cold work, but compare
   frequent scalar/cache paths: calls, saves and shared-successor reloads can
@@ -109,14 +112,10 @@ tool and artifact meanings are in [benchmarking.md](benchmarking.md).
   that closure as well as inlining dispatch into it; keep preparation and
   teardown outside its live ranges. Audit actual paths and the aggregate;
   [T056's codegen audit](../tasks/archive/T056-m1-stageA-codegen-diagnosis.md) links both boundary experiments.
-- **The wide executor spills when its inlining graph moves.** Edits to
-  strings, `Value` or the compact tier have twice grown
-  `compact_fn::wide::activation::run` and added executed work with no
-  logic change (T058's `memcpy`, T063's register-store spill; 24,640 bytes
-  and about 612 instructions per `broad/property_dynamic_read` read at
-  T063, rustc 1.95). After such an edit, compare that function's size and
-  spills between release builds, and keep an instruction-sensitive control
-  such as `property_dynamic_read` or `recursive_call_tree` in triage.
+- **The wide executor spills when its inlining graph moves.** String, Value
+  or compact-tier edits can change ordinary wide dispatch without logic changes.
+  Compare release-body spills and keep an instruction-sensitive property/call
+  control in triage; [T063](../tasks/archive/T063-instruction-diagnosis.md) records an example.
 
 ## Correctness while optimizing
 

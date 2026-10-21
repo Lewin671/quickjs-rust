@@ -412,11 +412,35 @@ const REGISTER_FILE: usize = 256;
 /// executor's dispatch arms is then a plain load or store, where a checked
 /// `Vec` index cost each arm a compare and a branch. Compilation guarantees
 /// every register is below `REGISTER_FILE`, so the mask never changes one.
-struct RegisterFile(Box<[Typed; REGISTER_FILE]>);
+/// Its backing has its own 4 KiB-aligned allocation; the program's scratch
+/// pool reuses that allocation across entries without reallocating it.
+struct RegisterFile(Box<ScalarRegisters>);
+
+/// Keep the scalar bank's placement independent of adjacent small allocations.
+/// The owner remains one pointer; alignment belongs to the heap allocation,
+/// never to the scratch bundle or interpreter stack frame.
+#[repr(align(4096))]
+struct ScalarRegisters([Typed; REGISTER_FILE]);
+
+impl std::ops::Deref for ScalarRegisters {
+    type Target = [Typed; REGISTER_FILE];
+
+    #[inline(always)]
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for ScalarRegisters {
+    #[inline(always)]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
 
 impl Default for RegisterFile {
     fn default() -> Self {
-        Self(Box::new([Typed::Undefined; REGISTER_FILE]))
+        Self(Box::new(ScalarRegisters([Typed::Undefined; REGISTER_FILE])))
     }
 }
 

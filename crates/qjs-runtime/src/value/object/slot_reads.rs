@@ -403,6 +403,27 @@ impl ObjectRef {
         Some((Rc::clone(&storage.layout), slot))
     }
 
+    /// A numeric literal-cache hit without cloning or dropping a boxed value.
+    /// The recorded layout fixes the slot's key and data-property attributes.
+    #[inline(always)]
+    pub(crate) fn literal_data_slot_number(
+        &self,
+        expected: &LiteralLayout,
+        slot: usize,
+    ) -> Option<f64> {
+        if self.0.module_namespace_exotic.get() {
+            return None;
+        }
+        let storage = self.0.properties.borrow();
+        if !Rc::ptr_eq(&storage.layout, expected) {
+            return None;
+        }
+        match storage.slot(slot)?.value() {
+            Value::Number(number) => Some(*number),
+            _ => None,
+        }
+    }
+
     /// Reads a previously resolved literal slot after checking that this
     /// object still has the same literal layout.
     pub(crate) fn literal_data_slot_value(

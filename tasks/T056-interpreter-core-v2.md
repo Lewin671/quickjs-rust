@@ -8,18 +8,18 @@
 - Implementation: stage 1 on main. Stage A on its branch, not on main; the rejected M1.2 candidate stays on
   `agent/t056-m1-stage2/codex`; the write-site add replay removed from stage A stays on
   `agent/t056-add-transition-replay/claude`.
-- Verified at: d130c77b / image 66ffb46f: local full/fast gates, NG255/subset5170, strict pin; lead exact
-  42,672/42,672 and bound86/86 pass; T061030903 is unclear, local_read wall1.0660 despite byte-equivalent scalar code.
+- Verified at: d130 exact42,672/42,672 and bound86 pass; completed data probe040650Z has540/540 units,
+  no DISTURBED. Aligned/literal follow-up b0b84489 passes local full/NG255/subset5170 and86/86; new exact/wall pending.
 - Evidence: [part 1](archive/T056-unit0-part1-evidence.md), [part 2](archive/T056-unit0-part2-evidence.md),
   [M1 stage 1](archive/T056-m1-stage1-evidence.md), [M1.2 rejection](archive/T056-m1-stage2-evidence.md),
   [M1.2 diagnosis](archive/T056-m1-stage2-diagnosis.md), [stage A record](archive/T056-m1-stageA-record.md),
-  [codegen](archive/T056-m1-stageA-codegen-diagnosis.md), [data/launch diagnosis](archive/T056-m1-stageA-data-diagnosis.md), [M2 inputs](archive/T056-m2-design-inputs.md);
+  [codegen](archive/T056-m1-stageA-codegen-diagnosis.md), [data/launch diagnosis](archive/T056-m1-stageA-data-diagnosis.md), [aligned scratch](archive/T056-m1-stageA-aligned-scratch.md), [M2 inputs](archive/T056-m2-design-inputs.md);
   plans [`interpreter-core-v2-atoms-layouts`](performance-units/interpreter-core-v2-atoms-layouts.json) (closed),
   [`interpreter-core-v2-layout-edges`](performance-units/interpreter-core-v2-layout-edges.json).
-- Unresolved: d130 local_read, unpack and heterogeneous-property wall excess; frame/spill hypothesis does not
-  explain local_read; data/launch factors and common cause remain unmeasured; arm64 unmeasured.
-- Next action: lead runs the versioned three-case data/env/same-image bank probe, 15 blocks and25-minute cap;
-  no owner timing or final K=6 submission; the last attempt remains unspent.
+- Unresolved: new image wall and full exact remain unverified; unpack has ranked hypotheses, no causal fix.
+  Probe supports allocation/launch sensitivity, not proven cache-line/4K aliasing; arm64 unmeasured.
+- Next action: lead runs new image correctness -> bound86 -> diagnostic triage; no owner timing or final K=6;
+  the last attempt remains unspent.
 
 ## Goal and scope
 

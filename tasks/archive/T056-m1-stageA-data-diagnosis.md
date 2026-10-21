@@ -1,16 +1,17 @@
 # T056 stage A: equivalent scalar code, data/launch diagnosis
 
-- Status: active diagnosis; d130's smaller frame did not fix local_read wall.
-- Implementation: production remains d130c77b on the stage-A branch; only
-  isolated diagnostic images add the same-image bank-window policy below.
-- Verified at: d130 / image 66ffb46f: complete exact 42,672/42,672 and bound
-  86/86 pre-gate pass; lead T061 is done0/unclear. Exact entry is now recorded.
+- Status: data probe complete; aligned production follow-up is under verification.
+- Implementation: d130 canonical and the isolated bank-window images below are
+  historical inputs; the current branch adds a pooled aligned scalar bank.
+- Verified at: probe20261021T040650Z, d130 / image66ffb46f; 540/540 units,
+  done0/no DISTURBED. Its original exact42,672 and pre-gate86 remain image-specific.
 - Evidence: [codegen history](T056-m1-stageA-codegen-diagnosis.md), byte/CPU
-  facts below and the versioned [lead protocol](../diagnostics/t056-data-probe/README.md).
-- Unresolved: local_read, unpack and heterogeneous_property_read wall excess;
-  data/launch factors are unmeasured, and common cause is not established.
-- Next action: lead submits the prepared three-case, 15-block data probe with
-  its 25-minute watchdog. Do not spend the remaining K=6 attempt yet.
+  facts below, [protocol](../diagnostics/t056-data-probe/README.md), and
+  [completed probe and production follow-up](T056-m1-stageA-aligned-scratch.md).
+- Unresolved: the probe supports allocation/launch sensitivity, not a proven
+  cache-line/4K-alias mechanism or a wall improvement for the production wrapper.
+- Next action: verify the new image through correctness, bound86 and lead triage;
+  do not spend the remaining K=6 attempt yet.
 
 ## Completed d130 chain
 
@@ -173,7 +174,7 @@ no offset or timing results were searched or selected.
 
 The versioned [protocol](../diagnostics/t056-data-probe/README.md) contains
 collector, guards, source/receipt hashes, renderer, budget/quiet-window wrapper,
-watchdog and fake-process validator. It remains unsubmitted. Existing complete
+watchdog and fake-process validator. It completed as job20261021T040650Z. Existing complete
 d130 correctness/pre-gate/triage are mandatory inputs; it does not weaken the
 old B packet's requirement for a complete old probe A.
 

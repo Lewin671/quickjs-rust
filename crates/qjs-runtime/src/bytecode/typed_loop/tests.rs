@@ -26,6 +26,13 @@ fn typed_loop_scratch_pool_reuses_only_cleared_storage() {
     assert!(program.scratch_pool.get().is_none());
 
     let mut first = program.take_scratch();
+    let scalar_pointer = first.registers.as_ptr();
+    assert_eq!((scalar_pointer as usize) % 4096, 0);
+    assert_eq!(std::mem::size_of::<super::ScalarRegisters>(), 4096);
+    assert_eq!(
+        std::mem::size_of::<super::RegisterFile>(),
+        std::mem::size_of::<usize>()
+    );
     first.registers[0] = super::Typed::Number(1.0);
     first.boxed.push(Value::Number(2.0));
     let boxed_capacity = first.boxed.capacity();
@@ -34,6 +41,7 @@ fn typed_loop_scratch_pool_reuses_only_cleared_storage() {
     // The fixed register file is reset per entry (`RegisterFile::reset`);
     // the growable storage comes back empty with its capacity.
     let mut reused = program.take_scratch();
+    assert_eq!(reused.registers.as_ptr(), scalar_pointer);
     assert!(reused.receivers.is_empty());
     assert!(reused.boxed.is_empty());
     assert!(reused.sloppy_global_writes.is_empty());
@@ -53,6 +61,8 @@ fn typed_loop_scratch_pool_reuses_only_cleared_storage() {
     let mut active = program.take_scratch();
     active.registers[0] = super::Typed::Number(4.0);
     let nested = program.take_scratch();
+    assert_ne!(nested.registers.as_ptr(), active.registers.as_ptr());
+    assert_eq!((nested.registers.as_ptr() as usize) % 4096, 0);
     assert!(matches!(nested.registers[0], super::Typed::Undefined));
     program.recycle_scratch(nested);
     assert!(matches!(active.registers[0], super::Typed::Number(n) if n == 4.0));
@@ -1832,11 +1842,21 @@ fn typed_loops_read_numeric_fields_inline_and_everything_else_exactly() {
             out.push(sum([new B(1, 2), new B(true, 1)], 10));
             out.push(sum([new B(1, 2), { y: 3 }], 10));
             out.push(sum([new B(1, 2), new G()], 10));
+            var literal = { x: 1, y: 2 };
+            var literals = [literal, { y: 5, x: 6, z: 0 }, { y: 4, z: 0, x: 3 }];
+            out.push(sum(literals, 999));
+            literal.x = false; out.push(sum(literals, 999));
+            Object.defineProperty(literal, 'x', { get: function () { return 10; } });
+            out.push(sum(literals, 999));
             return out.join();
         }";
     assert_eq!(
         eval(&format!("{source} run();")),
-        Ok(Value::String("7000,10323,95,35,NaN,1025".to_owned().into()))
+        Ok(Value::String(
+            "7000,10323,95,35,NaN,1025,10323,9657,16317"
+                .to_owned()
+                .into()
+        ))
     );
 }
 
