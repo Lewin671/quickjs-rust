@@ -4,7 +4,7 @@
   complete, no new acceptance attempt or wall result.
 - Implementation: safe 4096-aligned scalar backing, existing program-local pool;
   literal numeric cache hits copy f64 directly, with the full fallback retained.
-- Verified at: 4e609638 + source patch3c8ceddb / canonical b0b84489; local full
+- Verified at: 8f7d97c7 / canonical b0b84489 (committed reproduction043657Z); local full
   gate, NG255, strict pin and86/86 pass. Old d130 exact does not cover this image.
 - Evidence: [data diagnosis](T056-m1-stageA-data-diagnosis.md), completed
   job20261021T040650Z and the source/image identities below.
@@ -158,8 +158,7 @@ and reference residues; no timing feedback or offset search.
 
 Local full gate passes: runtime2346, tool663, script35, subset5170; NG255 and
 26 focused typed-loop tests pass. The new pool and numeric/accessor assertions
-are included. Context/size/whitespace checks pass; staged fast gate is required
-before commit. Frozen unit raw SHA stays
+are included. Context/size/whitespace checks pass; staged fast gate and pre-commit both pass (selected Test26265). Frozen unit raw SHA stays
 `d184dbcc122a060a219b367ffe3f3bb02c216f542f75f51eee1925387ef23284`.
 
 The final-image byte audit reproduces all six local paths against base:
@@ -170,9 +169,19 @@ Both typed frame reservations remain0x168 (360 bytes). This audit uses an
 outside copy of the old producer with only expected candidate SHA changed;
 the historical versioned d130 audit and probe guards are not weakened.
 
+Committed build-only job `20261021T043657Z-t056-aligned-committed-image`
+is done0/no DISTURBED,72s; it reproduces that exact canonical SHA from
+`8f7d97c71b34e2bec52e2c6df87f4ba4ac51641a`, with both executor and all15
+callee residues checked again. Runtime commit is pushed only to its owner
+branch. Manual full gate passed before push; QJS_SKIP_PRE_PUSH=1 avoided
+rerunning the same full gate, while the commit hook ran the fast gate.
+CI39544991941 was running at preparation, not claimed green.
+
 The lead packet at workspace `tmp/t056-m1a-aligned-verify` binds the new
 runtime commit, canonical SHA and helper SHA, preserving the original86-case
-policy, full pinned exact corpus and all27 native triage cases.
+policy, full pinned exact corpus and all27 previous triage cases plus spectral-norm (new maximum1.027396),
+28 total, all19 native controls retained. This adds a diagnostic focus, not
+a frozen payoff target or threshold change.
 Correctness must finish done0/no DISTURBED before bound86, then lead-only
 triage may run. Old d130 receipts cannot satisfy this chain; no owner timing
 or main integration is performed.
