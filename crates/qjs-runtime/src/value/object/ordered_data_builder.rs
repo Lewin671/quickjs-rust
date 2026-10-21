@@ -30,7 +30,7 @@ impl OrderedDataPropertyBuilder {
     /// Defines `key` with an arbitrary descriptor, as `insert` does for an
     /// enumerable data property.
     pub(crate) fn insert_property(&mut self, key: Rc<str>, property: Property) {
-        if self.properties.insert(&key, property).is_none() && is_array_index_key(&key) {
+        if self.properties.insert_shared(&key, property).is_none() && is_array_index_key(&key) {
             self.index_property_count += 1;
         }
     }

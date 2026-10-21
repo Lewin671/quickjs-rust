@@ -574,3 +574,24 @@ fn empty_receivers_resolve_a_realm_only_without_a_prototype_domain() {
     null.set("after_creation".into(), Value::Number(1.0));
     assert_eq!(null.get("after_creation"), Some(Value::Number(1.0)));
 }
+
+#[test]
+fn shared_append_adopts_the_callers_text_in_shapes_and_dictionaries() {
+    let domain = crate::property::atom::AtomDomain::new();
+    let object = ObjectRef::new_in(&domain, HashMap::new());
+    let first: Rc<str> = "first-shared-key".into();
+    object.set_shared_key(first.clone(), Value::Number(1.0));
+    assert!(Rc::ptr_eq(
+        object.0.properties.borrow().layout.fields()[0].atom.text(),
+        &first
+    ));
+    for i in 0..130 {
+        object.set(format!("field{i}"), Value::Undefined);
+    }
+    let last: Rc<str> = "dictionary-shared-key".into();
+    object.define_shared_property(last.clone(), Property::enumerable(Value::Number(2.0)));
+    let properties = object.0.properties.borrow();
+    assert!(properties.layout.is_dictionary());
+    let field = properties.field(properties.lookup(&last).unwrap()).unwrap();
+    assert!(Rc::ptr_eq(field.atom.text(), &last));
+}

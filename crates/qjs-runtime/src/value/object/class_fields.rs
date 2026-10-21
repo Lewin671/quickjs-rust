@@ -40,7 +40,7 @@ impl ObjectRef {
         let mut added_indices = 0;
         for (key, value) in fields {
             let property = Property::enumerable(value.clone());
-            if properties.insert(key, property).is_none() {
+            if properties.insert_shared(key, property).is_none() {
                 added_indices += usize::from(is_array_index_key(key));
             }
         }

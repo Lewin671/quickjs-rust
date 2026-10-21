@@ -8,7 +8,7 @@
   `agent/t056-add-transition-replay/claude`.
 - Verified at: pragmatic8f898dd9 lead211111Z full exact pass,213443Z86/86;213757Z triage unclear;
   214401Z mini A/A failed (inconclusive), global excess absent5/6 but unpack slow6/6.
-  Sparse header8dc59f64 full/NG/subset pass;220159Z native/count/PC diagnostics complete; repair qualification pending.
+  Sparse header8dc59f64 full/NG/subset pass;220159Z native/count/PC diagnostics complete; 52380 full/86 pass; shared-key repair qualification pending.
 - Evidence: [stage A record](archive/T056-m1-stageA-record.md),
   [allocation follow-up](archive/T056-m1-stageA-allocation-diagnosis.md),
   [architecture review](archive/T056-architecture-review.md), [stack/startup diagnosis](archive/T056-stack-phase-diagnosis.md), [PMU/FP diagnosis](archive/T056-pmu-attribution.md), [source bisection](archive/T056-source-bisect.md), [header factors/full-loop accounting](archive/T056-header-subparts.md), [dispatch addresses](archive/T056-dispatch-address.md), [JCC policy diagnosis](archive/T056-jcc-policy.md), [PMU helper](archive/T056-kpc-tool.md), [PMU setup failure/v2](archive/T056-kpc-setup-failure.md), [PMU counting v3](archive/T056-kpc-counting.md), [collector recovery](archive/T056-kpc-collection-retry.md), [PMU closure](archive/T056-pmu-closure.md), [pragmatic implementation](archive/T056-pragmatic-stageA.md), [pragmatic qualification](archive/T056-pragmatic-qualification.md), [hot/cold preparation](archive/T056-hot-cold-preparation.md), [M2 inputs](archive/T056-m2-design-inputs.md);

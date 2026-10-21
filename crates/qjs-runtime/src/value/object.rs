@@ -1275,7 +1275,7 @@ impl ObjectRef {
         if is_array_index_key(&key) {
             self.0.add_index_properties(1);
         }
-        properties.append(&key, Property::enumerable(value), true);
+        properties.append_shared(&key, Property::enumerable(value), true);
         self.bump_property_revision();
         drop(properties);
         if establishes_realm_identity {
@@ -1308,7 +1308,7 @@ impl ObjectRef {
         {
             let mut properties = self.properties_for(&key).borrow_mut();
             debug_assert!(!properties.contains_key(&key));
-            properties.append(&key, Property::enumerable(value), true);
+            properties.append_shared(&key, Property::enumerable(value), true);
             self.bump_property_revision();
         }
         if establishes_realm_identity {
@@ -1342,7 +1342,7 @@ impl ObjectRef {
             "the realm identity capture needs define_property"
         );
         let mut properties = self.properties_for(&key).borrow_mut();
-        if properties.insert(&key, property).is_none() && is_array_index_key(&key) {
+        if properties.insert_shared(&key, property).is_none() && is_array_index_key(&key) {
             self.0.add_index_properties(1);
         }
         self.bump_property_revision();

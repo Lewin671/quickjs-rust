@@ -280,6 +280,28 @@ impl PropertyStorage {
         slot
     }
 
+    /// Shared-key equivalent of append: a new atom adopts the existing text.
+    pub(super) fn append_shared(
+        &mut self,
+        key: &Rc<str>,
+        property: Property,
+        ordered: bool,
+    ) -> usize {
+        let mut attributes = Attributes::of(&property);
+        if !ordered {
+            attributes = attributes.unordered();
+        }
+        self.ensure_descriptors();
+        let slot = LayoutEdit::append_shared(&mut self.layout, key, attributes);
+        self.sync_encoding();
+        let Payload::Slots(properties) = &mut self.payload else {
+            unreachable!("descriptor payload ensured")
+        };
+        debug_assert_eq!(slot, properties.len());
+        properties.push(property);
+        slot
+    }
+
     /// Defines `key`: replaces an existing descriptor in its slot or appends
     /// a new one. One probe either way.
     #[inline(always)]
@@ -308,6 +330,43 @@ impl PropertyStorage {
             Some(slot) => Some(self.replace(slot, property)),
             None => {
                 self.append(key, property, true);
+                None
+            }
+        }
+    }
+
+    /// Defines `key`: replaces an existing descriptor in its slot or appends
+    /// a new one. One probe either way.
+    #[inline(always)]
+    pub(super) fn insert_shared(&mut self, key: &Rc<str>, property: Property) -> Option<Property> {
+        // An append edge from this shape proves `key` absent: its probe.
+        if let Payload::Slots(properties) = &mut self.payload
+            && let Some(slot) =
+                LayoutEdit::append_by_edge(&mut self.layout, key, Attributes::of(&property))
+        {
+            crate::diagnostics::count!(property_add_probes);
+            debug_assert_eq!(slot, properties.len());
+            properties.push(property);
+            // Append edges preserve their parent's encoding. Re-encoding uses
+            // a separate edge, so this hit cannot change the payload kind.
+            debug_assert_eq!(self.encoding, self.layout.encoding());
+            return None;
+        }
+        self.insert_shared_without_edge(key, property)
+    }
+
+    /// Replacements and unseen transitions stay out of the append-edge hit
+    /// path so callers can inline one small probe and payload push.
+    #[inline(never)]
+    fn insert_shared_without_edge(
+        &mut self,
+        key: &Rc<str>,
+        property: Property,
+    ) -> Option<Property> {
+        match self.probe_for_edit(key) {
+            Some(slot) => Some(self.replace(slot, property)),
+            None => {
+                self.append_shared(key, property, true);
                 None
             }
         }

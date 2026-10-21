@@ -216,6 +216,14 @@ impl AtomDomain {
     /// Interns the key `text` (stored runtime form), returning the domain's
     /// live atom for its code units or a new one.
     pub(crate) fn intern(&self, text: &str) -> Result<Atom, AtomDomainExhausted> {
+        self.intern_with_owned(text, None)
+    }
+
+    fn intern_with_owned(
+        &self,
+        text: &str,
+        owned: Option<&Rc<str>>,
+    ) -> Result<Atom, AtomDomainExhausted> {
         crate::diagnostics::count!(property_atom_interns);
         let canonical = canonical_property_text(text);
         let mut table = self.0.table.borrow_mut();
@@ -228,7 +236,10 @@ impl AtomDomain {
                 // Reuse that allocation; the new atom still receives a fresh id.
                 Rc::clone(text)
             }
-            None => Rc::from(canonical.as_ref()),
+            None => match owned {
+                Some(text) if canonical.as_ref() == &**text => Rc::clone(text),
+                _ => Rc::from(canonical.as_ref()),
+            },
         };
         let id = table.allocate_id()?;
         let array_index = array_index_property_key(&text)
@@ -261,6 +272,25 @@ impl AtomDomain {
                 domain: Rc::downgrade(&self.0),
             }))
         })
+    }
+
+    /// Interns an already shared key without copying canonical text on a miss.
+    /// Edge hits never call this; atom identity and normalization are unchanged.
+    pub(crate) fn intern_shared_key(&self, text: &Rc<str>) -> Atom {
+        self.intern_with_owned(text, Some(text))
+            .unwrap_or_else(|AtomDomainExhausted| {
+                let canonical = canonical_property_text(text);
+                Atom(Rc::new(AtomEntry {
+                    id: AtomId(NonZeroU32::MAX),
+                    text: if canonical.as_ref() == &**text {
+                        Rc::clone(text)
+                    } else {
+                        Rc::from(canonical.as_ref())
+                    },
+                    array_index: NO_ARRAY_INDEX,
+                    domain: Rc::downgrade(&self.0),
+                }))
+            })
     }
 
     /// The layout roots of this domain, created when no realm holds them.

@@ -1,0 +1,6 @@
+{
+  "kind": "pre-edit allocation/instruction repair",
+  "observation": "Native unpack histories show4868 Rc<str> requests of24B and4868 AtomEntry requests of48B on append-miss atom interning, in addition to the transient index/shape work. Ordinary object mutation already receives Rc<str>, but append erases ownership to &str and allocates another copy.",
+  "architecture": "Carry a borrowed shared Rc key through ordinary-object append misses into atom interning. Reuse the existing Rc text on canonical new keys; borrowed host &str entry points and normalization keep their behavior. Keep first live atom identity, fresh ids after reclamation, bounded weak tables, one layout probe and one atom intern on an append miss. Existing edge hits must not intern or clone a key. No header/shape growth, new caches, key/source pattern admission or executor changes.",
+  "checks": ["Shared canonical key text pointer retained on a new atom; mixed borrowed/shared interning deduplicates", "Noncanonical surrogate pairs still canonicalize", "Existing atom exhaustion/churn, layout edges/dictionary and object semantics", "Full gate + NG, then new canonical instruction/native/static qualification; earlier52380 image receipts remain separate"]
+}

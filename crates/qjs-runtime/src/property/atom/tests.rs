@@ -155,3 +155,21 @@ fn exhaustion_fails_instead_of_wrapping() {
     // Existing atoms are still found after exhaustion.
     assert_eq!(domain.intern("a").expect("intern"), penultimate);
 }
+
+#[test]
+fn shared_key_adopts_canonical_text_and_deduplicates_with_borrowed_keys() {
+    let domain = AtomDomain::new();
+    let key: std::rc::Rc<str> = "owned-key".into();
+    let atom = domain.intern_shared_key(&key);
+    assert!(std::rc::Rc::ptr_eq(atom.text(), &key));
+    assert_eq!(atom, domain.intern("owned-key").unwrap());
+    let halves: std::rc::Rc<str> = format!(
+        "{}{}",
+        string_from_code_units(&[0xD83D]),
+        string_from_code_units(&[0xDE00])
+    )
+    .into();
+    let normalized = domain.intern_shared_key(&halves);
+    assert_eq!(normalized, domain.intern("😀").unwrap());
+    assert!(!std::rc::Rc::ptr_eq(normalized.text(), &halves));
+}

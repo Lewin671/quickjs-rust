@@ -115,8 +115,8 @@ hit per field.
 
 ## Lookup by text
 
-- Shapes with up to 12 fields compare field text linearly, pointer first and then bytes. There is no domain probe
-  and no per-shape index.
+- Shapes with up to 12 fields compare field text linearly, pointer first and then bytes; no domain probe/index.
+  Shared-key append misses let the atom adopt canonical Rc text; borrowed host keys still normalize/intern once.
 - Larger shapes and dictionaries keep one index keyed by atom text, so a probe hashes once. A large shape builds
   its index after four linear read or write probes, including misses. A one-pass growing shape still
   sees only one probe; repeated absent-key probes on a shared shape amortize through the same index.

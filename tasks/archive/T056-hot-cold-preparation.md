@@ -1,9 +1,9 @@
 # T056 sparse hot/cold object header and instruction repair
 
 - Status: preparation active; no owner timing and no new acceptance attempt.
-- Implementation: header-only8dc59f64 present/pushed; inline index summary, atom reuse and host batches present in working tree.
+- Implementation: header-only8dc59f64 present/pushed; inline summary, atom reuse and host batches52380c2e pushed; shared-key append repair present in working tree.
 - Verified at:8dc59f64 full gate/NG255/subset5170; job220159Z done0 canonical count/native/static audit.
-  Follow-up repair full gate and exact-image qualification pending.
+  52380 full/NG/subset and canonical86 pass (job221049Z); shared-key follow-up full/qualification pending.
 - Evidence: [architecture plan](../diagnostics/t056-hot-cold/implementation-plan.json),
   [instruction plan](../diagnostics/t056-hot-cold/instruction-plan.json), [producers/receipts](../diagnostics/t056-hot-cold/README.md).
 - Unresolved: whole-program instruction residuals, shifted relative PCs and wall qualification of new image.
@@ -64,3 +64,12 @@ rise2736 requested/2272 class bytes, not a footprint win. Empty8f898/8dc59 both8
 Full histograms and raw-history/stack hashes: `header-native-summary.json`
 (SHA4ea1dfc7fe38127f11e2b80ce5ef44a52e7b8c8bb418393645e1b0266d1052dd).
 These counts do not measure live/peak memory or latency; logging/wrapper perturb execution.
+
+## Ownership follow-up
+
+Native histories retain4868 repeated24B text allocations on unpack append misses: ordinary-object writes
+already own Rc keys but erased ownership before atom construction. [Shared-key plan](../diagnostics/t056-hot-cold/shared-key-plan.json)
+keeps that ownership on misses through the existing shape/dictionary authority. Existing edge hits still
+intern nothing; borrowed host definitions retain the borrowed path, normalization and fresh ids are unchanged.
+No shape/header grows. Both paths share transition publication; focused atom/layout/property tests pass.
+No counter/timing result from52380 applies automatically to this next source.

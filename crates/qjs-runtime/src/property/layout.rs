@@ -534,6 +534,24 @@ impl Shape {
             return child;
         }
         let atom = shape.domain.intern_key(key);
+        Self::append_atom(this, atom, attributes)
+    }
+
+    #[inline(never)]
+    fn append_shared_child(this: &Layout, key: &Rc<str>, attributes: Attributes) -> Layout {
+        let LayoutNode::Shape(shape) = &**this else {
+            unreachable!("append_shared_child is called on shapes")
+        };
+        if let Some(child) = shape.append_edge(key, attributes) {
+            return child;
+        }
+        Self::append_atom(this, shape.domain.intern_shared_key(key), attributes)
+    }
+
+    fn append_atom(this: &Layout, atom: Atom, attributes: Attributes) -> Layout {
+        let LayoutNode::Shape(shape) = &**this else {
+            unreachable!("append_atom is called on shapes")
+        };
         // A key in another stored form can intern to an existing edge's atom.
         if let Some(edge) = shape
             .edges
@@ -857,6 +875,55 @@ impl LayoutEdit {
             return Self::append_slow(layout, key, attributes);
         }
         *layout = Shape::append_child(layout, key, attributes);
+        slot
+    }
+
+    /// Appends a proven-absent shared key, retaining its canonical text on a miss.
+    #[inline]
+    pub(crate) fn append_shared(
+        layout: &mut Layout,
+        key: &Rc<str>,
+        attributes: Attributes,
+    ) -> usize {
+        let slot = layout.len();
+        if let LayoutNode::Shape(shape) = &**layout
+            && match shape.encoding {
+                Encoding::Small => slot < LINEAR_LOOKUP_LIMIT,
+                Encoding::Dynamic => slot < SHAPE_FIELD_LIMIT,
+                Encoding::Shaped | Encoding::Pair => false,
+            }
+        {
+            *layout = match shape.append_edge(key, attributes) {
+                Some(child) => child,
+                None => Shape::append_shared_child(layout, key, attributes),
+            };
+            return slot;
+        }
+        Self::append_shared_slow(layout, key, attributes)
+    }
+
+    #[inline(never)]
+    fn append_shared_slow(layout: &mut Layout, key: &Rc<str>, attributes: Attributes) -> usize {
+        let slot = layout.len();
+        if let Some(dictionary) = Self::unique_dictionary(layout) {
+            let atom = dictionary.domain.intern_shared_key(key);
+            dictionary.index.insert(Rc::clone(atom.text()), slot as u32);
+            dictionary.positions.push(dictionary.order.len() as u32);
+            dictionary.order.push(slot as u32);
+            dictionary.fields.push(Field::new(atom, attributes));
+            dictionary.bump();
+            return slot;
+        }
+        let encoding = layout.encoding();
+        let grows_past_small = encoding == Encoding::Small && slot >= LINEAR_LOOKUP_LIMIT;
+        if grows_past_small || matches!(encoding, Encoding::Shaped | Encoding::Pair) {
+            *layout = Shape::recode_child(layout, Encoding::Dynamic);
+        }
+        if slot >= SHAPE_FIELD_LIMIT {
+            Self::to_dictionary(layout);
+            return Self::append_shared_slow(layout, key, attributes);
+        }
+        *layout = Shape::append_shared_child(layout, key, attributes);
         slot
     }
 
