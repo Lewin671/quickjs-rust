@@ -6,19 +6,18 @@
 - Implementation: stage 1 on main. Stage A on its branch, not on main; the rejected M1.2 candidate stays on
   `agent/t056-m1-stage2/codex`; the write-site add replay removed from stage A stays on
   `agent/t056-add-transition-replay/claude`.
-- Verified at: pragmatic8f898dd9 lead211111Z full exact pass,213443Z86/86;213757Z triage unclear;
-  214401Z mini A/A failed (inconclusive), global excess absent5/6 but unpack slow6/6.
-  Sparse header8dc59f64 full/NG/subset pass;220159Z native/count/PC diagnostics complete; 52380 full/86 pass; shared-key repair qualification pending.
+- Verified at:8f898dd9 lead211111Z exact/213443Z86 pass;214401Z mini A/A failed (inconclusive), unpack slow6/6.
+  Sparse112B header+shared-key5dd3a810 full/NG255/subset5170 pass; 222209Z86/native and222300Z12-image qualification pass; static fast-family test fails.
 - Evidence: [stage A record](archive/T056-m1-stageA-record.md),
   [allocation follow-up](archive/T056-m1-stageA-allocation-diagnosis.md),
   [architecture review](archive/T056-architecture-review.md), [stack/startup diagnosis](archive/T056-stack-phase-diagnosis.md), [PMU/FP diagnosis](archive/T056-pmu-attribution.md), [source bisection](archive/T056-source-bisect.md), [header factors/full-loop accounting](archive/T056-header-subparts.md), [dispatch addresses](archive/T056-dispatch-address.md), [JCC policy diagnosis](archive/T056-jcc-policy.md), [PMU helper](archive/T056-kpc-tool.md), [PMU setup failure/v2](archive/T056-kpc-setup-failure.md), [PMU counting v3](archive/T056-kpc-counting.md), [collector recovery](archive/T056-kpc-collection-retry.md), [PMU closure](archive/T056-pmu-closure.md), [pragmatic implementation](archive/T056-pragmatic-stageA.md), [pragmatic qualification](archive/T056-pragmatic-qualification.md), [hot/cold preparation](archive/T056-hot-cold-preparation.md), [M2 inputs](archive/T056-m2-design-inputs.md);
   plans [`interpreter-core-v2-atoms-layouts`](performance-units/interpreter-core-v2-atoms-layouts.json) (closed),
   [`interpreter-core-v2-layout-edges`](performance-units/interpreter-core-v2-layout-edges.json).
-- Unresolved: unpack wall1.033–1.057/instructions1.0105, class-fields1.0434/1.0095, empty instructions1.0721.
-  Header crossing alone is insufficient: historical unpack has only110 requests of136B.
-- Next action: follow the [hot/cold preparation](diagnostics/t056-hot-cold/implementation-plan.json):
-  verify112B sparse header, native classes and instruction attribution, fast-family PCs, then fresh lead bundle.
-  No owner timing; PMU stays closed with installed helper untouched; last frozen attempt unspent.
+- Unresolved:112B header returns Add store29ca→29be: four inlined brand checks shorten3B each.
+  Header class crossing alone insufficient (102 unpack allocations); instruction/wall residuals remain.
+- Next action: inspect [hot/cold evidence and gated bundle](diagnostics/t056-hot-cold/README.md).
+  Static fast-family prerequisite fails: no timing/last attempt on this image; kernel/service isolation needs its own plan.
+  PMU stays closed with installed helper untouched; no owner timing, last frozen attempt unspent.
 
 ## Goal and scope
 

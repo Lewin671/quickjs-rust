@@ -1,0 +1,29 @@
+{
+  "parent": "8f898dd96239d392c168bdd20049d073b3b47ff4",
+  "candidate": "5dd3a810cac6a88f6a1f86c0ef46dc68dfac47ee",
+  "runtime_files": [
+    "crates/qjs-runtime/src/function/value/tests.rs",
+    "crates/qjs-runtime/src/global.rs",
+    "crates/qjs-runtime/src/object/install.rs",
+    "crates/qjs-runtime/src/property/atom.rs",
+    "crates/qjs-runtime/src/property/atom/tests.rs",
+    "crates/qjs-runtime/src/property/layout.rs",
+    "crates/qjs-runtime/src/property/named_table.rs",
+    "crates/qjs-runtime/src/property/named_table/batch.rs",
+    "crates/qjs-runtime/src/value/object.rs",
+    "crates/qjs-runtime/src/value/object/class_fields.rs",
+    "crates/qjs-runtime/src/value/object/descriptor_batch/tests.rs",
+    "crates/qjs-runtime/src/value/object/flags.rs",
+    "crates/qjs-runtime/src/value/object/key_order.rs",
+    "crates/qjs-runtime/src/value/object/ordered_data_builder.rs",
+    "crates/qjs-runtime/src/value/object/storage.rs",
+    "crates/qjs-runtime/src/value/object/tests.rs"
+  ],
+  "runtime_diff_sha256": "15781fe4f0a000dfd478e287983797422247d8d541cdf05aee5d354de8b32b08",
+  "parser_lexer_ast_changed": false,
+  "binding_model_changed": false,
+  "tier_admission_changed": false,
+  "new_dependencies": false,
+  "unsafe_added": false,
+  "timing_submitted": false
+}

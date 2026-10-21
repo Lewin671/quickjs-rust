@@ -1,0 +1,183 @@
+{
+  "scope": "Header-only8dc59f64 vs8f898dd9 matched native unpack histories; ObjectColdData frames separated from unrelated400B CallEnv allocations. No timing claim.",
+  "job": "20261021T220159Z-t056-hot-cold-attribution",
+  "cold": {
+    "parent": {
+      "requested_size": 400,
+      "cold_boxes": 36,
+      "groups": [
+        {
+          "count": 21,
+          "frames": [
+            "main",
+            "std::sys::backtrace::__rust_begin_short_backtrace::<F<{safe}, {abi Rust}, std::process::ExitCode>, std::process::ExitCode>",
+            "qjs::main",
+            "qjs::run_repl",
+            "qjs_runtime::eval_classified_with_resolver",
+            "<qjs_runtime::bytecode::vm::Vm>::new",
+            "qjs_runtime::builtins::initialize_builtins",
+            "<qjs_runtime::value::object::ObjectRef>::set_to_string_tag",
+            "<core::cell::once::OnceCell::<alloc::boxed::Box::<qjs_runtime::value::object::ObjectColdData>>>::try_init::<<core::cell::once::OnceCell::<alloc::boxed::Box::<qjs_runtime::value::object::ObjectColdData>>>::get_or_init::<<alloc::boxed::Box::<qjs_runtime::value::object::ObjectColdData> as core::default::Default>::default>::{closure}, !>"
+          ]
+        },
+        {
+          "count": 13,
+          "frames": [
+            "main",
+            "std::sys::backtrace::__rust_begin_short_backtrace::<F<{safe}, {abi Rust}, std::process::ExitCode>, std::process::ExitCode>",
+            "qjs::main",
+            "qjs::run_repl",
+            "qjs_runtime::eval_classified_with_resolver",
+            "<qjs_runtime::bytecode::vm::Vm>::new",
+            "qjs_runtime::builtins::initialize_builtins",
+            "<qjs_runtime::value::object::ObjectRef>::define_symbol_property",
+            "<core::cell::once::OnceCell::<alloc::boxed::Box::<qjs_runtime::value::object::ObjectColdData>>>::try_init::<<core::cell::once::OnceCell::<alloc::boxed::Box::<qjs_runtime::value::object::ObjectColdData>>>::get_or_init::<<alloc::boxed::Box::<qjs_runtime::value::object::ObjectColdData> as core::default::Default>::default>::{closure}, !>"
+          ]
+        },
+        {
+          "count": 1,
+          "frames": [
+            "main",
+            "std::sys::backtrace::__rust_begin_short_backtrace::<F<{safe}, {abi Rust}, std::process::ExitCode>, std::process::ExitCode>",
+            "qjs::main",
+            "qjs::run_repl",
+            "qjs_runtime::eval_classified_with_resolver",
+            "<qjs_runtime::bytecode::vm::Vm>::new",
+            "qjs_runtime::builtins::initialize_builtins",
+            "qjs_runtime::symbol::define_to_string_tag_property",
+            "<qjs_runtime::value::object::ObjectRef>::define_symbol_property",
+            "<core::cell::once::OnceCell::<alloc::boxed::Box::<qjs_runtime::value::object::ObjectColdData>>>::try_init::<<core::cell::once::OnceCell::<alloc::boxed::Box::<qjs_runtime::value::object::ObjectColdData>>>::get_or_init::<<alloc::boxed::Box::<qjs_runtime::value::object::ObjectColdData> as core::default::Default>::default>::{closure}, !>"
+          ]
+        },
+        {
+          "count": 1,
+          "frames": [
+            "main",
+            "std::sys::backtrace::__rust_begin_short_backtrace::<F<{safe}, {abi Rust}, std::process::ExitCode>, std::process::ExitCode>",
+            "qjs::main",
+            "qjs::run_repl",
+            "qjs_runtime::eval_classified_with_resolver",
+            "<qjs_runtime::bytecode::vm::Vm>::new",
+            "qjs_runtime::builtins::initialize_builtins",
+            "qjs_runtime::symbol::define_well_known_iterator_alias",
+            "<qjs_runtime::value::object::ObjectRef>::define_symbol_property",
+            "<core::cell::once::OnceCell::<alloc::boxed::Box::<qjs_runtime::value::object::ObjectColdData>>>::try_init::<<core::cell::once::OnceCell::<alloc::boxed::Box::<qjs_runtime::value::object::ObjectColdData>>>::get_or_init::<<alloc::boxed::Box::<qjs_runtime::value::object::ObjectColdData> as core::default::Default>::default>::{closure}, !>"
+          ]
+        }
+      ],
+      "source_stacks_sha256": "0aab1a42340416238f78f8d61dd04b2b22c73ac82fd0d8cbc552f3e14be0ca7e"
+    },
+    "candidate": {
+      "requested_size": 408,
+      "cold_boxes": 44,
+      "groups": [
+        {
+          "count": 21,
+          "frames": [
+            "main",
+            "std::sys::backtrace::__rust_begin_short_backtrace::<F<{safe}, {abi Rust}, std::process::ExitCode>, std::process::ExitCode>",
+            "qjs::main",
+            "qjs::run_repl",
+            "qjs_runtime::eval_classified_with_resolver",
+            "<qjs_runtime::bytecode::vm::Vm>::new",
+            "qjs_runtime::builtins::initialize_builtins",
+            "<qjs_runtime::value::object::ObjectRef>::set_to_string_tag",
+            "<core::cell::once::OnceCell::<alloc::boxed::Box::<qjs_runtime::value::object::ObjectColdData>>>::try_init::<<core::cell::once::OnceCell::<alloc::boxed::Box::<qjs_runtime::value::object::ObjectColdData>>>::get_or_init::<<alloc::boxed::Box::<qjs_runtime::value::object::ObjectColdData> as core::default::Default>::default>::{closure}, !>"
+          ]
+        },
+        {
+          "count": 13,
+          "frames": [
+            "main",
+            "std::sys::backtrace::__rust_begin_short_backtrace::<F<{safe}, {abi Rust}, std::process::ExitCode>, std::process::ExitCode>",
+            "qjs::main",
+            "qjs::run_repl",
+            "qjs_runtime::eval_classified_with_resolver",
+            "<qjs_runtime::bytecode::vm::Vm>::new",
+            "qjs_runtime::builtins::initialize_builtins",
+            "<qjs_runtime::value::object::ObjectRef>::define_symbol_property",
+            "<core::cell::once::OnceCell::<alloc::boxed::Box::<qjs_runtime::value::object::ObjectColdData>>>::try_init::<<core::cell::once::OnceCell::<alloc::boxed::Box::<qjs_runtime::value::object::ObjectColdData>>>::get_or_init::<<alloc::boxed::Box::<qjs_runtime::value::object::ObjectColdData> as core::default::Default>::default>::{closure}, !>"
+          ]
+        },
+        {
+          "count": 8,
+          "frames": [
+            "main",
+            "std::sys::backtrace::__rust_begin_short_backtrace::<F<{safe}, {abi Rust}, std::process::ExitCode>, std::process::ExitCode>",
+            "qjs::main",
+            "qjs::run_repl",
+            "qjs_runtime::eval_classified_with_resolver",
+            "<qjs_runtime::bytecode::vm::Vm>::run",
+            "<qjs_runtime::bytecode::vm::Vm>::run_completion",
+            "<qjs_runtime::bytecode::vm::Vm>::run_current_activation",
+            "<qjs_runtime::bytecode::vm::Vm>::run_rare_op",
+            "<qjs_runtime::bytecode::vm::Vm>::call_direct_eval",
+            "<qjs_runtime::bytecode::vm::Vm>::call_callee_with_marker",
+            "qjs_runtime::function::call::call_function",
+            "qjs_runtime::native::call_native_function",
+            "qjs_runtime::global::native_global_eval",
+            "qjs_runtime::bytecode::eval_bytecode_with_env_ephemeral_global_lexicals",
+            "qjs_runtime::bytecode::vm::eval_function_bytecode",
+            "<qjs_runtime::bytecode::vm::Vm>::run_completion",
+            "<qjs_runtime::bytecode::vm::Vm>::run_current_activation",
+            "<qjs_runtime::bytecode::vm::Vm>::call_callee_with_marker",
+            "qjs_runtime::function::call::call_function",
+            "qjs_runtime::function::call::run_prepared_bytecode_call",
+            "qjs_runtime::bytecode::vm::eval_function_bytecode",
+            "<qjs_runtime::bytecode::vm::Vm>::run_completion",
+            "<qjs_runtime::bytecode::vm::Vm>::run_current_activation",
+            "<qjs_runtime::bytecode::vm::Vm>::op_set_prop",
+            "<qjs_runtime::bytecode::vm::Vm>::set_property_value",
+            "<qjs_runtime::bytecode::vm::Vm>::try_create_ordinary_own_data_property",
+            "<qjs_runtime::value::object::ObjectRef>::create_absent_own_data_property",
+            "<core::cell::once::OnceCell::<alloc::boxed::Box::<qjs_runtime::value::object::ObjectColdData>>>::try_init::<<core::cell::once::OnceCell::<alloc::boxed::Box::<qjs_runtime::value::object::ObjectColdData>>>::get_or_init::<<alloc::boxed::Box::<qjs_runtime::value::object::ObjectColdData> as core::default::Default>::default>::{closure}, !>"
+          ]
+        },
+        {
+          "count": 1,
+          "frames": [
+            "main",
+            "std::sys::backtrace::__rust_begin_short_backtrace::<F<{safe}, {abi Rust}, std::process::ExitCode>, std::process::ExitCode>",
+            "qjs::main",
+            "qjs::run_repl",
+            "qjs_runtime::eval_classified_with_resolver",
+            "<qjs_runtime::bytecode::vm::Vm>::new",
+            "qjs_runtime::builtins::initialize_builtins",
+            "qjs_runtime::symbol::define_to_string_tag_property",
+            "<qjs_runtime::value::object::ObjectRef>::define_symbol_property",
+            "<core::cell::once::OnceCell::<alloc::boxed::Box::<qjs_runtime::value::object::ObjectColdData>>>::try_init::<<core::cell::once::OnceCell::<alloc::boxed::Box::<qjs_runtime::value::object::ObjectColdData>>>::get_or_init::<<alloc::boxed::Box::<qjs_runtime::value::object::ObjectColdData> as core::default::Default>::default>::{closure}, !>"
+          ]
+        },
+        {
+          "count": 1,
+          "frames": [
+            "main",
+            "std::sys::backtrace::__rust_begin_short_backtrace::<F<{safe}, {abi Rust}, std::process::ExitCode>, std::process::ExitCode>",
+            "qjs::main",
+            "qjs::run_repl",
+            "qjs_runtime::eval_classified_with_resolver",
+            "<qjs_runtime::bytecode::vm::Vm>::new",
+            "qjs_runtime::builtins::initialize_builtins",
+            "qjs_runtime::symbol::define_well_known_iterator_alias",
+            "<qjs_runtime::value::object::ObjectRef>::define_symbol_property",
+            "<core::cell::once::OnceCell::<alloc::boxed::Box::<qjs_runtime::value::object::ObjectColdData>>>::try_init::<<core::cell::once::OnceCell::<alloc::boxed::Box::<qjs_runtime::value::object::ObjectColdData>>>::get_or_init::<<alloc::boxed::Box::<qjs_runtime::value::object::ObjectColdData> as core::default::Default>::default>::{closure}, !>"
+          ]
+        }
+      ],
+      "source_stacks_sha256": "c7c857b7d5f46262057ad2285c3fee6f8f15b75cdb0cea2af259e69e93357c2b"
+    }
+  },
+  "hot_Rc_objects": 102,
+  "hot_request_delta": -816,
+  "hot_class_delta": -1632,
+  "cold_request_delta": 3552,
+  "cold_class_delta": 3904,
+  "net_request_delta": 2736,
+  "net_class_delta": 2272,
+  "host_good_sizes": {
+    "128": 128,
+    "136": 144,
+    "400": 400,
+    "408": 416
+  }
+}

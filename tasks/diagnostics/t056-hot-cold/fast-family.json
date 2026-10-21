@@ -1,0 +1,18 @@
+{
+  "candidate_image_sha256": "26ed840a9cbb5bc17c2993ad7fb61380bbeab03b3a5bf39acbe220512da783fc",
+  "reference_image_sha256": "10211f836606e0c14ce5d9a427f818adda1ff2c5b1c8c7cc615860d8b2a4b57e",
+  "relative_pcs_sha256": "3c502cabc716934c4544878104dd861dd2947c3824ab5234fbd37572588a09cd",
+  "checks": {
+    "Dispatch": true,
+    "Backedge": true,
+    "Add": false,
+    "Lt": false,
+    "Update": false,
+    "Exit": false,
+    "WideLoopFrame": false,
+    "vm::Vm": false
+  },
+  "fast_family_static_pass": false,
+  "timing_eligible": false,
+  "scope": "Exact relative-PC family of the qualified120B parent; normalized equality alone is insufficient. A failure blocks prepared timing jobs and the last frozen attempt; no latency/hardware-cause inference."
+}

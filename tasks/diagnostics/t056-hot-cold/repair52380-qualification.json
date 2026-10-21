@@ -1,0 +1,469 @@
+{
+  "diagnostic_only": true,
+  "timing": false,
+  "acceptance": false,
+  "attempts_consumed": 0,
+  "candidate": "52380c2e8da94de030b7bde9dfdbe71fa9689f64",
+  "images": {
+    "base": "b0dfc65d0c026d62aa64ef3d69a089eb73b51088c84af75b44617ea2a1737f0e",
+    "parent": "10211f836606e0c14ce5d9a427f818adda1ff2c5b1c8c7cc615860d8b2a4b57e",
+    "candidate": "66dce67fd8d5dafcdcccb6b7e2ca26adf69986fc9866d89b1c4f2d79941fc309"
+  },
+  "instruction_ratios": [
+    {
+      "case": "broad/array_allocation",
+      "instructions": 1.0009152886305184,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/array_dynamic_read",
+      "instructions": 0.9919891561619791,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/array_index_of",
+      "instructions": 0.9689985983585272,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/array_read",
+      "instructions": 0.9977169645902414,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/array_write",
+      "instructions": 0.9942427394209411,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/branch_arithmetic",
+      "instructions": 0.9999653637132866,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/captured_read",
+      "instructions": 1.001852955232437,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/captured_write",
+      "instructions": 0.9905853373874587,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/closure_allocation_call",
+      "instructions": 0.9971943501915465,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/dynamic_method_call",
+      "instructions": 0.9933980499137132,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/empty_loop",
+      "instructions": 1.0000675421027534,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/function_call_reordered",
+      "instructions": 1.0017651684024582,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/function_call_two_args",
+      "instructions": 0.9999710255591873,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/global_read",
+      "instructions": 0.9999321117524228,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/local_read",
+      "instructions": 0.9999649696551617,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/many_locals_call",
+      "instructions": 1.0008821837268944,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/math_abs",
+      "instructions": 1.00006138363729,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/method_call",
+      "instructions": 0.9816026347704712,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/object_allocation",
+      "instructions": 1.000878195230348,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/plain_function_call",
+      "instructions": 1.0016928189475252,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/property_dynamic_read",
+      "instructions": 0.9268643977722906,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/property_read",
+      "instructions": 0.9975371425494888,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/property_write",
+      "instructions": 0.9944947494062456,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/string_slice",
+      "instructions": 1.0076846102977313,
+      "limit": 1.03
+    },
+    {
+      "case": "broad/top_level_function_call",
+      "instructions": 0.9867836020788737,
+      "limit": 1.03
+    },
+    {
+      "case": "development/big.js/arith",
+      "instructions": 0.9860766461672837,
+      "limit": 1.03
+    },
+    {
+      "case": "development/diff/compare",
+      "instructions": 0.9685728843202598,
+      "limit": 1.03
+    },
+    {
+      "case": "development/graphlib/paths",
+      "instructions": 1.0160895449412544,
+      "limit": 1.03
+    },
+    {
+      "case": "development/immutable/persistent",
+      "instructions": 0.9863300507477634,
+      "limit": 1.03
+    },
+    {
+      "case": "development/js-yaml/document",
+      "instructions": 1.0014633191076003,
+      "limit": 1.03
+    },
+    {
+      "case": "development/lodash/transform",
+      "instructions": 0.9888777270637842,
+      "limit": 1.03
+    },
+    {
+      "case": "development/matter-js/simulate",
+      "instructions": 0.9625885984541812,
+      "limit": 1.03
+    },
+    {
+      "case": "development/meriyah/parse",
+      "instructions": 0.9671506370046974,
+      "limit": 1.03
+    },
+    {
+      "case": "development/moment/dates",
+      "instructions": 0.9658776008045885,
+      "limit": 1.03
+    },
+    {
+      "case": "development/papaparse/csv",
+      "instructions": 0.9834821643328416,
+      "limit": 1.03
+    },
+    {
+      "case": "external/jetstream3-js-subset/cdjs",
+      "instructions": 0.9991892277841965,
+      "limit": 1.03
+    },
+    {
+      "case": "external/jetstream3-js-subset/gaussian-blur",
+      "instructions": 1.0007274428459068,
+      "limit": 1.03
+    },
+    {
+      "case": "external/jetstream3-js-subset/hash-map",
+      "instructions": 0.9951041614535966,
+      "limit": 1.03
+    },
+    {
+      "case": "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "instructions": 1.0120337268373505,
+      "limit": 1.03
+    },
+    {
+      "case": "external/jetstream3-js-subset/stanford-crypto-aes",
+      "instructions": 0.9864367607771992,
+      "limit": 1.03
+    },
+    {
+      "case": "external/kraken-1.1/ai-astar",
+      "instructions": 0.9874473868447402,
+      "limit": 1.03
+    },
+    {
+      "case": "external/kraken-1.1/audio-beat-detection",
+      "instructions": 0.9811352613200012,
+      "limit": 1.03
+    },
+    {
+      "case": "external/kraken-1.1/audio-dft",
+      "instructions": 1.0054193911726923,
+      "limit": 1.03
+    },
+    {
+      "case": "external/kraken-1.1/audio-fft",
+      "instructions": 0.9953448967788714,
+      "limit": 1.03
+    },
+    {
+      "case": "external/kraken-1.1/audio-oscillator",
+      "instructions": 1.019385235570225,
+      "limit": 1.03
+    },
+    {
+      "case": "external/kraken-1.1/imaging-darkroom",
+      "instructions": 0.9958644503345738,
+      "limit": 1.03
+    },
+    {
+      "case": "external/kraken-1.1/imaging-desaturate",
+      "instructions": 1.000999533655774,
+      "limit": 1.03
+    },
+    {
+      "case": "external/kraken-1.1/imaging-gaussian-blur",
+      "instructions": 0.9874355512648424,
+      "limit": 1.03
+    },
+    {
+      "case": "external/kraken-1.1/json-parse-financial",
+      "instructions": 0.9560458049698946,
+      "limit": 1.03
+    },
+    {
+      "case": "external/kraken-1.1/json-stringify-tinderbox",
+      "instructions": 0.970360731878368,
+      "limit": 1.03
+    },
+    {
+      "case": "external/kraken-1.1/stanford-crypto-aes",
+      "instructions": 0.9850188997474919,
+      "limit": 1.03
+    },
+    {
+      "case": "external/kraken-1.1/stanford-crypto-ccm",
+      "instructions": 1.00071333832949,
+      "limit": 1.03
+    },
+    {
+      "case": "external/kraken-1.1/stanford-crypto-pbkdf2",
+      "instructions": 0.9906921288885937,
+      "limit": 1.03
+    },
+    {
+      "case": "external/kraken-1.1/stanford-crypto-sha256-iterative",
+      "instructions": 0.9954756326711599,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/3d-cube",
+      "instructions": 0.9741998335316501,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/3d-morph",
+      "instructions": 1.002368505618188,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/3d-raytrace",
+      "instructions": 0.9981959031267029,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/access-binary-trees",
+      "instructions": 0.9867460137902645,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/access-fannkuch",
+      "instructions": 0.9842776584622668,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/access-nbody",
+      "instructions": 1.010248885035658,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/access-nsieve",
+      "instructions": 0.9954447449746087,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/bitops-3bit-bits-in-byte",
+      "instructions": 1.005245815755923,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/bitops-bits-in-byte",
+      "instructions": 1.0044820095263522,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/bitops-bitwise-and",
+      "instructions": 1.0067084393759858,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/bitops-nsieve-bits",
+      "instructions": 1.00206954475071,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/controlflow-recursive",
+      "instructions": 1.0081399753165714,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/crypto-aes",
+      "instructions": 0.9863106990718482,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/crypto-md5",
+      "instructions": 0.9998900045218052,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/crypto-sha1",
+      "instructions": 1.003746113392336,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/date-format-tofte",
+      "instructions": 0.992364981564771,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/date-format-xparb",
+      "instructions": 0.9660986247691689,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/math-cordic",
+      "instructions": 0.9893683526562008,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/math-partial-sums",
+      "instructions": 0.9926390873449659,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/math-spectral-norm",
+      "instructions": 1.015573644224826,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/regexp-dna",
+      "instructions": 0.9987658096367056,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/string-base64",
+      "instructions": 0.9923566511595943,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/string-fasta",
+      "instructions": 0.978852332097201,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/string-tagcloud",
+      "instructions": 0.9546227195975105,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/string-unpack-code",
+      "instructions": 1.0149613205156967,
+      "limit": 1.03
+    },
+    {
+      "case": "external/sunspider-1.0/string-validate-input",
+      "instructions": 1.0019094676568399,
+      "limit": 1.03
+    },
+    {
+      "case": "sentinel/capturing_closure_call",
+      "instructions": 0.9920525071011815,
+      "limit": 1.03
+    },
+    {
+      "case": "sentinel/heterogeneous_property_read",
+      "instructions": 0.822408280836152,
+      "limit": 1.03
+    },
+    {
+      "case": "sentinel/polymorphic_call_site",
+      "instructions": 0.9917149451406625,
+      "limit": 1.03
+    },
+    {
+      "case": "sentinel/prototype_method_call",
+      "instructions": 1.0060985560696252,
+      "limit": 1.03
+    },
+    {
+      "case": "sentinel/recursive_call_tree",
+      "instructions": 0.999958434132187,
+      "limit": 1.03
+    },
+    {
+      "case": "sentinel/string_key_map_churn",
+      "instructions": 0.9921711755341613,
+      "limit": 1.03
+    }
+  ],
+  "blocked": [],
+  "canonical_medians": {
+    "base": {
+      "empty": 13852893,
+      "cli_only": 8648576,
+      "external/sunspider-1.0/string-unpack-code": 1031129165,
+      "external/jetstream3-js-subset/raytrace-public-class-fields": 7391041156
+    },
+    "parent": {
+      "empty": 14866529,
+      "cli_only": 8680755,
+      "external/sunspider-1.0/string-unpack-code": 1041835941,
+      "external/jetstream3-js-subset/raytrace-public-class-fields": 7456215759
+    },
+    "candidate": {
+      "empty": 14808405,
+      "cli_only": 8715606,
+      "external/sunspider-1.0/string-unpack-code": 1044505116,
+      "external/jetstream3-js-subset/raytrace-public-class-fields": 7456067893
+    }
+  },
+  "probe_sha256": "fc411f1188ea007c2701d6e4b05be37803881355dd03743adf05a78b14e12b1e",
+  "snapshot_sha256": "3874ff8b088b7738bfbd066a1d64ffa9137879da6c8a894119e1d5d9ef72126a",
+  "producer_sha256": "a1d0845ea823b03783d8b91b6debffb657e6e91d15996db91c0bbd2294f7c242",
+  "scope": "Retired instructions only, wall fields discarded. Lead fresh exact+86 still required; PC changes are reported separately, never accepted by normalized bytes alone."
+}

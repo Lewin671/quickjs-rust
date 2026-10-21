@@ -1,0 +1,42 @@
+{
+  "runtime_commit": "5dd3a810cac6a88f6a1f86c0ef46dc68dfac47ee",
+  "canonical_image_sha256": "26ed840a9cbb5bc17c2993ad7fb61380bbeab03b3a5bf39acbe220512da783fc",
+  "local_full_gate": true,
+  "ng_fixtures": 255,
+  "test262_subset_cases": 5170,
+  "full_exact_for_this_candidate": "pending lead",
+  "runtime_CI": {
+    "id": 39685975633,
+    "conclusion": "success"
+  },
+  "owner_timing_submitted": false,
+  "attempts_consumed": 0,
+  "remaining_frozen_attempts": 1,
+  "instruction_job": "20261021T222209Z-t056-shared-key-qualification",
+  "original86_instruction_gate_pass": true,
+  "K6_image_job": "20261021T222300Z-t056-hot-cold-k6-qualification",
+  "qualified_images": 12,
+  "NG_fixtures_per_image": 255,
+  "matching_smoke_cases_per_image": 5,
+  "static_fast_family_pass": false,
+  "timing_eligible": false,
+  "last_attempt_eligible": false,
+  "guard": "prepared03/mini fail before collection; do not flip the guard or substitute older receipts",
+  "artifacts": {
+    "qualification.json": "78a311fb1a468850034d1591b802cd9e64d827a1430d7d045649fa7c2c6075b2",
+    "native-summary.json": "5a9628f0aeee9c4e89684eb7952894d97aef5badde8ae4988cbb2ccd79618ebb",
+    "relative-pcs.json": "3c502cabc716934c4544878104dd861dd2947c3824ab5234fbd37572588a09cd",
+    "displacements.json": "161d89775f59e3a6525e9a420ae34cad6cac54132e442f6249864d04db893213",
+    "fast-family.json": "4ef3fe18515ff871d51d4959d2a9c9cebcbc6e32ad6ae4053629f90812fbdfd6",
+    "events.json": "997a3c85a26e4140cecae430b49c20a34714af3502435c40415d69c092da6485",
+    "attribution.json": "38f6990418fdbf8e4b9396ff28601efe60df9dccfa8ff9344ec7f257eb49f5e5",
+    "panel/qualification.json": "993b62f8e7687fd779ea7891b26af8a23d665590371a722ceb5f3192d0b9b241",
+    "panel/producer-proof.json": "9259499948eebc01637d83a0128447c8bf969e5fa70d1a229a37982f395988fa",
+    "panel/config.json": "306f1c037c6ec41425557aa26932d8f078d9d6f63cfb5253fb7cb74b0d1f0b4e",
+    "lead/validation.json": "0807ec8182f9a33773faaea9dc9efe4e0d87473a62141ed1778468ec792238ed",
+    "panel/validation.json": "62a39dc886d910950d0ca7ff47b8a595bee838426f87fc77278d1932c2cbf0a6",
+    "header-cold-accounting.json": "918da220d0e5c1aad2ecfb428d819a0c4b25daacf55f94a5922f1ad14f577f96",
+    "lead/commands.sh": "d8b7be88a3e03ef3cbe962d4fe33c8306a3c81dca742c923a1dd7a5eeeb64ef2",
+    "render-owner.py": "8ded28ccacd0e7d87e835d8cf2a23f3a7ffca770838f9ac5acbbe8b7cb992631"
+  }
+}

@@ -1,0 +1,141 @@
+{
+  "scope": "aligned emitted memory instructions in WideLoopFrame execute; real operands and lengths, no CPU latency claim",
+  "images": {
+    "parent": {
+      "binary_sha256": "10211f836606e0c14ce5d9a427f818adda1ff2c5b1c8c7cc615860d8b2a4b57e",
+      "entry": "0x100004da0"
+    },
+    "candidate": {
+      "binary_sha256": "26ed840a9cbb5bc17c2993ad7fb61380bbeab03b3a5bf39acbe220512da783fc",
+      "entry": "0x100004d90"
+    }
+  },
+  "memory_encoding_changes": [
+    {
+      "parent": {
+        "offset": "0x838",
+        "op": "cmpb",
+        "args": "$0x0, 0x82(%r13)",
+        "bytes": 8
+      },
+      "candidate": {
+        "offset": "0x838",
+        "op": "cmpb",
+        "args": "$0x0, 0x7b(%r13)",
+        "bytes": 5
+      },
+      "length_delta": -3
+    },
+    {
+      "parent": {
+        "offset": "0xf92",
+        "op": "cmpb",
+        "args": "$0x0, 0x82(%rcx)",
+        "bytes": 7
+      },
+      "candidate": {
+        "offset": "0xf8f",
+        "op": "cmpb",
+        "args": "$0x0, 0x7b(%rcx)",
+        "bytes": 4
+      },
+      "length_delta": -3
+    },
+    {
+      "parent": {
+        "offset": "0x1ccc",
+        "op": "cmpb",
+        "args": "$0x1, 0x83(%rsi)",
+        "bytes": 7
+      },
+      "candidate": {
+        "offset": "0x1cc6",
+        "op": "cmpb",
+        "args": "$0x1, 0x7c(%rsi)",
+        "bytes": 4
+      },
+      "length_delta": -3
+    },
+    {
+      "parent": {
+        "offset": "0x1ceb",
+        "op": "cmpb",
+        "args": "$0x1, 0x83(%rdi)",
+        "bytes": 7
+      },
+      "candidate": {
+        "offset": "0x1ce2",
+        "op": "cmpb",
+        "args": "$0x1, 0x7c(%rdi)",
+        "bytes": 4
+      },
+      "length_delta": -3
+    }
+  ],
+  "all_negative_three_byte_changes": [
+    {
+      "parent": {
+        "offset": "0x838",
+        "op": "cmpb",
+        "args": "$0x0, 0x82(%r13)",
+        "bytes": 8
+      },
+      "candidate": {
+        "offset": "0x838",
+        "op": "cmpb",
+        "args": "$0x0, 0x7b(%r13)",
+        "bytes": 5
+      },
+      "length_delta": -3
+    },
+    {
+      "parent": {
+        "offset": "0xf92",
+        "op": "cmpb",
+        "args": "$0x0, 0x82(%rcx)",
+        "bytes": 7
+      },
+      "candidate": {
+        "offset": "0xf8f",
+        "op": "cmpb",
+        "args": "$0x0, 0x7b(%rcx)",
+        "bytes": 4
+      },
+      "length_delta": -3
+    },
+    {
+      "parent": {
+        "offset": "0x1ccc",
+        "op": "cmpb",
+        "args": "$0x1, 0x83(%rsi)",
+        "bytes": 7
+      },
+      "candidate": {
+        "offset": "0x1cc6",
+        "op": "cmpb",
+        "args": "$0x1, 0x7c(%rsi)",
+        "bytes": 4
+      },
+      "length_delta": -3
+    },
+    {
+      "parent": {
+        "offset": "0x1ceb",
+        "op": "cmpb",
+        "args": "$0x1, 0x83(%rdi)",
+        "bytes": 7
+      },
+      "candidate": {
+        "offset": "0x1ce2",
+        "op": "cmpb",
+        "args": "$0x1, 0x7c(%rdi)",
+        "bytes": 4
+      },
+      "length_delta": -3
+    }
+  ],
+  "source_assembly_sha256": {
+    "base-path": "6e781fdee20a36e90de32e25013846565422889a286ab113978cc8a4b65b8c12",
+    "final-path": "13cc5fd32a3a7494b09d364f2ce0e9fe32c0e3f82fbfc56ba93574dbc19492d7"
+  }
+}
