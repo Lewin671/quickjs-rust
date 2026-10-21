@@ -7,16 +7,16 @@
   `agent/t056-m1-stage2/codex`; the write-site add replay removed from stage A stays on
   `agent/t056-add-transition-replay/claude`.
 - Verified at: dfff3bb6/image3466c37a exact42672/42672, full/NG255/subset5170 and bound86 pass;
-  lead063231Z triage likely loss: global wall1.4271/instructions1.0002, unpack1.0381/1.0119.
+  lead063231Z triage global1.4271/instructions1.0002; 112221Z eight ablations done0; all11 images pass output/hot-path checks.
 - Evidence: [stage A record](archive/T056-m1-stageA-record.md),
   [allocation follow-up](archive/T056-m1-stageA-allocation-diagnosis.md),
-  [architecture review](archive/T056-architecture-review.md), [stack/startup diagnosis](archive/T056-stack-phase-diagnosis.md), [PMU/FP diagnosis](archive/T056-pmu-attribution.md), [M2 inputs](archive/T056-m2-design-inputs.md);
+  [architecture review](archive/T056-architecture-review.md), [stack/startup diagnosis](archive/T056-stack-phase-diagnosis.md), [PMU/FP diagnosis](archive/T056-pmu-attribution.md), [source bisection](archive/T056-source-bisect.md), [M2 inputs](archive/T056-m2-design-inputs.md);
   plans [`interpreter-core-v2-atoms-layouts`](performance-units/interpreter-core-v2-atoms-layouts.json) (closed),
   [`interpreter-core-v2-layout-edges`](performance-units/interpreter-core-v2-layout-edges.json).
 - Unresolved: global remains large across tested code/zone/stack phases. Stack-alias explanation rejected by lead;
   frozen stack probe still inconclusive due AA precision. Scalar bits/op list/executor agree; hardware cause unknown.
-- Next action: obtain an already authorized iMac PMU entry, then lead runs the [≤20min protocol](diagnostics/t056-pmu/README.md).
-  xctrace absent, kpc getters EPERM; no owner timing/production fix or further placement guesses; last attempt unspent.
+- Next action: lead runs the [≤25min source bisection](diagnostics/t056-bisect/README.md); bidirectional group trigger before mechanism work.
+  PMU remains blocked; no owner timing/production fix or further placement guesses; last attempt unspent.
 
 ## Goal and scope
 

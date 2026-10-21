@@ -1,0 +1,47 @@
+{
+  "diagnostic_only": true,
+  "hardware_profiled": false,
+  "timing_submitted": false,
+  "production_tree": "dfff3bb6 unchanged at 802aa51a",
+  "hunks": {
+    "a": 22,
+    "b": 6,
+    "c": 2,
+    "d": 11
+  },
+  "mock_process_calls": {
+    "trigger": 520,
+    "wrong-output": 8,
+    "timeout": 1,
+    "disturbed": 520,
+    "expired": 0,
+    "bad-hash": 0,
+    "owner": 0
+  },
+  "verified": [
+    "all source hunk reconstruction and partition completeness",
+    "exact images/receipts/source hashes",
+    "normalized bytes and numeric constants",
+    "lead-only guard",
+    "five blocks/13 roles/195 units/325 measured+195 preflight",
+    "positive and no/one-way/multiple trigger",
+    "AA/anchor/incomplete rejection",
+    "output/timeout/disturbance/hash/deadline rejection",
+    "environment/inodes/one active path",
+    "25min/DST/quiet window",
+    "rendered shell and embedded Python"
+  ],
+  "actual_byte_audit_equivalence": {
+    "aligned": true,
+    "candidate": true,
+    "base": true,
+    "plus_a": true,
+    "plus_b": true,
+    "plus_c": true,
+    "plus_d": true,
+    "minus_a": true,
+    "minus_b": true,
+    "minus_c": true,
+    "minus_d": true
+  }
+}
