@@ -143,11 +143,16 @@ impl PropertyStorage {
         self.layout.lookup(key)
     }
 
+    #[inline(always)]
+    pub(super) fn lookup_for_write(&self, key: &str) -> Option<usize> {
+        self.layout.lookup_for_write(key)
+    }
+
     /// One probe made by a mutation, counted against the one-probe rule.
     #[inline(always)]
     pub(super) fn probe_for_edit(&self, key: &str) -> Option<usize> {
         crate::diagnostics::count!(property_add_probes);
-        self.layout.lookup(key)
+        self.layout.lookup_for_write(key)
     }
 
     #[inline(always)]

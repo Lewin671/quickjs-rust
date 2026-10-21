@@ -117,7 +117,8 @@ hit per field.
 - Shapes with up to 12 fields compare field text linearly, pointer first and then bytes. There is no domain probe
   and no per-shape index.
 - Larger shapes and dictionaries keep one index keyed by atom text, so a probe hashes once. A large shape builds
-  its index after four linear probes: a shape an object only passes through while growing is probed once.
+  its index after four linear read or successful-write probes. Absent write probes do not warm or build it:
+  a following append leaves that shape. Writes still use an existing index, and a probe never repeats its lookup.
 - Append edges keep the appended field's text inline, so a hit compares the key without following the atom.
   Objects and function/array named tables use a hit as proof that the key is absent from the parent: no field
   probe precedes that hit. Misses and replacements retain the ordinary lookup path.

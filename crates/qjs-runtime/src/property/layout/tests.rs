@@ -24,6 +24,27 @@ fn appended(domain: &AtomDomain, names: &[&str]) -> Layout {
 }
 
 #[test]
+fn missing_write_probes_leave_large_shape_indexes_unallocated() {
+    let domain = AtomDomain::new();
+    let names: Vec<_> = (0..20).map(|i| format!("field{i}")).collect();
+    let refs: Vec<_> = names.iter().map(String::as_str).collect();
+    let layout = appended(&domain, &refs);
+    let shape = layout.as_shape().expect("shape");
+    for _ in 0..20 {
+        assert_eq!(layout.lookup_for_write("absent"), None);
+    }
+    assert!(shape.index.get().is_none());
+    assert_eq!(shape.unindexed_probes.get(), 0);
+    for _ in 0..=super::INDEX_AFTER_PROBES {
+        assert_eq!(layout.lookup_for_write("field19"), Some(19));
+    }
+    assert!(shape.index.get().is_some());
+    assert_eq!(layout.lookup_for_write("field0"), Some(0));
+    assert_eq!(layout.lookup_for_write("absent"), None);
+    assert_eq!(layout.lookup("field19"), Some(19));
+}
+
+#[test]
 fn equal_appends_share_one_shape_and_a_shape_is_a_stable_token() {
     let domain = AtomDomain::new();
     let _roots = domain.roots();

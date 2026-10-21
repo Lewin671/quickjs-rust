@@ -52,8 +52,9 @@ tool and artifact meanings are in [benchmarking.md](benchmarking.md).
   logger can itself change layout; confirm the uninstrumented spread and
   keep diagnostic timings out of promotion evidence. Revision-bound evidence
   belongs in [the owning task](../tasks/T038-audio-dft-variance.md).
-- **Diagnostic builds never time.** A `perf-counters` build adds work to the
-  paths it observes. Use it to count and trace.
+- **Diagnostic builds never time.** Instrumentation adds work; count and trace only.
+- **Measure the full allocation request.** Include Rc/RefCell ownership
+  headers; verify allocator classes on the host rather than rounding a payload.
 
 ## Knowing what a benchmark exercises
 

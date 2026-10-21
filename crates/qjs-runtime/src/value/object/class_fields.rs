@@ -8,7 +8,7 @@ use std::rc::Rc;
 
 use crate::{Property, Value};
 
-use super::{ObjectRef, is_array_index_key};
+use super::{Flag, ObjectRef, is_array_index_key};
 use crate::property::layout::{Attributes, Encoding, LINEAR_LOOKUP_LIMIT};
 
 impl ObjectRef {
@@ -20,7 +20,7 @@ impl ObjectRef {
         &self,
         fields: impl ExactSizeIterator<Item = (&'a Rc<str>, &'a Value)>,
     ) -> bool {
-        if self.0.string_indices_pending.get()
+        if self.0.flags.get(Flag::StringIndicesPending)
             || !self.is_extensible()
             || crate::typed_array::is_typed_array_object(self)
             || self.is_module_namespace_exotic()
@@ -41,7 +41,7 @@ impl ObjectRef {
         for (key, value) in fields {
             let property = Property::enumerable(value.clone());
             if properties.insert(key, property).is_none() {
-                added_indices += usize::from(is_array_index_key(key));
+                added_indices += u32::from(is_array_index_key(key));
             }
         }
         self.0

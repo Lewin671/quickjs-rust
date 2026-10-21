@@ -26,6 +26,7 @@ use super::{Property, Value};
 
 mod array_buffer_methods;
 mod class_fields;
+mod flags;
 mod key_order;
 mod ordered_data_builder;
 mod slot_reads;
@@ -35,6 +36,7 @@ mod typed_array_methods;
 
 use crate::property::atom::{AtomDomain, WeakAtomDomain};
 use crate::property::layout::{Attributes, BulkEdit, Encoding, Layout, layout_for_keys};
+use flags::{Flag, ObjectFlags};
 use storage::{Payload, PropertyStorage};
 
 pub(crate) use ordered_data_builder::OrderedDataPropertyBuilder;
@@ -388,27 +390,17 @@ struct ObjectData {
     /// are added and removed so `has_own_index_property` is an O(1) check; this
     /// keeps the `array[i] = x` fast path from scanning a prototype's keys on
     /// every write.
-    index_property_count: Cell<usize>,
-    extensible: Cell<bool>,
-    prototype: RefCell<Option<Prototype>>,
-    raw_json: Cell<bool>,
-    array_prototype_exotic: Cell<bool>,
-    /// Whether this object has the TypedArray internal slots. Keep the brand
-    /// outside string-keyed property storage so ordinary property reads can
-    /// reject the integer-indexed exotic path without a HashMap probe.
+    /// Valid array-index keys are 0..=u32::MAX-1, so their count fits u32.
+    index_property_count: Cell<u32>,
+    flags: ObjectFlags,
+    // Hot exotic checks keep single-byte boolean loads.
     typed_array_exotic: Cell<bool>,
+    module_namespace_exotic: Cell<bool>,
+    prototype: RefCell<Option<Prototype>>,
     /// Whether this object carries the Symbol [[SymbolData]] internal slot.
     /// Keep the primitive/boxed distinction outside string-keyed storage so
     /// ubiquitous symbol checks do not probe the property HashMap.
     symbol_brand: Cell<SymbolBrand>,
-    immutable_prototype_exotic: Cell<bool>,
-    module_namespace_exotic: Cell<bool>,
-    /// A String wrapper whose index properties are not defined yet: they are
-    /// defined, from its [[StringData]], before anything reads its property
-    /// table (`ObjectRef::properties`). Boxing a string as a sloppy
-    /// function's `this` used to define one property per code unit on every
-    /// call, which is quadratic in a method called on a long string.
-    string_indices_pending: Cell<bool>,
     cold: OnceCell<Box<ObjectColdData>>,
 }
 
@@ -647,7 +639,7 @@ fn write_existing_data(
     value: &Value,
     guard: impl FnOnce(&Value) -> bool,
 ) -> OwnDataPropertyWrite {
-    match storage.lookup(key) {
+    match storage.lookup_for_write(key) {
         Some(slot) => write_slot(storage, slot, value, guard),
         None => OwnDataPropertyWrite::NeedsSlowPath,
     }
@@ -669,14 +661,14 @@ impl fmt::Debug for ObjectRef {
             .field("symbol_properties", &symbol_property_count)
             .field("has_prototype", &self.0.prototype.borrow().is_some())
             .field("to_string_tag", &to_string_tag)
-            .field("raw_json", &self.0.raw_json.get())
+            .field("raw_json", &self.0.flags.get(Flag::RawJson))
             .field(
                 "array_prototype_exotic",
-                &self.0.array_prototype_exotic.get(),
+                &self.0.flags.get(Flag::ArrayPrototype),
             )
             .field(
                 "immutable_prototype_exotic",
-                &self.0.immutable_prototype_exotic.get(),
+                &self.0.flags.get(Flag::ImmutablePrototype),
             )
             .finish()
     }
@@ -687,7 +679,7 @@ impl ObjectRef {
     /// wrapper's pending index properties.
     #[inline(always)]
     fn properties(&self) -> &RefCell<PropertyStorage> {
-        if self.0.string_indices_pending.get() {
+        if self.0.flags.get(Flag::StringIndicesPending) {
             self.define_pending_string_indices();
         }
         &self.0.properties
@@ -697,7 +689,7 @@ impl ObjectRef {
     /// wrapper's pending index properties matter only to an index key.
     #[inline(always)]
     fn properties_for(&self, key: &str) -> &RefCell<PropertyStorage> {
-        if self.0.string_indices_pending.get() && is_array_index_key(key) {
+        if self.0.flags.get(Flag::StringIndicesPending) && is_array_index_key(key) {
             self.define_pending_string_indices();
         }
         &self.0.properties
@@ -706,7 +698,7 @@ impl ObjectRef {
     #[cold]
     #[inline(never)]
     fn define_pending_string_indices(&self) {
-        self.0.string_indices_pending.set(false);
+        self.0.flags.set(Flag::StringIndicesPending, false);
         let Some(text) = self.string_data() else {
             return;
         };
@@ -726,7 +718,7 @@ impl ObjectRef {
     /// Defers a String wrapper's index properties -- one per code unit of
     /// its [[StringData]] -- until its property table is next read.
     pub(crate) fn defer_string_indices(&self) {
-        self.0.string_indices_pending.set(true);
+        self.0.flags.set(Flag::StringIndicesPending, true);
     }
 
     /// A String wrapper's [[StringData]], read without defining its index
@@ -865,16 +857,14 @@ impl ObjectRef {
             properties: RefCell::new(storage),
             property_revision: Cell::new(0),
             layout_revision: Cell::new(0),
-            index_property_count: Cell::new(index_property_count),
-            extensible: Cell::new(true),
-            prototype: RefCell::new(prototype),
-            raw_json: Cell::new(false),
-            array_prototype_exotic: Cell::new(false),
+            index_property_count: Cell::new(
+                u32::try_from(index_property_count).expect("unique array-index keys fit u32"),
+            ),
+            flags: ObjectFlags::new(),
             typed_array_exotic: Cell::new(false),
-            symbol_brand: Cell::new(SymbolBrand::None),
-            immutable_prototype_exotic: Cell::new(false),
             module_namespace_exotic: Cell::new(false),
-            string_indices_pending: Cell::new(false),
+            prototype: RefCell::new(prototype),
+            symbol_brand: Cell::new(SymbolBrand::None),
             cold: OnceCell::new(),
         }))
     }
@@ -1045,19 +1035,19 @@ impl ObjectRef {
     }
 
     pub(crate) fn mark_raw_json(&self) {
-        self.0.raw_json.set(true);
+        self.0.flags.set(Flag::RawJson, true);
     }
 
     pub(crate) fn is_raw_json(&self) -> bool {
-        self.0.raw_json.get()
+        self.0.flags.get(Flag::RawJson)
     }
 
     pub(crate) fn mark_array_prototype_exotic(&self) {
-        self.0.array_prototype_exotic.set(true);
+        self.0.flags.set(Flag::ArrayPrototype, true);
     }
 
     pub(crate) fn is_array_prototype_exotic(&self) -> bool {
-        self.0.array_prototype_exotic.get()
+        self.0.flags.get(Flag::ArrayPrototype)
     }
 
     pub(crate) fn mark_symbol_primitive(&self) {
@@ -1077,7 +1067,7 @@ impl ObjectRef {
     }
 
     pub(crate) fn mark_immutable_prototype_exotic(&self) {
-        self.0.immutable_prototype_exotic.set(true);
+        self.0.flags.set(Flag::ImmutablePrototype, true);
     }
 
     pub(crate) fn mark_module_namespace_exotic(&self) {
@@ -1199,10 +1189,10 @@ impl ObjectRef {
         if same_prototype_slot(self.0.prototype.borrow().as_ref(), prototype.as_ref()) {
             return Ok(());
         }
-        if self.0.immutable_prototype_exotic.get() {
+        if self.0.flags.get(Flag::ImmutablePrototype) {
             return Err(());
         }
-        if !self.0.extensible.get() {
+        if !self.0.flags.get(Flag::Extensible) {
             return Err(());
         }
         if prototype
@@ -1241,10 +1231,10 @@ impl ObjectRef {
             }
             return;
         }
-        if !self.0.extensible.get() {
+        if !self.0.flags.get(Flag::Extensible) {
             return;
         }
-        if self.0.array_prototype_exotic.get()
+        if self.0.flags.get(Flag::ArrayPrototype)
             && let Some(index) = array_index_property_key(&key)
             && let Some(length_slot) = properties.lookup("length")
             && properties
@@ -1287,7 +1277,7 @@ impl ObjectRef {
     /// Returns `false` for a receiver whose creation has side effects this
     /// shortcut does not perform, leaving it to `set_shared_key`.
     pub(crate) fn create_absent_own_data_property(&self, key: Rc<str>, value: Value) -> bool {
-        if self.0.array_prototype_exotic.get() || !self.0.extensible.get() {
+        if self.0.flags.get(Flag::ArrayPrototype) || !self.0.flags.get(Flag::Extensible) {
             return false;
         }
         let establishes_realm_identity = key.as_ref() == "globalThis"
@@ -1390,11 +1380,11 @@ impl ObjectRef {
     }
 
     pub(crate) fn is_extensible(&self) -> bool {
-        self.0.extensible.get()
+        self.0.flags.get(Flag::Extensible)
     }
 
     pub(crate) fn prevent_extensions(&self) {
-        self.0.extensible.set(false);
+        self.0.flags.set(Flag::Extensible, false);
     }
 
     pub(crate) fn seal(&self) {
@@ -1424,7 +1414,7 @@ impl ObjectRef {
     }
 
     pub(crate) fn is_sealed(&self) -> bool {
-        !self.0.extensible.get()
+        !self.0.flags.get(Flag::Extensible)
             && self
                 .properties()
                 .borrow()
@@ -1449,7 +1439,7 @@ impl ObjectRef {
     }
 
     pub(crate) fn is_frozen(&self) -> bool {
-        !self.0.extensible.get()
+        !self.0.flags.get(Flag::Extensible)
             && self.properties().borrow().all_attributes(|attributes| {
                 !attributes.is_configurable() && !attributes.is_writable()
             })
@@ -1497,7 +1487,7 @@ impl ObjectRef {
         }
         let result = {
             let mut storage = self.properties_for(key).borrow_mut();
-            let slot = storage.lookup(key)?;
+            let slot = storage.lookup_for_write(key)?;
             write_slot(&mut storage, slot, value, |_| true)
         };
         if matches!(result, OwnDataPropertyWrite::Written) {

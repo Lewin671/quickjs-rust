@@ -62,12 +62,27 @@ fn ordinary_object_keeps_cold_state_unallocated() {
     assert!(object.own_property_symbols().is_empty());
     assert!(object.to_string_tag().is_none());
     assert!(object.0.cold.get().is_none());
-    // One layout pointer beside a keyless payload: the layout owns every
-    // name, so an object stays within fifteen machine words. The one-byte
-    // flags stay unpacked: packing them into a `Cell<u16>` frees six bytes
-    // that alignment pads back, so the object would still be 120 bytes.
-    assert!(mem::size_of::<ObjectData>() <= 120);
+    // The u32 index count and shared boolean byte recover one whole header
+    // word; packing flags alone would leave alignment padding unchanged.
+    assert!(mem::size_of::<ObjectData>() <= 112);
     assert!(mem::size_of::<std::cell::RefCell<super::PropertyStorage>>() <= 56);
+}
+
+#[test]
+fn array_index_count_tracks_only_unique_keys_in_the_u32_range() {
+    let object = ObjectRef::new(HashMap::from([
+        ("0".to_owned(), Value::Number(1.0)),
+        ("4294967294".to_owned(), Value::Number(2.0)),
+        ("4294967295".to_owned(), Value::Number(3.0)),
+    ]));
+    assert_eq!(object.0.index_property_count.get(), 2);
+    object.set("4294967294".to_owned(), Value::Number(4.0));
+    assert_eq!(object.0.index_property_count.get(), 2);
+    assert!(object.delete_own_property("4294967294"));
+    assert_eq!(object.0.index_property_count.get(), 1);
+    object.set("4294967294".to_owned(), Value::Number(5.0));
+    assert_eq!(object.0.index_property_count.get(), 2);
+    assert_eq!(object.get("4294967295"), Some(Value::Number(3.0)));
 }
 
 #[test]

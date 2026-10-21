@@ -506,6 +506,24 @@ impl Shape {
         index.get(key).map(|&slot| slot as usize)
     }
 
+    /// A failed write probe normally appends and leaves this shape. Do not
+    /// build an index on that transient layout; successful repeated writes
+    /// warm the same lazy index as reads, without probing a second time.
+    #[inline(never)]
+    fn first_write_lookups(&self, key: &str) -> Option<usize> {
+        let slot = self
+            .fields
+            .iter()
+            .position(|field| text_matches(field.text(), key))?;
+        let probes = self.unindexed_probes.get();
+        if probes < INDEX_AFTER_PROBES {
+            self.unindexed_probes.set(probes + 1);
+        } else {
+            self.index.get_or_init(|| build_index(&self.fields));
+        }
+        Some(slot)
+    }
+
     /// Whether this shape has exactly `encoding` and `fields`.
     fn has_content(&self, encoding: Encoding, fields: &[Field]) -> bool {
         crate::diagnostics::count!(property_field_vector_compares);
@@ -734,6 +752,18 @@ impl LayoutNode {
                 dictionary.index.get(key).map(|&slot| slot as usize)
             }
         }
+    }
+
+    /// Resolves a write slot without warming a shape index on an absent key.
+    #[inline]
+    pub(crate) fn lookup_for_write(&self, key: &str) -> Option<usize> {
+        if let Self::Shape(shape) = self
+            && shape.fields.len() > LINEAR_LOOKUP_LIMIT
+            && shape.index.get().is_none()
+        {
+            return shape.first_write_lookups(key);
+        }
+        self.lookup(key)
     }
 
     /// Slots in enumeration order, including unordered keys' slots for a

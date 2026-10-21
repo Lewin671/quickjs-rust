@@ -18,7 +18,7 @@ use super::{
     Class, DeoptSite, MAX_NATIVE_ITERATIONS, REGISTER_FILE, Typed, TypedLoopProgram,
     TypedLoopScratch, TypedOp,
 };
-use crate::Value;
+use crate::{ObjectRef, Value};
 
 /// Runs the program covering the backedge at `ip`, if one exists and this
 /// frame admits it. Returns whether the loop was executed natively.
@@ -1379,20 +1379,28 @@ fn get_named_typed(
     intrinsics: &Intrinsics,
     env: &crate::function::CallEnv,
 ) -> Option<Typed> {
-    // Literal hits are a regular typed read, not a cold resolution. Keep
-    // their numeric payload in this helper, avoiding get_named_object's
-    // owned Value ABI/clone/drop round trip. Layout misses keep the full path.
     if let Value::Object(object) = receiver {
-        for (shape, slot) in shapes.entries() {
-            if let Some(number) = object.literal_data_slot_number(shape, *slot) {
-                return Some(Typed::Number(number));
-            }
+        return get_named_object_typed(object, name, shapes);
+    }
+    let value = get_named(receiver, name, shapes, intrinsics, Some(env));
+    value.as_ref().and_then(Typed::from_value)
+}
+
+// Keep the literal loop's saved registers off non-object reads (notably an
+// array's length). The adapter above can tail-call this object-only path.
+#[inline(never)]
+fn get_named_object_typed(
+    object: &ObjectRef,
+    name: &Rc<str>,
+    shapes: &mut super::ShapeWays,
+) -> Option<Typed> {
+    // Numeric literal hits avoid the owned Value ABI/clone/drop round trip.
+    for (shape, slot) in shapes.entries() {
+        if let Some(number) = object.literal_data_slot_number(shape, *slot) {
+            return Some(Typed::Number(number));
         }
     }
-    let value = match receiver {
-        Value::Object(object) => get_named_object(object, name, shapes),
-        _ => get_named(receiver, name, shapes, intrinsics, Some(env)),
-    };
+    let value = get_named_object(object, name, shapes);
     value.as_ref().and_then(Typed::from_value)
 }
 

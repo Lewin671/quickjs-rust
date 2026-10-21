@@ -1,17 +1,13 @@
 # T056 stage A: aligned scalar scratch and literal numeric reads
 
-- Status: production follow-up implemented on the stage-A branch; local verification
-  complete, no new acceptance attempt or wall result.
-- Implementation: safe 4096-aligned scalar backing, existing program-local pool;
-  literal numeric cache hits copy f64 directly, with the full fallback retained.
-- Verified at: 8f7d97c7 / canonical b0b84489 (committed reproduction043657Z); local full
-  gate, NG255, strict pin and86/86 pass. Old d130 exact does not cover this image.
-- Evidence: [data diagnosis](T056-m1-stageA-data-diagnosis.md), completed
-  job20261021T040650Z and the source/image identities below.
-- Unresolved: new image exact correctness, bound pre-gate and diagnostic wall
-  triage remain lead work; unpack has no demonstrated causal fix.
-- Next action: lead runs the new correctness -> bound86 -> diagnostic triage
-  packet. Attempt1/2 remains spent; one remains across A+B, no automatic K=6.
+- Status:8f lead chain complete; local/branch/heterogeneous improved, unpack remains a wall blocker.
+- Implementation: aligned scalar bank and literal numeric reads are present on the owner branch;
+  the [allocation/adapter follow-up](T056-m1-stageA-allocation-diagnosis.md) supersedes this image.
+- Verified at:8f7d97c7 / b0b84489, exact42672/42672, bound86 pass and diagnostic T061 unclear.
+- Evidence: data probe below and completed chain/outcomes at the end of this record.
+- Unresolved:8f unpack/class-fields intervals cross the last-screen1.025 budget; no acceptance claim.
+- Next action: lead verifies the new allocation-follow-up image, not this historical packet;
+  one attempt remains across A+B, no owner timing or automatic K=6.
 
 ## Completed data probe
 
@@ -177,11 +173,43 @@ branch. Manual full gate passed before push; QJS_SKIP_PRE_PUSH=1 avoided
 rerunning the same full gate, while the commit hook ran the fast gate.
 CI39544991941 was running at preparation, not claimed green.
 
-The lead packet at workspace `tmp/t056-m1a-aligned-verify` binds the new
-runtime commit, canonical SHA and helper SHA, preserving the original86-case
-policy, full pinned exact corpus and all27 previous triage cases plus spectral-norm (new maximum1.027396),
-28 total, all19 native controls retained. This adds a diagnostic focus, not
-a frozen payoff target or threshold change.
-Correctness must finish done0/no DISTURBED before bound86, then lead-only
-triage may run. Old d130 receipts cannot satisfy this chain; no owner timing
-or main integration is performed.
+The historical workspace packet `tmp/t056-m1a-aligned-verify` completed the
+chain below; keep its8f helper/receipts for audit. The allocation follow-up
+requires a fresh image-bound chain, not a rerun of this packet. No owner
+timing or main integration was performed.
+
+## Completed8f lead chain and wall outcome
+
+All20261021 jobs are done0/no DISTURBED:044015Z-t056-m1a-aligned-correctness
+(full gate/NG255/subset5170,8 exact shards cover53572 pinned paths once,
+42672/42672 Rust pass, zero actionable gap),050305Z-t056-m1a-aligned-pregate86
+(86/86),050618Z-t056-m1a-aligned-triage (28 cases,5 pairs/workers4, unclear).
+Exact artifact hashes and original helper binding are verified; entry appended
+once to burndown, attributed only to8f. Triage command296.43s/end-to-end357.55s.
+Request SHA f5087aad44b81e20affdc06582509ce92886a32cc41c5a08b2445ee50dfa7066;
+result SHA460074f1391158e84e85b55f9f8cb8afafab2f6885dd2ef4d77d140be4e6faf5.
+
+| Case | wall C/B [exploratory95% interval] | instructions |
+| --- | ---: | ---: |
+| broad/local_read | 0.957600 [0.950734,0.969616] | 0.999994 |
+| broad/branch_arithmetic | 0.943738 [0.924480,0.953092] | 0.999953 |
+| broad/global_read | 1.004352 [0.982558,1.013693] | 0.999963 |
+| sentinel/heterogeneous_property_read | 0.834420 [0.805451,0.882499] | 0.819868 |
+| broad/property_dynamic_read | 0.957875 [0.904988,0.969385] | 0.925153 |
+| external/sunspider-1.0/string-unpack-code | 1.038892 [1.030490,1.052842] | 1.001596 |
+| external/jetstream3-js-subset/raytrace-public-class-fields | 1.025091 [1.015894,1.042165] | 1.014848 |
+| broad/string_slice | 1.031619 [0.978114,1.132330] | 1.012314 |
+| external/sunspider-1.0/bitops-bitwise-and | 1.020088 [0.946764,1.078841] | 1.009472 |
+| external/sunspider-1.0/access-nbody | 1.011029 [0.953847,1.021272] | 1.012094 |
+| external/sunspider-1.0/math-spectral-norm | 1.013779 [0.997174,1.025112] | 1.027216 |
+| development/meriyah/parse | 0.935060 [0.921361,0.966926] | 0.966639 |
+| development/moment/dates | 0.959922 [0.899018,0.967743] | 0.965201 |
+| development/diff/compare | 0.977204 [0.925647,1.016800] | 0.966836 |
+| external/kraken-1.1/json-parse-financial | 0.950354 [0.949134,0.965093] | 0.958707 |
+
+The old global_read0.905768 gain does **not** survive:8f is1.004. Treat the
+old result as placement-sensitive, not a durable execution gain. This is
+consistent with allocation/placement effects; the combined changes do not
+isolate an exact microarchitectural cause. The local/branch/heterogeneous
+improvements do not excuse unpack1.0389 or the other broad intervals. The
+last K=6 attempt remains unspent; these are diagnostics, not acceptance.

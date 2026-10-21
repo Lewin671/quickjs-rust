@@ -1,25 +1,24 @@
 # T056: Interpreter core v2
 
-- Status: active; M1 stage 1 integrated into main (`ab9c29b6`); the M1.2 shape `873c9bc5`
-  was rejected on its sole screen and is closed; its replacement is frozen as plan
-  [`interpreter-core-v2-layout-edges`](performance-units/interpreter-core-v2-layout-edges.json); stage A is
-  implemented on `agent/t056-m1-stage-a/claude` (plan `50b42547`); valid K=6 failure of `0a9af81b` spent
-  attempt 1/2. Its numeric-slot/codegen follow-up is present; one attempt remains across A+B.
+- Status: active; M1 stage1 on main (`ab9c29b6`); M1.2 closed. Replacement plan
+  [`interpreter-core-v2-layout-edges`](performance-units/interpreter-core-v2-layout-edges.json) is implemented
+  as stage A on `agent/t056-m1-stage-a/claude`. Valid0a9af81b K=6 spent attempt1/2; one remains across A+B.
 - Implementation: stage 1 on main. Stage A on its branch, not on main; the rejected M1.2 candidate stays on
   `agent/t056-m1-stage2/codex`; the write-site add replay removed from stage A stays on
   `agent/t056-add-transition-replay/claude`.
-- Verified at: d130 exact42,672/42,672 and bound86 pass; completed data probe040650Z has540/540 units,
-  no DISTURBED. Aligned/literal8f7d97c7 / b0b84489 (committed reproduction043657Z) passes local full/NG255/subset5170 and86/86; new exact/wall pending.
+- Verified at:8f7d97c7 exact42672/42672 and bound86 pass; lead triage improves local/branch/heterogeneous,
+  but unpack1.0389 remains. Allocation follow-up source f84fec3c+065fb10d / image3466c37a passes full/NG255/subset5170/86.
 - Evidence: [part 1](archive/T056-unit0-part1-evidence.md), [part 2](archive/T056-unit0-part2-evidence.md),
   [M1 stage 1](archive/T056-m1-stage1-evidence.md), [M1.2 rejection](archive/T056-m1-stage2-evidence.md),
   [M1.2 diagnosis](archive/T056-m1-stage2-diagnosis.md), [stage A record](archive/T056-m1-stageA-record.md),
-  [codegen](archive/T056-m1-stageA-codegen-diagnosis.md), [data/launch diagnosis](archive/T056-m1-stageA-data-diagnosis.md), [aligned scratch](archive/T056-m1-stageA-aligned-scratch.md), [M2 inputs](archive/T056-m2-design-inputs.md);
+  [codegen](archive/T056-m1-stageA-codegen-diagnosis.md), [data/launch diagnosis](archive/T056-m1-stageA-data-diagnosis.md), [aligned scratch](archive/T056-m1-stageA-aligned-scratch.md),
+  [allocation follow-up](archive/T056-m1-stageA-allocation-diagnosis.md), [M2 inputs](archive/T056-m2-design-inputs.md);
   plans [`interpreter-core-v2-atoms-layouts`](performance-units/interpreter-core-v2-atoms-layouts.json) (closed),
   [`interpreter-core-v2-layout-edges`](performance-units/interpreter-core-v2-layout-edges.json).
-- Unresolved: new image wall and full exact remain unverified; unpack has ranked hypotheses, no causal fix.
-  Probe supports allocation/launch sensitivity, not proven cache-line/4K aliasing; arm64 unmeasured.
-- Next action: lead runs new image correctness -> bound86 -> diagnostic triage; no owner timing or final K=6;
-  the last attempt remains unspent.
+- Unresolved: new-image full exact/wall pending; slice allocations unchanged, unpack instructions1.0119.
+  Global's old0.906 gain did not survive (8f1.004); no durable gain claimed. Arm64 timing unmeasured.
+- Next action: lead runs fresh allocation-image correctness -> bound86 -> diagnostic triage;
+  no owner timing/final K=6; the last attempt remains unspent.
 
 ## Goal and scope
 
