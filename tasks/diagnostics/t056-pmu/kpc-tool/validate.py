@@ -3,12 +3,13 @@ import ast,contextlib,copy,datetime,hashlib,io,json,os,runpy,stat,subprocess,sys
 from pathlib import Path
 from unittest.mock import patch
 ROOT=Path(__file__).resolve().parent;REPO=ROOT.parents[3];os.chdir(REPO);sys.path[:0]=[str(ROOT),str(REPO)]
-import protocol as p,counters,render,chain_common as chain
+import protocol as p,counters,recovery,render,chain_common as chain
 from tools.benchmark import screen as s
 from tools.benchmark.process import ProcessResult
 from tools.benchmark.layout_policy import load_policy
 read=lambda f:json.loads(Path(f).read_text());sha=lambda f:hashlib.sha256(Path(f).read_bytes()).hexdigest()
-queue=REPO.parents[2]/'outputs/imac-bench';cfg=read(ROOT/'config-v3.json');source=queue/cfg['qualification_job']/'out';report=read(source/'qualification.json');groups=read(ROOT/'groups-v3.json')['groups']
+queue=REPO.parents[2]/'outputs/imac-bench';cfg=read(ROOT/'config-v3-retry1.json');source=queue/cfg['qualification_job']/'out';report=read(source/'qualification.json');groups=read(ROOT/'groups-v3.json')['groups']
+assert sha(ROOT/'run-v3-initial.jsonl')==read(ROOT/'run-v3-diagnosis.json')['raw_sha256']==cfg['initial_run_raw_sha256']
 assert not report['privileged_run'] and not report['install_performed'] and not report['hardware_counter_evidence']
 assert sha(source/'qjs-kpc')==cfg['helper_sha256'] and sha(source/'qualification.json')==cfg['qualification_sha256']
 for name,h in report['source_sha256'].items():
@@ -30,6 +31,10 @@ for f in ROOT.glob('*.py'):ast.parse(f.read_text(),filename=str(f))
 script=render.render();subprocess.run(['bash','-n'],input=script,text=True,check=True);tree=ast.parse(script.split("<<'T056_WINDOW'\n",1)[1].rsplit('\nT056_WINDOW',1)[0]);body=next(ast.literal_eval(n.value) for n in tree.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='body' for t in n.targets));subprocess.run(['bash','-n'],input=body,text=True,check=True)
 subprocess.run(['sh','-n',str(ROOT/'install-user.sh')],check=True)
 assert cfg['throughput']['budgeted_seconds']<p.COLLECT_SECONDS<840<890<p.JOB_SECONDS==900
+assert p.PLANNED_CAPTURES==2*len(groups)*len(p.CASES)*len(p.ROLES)*p.BLOCKS==352
+assert p.MAX_INVALID_OBSERVATIONS==int(p.PLANNED_CAPTURES*p.MAX_INVALID_FRACTION)==17
+assert cfg['throughput']['retry_extra_calls_max']==2*p.MAX_INVALID_OBSERVATIONS==34
+assert cfg['throughput']['retry_seconds_limit']==p.RETRY_SECONDS==68
 # Root exec boundary and forbidden shell APIs are checked in addition to clang analysis.
 code=(ROOT/'process.c').read_text();assert code.index('drop_identity(uid,gid)')<code.index('execve(argv[0]') and 'close_extra()' in code
 assert all(not arg.endswith('/aggregate.c') for arg in report['build']['argv'])
@@ -40,12 +45,14 @@ for f in ROOT.glob('*.c'):
 policy_unit=read(chain.PLAN);policy=load_policy(Path(policy_unit['layout_gate']['policy_path']),policy_unit['layout_gate']['policy_sha256'],live=False)
 with patch.dict(os.environ,{'BENCH_QUEUE':str(queue)}):chain.correctness(cfg['correctness_job']);chain.pregate(cfg['pregate_job'],policy)
 assert sha(chain.PLAN)==chain.UNIT_HASH
+subprocess.run([sys.executable,str(ROOT/'recovery-unit.py')],check=True)
 simulations={}
-for mode in ('success','uninstalled','permission','wrong-uid','bad-output','bad-counters','bad-idle','bad-percpu','scope','expired','timeout','disturbed'):
+success_modes=('success','integrity-once','integrity-second','positive-jump','failures17')
+for mode in ('success','uninstalled','permission','wrong-uid','bad-output','bad-counters','bad-idle','bad-percpu','scope','expired','timeout','disturbed','integrity-once','integrity-second','positive-jump','failures17','failures18','integrity-exhausted','config-change','cleanup-failure','unexplained-integrity'):
  with tempfile.TemporaryDirectory(prefix='.simulation-',dir=ROOT) as temp:
   out=Path(temp)/'out';out.mkdir();(out.parent/'status').write_text('running 2026-10-21T00:00:00Z');(out/'config.json').write_text(json.dumps(cfg))
   for name in cfg['files']:(out/name).write_bytes((ROOT/('groups-v3.json' if name=='groups.json' else name)).read_bytes())
-  helper=source/'qjs-kpc' if mode!='uninstalled' else Path(temp)/'missing';realstat=Path.stat;calls=[]
+  helper=source/'qjs-kpc' if mode!='uninstalled' else Path(temp)/'missing';realstat=Path.stat;calls=[];seen={};injected=[0]
   def patched_stat(self,*args,**kw):
    v=realstat(self,*args,**kw)
    if self==helper:
@@ -55,6 +62,7 @@ for mode in ('success','uninstalled','permission','wrong-uid','bad-output','bad-
    assert 0<timeout<=26;calls.append(argv)
    if argv[0]!='/usr/bin/sudo':
     n=int(argv[-1]);return ProcessResult(started_at='SIMULATED',timer_started_ns=0,timer_finished_ns=100000000,duration_ns=100000000,exit_code=0,timed_out=False,stdout=s.RESULT_PREFIX+json.dumps({'operations':n,'checksum':n})+'\n',stderr='',stdout_truncated=False,stderr_truncated=False)
+   status=0
    separator=max(i for i,x in enumerate(argv) if x=='--');target=argv[separator+1:]
    if target[0]=='/usr/bin/id':value={'counter_backend':'kpep_programmable_user','capture_complete':True,'cleanup_ok':True,'configuration_readback_verified':True,'child_status':0,'child_stdout':str(os.getuid()+int(mode=='wrong-uid'))+'\n'}
    elif target[0]=='/usr/bin/env':value={'counter_backend':'kpep_programmable_user','capture_complete':True,'cleanup_ok':True,'configuration_readback_verified':True,'child_status':0,'child_stdout':'TZ=UTC\nLC_ALL=C\n'}
@@ -71,7 +79,27 @@ for mode in ('success','uninstalled','permission','wrong-uid','bad-output','bad-
     value={'version':'qjs-kpc-3','counter_backend':'kpep_programmable_user','capture_complete':True,'cleanup_ok':True,'child_status':0,'timed_out':False,'counters_valid':mode!='bad-counters','configuration_readback_verified':True,'encoding_crosswalk_applied':True,'scope':'system_wide_user_cpu_delta' if mode!='scope' else 'pid_scoped','pid_filtered':False,'full_lifetime_counts':False,'config':g['description']['config'],'readback':g['description']['config'],'events':events,'cycles':events[0]['count'],'instructions':events[1]['count'],'cpu_count':2,'counter_count':4,'snapshots':{'before':shot(1000000,[0]*4),'after':shot(101000000,vectors),'idle_before':shot(102000000,[0]*4),'idle_after':shot(202000000 if mode!='bad-idle' else 302000000,idle)},'child_window_ns':100000000,'idle_window_ns':100000000,'elapsed_ns':400000000,'child_stdout':s.RESULT_PREFIX+json.dumps({'operations':n,'checksum':n})+'\n'}
     if mode=='bad-percpu':value['events'][0]['per_cpu'][0]+=1
     if mode=='bad-output' and role=='candidate':value['child_stdout']='WRONG\n'
-   return ProcessResult(started_at='SIMULATED',timer_started_ns=0,timer_finished_ns=100000000,duration_ns=100000000,exit_code=1 if mode=='permission' else 0,timed_out=mode=='timeout',stdout=json.dumps(value),stderr='',stdout_truncated=False,stderr_truncated=False)
+    unit=(g['id'],target[-2],role);seen[unit]=seen.get(unit,0)+1
+    first=seen[unit]==(2 if mode=='integrity-second' else 1)
+    limit=17 if mode=='failures17' else 18 if mode=='failures18' else 1
+    inject=(mode in ('integrity-once','integrity-second','positive-jump','failures17','failures18') and first and injected[0]<limit) or mode=='integrity-exhausted'
+    status=0
+    if inject:
+     injected[0]+=1
+     if mode=='positive-jump':
+      index=0;value['snapshots']['after']['per_cpu'][0][index]+=2**48
+      value['events'][index]['count']+=2**48;value['events'][index]['per_cpu'][0]+=2**48;value['cycles']+=2**48
+     else:
+      value.update(capture_complete=False,counters_valid=False,failed_step='read.delta_integrity',failed_return=100,failed_errno=0,cycles=None,instructions=None);status=1
+      value['snapshots']['before']['per_cpu'][0][1]=2**48-1000
+      for event in value['events']:event.update(count=None,idle_count=None,per_cpu=[None,None],idle_per_cpu=[None,None])
+    if mode=='config-change':value['readback']=['0']*4
+    if mode=='cleanup-failure':value['cleanup_ok']=False
+    if mode=='unexplained-integrity':
+     for event in value['events']:event.update(count=None,idle_count=None,per_cpu=[None,None],idle_per_cpu=[None,None])
+     value.update(capture_complete=False,counters_valid=False,failed_step='read.delta_integrity',failed_return=100,failed_errno=0,cycles=None,instructions=None);status=1
+
+   return ProcessResult(started_at='SIMULATED',timer_started_ns=0,timer_finished_ns=100000000,duration_ns=100000000,exit_code=1 if mode=='permission' else status,timed_out=mode=='timeout',stdout=json.dumps(value),stderr='',stdout_truncated=False,stderr_truncated=False)
   monitor=types.SimpleNamespace(snapshot=lambda:{'text':'00:00:00 250 intruder\n' if mode=='disturbed' else '','anchor':datetime.datetime(2026,10,21,tzinfo=datetime.timezone.utc).timestamp()})
   with contextlib.ExitStack() as st:
    st.enter_context(patch.dict(os.environ,{'BENCH_OUT':str(out),'BENCH_QUEUE':str(queue)}));st.enter_context(patch.object(p,'HELPER',str(helper)));st.enter_context(patch.object(Path,'stat',patched_stat));st.enter_context(patch('tools.benchmark.layout_identity.host_identity',return_value={'hardware':'iMac20,1','cpu':'i7-10700'}));st.enter_context(patch('tools.benchmark.layout_policy.load_policy',return_value=policy));st.enter_context(patch('tools.benchmark.measure_lock.measurement_lock',return_value=contextlib.nullcontext()));st.enter_context(patch('tools.benchmark.process.run_process',side_effect=fake));st.enter_context(patch('tools.benchmark.pair_disturbance.Monitor.from_queue',return_value=monitor))
@@ -79,10 +107,18 @@ for mode in ('success','uninstalled','permission','wrong-uid','bad-output','bad-
    try:
     with contextlib.redirect_stdout(io.StringIO()):runpy.run_path(str(ROOT/'collect.py'))
    except (AssertionError,RuntimeError,s.ScreenError):
-    if mode=='success':raise
-   else:assert mode=='success',mode
-  if mode=='success':
-   assert len(calls)==362 and read(out/'complete.json')['measured_execs']==352
+    if mode in success_modes:raise
+   else:assert mode in success_modes,mode
+  if mode in success_modes:
+   assert len(calls)==362+(2 if mode=='integrity-second' else 17 if mode=='failures17' else 1 if mode in ('integrity-once','positive-jump') else 0) and read(out/'complete.json')['measured_execs']==352
+   quality=read(out/'quality.json');assert quality['invalid_observations']==injected[0]
+   audit=[json.loads(line) for line in (out/'observations.jsonl').read_text().splitlines()];assert sum(row['outcome']=='invalid_observation' for row in audit)==injected[0]
+   assert len([row for row in audit if row['outcome']=='accepted_pair'])==176
+   if mode=='integrity-second':
+    assert audit[0]['abandoned_valid_sizes']==['N'] and audit[1]['attempt']==2
+    raw=[json.loads(line) for line in (out/'raw.jsonl').read_text().splitlines() if json.loads(line)['phase']=='measured']
+    assert [row['unit_attempt'] for row in raw[:4]]==[1,1,2,2]
+    assert raw[0]['argv']==raw[2]['argv'] and raw[1]['argv']==raw[3]['argv']
    rows=read(out/'rows.json');assert len(rows)==22
    noisy=copy.deepcopy(rows[0]['samples']['base'])
    for sample in noisy.values():
@@ -93,4 +129,4 @@ for mode in ('success','uninstalled','permission','wrong-uid','bad-output','bad-
   else:assert not (out/'complete.json').exists()
   if mode in ('uninstalled','expired'):assert not calls
   simulations[mode]=len(calls)
-(ROOT/'validation-v3.json').write_text(json.dumps({'diagnostic_only':True,'privileged_execution_performed':False,'installation_performed':False,'hardware_evidence':False,'nonroot_tool_receipt':cfg['qualification_job'],'crosswalk_events':21,'version':'qjs-kpc-3','groups':11,'mock_calls':simulations,'scope':'354 fake helper calls and8 nonprivileged warmups exercise real collector. Actual counting backend is compile/static/API-mock qualified; root all-CPU getter awaits user install/smoke. System-wide, not child/PID attribution.','checks':['C/H/qualifier and binary seals','clang warnings-as-errors/static analyzer/unit and mocked credentials receipts','all21 programmable event encodings including CMask/edge','no shell API; drop before only execve','render/deadline/budget/install shell syntax','N2N/AA/all rows/negative events retained','missing-install/permission/UID/output/counter/idle/percpu/scope/timeout/load/deadline rejection']},indent=2)+'\n');print('VALIDATED, no real root execution',simulations)
+(ROOT/'validation-v3-retry1.json').write_text(json.dumps({'diagnostic_only':True,'privileged_execution_performed':False,'installation_performed':False,'hardware_evidence':False,'nonroot_tool_receipt':cfg['qualification_job'],'crosswalk_events':21,'version':'qjs-kpc-3','protocol_revision':'v3-retry1','groups':11,'mock_calls':simulations,'scope':'354 fake helper calls and8 nonprivileged warmups exercise real collector. Installed helper unchanged; real lead raw rows replayed offline. Collector integrity failures restart complete N2N pairs within frozen retry limits. System-wide, not child/PID attribution.','checks':['C/H/qualifier and binary seals','clang warnings-as-errors/static analyzer/unit and mocked credentials receipts','all21 programmable event encodings including CMask/edge','no shell API; drop before only execve','render/deadline/budget/install shell syntax','N2N/AA/all rows/negative events retained','missing-install/permission/UID/output/counter/idle/percpu/scope/timeout/load/deadline rejection','single and second-capture integrity recovery, same argv and complete pair replacement','17 invalid accepted,18 invalid rejected,3 per-unit attempts exhausted','huge positive jump rejected, cleanup/config/unexplained failures never retried','six offline tests replay real raw snapshots, negative N2N, noisy idle and retry wall cap']},indent=2)+'\n');print('VALIDATED, no real root execution',simulations)

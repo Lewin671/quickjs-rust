@@ -11,10 +11,9 @@ def contamination(value):
  work,idle=windows(value)
  return {e['name']:e['idle_count']*work/idle/e['count'] if e['count'] else None for e in value['events']}
 
-def check(value,description):
- assert value['capture_complete'] and value['cleanup_ok'] and value['child_status']==0 and not value['timed_out']
+def structure(value,description):
  assert value['version']=='qjs-kpc-3' and value['counter_backend']=='kpep_programmable_user'
- assert value['counters_valid'] and value['configuration_readback_verified'] and value['encoding_crosswalk_applied']
+ assert value['configuration_readback_verified'] and value['encoding_crosswalk_applied']
  assert value['scope']=='system_wide_user_cpu_delta' and value['pid_filtered'] is False and value['full_lifetime_counts'] is False
  assert value['config']==value['readback']==description['config'] and value['counter_count']==4
  expected=[(e['name'],e['index']) for e in description['events']];assert [(e['name'],e['index']) for e in value['events']]==expected
@@ -23,13 +22,41 @@ def check(value,description):
   assert shot['end_ns']>=shot['begin_ns']>0 and 0<=shot['current_cpu']<ncpu
   assert len(shot['per_cpu'])==ncpu and all(len(row)==4 for row in shot['per_cpu'])
   assert all(isinstance(n,int) and 0<=n<2**64 for row in shot['per_cpu'] for n in row)
+ previous_end=0
+ for name in ('before','after','idle_before','idle_after'):
+  shot=value['snapshots'][name];assert shot['begin_ns']>=previous_end;previous_end=shot['end_ns']
  work,idle=windows(value);assert work>0 and .95<=idle/work<=1.05
+
+def discontinuities(value):
+ issues=[];shots=value['snapshots'];count=value['counter_count']
+ cycle_slots={event['index'] for event in value['events'] if event['name']=='CPU_CLK_UNHALTED.THREAD'}
+ for left,right in (('before','after'),('idle_before','idle_after')):
+  ns=shots[right]['end_ns']-shots[left]['begin_ns'];sums=[0]*count
+  for cpu,(a,b) in enumerate(zip(shots[left]['per_cpu'],shots[right]['per_cpu'])):
+   for index,(x,y) in enumerate(zip(a,b)):
+    delta=y-x;sums[index]+=delta
+    # Deliberately loose bounds for this fixed Comet Lake diagnostic. These
+    # admit stalls/noise; they reject 2^48-scale discontinuities, never repair.
+    bound=(p.MAX_CYCLE_PER_NS if index in cycle_slots else p.MAX_EVENT_PER_NS)*ns+p.COUNTER_RATE_SLACK
+    if delta<0 or delta>bound:issues.append({'window':left+'..'+right,'cpu':cpu,'index':index,'before':x,'after':y,'delta':delta,'bound':bound,'reason':'counter_decrease' if delta<0 else 'counter_rate_bound'})
+  for index,total in enumerate(sums):
+   if total>=2**64:issues.append({'window':left+'..'+right,'index':index,'sum':total,'reason':'sum_overflow'})
+ return issues
+
+def totals(value):
+ ncpu=value['cpu_count']
  for e in value['events']:
   for prefix,left,right in (('', 'before','after'),('idle_', 'idle_before','idle_after')):
    observed=e[prefix+'per_cpu'];assert len(observed)==ncpu and all(isinstance(n,int) and n>=0 for n in observed)
    assert observed==[value['snapshots'][right]['per_cpu'][c][e['index']]-value['snapshots'][left]['per_cpu'][c][e['index']] for c in range(ncpu)]
    assert sum(observed)==e[prefix+'count']<2**64
- assert value['cycles']==value['events'][0]['count']>0 and value['instructions']==value['events'][1]['count']>0
+ counts={event['name']:event['count'] for event in value['events']}
+ assert value['cycles']==counts['CPU_CLK_UNHALTED.THREAD']>0 and value['instructions']==counts['INST_RETIRED.ANY']>0
+
+def check(value,description):
+ assert value['capture_complete'] and value['cleanup_ok'] and value['child_status']==0 and not value['timed_out']
+ assert value['counters_valid']
+ structure(value,description);totals(value);assert not discontinuities(value)
  return contamination(value)
 
 def delta(samples):

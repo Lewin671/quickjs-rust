@@ -11,7 +11,15 @@ COLLECT_SECONDS=720
 JOB_SECONDS=900
 HELPER='/usr/local/libexec/qjs-kpc'
 ENV_KEYS=('MallocNanoZone','MallocStackLogging','MallocStackLoggingNoCompact','QJS_TL_TRACE','QJS_ARCH_PAD_MODE','QJS_DIAGNOSTIC_BANK_POLICY','QJS_DIAGNOSTIC_BANK_TRACE','T056_INITIAL_STACK_PAD','T056_STACK_COOKIE','T056_CAPTURE_GRID')
-RULE='All-CPU USER-only counters include background and helper polling; no PID attribution. Require exact config/readback/CPU shapes, monotonic raw snapshots and summed per-CPU deltas, successful nonroot child and cleanup, idle/work snapshot span ratio0.95..1.05. Report duration-normalized idle fraction for every event; cycles/instructions<=5% is descriptive qualification, never a presumed fact. Preserve raw/idle/adjusted N2N and negative rare increments; no clamping, retries, full-lifetime or causal claims. AA CPI10% guard descriptive only.'
+PLANNED_CAPTURES=352
+MAX_UNIT_ATTEMPTS=3
+MAX_INVALID_FRACTION=.05
+MAX_INVALID_OBSERVATIONS=17 # floor(352*.05), fixed denominator prevents retry dilution
+RETRY_SECONDS=68
+MAX_CYCLE_PER_NS=16
+MAX_EVENT_PER_NS=256
+COUNTER_RATE_SLACK=1000000
+RULE='All-CPU USER-only counters include background and helper polling; no PID attribution. Require exact config/readback/CPU shapes, monotonic raw snapshots and summed per-CPU deltas, successful nonroot child and cleanup, idle/work snapshot span ratio0.95..1.05. Report duration-normalized idle fraction for every event; cycles/instructions<=5% is descriptive qualification, never a presumed fact. Preserve raw/idle/adjusted N2N and negative rare increments; no clamping, full-lifetime or causal claims. Counter discontinuities alone may restart the exact N/2N pair, at most3 total attempts,17 invalid observations across352 planned captures (5%),68s discarded-pair wall; all attempts/mates retained. Never retry timeout, cleanup, config/shape/output/load failures or unfavorable timing/CPI/background/N2N. No modulo wrap repair; cycle/event per-CPU bounds16/256 per ns plus1e6 slack. Installed helper unchanged; readback is setup-only, mid-window configuration is unobservable. AA CPI10% guard descriptive only.'
 def order(values,block,phase=0):
  values=list(values);n=(block+phase)%len(values);r=values[n:]+values[:n]
  return r[::-1] if block%2 else r

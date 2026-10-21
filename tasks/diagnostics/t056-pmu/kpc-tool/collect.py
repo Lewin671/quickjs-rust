@@ -8,7 +8,7 @@ from tools.benchmark.performance_decision import load_unit
 from tools.benchmark.measure_lock import measurement_lock
 from tools.benchmark.pair_disturbance import Monitor,heavy_samples
 from tools.benchmark.process import run_process
-import protocol as p,counters,chain_common as chain
+import protocol as p,counters,recovery,chain_common as chain
 out=Path(os.environ['BENCH_OUT']);start=time.monotonic();deadline=start+p.COLLECT_SECONDS
 assert re.fullmatch(r'running [0-9TZ:-]+',(out.parent/'status').read_text().strip()),'lead --timing required; owner must not submit'
 read=lambda f:json.loads(Path(f).read_text());sha=lambda f:hashlib.sha256(Path(f).read_bytes()).hexdigest()
@@ -42,13 +42,17 @@ for key in p.ENV_KEYS:os.environ.pop(key,None)
 os.environ.update(TZ='UTC',LC_ALL='C')
 active=out/'active/qjs';active.parent.mkdir();nxt=active.with_name('next');raw=(out/'raw.jsonl').open('x');current={};rows=[];checks={}
 def call(argv):
- value=run_process(argv,p.remaining(deadline,time.monotonic(),26));raw.write(json.dumps({**current,'argv':argv,'result':dataclasses.asdict(value)})+'\n');raw.flush();assert not value.timed_out and value.exit_code==0 and not value.stdout_truncated and not value.stderr_truncated;return json.loads(value.stdout)
+ value=run_process(argv,p.remaining(deadline,time.monotonic(),26));raw.write(json.dumps({**current,'argv':argv,'result':dataclasses.asdict(value)})+'\n');raw.flush();assert not value.timed_out and value.exit_code in (0,1) and not value.stdout_truncated and not value.stderr_truncated;return value.exit_code,json.loads(value.stdout)
 def argv(events,target):return ['/usr/bin/sudo','-n','--',str(helper),'--events',','.join(['cycles','instructions',*events]),'--env','TZ=UTC','--env','LC_ALL=C','--',*map(str,target)]
-request={'artifact_type':'t056-kpc-counters','diagnostic_only':True,'decision_evidence':False,'attempts_consumed':0,'images':cfg['images'],'helper_sha256':cfg['helper_sha256'],'cases':p.CASES,'roles':p.ROLES,'groups':groups,'blocks':p.BLOCKS,'count':p.COUNT,'host':host,'rule':p.RULE,'configuration':cfg,'ownership':'root helper handles only own gated child and exclusively forced PMU counters; fixed env and uid/gid drop; no install from job','scope':'system-wide USER-only CPU deltas with equal-duration idle control, no PID filter'}
+request={'artifact_type':'t056-kpc-counters','diagnostic_only':True,'decision_evidence':False,'attempts_consumed':0,'images':cfg['images'],'helper_sha256':cfg['helper_sha256'],'cases':p.CASES,'roles':p.ROLES,'groups':groups,'blocks':p.BLOCKS,'count':p.COUNT,'host':host,'rule':p.RULE,'configuration':cfg,'ownership':'root helper handles only own gated child and exclusively forced PMU counters; fixed env and uid/gid drop; no install from job','scope':'system-wide USER-only CPU deltas with equal-duration idle control, no PID filter','configuration_observation':'setup readback only; no window/end configuration available','retry_policy':{'unit':'whole N/2N pair','max_attempts':p.MAX_UNIT_ATTEMPTS,'max_invalid_observations':p.MAX_INVALID_OBSERVATIONS,'denominator':p.PLANNED_CAPTURES,'max_invalid_fraction':p.MAX_INVALID_FRACTION,'discarded_pair_seconds':p.RETRY_SECONDS}}
 (out/'request.json').write_text(json.dumps(request,indent=2)+'\n')
+audit=(out/'observations.jsonl').open('x')
+def emit(event):
+ audit.write(json.dumps(event)+'\n');audit.flush();(out/'quality.json').write_text(json.dumps(event['quality'],indent=2)+'\n')
+retry=recovery.Recovery(emit)
 with measurement_lock('T056 kpc system-wide counter diagnostic'):
  monitor=Monitor.from_queue();current['phase']='privilege-check'
- identity=call(argv([],['/usr/bin/id','-u']));environment=call(argv([],['/usr/bin/env']))
+ identity_status,identity=call(argv([],['/usr/bin/id','-u']));environment_status,environment=call(argv([],['/usr/bin/env']));assert identity_status==environment_status==0
  for result in (identity,environment):
   assert result['counter_backend']=='kpep_programmable_user'
   assert result['capture_complete'] and result['cleanup_ok'] and result['configuration_readback_verified'] and result['child_status']==0
@@ -67,15 +71,19 @@ with measurement_lock('T056 kpc system-wide counter diagnostic'):
     row={'block':block,'group':group['id'],'case':case.id,'samples':{}}
     for role in p.order(p.ROLES,block,ci+group['id']):
      nxt.unlink(missing_ok=True);os.link(paths[role],nxt);os.replace(nxt,active);values={}
-     for label,n in (reversed([('N',p.COUNT),('2N',2*p.COUNT)]) if (block+group['id'])%2 else [('N',p.COUNT),('2N',2*p.COUNT)]):
-      current.update(phase='measured',block=block,group=group['id'],case=case.id,role=role,size=label)
-      value=call(argv(group['events'],s._argv(active,case,n)));counters.check(value,group['description']);output=s._check_output(case,value['child_stdout']);key=(case.id,label)
+     labels=[('N',p.COUNT),('2N',2*p.COUNT)]
+     if (block+group['id'])%2:labels.reverse()
+     def measure(label,n,attempt):
+      current.update(phase='measured',block=block,group=group['id'],case=case.id,role=role,size=label,unit_attempt=attempt)
+      status,value=call(argv(group['events'],s._argv(active,case,n)))
+      output=s._check_output(case,value['child_stdout']);key=(case.id,label)
       if key in checks:assert checks[key]==output
       else:checks[key]=output
-      values[label]=value
+      return recovery.observe(status,value,group['description'])
+     values=retry.pair(measure,labels,{'block':block,'group':group['id'],'case':case.id,'role':role})
      row['samples'][role]=values
     rows.append(row);(out/'rows.json').write_text(json.dumps(rows,indent=2)+'\n')
    print('BLOCK',block+1,'GROUP',group['id'],'complete',flush=True)
  load=monitor.snapshot();(out/'load.json').write_text(json.dumps(load,indent=2)+'\n');assert not heavy_samples(load['text'],load['anchor']),'DISTURBED; retain whole job, no retry'
- summary=counters.summarize(rows);(out/'summary.json').write_text(json.dumps(summary,indent=2)+'\n');p.remaining(deadline,time.monotonic(),1)
-raw.close();(out/'complete.json').write_text(json.dumps({'diagnostic_only':True,'decision_evidence':False,'attempts_consumed':0,'groups':11,'events':21,'case_role_blocks':176,'measured_execs':352,'privilege_checks':2,'unprivileged_warmups':8,'seconds':time.monotonic()-start,'pid_attribution':False,'matched_idle_controls':352})+'\n')
+ quality=retry.finish();summary=counters.summarize(rows);summary['observation_quality']=quality;(out/'summary.json').write_text(json.dumps(summary,indent=2)+'\n');p.remaining(deadline,time.monotonic(),1)
+audit.close();raw.close();(out/'complete.json').write_text(json.dumps({'diagnostic_only':True,'decision_evidence':False,'attempts_consumed':0,'groups':11,'events':21,'case_role_blocks':176,'measured_execs':352,'privilege_checks':2,'unprivileged_warmups':8,'seconds':time.monotonic()-start,'pid_attribution':False,'matched_idle_controls':352,'observation_quality':quality})+'\n')

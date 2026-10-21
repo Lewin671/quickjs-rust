@@ -1,0 +1,81 @@
+{
+  "job": "20261021T172024Z-t056-kpc-counters",
+  "revision": "fc49e7691279d538e5d7554d3d1c9e0ec547bfb4",
+  "installed_helper_sha256": "4b5776d1126490ddd9d3b6b8394cbe9b43c3406752534fb0704c501cfb81eafe",
+  "raw_sha256": "ab3c8688366e343b0ff34ee317c804755e5491ebc5473a6b4ba74a1ec0645127",
+  "raw_rows": 13,
+  "measured_valid": 2,
+  "measured_invalid": 1,
+  "failed_unit": {
+    "case": "broad/global_read",
+    "role": "aligned",
+    "group": 0,
+    "size": "N"
+  },
+  "helper_failed_step": "read.delta_integrity",
+  "child_status": 0,
+  "cleanup_ok": true,
+  "work_window_ns": 305093000,
+  "idle_window_ns": 314186000,
+  "per_cpu_discontinuities": [
+    {
+      "cpu": 0,
+      "index": 0,
+      "before": 1187246011,
+      "after": 281475019421786,
+      "delta": 281473832175775,
+      "delta_mod_2pow48_for_diagnosis_only": 281473832175775
+    },
+    {
+      "cpu": 0,
+      "index": 1,
+      "before": 281474690922632,
+      "after": 42711131,
+      "delta": -281474648211501,
+      "delta_mod_2pow48_for_diagnosis_only": 328499155
+    },
+    {
+      "cpu": 2,
+      "index": 0,
+      "before": 1107391450,
+      "after": 281476503986695,
+      "delta": 281475396595245,
+      "delta_mod_2pow48_for_diagnosis_only": 419884589
+    },
+    {
+      "cpu": 2,
+      "index": 1,
+      "before": 281474528774589,
+      "after": 1527276040,
+      "delta": -281473001498549,
+      "delta_mod_2pow48_for_diagnosis_only": 1975212107
+    }
+  ],
+  "idle_counter_decreases": [],
+  "configuration_readback_scope": "setup only, no after/window readback",
+  "configuration_matches_request": true,
+  "root_cause": "Observed per-CPU decreases and 2^48-scale jumps; neither normal wrap nor a foreign reprogramming client can be established. No correction is applied.",
+  "lead_reported_smoke": "Root Perl counters valid, idle about0.1%; user re-enabled tailspin. No new owner root run.",
+  "sources": [
+    "https://github.com/apple-oss-distributions/xnu/blob/xnu-8020.140.41/osfmk/kern/kpc_common.c",
+    "https://cdrdv2-public.intel.com/868137/325462-089-sdm-vol-1-2abcd-3abcd-4.pdf"
+  ],
+  "valid_but_unfavorable": {
+    "cycle_N2N_increment": -1141177,
+    "normalized_idle_fraction": [
+      {
+        "CPU_CLK_UNHALTED.THREAD": 0.06459176679848362,
+        "INST_RETIRED.ANY": 0.021703296274911597,
+        "IDQ.DSB_UOPS": 0.013356808238440066,
+        "IDQ.MITE_UOPS": 0.20671493699157364
+      },
+      {
+        "CPU_CLK_UNHALTED.THREAD": 0.07514917290007363,
+        "INST_RETIRED.ANY": 0.03505636353462899,
+        "IDQ.DSB_UOPS": 0.0274133512829505,
+        "IDQ.MITE_UOPS": 0.5798993912373562
+      }
+    ],
+    "retry_allowed_for_these_metrics": false
+  }
+}
