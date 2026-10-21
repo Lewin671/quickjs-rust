@@ -1,8 +1,7 @@
 //! Ordinary-object brands and state bits that do not borrow property storage.
 //!
-//! The five less frequent booleans share one byte. Together with a u32 index
-//! count (there are only u32::MAX possible array-index keys), this removes an
-//! entire word from the object header. SymbolBrand and the two hot exotic flags keep individual bytes.
+//! Five booleans share one byte; hot exotic and Symbol checks stay separate.
+//! Sparse index metadata lives in ObjectColdData at its native usize width.
 
 use std::cell::Cell;
 

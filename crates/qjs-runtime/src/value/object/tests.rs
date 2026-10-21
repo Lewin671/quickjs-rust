@@ -62,10 +62,27 @@ fn ordinary_object_keeps_cold_state_unallocated() {
     assert!(object.own_property_symbols().is_empty());
     assert!(object.to_string_tag().is_none());
     assert!(object.0.cold.get().is_none());
-    // Packed cold flags remain; the native-width index count deliberately
-    // keeps the existing header at120 bytes.
-    assert_eq!(mem::size_of::<ObjectData>(), 120);
+    // Sparse metadata is cold; no count-width or flag-packing dependency.
+    assert_eq!(mem::size_of::<ObjectData>(), 112);
     assert!(mem::size_of::<std::cell::RefCell<super::PropertyStorage>>() <= 56);
+}
+
+#[test]
+fn sparse_indices_allocate_cold_state_once_and_preserve_other_cold_slots() {
+    let object = ObjectRef::new(HashMap::new());
+    object.set("named".to_owned(), Value::Undefined);
+    assert!(!object.has_own_index_property());
+    assert!(object.0.cold.get().is_none());
+    object.set("0".to_owned(), Value::Number(1.0));
+    let cold = object.0.cold() as *const super::ObjectColdData;
+    assert!(object.has_own_index_property());
+    object.set("1".to_owned(), Value::Number(2.0));
+    assert!(std::ptr::eq(cold, object.0.cold()));
+    assert!(object.delete_own_property("0"));
+    assert!(object.delete_own_property("1"));
+    assert!(!object.has_own_index_property());
+    assert!(std::ptr::eq(cold, object.0.cold()));
+    assert!(object.own_property_symbols().is_empty());
 }
 
 #[test]
@@ -75,13 +92,13 @@ fn array_index_count_tracks_only_unique_keys_in_the_u32_range() {
         ("4294967294".to_owned(), Value::Number(2.0)),
         ("4294967295".to_owned(), Value::Number(3.0)),
     ]));
-    assert_eq!(object.0.index_property_count.get(), 2);
+    assert_eq!(object.0.index_property_count(), 2);
     object.set("4294967294".to_owned(), Value::Number(4.0));
-    assert_eq!(object.0.index_property_count.get(), 2);
+    assert_eq!(object.0.index_property_count(), 2);
     assert!(object.delete_own_property("4294967294"));
-    assert_eq!(object.0.index_property_count.get(), 1);
+    assert_eq!(object.0.index_property_count(), 1);
     object.set("4294967294".to_owned(), Value::Number(5.0));
-    assert_eq!(object.0.index_property_count.get(), 2);
+    assert_eq!(object.0.index_property_count(), 2);
     assert_eq!(object.get("4294967295"), Some(Value::Number(3.0)));
 }
 

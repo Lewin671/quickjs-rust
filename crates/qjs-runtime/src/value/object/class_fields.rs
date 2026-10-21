@@ -44,9 +44,7 @@ impl ObjectRef {
                 added_indices += usize::from(is_array_index_key(key));
             }
         }
-        self.0
-            .index_property_count
-            .set(self.0.index_property_count.get() + added_indices);
+        self.0.add_index_properties(added_indices);
         self.bump_property_revision();
         true
     }
@@ -80,6 +78,16 @@ mod tests {
     }
 
     #[test]
+    fn named_constant_segment_keeps_sparse_metadata_unallocated() {
+        let object = ObjectRef::new(HashMap::new());
+        let key: Rc<str> = "field".into();
+        let value = Value::Number(1.0);
+        assert!(object.install_constant_class_fields([(&key, &value)].into_iter()));
+        assert_eq!(object.get("field"), Some(value));
+        assert!(object.0.cold.get().is_none());
+    }
+
+    #[test]
     fn duplicates_keep_slots_and_invalidate_cached_layouts() {
         let object = ObjectRef::new(HashMap::new());
         let key: Rc<str> = "0".into();
@@ -89,7 +97,7 @@ mod tests {
         let layout = object.layout_revision();
         assert!(object.install_constant_class_fields([(&key, &first), (&key, &last)].into_iter()));
         assert_eq!(object.get("0"), Some(last));
-        assert_eq!(object.0.index_property_count.get(), 1);
+        assert_eq!(object.0.index_property_count(), 1);
         assert!(object.property_revision() > revision);
         assert!(object.layout_revision() > layout);
     }

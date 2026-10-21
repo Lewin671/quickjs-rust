@@ -1,0 +1,15 @@
+{
+  "kind": "owner preparation, no timing or acceptance",
+  "parent_runtime": "8f898dd96239d392c168bdd20049d073b3b47ff4",
+  "feedback": "feedback-pragmatic-result.md, lead jobs 20261021T211111Z / 213443Z / 213757Z / 214401Z",
+  "standing": "full exact and 86 pass; mini inconclusive due to A/A; unpack persists in six layouts; last frozen attempt remains unspent",
+  "architecture": "Keep property payload, prototype, revisions and frequent brand checks inline. Put sparse own-index metadata in existing lazy ObjectColdData: absent cold data means count zero. Keep Cell<usize>, no narrowing, packing, padding or executor edits. Ordinary named-only construction and zero-index class segments must not allocate cold state. Count mutations allocate only when a first index is installed; retain O(1) index checks and exact deletion accounting.",
+  "stages": [
+    "Move own-index metadata to cold storage; test all constructors/mutations, named-only cold absence, lazy String indices, cache invalidation and 64-bit header <=112 bytes.",
+    "Use non-timing native allocation and instruction/event attribution to repair general residual costs. Host intrinsic tables may publish complete descriptors; never add benchmark-shape admission or a per-call binding snapshot.",
+    "Build exact canonical commit, instruction-qualify all 86, inspect full selected global/local numeric relative-PC paths against fast 8f7d and parent 8f898. Never infer hardware cause from equivalence alone.",
+    "Qualify all six prescribed original-recipe layouts, prepare fresh correctness -> 86 -> triage -> mini receipts including class-fields within budget; do not run owner timing."
+  ],
+  "attribution_limits": "Historical unpack has only 110 requests of 136 bytes (78 empty): header class is not established as principal wall cause. Native stack logging includes REPL wrapper; report actual host malloc classes, all events and source hashes. Public non-root retired-instruction totals are diagnostic; PMU helper stays closed.",
+  "guards": ["No edits to frozen unit/policy/history", "No root/PMU action", "No parser/lexer/AST/binding/tier changes", "Full local gate and NG before push", "Lead fresh full exact scan required on new image"]
+}

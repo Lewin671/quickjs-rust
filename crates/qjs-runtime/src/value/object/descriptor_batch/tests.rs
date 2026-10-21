@@ -40,7 +40,7 @@ fn numeric_batch_uses_existing_index_classification_and_order() {
         (Rc::from("2"), Property::enumerable(Value::Number(2.0))),
     ]);
     assert_eq!(object.own_property_names(), ["2", "10", "text"]);
-    assert_eq!(object.0.index_property_count.get(), 2);
+    assert_eq!(object.0.index_property_count(), 2);
 }
 
 #[test]

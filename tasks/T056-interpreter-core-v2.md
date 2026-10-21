@@ -6,18 +6,19 @@
 - Implementation: stage 1 on main. Stage A on its branch, not on main; the rejected M1.2 candidate stays on
   `agent/t056-m1-stage2/codex`; the write-site add replay removed from stage A stays on
   `agent/t056-add-transition-replay/claude`.
-- Verified at: pragmatic8f898dd9 full/NG255/subset5170 and CI green; owner182852Z86/86,
-  183100Z12-image K=6 qualification pass. Historical dfff3bb6 exact42672/42672 remains its own receipt;
-  no new wall or exact result. PMU is closed after174256Z, helper remains installed without more calls.
+- Verified at: pragmatic8f898dd9 lead211111Z full exact pass,213443Z86/86;213757Z triage unclear;
+  214401Z mini A/A failed (inconclusive), global excess absent5/6 but unpack slow6/6.
+  Sparse-index hot/cold implementation now present;32 object tests pass locally, full gate pending.
 - Evidence: [stage A record](archive/T056-m1-stageA-record.md),
   [allocation follow-up](archive/T056-m1-stageA-allocation-diagnosis.md),
   [architecture review](archive/T056-architecture-review.md), [stack/startup diagnosis](archive/T056-stack-phase-diagnosis.md), [PMU/FP diagnosis](archive/T056-pmu-attribution.md), [source bisection](archive/T056-source-bisect.md), [header factors/full-loop accounting](archive/T056-header-subparts.md), [dispatch addresses](archive/T056-dispatch-address.md), [JCC policy diagnosis](archive/T056-jcc-policy.md), [PMU helper](archive/T056-kpc-tool.md), [PMU setup failure/v2](archive/T056-kpc-setup-failure.md), [PMU counting v3](archive/T056-kpc-counting.md), [collector recovery](archive/T056-kpc-collection-retry.md), [PMU closure](archive/T056-pmu-closure.md), [pragmatic implementation](archive/T056-pragmatic-stageA.md), [pragmatic qualification](archive/T056-pragmatic-qualification.md), [M2 inputs](archive/T056-m2-design-inputs.md);
   plans [`interpreter-core-v2-atoms-layouts`](performance-units/interpreter-core-v2-atoms-layouts.json) (closed),
   [`interpreter-core-v2-layout-edges`](performance-units/interpreter-core-v2-layout-edges.json).
-- Unresolved: relative-PC family cause unknown; sampled ops600/900 rejected by lead, formal controls failed.
-  Pragmatic120B candidate retains instruction excess empty+7.21%/unpack+0.91%; unknown PC sensitivity remains a known risk.
-- Next action: lead runs the [sealed bundle](diagnostics/t056-pragmatic/README.md): fresh correctness→86→triage→four-case K=6.
-  PMU helper stays installed, no further calls/sudo/reinstall. No owner timing; last attempt unspent.
+- Unresolved: unpack wall1.033–1.057/instructions1.0105, class-fields1.0434/1.0095, empty instructions1.0721.
+  Header crossing alone is insufficient: historical unpack has only110 requests of136B.
+- Next action: follow the [hot/cold preparation](diagnostics/t056-hot-cold/implementation-plan.json):
+  verify112B sparse header, native classes and instruction attribution, fast-family PCs, then fresh lead bundle.
+  No owner timing; PMU stays closed with installed helper untouched; last frozen attempt unspent.
 
 ## Goal and scope
 

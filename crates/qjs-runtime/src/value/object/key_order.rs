@@ -22,7 +22,7 @@ impl ObjectRef {
     /// the prototype chain with this.
     pub(crate) fn own_string_keys_with_enumerability(&self) -> Vec<(Rc<str>, bool)> {
         let properties = self.properties().borrow();
-        let has_indices = self.0.index_property_count.get() > 0;
+        let has_indices = self.0.index_property_count() > 0;
         let mut indices: Vec<(u32, Rc<str>, bool)> = Vec::new();
         let mut strings: Vec<(Rc<str>, bool)> = Vec::with_capacity(properties.len());
         for (_, field) in properties.ordered_fields() {
@@ -56,7 +56,7 @@ impl ObjectRef {
         let included = properties.ordered_fields().filter(|(_, field)| {
             !is_internal_property_key(field.text()) && include(field.attributes)
         });
-        if self.0.index_property_count.get() == 0 {
+        if self.0.index_property_count() == 0 {
             return included
                 .map(|(_, field)| field.text().to_string())
                 .collect();

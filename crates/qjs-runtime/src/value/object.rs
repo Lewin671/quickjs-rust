@@ -387,12 +387,6 @@ struct ObjectData {
     /// valid, so a slot-keyed read cache survives ordinary field assignment --
     /// the case `property_revision` deliberately cannot express.
     layout_revision: Cell<u64>,
-    /// Count of own string keys that parse as array indices. Maintained as keys
-    /// are added and removed so `has_own_index_property` is an O(1) check; this
-    /// keeps the `array[i] = x` fast path from scanning a prototype's keys on
-    /// every write.
-    /// Keep its native width independent of the packed cold-flag byte.
-    index_property_count: Cell<usize>,
     flags: ObjectFlags,
     // Hot exotic checks keep single-byte boolean loads.
     typed_array_exotic: Cell<bool>,
@@ -407,6 +401,9 @@ struct ObjectData {
 
 #[derive(Default)]
 struct ObjectColdData {
+    /// Sparse own-index metadata. No cold payload means zero indices; keep
+    /// the native count width, independent of the inline brand flags.
+    index_property_count: Cell<usize>,
     symbol_properties: RefCell<Vec<(ObjectRef, Property)>>,
     to_string_tag: RefCell<Option<String>>,
     module_namespace_bindings: RefCell<Option<ModuleNamespaceBindings>>,
@@ -476,6 +473,19 @@ enum ArrayBufferKind {
 impl ObjectData {
     fn cold(&self) -> &ObjectColdData {
         self.cold.get_or_init(Box::default).as_ref()
+    }
+
+    fn index_property_count(&self) -> usize {
+        self.cold_if_present()
+            .map_or(0, |cold| cold.index_property_count.get())
+    }
+
+    fn add_index_properties(&self, count: usize) {
+        if count != 0 {
+            let cold = self.cold();
+            cold.index_property_count
+                .set(cold.index_property_count.get() + count);
+        }
     }
 
     fn cold_if_present(&self) -> Option<&ObjectColdData> {
@@ -854,18 +864,19 @@ impl ObjectRef {
         index_property_count: usize,
         prototype: Option<Prototype>,
     ) -> Self {
-        Self(Rc::new(ObjectData {
+        let object = Self(Rc::new(ObjectData {
             properties: RefCell::new(storage),
             property_revision: Cell::new(0),
             layout_revision: Cell::new(0),
-            index_property_count: Cell::new(index_property_count),
             flags: ObjectFlags::new(),
             typed_array_exotic: Cell::new(false),
             module_namespace_exotic: Cell::new(false),
             prototype: RefCell::new(prototype),
             symbol_brand: Cell::new(SymbolBrand::None),
             cold: OnceCell::new(),
-        }))
+        }));
+        object.0.add_index_properties(index_property_count);
+        object
     }
 
     /// Builds a plain object literal from statically known string keys without
@@ -1115,7 +1126,7 @@ impl ObjectRef {
     /// non-writable data property.
     pub(crate) fn has_own_index_property(&self) -> bool {
         let _ = self.properties();
-        self.0.index_property_count.get() > 0
+        self.0.index_property_count() > 0
     }
 
     /// Whether creating a new indexed property on an object with this
@@ -1250,9 +1261,7 @@ impl ObjectRef {
             }
         }
         if is_array_index_key(&key) {
-            self.0
-                .index_property_count
-                .set(self.0.index_property_count.get() + 1);
+            self.0.add_index_properties(1);
         }
         properties.append(&key, Property::enumerable(value), true);
         self.bump_property_revision();
@@ -1282,9 +1291,7 @@ impl ObjectRef {
         let establishes_realm_identity = key.as_ref() == "globalThis"
             && matches!(&value, Value::Object(global_this) if self.ptr_eq(global_this));
         if is_array_index_key(&key) {
-            self.0
-                .index_property_count
-                .set(self.0.index_property_count.get() + 1);
+            self.0.add_index_properties(1);
         }
         {
             let mut properties = self.properties_for(&key).borrow_mut();
@@ -1304,9 +1311,7 @@ impl ObjectRef {
             && matches!(&property.value, Value::Object(global_this) if self.ptr_eq(global_this));
         let mut properties = self.properties_for(&key).borrow_mut();
         if properties.insert(&key, property).is_none() && is_array_index_key(&key) {
-            self.0
-                .index_property_count
-                .set(self.0.index_property_count.get() + 1);
+            self.0.add_index_properties(1);
         }
         self.bump_property_revision();
         drop(properties);
@@ -1326,9 +1331,7 @@ impl ObjectRef {
         );
         let mut properties = self.properties_for(&key).borrow_mut();
         if properties.insert(&key, property).is_none() && is_array_index_key(&key) {
-            self.0
-                .index_property_count
-                .set(self.0.index_property_count.get() + 1);
+            self.0.add_index_properties(1);
         }
         self.bump_property_revision();
     }
@@ -1626,9 +1629,9 @@ impl ObjectRef {
             self.bump_property_revision();
         }
         if removed.is_some() && is_array_index_key(key) {
-            self.0
-                .index_property_count
-                .set(self.0.index_property_count.get().saturating_sub(1));
+            let cold = self.0.cold();
+            cold.index_property_count
+                .set(cold.index_property_count.get() - 1);
         }
         true
     }

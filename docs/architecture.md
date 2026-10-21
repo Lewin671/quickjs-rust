@@ -160,8 +160,8 @@ Defined in `value/mod.rs`, `value/object.rs`, `value/property.rs` and
   strong reference. There is no tracing collector: a reference cycle is
   never freed.
 - `ObjectData` holds the fields every object needs inline. Rare state
-  (symbol-keyed properties, generator state, private names, ArrayBuffer and
-  TypedArray slots) sits behind a lazily allocated `ObjectColdData` box.
+  (own-index counts, symbol-keyed properties, generator state, private names,
+  ArrayBuffer and TypedArray slots) sits behind a lazily allocated `ObjectColdData` box.
 - String-keyed properties live in a `PropertyStorage`
   (`value/object/storage.rs`): one layout pointer (`property/layout.rs`)
   that owns every key, slot, attribute and the order, beside a keyless
