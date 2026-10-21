@@ -1,0 +1,273 @@
+{
+  "diagnostic_only": true,
+  "timing": false,
+  "capture_source": "20261021T124843Z-t056-dispatch-heap-capture",
+  "raw_capture_sha256": "fb4c075e4b520400c3d9db9680c18c09da3318faeb4db5561e494eb55c5e21aa",
+  "probe_capture_source": "20261021T130515Z-t056-ops-address-capture",
+  "raw_probe_capture_sha256": "4f8f6b00d6b513eb096dc07b6cfa11d7956d36972c3e26d20eb5af81f2095cb5",
+  "roles": {
+    "count": {
+      "broad/global_read": {
+        "loop_record": "loops/count-global_read.json",
+        "samples": 6,
+        "heap_low12_histograms": {"bank":{"0x0":6},"program":{"0x0":6},"ops_base":{"0x600":6},"constants_ptr":{"0x420":6},"rbp":{"0xf90":6},"rsp":{"0xe00":6}},
+        "r5_cell_low12_histogram": {"0xaf0":6},
+        "first_absolute_addresses": {"bank":"0x7ff55b884000","program":"0x7ff55b887000","ops_base":"0x600001a13600","constants_ptr":"0x600001010420","rbp":"0x7ff7bd7e8f90","rsp":"0x7ff7bd7e8e00"},
+        "first_received_cells": [
+          {
+            "reg": 5,
+            "slot": 0,
+            "upvalue_index": 0,
+            "RcInner": 105553177299680,
+            "cell": 105553177299696,
+            "payload": 105553177299704,
+            "cell_raw_hex": "03000000000000000100000000000000000000000000000000b27ebdf77f0000000000000000f03f"
+          }
+        ],
+        "publication_flag": true,
+        "publication_sinks_len": 0,
+        "r5_received_present": true,
+        "all_received_r5_payloads_one": true
+      },
+      "broad/local_read": {
+        "loop_record": "loops/count-local_read.json",
+        "samples": 6,
+        "heap_low12_histograms": {"bank":{"0x0":6},"program":{"0x600":6},"ops_base":{"0x600":6},"constants_ptr":{"0x360":6},"rbp":{"0xf90":6},"rsp":{"0xe00":6}},
+        "r5_cell_low12_histogram": {},
+        "first_absolute_addresses": {"bank":"0x7faf4109e000","program":"0x7faf41095600","ops_base":"0x600002d43600","constants_ptr":"0x600002740360","rbp":"0x7ff7b3ebbf90","rsp":"0x7ff7b3ebbe00"},
+        "first_received_cells": [],
+        "publication_flag": true,
+        "publication_sinks_len": 0,
+        "r5_received_present": false,
+        "all_received_r5_payloads_one": true
+      }
+    },
+    "flags": {
+      "broad/global_read": {
+        "loop_record": "loops/flags-global_read.json",
+        "samples": 6,
+        "heap_low12_histograms": {"bank":{"0x0":6},"program":{"0x0":6},"ops_base":{"0x600":6},"constants_ptr":{"0x420":6},"rbp":{"0xf90":6},"rsp":{"0xe00":6}},
+        "r5_cell_low12_histogram": {"0xaf0":6},
+        "first_absolute_addresses": {"bank":"0x7fa6db084000","program":"0x7fa6db087000","ops_base":"0x600000673600","constants_ptr":"0x600000c70420","rbp":"0x7ff7b6672f90","rsp":"0x7ff7b6672e00"},
+        "first_received_cells": [
+          {
+            "reg": 5,
+            "slot": 0,
+            "upvalue_index": 0,
+            "RcInner": 105553156459232,
+            "cell": 105553156459248,
+            "payload": 105553156459256,
+            "cell_raw_hex": "030000000000000001000000000000000000000000000000005267b6f77f0000000000000000f03f"
+          }
+        ],
+        "publication_flag": true,
+        "publication_sinks_len": 0,
+        "r5_received_present": true,
+        "all_received_r5_payloads_one": true
+      },
+      "broad/local_read": {
+        "loop_record": "loops/flags-local_read.json",
+        "samples": 6,
+        "heap_low12_histograms": {"bank":{"0x0":6},"program":{"0x600":6},"ops_base":{"0x600":6},"constants_ptr":{"0x360":6},"rbp":{"0xf90":6},"rsp":{"0xe00":6}},
+        "r5_cell_low12_histogram": {},
+        "first_absolute_addresses": {"bank":"0x7febd009e000","program":"0x7febd0095600","ops_base":"0x600000e4b600","constants_ptr":"0x600000448360","rbp":"0x7ff7ba377f90","rsp":"0x7ff7ba377e00"},
+        "first_received_cells": [],
+        "publication_flag": true,
+        "publication_sinks_len": 0,
+        "r5_received_present": false,
+        "all_received_r5_payloads_one": true
+      }
+    },
+    "count_flags": {
+      "broad/global_read": {
+        "loop_record": "loops/count_flags-global_read.json",
+        "samples": 6,
+        "heap_low12_histograms": {"bank":{"0x0":6},"program":{"0x0":6},"ops_base":{"0x900":6},"constants_ptr":{"0x420":6},"rbp":{"0xf90":6},"rsp":{"0xe00":6}},
+        "r5_cell_low12_histogram": {"0xaf0":6},
+        "first_absolute_addresses": {"bank":"0x7f90ef884000","program":"0x7f90ef887000","ops_base":"0x600002d95900","constants_ptr":"0x600002798420","rbp":"0x7ff7bf70ff90","rsp":"0x7ff7bf70fe00"},
+        "first_received_cells": [
+          {
+            "reg": 5,
+            "slot": 0,
+            "upvalue_index": 0,
+            "RcInner": 105553130670816,
+            "cell": 105553130670832,
+            "payload": 105553130670840,
+            "cell_raw_hex": "030000000000000001000000000000000000000000000000002271bff77f0000000000000000f03f"
+          }
+        ],
+        "publication_flag": true,
+        "publication_sinks_len": 0,
+        "r5_received_present": true,
+        "all_received_r5_payloads_one": true
+      },
+      "broad/local_read": {
+        "loop_record": "loops/count_flags-local_read.json",
+        "samples": 6,
+        "heap_low12_histograms": {"bank":{"0x0":6},"program":{"0x600":6},"ops_base":{"0x900":6},"constants_ptr":{"0x360":6},"rbp":{"0xf90":6},"rsp":{"0xe00":6}},
+        "r5_cell_low12_histogram": {},
+        "first_absolute_addresses": {"bank":"0x7f950d89e000","program":"0x7f950d895600","ops_base":"0x600002cb9900","constants_ptr":"0x6000026b4360","rbp":"0x7ff7b9625f90","rsp":"0x7ff7b9625e00"},
+        "first_received_cells": [],
+        "publication_flag": true,
+        "publication_sinks_len": 0,
+        "r5_received_present": false,
+        "all_received_r5_payloads_one": true
+      }
+    },
+    "aligned": {
+      "broad/global_read": {
+        "loop_record": "loops/aligned-global_read.json",
+        "samples": 6,
+        "heap_low12_histograms": {"bank":{"0x0":6},"program":{"0x0":6},"ops_base":{"0x600":6},"constants_ptr":{"0x420":6},"rbp":{"0xf90":6},"rsp":{"0xe00":6}},
+        "r5_cell_low12_histogram": {"0xaf0":6},
+        "first_absolute_addresses": {"bank":"0x7f858f084000","program":"0x7f858f087000","ops_base":"0x600002e0f600","constants_ptr":"0x60000240c420","rbp":"0x7ff7ba41cf90","rsp":"0x7ff7ba41ce00"},
+        "first_received_cells": [
+          {
+            "reg": 5,
+            "slot": 0,
+            "upvalue_index": 0,
+            "RcInner": 105553131113184,
+            "cell": 105553131113200,
+            "payload": 105553131113208,
+            "cell_raw_hex": "03000000000000000100000000000000000000000000000000f241baf77f0000000000000000f03f"
+          }
+        ],
+        "publication_flag": true,
+        "publication_sinks_len": 0,
+        "r5_received_present": true,
+        "all_received_r5_payloads_one": true
+      },
+      "broad/local_read": {
+        "loop_record": "loops/aligned-local_read.json",
+        "samples": 6,
+        "heap_low12_histograms": {"bank":{"0x0":6},"program":{"0x600":6},"ops_base":{"0x600":6},"constants_ptr":{"0x360":6},"rbp":{"0xf90":6},"rsp":{"0xe00":6}},
+        "r5_cell_low12_histogram": {},
+        "first_absolute_addresses": {"bank":"0x7f9ddf89e000","program":"0x7f9ddf895600","ops_base":"0x600000fa7600","constants_ptr":"0x6000005a4360","rbp":"0x7ff7bb0faf90","rsp":"0x7ff7bb0fae00"},
+        "first_received_cells": [],
+        "publication_flag": true,
+        "publication_sinks_len": 0,
+        "r5_received_present": false,
+        "all_received_r5_payloads_one": true
+      }
+    },
+    "candidate": {
+      "broad/global_read": {
+        "loop_record": "loops/candidate-global_read.json",
+        "samples": 6,
+        "heap_low12_histograms": {"bank":{"0x0":6},"program":{"0x0":6},"ops_base":{"0x900":6},"constants_ptr":{"0x420":6},"rbp":{"0xf90":6},"rsp":{"0xe00":6}},
+        "r5_cell_low12_histogram": {"0xaf0":6},
+        "first_absolute_addresses": {"bank":"0x7f9186084000","program":"0x7f9186087000","ops_base":"0x600003c69900","constants_ptr":"0x600003664420","rbp":"0x7ff7b7f74f90","rsp":"0x7ff7b7f74e00"},
+        "first_received_cells": [
+          {
+            "reg": 5,
+            "slot": 0,
+            "upvalue_index": 0,
+            "RcInner": 105553145891552,
+            "cell": 105553145891568,
+            "payload": 105553145891576,
+            "cell_raw_hex": "0300000000000000010000000000000000000000000000000072f7b7f77f0000000000000000f03f"
+          }
+        ],
+        "publication_flag": true,
+        "publication_sinks_len": 0,
+        "r5_received_present": true,
+        "all_received_r5_payloads_one": true
+      },
+      "broad/local_read": {
+        "loop_record": "loops/candidate-local_read.json",
+        "samples": 6,
+        "heap_low12_histograms": {"bank":{"0x0":6},"program":{"0x600":6},"ops_base":{"0x900":6},"constants_ptr":{"0x360":6},"rbp":{"0xf90":6},"rsp":{"0xe00":6}},
+        "r5_cell_low12_histogram": {},
+        "first_absolute_addresses": {"bank":"0x7facb689e000","program":"0x7facb6895600","ops_base":"0x600002569900","constants_ptr":"0x600002f64360","rbp":"0x7ff7beb7bf90","rsp":"0x7ff7beb7be00"},
+        "first_received_cells": [],
+        "publication_flag": true,
+        "publication_sinks_len": 0,
+        "r5_received_present": false,
+        "all_received_r5_payloads_one": true
+      }
+    }
+  },
+  "global_PC_deltas_from_count": {"count":{"0":152},"flags":{"0":152},"count_flags":{"0":96,"-6":24,"-12":20,"-3":12},"aligned":{"0":152},"candidate":{"0":96,"-6":24,"-12":20,"-3":12}},
+  "correlated_observations": [
+    "fast count/flags/8f have identical relative-PC vectors; slow count_flags/dfff share another vector, with -3/-6/-12B internal shifts",
+    "ops low12 fast600/slow900 for BOTH global and local; local remains fast900, so ops phase alone is not sufficient",
+    "global program+8 low12=8 overlaps bank payload low12=8 in ALL five originals; local program low12=600; no actual physical overlap",
+    "FP literal low12 differs across individual images and does not separate both classes; all8B aligned and do not cross64B"
+  ],
+  "unique_hardware_cause_identified": false,
+  "reason": "two coupled class-separating factors (ops phase and relative code map), with additional literal differences. Correlation alone cannot select a single cause. Confirmation isolates ops address holding all hot code PCs/bytes constant.",
+  "probe_qualification": {
+    "count_sham": {
+      "rows": 12,
+      "ops_low12_histogram": {"0x600":12},
+      "bank_low12": "0x0",
+      "program_low12": {"broad/global_read":{"0x0":6},"broad/local_read":{"0x600":6}},
+      "RBP_minus_RSP": 432,
+      "normal_loop_bytes_match_parent": true
+    },
+    "count_phase600": {
+      "rows": 12,
+      "ops_low12_histogram": {"0x600":12},
+      "bank_low12": "0x0",
+      "program_low12": {"broad/global_read":{"0x0":6},"broad/local_read":{"0x600":6}},
+      "RBP_minus_RSP": 432,
+      "normal_loop_bytes_match_parent": true
+    },
+    "count_phase900": {
+      "rows": 12,
+      "ops_low12_histogram": {"0x900":12},
+      "bank_low12": "0x0",
+      "program_low12": {"broad/global_read":{"0x0":6},"broad/local_read":{"0x600":6}},
+      "RBP_minus_RSP": 432,
+      "normal_loop_bytes_match_parent": true
+    },
+    "flags_sham": {
+      "rows": 12,
+      "ops_low12_histogram": {"0x600":10,"0x900":1,"0x180":1},
+      "bank_low12": "0x0",
+      "program_low12": {"broad/global_read":{"0x0":5,"0x600":1},"broad/local_read":{"0x600":6}},
+      "RBP_minus_RSP": 432,
+      "normal_loop_bytes_match_parent": true
+    },
+    "flags_phase600": {
+      "rows": 12,
+      "ops_low12_histogram": {"0x600":12},
+      "bank_low12": "0x0",
+      "program_low12": {"broad/global_read":{"0x0":6},"broad/local_read":{"0x600":6}},
+      "RBP_minus_RSP": 432,
+      "normal_loop_bytes_match_parent": true
+    },
+    "flags_phase900": {
+      "rows": 12,
+      "ops_low12_histogram": {"0x900":12},
+      "bank_low12": "0x0",
+      "program_low12": {"broad/global_read":{"0x0":6},"broad/local_read":{"0x600":6}},
+      "RBP_minus_RSP": 432,
+      "normal_loop_bytes_match_parent": true
+    },
+    "count_flags_sham": {
+      "rows": 12,
+      "ops_low12_histogram": {"0x900":12},
+      "bank_low12": "0x0",
+      "program_low12": {"broad/global_read":{"0x0":6},"broad/local_read":{"0x600":6}},
+      "RBP_minus_RSP": 432,
+      "normal_loop_bytes_match_parent": true
+    },
+    "count_flags_phase600": {
+      "rows": 12,
+      "ops_low12_histogram": {"0x600":12},
+      "bank_low12": "0x0",
+      "program_low12": {"broad/global_read":{"0x0":6},"broad/local_read":{"0x600":6}},
+      "RBP_minus_RSP": 432,
+      "normal_loop_bytes_match_parent": true
+    },
+    "count_flags_phase900": {
+      "rows": 12,
+      "ops_low12_histogram": {"0x900":12},
+      "bank_low12": "0x0",
+      "program_low12": {"broad/global_read":{"0x0":6},"broad/local_read":{"0x600":6}},
+      "RBP_minus_RSP": 432,
+      "normal_loop_bytes_match_parent": true
+    }
+  }
+}

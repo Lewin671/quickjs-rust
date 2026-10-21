@@ -1,0 +1,35 @@
+{
+  "build_job": "20261021T125859Z-t056-ops-address-qualification",
+  "base_job": "20261021T120731Z-t056-header-layout-qualification",
+  "images_sha256": "399ebde92ee4e273139849a905c547bc23aefd89a90b0086e1e2f65c55cec726",
+  "capture_job": "20261021T124843Z-t056-dispatch-heap-capture",
+  "probe_capture_job": "20261021T130515Z-t056-ops-address-capture",
+  "probe_capture_sha256": "4f8f6b00d6b513eb096dc07b6cfa11d7956d36972c3e26d20eb5af81f2095cb5",
+  "correctness_job": "20261021T060648Z-t056-m1a-allocation-correctness",
+  "pregate_job": "20261021T062918Z-t056-m1a-allocation-pregate86",
+  "workload_sha256": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
+  "binary_sha256": {
+    "count": "661969a50fb0bc36f73e6fe1af20e78218c2ceffb63d62a4903c7c61a67858ea",
+    "count_sham": "8c632a408a2dd09452c05c80a9180cf6ea837ac07632143e34d762f20b3d5d7e",
+    "count_phase600": "3f07ff8df1176e99dd4c1bb7dc97069c8b74620c6202a9a1337638b02c2b6969",
+    "count_phase900": "0381fa504885390b015914aa015619c1a942d238178dfb516b0c5dfe332ab041",
+    "flags": "100cda383a0f5146e2f9e025f273edfb1d622fe0754e9d84bef10954732a7152",
+    "flags_sham": "d54fb5762bee9342564d723503f6bf2f2d3bc7b70e86ba4569b7a43dac1f166a",
+    "flags_phase600": "7cdc11a34bfa6ae2655da95ddf0c3c4bc6b5400094a6d6b697dfea042bca9858",
+    "flags_phase900": "645691e3559d534c05aec74edeea78e5bec7a721d463150a0427b28ed501c9a4",
+    "count_flags": "52ed87e969884aed7cb6d2ccd047f484dd41c26c31c28a94bbebba6201bcfeca",
+    "count_flags_sham": "98836033cdea490899422c99266abbd17a7fee2f9c44f68da3de288059dce2f6",
+    "count_flags_phase600": "adc46f814cb8bdfbad73d6912be4cb6637e80641e22001d3bf8b35865e0c4051",
+    "count_flags_phase900": "d9a24fc5e624203db8d737bb7eeaad3d2c0d0ee831dcb2a15428205f2cb424dd",
+    "aligned": "b0b84489a3f6fd673b06dc4bdc71c8f176387a231ca19fe1da5ea48ca4ee0fd5",
+    "candidate": "3466c37a62f2fb6d764d0123212749ff810138ca05fcad336ce1afa05bdb1e3f",
+    "base": "b0dfc65d0c026d62aa64ef3d69a089eb73b51088c84af75b44617ea2a1737f0e"
+  },
+  "files": {
+    "collect.py": "910f1cc5ae08b9288eccec3edeab078cbf95c6b586e54e3e48b8e772113a613b",
+    "protocol.py": "1ffd4d6e157747033a57e674e64f1bb8e743b8c75ff260782fe576b0ef5f99e6",
+    "analyze.py": "27027b7cbf21c30a60a492d8b6feff88795958957ed0ae4f96e56092faffe8e9",
+    "chain_common.py": "24f2e1551c457b6e5d37f70229d3ec2f85e49cc4a3da563ad4fb31a6f411e7d5",
+    "window.py": "daf187949c5be104ead5e727353406a6670b8f54adaa9a1ad300fa4d9ab7b2f6"
+  }
+}

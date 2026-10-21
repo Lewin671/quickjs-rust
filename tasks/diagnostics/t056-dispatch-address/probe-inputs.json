@@ -1,0 +1,14 @@
+{
+  "source_job": "20261021T125859Z-t056-ops-address-qualification",
+  "roles": {
+    "count_sham": {"binary_sha256":"8c632a408a2dd09452c05c80a9180cf6ea837ac07632143e34d762f20b3d5d7e","entry":4294987152,"header":4294987286},
+    "count_phase600": {"binary_sha256":"3f07ff8df1176e99dd4c1bb7dc97069c8b74620c6202a9a1337638b02c2b6969","entry":4294987152,"header":4294987286},
+    "count_phase900": {"binary_sha256":"0381fa504885390b015914aa015619c1a942d238178dfb516b0c5dfe332ab041","entry":4294987152,"header":4294987286},
+    "flags_sham": {"binary_sha256":"d54fb5762bee9342564d723503f6bf2f2d3bc7b70e86ba4569b7a43dac1f166a","entry":4294987152,"header":4294987286},
+    "flags_phase600": {"binary_sha256":"7cdc11a34bfa6ae2655da95ddf0c3c4bc6b5400094a6d6b697dfea042bca9858","entry":4294987152,"header":4294987286},
+    "flags_phase900": {"binary_sha256":"645691e3559d534c05aec74edeea78e5bec7a721d463150a0427b28ed501c9a4","entry":4294987152,"header":4294987286},
+    "count_flags_sham": {"binary_sha256":"98836033cdea490899422c99266abbd17a7fee2f9c44f68da3de288059dce2f6","entry":4294987136,"header":4294987270},
+    "count_flags_phase600": {"binary_sha256":"adc46f814cb8bdfbad73d6912be4cb6637e80641e22001d3bf8b35865e0c4051","entry":4294987136,"header":4294987270},
+    "count_flags_phase900": {"binary_sha256":"d9a24fc5e624203db8d737bb7eeaad3d2c0d0ee831dcb2a15428205f2cb424dd","entry":4294987136,"header":4294987270}
+  }
+}

@@ -1,0 +1,208 @@
+{
+  "job": "20261021T123327Z-t056-header-subparts",
+  "assessment_unchanged": {
+    "diagnostic_only": true,
+    "decision_evidence": false,
+    "attempts_consumed": 0,
+    "effects": {
+      "broad/global_read": {
+        "C/B": {
+          "aligned": {
+            "wall_ns": {"median":1.0064793411545692,"lower":0.9914543333839514,"upper":1.0203838822669737},
+            "instructions": {"median":1.0000641737419615,"lower":0.9999918148113703,"upper":1.0001004782505925}
+          },
+          "candidate": {
+            "wall_ns": {"median":1.4360134263244808,"lower":1.35360850224618,"upper":1.4809010696961267},
+            "instructions": {"median":1.0002162592742019,"lower":1.0001781309770124,"upper":1.000233179167012}
+          },
+          "full_a": {
+            "wall_ns": {"median":1.5633631447915737,"lower":1.521861323630567,"upper":1.5775712413889853},
+            "instructions": {"median":1.0003088818853194,"lower":1.0002191836960932,"upper":1.0003268209918574}
+          },
+          "count": {
+            "wall_ns": {"median":1.000792244267801,"lower":0.9785199650390504,"upper":1.015259193448153},
+            "instructions": {"median":0.999989360979221,"lower":0.9999446373477013,"upper":1.0000825159062083}
+          },
+          "flags": {
+            "wall_ns": {"median":0.998029025131216,"lower":0.9911273581147162,"upper":1.02434634556827},
+            "instructions": {"median":1.000029548662087,"lower":1.0000171321358748,"upper":1.0001139757715305}
+          },
+          "order": {
+            "wall_ns": {"median":1.0017534819344127,"lower":0.992118362730372,"upper":1.0131623897062796},
+            "instructions": {"median":1.0000280395404069,"lower":0.9999687147575322,"upper":1.0000647213705158}
+          },
+          "count_flags": {
+            "wall_ns": {"median":1.5695045045076617,"lower":1.5499030547091817,"upper":1.5854407034693399},
+            "instructions": {"median":1.000294510863362,"lower":1.0002325314866956,"upper":1.0003551229722094}
+          },
+          "count_order": {
+            "wall_ns": {"median":1.0020083602546632,"lower":0.9862654980986972,"upper":1.0256698475830437},
+            "instructions": {"median":1.0000335214473013,"lower":0.9999584440761089,"upper":1.0000779092124625}
+          },
+          "flags_order": {
+            "wall_ns": {"median":0.9964884626063476,"lower":0.9751144033221639,"upper":1.0164824425349779},
+            "instructions": {"median":1.0000275060051935,"lower":0.9999209730499329,"upper":1.0000801708685334}
+          }
+        },
+        "AA": {
+          "aligned": {
+            "wall_ns": {"median":0.9900500812435091,"lower":0.9796259508060795,"upper":1.009136533450154},
+            "instructions": {"median":0.9999231444520167,"lower":0.9998840047557203,"upper":1.000016237102479}
+          },
+          "candidate": {
+            "wall_ns": {"median":0.989196915876231,"lower":0.9743374712556185,"upper":1.0574421279403274},
+            "instructions": {"median":1.0000026780213755,"lower":0.9999844285903052,"upper":1.0000391762233922}
+          },
+          "full_a": {
+            "wall_ns": {"median":1.006143991736196,"lower":0.9894382757019323,"upper":1.0392966180866603},
+            "instructions": {"median":0.9999371321563343,"lower":0.9998595946212638,"upper":1.0000725581761936}
+          }
+        },
+        "vs_aligned": {
+          "count": {
+            "wall_ns": {"median":0.988530207872426,"lower":0.9869541461372663,"upper":0.9971787832664193},
+            "instructions": {"median":0.9999680579173181,"lower":0.9998804712763453,"upper":0.9999987238203233}
+          },
+          "flags": {
+            "wall_ns": {"median":0.9996702064248192,"lower":0.9887190668046435,"upper":1.0117957165613305},
+            "instructions": {"median":1.0000012613569493,"lower":0.9999529614125555,"upper":1.0000377341595779}
+          },
+          "order": {
+            "wall_ns": {"median":0.9944940457045726,"lower":0.9799626015901365,"upper":1.0103879202537842},
+            "instructions": {"median":0.9999647897439136,"lower":0.9999275685675979,"upper":1.000000547593413}
+          },
+          "count_flags": {
+            "wall_ns": {"median":1.55170745433577,"lower":1.5442900518105065,"upper":1.5830325731198898},
+            "instructions": {"median":1.0002358596842356,"lower":1.000132039968958,"upper":1.0003026985296364}
+          },
+          "count_order": {
+            "wall_ns": {"median":0.9955578016188816,"lower":0.9826937191523489,"upper":1.0093694090986918},
+            "instructions": {"median":0.9999666289915906,"lower":0.9999330499237352,"upper":1.000013734589101}
+          },
+          "flags_order": {
+            "wall_ns": {"median":0.9859626681494985,"lower":0.9715830082740948,"upper":1.0099387051193063},
+            "instructions": {"median":0.9999574264333161,"lower":0.9999291576587047,"upper":0.9999963789791277}
+          },
+          "full_a": {
+            "wall_ns": {"median":1.5470607978943172,"lower":1.534978740207099,"upper":1.5532987920032049},
+            "instructions": {"median":1.0002250708333218,"lower":1.000178009476362,"upper":1.0002888523755984}
+          }
+        }
+      },
+      "broad/local_read": {
+        "C/B": {
+          "aligned": {
+            "wall_ns": {"median":0.9682752902114266,"lower":0.9377781971897097,"upper":0.9963595734745672},
+            "instructions": {"median":0.9999564744231524,"lower":0.9999108890076701,"upper":1.000054342400529}
+          },
+          "candidate": {
+            "wall_ns": {"median":0.9368441952554374,"lower":0.9344249398804556,"upper":0.9615344027785276},
+            "instructions": {"median":0.9999631195317721,"lower":0.9999099076052541,"upper":1.0000293956722277}
+          },
+          "full_a": {
+            "wall_ns": {"median":0.9384947831823381,"lower":0.9212358999685564,"upper":0.9658772571032769},
+            "instructions": {"median":0.9999707456233121,"lower":0.9999248594999344,"upper":1.0000358794811968}
+          },
+          "count": {
+            "wall_ns": {"median":0.9700245028989215,"lower":0.952761904070686,"upper":1.0036093673468367},
+            "instructions": {"median":1.0000158322465214,"lower":0.999937254360215,"upper":1.0000646770777524}
+          },
+          "flags": {
+            "wall_ns": {"median":0.9673957351815746,"lower":0.9531091244358045,"upper":0.9800563904485361},
+            "instructions": {"median":1.0000105731900435,"lower":0.9999647368369504,"upper":1.0000525653305206}
+          },
+          "order": {
+            "wall_ns": {"median":0.9756320194984928,"lower":0.9531153545757598,"upper":0.9790917037604893},
+            "instructions": {"median":0.9999914325701351,"lower":0.9999090533312905,"upper":1.000068732510324}
+          },
+          "count_flags": {
+            "wall_ns": {"median":0.9383287349701624,"lower":0.9320223469166465,"upper":0.9573798972602446},
+            "instructions": {"median":0.9999620175892082,"lower":0.9999428747711717,"upper":1.0000391275122744}
+          },
+          "count_order": {
+            "wall_ns": {"median":0.9700591863664253,"lower":0.9478024311650728,"upper":0.9889699750630627},
+            "instructions": {"median":0.9999892407327208,"lower":0.9998746213309943,"upper":1.0000655155714844}
+          },
+          "flags_order": {
+            "wall_ns": {"median":0.9687196935820855,"lower":0.9485493696677018,"upper":0.9848813151304399},
+            "instructions": {"median":0.9999991646359988,"lower":0.999896831345828,"upper":1.0000577361885192}
+          }
+        },
+        "AA": {
+          "aligned": {
+            "wall_ns": {"median":1.0081679283266403,"lower":0.9788324117176733,"upper":1.0197952063790705},
+            "instructions": {"median":1.0000090257943879,"lower":0.999967247733444,"upper":1.0001027268139517}
+          },
+          "candidate": {
+            "wall_ns": {"median":1.0003672440358191,"lower":0.988121456916025,"upper":1.013235789720925},
+            "instructions": {"median":1.0000056349658302,"lower":0.9999391551226475,"upper":1.0000472303582313}
+          },
+          "full_a": {
+            "wall_ns": {"median":0.9943789082351321,"lower":0.9718220088606516,"upper":1.0285964278331785},
+            "instructions": {"median":0.9999799903931533,"lower":0.9999427077700116,"upper":1.0000641341171976}
+          }
+        },
+        "vs_aligned": {
+          "count": {
+            "wall_ns": {"median":1.003451253266072,"lower":0.9918096218062937,"upper":1.0343858556381946},
+            "instructions": {"median":1.0000131236352416,"lower":0.999987487281804,"upper":1.0001304403618194}
+          },
+          "flags": {
+            "wall_ns": {"median":1.0038515014642178,"lower":0.9810689023851821,"upper":1.0248588803666863},
+            "instructions": {"median":1.0000355511211487,"lower":0.9999982230265566,"upper":1.0000661800112631}
+          },
+          "order": {
+            "wall_ns": {"median":0.9921775580244264,"lower":0.9826690381928481,"upper":1.0419327622895662},
+            "instructions": {"median":1.0000154935124022,"lower":0.9999592848361705,"upper":1.0000805507404213}
+          },
+          "count_flags": {
+            "wall_ns": {"median":0.9767849278865477,"lower":0.9354277027383199,"upper":1.0033216820887814},
+            "instructions": {"median":1.0000055434073358,"lower":0.9999398393642448,"upper":1.0000529461570618}
+          },
+          "count_order": {
+            "wall_ns": {"median":0.9985162001051348,"lower":0.9822661831506493,"upper":1.0342326806230824},
+            "instructions": {"median":1.000018750407561,"lower":0.9999248511061458,"upper":1.000055584592822}
+          },
+          "flags_order": {
+            "wall_ns": {"median":1.000458963866115,"lower":0.9874244421142647,"upper":1.0222829748340747},
+            "instructions": {"median":1.0000134430783743,"lower":0.9999470622367235,"upper":1.0000882834953586}
+          },
+          "full_a": {
+            "wall_ns": {"median":0.9694063095464718,"lower":0.9589915650892853,"upper":1.0007641316409102},
+            "instructions": {"median":0.9999815380839325,"lower":0.9999750917988542,"upper":1.000061726099277}
+          }
+        }
+      }
+    },
+    "AA_eligible": true,
+    "anchors_reproduced": true,
+    "threshold_matches": [],
+    "qualified_triggers": [],
+    "minimal_observed_bad_subsets": ["count_flags"],
+    "verdict": "header factor pattern available; mechanism and fix pending lead review",
+    "rule": {
+      "single_part_sufficient": 1.3,
+      "complement_restores_max": 1.05,
+      "metric": "five paired-block global wall N/2N increments relative to f58",
+      "AA": "global/local aligned,candidate,full_a median [1/1.03,1.03], CI [1/1.10,1.10], instructions median [1/1.01,1.01]",
+      "anchors": "aligned/base <=1.05; candidate/base and full_a/base >=1.30",
+      "interpretation": "report all factorial cell medians/CIs and minimal observed bad subsets. Singleton >=1.30 with complement <=1.05 is bidirectional match; no singletons may indicate combination interaction. No deletion/retry, no architectural fix or acceptance decision."
+    },
+    "limits": "source type/order factors include downstream code generation and heap layout; instruction fraction does not establish time attribution; shared five f58 references, no row deletion or retry"
+  },
+  "complete": {
+    "cases": 2,
+    "images_vs_base": 9,
+    "roles": 13,
+    "blocks": 5,
+    "units": 130,
+    "measured_execs": 260,
+    "preflights": 130,
+    "seconds": 131.99265529494733,
+    "diagnostic_only": true,
+    "decision_evidence": false,
+    "attempts_consumed": 0,
+    "all_outputs_match": true
+  },
+  "raw_sha256": {"assessment.json":"5a96bfcff063102db9f39b6a926f74f57ea3f8554dc0b95bb81270b7db26f0dc","complete.json":"6e06bfe247ae4665010cc03388700fcd22329d5715edf03cc8c4dd7377c63ac4"}
+}

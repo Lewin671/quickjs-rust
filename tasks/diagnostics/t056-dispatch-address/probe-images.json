@@ -1,0 +1,222 @@
+{
+  "diagnostic_only": true,
+  "timing": false,
+  "images": {
+    "count": {"kind":"original","source":"count","binary_sha256":"661969a50fb0bc36f73e6fe1af20e78218c2ceffb63d62a4903c7c61a67858ea"},
+    "count_sham": {
+      "kind": "sham",
+      "source": "count",
+      "binary_sha256": "8c632a408a2dd09452c05c80a9180cf6ea837ac07632143e34d762f20b3d5d7e",
+      "canonical_sha256": "661969a50fb0bc36f73e6fe1af20e78218c2ceffb63d62a4903c7c61a67858ea",
+      "first_entry_jmp": "0x100004df8",
+      "normal_exit_jmp": "0x100005945",
+      "entry_helper": "0x100002110",
+      "cleanup_helper": "0x100002410",
+      "patches": [
+        {
+          "address": "0x100002110",
+          "bytes": "4c8945d0488d6424e04c895c24104889442418498b430848894424089c5051525657415041514152415341544155415641574989e748c7c70000000048c7c60010000048c7c20300000049c7c20210000049c7c0ffffffff4531c9b8c50000020f0572564989c6498947704d8b5f20fc498dbe00060000498b7308498b4b1048c1e104f3a4498dbe00090000498b7308498b4b1048c1e104f3a4415f415e415d415c415b415a415941585f5e5a59589d488b442418e94c2c0000bf09000000b8010000020f050f0b"
+        },
+        {"address":"0x100002410","bytes":"9c50488b44241849894308589d488d642420e998550000"},
+        {"address":"0x100004df8","bytes":"e913d3ffff909090"},
+        {"address":"0x100005945","bytes":"e9c6caffff"}
+      ],
+      "unsigned_headers_and_all_other_bytes_preserved": true,
+      "all_repeated_path_bytes_and_PCs_preserved": true,
+      "arena": "one RW anonymous page, both600/900 copied identically, bounded until child exit; original program.ops pointer restored before normal Exit",
+      "numeric_global_local_only": true
+    },
+    "count_phase600": {
+      "kind": "phase600",
+      "source": "count",
+      "binary_sha256": "3f07ff8df1176e99dd4c1bb7dc97069c8b74620c6202a9a1337638b02c2b6969",
+      "canonical_sha256": "661969a50fb0bc36f73e6fe1af20e78218c2ceffb63d62a4903c7c61a67858ea",
+      "first_entry_jmp": "0x100004df8",
+      "normal_exit_jmp": "0x100005945",
+      "entry_helper": "0x100002110",
+      "cleanup_helper": "0x100002410",
+      "patches": [
+        {
+          "address": "0x100002110",
+          "bytes": "4c8945d0488d6424e04c895c24104889442418498b430848894424089c5051525657415041514152415341544155415641574989e748c7c70000000048c7c60010000048c7c20300000049c7c20210000049c7c0ffffffff4531c9b8c50000020f0572614989c6498947704d8b5f20fc498dbe00060000498b7308498b4b1048c1e104f3a4498dbe00090000498b7308498b4b1048c1e104f3a4498d860006000049894308415f415e415d415c415b415a415941585f5e5a59589d488b442418e9412c0000bf09000000b8010000020f050f0b"
+        },
+        {"address":"0x100002410","bytes":"9c50488b44241849894308589d488d642420e998550000"},
+        {"address":"0x100004df8","bytes":"e913d3ffff909090"},
+        {"address":"0x100005945","bytes":"e9c6caffff"}
+      ],
+      "unsigned_headers_and_all_other_bytes_preserved": true,
+      "all_repeated_path_bytes_and_PCs_preserved": true,
+      "arena": "one RW anonymous page, both600/900 copied identically, bounded until child exit; original program.ops pointer restored before normal Exit",
+      "numeric_global_local_only": true
+    },
+    "count_phase900": {
+      "kind": "phase900",
+      "source": "count",
+      "binary_sha256": "0381fa504885390b015914aa015619c1a942d238178dfb516b0c5dfe332ab041",
+      "canonical_sha256": "661969a50fb0bc36f73e6fe1af20e78218c2ceffb63d62a4903c7c61a67858ea",
+      "first_entry_jmp": "0x100004df8",
+      "normal_exit_jmp": "0x100005945",
+      "entry_helper": "0x100002110",
+      "cleanup_helper": "0x100002410",
+      "patches": [
+        {
+          "address": "0x100002110",
+          "bytes": "4c8945d0488d6424e04c895c24104889442418498b430848894424089c5051525657415041514152415341544155415641574989e748c7c70000000048c7c60010000048c7c20300000049c7c20210000049c7c0ffffffff4531c9b8c50000020f0572614989c6498947704d8b5f20fc498dbe00060000498b7308498b4b1048c1e104f3a4498dbe00090000498b7308498b4b1048c1e104f3a4498d860009000049894308415f415e415d415c415b415a415941585f5e5a59589d488b442418e9412c0000bf09000000b8010000020f050f0b"
+        },
+        {"address":"0x100002410","bytes":"9c50488b44241849894308589d488d642420e998550000"},
+        {"address":"0x100004df8","bytes":"e913d3ffff909090"},
+        {"address":"0x100005945","bytes":"e9c6caffff"}
+      ],
+      "unsigned_headers_and_all_other_bytes_preserved": true,
+      "all_repeated_path_bytes_and_PCs_preserved": true,
+      "arena": "one RW anonymous page, both600/900 copied identically, bounded until child exit; original program.ops pointer restored before normal Exit",
+      "numeric_global_local_only": true
+    },
+    "flags": {"kind":"original","source":"flags","binary_sha256":"100cda383a0f5146e2f9e025f273edfb1d622fe0754e9d84bef10954732a7152"},
+    "flags_sham": {
+      "kind": "sham",
+      "source": "flags",
+      "binary_sha256": "d54fb5762bee9342564d723503f6bf2f2d3bc7b70e86ba4569b7a43dac1f166a",
+      "canonical_sha256": "100cda383a0f5146e2f9e025f273edfb1d622fe0754e9d84bef10954732a7152",
+      "first_entry_jmp": "0x100004df8",
+      "normal_exit_jmp": "0x100005945",
+      "entry_helper": "0x100002110",
+      "cleanup_helper": "0x100002410",
+      "patches": [
+        {
+          "address": "0x100002110",
+          "bytes": "4c8945d0488d6424e04c895c24104889442418498b430848894424089c5051525657415041514152415341544155415641574989e748c7c70000000048c7c60010000048c7c20300000049c7c20210000049c7c0ffffffff4531c9b8c50000020f0572564989c6498947704d8b5f20fc498dbe00060000498b7308498b4b1048c1e104f3a4498dbe00090000498b7308498b4b1048c1e104f3a4415f415e415d415c415b415a415941585f5e5a59589d488b442418e94c2c0000bf09000000b8010000020f050f0b"
+        },
+        {"address":"0x100002410","bytes":"9c50488b44241849894308589d488d642420e998550000"},
+        {"address":"0x100004df8","bytes":"e913d3ffff909090"},
+        {"address":"0x100005945","bytes":"e9c6caffff"}
+      ],
+      "unsigned_headers_and_all_other_bytes_preserved": true,
+      "all_repeated_path_bytes_and_PCs_preserved": true,
+      "arena": "one RW anonymous page, both600/900 copied identically, bounded until child exit; original program.ops pointer restored before normal Exit",
+      "numeric_global_local_only": true
+    },
+    "flags_phase600": {
+      "kind": "phase600",
+      "source": "flags",
+      "binary_sha256": "7cdc11a34bfa6ae2655da95ddf0c3c4bc6b5400094a6d6b697dfea042bca9858",
+      "canonical_sha256": "100cda383a0f5146e2f9e025f273edfb1d622fe0754e9d84bef10954732a7152",
+      "first_entry_jmp": "0x100004df8",
+      "normal_exit_jmp": "0x100005945",
+      "entry_helper": "0x100002110",
+      "cleanup_helper": "0x100002410",
+      "patches": [
+        {
+          "address": "0x100002110",
+          "bytes": "4c8945d0488d6424e04c895c24104889442418498b430848894424089c5051525657415041514152415341544155415641574989e748c7c70000000048c7c60010000048c7c20300000049c7c20210000049c7c0ffffffff4531c9b8c50000020f0572614989c6498947704d8b5f20fc498dbe00060000498b7308498b4b1048c1e104f3a4498dbe00090000498b7308498b4b1048c1e104f3a4498d860006000049894308415f415e415d415c415b415a415941585f5e5a59589d488b442418e9412c0000bf09000000b8010000020f050f0b"
+        },
+        {"address":"0x100002410","bytes":"9c50488b44241849894308589d488d642420e998550000"},
+        {"address":"0x100004df8","bytes":"e913d3ffff909090"},
+        {"address":"0x100005945","bytes":"e9c6caffff"}
+      ],
+      "unsigned_headers_and_all_other_bytes_preserved": true,
+      "all_repeated_path_bytes_and_PCs_preserved": true,
+      "arena": "one RW anonymous page, both600/900 copied identically, bounded until child exit; original program.ops pointer restored before normal Exit",
+      "numeric_global_local_only": true
+    },
+    "flags_phase900": {
+      "kind": "phase900",
+      "source": "flags",
+      "binary_sha256": "645691e3559d534c05aec74edeea78e5bec7a721d463150a0427b28ed501c9a4",
+      "canonical_sha256": "100cda383a0f5146e2f9e025f273edfb1d622fe0754e9d84bef10954732a7152",
+      "first_entry_jmp": "0x100004df8",
+      "normal_exit_jmp": "0x100005945",
+      "entry_helper": "0x100002110",
+      "cleanup_helper": "0x100002410",
+      "patches": [
+        {
+          "address": "0x100002110",
+          "bytes": "4c8945d0488d6424e04c895c24104889442418498b430848894424089c5051525657415041514152415341544155415641574989e748c7c70000000048c7c60010000048c7c20300000049c7c20210000049c7c0ffffffff4531c9b8c50000020f0572614989c6498947704d8b5f20fc498dbe00060000498b7308498b4b1048c1e104f3a4498dbe00090000498b7308498b4b1048c1e104f3a4498d860009000049894308415f415e415d415c415b415a415941585f5e5a59589d488b442418e9412c0000bf09000000b8010000020f050f0b"
+        },
+        {"address":"0x100002410","bytes":"9c50488b44241849894308589d488d642420e998550000"},
+        {"address":"0x100004df8","bytes":"e913d3ffff909090"},
+        {"address":"0x100005945","bytes":"e9c6caffff"}
+      ],
+      "unsigned_headers_and_all_other_bytes_preserved": true,
+      "all_repeated_path_bytes_and_PCs_preserved": true,
+      "arena": "one RW anonymous page, both600/900 copied identically, bounded until child exit; original program.ops pointer restored before normal Exit",
+      "numeric_global_local_only": true
+    },
+    "count_flags": {"kind":"original","source":"count_flags","binary_sha256":"52ed87e969884aed7cb6d2ccd047f484dd41c26c31c28a94bbebba6201bcfeca"},
+    "count_flags_sham": {
+      "kind": "sham",
+      "source": "count_flags",
+      "binary_sha256": "98836033cdea490899422c99266abbd17a7fee2f9c44f68da3de288059dce2f6",
+      "canonical_sha256": "52ed87e969884aed7cb6d2ccd047f484dd41c26c31c28a94bbebba6201bcfeca",
+      "first_entry_jmp": "0x100004de8",
+      "normal_exit_jmp": "0x100005932",
+      "entry_helper": "0x100002110",
+      "cleanup_helper": "0x100002410",
+      "patches": [
+        {
+          "address": "0x100002110",
+          "bytes": "4c8945d0488d6424e04c895c24104889442418498b430848894424089c5051525657415041514152415341544155415641574989e748c7c70000000048c7c60010000048c7c20300000049c7c20210000049c7c0ffffffff4531c9b8c50000020f0572564989c6498947704d8b5f20fc498dbe00060000498b7308498b4b1048c1e104f3a4498dbe00090000498b7308498b4b1048c1e104f3a4415f415e415d415c415b415a415941585f5e5a59589d488b442418e93c2c0000bf09000000b8010000020f050f0b"
+        },
+        {"address":"0x100002410","bytes":"9c50488b44241849894308589d488d642420e97c550000"},
+        {"address":"0x100004de8","bytes":"e923d3ffff909090"},
+        {"address":"0x100005932","bytes":"e9d9caffff"}
+      ],
+      "unsigned_headers_and_all_other_bytes_preserved": true,
+      "all_repeated_path_bytes_and_PCs_preserved": true,
+      "arena": "one RW anonymous page, both600/900 copied identically, bounded until child exit; original program.ops pointer restored before normal Exit",
+      "numeric_global_local_only": true
+    },
+    "count_flags_phase600": {
+      "kind": "phase600",
+      "source": "count_flags",
+      "binary_sha256": "adc46f814cb8bdfbad73d6912be4cb6637e80641e22001d3bf8b35865e0c4051",
+      "canonical_sha256": "52ed87e969884aed7cb6d2ccd047f484dd41c26c31c28a94bbebba6201bcfeca",
+      "first_entry_jmp": "0x100004de8",
+      "normal_exit_jmp": "0x100005932",
+      "entry_helper": "0x100002110",
+      "cleanup_helper": "0x100002410",
+      "patches": [
+        {
+          "address": "0x100002110",
+          "bytes": "4c8945d0488d6424e04c895c24104889442418498b430848894424089c5051525657415041514152415341544155415641574989e748c7c70000000048c7c60010000048c7c20300000049c7c20210000049c7c0ffffffff4531c9b8c50000020f0572614989c6498947704d8b5f20fc498dbe00060000498b7308498b4b1048c1e104f3a4498dbe00090000498b7308498b4b1048c1e104f3a4498d860006000049894308415f415e415d415c415b415a415941585f5e5a59589d488b442418e9312c0000bf09000000b8010000020f050f0b"
+        },
+        {"address":"0x100002410","bytes":"9c50488b44241849894308589d488d642420e97c550000"},
+        {"address":"0x100004de8","bytes":"e923d3ffff909090"},
+        {"address":"0x100005932","bytes":"e9d9caffff"}
+      ],
+      "unsigned_headers_and_all_other_bytes_preserved": true,
+      "all_repeated_path_bytes_and_PCs_preserved": true,
+      "arena": "one RW anonymous page, both600/900 copied identically, bounded until child exit; original program.ops pointer restored before normal Exit",
+      "numeric_global_local_only": true
+    },
+    "count_flags_phase900": {
+      "kind": "phase900",
+      "source": "count_flags",
+      "binary_sha256": "d9a24fc5e624203db8d737bb7eeaad3d2c0d0ee831dcb2a15428205f2cb424dd",
+      "canonical_sha256": "52ed87e969884aed7cb6d2ccd047f484dd41c26c31c28a94bbebba6201bcfeca",
+      "first_entry_jmp": "0x100004de8",
+      "normal_exit_jmp": "0x100005932",
+      "entry_helper": "0x100002110",
+      "cleanup_helper": "0x100002410",
+      "patches": [
+        {
+          "address": "0x100002110",
+          "bytes": "4c8945d0488d6424e04c895c24104889442418498b430848894424089c5051525657415041514152415341544155415641574989e748c7c70000000048c7c60010000048c7c20300000049c7c20210000049c7c0ffffffff4531c9b8c50000020f0572614989c6498947704d8b5f20fc498dbe00060000498b7308498b4b1048c1e104f3a4498dbe00090000498b7308498b4b1048c1e104f3a4498d860009000049894308415f415e415d415c415b415a415941585f5e5a59589d488b442418e9312c0000bf09000000b8010000020f050f0b"
+        },
+        {"address":"0x100002410","bytes":"9c50488b44241849894308589d488d642420e97c550000"},
+        {"address":"0x100004de8","bytes":"e923d3ffff909090"},
+        {"address":"0x100005932","bytes":"e9d9caffff"}
+      ],
+      "unsigned_headers_and_all_other_bytes_preserved": true,
+      "all_repeated_path_bytes_and_PCs_preserved": true,
+      "arena": "one RW anonymous page, both600/900 copied identically, bounded until child exit; original program.ops pointer restored before normal Exit",
+      "numeric_global_local_only": true
+    },
+    "aligned": {"kind":"original","source":"aligned","binary_sha256":"b0b84489a3f6fd673b06dc4bdc71c8f176387a231ca19fe1da5ea48ca4ee0fd5"},
+    "candidate": {"kind":"original","source":"candidate","binary_sha256":"3466c37a62f2fb6d764d0123212749ff810138ca05fcad336ce1afa05bdb1e3f"}
+  },
+  "all_outputs_match": true,
+  "repeated_instruction_count": 152,
+  "input_sha256": "c15c51f2353d9ad36b81a64b392150c9bbc37ecc120415ce4f5f6adcaaee4b05",
+  "producer_sha256": "4bcb4c74dddff5a04a0d5fe871df7faa13af7c180e4e62c9a9f7534c4a7187c5"
+}

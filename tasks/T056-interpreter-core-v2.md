@@ -7,16 +7,16 @@
   `agent/t056-m1-stage2/codex`; the write-site add replay removed from stage A stays on
   `agent/t056-add-transition-replay/claude`.
 - Verified at: dfff3bb6/image3466c37a exact42672/42672, full/NG255/subset5170 and bound86 pass;
-  lead114227Z a-only threshold match (AA inconclusive); header images/audits and fresh layouts120731Z done0.
+  lead123327Z AA eligible, minimal bad subset count+flags; address capture/probe qualification130515Z done0.
 - Evidence: [stage A record](archive/T056-m1-stageA-record.md),
   [allocation follow-up](archive/T056-m1-stageA-allocation-diagnosis.md),
-  [architecture review](archive/T056-architecture-review.md), [stack/startup diagnosis](archive/T056-stack-phase-diagnosis.md), [PMU/FP diagnosis](archive/T056-pmu-attribution.md), [source bisection](archive/T056-source-bisect.md), [header factors/full-loop accounting](archive/T056-header-subparts.md), [M2 inputs](archive/T056-m2-design-inputs.md);
+  [architecture review](archive/T056-architecture-review.md), [stack/startup diagnosis](archive/T056-stack-phase-diagnosis.md), [PMU/FP diagnosis](archive/T056-pmu-attribution.md), [source bisection](archive/T056-source-bisect.md), [header factors/full-loop accounting](archive/T056-header-subparts.md), [dispatch addresses](archive/T056-dispatch-address.md), [M2 inputs](archive/T056-m2-design-inputs.md);
   plans [`interpreter-core-v2-atoms-layouts`](performance-units/interpreter-core-v2-atoms-layouts.json) (closed),
   [`interpreter-core-v2-layout-edges`](performance-units/interpreter-core-v2-layout-edges.json).
-- Unresolved: lead114227Z uniquely matches header group a; automatic verdict remains inconclusive due AA.
-  Full repeated loop is152 instructions, no ObjectData/RefCell access; hardware cause remains unknown.
-- Next action: lead runs the [≤15min header-factor matrix](diagnostics/t056-header/README.md); inspect singleton/interaction before fixes.
-  PMU blocked; no owner timing/production change; last attempt unspent.
+- Unresolved: fast/slow relative-PC families and ops600/900 covary; no unique hardware cause.
+  All152 instructions/operands enumerated; no repeated ObjectData/poll/publication access; PMU blocked.
+- Next action: lead runs the [≤15min ops-address confirmation](diagnostics/t056-dispatch-address/README.md); sham/neutrality before interpretation.
+  No owner timing/production change; last attempt unspent.
 
 ## Goal and scope
 

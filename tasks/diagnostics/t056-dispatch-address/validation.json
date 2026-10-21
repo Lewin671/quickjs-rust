@@ -1,0 +1,30 @@
+{
+  "diagnostic_only": true,
+  "timing_submitted": false,
+  "producer_comment_only_change_verified": true,
+  "real_original_capture_rows": 60,
+  "real_probe_capture_rows": 108,
+  "all152_repeat_bytes_and_PCs_preserved_for_probes": true,
+  "retained_flags_sham_phase_outliers": [
+    "900",
+    "180"
+  ],
+  "mock_process_calls": {
+    "success": 510,
+    "wrong-output": 17,
+    "timeout": 1,
+    "disturbed": 510,
+    "expired": 0,
+    "bad-hash": 0,
+    "owner": 0
+  },
+  "checks": [
+    "all binary/capture/receipt seals",
+    "every patch and byte outside patches",
+    "all loop PCs/32B/64B windows and data operands",
+    "causal/source-dependent/null/confounded/AA result routing",
+    "five blocks/17 roles/170 units/340 measured+170 preflight",
+    "output/timeout/disturbance/deadline/hash/owner rejection",
+    "rendered shell/embedded Python and15min/DST/quiet-window guards"
+  ]
+}
