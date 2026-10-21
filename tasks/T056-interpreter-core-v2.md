@@ -1,6 +1,6 @@
 # T056: Interpreter core v2
 
-- Status: active; M1 stage1 on main (`ab9c29b6`); M1.2 closed. Replacement plan
+- Status: blocked on the [kernel prerequisite](T064-kernel-isolation.md); M1 stage1 on main (`ab9c29b6`); M1.2 closed. Replacement plan
   [`interpreter-core-v2-layout-edges`](performance-units/interpreter-core-v2-layout-edges.json) is implemented
   as stage A on `agent/t056-m1-stage-a/claude`. Valid0a9af81b K=6 spent attempt1/2; one remains across A+B.
 - Implementation: stage 1 on main. Stage A on its branch, not on main; the rejected M1.2 candidate stays on
@@ -15,9 +15,9 @@
   [`interpreter-core-v2-layout-edges`](performance-units/interpreter-core-v2-layout-edges.json).
 - Unresolved:112B header returns Add store29ca→29be: four inlined brand checks shorten3B each.
   Header class crossing alone insufficient (102 unpack allocations); instruction/wall residuals remain.
-- Next action: inspect [hot/cold evidence and gated bundle](diagnostics/t056-hot-cold/README.md).
-  Static fast-family prerequisite fails: no timing/last attempt on this image; kernel/service isolation needs its own plan.
-  PMU stays closed with installed helper untouched; no owner timing, last frozen attempt unspent.
+- Next action: independent review of [T064](T064-kernel-isolation.md) and the updated [core design](../docs/design/interpreter-core-v2.md#kernel-isolation-prerequisite-k0-before-m1-resumes).
+  Planning only; no5dd3 timing, runtime implementation or old-plan rebase. Proposed successor transition awaits review.
+  PMU stays closed with installed helper untouched; the last A+B attempt stays unspent.
 
 ## Goal and scope
 
@@ -51,6 +51,8 @@ architecture. Read their full records before freezing a new unit.
 | [T053](archive/T053-ordinary-own-slot-hot-read-fat-lto.md) | Hash-map 0.917431x did not excuse six failing controls; layout shifts were not isolated causality. V2 requires complete controls, exact-binary attribution and layout audit at each stage. |
 
 ## Ordered migration
+
+[T064](T064-kernel-isolation.md) is the planning prerequisite before M1 resumes; its proposed K→A→B successor/base/budget transition is not yet approved.
 
 The numbered units run in order. M1/M2/M3 are separate migrations with their own
 fixed base; numbered substeps are independently correct stage boundaries.

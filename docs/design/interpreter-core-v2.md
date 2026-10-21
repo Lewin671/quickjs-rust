@@ -1,160 +1,126 @@
 # Interpreter core v2: target and migration
 
-Proposed architecture, **not implemented or a frozen performance plan**. The ordinary interpreter must become cheaper
-even when every accelerator declines. Calls, names, layouts and values share the contracts below; none depends on a
-benchmark or a literal's source form. [T056](../../tasks/T056-interpreter-core-v2.md) owns evidence, source checks and
-next work; [architecture](../architecture.md) describes today's code. The protected [binding](env-model-rewrite.md) and
-[suspension](generator-suspension.md) invariants remain requirements. No new crate, dependency, FFI or Rust async.
+Proposed architecture, not implemented or a frozen performance plan. The ordinary interpreter must become cheaper even when accelerators decline.
+[T056](../../tasks/T056-interpreter-core-v2.md) owns migration/evidence; [architecture](../architecture.md) owns current code. No FFI or Rust async.
+The proposed kernel crate below is the only new dependency boundary; implementation awaits independent review and evidence-bound planning.
 
-## Contracts shared by the three changes
+## Contracts shared by the changes
 
-```text
-ExecutionContext = one Vm + FrameStore + native boundaries + job driver
-FrameId          = store identity + reusable slot index + generation
-FrameSlot        = active header + zero-based local/operand buffers + optional cold state
-LinkedCode       = owned bytecode + property atoms linked to an AtomDomain
-PropertyLayout   = atom -> (slot, descriptor kind, attributes), ordering, storage encoding
-Value            = owning opaque word; payload access through typed methods
-```
-
-Frame/shape/context types stay private. Replace public Value enum patterns with documented typed views; migrate CLI and
-embedding callers before backend changes (explicit Rust API migration, unchanged JS). Frame/property/tier code adopt those
-views first. Typed activation context replaces hot `CallEnv` copies; shared services preserve realm isolation and no mutable process state.
+`ExecutionContext` owns one Vm, FrameStore, native boundaries and job driver; `FrameId` is store + slot + generation.
+A FrameSlot owns a hot activation header, zero-based local/operand windows and optional cold state. LinkedCode owns bytecode and domain-linked atoms.
+PropertyLayout owns key→slot/descriptor/order authority. Value is an owning opaque word accessed through typed views, not public enum patterns.
+Frame/shape/context types stay private; migrate embedding/CLI callers before a Value backend change. Kernel isolation does not require M2 or M3.
 
 ## Frames: storage, activation context and lazy names
 
-M2 removes both nested Vms and ordinary per-call environment assembly. It preserves one authoritative slot/cell per binding; an ordinary call, including one creating closures or invoking natives,
-installs **no name-keyed entries**. General admission uses callable kind and execution state, never a benchmark identity or direct-leaf prerequisite. No unsafe is required. [Frame activation](frame-activation.md) owns the measured cost inventory, cohort replacement rule, driver/compact-window contract and M1 interface.
-
-Source paths are relative to `crates/qjs-runtime/src/`. `function/call.rs::function_env` inserts general-call parameters, this, arguments and internal context into `CallEnv.frame_bindings`;
-`initial_slots`/`initial_local_upvalues` in `bytecode/vm_bindings.rs` import them. `FrameBindings` is a name-keyed **vector**. `vm_frame_init.rs::frame_call_env` forks entries as values, exports live slots,
-then overlays cells, catch/conflict sets and private state; `frame_deopt_bindings` overlays the dynamic cell map. `vm_call_env.rs::callee_env` selects this view for direct-eval/with/deopt callers **or
-closure creators**: a native may invoke a passed closure whose eval needs outer names absent from static upvalues. Legacy APIs take only `CallEnv`; `apply_env` reconciles values/declarations and
-`apply_call_env` scans realm fallbacks. This compatibility view is not binding authority. `vm_call.rs` already sends ordinary native Call opcodes a realm-only env; helper calls through
-`callee_env`/`current_env` still export it. Deleting the closure predicate or pooling the vector neither migrates consumers nor removes the work.
-
-Owned code gets an immutable `BindingPlan`: parameter/input slot indices, received-cell order, call-context indices, scope parent/ranges, declaration kind/mutability and parameter/body/catch
-relationships. Runtime scope-instance tokens distinguish shadowing, TDZ, exited scopes and fresh loop iterations; source names live in code metadata, never copied at entry. `CallSeed` carries the
-caller's argument range, moved once into parameter slots with no intermediate vector, this/new.target, callee/code/cells and realm handles. Initialize slots by index; compiled default/destructuring/rest prologues retain their order.
-Mapped arguments uses those same parameter cells, including duplicate-parameter rules. `ActivationContext` stores typed home/super/active-constructor, derived-this cell, function/field/eval flags,
-immutable-self identity, private environment, module/host/agent handles and realm. Lexical arrows retain the declaring context/cells, never inherit these from whichever native happens to invoke them.
-
-A dynamic request resolves `(scope instance, name)` through code metadata to a slot/cell, then parent scopes and realm. Promoting a slot moves authority to its existing/new cell and clears its
-authority bit; it never copies into a second binding. Direct eval creates its own lexical scope; strict vars stay there, sloppy vars enter the correct caller variable scope, and parameter-eval vars
-remain distinct from body vars. Only genuinely new eval names need a lazy name-to-cell extension. Conflict/deletability checks use scope metadata. With-object lookup preserves own-local precedence,
-unscopables and Proxy effects. Lookup caches include scope-instance/mapping generations; addition, deletion, remapping and iteration invalidate bypasses.
-
-An eval-capable closure must retain arbitrary visible names, even absent from static free-name lists. Propagate that capability through nested closures/eval-created functions. At creation, retain an
-owned `ScopeLease` of code + positional cells + parent scope descriptors (including TDZ locations and with objects); promote potentially observable locals by slot plan, with no name installation.
-Static closures capture only their indexed cells. Escaping leases retain lexical scopes, never a caller frame; future initialization/writes hit the promoted cells. A dynamic consumer may build a lazy
-cell index on first request, never a value snapshot. Leases share a variable-scope extension holder before eval adds names, never reference reusable FrameIds, and retain escaped cells across scope exit.
-
-| Current consumer / source | Target service |
-| --- | --- |
-| General entry and closure capture: `function/call.rs`, `function/arguments.rs`, `vm_bindings.rs`, `vm_capture.rs`, `vm/rare_ops.rs`, `vm_class.rs`, `vm_private.rs` | Indexed seeds/received cells and typed context above; mapped arguments and immutable class/self cells share identity. Ordinary closure creation exports no names. |
-| Direct eval: `vm_call.rs` cached/selected/full views; `global.rs` parse context, declaration checks, written-name reconciliation and captured-function repair | Resolve against the eval caller's scope lease; existing writes hit cells, new declarations extend only its variable scope. Parameter/body separation and strict lexical isolation replace repair/write-back, not syntax caching. Indirect eval/Function stay realm-only. |
-| With and retained dynamic scope: `vm_with.rs`, deopt overlays and `closure_scope_use` in `vm_frame_init.rs` | Ordered object/scope descriptors plus generation-checked lazy name resolution; no eager overlays at every call/closure. Preserve bypass invalidation. |
-| Native forwarding/callbacks (call/apply/bind), accessors, Proxy traps, coercion, iterators and disposal: `vm_call_env.rs`, `vm_props.rs`, `vm_set.rs`, `vm_iter.rs`, `vm_ops.rs`, `vm_literals.rs`, `vm_dispose.rs`, `vm_string_append.rs` | Realm/services capability and same-context callback boundary; each JS callback uses its own lexical lease/upvalues. Helper `current_env` calls for heritage/private/import paths use typed context too. Native invocation alone requests no caller names. |
-| Coercion filtering/sync: `conversion.rs::to_primitive_method_env` / `sync_to_primitive_method_env` | Method's own captures/native context and shared realm cells; remove name filtering/value write-back once reads/writes use those authorities. Explicit native payloads remain function-owned. |
-| Call completion, derived this/super, realm overrides: `function/call_frame.rs`, `vm_result.rs`, `vm_call.rs` marked-realm save/restore | Typed continuation and shared derived-this cell; isolated self binding cannot mutate caller names, so no restore-by-name. Callee realm/intrinsics selected by handle; preserve explicit cross-realm override semantics without global-value snapshots. |
-| Realm/global/module refresh: `apply_env`, `refresh_realm_backed_locals_from_realm`, `vm_props.rs`, `vm_module.rs`, `module/link.rs` | Slot source is local/cell/realm reference; imports/exports use canonical cells. Global delete/accessor/recreate publishes a shared invalidation marker/generation; loads re-resolve through full property semantics, never a post-call scan. Eval shadowing retargets the affected slot to its new local cell. |
-| Result enumeration / diagnostics: `module/link.rs::binding_snapshot`, `vm_jobs.rs`, `vm_import.rs`, `CallEnv` Debug | Export/result handles retain requested cells and services after frame release; enumerate only at explicit result/diagnostic request. An owned value snapshot is output only, never execution storage. `debugger` currently compiles as an empty statement (`compiler.rs`); no debugger-reflection API is assumed. |
-
-`FrameStore` has reusable slots in reference-counted boxed chunks with checked borrows. Directory growth moves pointers, never frames. Initialize fields in place; never return/queue/swap a FrameState.
-Reuse clears values/cells/completions before advancing generation; empty capacity is not a GC root. Keep existing cold try/with/disposal state. Bind each slot's zero-based buffers once per activation;
-no shared-vector base arithmetic per op. Measure allocations, retained capacity, initialization stores and emitted copies; stable addresses alone do not prove cheap code.
-
-Dispatch borrows a slot and disjoint services. Helpers yield `Enter(CallSeed)`, `Return`, `Throw`, `Suspend` or `NativeRequest`. Publish IP/typed continuation and release slot, buffer, tier and
-`FrameProgramView` borrows before switching/re-entry; retain owned code handles and reacquire views after stream selection. Calls push IDs; return moves only the result and drops in place.
-Continuations cover discarded results, construction/new.target, derived completion, eval and native boundary results. Preparation preserves bound/Proxy forwarding, parameter and class-field effects
-exactly once. Throw unwinds catch/finally/using before popping; pending completions stay frame-local and finally may replace them. Preserve thrown identity, spans and realm.
-
-Natives receive a capability, not a borrowed frame. `call_sync` drives **this same Vm** to a boundary token; throws return to the waiting Rust native rather than unwinding through it. Rust driver
-re-entry may nest, never another Vm. Enforce JS/native depth limits before Rust stack exhaustion. Suspending builtins need explicit native continuations, never suspended Rust stacks. A generator/async
-body detaches a lease retaining its store/code/cells after its creator returns, without retaining its caller; reattach to a compatible invocation. Preserve synchronous prologues, Executing rejection,
-yield*, finally, async-generator FIFO and promise job order. Await yields to the job driver; ordinary returns do not drain jobs. Host independent roots may create contexts; callbacks from active
-contexts must reuse them. Cross-realm frames choose callee intrinsics and compatible atom linkage.
+[Frame activation](frame-activation.md) owns cohorts, costs, native capability migration, driver stages and the M1 interface;
+[environment model](env-model-rewrite.md) and [suspension](generator-suspension.md) remain protected. Required target contracts:
+- Ordinary entry installs no name-keyed entries or per-call snapshots. Replace the whole legacy route for an admitted cohort, never mirror its fields.
+- Immutable BindingPlan precomputes parameter/input slots, received-cell order, immutable-self/arguments facts, scope parents, TDZ and declaration relationships.
+  CallSeed moves arguments once from caller windows into slots; default/destructuring/rest order and mapped-argument cell aliasing remain exact.
+- Typed ActivationContext retains this/new.target, home/super, derived-this cell, private environment, module/referrer/imports, realm/agent and eval/field flags.
+  Arrows retain their declaring context; cross-realm calls use callee intrinsics. Native arguments remain borrowed in place. No native callback inherits another activation's private names/referrer.
+- Dynamic lookup resolves scope-instance metadata→existing slot/cell→parents/realm; promotion transfers authority, never copies it. Only genuinely new eval names extend a lazy cell map.
+  Preserve parameter/body separation, strict lexical isolation, sloppy var placement/conflicts, TDZ/shadowing, own-local precedence, with/unscopables/Proxy effects and fresh loop scopes.
+- Eval-capable closures retain every visible name via ScopeLease(code, positional cells, parent descriptors, with objects), even absent from static free-name lists, transitively through nested eval/with.
+  Variable-scope extension holders are shared before eval adds names; leases outlive frames and never refer to reusable FrameIds. Static closures capture indexed cells only.
+- Native capabilities expose typed caller-varying state with stack-disciplined restoration; legacy writers stay on their audited route until migrated.
+  Coercion/accessor/iterator/disposal/call-apply-bind callbacks retain captures and cell identity, not exported name/value overlays or refresh scans.
+- Globals/imports/exports use canonical cells; delete/accessor/recreate invalidates shared markers/generations, eval shadowing retargets slots, and no post-call refresh scan is introduced.
+- FrameStore uses Rc-owned boxed chunks and checked borrows: growth moves directory pointers, not frames. Initialize/drop in place; clear values/cells/completions before generation reuse.
+  Bind each zero-based window once, never resolve FrameId/base per op; empty retained capacity is not a GC root. Stable addresses alone do not prove cheap entry.
+- Dispatch keeps same-executor call/return in the driver; cross-executor Enter/Return/Throw/Suspend/NativeRequest publishes IP/continuation and releases all frame/program/buffer borrows.
+  Reacquire after re-entry/stream selection; preserve construction, derived completion, spans, thrown identity, finally/using replacement and depth limits.
+- Natives drive this Vm synchronously to a boundary token; only driver re-entry may nest Rust. Suspensions own explicit continuations, never suspended Rust stacks.
+  Generator/async leases preserve Executing rejection, yield*, finally, FIFO and job order; ordinary return does not drain jobs. No debugger-reflection API is assumed.
+- Explicit result/diagnostic enumeration retains requested cells/services after frame release; owned value snapshots are output only, never execution authority.
 
 ## Properties: atoms and layouts are the ordinary lookup authority
 
-An owned `AtomDomain` interns exact JavaScript string code units (including lone surrogates) to non-reused IDs. IDs
-belong to that domain, not a realm; realms that exchange objects share it. Bytecode keeps a symbolic name pool and
-obtains a cached per-domain `LinkedCode` relocation, so reused eval/Function/module code cannot carry another domain's
-integers. Foreign inputs are re-interned by content at a boundary. Objects/layouts retain their domain; escaping values
-keep it alive. Reclaim unused atoms with owned atom references without reusing IDs; transitions/link caches retain at
-most a fixed bound, never arbitrary churn. Exhaustion fails explicitly, never wraps.
-
-`ToPropertyKey` runs once, preserving effects; the result is StringAtom or Symbol identity. Numeric-index classification
-preserves distinctions such as `"01"` versus `"1"`. Symbols/private names are separate identities, not string interning
-aliases. Host string APIs intern at entry. Repeated named bytecodes do no string hashing or comparison; computed keys
-still pay conversion/interning when not already atomized.
-
-Every ordinary named-property store has a layout authority and value slots. `Small`, `Dynamic`, `Shaped` and
-`ShapedPair` initially keep their payload layouts behind slot adapters; each receives the same atom lookup contract. The
-layout's storage encoding makes its slot interpretation unambiguous. Later consolidation may remove adapters only if
-measured; literals get no privileged lookup admission. Arrays, functions, Map/Set wrappers and boxed primitives use that
-contract for their ordinary named parts, including lazily installed properties after their semantic hook.
-
-Shared immutable shapes describe keys, slots, descriptor kinds and attributes; stable value assignment changes only the
-slot. Edits follow owned, bounded transition edges and never republish layouts by value; a store resolves its domain at
-creation. High-churn objects use a dictionary with its own identity/version, edited in place before any observer.
-[Property layouts](property-layouts.md) owns construction, edges, retention bounds and object size. Enumeration keeps
-numeric-index sorting and string/symbol insertion order; delete/reinsert and duplicates keep language-defined order.
-
-Baseline `Get` classifies the receiver, probes its layout once, then reads the live data slot or follows the prototype
-chain. Accessors retain the original receiver; clone the callable/descriptor and release all storage borrows before
-invoking it. Proxy, module namespace live exports, primitive virtual fields, array indices/length, string indices and
-TypedArray integer-indexed semantics keep their full algorithms. Ordinary named portions remain covered; a shape match
-never overrides exotic behavior. Missing/index/hole paths preserve prototype getters and conversion/detachment effects.
-
-`Set` uses the same lookup and descriptor authority. Direct own writes require the actual receiver and a writable data
-slot; additions, inherited setters/non-writable properties, super/Reflect receivers, extensibility, strict errors and
-global-cell synchronization go through complete semantics. Define/delete/freeze/seal and lazy materialization publish
-layout changes atomically with slot changes. Keep existing revision consumers valid until migrated; value-sensitive
-caches still need value revisions.
-
-No per-site cache is needed for correctness or baseline admission. Remove the old rejecting chain only after every
-consumer uses the new lookup. A later **leaf** IC may memoize `(domain, layout token, atom, slot)` without storing
-values. Inherited answers additionally validate every missing-own shape and prototype link to the holder, including
-dictionary versions. No recycled address alone is an identity; no cache retains receivers strongly or holds a borrow
-across JS. This layer is safe Rust; unchecked slots need separate bottleneck evidence and an unsafe audit.
+An owned AtomDomain interns exact JS code units, including lone surrogates, to non-reused IDs; communicating realms share it.
+Bytecode links its symbolic pool per domain; foreign keys re-intern by content. Objects/escaping values retain owners; weak interning and bounded transitions cannot retain arbitrary churn.
+ToPropertyKey runs once. Numeric indices distinguish `01`/`1`; symbols/private names retain separate identity. Exhaustion fails, never wraps.
+Every ordinary named store uses layout authority plus keyless slots: objects, arrays/functions, Map/Set wrappers and boxed primitives, including lazily installed named properties.
+Small/Dynamic/Shaped/Pair payload adapters do not restore payload-side name indexes; literals receive no privileged admission. Domain selection happens at creation.
+Shared immutable shapes own keys/slots/attributes/order; stable value writes change slots only. Bounded owned edges serve edits; high churn uses private dictionary identity/version.
+[Property layouts](property-layouts.md) owns construction/retention/size contracts. Preserve numeric sorting, string/symbol order, duplicates and delete/reinsert semantics.
+Get probes once, reads live data or follows prototypes with the original receiver. Release descriptor/storage borrows before any accessor/Proxy/callback.
+Set requires actual receiver and writable data; additions/inherited setters/nonwritable fields, super/Reflect, strict errors and global cells use full semantics.
+Shape identity never overrides module live exports, primitive virtual fields, indices/length, lazy String or TypedArray/detachment behavior.
+Define/delete/freeze/seal/prototype/lazy changes publish layout+slots atomically; keep existing value/layout revisions until all consumers migrate.
+Caches are optional later leaves: domain/layout/slot, never cached values; inherited guards cover every missing-own layout/prototype and dictionary version.
+No recycled address alone is identity, strong receiver retention or borrow across JS. Unchecked slots need independent bottleneck evidence and an unsafe audit.
 
 ## Value word and lifetime
 
-Target an opaque, non-Copy, 8-byte NaN-boxed `Value` on qualified 64-bit targets. Reserve high words `0xfff8` for
-immediates and `0xfff9` for a heap pointer in the low 48 bits; header kind selects the heap family. Other negative
-quiet-NaN tags remain reserved. Canonicalize numeric NaNs to `0x7ff8000000000000`; preserve infinities, signed zero, BigInt and
-Symbol identity. Do not rewrite raw ArrayBuffer bytes when a load produces a Number. Reserved internal TDZ/empty states
-never escape as JS values. Slot-state bitmaps avoid widening every slot back to `Option<Value>`; capture still transfers
-authority to the existing cell.
+The future qualified64-bit backend is an opaque non-Copy8-byte NaN-boxed Value; typed views precede replacement of public enum matching.
+Reserve high words0xfff8 for immediates and0xfff9 for a low48-bit heap pointer; other negative quiet-NaN tags remain reserved; canonicalize numeric NaNs to0x7ff8000000000000, preserving infinities/signed zero/identity.
+Never rewrite raw ArrayBuffer bytes on a Number load; TDZ/empty sentinels never escape. Slot bitmaps avoid widening each slot; capture retains the existing Upvalue.
+One allocation holds HeapHeader(strong,weak,kind,destroy)+payload, replacing Rc rather than boxing it. Strings/BigInts/functions/object families share audited ownership.
+Cloning increments a count, moves transfer it, borrowed views do neither; last strong destroys once and weak observers hold only tombstones, with no address ABA.
+Preserve String uniqueness/COW, iterative deep teardown and escaping lifetimes. Non-atomic core values never become Send/Sync; shared buffers retain their separate feature-gated protocol.
+Pointer width/provenance are release blockers: never truncate, qualify each ABI, use a specified provenance-preserving reconstruction and retain enum fallback on unsupported targets.
+Unsafe stays localized in word/header modules with explicit allowance and per-block SAFETY proofs (tag/alignment/provenance/kind/count/lifetime/uniqueness).
+Safe views retain RefCell checks. Miri/ownership tests supplement conformance; measured transport/count savings justify selection. Cycle collection/arenas are separate, not hidden prerequisites.
 
-One allocation holds `HeapHeader { strong, weak, kind, destroy }` and the aligned payload, replacing the corresponding
-Rc allocation, not wrapping an Rc in a box. Strings, BigInts, functions and object families share this ownership
-protocol; header-kind load and count overhead must pass M3's payoff gate. Cloning bumps a heap count; moves transfer
-ownership; borrowed views do neither. Last strong drop destroys
-exactly once; weak observers retain only a tombstone until last weak drop. Escaping values outlive Vm/realm; weak
-upgrades cannot observe a reused allocation. Preserve string uniqueness/COW and iterative deep teardown. Cells remain
-shared `Upvalue` identities; no cell refresh/writeback is introduced. Non-atomic counts belong to the single-thread
-core; feature-gated shared buffers keep their explicit sharing protocol, never make arbitrary Values Send/Sync.
+## Kernel isolation prerequisite (K0, before M1 resumes)
 
-Pointer payload width and Rust provenance are release blockers, not assumptions. Qualify each supported ABI/address
-range before selecting this backend; never truncate an allocation pointer. Use an explicit provenance-preserving
-reconstruction protocol (including exposed-provenance APIs where integer packing requires them). Unsupported targets
-retain the enum backend; if a required target cannot support 8 bytes, stop and revise the encoding before rollout. No
-process-global handle table or guessed Rc layout. Unsafe is confined to word/header modules, with module-level
-`#[allow(unsafe_code)]` and a `// SAFETY:` proof on every block: valid tag, alignment, provenance, live count, exact
-payload kind, unique destruction and weak lifetime. Safe typed views retain RefCell checks. A safe enum is the
-comparison baseline; measured transport/count cost must justify unsafe. Miri and ownership tests supplement, never
-replace, conformance. This retains today's cycle limitation; cycle collection/block allocation is a separate subsystem,
-not a hidden prerequisite or claimed allocation win over T023.
+[T064](../../tasks/T064-kernel-isolation.md) owns the implementation sequence, CI matrix, budget transition and review checklist.
+**Invariant:** the hot numeric/dispatch kernel's machine code (bytes and intra-function relative layout of hot blocks) is invariant under object-model and cold-runtime changes.
+This is an artifact-enforced contract for a pinned toolchain/recipe, not a Rust compiler theorem or a promise of stable wall time/cache behavior.
+Protected scope is typed dispatch shared by Vm/WideLoopFrame, then the wide compact dispatch/numeric core; general Vm and numeric-mutation/compact executors remain separate.
+The old29ca position is diagnostic history, not the new reference address. Do not restore it with padding, source-shape recognition or favorable-layout selection.
 
-## Tiers and exits
+### Narrow Rust ABI and ownership
 
-Compact/numeric/typed-loop tiers retain scalar banks and admission order; compact windows lease frame-store slots under the
-one driver. Boxed banks use `Value`; shared property operations use atoms/layouts. Exit records name FrameId, exact IP, operands, slot/cell authority and pending completion.
-Publish them before a generic call/re-entry; reacquire views after it. Virtual objects retain their field bank and
-identity-flow proof; do not invent a heap receiver for a placeholder. Only a later tier unit maps proven virtual fields
-into registers or materializes at a proved escape. Any side exit reconstructs state once, without replaying effects.
+Recommend one internal std-only `qjs-kernel` crate, depending on no runtime/AST/property/value crate. It removes object-typed monomorphizations, not merely relocates their source.
+It owns scalar/op/cursor types and non-generic `typed_run` / `wide_numeric_run`; translate AST operators once during lowering, preserving all admissions and op semantics.
+Protected entries and runtime service entry points use `inline(never)`, verified from emitted artifacts rather than trusted as a guarantee.
+Proposed signature: `run(ops: &[KernelOp], scalars: &mut [KernelScalar], cursor: &mut Cursor) -> StopTag` (safe Rust, no extern ABI).
+Ops carry register/PC/service-site indices, never Value/ObjectRef/CallEnv/LoopFrame/layout/cache types, destructors, generic callbacks or embedded runtime enums.
+One fixed Service(site) tag covers cold operations; adding an object kind must not grow the kernel dispatch enum. Runtime tables retain names, Value roots and caches.
+Cursor is loaded once and updated at a boundary; return a small stop tag, not an aggregate Value-bearing action stored/reloaded each numeric op.
+Numeric blocks perform no per-op frame resolution, virtual call, allocation or service call. Existing scalar sizing/alignment/op width must not grow without a new measured plan.
+Operations needing an external runtime/math call stop for services if its hot fixup cannot satisfy the byte contract; count that cost.
+Service ops stop before the effect. Runtime wrappers, outside the protected functions, use non-inlined service entry points and existing authoritative slots/cells/Value roots.
+Release kernel/register/RefCell borrows, publish the exact continuation and dirty scalar values before an observer; execute an effect once, then resume or deopt at its original PC.
+No raw pointer/Value bit reinterpretation, per-call name table, new GC/root arena or M2 frame-store rewrite is introduced to manufacture an opaque handle.
+For wide code, batch consecutive boxed/service ops in the wrapper; numeric projections transfer authority only during the segment, then publish before any callback/throw/exit.
+Reuse existing scratch capacity; no extra allocation per short callback, unbounded retained handles, duplicate live binding authority or extra boxing on every numeric op.
+Mixed operations retain the old generic fallback at the same instruction; failure before an effect cannot replay a prior effect. This staging may be expensive and must pass the gates below.
 
-Stage order, effects, stops and gates: [T056](../../tasks/T056-interpreter-core-v2.md#ordered-migration); its
-[prior attempts](../../tasks/T056-interpreter-core-v2.md#prior-attempts) explain how this differs from rejected work.
+### Mechanism choice and costs
+
+| Option | Cost/limitation and decision |
+| --- | --- |
+| **Recommended: separate non-generic crate + service-yield ABI, original fat/16/abort recipe** | Extra boundary branches, spills, projection/publication and lost property inlining; typed first, wide second. Acceptance requires the static matrix, including linked literals/tables, to pass. A crate alone is not a guarantee. |
+| Dedicated CGU / same-crate non-generic helpers | Smaller API migration, but modules do not guarantee CGU ownership and fat LTO can recombine code; useful diagnostic only, not the selected final boundary. |
+| No cross-crate LTO / new profile | Stronger compiler separation but may lose T046's engine-wide wins; new recipe/cache identity, policy calibration and compiler study required. Not an automatic fallback or an unmeasured package override. |
+| Handler-per-op / tail dispatch | More indirect branches/call-return and lost cross-op optimization; stable Rust does not promise tail dispatch. Reject unbounded native stack growth; no computed-goto/FFI workaround. |
+| Linker entry pinning / alignment alone | Does not isolate internal blocks (T054). Cannot satisfy the invariant or select a winning offset. |
+
+Fat LTO crosses crate boundaries; Cargo package overrides cannot set lto, and `false` means local thin LTO whereas `off` disables it ([Cargo profiles](https://doc.rust-lang.org/cargo/reference/profiles.html)).
+`inline(never)` is a hint, not a proof ([Rust reference](https://doc.rust-lang.org/reference/attributes/codegen.html#the-inline-attribute)); audit emitted clones/calls and stop if the chosen design still changes.
+Kernel-owned dispatch tables/literals belong to the protected closure. Hot RIP references cannot be hidden by normalization; an unstable literal may need an ABI constant input.
+Backend jump-table/constant merging or LTO cloning is an explicit feasibility risk: if isolation cannot pass under the unchanged recipe, stop for review of the profile alternative; no pragma/padding search.
+No production routing or performance attempt begins on a failed static design. A new compiler profile cannot borrow the old policy's bands or erase the recipe-only cost.
+
+### Static acceptance (no timing)
+
+The proposed `scripts/check-kernel-isolation.sh` and `tools/benchmark/kernel_isolation.py` build clean archives, never run a timing collector; implementation is T064 work.
+Reuse the existing structural symbol selector/decoder/raw-byte reader, but extend to full CFGs and ELF as well as Mach-O; do not reuse address-normalized equality as acceptance.
+Bind source, kernel/ABI/recipe hashes, features, target, rustc/LLVM/linker/disassembler versions and compiler invocations; require independent A/A rebuild reproducibility first.
+Inventory exactly one body per kernel role, all handlers/dispatch edges/stack offsets/owned constants/tables and instruction starts, lengths and offsets from entry; missing/extra/cloned/undecodable roles fail closed.
+Compare raw final hot instruction bytes and every hot block's entry-relative offset; compare owned table targets/constant contents and relative positions. Internal branches/RIP/table displacements are never masked.
+Only classified external address fixups outside the hot closure may normalize, with equal target identity, operand width, relocation kind and referent; unknown relocations fail.
+Uniform movement of the whole protected closure is allowed; same entry, opcode counts, disassembly mnemonics or masked bytes alone cannot pass. Native frame/spill layout and hot callee closure also remain equal.
+Check pre-link kernel objects/IR and dependencies to diagnose compiler versus linker drift, but only final linked artifacts satisfy acceptance. Reject Runtime-typed instantiations and imported cold bodies.
+The CI perturbations and real-PR comparison use unchanged kernel source/ABI/recipe; a legitimate kernel change needs reviewed fingerprints and the full matrix again, never an automatic golden refresh.
+Finite perturbations are regression coverage, not proof for all compiler transformations. Every cold-only PR also compares its actual base/candidate kernel fingerprints.
+
+## Tiers, exits and migration gates
+
+Existing tier order/admission and scalar banks remain; numeric, wide and typed executors are not merged. Virtual objects retain their existing field bank and escape proof.
+Exit records retain exact PC/operand depth, slot/cell authority and completion; publish before callbacks and reacquire afterwards. Never materialize an unobservable receiver gratuitously.
+T064 must pass static invariance, full configured correctness and complete prospective neutrality gates before integration; static equality cannot waive wall/memory/call-boundary costs.
+Stage order/effects/stops are in [T056](../../tasks/T056-interpreter-core-v2.md#ordered-migration). Kernel isolation precedes resumed M1; M2 still waits for M1 acceptance or explicit closure.

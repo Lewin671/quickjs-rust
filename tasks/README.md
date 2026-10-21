@@ -13,8 +13,9 @@ it to `archive/` with `git mv` and move its row below.
 
 | Task | Status | What it is |
 | --- | --- | --- |
+| [T064](T064-kernel-isolation.md) kernel isolation | active | [Allocation inputs](archive/T064-kernel-isolation-inputs.md); planning only: explicit numeric/service ABI, non-timing x86 static perturbation CI, staged main-based migration and carried A+B reserve; independent review before implementation. |
 | [T057](T057-string-code-units.md) string code units | active | Stage-1 PROMOTE under v4; integrated into main; stages 2 onward require new plans. |
-| [T056](T056-interpreter-core-v2.md) interpreter core v2 | active | Stage A unintegrated,1/2 attempts spent. Lead8f898 exact/86 pass; mini A/A failed, unpack slow6/6. Sparse112B header/shared-key5dd3a810 full/NG/subset pass; 222209Z86/native/PC complete. Static Add store returns29be (four shortened brand checks); prepared timing must stay blocked. PMU closed, installed helper untouched; no owner timing. |
+| [T056](T056-interpreter-core-v2.md) interpreter core v2 | blocked | Stage A unintegrated,1/2 attempts spent. Lead8f898 exact/86 pass; mini A/A failed, unpack slow6/6. Sparse112B header/shared-key5dd3a810 full/NG/subset pass; 222209Z86/native/PC complete. Static Add store returns29be (four shortened brand checks); prepared timing must stay blocked. PMU closed, installed helper untouched; no owner timing. |
 | [T018](T018-broad-performance.md) broad performance | active | The performance campaign contract and its targets against QuickJS-NG. Start performance work here, then follow [the workflow](../docs/performance-workflow.md). |
 | [T040](T040-imac-general-performance.md) x86_64 general optimization | active | Fresh current-main comparison and exact-binary profiles, followed by independent general runtime units. |
 | [T045](T045-typed-loop-boxed-demand-provenance.md) boxed demand provenance | active | Ordinary identity-flow joins lose boxed demand; exact profiles and seed diagnosis precede a compiler-only unit. |
@@ -30,8 +31,7 @@ The last recorded full scan passes every configured case (see
 [conformance records](../docs/conformance/README.md)); [T043 history](archive/T043-derived-constructor-eval-context.md) records
 two remaining baseline programs outside that standing. Take broader conformance work from `./scripts/find-qjsng-gaps.sh`.
 
-Performance entries record scope and outcomes, not priority. Priority comes
-from a freshly generated opportunity queue. Reopening a closed proposal needs
+Performance entries record scope and outcomes, not priority. Priority comes from a fresh opportunity queue. Reopening a closed proposal needs
 a new profile and a newly frozen plan; a rejected implementation does not ban
 its whole mechanism family (T022 states the rule).
 
