@@ -210,7 +210,8 @@ Job `20261020T232041Z-t056-nbody-site-counters` builds base f58c696e and repair 
 `agents,perf-counters` plus an identical temporary per-PC execution tally. Canonical release settings
 and explicit x86_64 target are retained; these instrumented images are never used for instruction
 or wall ratios. Each counter build dumps `(region header, backedge, PC, TypedOp, count)` on exit.
-The original nbody input has **240 occupied sites**, all with identical counts in both versions:
+The original nbody input has **240 occupied (header, backedge, PC, TypedOp) keys**,
+all with identical counts in both versions:
 945,908 GetNamedTyped, 337,491 SetNamedTyped, 1,585,485 Binary, 90,134 ElementRead,
 90,134 Update and 382,569 MoveBoxed. Loop entries remain 9,015, backedges 9,020 and declined edges 5;
 all common execution counters match except the expected atom-creation implementation difference
@@ -244,7 +245,11 @@ Earlier marginal jobs `20261020T232419Z-t056-nbody-marginal-site-instructions` a
 `20261020T232731Z-t056-nbody-site-precision-instructions` use a loop-invariant receiver. Their
 read is hoisted, so their read-site slope does **not** attribute a numeric property read. Raw outputs
 are retained; the latter's pure scalar probe independently measures approximately +0.959 per extra
-Binary. Job `20261020T232628Z-t056-scalar-site-instructions` uses shorter N=100,000 increments;
+Binary. The varying-receiver job's scalar-only body is a different control: its trace has zero typed
+sites, zero loop-plan entries and one declined edge. Its ordinary-wide marginal add cost is base
+111.078 / 944 111.089 / repaired ABI 116.067 instructions (+4.989 versus base). This adverse probe
+is retained; the repair does not establish neutrality for every declined/mixed scalar loop. It must
+not be confused with the three admitted typed scalar benchmarks or used in their Binary attribution. Job `20261020T232628Z-t056-scalar-site-instructions` uses shorter N=100,000 increments;
 it shows the same direction with more startup/counter error, not a different causal result.
 
 ### General repair and sealed experiments
@@ -270,3 +275,30 @@ and all 15 surviving reference callee residues are checked. The final ten-case d
 instruction ratios moment 0.964924 / diff 0.968134 / meriyah 0.967284, unpack 1.013624.
 Dynamic's gain is smaller than 94408090's 0.905467 but remains 0.925173 versus base; trees retains
 0.986831 versus 0.985229. These costs are not hidden by the nbody/scalar repair.
+
+Final diagnostic `20261020T232947Z-t056-nbody-final-site-counters`, done 0, repeats that tally on
+807867f6's source with identical instrumentation. All nbody and scalar keys/counts, and all common
+execution events except the same one-time atom creation difference, still equal the base. Instrumented
+SHA-256: base fac2361029db847840b0c3867ac570475ca05f2378b1ff25ce4fb199e3cc47fb;
+944 5537f2b6828bf56a590e28dfa1baa72dbca550f1f1b7c6c19f04d911b8549c74;
+final 38c97b328fdc3d0f65ee55ecefbe4a9cccd40474f57b462c83adc24964edf0c9.
+Pinning preserves the full normalized instruction bodies of both typed executors and wide activation
+between 4d5bb1e1 and 807867f6 (3380 / 3311 / 5193 instructions respectively); changes are placement
+and relocations, not a new codegen variant hidden under the same diagnosis.
+
+The runtime repair is committed and pushed as **4842f8230e061624db86cec21f5f612dbcbba3bc**.
+Its pre-commit fast gate passes (including the selected 65-case Test262 slice), as do the local full
+gate, 5170 subset and 255 NG fixtures. The final source is exactly the sealed runtime/tool patch
+5db877d1 above; full configured correctness job `20261020T233507Z-t056-nbody-final-correctness`
+completed done 0 in 1363 seconds without --timing or a DISTURBED marker. It reproduces the committed
+canonical image 807867f6, passes full check/255 NG/5170 subset, and verifies eight disjoint complete
+shards: 42,672 configured Rust passes, zero failures/timeouts/not-run, all 53,572 pinned paths exactly
+once. The new burndown entry is recorded at 4842f823. Correctness-ready and its four artifact hashes
+verify locally after fetch. Runtime CI 39515915868 is completed/success at the same commit.
+
+The refreshed workspace verification packet retains ZoneInfo and binds candidate 4842f823/image
+807867f6. Its T061 focus adds nbody/global_read and the new largest instruction cases bitwise-and/
+graphlib to the earlier eight; all 19 fixed controls remain, yielding 27 unique cases. These are
+only diagnostic focus labels; frozen unit targets, policy, thresholds and the 1/2 attempt ledger
+remain unchanged. Triage is prepared but unsubmitted, and still requires new done0/no-DISTURBED
+correctness and pre-gate receipts for this exact candidate/helper/image.

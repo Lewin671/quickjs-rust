@@ -609,3 +609,22 @@ Other requested cases:
 Strict native pin audit and all 15 reference callee residues pass. Local full check, 26 focused
 typed-loop tests, 255 NG fixtures and 5170 subset pass. Fresh final-commit image identity and full
 configured exact remain to be verified; no wall repair, promotion or second attempt is claimed.
+
+## Committed repair 4842f823: final correctness verified
+
+Non-timing job `20261020T233507Z-t056-nbody-final-correctness` completed done 0 in 1363 seconds, with no
+DISTURBED marker. Canonical committed image SHA-256 is
+`807867f6a8874f5dd2501ee5440153e7ed1461badf7b439839aad0bbf4e0be9e`, exactly the
+86-case pre-gate image above. Full gate, 255 NG fixtures and 5170 subset pass again on iMac.
+Eight full configured Test262 shards give Rust **42,672 pass / 0 fail / 0 timeout / 0 not-run**;
+NG 42,602 pass / 70 fail / 0 timeout; actionable gap 0. The disjoint raw union is all **53,572**
+pinned JavaScript paths exactly once, with the unchanged 10,900 reference-config skips.
+The complete scan entry is appended to `docs/conformance/burndown.jsonl` at revision 4842f823.
+Correctness-ready receipt and all four artifact hashes verify locally after fetch.
+
+Runtime CI `39515915868` at 4842f823 is completed/success. New verification packet under workspace
+`tmp/t056-m1a-last-attempt-verify/` binds this commit/image, preserves ZoneInfo and includes 27 T061
+cases with every fixed control. Its correctness job is complete; the sequential pre-gate and
+lead-only timing triage commands remain prepared/unsubmitted. No timing job or attempt 2 was submitted.
+Wall repair is unverified, and the adverse ordinary-wide synthetic add cost is retained in the
+linked diagnosis. One attempt remains across A+B; stage A has not advanced.

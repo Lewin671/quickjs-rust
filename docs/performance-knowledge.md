@@ -100,11 +100,13 @@ tool and artifact meanings are in [benchmarking.md](benchmarking.md).
   file through its owning struct adds a pointer load the loop cannot keep
   in a register. When instructions fall and cycles rise, suspect an extra
   indirection before alignment.
-- **Keep hot dispatch arms tiny.** Growing an arm of a hot interpreter
-  `match` perturbs register allocation and placement for the whole loop and
-  can slow workloads that never reach the arm. Put new work behind one
-  out-of-line call from the arm, and measure the aggregate even when the
-  change only adds a case.
+- **Measure a dispatch arm's inlining boundary.** Growing an arm of a hot
+  interpreter `match` perturbs register allocation and placement for the
+  whole loop, including workloads that never reach it. Prefer outlining
+  cold work, but check frequent scalar/cache operations both ways: per-op
+  calls and register saves can dominate, and outlining can add loads at
+  shared successors in unrelated arms. Compare executed paths as well as
+  body extents and measure the aggregate; see [T056's attribution](../tasks/archive/T056-m1-stageA-attempt1-diagnosis.md#nbody-follow-up-numeric-calls-and-scalar-spills).
 - **The wide executor spills when its inlining graph moves.** Edits to
   strings, `Value` or the compact tier have twice grown
   `compact_fn::wide::activation::run` and added executed work with no
