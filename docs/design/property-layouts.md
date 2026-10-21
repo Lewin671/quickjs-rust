@@ -55,7 +55,7 @@ The layout **replaces** payload lookup authority in the same stage; it is not la
 
 Intrinsic method tables publish one complete ordered descriptor batch, avoiding unobservable prefix shapes.
 Canonicalize/deduplicate keys (first position, last descriptor), then publish the final immutable layout and payload.
-The existing weak content cache shares final layouts without retention; later appends still use bounded owned edges.
+The weak content cache shares final layouts; insertion prunes dead same-hash entries, and later appends use bounded owned edges.
 Batches above128 fields become dictionaries. Preserve symbols/prototypes/index count and invalidate caches;
 numeric/globalThis installs and unordered stores use sequential semantics. Resolve aliases after publication.
 No construction mode/header field is added, and ordinary adds never rebuild the whole layout.

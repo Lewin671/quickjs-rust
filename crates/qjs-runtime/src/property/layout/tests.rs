@@ -283,3 +283,21 @@ fn key_probes_distinguish_every_byte_at_inline_comparison_boundaries() {
         assert!(!super::text_matches(key, &different));
     }
 }
+
+#[test]
+fn repeated_content_hash_does_not_retain_dead_weak_allocations() {
+    let domain = AtomDomain::new();
+    let mut cache = super::ContentCache::default();
+    for _ in 0..1000 {
+        let layout = Rc::new(super::LayoutNode::Shape(super::Shape::new(
+            domain.clone(),
+            Encoding::Small,
+            Box::new([]),
+            7,
+            false,
+        )));
+        cache.insert(7, &layout);
+        assert_eq!(cache.entries[&7].len(), 1);
+    }
+    assert!(cache.find(7, |_| true).is_none());
+}

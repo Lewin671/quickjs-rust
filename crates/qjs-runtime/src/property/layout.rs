@@ -1063,10 +1063,11 @@ impl ContentCache {
             });
             self.sweep_at = self.entries.len() * 2;
         }
-        self.entries
-            .entry(hash)
-            .or_default()
-            .push(Rc::downgrade(shape));
+        let bucket = self.entries.entry(hash).or_default();
+        // Repeated publications can have one hash while every prior shape
+        // dies. Table-size sweeps alone never visit that single-key bucket.
+        bucket.retain(|shape| shape.strong_count() > 0);
+        bucket.push(Rc::downgrade(shape));
     }
 }
 
