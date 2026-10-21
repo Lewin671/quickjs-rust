@@ -5,14 +5,15 @@
 - Verified at: b1ecbaf6 的生产树；base=f58c696e、aligned=8f7d97c7、allocation=dfff3bb6 的独立 iMac 诊断见下表。
 - Evidence: [机器可读地址与字节审计](../diagnostics/t056-architecture/address-evidence.json)、[复现及 lead 探针](../diagnostics/t056-architecture/README.md)。
 - Unresolved: global_read 的 42.7% wall 回退尚无硬件因果归属；不把低 12 位相同当作证明。
-- Next action: lead 先跑已准备的诊断K=6 mini-panel；按预注册规则决定是否考虑在未改dfff上用最后attempt，或转代码×数据2×2。无生产修改、无owner timing提交。
+- Next action: lead mini/cross已完成；按[栈相位/启动后续诊断](T056-stack-phase-diagnosis.md)运行已准备探针。无owner timing或生产修改，最后attempt不动。
 
 ## 判断与阶段决定
 
 **等指令布局回退的主架构方向是代码/构建侧的小内核隔离；数据 packet 留给M2。**
 独立评审（lead转交dsh/deepseek-flash意见）与本次补查支持这个优先级。
 不能把单次natural triage的1.427当作跨布局持续回退，也没有证据要求先实现HotExecutionPacket。
-下一步用未改dfff对base的诊断K=6辨别布局敏感性；它不是acceptance，不消耗attempt。
+lead后续已完成未改dfff对base的诊断K=6和2×2，所测布局/zone均保留大幅global事件；
+AA限制及[栈相位后续证据](T056-stack-phase-diagnosis.md)不允许将其当作acceptance或已知根因。
 数据/allocator确有影响，但[既有local_read zone对照](T056-m1-stageA-aligned-scratch.md)约1.070对1.005，不能拿来解释global的43%。
 
 最新 lead 链：`20261021T060648Z-t056-m1a-allocation-correctness` 完整 exact 42,672/42,672、
@@ -110,12 +111,13 @@ wide返回、8个program；未捕获 typed执行（这些短回调没有循环�
 两个 canonical 镜像 SHA：8f=`b0b84489a3f6fd673b06dc4bdc71c8f176387a231ca19fe1da5ea48ca4ee0fd5`；
 dfff=`3466c37a62f2fb6d764d0123212749ff810138ca05fcad336ce1afa05bdb1e3f`。
 与 base 的六段数值热路径分别检查指令、原字节和 rel/RIP relocation：Lt32条/140B、Exit12/51、
-Add32/141、Update17/81、Dispatch13/48、Backedge4/22，均 address-normalized equivalent。
+Add32/141、当时所选Decrement17/81、Dispatch13/48、Backedge4/22，均 address-normalized equivalent；
+实际Increment已在[后续审计](T056-stack-phase-diagnosis.md#哪些访问真的逐轮发生)更正为18/86，等价结论保持。
 这是有限数值路径审计，不是整个函数等价或每个输入动态执行相同的证明。
 
 8f/dfff 的执行入口都是 `0x100007d90`，但内部 Lt/Add/Update/Exit 若干块移动3–12字节；
 dispatch table 从 `0x10000b23c` 到 `0x10000b230`，numeric binary table 从b2c0到b2b4；
-Update读取的−1.0常量从 `0x1004b0708` 到 `0x10049c648`。
+该静态Decrement分支读取的−1.0常量从 `0x1004b0708` 到 `0x10049c648`。
 同入口、同 normalized bytes 并没有固定 fetch/解码边界、分支目标位置或常量数据流。
 目前不能量化42.7%中有多少来自前端，不能断言是某个 Intel erratum。
 

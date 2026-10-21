@@ -1,0 +1,15 @@
+{
+  "snapshot_job": "20261021T093204Z-t056-stack-geometry-final",
+  "snapshot_sha256": "a858e5b14add249ea69c066f085f95dc94fb8c55fb876dee42fdd51d4dff2c68",
+  "canonical_job": "20261021T063231Z-t056-m1a-allocation-triage",
+  "correctness_job": "20261021T060648Z-t056-m1a-allocation-correctness",
+  "pregate_job": "20261021T062918Z-t056-m1a-allocation-pregate86",
+  "files": {
+    "collect.py": "0c137a843e96dcabd588fd1dcc3c68b2b24453323266af0ccdc98ce0fabefeee",
+    "protocol.py": "8696a1d3b75ebf45825dbcc89686d9909d3a46207dc2fad21be78ff86f851d0d",
+    "phase.py": "e392d9f5ed7edd0509e6b34f6f2eec647b05021a3bf7594f8522e7d75071d5af",
+    "analyze.py": "bfe3f792b6623964b73d9d95bc6b4d319617ff58e116f9398bf58b5a6955c7c6",
+    "chain_common.py": "24f2e1551c457b6e5d37f70229d3ec2f85e49cc4a3da563ad4fb31a6f411e7d5",
+    "window.py": "e72ed58abf7c4ac3881c780b4574581918a216c3ec7b615e92190adc3087a809"
+  }
+}

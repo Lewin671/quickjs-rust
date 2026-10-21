@@ -10,13 +10,13 @@
   lead063231Z triage likely loss: global wall1.4271/instructions1.0002, unpack1.0381/1.0119.
 - Evidence: [stage A record](archive/T056-m1-stageA-record.md),
   [allocation follow-up](archive/T056-m1-stageA-allocation-diagnosis.md),
-  [architecture review](archive/T056-architecture-review.md), [M2 inputs](archive/T056-m2-design-inputs.md);
+  [architecture review](archive/T056-architecture-review.md), [stack/startup diagnosis](archive/T056-stack-phase-diagnosis.md), [M2 inputs](archive/T056-m2-design-inputs.md);
   plans [`interpreter-core-v2-atoms-layouts`](performance-units/interpreter-core-v2-atoms-layouts.json) (closed),
   [`interpreter-core-v2-layout-edges`](performance-units/interpreter-core-v2-layout-edges.json).
-- Unresolved: equal-instruction placement regressions; real-address diagnosis does not establish a global-cell4K alias.
-  Code-side kernel isolation is primary; data ownership is M2, neither implemented; arm64 timing unmeasured.
-- Next action: independent review received; lead runs the [diagnostic K=6 mini-panel](diagnostics/t056-code-layout/README.md),
-  then follows its preregistered rule (unchanged dfff last attempt may be considered, or code×zone2×2).
+- Unresolved: global remains large across tested code/zone cells; AA limits prevent acceptance.
+  Preserved-frame snapshots show no default stack-bank overlap; no old timing RSP captured. Startup/unpack instruction costs diagnosed, fixes unimplemented.
+- Next action: lead runs the [stack-phase probe](diagnostics/t056-stack/README.md) after completed mini/cross diagnostics;
+  qualified address coverage and AA/precision decide whether flatness can reject the hypothesis.
   No owner timing/production change; last attempt remains unspent.
 
 ## Goal and scope

@@ -1,0 +1,13 @@
+{
+  "checked_parent": "e5172755",
+  "production_revision": "dfff3bb6bf3db01fb52a7612ed1144900b5f08c5",
+  "production_unchanged": true,
+  "full_check_exit": 0,
+  "full_check_log_sha256": "263ef7146e7db0dbfd3721447e902f6198e51fe161ad41924c26dc23d6d07a87",
+  "subset_cases": 5170,
+  "actual_snapshot_producer_sha256": "87ba553d3bc456f5abe4c4fd160fb0a21836d150c5774a3907a71d1fe502289e",
+  "actual_snapshot_protocol_sha256": "8696a1d3b75ebf45825dbcc89686d9909d3a46207dc2fad21be78ff86f851d0d",
+  "numeric_increment_paths_audited": true,
+  "timing_submissions_by_owner": 0,
+  "attempts_consumed": 0
+}

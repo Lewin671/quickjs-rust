@@ -1,7 +1,10 @@
 # T056 code-layout diagnostics (lead-only, prospective)
 
 [Architecture review](../../archive/T056-architecture-review.md) owns the code
-kernel proposal and historical evidence. This package changes no production
+kernel proposal and historical evidence. Lead mini/cross have now completed
+(diagnostic only); [results and current stack-phase work](../../archive/T056-stack-phase-diagnosis.md)
+own the continuation. The protocol below is retained for reproduction, not a
+request to rerun or spend an attempt. This package changes no production
 code, acceptance policy or attempt budget. **The owner submits no timing jobs.**
 These outputs have artifact type `t056-code-layout-diagnostic`, not a selection,
 formal or acceptance panel. The old data-first probe remains historical.
