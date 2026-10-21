@@ -86,8 +86,10 @@ tool and artifact meanings are in [benchmarking.md](benchmarking.md).
   and re-pin after every change to them. The fast address window depends on
   the executor revision; a formerly good offset can become the degraded one.
   Re-scan the controls rather than treating a default offset as universal.
-  Revision-bound evidence belongs in the owning task (for example,
-  [batch 1](../tasks/T037-integration-batch-1.md#placement-check)).
+  Audit interior loop/branch positions too: preserving the entry does not
+  preserve them after codegen edits. Equal retired counts also do not fix
+  dependencies or micro-ops. Revision-bound evidence belongs in the owning
+  task (for example, [batch 1](../tasks/T037-integration-batch-1.md#placement-check)).
 - **Keep an executor in its caller's codegen unit.** A generic dispatch
   loop is instantiated where it is called; moving that caller to another
   module recompiles the loop differently.

@@ -639,3 +639,9 @@ Unpack1.0385 and string_slice1.0393 also need diagnosis; dynamic0.9406 and momen
 until local/branch equal-instruction excess is explained and removed generally.
 [Interior-code/data-layout evidence and prospective probes](T056-m1-stageA-placement-diagnosis.md)
 replace the earlier next-action of simply running triage; no production repair is yet verified.
+
+The placement continuation now has five audited fixed-slot links (all bodies identical; only the
+target moves within each implementation), 13 matching workload outputs on seven images and
+255 NG fixtures passing on each of the five links. See the placement record for hashes, failed
+analysis attempts, type sizes, string profiles and two prepared lead-only causal probes. Runtime
+remains 4842f823; no new timing job, production repair or screen attempt was submitted.

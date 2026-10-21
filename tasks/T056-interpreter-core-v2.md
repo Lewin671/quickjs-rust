@@ -18,8 +18,8 @@
   [`interpreter-core-v2-layout-edges`](performance-units/interpreter-core-v2-layout-edges.json).
 - Unresolved: lead triage still has local_read wall 1.0728 at equal instructions;
   [placement diagnosis](archive/T056-m1-stageA-placement-diagnosis.md) precedes any final attempt; arm64 timing unmeasured.
-- Next action: statically audit the isolated placement matrix, then the lead runs its frozen diagnostic
-  probes. No timing submission by the owner; the sole remaining screen stays unspent.
+- Next action: lead runs the statically audited 13-case code-placement probe, then optional five-case
+  data-state probe if unresolved. No owner timing; no production fix or final-screen submission yet.
 
 ## Goal and scope
 

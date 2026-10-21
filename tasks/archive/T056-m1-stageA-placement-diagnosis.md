@@ -132,13 +132,13 @@ The 16-byte difference is derived from the two existing headers, not from timing
 must retain every original boundary-correct normalized function body, the same function inventory/order, and the
 recorded page residue. Within each implementation, **only the typed body's address may differ**;
 all other original text symbols must have identical addresses. Unexpected drift stops timing.
-Natural-versus-padded links also record their three-page displacement after the slot; T054 means
+Natural-versus-padded links record the three-page slot displacement plus the whole text-section shift; T054 means
 this is not assumed neutral. b_nat/c_nat plus byte-identical b_cpy/c_cpy are controls: nine images.
 
 Lead-only timing: 15 serial balanced rotating/reversing blocks, one warmed literal executable path,
 all raw N/2N (whole input for external), output equality, positive increments and base increments
->=50ms. Twelve cases fixed now: local_read, branch_arithmetic, global_read, property_dynamic_read,
-string_slice, binary-trees, string-unpack-code, bitwise-and, class-fields, moment, diff, meriyah.
+>=50ms. Thirteen cases fixed before timing: local_read, branch_arithmetic, global_read, property_dynamic_read,
+string_slice, binary-trees, string-unpack-code, bitwise-and, class-fields, moment, diff, meriyah, nbody.
 Budget 30 minutes; iMac ZoneInfo quiet-window/deadline wrapper retained. No outlier deletion.
 
 Report paired medians and exploratory bootstrap intervals for both A/A controls, each padded/native
@@ -191,3 +191,65 @@ b_nat and refused b_ref gives **zero** body differences. The optimized reader re
 code prefixes, redecodes broken starts and retains literal data; it changes no repository formal
 policy/producer. Fresh fixed-slot links still require every function body to match and every
 non-target address within each implementation to remain fixed. No refused output is timing evidence.
+
+Before the first timing submission, the diagnostic A list adds nbody (13 cases total), retaining
+that earlier repaired numeric-field control. This is an explicit coverage addition to the initial
+12-case prospective contract, with no timing data collected and no unit/policy change.
+
+## Completed static matrix and smoke verification
+
+Non-timing `20261021T004946Z-t056-placement-boundary-matrix` completes done 0 in 357s.
+Identity SHA-256 is `bcb92039f209699493e7dac572a4d3dff9b58191302823014127a2d56f231021`.
+All 4203 original base functions / 4225 candidate functions retain their boundary-correct code
+prefixes and literal jump-table/tail bytes. Only the target address differs within either matrix;
+all other original symbol addresses are identical. The extra assembly object moves the __text
+section start by 4096, so canonical/padded comparison is explicitly a control, not assumed neutral.
+The previously refused b_ref is byte-identical to the re-audited b_ref: fixing data/function boundary
+decoding did not change or tune the binary. No repository formal producer/policy was edited.
+
+| Link | Target address | SHA-256 |
+| --- | --- | --- |
+| b_ref | 0x10025dd90 | c0346d7800b34cec098277149fc976c199e11634b4641ce8efe2c35d17b9ff76 |
+| b_swp | 0x10025dd80 | 5853b4880e2e6aecf698231e7e22c5d815ea768bbbe08fb53bbc87d8ef392298 |
+| c_ref | 0x100008d90 | 2abcea0c0283b144f719da9340ccd557aa403cdfb236981e9d0c6b7f252e9c76 |
+| c_swp | 0x100008da0 | 8641800307055fd4bf51b894578da1eefd83d1f15287411054efe0fc0a7c96c9 |
+| c_p4k | 0x100009d90 | 39053d216ea71b58c7fc066a50c04803a6eb35ac5d9b63751d03e0cd11f3b989 |
+
+Non-timing `20261021T005727Z-t056-placement-matrix-smoke`, done 0 in 163s, runs the 13 complete
+diagnostic workloads on all seven exact files (two canonical, five links), with matching outputs.
+Each of the five links separately passes all 255 NG fixtures. Smoke-ready SHA-256 is
+`df79ea28d027e9a6977a390f3557006d639415f6bfa82fe28d4324eada205cb7`.
+No benchmark wall timing was collected by either job, and no new full Test262 claim is made for
+these diagnostic links. The canonical 4842f823 full configured scan remains the standing result.
+
+### String attribution and other concrete checks
+
+Exact-image non-timing profiles `20261021T002551Z-t056-placement-string-profiles`, done 0 in 51s,
+use internal N=100,000,000 and 40 original unpack passes only for sampling. Main-thread sample
+counts: string_slice base 6692/candidate 6701; unpack 3216/3264. Reported allocator self samples
+are 3053/3123 (45.6%/46.6%) for slice and 1431/1482 (44.5%/45.4%) for unpack. The typed body itself
+has 738/759 self samples for slice (11.0%/11.3%); no typed-dispatch self symbol reaches the five-sample
+report threshold for unpack. This supports checking allocator/native string work independently;
+it does not prove a shared scalar-loop cause or quantify a speed difference from sample counts.
+
+The wide activation's own stack reservation is unchanged at 0x388 in both images. In the numeric
+Binary fast paths, both use r8 for the tag-combine temporary and restore it once from stack;
+the bank stays live in r9 (base) / r11 (candidate). Thus another bank-pointer indirection is not an
+observed explanation in 4842f823. Instruction dependencies/encoding/backend behavior remain a
+fallback hypothesis if isolated placement and launch-state factors do not explain the excess.
+
+### Handoff and stopping rule
+
+Workspace packet `tmp/t056-m1a-placement/probes/` contains the two exact self-contained commands,
+collector, fixed configs, ZoneInfo guard, static validator and hashes. It binds both completed
+static/smoke receipts, every image SHA, immutable production inputs and the recorded protocol.
+A is 13 cases/nine images/15 serial blocks; B is five cases/ten launch conditions/15 blocks and
+requires a complete same-binding A job plus manual review before submission. Each has a 30-minute
+budget and 45-minute quiet-window headroom, all raw samples and output checks. The package renders
+but never submits jobs. The owner has submitted **zero new timing jobs**.
+
+The last attempt stays unspent. No production fix has been applied: the evidence now discriminates
+entry-versus-interior pinning and array dimensions, but cannot choose between code placement,
+actual data/stack placement, backend dependencies and measurement-context interactions without
+those probes. If native C/B does not reproduce serially, investigate schedule/path interactions;
+non-reproduction is not a dismissal of the valid four-worker rejection/triage.
