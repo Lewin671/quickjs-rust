@@ -1,0 +1,152 @@
+{
+  "job": "20261021T051608Z-t056-alloc-type-layouts",
+  "scope": "base and 8f diagnostic compiler inventory; these type definitions are unchanged by dfff",
+  "roles": {
+    "base": {
+      "raw_sha256": "073513b6948c143dcfd897a7711c77f2c6a62c29ae7e01e36fdb0361cfff4cf3",
+      "types": {
+        "bytecode::ir::Bytecode": {
+          "bytes": 1280,
+          "align": 16
+        },
+        "bytecode::vm::Vm<'_>": {
+          "bytes": 1024,
+          "align": 16
+        },
+        "bytecode::typed_loop::TypedLoopProgram": {
+          "bytes": 528,
+          "align": 8
+        },
+        "bytecode::vm::FrameState<'_>": {
+          "bytes": 496,
+          "align": 16
+        },
+        "bytecode::compact_fn::wide::WideProgram": {
+          "bytes": 304,
+          "align": 16
+        },
+        "bytecode::named_property_cache::NamedPropertyCacheState": {
+          "bytes": 240,
+          "align": 8
+        },
+        "bytecode::vm_bindings::TypedLoopSloppyGlobalWrite": {
+          "bytes": 72,
+          "align": 8
+        },
+        "bytecode::compact_fn::wide::NamedWriteSite": {
+          "bytes": 64,
+          "align": 8
+        },
+        "bytecode::compact_fn::wide::activation::WideFrame": {
+          "bytes": 64,
+          "align": 8
+        },
+        "bytecode::typed_loop::ShapeWays": {
+          "bytes": 48,
+          "align": 8
+        },
+        "bytecode::compact_fn::property::GlobalReadSite": {
+          "bytes": 32,
+          "align": 8
+        },
+        "bytecode::operand_stack::OperandStack": {
+          "bytes": 32,
+          "align": 8
+        },
+        "bytecode::compact_fn::wide::NamedReadSite": {
+          "bytes": 24,
+          "align": 8
+        },
+        "bytecode::typed_loop::Typed": {
+          "bytes": 16,
+          "align": 8
+        },
+        "bytecode::typed_loop::TypedOp": {
+          "bytes": 16,
+          "align": 4
+        },
+        "value::Value": {
+          "bytes": 16,
+          "align": 8
+        },
+        "bytecode::compact_fn::wide::WideOp": {
+          "bytes": 8,
+          "align": 4
+        }
+      }
+    },
+    "candidate": {
+      "raw_sha256": "dd6a70fb4417866b56f9d03af618bf424618a168dfdc1497860d91a6b9be2925",
+      "types": {
+        "bytecode::ir::Bytecode": {
+          "bytes": 1280,
+          "align": 16
+        },
+        "bytecode::vm::Vm<'_>": {
+          "bytes": 1024,
+          "align": 16
+        },
+        "bytecode::typed_loop::TypedLoopProgram": {
+          "bytes": 528,
+          "align": 8
+        },
+        "bytecode::vm::FrameState<'_>": {
+          "bytes": 496,
+          "align": 16
+        },
+        "bytecode::compact_fn::wide::WideProgram": {
+          "bytes": 304,
+          "align": 16
+        },
+        "bytecode::named_property_cache::NamedPropertyCacheState": {
+          "bytes": 272,
+          "align": 8
+        },
+        "bytecode::compact_fn::wide::NamedWriteSite": {
+          "bytes": 80,
+          "align": 8
+        },
+        "bytecode::typed_loop::ShapeWays": {
+          "bytes": 80,
+          "align": 8
+        },
+        "bytecode::vm_bindings::TypedLoopSloppyGlobalWrite": {
+          "bytes": 72,
+          "align": 8
+        },
+        "bytecode::compact_fn::wide::activation::WideFrame": {
+          "bytes": 64,
+          "align": 8
+        },
+        "bytecode::compact_fn::property::GlobalReadSite": {
+          "bytes": 32,
+          "align": 8
+        },
+        "bytecode::operand_stack::OperandStack": {
+          "bytes": 32,
+          "align": 8
+        },
+        "bytecode::compact_fn::wide::NamedReadSite": {
+          "bytes": 24,
+          "align": 8
+        },
+        "bytecode::typed_loop::Typed": {
+          "bytes": 16,
+          "align": 8
+        },
+        "bytecode::typed_loop::TypedOp": {
+          "bytes": 16,
+          "align": 4
+        },
+        "value::Value": {
+          "bytes": 16,
+          "align": 8
+        },
+        "bytecode::compact_fn::wide::WideOp": {
+          "bytes": 8,
+          "align": 4
+        }
+      }
+    }
+  }
+}

@@ -1,18 +1,18 @@
 # T056 stage A: allocation-class and adapter follow-up
 
 - Status: implemented on the stage-A branch; local and instruction checks pass,
-  new-image exact correctness and wall remain lead work. No acceptance attempt.
+  new-image exact/86 pass; lead triage likely loss. No acceptance attempt.
 - Implementation:112-byte object header; absent write probes do not create
   transient shape indexes; object-only typed getter is separated from arrays.
 - Verified at: dfff3bb6 / canonical3466c37a (committed reproduction055658Z);
-  local full gate/NG255 and86/86 pass; identities and limits below.
+  local full gate/NG255 and86/86 pass; lead060648Z exact42672/42672,062918Z86 pass,063231Z triage likely loss; see architecture review.
 - Evidence: [completed8f chain](T056-m1-stageA-aligned-scratch.md),
   [type/class/event inventory](T056-m1-stageA-allocation-inventory.md),
   [producers](../diagnostics/t056-allocation-probe/README.md).
-- Unresolved: no new wall claim; unpack/string_slice instruction excess remains;
+- Unresolved: global wall1.4271 at instructions1.0002; unpack wall1.0381/instructions1.0119 remains;
   arm64 timing unmeasured. The frozen unit's final attempt remains unspent.
-- Next action: lead runs fresh correctness -> bound86 -> diagnostic triage on
-  the new runtime commit; old8f receipts cannot satisfy it. No owner timing/K=6.
+- Next action: [architecture review](T056-architecture-review.md) supersedes further placement point fixes;
+  lead independent design review precedes implementation; no owner timing/K=6.
 
 ## Architecture and staged repair
 

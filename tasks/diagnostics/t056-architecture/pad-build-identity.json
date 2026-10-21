@@ -1,0 +1,124 @@
+{
+  "diagnostic_only": true,
+  "runtime_source_unchanged": true,
+  "pad_count": 64,
+  "pad_modes": {
+    "pad0128": 128,
+    "pad0144": 144,
+    "pad1536": 1536,
+    "pada128": 128
+  },
+  "images": {
+    "aligned": {
+      "revision": "8f7d97c71b34e2bec52e2c6df87f4ba4ac51641a",
+      "sha256": "c80cebb5fec9bf21cc3980bb75cb73f58e7175b2ad5ff28200d5f14b28fb7f22",
+      "host_source_sha256": "310d93ecbc103d94195a6199f9eb79371ca17bce9ec624a02215a27ca9b1b5d2",
+      "runtime_tree_sha256": "03e407c501f72bf83f93c292cf4e088b0c267c1eb1c0e0dc3139d3d3361621da"
+    },
+    "allocation": {
+      "revision": "dfff3bb6bf3db01fb52a7612ed1144900b5f08c5",
+      "sha256": "d237ca571d51bd20592ea5439bf07afc4ccd51800111c7227f1c98db12565f2d",
+      "host_source_sha256": "310d93ecbc103d94195a6199f9eb79371ca17bce9ec624a02215a27ca9b1b5d2",
+      "runtime_tree_sha256": "8815eca2d6b4b5f840173d29da836cd5cd215ab62ee49114384d2d87017c711d"
+    }
+  },
+  "qualification": [
+    {
+      "side": "aligned",
+      "mode": "pad0128",
+      "ng_fixtures": 255,
+      "outputs": {
+        "broad/global_read": "QJS_BENCH_RESULT {\"case_id\":\"global_read\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "broad/local_read": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":1000,\"operations\":2000,\"checksum\":3000}\n",
+        "broad/branch_arithmetic": "QJS_BENCH_RESULT {\"case_id\":\"branch_arithmetic\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "sentinel/heterogeneous_property_read": "QJS_BENCH_RESULT {\"case_id\":\"heterogeneous_property_read\",\"iterations\":1000,\"operations\":3000,\"checksum\":500500}\n",
+        "external/sunspider-1.0/string-unpack-code": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n"
+      }
+    },
+    {
+      "side": "aligned",
+      "mode": "pad0144",
+      "ng_fixtures": 255,
+      "outputs": {
+        "broad/global_read": "QJS_BENCH_RESULT {\"case_id\":\"global_read\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "broad/local_read": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":1000,\"operations\":2000,\"checksum\":3000}\n",
+        "broad/branch_arithmetic": "QJS_BENCH_RESULT {\"case_id\":\"branch_arithmetic\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "sentinel/heterogeneous_property_read": "QJS_BENCH_RESULT {\"case_id\":\"heterogeneous_property_read\",\"iterations\":1000,\"operations\":3000,\"checksum\":500500}\n",
+        "external/sunspider-1.0/string-unpack-code": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n"
+      }
+    },
+    {
+      "side": "aligned",
+      "mode": "pad1536",
+      "ng_fixtures": 255,
+      "outputs": {
+        "broad/global_read": "QJS_BENCH_RESULT {\"case_id\":\"global_read\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "broad/local_read": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":1000,\"operations\":2000,\"checksum\":3000}\n",
+        "broad/branch_arithmetic": "QJS_BENCH_RESULT {\"case_id\":\"branch_arithmetic\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "sentinel/heterogeneous_property_read": "QJS_BENCH_RESULT {\"case_id\":\"heterogeneous_property_read\",\"iterations\":1000,\"operations\":3000,\"checksum\":500500}\n",
+        "external/sunspider-1.0/string-unpack-code": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n"
+      }
+    },
+    {
+      "side": "aligned",
+      "mode": "pada128",
+      "ng_fixtures": null,
+      "outputs": {
+        "broad/global_read": "QJS_BENCH_RESULT {\"case_id\":\"global_read\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "broad/local_read": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":1000,\"operations\":2000,\"checksum\":3000}\n",
+        "broad/branch_arithmetic": "QJS_BENCH_RESULT {\"case_id\":\"branch_arithmetic\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "sentinel/heterogeneous_property_read": "QJS_BENCH_RESULT {\"case_id\":\"heterogeneous_property_read\",\"iterations\":1000,\"operations\":3000,\"checksum\":500500}\n",
+        "external/sunspider-1.0/string-unpack-code": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n"
+      }
+    },
+    {
+      "side": "allocation",
+      "mode": "pad0128",
+      "ng_fixtures": 255,
+      "outputs": {
+        "broad/global_read": "QJS_BENCH_RESULT {\"case_id\":\"global_read\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "broad/local_read": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":1000,\"operations\":2000,\"checksum\":3000}\n",
+        "broad/branch_arithmetic": "QJS_BENCH_RESULT {\"case_id\":\"branch_arithmetic\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "sentinel/heterogeneous_property_read": "QJS_BENCH_RESULT {\"case_id\":\"heterogeneous_property_read\",\"iterations\":1000,\"operations\":3000,\"checksum\":500500}\n",
+        "external/sunspider-1.0/string-unpack-code": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n"
+      }
+    },
+    {
+      "side": "allocation",
+      "mode": "pad0144",
+      "ng_fixtures": 255,
+      "outputs": {
+        "broad/global_read": "QJS_BENCH_RESULT {\"case_id\":\"global_read\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "broad/local_read": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":1000,\"operations\":2000,\"checksum\":3000}\n",
+        "broad/branch_arithmetic": "QJS_BENCH_RESULT {\"case_id\":\"branch_arithmetic\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "sentinel/heterogeneous_property_read": "QJS_BENCH_RESULT {\"case_id\":\"heterogeneous_property_read\",\"iterations\":1000,\"operations\":3000,\"checksum\":500500}\n",
+        "external/sunspider-1.0/string-unpack-code": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n"
+      }
+    },
+    {
+      "side": "allocation",
+      "mode": "pad1536",
+      "ng_fixtures": 255,
+      "outputs": {
+        "broad/global_read": "QJS_BENCH_RESULT {\"case_id\":\"global_read\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "broad/local_read": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":1000,\"operations\":2000,\"checksum\":3000}\n",
+        "broad/branch_arithmetic": "QJS_BENCH_RESULT {\"case_id\":\"branch_arithmetic\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "sentinel/heterogeneous_property_read": "QJS_BENCH_RESULT {\"case_id\":\"heterogeneous_property_read\",\"iterations\":1000,\"operations\":3000,\"checksum\":500500}\n",
+        "external/sunspider-1.0/string-unpack-code": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n"
+      }
+    },
+    {
+      "side": "allocation",
+      "mode": "pada128",
+      "ng_fixtures": null,
+      "outputs": {
+        "broad/global_read": "QJS_BENCH_RESULT {\"case_id\":\"global_read\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "broad/local_read": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":1000,\"operations\":2000,\"checksum\":3000}\n",
+        "broad/branch_arithmetic": "QJS_BENCH_RESULT {\"case_id\":\"branch_arithmetic\",\"iterations\":1000,\"operations\":1000,\"checksum\":1000}\n",
+        "sentinel/heterogeneous_property_read": "QJS_BENCH_RESULT {\"case_id\":\"heterogeneous_property_read\",\"iterations\":1000,\"operations\":3000,\"checksum\":500500}\n",
+        "external/sunspider-1.0/string-unpack-code": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n"
+      }
+    }
+  ],
+  "all_outputs_match": true
+}

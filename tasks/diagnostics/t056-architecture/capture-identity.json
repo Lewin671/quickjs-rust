@@ -1,0 +1,461 @@
+{
+  "diagnostic_only": true,
+  "timing": false,
+  "struct_layout_fields_unchanged": true,
+  "trace_position": "after typed loop, after wide run, before recycler",
+  "caveat": "new code and post-print allocations can perturb subsequent entries; these are not canonical-image addresses or latency evidence",
+  "roles": {
+    "base": {
+      "revision": "f58c696e8379261ed726f0cea1051ed6d34f431a",
+      "binary_sha256": "b5a401a9c112f6306eff614ad2690b16bfed961cfa04ffdf57256abdef676db2",
+      "recipe": {
+        "cargo_args": [
+          "--locked",
+          "--release",
+          "-p",
+          "qjs-cli",
+          "--features",
+          "agents",
+          "--config=profile.release.opt-level=3",
+          "--config=profile.release.lto=\"fat\"",
+          "--config=profile.release.codegen-units=16",
+          "--config=profile.release.panic=\"abort\""
+        ],
+        "environment": {
+          "CARGO_INCREMENTAL": "0",
+          "CARGO_ENCODED_RUSTFLAGS": "-Csymbol-mangling-version=v0\u001f-Cllvm-args=-align-all-functions=4"
+        },
+        "binary": "qjs"
+      },
+      "object_data_bytes": 112,
+      "register_owner_bytes": 8,
+      "scratch_bytes": 80
+    },
+    "aligned": {
+      "revision": "8f7d97c71b34e2bec52e2c6df87f4ba4ac51641a",
+      "binary_sha256": "8fd85ca3d71d9ada529e8906363d640dabccb0655ab7879c67c82d6a5ed4e7bf",
+      "recipe": {
+        "cargo_args": [
+          "--locked",
+          "--release",
+          "-p",
+          "qjs-cli",
+          "--features",
+          "agents",
+          "--config=profile.release.opt-level=3",
+          "--config=profile.release.lto=\"fat\"",
+          "--config=profile.release.codegen-units=16",
+          "--config=profile.release.panic=\"abort\""
+        ],
+        "environment": {
+          "CARGO_INCREMENTAL": "0",
+          "CARGO_ENCODED_RUSTFLAGS": "-Csymbol-mangling-version=v0\u001f-Cllvm-args=-align-all-functions=4"
+        },
+        "binary": "qjs"
+      },
+      "object_data_bytes": 120,
+      "register_owner_bytes": 8,
+      "scratch_bytes": 80
+    },
+    "allocation": {
+      "revision": "dfff3bb6bf3db01fb52a7612ed1144900b5f08c5",
+      "binary_sha256": "e7577eb11efd474a0b00eab3a8904b0619e1b4e9421debcc9e043a092a16cb10",
+      "recipe": {
+        "cargo_args": [
+          "--locked",
+          "--release",
+          "-p",
+          "qjs-cli",
+          "--features",
+          "agents",
+          "--config=profile.release.opt-level=3",
+          "--config=profile.release.lto=\"fat\"",
+          "--config=profile.release.codegen-units=16",
+          "--config=profile.release.panic=\"abort\""
+        ],
+        "environment": {
+          "CARGO_INCREMENTAL": "0",
+          "CARGO_ENCODED_RUSTFLAGS": "-Csymbol-mangling-version=v0\u001f-Cllvm-args=-align-all-functions=4"
+        },
+        "binary": "qjs"
+      },
+      "object_data_bytes": 112,
+      "register_owner_bytes": 8,
+      "scratch_bytes": 80
+    }
+  },
+  "runs": [
+    {
+      "role": "base",
+      "case": "broad/global_read",
+      "iterations": 23068672,
+      "repeat": 0,
+      "stderr": "base-broad--global_read-23068672-0.stderr.gz",
+      "stderr_sha256": "8a992cee7695ec16f86916c98478f78f3adff0d89de5ed029e7913da1f1fed90",
+      "stdout": "base-broad--global_read-23068672-0.stdout",
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T072833Z-t056-architecture-capture-v3/out/active/qjs",
+        "--raw",
+        "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+        "global_read",
+        "23068672"
+      ]
+    },
+    {
+      "role": "base",
+      "case": "broad/global_read",
+      "iterations": 23068672,
+      "repeat": 1,
+      "stderr": "base-broad--global_read-23068672-1.stderr.gz",
+      "stderr_sha256": "6e1f6eedf4a800e421a8ab2e9870a97b6d1a569596aae40504803a0f41aafdf4",
+      "stdout": "base-broad--global_read-23068672-1.stdout",
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T072833Z-t056-architecture-capture-v3/out/active/qjs",
+        "--raw",
+        "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+        "global_read",
+        "23068672"
+      ]
+    },
+    {
+      "role": "base",
+      "case": "broad/global_read",
+      "iterations": 46137344,
+      "repeat": 0,
+      "stderr": "base-broad--global_read-46137344-0.stderr.gz",
+      "stderr_sha256": "c23c82dc2f5b5d1c971f974e80b2b2ab0ab21803766e860b03bbb2ffd0e365b7",
+      "stdout": "base-broad--global_read-46137344-0.stdout",
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T072833Z-t056-architecture-capture-v3/out/active/qjs",
+        "--raw",
+        "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+        "global_read",
+        "46137344"
+      ]
+    },
+    {
+      "role": "base",
+      "case": "broad/global_read",
+      "iterations": 46137344,
+      "repeat": 1,
+      "stderr": "base-broad--global_read-46137344-1.stderr.gz",
+      "stderr_sha256": "ab637b543f6e7f041f09523c8acc5f4a1e4609744ffa027e08ff8bae91025440",
+      "stdout": "base-broad--global_read-46137344-1.stdout",
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T072833Z-t056-architecture-capture-v3/out/active/qjs",
+        "--raw",
+        "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+        "global_read",
+        "46137344"
+      ]
+    },
+    {
+      "role": "base",
+      "case": "broad/local_read",
+      "iterations": 1000000,
+      "repeat": 0,
+      "stderr": "base-broad--local_read-1000000-0.stderr.gz",
+      "stderr_sha256": "fc26c0a24c1cf3497fabe00c7a8b54b3a1d87e1b16856020afbbf1046b44d08c",
+      "stdout": "base-broad--local_read-1000000-0.stdout",
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T072833Z-t056-architecture-capture-v3/out/active/qjs",
+        "--raw",
+        "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+        "local_read",
+        "1000000"
+      ]
+    },
+    {
+      "role": "base",
+      "case": "broad/local_read",
+      "iterations": 1000000,
+      "repeat": 1,
+      "stderr": "base-broad--local_read-1000000-1.stderr.gz",
+      "stderr_sha256": "deb8fef14495c5ad339af42f9dfd38f08cc79f2105cd43a7108625336546a06a",
+      "stdout": "base-broad--local_read-1000000-1.stdout",
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T072833Z-t056-architecture-capture-v3/out/active/qjs",
+        "--raw",
+        "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+        "local_read",
+        "1000000"
+      ]
+    },
+    {
+      "role": "base",
+      "case": "external/sunspider-1.0/string-unpack-code",
+      "iterations": null,
+      "repeat": 0,
+      "stderr": "base-external--sunspider-1.0--string-unpack-code-None-0.stderr.gz",
+      "stderr_sha256": "79f19246c7857fb6d2c4d36aff8325289354426be639fe5e81506eece76b0651",
+      "stdout": "base-external--sunspider-1.0--string-unpack-code-None-0.stdout",
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T072833Z-t056-architecture-capture-v3/out/active/qjs",
+        "--raw",
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T072833Z-t056-architecture-capture-v3/out/work/sunspider-1.0--string-unpack-code.js"
+      ]
+    },
+    {
+      "role": "base",
+      "case": "external/sunspider-1.0/string-unpack-code",
+      "iterations": null,
+      "repeat": 1,
+      "stderr": "base-external--sunspider-1.0--string-unpack-code-None-1.stderr.gz",
+      "stderr_sha256": "79f19246c7857fb6d2c4d36aff8325289354426be639fe5e81506eece76b0651",
+      "stdout": "base-external--sunspider-1.0--string-unpack-code-None-1.stdout",
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T072833Z-t056-architecture-capture-v3/out/active/qjs",
+        "--raw",
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T072833Z-t056-architecture-capture-v3/out/work/sunspider-1.0--string-unpack-code.js"
+      ]
+    },
+    {
+      "role": "aligned",
+      "case": "broad/global_read",
+      "iterations": 23068672,
+      "repeat": 0,
+      "stderr": "aligned-broad--global_read-23068672-0.stderr.gz",
+      "stderr_sha256": "9e00a0cfccaa52c863c37a57533e0b12b8983e1f1499b3491d46fe3456493928",
+      "stdout": "aligned-broad--global_read-23068672-0.stdout",
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T072833Z-t056-architecture-capture-v3/out/active/qjs",
+        "--raw",
+        "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+        "global_read",
+        "23068672"
+      ]
+    },
+    {
+      "role": "aligned",
+      "case": "broad/global_read",
+      "iterations": 23068672,
+      "repeat": 1,
+      "stderr": "aligned-broad--global_read-23068672-1.stderr.gz",
+      "stderr_sha256": "2f05fa6729a9c4dbfc7f5e8140146cb2ee690a91bee3178002b3c6392c5f408b",
+      "stdout": "aligned-broad--global_read-23068672-1.stdout",
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T072833Z-t056-architecture-capture-v3/out/active/qjs",
+        "--raw",
+        "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+        "global_read",
+        "23068672"
+      ]
+    },
+    {
+      "role": "aligned",
+      "case": "broad/global_read",
+      "iterations": 46137344,
+      "repeat": 0,
+      "stderr": "aligned-broad--global_read-46137344-0.stderr.gz",
+      "stderr_sha256": "96a909259658c194cfafeb5c54f5f71fbbb52e35cd5a4078c2deb48a43a04b5c",
+      "stdout": "aligned-broad--global_read-46137344-0.stdout",
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T072833Z-t056-architecture-capture-v3/out/active/qjs",
+        "--raw",
+        "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+        "global_read",
+        "46137344"
+      ]
+    },
+    {
+      "role": "aligned",
+      "case": "broad/global_read",
+      "iterations": 46137344,
+      "repeat": 1,
+      "stderr": "aligned-broad--global_read-46137344-1.stderr.gz",
+      "stderr_sha256": "57c492c99d95205338c9d6991ab785ac8faa4ab774aedb3469e5810bdea05745",
+      "stdout": "aligned-broad--global_read-46137344-1.stdout",
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T072833Z-t056-architecture-capture-v3/out/active/qjs",
+        "--raw",
+        "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+        "global_read",
+        "46137344"
+      ]
+    },
+    {
+      "role": "aligned",
+      "case": "broad/local_read",
+      "iterations": 1000000,
+      "repeat": 0,
+      "stderr": "aligned-broad--local_read-1000000-0.stderr.gz",
+      "stderr_sha256": "341870463c3c1798352b5668e7bb79149f19de68e2c9ff775aef57beaeb3b2e2",
+      "stdout": "aligned-broad--local_read-1000000-0.stdout",
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T072833Z-t056-architecture-capture-v3/out/active/qjs",
+        "--raw",
+        "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+        "local_read",
+        "1000000"
+      ]
+    },
+    {
+      "role": "aligned",
+      "case": "broad/local_read",
+      "iterations": 1000000,
+      "repeat": 1,
+      "stderr": "aligned-broad--local_read-1000000-1.stderr.gz",
+      "stderr_sha256": "48f7bc47428353abf2f3828c0d79ba65912aa523995db8c50122c1e6b3c07b7c",
+      "stdout": "aligned-broad--local_read-1000000-1.stdout",
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T072833Z-t056-architecture-capture-v3/out/active/qjs",
+        "--raw",
+        "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+        "local_read",
+        "1000000"
+      ]
+    },
+    {
+      "role": "aligned",
+      "case": "external/sunspider-1.0/string-unpack-code",
+      "iterations": null,
+      "repeat": 0,
+      "stderr": "aligned-external--sunspider-1.0--string-unpack-code-None-0.stderr.gz",
+      "stderr_sha256": "ebf58449eb9afa89cc6a097c1d93394cb3e01dae1819fae2a21be82aaedc153d",
+      "stdout": "aligned-external--sunspider-1.0--string-unpack-code-None-0.stdout",
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T072833Z-t056-architecture-capture-v3/out/active/qjs",
+        "--raw",
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T072833Z-t056-architecture-capture-v3/out/work/sunspider-1.0--string-unpack-code.js"
+      ]
+    },
+    {
+      "role": "aligned",
+      "case": "external/sunspider-1.0/string-unpack-code",
+      "iterations": null,
+      "repeat": 1,
+      "stderr": "aligned-external--sunspider-1.0--string-unpack-code-None-1.stderr.gz",
+      "stderr_sha256": "ebf58449eb9afa89cc6a097c1d93394cb3e01dae1819fae2a21be82aaedc153d",
+      "stdout": "aligned-external--sunspider-1.0--string-unpack-code-None-1.stdout",
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T072833Z-t056-architecture-capture-v3/out/active/qjs",
+        "--raw",
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T072833Z-t056-architecture-capture-v3/out/work/sunspider-1.0--string-unpack-code.js"
+      ]
+    },
+    {
+      "role": "allocation",
+      "case": "broad/global_read",
+      "iterations": 23068672,
+      "repeat": 0,
+      "stderr": "allocation-broad--global_read-23068672-0.stderr.gz",
+      "stderr_sha256": "68ee4a3619817f94b110087a544e3541d148573953b62b6d1d6964a8042dc596",
+      "stdout": "allocation-broad--global_read-23068672-0.stdout",
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T072833Z-t056-architecture-capture-v3/out/active/qjs",
+        "--raw",
+        "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+        "global_read",
+        "23068672"
+      ]
+    },
+    {
+      "role": "allocation",
+      "case": "broad/global_read",
+      "iterations": 23068672,
+      "repeat": 1,
+      "stderr": "allocation-broad--global_read-23068672-1.stderr.gz",
+      "stderr_sha256": "ccc773b5f228cf4febb9b96eb582a6ad2c6211fb88157397b16b6f762116aa37",
+      "stdout": "allocation-broad--global_read-23068672-1.stdout",
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T072833Z-t056-architecture-capture-v3/out/active/qjs",
+        "--raw",
+        "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+        "global_read",
+        "23068672"
+      ]
+    },
+    {
+      "role": "allocation",
+      "case": "broad/global_read",
+      "iterations": 46137344,
+      "repeat": 0,
+      "stderr": "allocation-broad--global_read-46137344-0.stderr.gz",
+      "stderr_sha256": "a15362c2d9586c1a42e1c9f7cc4dfa89fa8f9e5522247006e0c5962ea5196000",
+      "stdout": "allocation-broad--global_read-46137344-0.stdout",
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T072833Z-t056-architecture-capture-v3/out/active/qjs",
+        "--raw",
+        "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+        "global_read",
+        "46137344"
+      ]
+    },
+    {
+      "role": "allocation",
+      "case": "broad/global_read",
+      "iterations": 46137344,
+      "repeat": 1,
+      "stderr": "allocation-broad--global_read-46137344-1.stderr.gz",
+      "stderr_sha256": "e149bdb105e90226cc56b387958b8abe260b0885aedaaa5269ae8dc6f30ef52e",
+      "stdout": "allocation-broad--global_read-46137344-1.stdout",
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T072833Z-t056-architecture-capture-v3/out/active/qjs",
+        "--raw",
+        "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+        "global_read",
+        "46137344"
+      ]
+    },
+    {
+      "role": "allocation",
+      "case": "broad/local_read",
+      "iterations": 1000000,
+      "repeat": 0,
+      "stderr": "allocation-broad--local_read-1000000-0.stderr.gz",
+      "stderr_sha256": "ecff8383c942930638853f854400e76d490ae4d0f682210c3e4f8eb28f1e54a5",
+      "stdout": "allocation-broad--local_read-1000000-0.stdout",
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T072833Z-t056-architecture-capture-v3/out/active/qjs",
+        "--raw",
+        "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+        "local_read",
+        "1000000"
+      ]
+    },
+    {
+      "role": "allocation",
+      "case": "broad/local_read",
+      "iterations": 1000000,
+      "repeat": 1,
+      "stderr": "allocation-broad--local_read-1000000-1.stderr.gz",
+      "stderr_sha256": "7d8d88f744256e7fc04019f12d2fc26af9de1adc540372effa3ae9ece1b0d75b",
+      "stdout": "allocation-broad--local_read-1000000-1.stdout",
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T072833Z-t056-architecture-capture-v3/out/active/qjs",
+        "--raw",
+        "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+        "local_read",
+        "1000000"
+      ]
+    },
+    {
+      "role": "allocation",
+      "case": "external/sunspider-1.0/string-unpack-code",
+      "iterations": null,
+      "repeat": 0,
+      "stderr": "allocation-external--sunspider-1.0--string-unpack-code-None-0.stderr.gz",
+      "stderr_sha256": "bd845c7de498b1fa2b9209bb3328abfe7c31e15903ff51f3e2f8194ffd42bdfc",
+      "stdout": "allocation-external--sunspider-1.0--string-unpack-code-None-0.stdout",
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T072833Z-t056-architecture-capture-v3/out/active/qjs",
+        "--raw",
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T072833Z-t056-architecture-capture-v3/out/work/sunspider-1.0--string-unpack-code.js"
+      ]
+    },
+    {
+      "role": "allocation",
+      "case": "external/sunspider-1.0/string-unpack-code",
+      "iterations": null,
+      "repeat": 1,
+      "stderr": "allocation-external--sunspider-1.0--string-unpack-code-None-1.stderr.gz",
+      "stderr_sha256": "bd845c7de498b1fa2b9209bb3328abfe7c31e15903ff51f3e2f8194ffd42bdfc",
+      "stdout": "allocation-external--sunspider-1.0--string-unpack-code-None-1.stdout",
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T072833Z-t056-architecture-capture-v3/out/active/qjs",
+        "--raw",
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261021T072833Z-t056-architecture-capture-v3/out/work/sunspider-1.0--string-unpack-code.js"
+      ]
+    }
+  ]
+}

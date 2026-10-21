@@ -6,19 +6,17 @@
 - Implementation: stage 1 on main. Stage A on its branch, not on main; the rejected M1.2 candidate stays on
   `agent/t056-m1-stage2/codex`; the write-site add replay removed from stage A stays on
   `agent/t056-add-transition-replay/claude`.
-- Verified at:8f7d97c7 exact42672/42672 and bound86 pass; lead triage improves local/branch/heterogeneous,
-  but unpack1.0389 remains. Follow-up dfff3bb6 / image3466c37a (committed reproduction055658Z) passes full/NG255/subset5170/86.
-- Evidence: [part 1](archive/T056-unit0-part1-evidence.md), [part 2](archive/T056-unit0-part2-evidence.md),
-  [M1 stage 1](archive/T056-m1-stage1-evidence.md), [M1.2 rejection](archive/T056-m1-stage2-evidence.md),
-  [M1.2 diagnosis](archive/T056-m1-stage2-diagnosis.md), [stage A record](archive/T056-m1-stageA-record.md),
-  [codegen](archive/T056-m1-stageA-codegen-diagnosis.md), [data/launch diagnosis](archive/T056-m1-stageA-data-diagnosis.md), [aligned scratch](archive/T056-m1-stageA-aligned-scratch.md),
-  [allocation follow-up](archive/T056-m1-stageA-allocation-diagnosis.md), [M2 inputs](archive/T056-m2-design-inputs.md);
+- Verified at: dfff3bb6/image3466c37a exact42672/42672, full/NG255/subset5170 and bound86 pass;
+  lead063231Z triage likely loss: global wall1.4271/instructions1.0002, unpack1.0381/1.0119.
+- Evidence: [stage A record](archive/T056-m1-stageA-record.md),
+  [allocation follow-up](archive/T056-m1-stageA-allocation-diagnosis.md),
+  [architecture review](archive/T056-architecture-review.md), [M2 inputs](archive/T056-m2-design-inputs.md);
   plans [`interpreter-core-v2-atoms-layouts`](performance-units/interpreter-core-v2-atoms-layouts.json) (closed),
   [`interpreter-core-v2-layout-edges`](performance-units/interpreter-core-v2-layout-edges.json).
-- Unresolved: new-image full exact/wall pending; slice allocations unchanged, unpack instructions1.0119.
-  Global's old0.906 gain did not survive (8f1.004); no durable gain claimed. Arm64 timing unmeasured.
-- Next action: lead runs fresh allocation-image correctness -> bound86 -> diagnostic triage;
-  no owner timing/final K=6; the last attempt remains unspent.
+- Unresolved: equal-instruction placement regressions; real-address diagnosis does not establish a global-cell4K alias.
+  Proposed owned hot-state layout is not implemented; arm64 timing unmeasured.
+- Next action: lead obtains independent architecture review, then considers the prepared A/A robustness probe;
+  no owner timing/final K=6; last attempt remains unspent. No further placement point fix in this review.
 
 ## Goal and scope
 

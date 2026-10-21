@@ -1,0 +1,82 @@
+{
+  "source_revision": "b1ecbaf6c5acbace236bbac393620311018110ae",
+  "production_unchanged": true,
+  "full_check_exit": 0,
+  "full_check_log_sha256": "7652d864c7754fbbb045bbca52b4245ac1f3b3b8ec0aa01f13132f1f99ecc87c",
+  "full_check_last_stage": "Test262 subset, 5170 cases passed",
+  "pointer_range_checks": [
+    {
+      "capture": "aligned-broad--global_read-23068672-0.stderr.gz",
+      "store_vs_opcode_low12_overlaps": 0
+    },
+    {
+      "capture": "aligned-broad--global_read-23068672-1.stderr.gz",
+      "store_vs_opcode_low12_overlaps": 0
+    },
+    {
+      "capture": "aligned-broad--global_read-46137344-0.stderr.gz",
+      "store_vs_opcode_low12_overlaps": 0
+    },
+    {
+      "capture": "aligned-broad--global_read-46137344-1.stderr.gz",
+      "store_vs_opcode_low12_overlaps": 0
+    },
+    {
+      "capture": "aligned-broad--local_read-1000000-0.stderr.gz",
+      "store_vs_opcode_low12_overlaps": 0
+    },
+    {
+      "capture": "aligned-broad--local_read-1000000-1.stderr.gz",
+      "store_vs_opcode_low12_overlaps": 0
+    },
+    {
+      "capture": "allocation-broad--global_read-23068672-0.stderr.gz",
+      "store_vs_opcode_low12_overlaps": 0
+    },
+    {
+      "capture": "allocation-broad--global_read-23068672-1.stderr.gz",
+      "store_vs_opcode_low12_overlaps": 0
+    },
+    {
+      "capture": "allocation-broad--global_read-46137344-0.stderr.gz",
+      "store_vs_opcode_low12_overlaps": 0
+    },
+    {
+      "capture": "allocation-broad--global_read-46137344-1.stderr.gz",
+      "store_vs_opcode_low12_overlaps": 0
+    },
+    {
+      "capture": "allocation-broad--local_read-1000000-0.stderr.gz",
+      "store_vs_opcode_low12_overlaps": 0
+    },
+    {
+      "capture": "allocation-broad--local_read-1000000-1.stderr.gz",
+      "store_vs_opcode_low12_overlaps": 0
+    },
+    {
+      "capture": "base-broad--global_read-23068672-0.stderr.gz",
+      "store_vs_opcode_low12_overlaps": 0
+    },
+    {
+      "capture": "base-broad--global_read-23068672-1.stderr.gz",
+      "store_vs_opcode_low12_overlaps": 0
+    },
+    {
+      "capture": "base-broad--global_read-46137344-0.stderr.gz",
+      "store_vs_opcode_low12_overlaps": 0
+    },
+    {
+      "capture": "base-broad--global_read-46137344-1.stderr.gz",
+      "store_vs_opcode_low12_overlaps": 0
+    },
+    {
+      "capture": "base-broad--local_read-1000000-0.stderr.gz",
+      "store_vs_opcode_low12_overlaps": 0
+    },
+    {
+      "capture": "base-broad--local_read-1000000-1.stderr.gz",
+      "store_vs_opcode_low12_overlaps": 0
+    }
+  ],
+  "limitations": "does not cover canonical machine-stack spills, native transient state, physical cache sets, or prove a hardware cause"
+}

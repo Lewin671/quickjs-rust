@@ -1,0 +1,23 @@
+{
+  "protocol_revision": "b1ecbaf6c5acbace236bbac393620311018110ae",
+  "case_ids": [
+    "broad/global_read",
+    "broad/local_read",
+    "broad/branch_arithmetic",
+    "sentinel/heterogeneous_property_read",
+    "external/sunspider-1.0/string-unpack-code",
+    "diagnostic/empty"
+  ],
+  "correctness_job": "20261021T060648Z-t056-m1a-allocation-correctness",
+  "pregate_job": "20261021T062918Z-t056-m1a-allocation-pregate86",
+  "triage_job": "20261021T063231Z-t056-m1a-allocation-triage",
+  "pad_build_job": "20261021T075152Z-t056-architecture-pad-build",
+  "natural_jobs": {
+    "b": "20261021T050618Z-t056-m1a-aligned-triage",
+    "c": "20261021T063231Z-t056-m1a-allocation-triage"
+  },
+  "pad_build_sha256": "aa72edb79a71760ef60c73d8041e94811cddd1c8630f74273028160ebdb13e5d",
+  "triage_result_sha256": "ca396e60101edb3c8eaf099b28c33c4fb3e9379c35f60a51511e7ab9cbc6b9e4",
+  "collector_sha256": "bf264a54edac03b3975d571480fccd10839b0a0e05af84e4c581d390e5f8d0d6",
+  "protocol_sha256": "efb3b80b19f2e84f23efda32c8cb968ed85028a3db52097569f5bba257832f7b"
+}

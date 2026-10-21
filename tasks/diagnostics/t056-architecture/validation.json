@@ -1,0 +1,21 @@
+{
+  "scope": "static/local and FAKE-PROCESS SIMULATION only; no engine, timing or job submission",
+  "candidate": "dfff3bb6bf3db01fb52a7612ed1144900b5f08c5",
+  "cases": [
+    "broad/global_read",
+    "broad/local_read",
+    "broad/branch_arithmetic",
+    "sentinel/heterogeneous_property_read",
+    "external/sunspider-1.0/string-unpack-code",
+    "diagnostic/empty"
+  ],
+  "blocks": 15,
+  "case_role_units": 1080,
+  "checks": [
+    "all modules and rendered shell/embedded Python parse; renderer only prints",
+    "15 blocks, six cases, twelve roles, 1080 units; projection fits; contrasts, resets, same-image factors",
+    "Shanghai/LA/DST quiet windows; total running-job watchdog includes quieting, excludes queue wait; remote own-tree stop payload parses",
+    "actual collector completes simulated 15-block matrix with fake process/counters; env effective values reset, raw logs/AA/same inode/output/ratios verified; temporary fake artifacts removed",
+    "old and failed prerequisites rejected; frozen receipt helper unchanged"
+  ]
+}

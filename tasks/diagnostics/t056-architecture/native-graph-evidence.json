@@ -1,0 +1,55 @@
+{
+  "scope": "canonical text symbol extents; static row counts are not executed instruction counts",
+  "roles": {
+    "aligned": {
+      "binary_sha256": "b0b84489a3f6fd673b06dc4bdc71c8f176387a231ca19fe1da5ea48ca4ee0fd5",
+      "functions": [
+        {
+          "name": "qjs_runtime::native::call_native_family",
+          "entry": "0x10021e820",
+          "end": "0x10022a310",
+          "instruction_rows": 10187,
+          "stack_reserve": "$0x3f8, %rsp                    ## imm = 0x3F8",
+          "decoded_instruction_rows": 9524
+        },
+        {
+          "name": "qjs_runtime::native::regexp::call_regexp_native",
+          "entry": "0x100490460",
+          "end": "0x10049a010",
+          "instruction_rows": 7988,
+          "stack_reserve": "$0x478, %rsp                    ## imm = 0x478",
+          "decoded_instruction_rows": 7745
+        },
+        {
+          "name": "qjs_runtime::regexp::symbol_replace::replace_matches",
+          "entry": "0x10049a010",
+          "end": "0x10049cc90",
+          "instruction_rows": 2545,
+          "stack_reserve": "$0x288, %rsp                    ## imm = 0x288",
+          "decoded_instruction_rows": 2482
+        }
+      ]
+    },
+    "allocation": {
+      "binary_sha256": "3466c37a62f2fb6d764d0123212749ff810138ca05fcad336ce1afa05bdb1e3f",
+      "functions": [
+        {
+          "name": "qjs_runtime::native::call_native_family",
+          "entry": "0x100218770",
+          "end": "0x100221390",
+          "instruction_rows": 8218,
+          "stack_reserve": "$0x308, %rsp                    ## imm = 0x308",
+          "decoded_instruction_rows": 7652
+        },
+        {
+          "name": "qjs_runtime::regexp::symbol_replace::native_regexp_prototype_replace",
+          "entry": "0x10048dc00",
+          "end": "0x1004937c0",
+          "instruction_rows": 4993,
+          "stack_reserve": "$0x2f8, %rsp                    ## imm = 0x2F8",
+          "decoded_instruction_rows": 4885
+        }
+      ]
+    }
+  }
+}
