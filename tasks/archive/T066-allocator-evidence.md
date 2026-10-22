@@ -1,6 +1,6 @@
 # T066 allocator evidence
 
-- Status: evidence record; 2026-10-22; screen attempt 1 rejected, repair complete, out-of-line entry measured; attempt 2 is the lead's call.
+- Status: evidence record; 2026-10-22; screen attempt 1 rejected; repair, out-of-line entry and page coloring measured; attempt 2 is the lead's call.
 - Implementation: present at `52dd420d` on `agent/t066-size-class-allocator/cmd`;
   64-KiB pages with per-class free-page queues, page recycling and an atomic
   cross-thread remote list. The compiled candidate is byte-identical to
@@ -15,10 +15,10 @@
   `matter-js/simulate`; the per-case ratio is dominated by whole-process variance
   in the base medians (4-10% between cohorts with the same base binary).
   `graphlib/paths` fell from 1.073 to 1.018, so the diagnosed stranding is fixed.
-- Next action: lead decides whether to spend attempt 2. The out-of-line entry
-  restores the base call shape and improves the pre-gate, but
-  `capturing_closure_call` remains ~1.19 in triage, so the inlining hypothesis
-  does not explain that regression.
+- Next action: lead decides whether to spend attempt 2. Page coloring moved
+  `capturing_closure_call` from 1.194 to 1.034 (triage median, no obvious
+  regression), supporting the 4K-aliasing hypothesis; imaging stays fixed and
+  the amended RSS rule passes.
 
 ## Plan stage: target selection
 
@@ -710,6 +710,101 @@ closure regression is unchanged. Fat-LTO inlining of the allocator body is
 therefore confirmed as a code-shape effect and falsified as the cause of the
 closure cost. Per the brief this was the one change: no further tuning, no
 screen, formal run or plan change. Attempt 2 remains the lead's call.
+
+## Page coloring
+
+Declared rule (`f4405037`, fixed before measuring): the c-th page a thread
+creates starts its block area at `HEADER_SIZE + (c mod 16) * 64` bytes and holds
+correspondingly fewer whole blocks. The rule is recorded in the module header
+with its reason: every page is 64-KiB aligned with the same header offset, so
+without coloring the first (hot, long-lived) blocks of every class share
+identical low address bits; on the Intel measurement host that aliases L1 sets
+and lets equal low 12 bits create 4K store/load false dependencies. No offset is
+searched. The out-of-line entry is kept.
+
+A unit test (`consecutive_pages_have_different_colors`) allocates across page
+boundaries of the 8-KiB class and asserts consecutive pages' first blocks differ
+in their low 12 bits. `rss15.sh` now reports the user-amended rule (per case
+≤1.10, development geomean ≤1.05) instead of the superseded 1.05.
+
+### Verification
+
+| Check | Result |
+| --- | --- |
+| `cargo test -p qjs-cli` | 32 passed (27 unit + 5 integration), 0 failed |
+| `QJS_CHECK_SKIP_TEST262=1 ./scripts/check.sh` | passed locally (Test262 deferred) |
+| iMac correctness `20261022T165710Z` | exit 0: compare-qjs ok, Test262 subset 5170/5170 |
+| iMac pre-gate `20261022T165713Z` | PASS, 86/86; worst `audio-oscillator` 1.003227, `dynamic_method_call` 1.001140, `property_write` 1.001032; median 0.991485; candidate `b3132b40…`; artifacts `images.json` `dcb24f01…`, `pregate.json` `7f637fdb…`, `verdict.json` `1a74d8b1…` |
+
+15-pair RSS (`20261022T165714Z`, amended rule): all ten cases ≤1.10 and the
+development geomean is 1.035718 ≤1.05, exit 0.
+
+| Case | Base bytes | Candidate bytes | Ratio |
+| --- | ---: | ---: | ---: |
+| `matter-js/simulate` | 24,911,872 | 27,176,960 | 1.090924 |
+| `lodash/transform` | 75,055,104 | 81,711,104 | 1.088682 |
+| `js-yaml/document` (target) | 28,409,856 | 30,248,960 | 1.064735 |
+| `graphlib/paths` (target) | 29,245,440 | 30,707,712 | 1.050000 |
+| `big.js/arith` | 7,335,936 | 7,700,480 | 1.049693 |
+| `immutable/persistent` (target) | 37,928,960 | 39,399,424 | 1.038769 |
+| `meriyah/parse` | 130,637,824 | 134,225,920 | 1.027466 |
+| `moment/dates` | 19,128,320 | 19,550,208 | 1.022056 |
+| `papaparse/csv` | 108,793,856 | 108,814,336 | 1.000188 |
+| `diff/compare` (target) | 13,484,032 | 12,595,200 | 0.934083 |
+
+Artifacts `images.json` `233e6654…`, `rss.json` `9134d2bc…`, `verdict.json`
+`45762aaf…`. Coloring shifts each page's block area by up to 960 bytes and
+shrinks some pages by a block, which is why lodash and matter-js sit higher
+than the uncolored 15-pair run; the amended rule still passes.
+
+Diagnostic quick triage (`20261022T165715Z`, 120/120 valid, 275 s, candidate
+`b3132b40…`; request `e787779c…`, `triage.json` `0469262b…`, `triage.md`
+`d9f50e92…`):
+
+| Case | Wall ratio [95% exploratory] | Instructions |
+| --- | ---: | ---: |
+| `development/diff/compare` (target) | 0.8146 [0.7957, 0.8836] | 0.8130 |
+| `development/graphlib/paths` (target) | 0.8834 [0.8731, 0.9189] | 0.8687 |
+| `development/js-yaml/document` (target) | 0.8924 [0.8435, 0.9578] | 0.8531 |
+| `development/immutable/persistent` (target) | 0.8594 [0.8376, 0.8820] | 0.8646 |
+| `external/kraken-1.1/imaging-darkroom` | 0.9714 [0.9398, 0.9877] | 0.9575 |
+| `external/kraken-1.1/imaging-desaturate` | 0.9515 [0.8428, 0.9750] | 0.9746 |
+| `sentinel/capturing_closure_call` | **1.0336 [1.0093, 1.1250]** | 0.9989 |
+| `sentinel/heterogeneous_property_read` | 1.0895 [1.0461, 1.1674] | 1.0001 |
+| `sentinel/polymorphic_call_site` | 1.0276 [0.9785, 1.0790] | 0.9988 |
+| `sentinel/prototype_method_call` | 0.9868 [0.8574, 1.0346] | 0.9992 |
+| `sentinel/recursive_call_tree` | 1.0122 [1.0062, 1.0641] | 1.0000 |
+| `sentinel/string_key_map_churn` | 1.0239 [0.9954, 1.0875] | 1.0000 |
+| `broad/property_dynamic_read` | 1.0258 [0.9950, 1.1039] | 1.0001 |
+| `broad/object_allocation` | 0.9973 [0.9786, 1.0180] | 1.0000 |
+| `broad/string_slice` | 0.6707 [0.6076, 0.7242] | 0.6931 |
+| `broad/top_level_function_call` | 1.0493 [1.0389, 1.1056] | 0.9992 |
+| `development/lodash/transform` | 0.9213 [0.9029, 0.9263] | 0.9283 |
+| `development/moment/dates` | 0.8960 [0.8734, 0.9156] | 0.8881 |
+| `external/kraken-1.1/json-stringify-tinderbox` | 0.8213 [0.8158, 0.8457] | 0.7993 |
+| `external/kraken-1.1/json-parse-financial` | 0.5649 [0.5480, 0.5687] | 0.6062 |
+| `external/jetstream3-js-subset/raytrace-public-class-fields` | 0.8682 [0.8578, 0.8825] | 0.8933 |
+| `external/sunspider-1.0/access-binary-trees` | 0.9024 [0.8916, 0.9084] | 0.9037 |
+| `external/kraken-1.1/audio-dft` | 0.9749 [0.9518, 1.0190] | 0.9933 |
+| `external/jetstream3-js-subset/cdjs` | 0.8868 [0.8231, 0.9074] | 0.8981 |
+
+Verdict `unclear`, with **no obvious regression**: `capturing_closure_call`
+moved from 1.1937 to 1.0336 (median under its 1.050 band; the 1.125 upper bound
+keeps it in the possible set), `prototype_method_call` fell to 0.987, and the
+imaging cases stay fixed. `heterogeneous_property_read` (1.0895) and
+`top_level_function_call` (1.0493) are the larger possible-regression medians.
+The four plan targets remain well below their payoffs. A coloring-disabled
+attribution triage was not run: it needs a separately built commit, so it is not
+cheap inside the same job.
+
+### Outcome
+
+Coloring alone moves the closure sentinel from 1.194 to 1.034 with instructions
+unchanged (0.9989), which supports the 4K-aliasing/set-conflict explanation and
+points at data placement rather than allocator work. Imaging stays fixed, the
+pre-gate improves to a 1.0032 worst case, and the amended RSS rule passes.
+Attempt 2 remains the lead's call; no screen, formal run or plan change was
+made.
 
 ## Open risks
 

@@ -1,22 +1,21 @@
 # T066: Production size-class global allocator for the CLI
 
-- Status: active; screen attempt 1 rejected (valid K=6 fail, attempt 1 of 2 spent); repair, out-of-line entry and the
-  declared page-coloring change are measured; attempt 2 is the lead's call.
-- Implementation: present at `561a8795`; 64-KiB pages, per-class free-page queues, O(1) allocation (free block,
-  bump page, or new page), an epoch-gated remote-list scan and a retained bump page, with the four `GlobalAlloc`
-  methods marked `#[inline(never)]`. The repair removes the O(pages) class scan attempt 1's profile showed at 67M
-  visits; the out-of-line entry restores the base call shape under fat LTO. Diagnostic block/page counters live
-  behind the never-timed `alloc-counters` feature.
-- Verified at: `561a8795`, binary `fdd0136c…`, 2026-10-22; local full gate with Test262 deferred, iMac correctness
-  (compare-qjs, 5170/5170 Test262), 86-case instruction pre-gate PASS (worst 1.0086), canonical symbol/call comparison
-  versus base and the inlined build, one diagnostic triage, and the earlier H1/15-pair RSS evidence for the repair.
-  Details: [evidence](archive/T066-allocator-evidence.md#out-of-line-allocator-entry).
+- Status: active; screen attempt 1 rejected (valid K=6 fail, attempt 1 of 2 spent); repair, out-of-line entry and page
+  coloring are measured; attempt 2 is the lead's call.
+- Implementation: present at `f4405037`; 64-KiB pages with declared cache coloring (the c-th page starts its block
+  area at `HEADER_SIZE + (c mod 16)*64`), per-class free-page queues, O(1) allocation, an epoch-gated remote-list
+  scan, a retained bump page, and `#[inline(never)]` on the four `GlobalAlloc` methods. Diagnostic block/page
+  counters live behind the never-timed `alloc-counters` feature.
+- Verified at: `f4405037`, binary `b3132b40…`, 2026-10-22; local full gate with Test262 deferred, iMac correctness
+  (compare-qjs, 5170/5170 Test262), 86-case instruction pre-gate PASS (worst 1.0032), 15-pair RSS under the amended
+  rule (max 1.0909, development geomean 1.0357) and one diagnostic triage. Details:
+  [evidence](archive/T066-allocator-evidence.md#page-coloring).
 - Evidence: [plan](performance-units/cli-size-class-allocator.json), this file, [evidence record](archive/T066-allocator-evidence.md),
   [user RSS amendment](#user-rss-amendment-2026-10-22).
-- Unresolved: `capturing_closure_call` is 1.194 in triage after both the repair and the out-of-line change (1.067 in
-  the attempt-1 screen), so allocator-body inlining does not explain it; `prototype_method_call` (1.091) and
-  `recursive_call_tree` (1.053) are the next sentinels. The allocator is not screen-ready as it stands; attempt 2 is
-  the lead's call.
+- Unresolved: page coloring moved `capturing_closure_call` from 1.194 to 1.034 (triage median; the 1.125 interval
+  upper keeps it in the possible set) and removed the obvious regression. `heterogeneous_property_read` (1.0895) and
+  `top_level_function_call` (1.0493) are the larger possible-regression medians; only the six-layout screen can
+  decide them. Attempt 2 is the lead's call.
 - Next action: lead decides whether to spend attempt 2; no further retune, screen, formal run or plan change was made.
 
 ## User RSS amendment (2026-10-22)
