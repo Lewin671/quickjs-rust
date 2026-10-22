@@ -32,7 +32,7 @@ own the exact-M profiles, job/receipt hashes and original drafting history.
    diagnostic-only cases the stage evaluator substitutes its stage cap for
    the case band; record the additional stricter-band audit before advancing.
 5. **Amended static contract adopted.** `scripts/check-kernel-isolation.sh`
-   must implement the [T064 lead-decision amendment](../T064-kernel-isolation.md#lead-decision-2026-10-21):
+   must implement the [T064 lead-decision amendment](../archive/T064-kernel-isolation.md#lead-decision-2026-10-21):
    pointer-sized slots inside referents compare relocated target identity and
    contents under the same rule, rather than raw pointer values. The contract
    is cited by document, not by a checker commit. K0 is being finished on

@@ -36,4 +36,4 @@ unchanged. The successor carries the single unused A+B failure, with K's
 independent cap and immediate stop-on-K-failure rule; no allowance is borrowed,
 reset or fabricated. No K1 implementation or screen starts in this handoff.
 
-Authority: [T064 transition and ledger](../T064-kernel-isolation.md#frozen-plan-transition-and-attempt-ledger).
+Authority: [T064 transition and ledger](T064-kernel-isolation.md#frozen-plan-transition-and-attempt-ledger).

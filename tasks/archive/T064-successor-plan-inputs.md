@@ -168,7 +168,7 @@ The [lead review](../proposals/T064-successor-review.md) records the 2026-10-21
 approval, target/payoff reasoning, accepted manual ledger/stage-band checks,
 quantitative RSS ceiling and amended static contract. The frozen JSON owns the
 full mechanism and typed fields. K's gate cites the pointer-slot amendment in
-[T064](../T064-kernel-isolation.md#lead-decision-2026-10-21), not a checker commit.
+[T064](T064-kernel-isolation.md#lead-decision-2026-10-21), not a checker commit.
 
 K→A→B keeps M fixed. K/A stage cap is 1.025, further limited by each case's
 policy band; final target payoff is min(.97, 1/B_i). New workers-4 policy v6,

@@ -8,7 +8,7 @@
 - Unresolved: none for this checker brief; K1 runtime/performance qualification is outside scope.
 - Next action: lead integrates the checker and freezes the successor plan before K1. No further checker iteration or CI hook in this brief.
 
-The [lead decision](../T064-kernel-isolation.md#lead-decision-2026-10-21)
+The [lead decision](T064-kernel-isolation.md#lead-decision-2026-10-21)
 is the acceptance contract. Both typed roles are mandatory, including every
 entry/cold instruction. The original `run` closures and future outlined
 `execute` entries are separate admitted families; mixed families fail.
@@ -37,7 +37,7 @@ LEA has no dereference width. For owned tables it protects the full table;
 other address-only LEAs stop at their containing nm symbol extent when known,
 using the next data boundary or section end only for anonymous data. That can reject unrelated metadata movement; it
 never certifies an opaque pointer by checking an arbitrary short prefix.
-Under [feedback-1 amendment](../T064-kernel-isolation.md#lead-decision-2026-10-21),
+Under [feedback-1 amendment](T064-kernel-isolation.md#lead-decision-2026-10-21),
 `kernel_relocations.py` decodes native-pointer dyld rebase/bind streams.
 `kernel_referents.py` compares section/symbol/offset or exact external binding
 identities, keeping non-pointer bytes raw. Confirmed code outside the protected

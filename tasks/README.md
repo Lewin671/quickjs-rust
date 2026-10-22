@@ -1,7 +1,6 @@
 # Tasks
 
-Which task should I open? Active and blocked tasks open with a resume block. Everything
-else is a historical record under `archive/`.
+Active and blocked tasks open with a resume block; historical records live under `archive/`.
 
 For a new task, copy [TEMPLATE.md](TEMPLATE.md). One slice of a task is one
 reviewable unit: verify it with its focused command before and after, and
@@ -12,9 +11,8 @@ it to `archive/` with `git mv` and move its row below.
 
 | Task | Status | What it is |
 | --- | --- | --- |
-| [T064](T064-kernel-isolation.md) kernel isolation | active | K→A→B successor frozen after [lead review](proposals/T064-successor-review.md) ([inputs](archive/T064-successor-plan-inputs.md)); old layout-edges [closed-superseded](archive/T064-layout-edges-closure.md); [K0 checker](archive/T064-k0-checker.md) qualified on main; K1 next; [spike](archive/T064-causal-outlining-spike.md), [costs](archive/T064-kernel-isolation-inputs.md). |
 | [T057](T057-string-code-units.md) string code units | active | Stage 1 and UTF-16 correctness extraction integrated; stage 2 abandoned (0 attempts); linear-search follow-up awaits screening. |
-| [T056](T056-interpreter-core-v2.md) interpreter core v2 | blocked | Frozen K→A→B successor awaits T064 K; old0a9af81b failure permanent, one A+B reserve carried; no automatic stage-A port; unpack/startup attribution remains open. |
+| [T056](T056-interpreter-core-v2.md) interpreter core v2 | active | M2 frames/activation plan being drafted separately; M1 A/B blocked on object-layout → typed-code coupling after T064 K abort; `0a9af81b` spent and one shared A+B reserve unchanged. |
 | [T018](T018-broad-performance.md) broad performance | active | The performance campaign contract and its targets against QuickJS-NG. Start performance work here, then follow [the workflow](../docs/performance-workflow.md). |
 | [T040](T040-imac-general-performance.md) x86_64 general optimization | active | Fresh current-main comparison and exact-binary profiles, followed by independent general runtime units. |
 | [T045](T045-typed-loop-boxed-demand-provenance.md) boxed demand provenance | active | Ordinary identity-flow joins lose boxed demand; exact profiles and seed diagnosis precede a compiler-only unit. |
@@ -37,11 +35,11 @@ its whole mechanism family (T022 states the rule).
 
 ## Closed
 
-Each file is under `archive/` and opens with its own resume block. The
-outcome column says what happened, not what to do next.
+Each file is under `archive/` with a resume block; outcomes record what happened.
 
 | Task | Outcome |
 | --- | --- |
+| [T064 kernel isolation](archive/T064-kernel-isolation.md) | Stage K aborted before timing: K1/Repair 1 static and correctness gates pass, same 46/86 instruction cases block; outlining abandoned; [plan closure/ledger](archive/T064-kernel-layout-authority-closure.md), M1 A/B blocked, T056 moves to M2. |
 | `T063-string-canonical.md` | Surrogate pairs stored canonically at construction; instruction repair; regression screen passed (lanes 0.998-1.008); integrated ([correctness](archive/T063-correctness-verification.md), [instructions](archive/T063-instruction-diagnosis.md)). |
 | `T058-regexp-lazy-quantifiers.md` | Fixed-candidate v6 unit retained: papaparse/csv 0.0806 at formal, 86/86 selection and 9/9 held-out pass, Test262 42,672/42,672; candidate `736200aa`, integration pending. |
 | `T062-formal-precision-rule.md` | Prospective v6 two-look exact-median formal gates; v5 measurement/bands retained; historical attempts unchanged. |
@@ -91,6 +89,8 @@ outcome column says what happened, not what to do next.
 | `T032-shaped-prototype-slot-reads.md` | Retained. |
 
 ## Other Records In `archive/`
+
+- T064: [K1/Repair 1 evidence](archive/T064-k1-record.md), [K0 checker](archive/T064-k0-checker.md), [successor inputs](archive/T064-successor-plan-inputs.md), [lead review](proposals/T064-successor-review.md), [old-plan closure](archive/T064-layout-edges-closure.md), [spike](archive/T064-causal-outlining-spike.md), [isolation/cost inputs](archive/T064-kernel-isolation-inputs.md).
 
 - T058: [fixed-candidate v6 promotion](archive/T058-regexp-lazy-quantifiers.md), [attempt 1 incomplete closure](archive/T058-attempt1-incomplete.md), [attempt 2 inconclusive](archive/T058-attempt2-inconclusive.md), [v6 rejection](archive/T058-v6-rejection.md), [instruction diagnosis](archive/T058-instruction-diagnosis.md).
 - T057: [linear-search repair](archive/T057-search-linear.md), [stage-1 promotion evidence](archive/T057-stage1-evidence.md), [preliminary development baseline](archive/T057-development-baseline.md) [policy v3 qualification](archive/T057-development-policy.md) and [pre-stage-1 log](archive/T057-log.md).
