@@ -48,9 +48,11 @@ def matrix(full, kind):
 
 def admit_host(output):
     queue = os.environ.get('BENCH_OUT')
-    if not queue or 'no-timing' not in (Path(queue).parent / 'status').read_text():
+    queue = Path(queue).resolve() if queue else None
+    output = output.resolve()
+    if not queue or 'no-timing' not in (queue.parent / 'status').read_text():
         raise ValueError('canonical builds require an imac-bench run job without --timing')
-    if not output.is_relative_to(Path(queue).resolve()):
+    if not output.is_relative_to(queue):
         raise ValueError('output must be inside BENCH_OUT')
     rust = run(['rustc', '-vV'])
     if (platform.system(), platform.machine()) != ('Darwin', 'x86_64') or any(

@@ -147,6 +147,9 @@ class BuildCacheTests(unittest.TestCase):
             repo = self._repo(root / "repo")
             tools = root / "tools"
             tools.mkdir()
+            cargo = tools / "cargo"
+            cargo.write_text("#!/bin/sh\necho cargo-fixture\n", encoding="utf-8")
+            cargo.chmod(0o755)
             for tool_name, release in (("rustc-one", "one"), ("rustc-two", "two"), ("ld-one", "one"), ("ld-two", "two")):
                 tool = tools / tool_name
                 if tool_name.startswith("rustc"):
@@ -158,7 +161,8 @@ class BuildCacheTests(unittest.TestCase):
 
             def planned(image: str, rustc: str, linker: str) -> str:
                 environment = {
-                    "PATH": os.environ["PATH"], "HOME": os.environ.get("HOME", str(root)),
+                    "PATH": str(tools) + os.pathsep + os.environ["PATH"],
+                    "HOME": os.environ.get("HOME", str(root)),
                     "ImageOS": "ubuntu24", "ImageVersion": image,
                     "RUSTC": str(tools / rustc),
                     "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER": str(tools / linker),

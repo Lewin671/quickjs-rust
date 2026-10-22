@@ -17,6 +17,7 @@ from tools.benchmark.kernel_macho import Image, ROLES, assembly, select_roles
 from tools.benchmark.kernel_perturb import (BUILDER, FIELDS, OBJECT, install_layout_probe,
                                            perturb, validate_layout)
 from tools.benchmark.kernel_build import matrix, parse_layout
+from tools.benchmark.kernel_referents import CONTRACT, Referents
 from tools.benchmark.tests.layout_fixtures import (
     INTERPRETER_CLOSURE, WIDE_CLOSURE, read_symbols)
 
@@ -26,6 +27,11 @@ class Memory:
     def __init__(self, code, literal=b'12345678', tables=()):
         self.regions = [(0x1000, code), (0x2000, literal)]
         self.tables = list(tables)
+        self.pointer_fixups = {}
+        self.referents = Referents(self)
+
+    def referent(self, address, width):
+        return self.referents.snapshot(address, width)
 
     def raw(self, address, width):
         for start, data in self.regions:
@@ -56,7 +62,7 @@ def body(literal=b'12345678', displacement=0xff8, call_disp=0x1ff3):
 
 
 def report(b=None):
-    return {'schema': 1, 'target': 'x86_64-apple-darwin', 'family': 'run',
+    return {'schema': 2, 'referent_contract': CONTRACT.copy(), 'target': 'x86_64-apple-darwin', 'family': 'run',
             'decoder': {'sha256': 'audited-decoder'}, 'adapters': [],
             'roles': {r: deepcopy(b if b is not None else body()) for r in ROLES}}
 
@@ -321,13 +327,26 @@ class BuildTests(unittest.TestCase):
         from tools.benchmark.kernel_build import admit_host
         with patch.dict(os.environ, {}, clear=True), self.assertRaisesRegex(ValueError, 'imac-bench'):
             admit_host(Path('/unused'))
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            (root / 'status').write_text('running no-timing')
-            with patch.dict(os.environ, {'BENCH_OUT': str(root / 'out')}, clear=True), \
-                    patch('tools.benchmark.kernel_build.run', return_value='release: unknown'), \
-                    self.assertRaisesRegex(ValueError, 'unknown host/toolchain'):
-                admit_host(root / 'out' / 'k0')
+        # Own the directory and symlink explicitly, independent of TMPDIR,
+        # BENCH_OUT and the host architecture supplied by the caller.
+        scratch = Path(__file__).resolve().parents[3] / 'target'
+        scratch.mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=scratch) as tmp:
+            root = Path(tmp).resolve()
+            physical = root / 'physical'
+            physical.mkdir()
+            alias = root / 'alias'
+            alias.symlink_to(physical, target_is_directory=True)
+            (physical / 'status').write_text('running no-timing')
+            for queue, output in [(physical / 'out', alias / 'out/k0'),
+                                  (alias / 'out', physical / 'out/k0')]:
+                with self.subTest(queue=queue), \
+                        patch.dict(os.environ, {'BENCH_OUT': str(queue)}, clear=True), \
+                        patch('tools.benchmark.kernel_build.platform.system', return_value='Darwin'), \
+                        patch('tools.benchmark.kernel_build.platform.machine', return_value='x86_64'), \
+                        patch('tools.benchmark.kernel_build.run', return_value='release: unknown'), \
+                        self.assertRaisesRegex(ValueError, 'unknown host/toolchain'):
+                    admit_host(output)
 
     def test_aa_failure_stops_before_perturbations(self):
         from tools.benchmark.kernel_build import execute

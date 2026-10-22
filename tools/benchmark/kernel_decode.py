@@ -82,6 +82,8 @@ def decode_body(image, allrows, entry, extent):
     ranges = [(a, n, tag) for a, n, tag in image.tables if a < end and a+n > entry]
     if any(a < entry or a+n > end or tag != 4 or n % 4 for a, n, tag in ranges):
         raise ValueError('unknown/overlapping owned table relocation')
+    if any(slot < a+n and slot+8 > a for slot in image.pointer_fixups for a, n, _ in ranges):
+        raise ValueError('owned tables cannot contain dyld pointer fixups')
     # Linear otool decoding crosses inline table data and loses alignment.
     # The final table may be followed only by verified canonical NOPs; do
     # not trust the accidental instructions decoded across that boundary.
@@ -161,6 +163,13 @@ def decode_body(image, allrows, entry, extent):
             row['fixup'] = {'kind': 'rip', 'position': at, 'size': 4,
                             'width': width, 'mode': mode,
                             'referent_sha256': hashlib.sha256(referent).hexdigest()}
+            if mode != 'owned-table':
+                snapshot = image.referent(target, width)
+                root = snapshot['content']['nodes']['root']
+                row['fixup']['referent_sha256'] = snapshot['sha256']
+                row['fixup']['non_pointer_sha256'] = root['non_pointer_sha256']
+                row['referent_relocations'] = {key: snapshot[key] for key in (
+                    'raw_sha256', 'pointer_values_sha256', 'pointer_count')}
             imported = image.import_identity(target)
             if imported is not None:
                 row['fixup']['import_identity'] = imported

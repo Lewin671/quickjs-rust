@@ -1,12 +1,12 @@
 # T064: Kernel isolation prerequisite
 
-- Status: active; K0 checker qualified on unoutlined main (A/A passes, H/C fail); lead decision 2026-10-21 approves the address-operand contract below; K1 not started.
+- Status: active; K0 feedback-1 pointer amendment implemented; fresh qualification pending; lead decision 2026-10-21 approves the address-operand contract below; K1 not started.
 - Implementation: diagnostic archive transformations plus maintained [K0 checker](archive/T064-k0-checker.md); production runtime/Cargo/recipe unchanged. No kernel crate.
-- Verified at: checker `36ab76e3` fast/full gates and 5,170 subset cases pass; main `9eba7a1d` canonical queue job `20261022T043602Z-t064-k0-main` completed all four builds; final-checker replay agrees (see record).
+- Verified at: initial schema1 checker `36ab76e3` fast/full gates and 5,170 subset cases pass; feedback1 schema2 has 52 focused passes and original34/696 clean/symlink passes; fresh canonical qualification pending.
 - Evidence: [K0 qualification/identities](archive/T064-k0-checker.md), [spike result/identities](archive/T064-causal-outlining-spike.md), [design/ABI](../docs/design/interpreter-core-v2.md#kernel-isolation-prerequisite-k0-before-m1-resumes),
   [allocation/startup inputs](archive/T064-kernel-isolation-inputs.md), [producer](diagnostics/t064-k-spike/README.md), [lead decision](#lead-decision-2026-10-21).
 - Unresolved: K's own cost (outlined service calls, entry constants) is unpriced; successor K→A→B plan needs a fresh queue/profiles on recorded main M.
-- Next action: lead reviews fresh current-main queue/profiles and K0 failures, then freezes the successor plan before K1 runtime code; T056 unpack/startup attribution continues. No CI hook yet.
+- Next action: qualify the amended K0 contract on recorded current main, explain remaining C+8 mismatches, then hand results to the lead before K1. No CI hook yet.
 
 ## Lead decision (2026-10-21)
 
@@ -18,6 +18,13 @@ The user delegated this decision to the lead. Decisions, binding on later owners
    Raw whole-body byte equality is not required. The spike's H+8 differences are all of the allowed class; the T056 failure mechanism
    (an off-path 3B shortening moving Add `29ca→29be`) is a relative-PC change and stays a hard failure.
    This changes only the static artifact contract; no timing, band, attempt or correctness gate is relaxed.
+   **Amendment (lead feedback 1, 2026-10-21):** pointer-sized referent slots compare relocated target identity
+   (section, symbol or import, offset within symbol) and target contents under the same rule, not raw pointer values.
+   The checker traverses local target graphs to depth2; cycles revisit already checked nodes, and new nodes beyond the bound,
+   unknown/unresolvable slots and partial slots fail closed. Non-pointer bytes stay raw; owned tables remain fully protected.
+   Exact external dyld import bindings are leaves: their definitions are outside the linked executable.
+   Identical resolved targets with moved pointer values are reported in the allowed displacement class.
+   LEA spans end at the containing symbol's extent when known; through-next-data-boundary is the anonymous fallback.
 2. **No crate, no FFI, no linker/literal ownership work.** K1 is production-quality cold outlining of the object-bearing typed arms for both
    Vm and WideLoopFrame on fresh main, following the spike's boundary. A type/field firewall check may be source-level; a crate is not required.
 3. **Plan.** Adopt the K→A→B successor migration and the failure sub-budgets proposed below (at most one K failure; A+B keep one shared failure;

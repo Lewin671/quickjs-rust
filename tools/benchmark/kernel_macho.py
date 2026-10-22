@@ -14,6 +14,8 @@ from .layout_symbols import Nested, parse_symbol, unwrap_closures
 from .layout_tables import text_symbols
 from .layout_variant_audit import sections
 from .build_cache_identity import version_identity
+from .kernel_relocations import pointer_fixups
+from .kernel_referents import Referents
 
 ROLES = {'Vm': 'qjs_runtime::bytecode::vm::Vm',
          'WideLoopFrame': 'qjs_runtime::bytecode::compact_fn::wide::loop_frame::WideLoopFrame'}
@@ -97,6 +99,8 @@ class Image:
             if match:
                 self.imports[int(match[1], 16)] = match[2]
         self.tables = self.data_in_code()
+        self.pointer_fixups = pointer_fixups(self.data, self.sections)
+        self.referents = Referents(self)
 
     def section(self, address, width=1):
         found = [s for s in self.sections if s[0] <= address and address + width <= s[0] + s[1]]
@@ -128,20 +132,49 @@ class Image:
             raise ValueError('unknown import-slot relocation')
         return None
 
-    def address_span(self, address):
-        """LEA has no dereference width: protect through the next data boundary.
-
-        This conservative upper bound can reject unrelated data movement; it
-        never truncates an opaque address to an arbitrary 8-byte prefix.
-        """
+    def symbol_extent(self, address):
+        """Containing nm symbol and its extent, bounded by its own section."""
         section = self.section(address)
-        if section[2] == '__TEXT/__text':
-            raise ValueError('unowned RIP code address')
         end = section[0] + section[1]
         i = bisect.bisect_right(self.name_starts, address)
         if i < len(self.name_starts):
             end = min(end, self.name_starts[i])
-        return end - address
+        start = self.name_starts[i-1] if i else None
+        if start is not None and start >= section[0]:
+            if len(self.names[start]) != 1:
+                raise ValueError('ambiguous referent symbol extent')
+            name = self.names[start][0]
+            return start, end, name
+        return None
+
+    def address_span(self, address):
+        """LEA ends at its containing symbol, else next data boundary."""
+        section = self.section(address)
+        if section[2] == '__TEXT/__text':
+            raise ValueError('unowned RIP code address')
+        extent = self.symbol_extent(address)
+        if extent:
+            return extent[1]-address
+        i = bisect.bisect_right(self.name_starts, address)
+        end = min(section[0]+section[1], self.name_starts[i]) if i < len(self.name_starts) else section[0]+section[1]
+        return end-address
+
+    def referent_target(self, address):
+        section = self.section(address)
+        extent = self.symbol_extent(address)
+        if extent:
+            start, end, name = extent
+            identity = {'section': section[2], 'symbol': name, 'offset': address-start}
+        else:
+            start, end = section[0], section[0]+section[1]
+            i = bisect.bisect_right(self.name_starts, address)
+            if i < len(self.name_starts):
+                end = min(end, self.name_starts[i])
+            identity = {'section': section[2], 'symbol': None, 'offset': address-start}
+        return identity, end-address
+
+    def referent(self, address, width):
+        return self.referents.snapshot(address, width)
 
     def data_in_code(self):
         cursor, records = 32, []

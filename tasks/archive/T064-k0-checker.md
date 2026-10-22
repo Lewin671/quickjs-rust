@@ -1,12 +1,12 @@
 # T064 K0 static checker
 
-- Status: complete tooling qualification; current unoutlined main fails isolation as expected.
+- Status: feedback-1 amendment implemented; fresh qualification pending. Initial raw-pointer result retained below.
 - Implementation: maintained Python checker and archive-only H+8/C+8 transforms;
   `scripts/check-kernel-isolation.sh`; no runtime/Cargo/recipe/policy change, no CI hook.
-- Verified at: final checker `36ab76e3`; 34 focused tests, staged fast gate and full local `check.sh` pass (696 benchmark tests, 35 script tests, 5,170 Test262 subset cases).
+- Verified at: initial checker `36ab76e3` full-gate evidence below; feedback1: original34/696 tests pass in minimal and symlink TMPDIR environments, new52 focused cases pass; amended full gate and new canonical matrix pending.
 - Evidence: contract/method and exact current-main identities/results below; raw queue artifacts are fetchable by job ID.
-- Unresolved: K1 isolation is outside this tooling brief; LEA bounds remain deliberately conservative.
-- Next action: lead reviews these static results with the fresh queue/profiles and freezes the successor plan before K1; CI remains prospective.
+- Unresolved: amended current-main canonical qualification and remaining C+8 attribution pending; K1 is outside this tooling brief.
+- Next action: run the amended full matrix through the iMac queue, attribute remaining C+8 mismatches and update this record; CI remains prospective.
 
 The [lead decision](../T064-kernel-isolation.md#lead-decision-2026-10-21)
 is the acceptance contract. Both typed roles are mandatory, including every
@@ -26,7 +26,7 @@ independently. Every code byte is decoded; unsupported shapes fail closed.
 `kernel_isolation.py` compares relative instruction PCs/lengths, non-address
 bytes, CFG edges, tables/positions/padding and stack-affecting operands.
 Only encoded disp32 RIP operands and external E8 calls may vary. RIP
-referents retain their full memory operand width and content hash; calls
+referents retain their full memory operand width and relocation-aware graph hash; calls
 retain exact local symbol/import identities, including closure/clone details.
 RIP import slots also retain binding identities: equal zero pointer bytes cannot
 hide retargeting to another import. Zero-fill/non-file-backed referents and
@@ -34,10 +34,19 @@ unresolved import slots fail closed. Allowed differences are individually
 reported, even when another check fails.
 
 LEA has no dereference width. For owned tables it protects the full table;
-other address-only LEAs conservatively protect through the next nm data
-boundary or section end. That can reject unrelated metadata movement; it
+other address-only LEAs stop at their containing nm symbol extent when known,
+using the next data boundary or section end only for anonymous data. That can reject unrelated metadata movement; it
 never certifies an opaque pointer by checking an arbitrary short prefix.
-Pointer-containing referent bytes remain raw, as required by the contract.
+Under [feedback-1 amendment](../T064-kernel-isolation.md#lead-decision-2026-10-21),
+`kernel_relocations.py` decodes native-pointer dyld rebase/bind streams.
+`kernel_referents.py` compares section/symbol/offset or exact external binding
+identities, keeping every non-pointer byte raw. Local target contents form a
+breadth-first graph of depth2; every node, including cycles, is checked.
+Unresolved targets, partial slots, weak/chained/threaded/unknown fixups or new
+nodes beyond the budget fail closed. External imports are resolved binding
+identities, not a claim about bytes in external dylibs. Schema2 fingerprints
+record the contract and reject schema1 comparisons. Pointer-value changes
+with equal graph contents are explicitly allowed displacement changes.
 The checker proves equality for this pair under this decoder, not future
 compiler isolation, wall-time neutrality, or structural type/field separation.
 
@@ -102,7 +111,7 @@ SHA-256 `8353ad3c42743a93e9ca7d0d4e9d3df22305252d169c42c543ee22eeb8c33809`.
 Both decoders agree on the complete roles and results; all canonical builds
 were on the queued iMac, not on this laptop.
 
-## Current-main canonical qualification
+## Initial raw-pointer qualification (superseded contract, retained evidence)
 
 Non-timing queue job `20261022T043602Z-t064-k0-main`, start
 2026-10-22T05:03:43Z, completed with exit 1 after 419 s of build/check work.
@@ -156,3 +165,24 @@ byte0; it is not caused solely by conservatively checking distant data.
 The 80 failures per role are address-span LEA referents, not rejected numeric
 literal displacement changes. This qualification detects current coupling;
 it does not establish that outlining or a future K1 would pass.
+
+## Feedback 1: amended qualification
+
+The lead supplied the pointer comparison amendment and a macOS temporary-path
+failure. `admit_host` now resolves both BENCH_OUT and output. Its test creates
+its own physical/alias directories and controls environment and platform;
+it does not rely on caller TMPDIR or BENCH_OUT. Original34 focused tests and
+696 benchmark-tool tests pass in both a minimal environment and a deliberate
+`/var/folders/.../T/.../alias` TMPDIR resolving through `/private/var/folders`.
+The caller BENCH_OUT is deliberately invalid in the alias run. The complete
+suite exposed two adjacent fixture dependencies: preview expected an unresolved
+error path, and the mock compiler test accidentally invoked real Cargo against
+a fake HOME. Those fixtures now resolve the expected path and provide mock
+Cargo respectively; no production preview/cache behavior changed.
+
+New synthetic cases cover moved identical targets (pass and reported allowed),
+retargeting to a different symbol with identical bytes (fail), changed target
+bytes, non-pointer changes, unresolved/partial slots, imports, symbol bounds,
+cycles and depth exhaustion. Dyld stream cases cover opcode families, segment
+bounds, lazy-state reset, unsigned backward additions, truncation/overflow,
+resource bounds and unsupported chained/threaded forms. Fresh results pending.

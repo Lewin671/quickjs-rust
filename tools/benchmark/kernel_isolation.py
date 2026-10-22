@@ -12,6 +12,7 @@ from pathlib import Path
 
 from .kernel_decode import decode_body
 from .kernel_macho import Image, ROLES, apple_tool_identity, assembly, select_roles
+from .kernel_referents import CONTRACT
 
 
 def fingerprint(binary, output=None):
@@ -19,7 +20,7 @@ def fingerprint(binary, output=None):
     family, roles, adapters = select_roles(image.symbols)
     decoder = apple_tool_identity('otool')
     listing, rows = assembly(binary, decoder['path'])
-    result = {'schema': 1, 'target': 'x86_64-apple-darwin', 'family': family,
+    result = {'schema': 2, 'referent_contract': CONTRACT.copy(), 'target': 'x86_64-apple-darwin', 'family': family,
               'sha256': hashlib.sha256(image.data).hexdigest(), 'adapters': adapters,
               'decoder': decoder, 'roles': {}}
     for role, symbol in roles.items():
@@ -48,7 +49,8 @@ def non_address(row):
 def compare(left, right):
     """Compare validated fingerprints; return all role-level failures."""
     for report in (left, right):
-        if report['schema'] != 1 or report['target'] != 'x86_64-apple-darwin':
+        if (report['schema'] != 2 or report.get('referent_contract') != CONTRACT or
+                report['target'] != 'x86_64-apple-darwin'):
             raise ValueError('unknown artifact schema/target')
         if set(report['roles']) != set(ROLES):
             raise ValueError('missing/extra protected role')
@@ -73,11 +75,28 @@ def compare(left, right):
                 if (l['op'], l['operands'], l['edges'], lb) != (r['op'], r['operands'], r['edges'], rb):
                     reasons.append('non-address bytes / CFG changed')
                 if l['fixup'] != r['fixup']:
-                    reasons.append('RIP referent/width or call identity changed')
+                    lf, rf = l['fixup'], r['fixup']
+                    if (lf and rf and lf['kind'] == rf['kind'] == 'rip' and
+                            lf['width'] == rf['width'] and
+                            'non_pointer_sha256' in lf and 'non_pointer_sha256' in rf):
+                        if lf['non_pointer_sha256'] != rf['non_pointer_sha256']:
+                            reasons.append('RIP non-pointer referent bytes changed')
+                        elif lf['referent_sha256'] != rf['referent_sha256']:
+                            reasons.append('RIP pointer target identity/content changed')
+                        else:
+                            reasons.append('RIP import identity or mode changed')
+                    else:
+                        reasons.append('RIP referent/width or call identity changed')
                 if reasons:
                     failures.append(f"+{l['offset']:#x}: " + '; '.join(reasons))
-                elif l['raw'] != r['raw']:
+                elif l['raw'] != r['raw'] or l.get('referent_relocations') != r.get('referent_relocations'):
+                    changes = []
+                    if l['raw'] != r['raw']:
+                        changes.append('instruction-displacement')
+                    if l.get('referent_relocations') != r.get('referent_relocations'):
+                        changes.append('referent-pointer-relocation')
                     allowed.append({'offset': l['offset'], 'kind': l['fixup']['kind'],
+                                    'class': 'allowed-displacement', 'changes': changes,
                                     'base': l['raw'], 'candidate': r['raw'],
                                     'verification': l['fixup']})
         result['roles'][role] = {'pass': not failures, 'failures': failures,
