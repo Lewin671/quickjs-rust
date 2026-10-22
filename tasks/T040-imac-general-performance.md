@@ -34,6 +34,22 @@ benchmark-identity or source-template recognition. Workload profiles identify
 costs; they do not define admission rules. Multiple independent external
 workloads and the complete regression portfolio must check generalization.
 
+## Current measured standing (2026-10-22, after T066)
+
+Formal job `20261022T182921Z-t066-formal60` (60 blocks, workers-4): candidate `9420a6a5` (T066 allocator; runtime as main after the
+T066 merge), base `9eba7a1d`, NG `f7830186`. Candidate/base: development 0.898, JetStream subset 0.936, Kraken 0.917, SunSpider 0.927,
+broad 0.986, sentinel 1.028. Candidate/NG wall geomeans:
+
+| Lane | Rust / NG |
+| --- | ---: |
+| Broad | 0.977 |
+| Sentinel | 1.071 |
+| Development (10 npm libraries) | 2.751 |
+| JetStream subset / Kraken / SunSpider | 1.092 / 0.719 / 1.007 |
+
+Worst development cases against NG: js-yaml 3.84, immutable 3.40, moment 3.29, meriyah 3.04, diff 2.93. See
+[T066](archive/T066-size-class-allocator.md) for the unit decision.
+
 ## Current measured standing (2026-10-21)
 
 Job `20261022T041140Z-current-main-9eba7a1d-formal` (exit 0, 2665 s, workers-4, 30 blocks): candidate main
