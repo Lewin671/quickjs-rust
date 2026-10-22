@@ -9,8 +9,9 @@
 //!   per power of two through 8 KiB. A class block is always aligned to at
 //!   least 16 bytes and holds at least the requested size.
 //! - Per-thread free lists and bump slabs. A slab is one System allocation of
-//!   `blocks * class_size` bytes (about 64 KiB) taken with alignment 16; blocks
-//!   are carved from it and never individually returned.
+//!   `blocks * class_size` bytes taken with alignment 16. A class starts with a
+//!   4 KiB slab and each later slab doubles, up to 64 KiB, so a lightly used
+//!   class retains little memory while a hot class still amortizes mallocs.
 //! - A `GlobalAlloc` that forwards anything outside the class contract (size
 //!   above 8 KiB, alignment above 16, or zero size) to `System`.
 //!
@@ -49,7 +50,9 @@ const SMALL_LIMIT: usize = 128;
 const MAX_CLASS: usize = 8192;
 /// Number of classes; `class_index` and the pool arrays share this bound.
 const CLASS_COUNT: usize = 32;
-/// Target bytes per slab; each class gets one when its bump pointer runs out.
+/// Bytes in the first slab of a class; later slabs double up to `SLAB_TARGET`.
+const FIRST_SLAB: usize = 4 * 1024;
+/// Upper bound for one class's slab; growth stops there.
 const SLAB_TARGET: usize = 64 * 1024;
 
 /// Upper bound of each class, strictly increasing from 16 through 8192.
@@ -96,6 +99,8 @@ struct Pool {
     /// Next unserved block in the current slab, and its one-past-the-end.
     next: [Cell<*mut u8>; CLASS_COUNT],
     end: [Cell<*mut u8>; CLASS_COUNT],
+    /// Bytes in the last slab of each class, which sets the next slab's size.
+    slab_bytes: [Cell<usize>; CLASS_COUNT],
 }
 
 impl Pool {
@@ -104,6 +109,7 @@ impl Pool {
             free: [const { Cell::new(ptr::null_mut()) }; CLASS_COUNT],
             next: [const { Cell::new(ptr::null_mut()) }; CLASS_COUNT],
             end: [const { Cell::new(ptr::null_mut()) }; CLASS_COUNT],
+            slab_bytes: [const { Cell::new(0) }; CLASS_COUNT],
         }
     }
 }
@@ -128,7 +134,15 @@ unsafe fn allocate(index: usize) -> *mut u8 {
         let block_size = CLASS_SIZES[index];
         let mut block = pool.next[index].get();
         if block.is_null() || block == pool.end[index].get() {
-            let blocks = (SLAB_TARGET / block_size).max(1);
+            // Start small and double: a class the program barely uses keeps one
+            // small slab, while a hot class reaches the 64 KiB amortized size.
+            let previous = pool.slab_bytes[index].get();
+            let target = if previous == 0 {
+                FIRST_SLAB
+            } else {
+                previous.saturating_mul(2).min(SLAB_TARGET)
+            };
+            let blocks = (target / block_size).max(1);
             let bytes = block_size * blocks;
             // SAFETY: `bytes` is a non-zero multiple of 16 bytes, so alignment
             // 16 is valid, and the size does not exceed `isize::MAX`.
@@ -137,6 +151,7 @@ unsafe fn allocate(index: usize) -> *mut u8 {
                 return slab;
             }
             block = slab;
+            pool.slab_bytes[index].set(bytes);
             // SAFETY: the slab owns exactly `bytes` bytes.
             pool.end[index].set(unsafe { slab.add(bytes) });
         }
