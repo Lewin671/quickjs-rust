@@ -1,7 +1,7 @@
 # T066: Production size-class global allocator for the CLI
 
-- Status: active; screen attempt 1 rejected (valid K=6 fail, attempt 1 of 2 spent); repair and the declared out-of-line
-  entry change are measured; attempt 2 is the lead's call.
+- Status: active; screen attempt 1 rejected (valid K=6 fail, attempt 1 of 2 spent); repair, out-of-line entry and the
+  declared page-coloring change are measured; attempt 2 is the lead's call.
 - Implementation: present at `561a8795`; 64-KiB pages, per-class free-page queues, O(1) allocation (free block,
   bump page, or new page), an epoch-gated remote-list scan and a retained bump page, with the four `GlobalAlloc`
   methods marked `#[inline(never)]`. The repair removes the O(pages) class scan attempt 1's profile showed at 67M
@@ -112,6 +112,13 @@ targets are inside the plan's rank ceiling 6.
   scanned only when a per-class remote-free epoch changed, so single-threaded
   programs never pay that scan. An empty bump page is kept rather than
   recycled, so a 0-live/1-live oscillation cannot recycle it repeatedly.
+- Page coloring (declared rule, no offset search): the c-th page a thread creates
+  starts its block area at `HEADER_SIZE + (c mod 16) * 64` bytes and holds
+  correspondingly fewer blocks. Every page is 64-KiB aligned with the same
+  header offset, so without coloring the first (hot, long-lived) blocks of every
+  class share identical low address bits; on the Intel measurement host that
+  aliases L1 sets and lets equal low 12 bits create 4K store/load false
+  dependencies.
 - Free updates the owning page's live count; when it reaches zero the page is
   unlinked and parked in a thread-local empty pool of at most 8 pages, or
   returned to System. Empty pages are reusable by any class.

@@ -22,6 +22,15 @@
 //!   queued free block first, then the bump page, then a new page. The class
 //!   list is scanned only when a per-class remote-free epoch changed, so a
 //!   single-threaded program never pays that scan.
+//! - Page coloring (fixed rule, not a tuned offset): the c-th page a thread
+//!   creates, c mod `COLOR_COUNT`, starts its block area at
+//!   `HEADER_SIZE + c * COLOR_STEP` and holds correspondingly fewer blocks.
+//!   Every page is 64-KiB aligned with the same header, so without coloring the
+//!   first (hot, long-lived) blocks of every class share identical low address
+//!   bits; on the Intel measurement host that aliases the L1 sets and lets
+//!   equal low 12 bits create 4K store/load false dependencies. The color
+//!   spreads those blocks across 4 KiB of offsets while keeping 16-byte block
+//!   alignment. The rule is declared before measuring; no offset is searched.
 //!
 //! Invariants that keep it sound:
 //!
@@ -154,6 +163,10 @@ const PAGE_SIZE: usize = 64 * 1024;
 const PAGE_MASK: usize = PAGE_SIZE - 1;
 /// Space reserved for the page header at the page base (16-byte multiple).
 const HEADER_SIZE: usize = 96;
+/// Page colors; each new page advances one color. 16 colors times 64 bytes
+/// spans 4 KiB of block-area offsets.
+const COLOR_COUNT: usize = 16;
+const COLOR_STEP: usize = 64;
 /// Empty pages a thread keeps for reuse; the rest go back to System.
 const EMPTY_PAGES: usize = 8;
 
@@ -219,6 +232,8 @@ impl ClassState {
 struct Pool {
     /// Stable non-zero id for this thread; 0 means "not assigned yet".
     id: Cell<usize>,
+    /// Pages this thread has created; selects each new page's color.
+    pages_created: Cell<usize>,
     classes: [ClassState; CLASS_COUNT],
     empty: [Cell<*mut PageHeader>; EMPTY_PAGES],
     empty_len: Cell<usize>,
@@ -228,6 +243,7 @@ impl Pool {
     const fn new() -> Self {
         Self {
             id: const { Cell::new(0) },
+            pages_created: const { Cell::new(0) },
             classes: [const { ClassState::new() }; CLASS_COUNT],
             empty: [const { Cell::new(ptr::null_mut()) }; EMPTY_PAGES],
             empty_len: const { Cell::new(0) },
@@ -294,6 +310,7 @@ fn page_layout() -> Layout {
     unsafe { Layout::from_size_align_unchecked(PAGE_SIZE, PAGE_SIZE) }
 }
 
+#[cfg(test)]
 #[inline]
 const fn page_blocks(block_size: usize) -> usize {
     (PAGE_SIZE - HEADER_SIZE) / block_size
@@ -450,6 +467,9 @@ unsafe fn new_page(pool: &Pool, index: usize) -> *mut PageHeader {
             pool.empty_len.set(len - 1);
             page
         };
+        let color = pool.pages_created.get() % COLOR_COUNT;
+        pool.pages_created.set(pool.pages_created.get() + 1);
+        let start = HEADER_SIZE + color * COLOR_STEP;
         let base = page as *mut u8;
         let block_size = CLASS_SIZES[index];
         (*page).class = index;
@@ -457,10 +477,11 @@ unsafe fn new_page(pool: &Pool, index: usize) -> *mut PageHeader {
         (*page).live = 0;
         (*page).remote.store(ptr::null_mut(), Ordering::Relaxed);
         (*page).free = ptr::null_mut();
-        // The header occupies the first HEADER_SIZE bytes of a PAGE_SIZE page,
-        // and the block area holds `page_blocks` whole blocks.
-        (*page).bump = base.add(HEADER_SIZE);
-        (*page).bump_end = base.add(HEADER_SIZE + page_blocks(block_size) * block_size);
+        // The header and this page's color precede the block area, which holds
+        // whole blocks up to the end of the page.
+        let blocks = (PAGE_SIZE - start) / block_size;
+        (*page).bump = base.add(start);
+        (*page).bump_end = base.add(start + blocks * block_size);
         (*page).free_next = ptr::null_mut();
         (*page).free_prev = ptr::null_mut();
         (*page).queued = false;
@@ -824,6 +845,41 @@ mod tests {
             assert!(!block.is_null());
             assert_eq!(block as usize % 16, 0);
             // SAFETY: `block` came from this allocator with this layout.
+            unsafe { ALLOC.dealloc(block, block_layout) };
+        }
+    }
+
+    #[test]
+    fn consecutive_pages_have_different_colors() {
+        let block_layout = layout(8192, 16);
+        let mut blocks = Vec::new();
+        let mut first_blocks = Vec::new();
+        let mut previous: *mut PageHeader = ptr::null_mut();
+        for _ in 0..(page_blocks(8192) * 4) {
+            // SAFETY: test-only allocation with a valid layout.
+            let block = unsafe { ALLOC.alloc(block_layout) };
+            assert!(!block.is_null());
+            let page = page_of(block);
+            if !previous.is_null() && page != previous {
+                first_blocks.push(block as usize);
+            }
+            previous = page;
+            blocks.push(block);
+        }
+        assert!(
+            first_blocks.len() >= 3,
+            "pages seen: {}",
+            first_blocks.len()
+        );
+        for pair in first_blocks.windows(2) {
+            assert_ne!(
+                pair[0] & 0xfff,
+                pair[1] & 0xfff,
+                "consecutive pages start at the same low address bits"
+            );
+        }
+        for block in blocks {
+            // SAFETY: every block came from this allocator with this layout.
             unsafe { ALLOC.dealloc(block, block_layout) };
         }
     }
