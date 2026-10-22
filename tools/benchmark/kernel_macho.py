@@ -106,6 +106,8 @@ class Image:
 
     def raw(self, address, width):
         start, _, _, offset = self.section(address, width)
+        if start in self.unbacked:
+            raise ValueError('referent is zero-fill, not file-backed')
         at = offset + address - start
         if at + width > len(self.data):
             raise ValueError('referent is not file-backed')
@@ -117,6 +119,14 @@ class Image:
         if address in self.names and len(self.names[address]) == 1:
             return 'symbol:' + self.names[address][0]
         raise ValueError(f'unknown relocation/call target {address:#x}')
+
+    def import_identity(self, address):
+        if address in self.imports:
+            return 'import:' + self.imports[address]
+        if self.section(address)[2].split('/')[-1] in (
+                '__got', '__nl_symbol_ptr', '__la_symbol_ptr'):
+            raise ValueError('unknown import-slot relocation')
+        return None
 
     def address_span(self, address):
         """LEA has no dereference width: protect through the next data boundary.
@@ -135,13 +145,18 @@ class Image:
 
     def data_in_code(self):
         cursor, records = 32, []
+        self.unbacked = set()
         for _ in range(struct.unpack_from('<I', self.data, 16)[0]):
             kind, size = struct.unpack_from('<II', self.data, cursor)
             if kind == 0x19:
                 count = struct.unpack_from('<I', self.data, cursor+64)[0]
                 for i in range(count):
-                    if struct.unpack_from('<I', self.data, cursor+72+i*80+60)[0]:
+                    section = cursor+72+i*80
+                    if struct.unpack_from('<I', self.data, section+60)[0]:
                         raise ValueError('unknown unresolved section relocation')
+                    flags = struct.unpack_from('<I', self.data, section+64)[0]
+                    if flags & 0xff in (1, 12, 18):  # Mach-O zero-fill kinds
+                        self.unbacked.add(struct.unpack_from('<Q', self.data, section+32)[0])
             if kind == 0x29:
                 if size != 16:
                     raise ValueError('invalid data-in-code command')
@@ -155,10 +170,11 @@ class Image:
                         raise ValueError('invalid data-in-code range')
                     section = mapped[0]
                     address = section[0] + at - section[3]
-                    self.raw(address, width)
                     records.append((address, width, tag))
             cursor += size
         ordered = sorted(records)
+        for address, width, _ in ordered:
+            self.raw(address, width)
         if any(a+n > b for (a, n, _), (b, _, _) in zip(ordered, ordered[1:])):
             raise ValueError('overlapping data-in-code')
         return ordered

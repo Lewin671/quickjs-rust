@@ -3,9 +3,9 @@
 - Status: implementation present; current-main qualification pending.
 - Implementation: maintained Python checker and archive-only H+8/C+8 transforms;
   `scripts/check-kernel-isolation.sh`; no runtime/Cargo/recipe/policy change, no CI hook.
-- Verified at: branch based on main `9eba7a1d`; 32 focused Python tests and the staged fast gate pass before first tooling commit (694 benchmark tests).
+- Verified at: tooling `7ed7479f`; 32 focused tests, staged fast gate and full local `check.sh` pass (694 benchmark tests, 35 script tests, 5,170 Test262 subset cases).
 - Evidence: contract/method below; queued build identities/results will be recorded here.
-- Unresolved: current-main A/A, H+8 and C+8 results and full local gate pending.
+- Unresolved: current-main A/A, H+8 and C+8 results pending in queued job `20261022T043602Z-t064-k0-main`.
 - Next action: queue the full non-timing canonical matrix, then record exact results and gates.
 
 The [lead decision](../T064-kernel-isolation.md#lead-decision-2026-10-21)
@@ -28,7 +28,10 @@ bytes, CFG edges, tables/positions/padding and stack-affecting operands.
 Only encoded disp32 RIP operands and external E8 calls may vary. RIP
 referents retain their full memory operand width and content hash; calls
 retain exact local symbol/import identities, including closure/clone details.
-Allowed differences are individually reported, even when another check fails.
+RIP import slots also retain binding identities: equal zero pointer bytes cannot
+hide retargeting to another import. Zero-fill/non-file-backed referents and
+unresolved import slots fail closed. Allowed differences are individually
+reported, even when another check fails.
 
 LEA has no dereference width. For owned tables it protects the full table;
 other address-only LEAs conservatively protect through the next nm data
@@ -79,3 +82,17 @@ Focused synthetic tests cover allowed RIP/call movement and negatives for
 stack/table changes, missing/duplicate/aliased/cloned roles, unknown decoder,
 unknown relocation, stale transforms and optimized-away/missing probes.
 No engine semantics changed; touched-file Test262 slices select none.
+
+The first local full gate stopped at Test262 because this worktree had no
+initialized upstream input. The first error was:
+`error: allowlist entry does not exist: third_party/test262/test/language/statements/class/definition/fn-name-accessor-get.js`.
+Initialized pinned Test262 `4249661388e5d3f92a85186213da140a6481490f`, then
+reran the full gate successfully. Local Cargo calls checked disk availability
+before execution; debug/test symbols and incremental output were disabled
+for disk budget only. All local build outputs stayed under `target/`;
+`target/debug` was removed after verification. No runtime semantic file changed.
+
+Final review added RIP import-identity and zero-fill negatives (34 focused
+tests pass). This changes checker validation only; the queued canonical
+builds at producer `7ed7479f` remain usable. Re-fingerprint all four linked
+images with the final checker before interpreting its qualification.

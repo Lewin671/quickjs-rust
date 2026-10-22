@@ -38,6 +38,9 @@ class Memory:
             return 'import:_pow'
         raise ValueError('unknown relocation/call target')
 
+    def import_identity(self, target):
+        return None
+
     def address_span(self, target):
         return len(self.raw(target, 8))
 
@@ -214,6 +217,25 @@ class DecoderTests(unittest.TestCase):
         image.data = bytes(data)
         with self.assertRaisesRegex(ValueError, 'unknown unresolved'):
             image.data_in_code()
+
+
+    def test_equal_got_bytes_do_not_hide_import_retargeting(self):
+        with patch.object(Memory, 'import_identity', return_value='import:_pow'):
+            a = report(body(b'\0'*8))
+        with patch.object(Memory, 'import_identity', return_value='import:_fmod'):
+            b = report(body(b'\0'*8))
+        self.assertFalse(compare(a, b)['pass'])
+
+    def test_unknown_import_slot_and_zero_fill_referents_fail_closed(self):
+        image = Image.__new__(Image)
+        image.imports = {}
+        image.sections = [(0x2000, 8, '__DATA_CONST/__got', 0)]
+        image.unbacked = {0x2000}
+        image.data = b'header!!'
+        with self.assertRaisesRegex(ValueError, 'unknown import-slot'):
+            image.import_identity(0x2000)
+        with self.assertRaisesRegex(ValueError, 'zero-fill'):
+            image.raw(0x2000, 8)
 
 
 class InventoryTests(unittest.TestCase):

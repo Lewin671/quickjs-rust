@@ -161,6 +161,9 @@ def decode_body(image, allrows, entry, extent):
             row['fixup'] = {'kind': 'rip', 'position': at, 'size': 4,
                             'width': width, 'mode': mode,
                             'referent_sha256': hashlib.sha256(referent).hexdigest()}
+            imported = image.import_identity(target)
+            if imported is not None:
+                row['fixup']['import_identity'] = imported
             row['operands'] = RIP.sub('RIP', args)
         if op in ('callq', 'jmp', 'jmpq') or op.startswith('j'):
             direct = re.fullmatch('0x[0-9a-f]+', args)
