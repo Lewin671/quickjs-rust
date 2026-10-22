@@ -81,11 +81,10 @@ targets are inside the plan's rank ceiling 6.
   fragmentation is one 16-byte step at 128 B and one quarter-step above it.
 - A layout with `size > 8192` or `align > 16` is System-managed; zero-sized
   layouts forward to System as well.
-- Page-structured, mimalloc-style: a 32-KiB System allocation aligned to 32 KiB
+- Page-structured, mimalloc-style: a 64-KiB System allocation aligned to 64 KiB
   per page, header at the base, one class per page, and a per-page free list,
-  bump area and live count. `block & !(PAGE_SIZE - 1)` finds the header. The
-  size halves each class's first-page slack while the largest class still holds
-  three 8-KiB blocks, so no page is allocated per large block.
+  bump area and live count. `block & !(PAGE_SIZE - 1)` finds the header. A
+  32-KiB variant was measured and reverted; see the round-2 record.
 - A thread owns its pages through per-class lists, a current page, and a queue
   of pages with free blocks. Allocation reuses a queued free block first; it
   bumps the current page only when no page has a free block, then scans the

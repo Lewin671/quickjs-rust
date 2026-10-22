@@ -11,7 +11,7 @@
 //! - 32 size classes: 16-byte steps through 128 bytes, then four equal classes
 //!   per power of two through 8 KiB. A block is always aligned to at least 16
 //!   bytes and holds at least the requested size.
-//! - Pages: one 32-KiB, 32-KiB-aligned System allocation per page. The page
+//! - Pages: one 64-KiB, 64-KiB-aligned System allocation per page. The page
 //!   header sits at the page base, so `block & !(PAGE_SIZE - 1)` recovers it.
 //!   Each page serves exactly one class, keeps its own free list, bump area and
 //!   live count, and is linked into its owning thread's class list.
@@ -72,10 +72,7 @@ const MAX_CLASS: usize = 8192;
 /// Number of classes; `class_index` and the pool arrays share this bound.
 const CLASS_COUNT: usize = 32;
 /// Uniform page size; pages are aligned to it so masking finds the header.
-/// 32 KiB halves the first-page slack each class pays compared with 64 KiB
-/// while still holding three 8-KiB blocks, so the largest class never needs a
-/// page per allocation.
-const PAGE_SIZE: usize = 32 * 1024;
+const PAGE_SIZE: usize = 64 * 1024;
 const PAGE_MASK: usize = PAGE_SIZE - 1;
 /// Space reserved for the page header at the page base (16-byte multiple).
 const HEADER_SIZE: usize = 96;
