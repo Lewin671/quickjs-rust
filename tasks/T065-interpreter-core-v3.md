@@ -1,6 +1,6 @@
 # T065: Interpreter core v3
 
-- Status: active; design complete, pending lead review and policy approval.
+- Status: active; design reviewed (dsh), not approved. User decision 2026-10-22: run a pre-M0 mechanism ablation on real programs before choosing between this rewrite and an incremental path.
 - Implementation: none; documentation only. Existing runtime remains unchanged;
   no new crate, dependency, unsafe block, schema kind or performance plan exists.
 - Verified at: design tree over 0ab98e3920629da1d7d6efae46f24f0b43bfa018,
@@ -9,12 +9,13 @@
 - Evidence: [gap anatomy and instruction record](archive/T065-gap-anatomy.md),
   [target architecture](../docs/design/interpreter-core-v3.md),
   [migration](../docs/design/interpreter-core-v3-migration.md),
-  [acceptance proposal](proposals/T065-core-migration-acceptance.md).
-- Unresolved: lead decisions on packed-word/GC/API, migration scope, budgets and
-  acceptance; exact per-mechanism gap attribution remains unidentified.
-- Next action: lead reviews the design and T022 proposal; implement/review the
-  new policy kind, then freeze M0's complete plan before runtime edits. T056's
-  remaining M2/M3 work is superseded by this proposal pending that review.
+  [acceptance proposal](proposals/T065-core-migration-acceptance.md),
+  [independent review and lead outcome](archive/T065-design-review.md).
+- Unresolved: target level (the proposed 0.80×M leaves ~2.46× NG), shared-window frames (T021), collector choice, effort (review: 45–70 one-owner weeks);
+  per-mechanism wall attribution is unmeasured.
+- Next action: plan and run the ablation ladder (value word ownership, global allocator control, compact general bytecode, zero-based
+  per-activation entry) on big.js, immutable and js-yaml with wall and instruction evidence; then decide rewrite vs incremental.
+  T056's remaining M2/M3 work stays superseded pending that decision.
 
 ## Intent
 
