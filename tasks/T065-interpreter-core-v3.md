@@ -92,3 +92,55 @@ scripts, Cargo files or executable examples changed). No timing claim, push or
 merge. Local free disk was 69 GiB; no builds were performed. One non-timing
 collector failed on role-specific stdout validation, then the corrected job
 completed 60 records; both job identities and correction are in the evidence.
+
+## Ablation ladder
+
+Prospective diagnostic plan, 2026-10-22, base `db64cab0` (runtime/build
+inputs unchanged from measured main `9eba7a1d`). No acceptance attempt,
+policy change, runtime integration or origin push. Scratch code lives only
+on `agent/t065-abl-<name>/codex`; this branch owns documentation.
+
+Fixed targets for every experiment: `development/big.js/arith`,
+`development/immutable/persistent`, `development/js-yaml/document`, and
+`development/graphlib/paths`. Fixed controls: all six sentinels and the
+19 controls already hard-coded in `tools/benchmark/quick_triage.py`, including
+JSON parse/stringify, raytrace, binary trees, audio-dft and cdjs external
+cases. No held-out programs, optional case removal or result-based retargeting.
+
+1. **Allocator (round 1).** Pure-Rust thread-local power-of-two size classes
+   (16–2048 bytes), chunk-backed bump allocation with returned-block reuse;
+   larger/over-aligned allocations use System. Slabs retained to process exit:
+   a realistic fast-path prototype, not a production memory estimate. Compare
+   separately with a pinned mimalloc global allocator. The C allocator uses
+   FFI, forbidden in a landing engine by AGENTS.md; explicitly authorized here
+   only as a never-landing diagnostic alternative, not a mathematical bound.
+2. **Call/activation (round 1).** Reuse exact M2.1 pricing branch `117082ed`;
+   measure its implemented narrower cohort without extrapolating to unpriced
+   native/argument/frame work. No shared-window rewrite.
+3. **Value ownership (round 2).** Try a deliberately leaky ownership oracle:
+   cheap handle copies and omitted refcount release for measured runs. Record
+   which wrappers are covered and retain allocation/width work that remains.
+   Checksums must match; mutation/uniqueness behavior must remain protected.
+   If a full bit-copy oracle cannot preserve checksums, report that failure
+   and use a narrower safe-lifetime leak experiment. This is no price of an
+   8-byte word, and results cannot be added to allocator/call savings.
+4. **Named authority (future, lead review required).** Bound string/hash/cache
+   reject work while preserving receiver/prototype validation; then price an
+   atom/slot prototype if worthwhile.
+5. **Bytecode/dispatch (future).** Bound the 112-byte Op fetch/dispatch cost
+   independently of Value and call storage; compare compact general encoding.
+6. **Startup (optional future).** Separate process launch/parse/compile from
+   repeated execution before attributing whole-process gains to the VM.
+
+For each variant collect three alternating whole-process retired-instruction
+pairs in a non-timing iMac queue job, with validated stdout/checksums and exact
+source/workload/binary hashes. Separately run `scripts/quick-triage.sh` through
+`imac-bench.sh run --timing`, five natural-layout pairs, unchanged fixed
+controls and canonical agents/fat16/abort recipe. Check queue status first;
+never direct SSH, cancel another job, or overlap timing. Batch all four targets
+per variant. Preserve failed/unclear/budget-missed jobs; report per-program
+candidate/main ratios, instruction ranges and wall exploratory intervals,
+request/result hashes and stage costs in [rounds 1–2](archive/T065-ablation-r1.md).
+Disk must remain at least 8 GiB locally and on the runner. Remove created
+scratch worktrees and their target/debug outputs; retain branches. Stop after
+round 2 for lead review. No production conformance or performance claim.
