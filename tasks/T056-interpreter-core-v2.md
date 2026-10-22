@@ -1,13 +1,11 @@
 # T056: Interpreter core v2
 
-- Status: blocked on [T064](T064-kernel-isolation.md); stage1 integrated; stage A remains unpromoted on its own branch.
-- Implementation: main06e199fe has stage1, not stage-A5dd3a810. T064's spike retains no production runtime changes.
-- Verified at: historical stage-A/runtime and startup/allocation receipts summarized in [T064 inputs](archive/T064-kernel-isolation-inputs.md); main spike tracked in T064.
-- Evidence: [stage1](archive/T056-m1-stage1-evidence.md), [M1.2 rejection](archive/T056-m1-stage2-evidence.md),
-  [M1.2 diagnosis](archive/T056-m1-stage2-diagnosis.md), [M2 inputs](archive/T056-m2-design-inputs.md), [isolation/cost inputs](archive/T064-kernel-isolation-inputs.md).
-- Unresolved: object/header changes move off-path instructions in typed execution; unpack allocation and +7.1% historical startup instruction excess remain attribution priorities.
-- Next action: per the [T064 lead decision](T064-kernel-isolation.md#lead-decision-2026-10-21), A/B continue in the K→A→B successor plan;
-  until then attribute unpack allocations and startup instructions without timing. Old layout-edges plan untouched:0a9af81b failed1/2, one shared A+B reserve remains, no reset.
+- Status: blocked on [T064](T064-kernel-isolation.md) K; K→A→B successor frozen after lead feedback 1; old layout-edges continuation closed-superseded.
+- Implementation: main06e199fe has stage1, not stage-A5dd3a810; this handoff adds no runtime implementation or timing screen.
+- Verified at: exact-M9eba7a1d profiles and freeze validation/checks on the `4a2c7993` documentation follow-up are in the [lead review](proposals/T064-successor-review.md); historical runtime receipts remain bound to their original revisions.
+- Evidence: [frozen successor](performance-units/interpreter-core-v2-kernel-layout-authority.json), [old-plan closure](archive/T064-layout-edges-closure.md), [fresh profile inputs](archive/T064-successor-plan-inputs.md), [isolation/cost inputs](archive/T064-kernel-isolation-inputs.md).
+- Unresolved: K qualification/cost and separate unpack/startup attribution remain; the successor's manual ledger, stage-band and per-case RSS checks must precede each stage decision.
+- Next action: await lead's K1 handoff and passing K stage; after K integration at I, refresh exact I profiles before porting A, keeping cumulative base M fixed. Preserve old0a9af81b and exactly one shared A+B remaining failure; no automatic port of5dd3.
 
 ## Goal and scope
 
@@ -121,7 +119,9 @@ The [diagnosis](archive/T056-m1-stage2-diagnosis.md) reproduces the screen's ins
 and its ablations remove most of the excess. The replacement is
 [property layouts](../docs/design/property-layouts.md), which assumes T063's invariant that
 stored strings keep valid surrogate pairs as scalars, so typed keys need no canonicalization scan.
-Its replacement received the queue/profile-bound plan below (the closed shape's data was not reused); continuation is now blocked on T064, with the work-count obligations preserved.
+Its replacement's historical contract is below; that continuation is closed-superseded by the frozen K→A→B plan in the resume block. Work-count obligations remain applicable.
+
+**Historical closed-superseded contract (not the successor).**
 
 Plan `interpreter-core-v2-layout-edges` (base and queue candidate `f58c696e`, post-T063; queue `c50ee7df`)
 freezes these parameters: migration, stages A (layout replacement)
