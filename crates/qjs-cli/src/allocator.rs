@@ -1,48 +1,63 @@
-//! Thread-local size-class global allocator for the CLI process.
+//! Thread-local, page-structured size-class global allocator for the CLI.
 //!
-//! The CLI is a short-lived host process, so this allocator trades returning
-//! memory to the system for speed on the allocation/free path that real
-//! programs spend a large share of their time in. It owns three things and
-//! nothing else:
+//! The CLI is a short-lived host process, so this allocator trades some
+//! retention for speed on the allocation/free path that real programs spend a
+//! large share of their time in. Memory is organised the way mimalloc does it:
+//! fixed-size pages, one class per page, a per-page free list and live count,
+//! and page-level recycling instead of permanently retaining every freed block.
+//!
+//! What the module owns:
 //!
 //! - 32 size classes: 16-byte steps through 128 bytes, then four equal classes
-//!   per power of two through 8 KiB. A class block is always aligned to at
-//!   least 16 bytes and holds at least the requested size.
-//! - Per-thread free lists and bump slabs. A slab is one System allocation of
-//!   `blocks * class_size` bytes (16 KiB) taken with alignment 16; a class the
-//!   program barely touches therefore retains little, and a hot class still
-//!   amortizes one malloc over many blocks. Slab allocation is out of line so
-//!   the pop/carve hot path stays small.
-//! - A `GlobalAlloc` that forwards anything outside the class contract (size
-//!   above 8 KiB, alignment above 16, or zero size) to `System`.
+//!   per power of two through 8 KiB. A block is always aligned to at least 16
+//!   bytes and holds at least the requested size.
+//! - Pages: one 64-KiB, 64-KiB-aligned System allocation per page. The page
+//!   header sits at the page base, so `block & !(PAGE_SIZE - 1)` recovers it.
+//!   Each page serves exactly one class, keeps its own free list, bump area and
+//!   live count, and is linked into its owning thread's class list.
+//! - Per-thread state: the class lists, the current page per class, and a
+//!   bounded pool of at most `EMPTY_PAGES` empty pages reusable by any class.
+//!   Pages beyond that bound are returned to System.
 //!
 //! Invariants that keep it sound:
 //!
-//! - A block is owned by exactly one thread at a time. `dealloc` pushes it onto
-//!   the *freeing* thread's list, which transfers ownership; no other thread
-//!   ever reads that thread's pool. A block allocated on thread A and freed on
-//!   thread B is therefore reused only by B, and A's list never sees it again.
-//! - Slabs are never deallocated, so every block's backing storage lives for
-//!   the whole process. A thread that exits leaks its free lists and slabs;
-//!   nothing can reference them afterwards, which is sound.
-//! - `thread_local!` is const-initialized and the pool registers no destructor
-//!   (`Cell<*mut u8>` has no drop glue), so no thread can observe a destroyed
-//!   or partially initialized pool.
-//! - The class table is static; class sizes are multiples of 16, so a block at
-//!   `slab + k * class_size` is 16-aligned whenever the slab is.
-//! - `realloc` changes only the size in the frozen Rust trait signature, so it
-//!   never changes alignment. A same-class realloc returns the same block; a
-//!   System-to-System realloc forwards to `System::realloc`; every other case
-//!   allocates, copies `min(old, new)` bytes and frees the old block.
+//! - A page's ordinary fields (`class`, `live`, `free`, `bump`, `bump_end`,
+//!   `next`) are touched only by the thread that owns the page. Remote frees
+//!   use only `owner` and the atomic `remote` stack.
+//! - `live` counts blocks that are allocated plus blocks sitting in `remote`.
+//!   A remote free pushes the block and never touches `live`; the owner
+//!   subtracts the drained count when it takes the remote list. Therefore
+//!   `live == 0` proves that no block is allocated, no remote push is
+//!   undrained, and no future remote push is possible (a push requires an
+//!   allocated block). That is the only condition under which a page is
+//!   recycled.
+//! - `owner` is written when a page becomes that thread's page and is reset
+//!   only after `live == 0`. A block can only be freed while it is live, so a
+//!   remote freer always observes the owning thread's id; the Release store at
+//!   page initialisation and the Acquire load at free establish the ordering.
+//! - A recycled page is unlinked and either kept in the owner's empty pool or
+//!   returned to System with the same page layout it was allocated with. An
+//!   empty page has no live blocks and no undrained remote entries, so no
+//!   pointer into it can be freed.
+//! - `thread_local!` state is const-initialised and registers no destructor
+//!   (`Cell<*mut ...>`/`Cell<usize>` have no drop glue), so no thread ever
+//!   observes a destroyed pool. Pages and lists retained by a thread that
+//!   exits are leaked; nothing can reference them afterwards, which is sound.
+//! - The class table and page size are static, so a block pointer always masks
+//!   to its page header. `realloc` never changes alignment (the Rust trait
+//!   fixes it): same-class growth keeps the block, System-to-System forwards to
+//!   `System::realloc`, and everything else allocates, copies `min(old, new)`
+//!   and frees the old block.
 //!
 //! No dependency, no FFI, no global mutable state beyond the
-//! `#[global_allocator]` static itself. Library crates keep their allocator so
-//! embedders choose their own.
+//! `#[global_allocator]` static and the thread-id counter. Library crates keep
+//! their allocator so embedders choose their own.
 
 use std::{
     alloc::{GlobalAlloc, Layout, System},
     cell::Cell,
     ptr,
+    sync::atomic::{AtomicPtr, AtomicUsize, Ordering},
 };
 
 /// Largest size served by an explicit class with 16-byte steps.
@@ -51,9 +66,13 @@ const SMALL_LIMIT: usize = 128;
 const MAX_CLASS: usize = 8192;
 /// Number of classes; `class_index` and the pool arrays share this bound.
 const CLASS_COUNT: usize = 32;
-/// Bytes per slab; large enough to amortize mallocs, small enough that a
-/// lightly used class does not retain much.
-const SLAB_TARGET: usize = 16 * 1024;
+/// Uniform page size; pages are aligned to it so masking finds the header.
+const PAGE_SIZE: usize = 64 * 1024;
+const PAGE_MASK: usize = PAGE_SIZE - 1;
+/// Space reserved for the page header at the page base (16-byte multiple).
+const HEADER_SIZE: usize = 64;
+/// Empty pages a thread keeps for reuse; the rest go back to System.
+const EMPTY_PAGES: usize = 8;
 
 /// Upper bound of each class, strictly increasing from 16 through 8192.
 const CLASS_SIZES: [usize; CLASS_COUNT] = [
@@ -62,6 +81,82 @@ const CLASS_SIZES: [usize; CLASS_COUNT] = [
 ];
 
 const _: () = assert!(CLASS_SIZES[0] == 16 && CLASS_SIZES[CLASS_COUNT - 1] == MAX_CLASS);
+const _: () = assert!(HEADER_SIZE % 16 == 0 && HEADER_SIZE < PAGE_SIZE);
+
+/// Header at the base of every page. Only the owning thread touches all fields
+/// except `owner` and `remote`; remote frees touch exactly those two.
+#[repr(C)]
+struct PageHeader {
+    /// Class served by this page; owner-only.
+    class: usize,
+    /// Owning thread id, or 0 while the page sits in an empty pool.
+    owner: AtomicUsize,
+    /// Allocated blocks plus blocks queued on `remote`; owner-only.
+    live: usize,
+    /// Blocks freed by other threads (Treiber stack through the first word).
+    remote: AtomicPtr<u8>,
+    /// Next page in the owning thread's class list; owner-only.
+    next: *mut PageHeader,
+    /// Free blocks; owner-only.
+    free: *mut u8,
+    /// Next unallocated block and the end of the block area; owner-only.
+    bump: *mut u8,
+    bump_end: *mut u8,
+}
+
+const _: () = assert!(std::mem::size_of::<PageHeader>() <= HEADER_SIZE);
+
+/// One class's pages owned by this thread, and the preferred page.
+struct ClassState {
+    pages: Cell<*mut PageHeader>,
+    current: Cell<*mut PageHeader>,
+}
+
+impl ClassState {
+    const fn new() -> Self {
+        Self {
+            pages: const { Cell::new(ptr::null_mut()) },
+            current: const { Cell::new(ptr::null_mut()) },
+        }
+    }
+}
+
+struct Pool {
+    /// Stable non-zero id for this thread; 0 means "not assigned yet".
+    id: Cell<usize>,
+    classes: [ClassState; CLASS_COUNT],
+    empty: [Cell<*mut PageHeader>; EMPTY_PAGES],
+    empty_len: Cell<usize>,
+}
+
+impl Pool {
+    const fn new() -> Self {
+        Self {
+            id: const { Cell::new(0) },
+            classes: [const { ClassState::new() }; CLASS_COUNT],
+            empty: [const { Cell::new(ptr::null_mut()) }; EMPTY_PAGES],
+            empty_len: const { Cell::new(0) },
+        }
+    }
+
+    fn thread_id(&self) -> usize {
+        let id = self.id.get();
+        if id != 0 {
+            return id;
+        }
+        let id = NEXT_THREAD_ID.fetch_add(1, Ordering::Relaxed);
+        self.id.set(id);
+        id
+    }
+}
+
+/// Unique non-zero thread ids; never reused, so a stale id cannot match.
+static NEXT_THREAD_ID: AtomicUsize = AtomicUsize::new(1);
+
+thread_local! {
+    /// Per-thread pool; no destructor, so it stays valid for the whole thread.
+    static POOL: Pool = const { Pool::new() };
+}
 
 /// Class index for a non-zero size at or below `MAX_CLASS`.
 ///
@@ -92,89 +187,231 @@ fn class_index_for(layout: Layout) -> Option<usize> {
     class_index(layout.size())
 }
 
-struct Pool {
-    /// Singly linked free lists; a freed block stores the next pointer in its
-    /// first word. Every class block is at least 16 bytes, so that word fits.
-    free: [Cell<*mut u8>; CLASS_COUNT],
-    /// Next unserved block in the current slab, and its one-past-the-end.
-    next: [Cell<*mut u8>; CLASS_COUNT],
-    end: [Cell<*mut u8>; CLASS_COUNT],
+#[inline]
+fn page_layout() -> Layout {
+    // SAFETY: PAGE_SIZE is a non-zero power of two, so size and alignment are
+    // valid and the size is a multiple of the alignment.
+    unsafe { Layout::from_size_align_unchecked(PAGE_SIZE, PAGE_SIZE) }
 }
 
-impl Pool {
-    const fn new() -> Self {
-        Self {
-            free: [const { Cell::new(ptr::null_mut()) }; CLASS_COUNT],
-            next: [const { Cell::new(ptr::null_mut()) }; CLASS_COUNT],
-            end: [const { Cell::new(ptr::null_mut()) }; CLASS_COUNT],
+#[inline]
+const fn page_blocks(block_size: usize) -> usize {
+    (PAGE_SIZE - HEADER_SIZE) / block_size
+}
+
+/// Page that owns `block`. The page base is aligned to `PAGE_SIZE`, so masking
+/// recovers the header.
+#[inline]
+fn page_of(block: *mut u8) -> *mut PageHeader {
+    (block as usize & !PAGE_MASK) as *mut PageHeader
+}
+
+/// Take a block from a page the calling thread owns: free list, then drained
+/// remote entries, then the bump area. Returns `None` when the page is full.
+#[inline]
+unsafe fn allocate_from_page(page: *mut PageHeader) -> Option<*mut u8> {
+    // SAFETY: the caller guarantees `page` is a live page owned by this thread,
+    // so none of its owner-only fields is touched concurrently; the remote
+    // list is exchanged atomically.
+    unsafe {
+        let free = (*page).free;
+        if !free.is_null() {
+            // A free block stores the next free block in its first word;
+            // class blocks are at least 16 bytes, so the word fits.
+            (*page).free = free.cast::<*mut u8>().read();
+            (*page).live += 1;
+            return Some(free);
+        }
+        let mut cursor = (*page).remote.swap(ptr::null_mut(), Ordering::AcqRel);
+        if !cursor.is_null() {
+            let mut drained = 0usize;
+            while !cursor.is_null() {
+                // Remote entries are blocks of this page and were at least 16
+                // bytes, so each stores the next entry in its first word.
+                let next = cursor.cast::<*mut u8>().read();
+                cursor.cast::<*mut u8>().write((*page).free);
+                (*page).free = cursor;
+                cursor = next;
+                drained += 1;
+            }
+            // Remote blocks were counted in `live` while queued; they are free
+            // now, and the drain pushed at least one block.
+            (*page).live -= drained;
+            let block = (*page).free;
+            (*page).free = block.cast::<*mut u8>().read();
+            (*page).live += 1;
+            return Some(block);
+        }
+        let bump = (*page).bump;
+        if !bump.is_null() && bump < (*page).bump_end {
+            // The bump area was sized to whole blocks, so `bump` has
+            // `CLASS_SIZES[class]` bytes before `bump_end`.
+            (*page).bump = bump.add(CLASS_SIZES[(*page).class]);
+            (*page).live += 1;
+            return Some(bump);
+        }
+        None
+    }
+}
+
+/// Take a fresh page for `index`: reuse an empty page when possible, otherwise
+/// ask System for one. Links the page into the class list and makes it current.
+#[inline]
+unsafe fn new_page(pool: &Pool, index: usize) -> *mut PageHeader {
+    // SAFETY: System receives a valid page layout, and every field written here
+    // belongs to this thread's page (its owner id is stored before any block is
+    // handed out).
+    unsafe {
+        let len = pool.empty_len.get();
+        let page = if len == 0 {
+            let raw = System.alloc(page_layout());
+            if raw.is_null() {
+                return ptr::null_mut();
+            }
+            raw.cast::<PageHeader>()
+        } else {
+            let page = pool.empty[len - 1].get();
+            pool.empty_len.set(len - 1);
+            page
+        };
+        let base = page as *mut u8;
+        let block_size = CLASS_SIZES[index];
+        (*page).class = index;
+        (*page).owner.store(pool.thread_id(), Ordering::Release);
+        (*page).live = 0;
+        (*page).remote.store(ptr::null_mut(), Ordering::Relaxed);
+        (*page).free = ptr::null_mut();
+        // The header occupies the first HEADER_SIZE bytes of a PAGE_SIZE page,
+        // and the block area holds `page_blocks` whole blocks.
+        (*page).bump = base.add(HEADER_SIZE);
+        (*page).bump_end = base.add(HEADER_SIZE + page_blocks(block_size) * block_size);
+        let state = &pool.classes[index];
+        (*page).next = state.pages.get();
+        state.pages.set(page);
+        state.current.set(page);
+        page
+    }
+}
+
+/// Unlink a fully free page from the class list and either park it in the empty
+/// pool or return it to System.
+#[inline]
+unsafe fn recycle_page(pool: &Pool, index: usize, page: *mut PageHeader) {
+    // SAFETY: the caller proved `live == 0`, so no block of this page can be
+    // freed again and the page is owned by this thread. Unlinking and the
+    // System deallocation use the page's own bookkeeping.
+    unsafe {
+        let state = &pool.classes[index];
+        if state.current.get() == page {
+            state.current.set(ptr::null_mut());
+        }
+        let mut cursor = state.pages.get();
+        if cursor == page {
+            state.pages.set((*page).next);
+        } else {
+            while !cursor.is_null() {
+                if (*cursor).next == page {
+                    (*cursor).next = (*page).next;
+                    break;
+                }
+                cursor = (*cursor).next;
+            }
+        }
+        (*page).next = ptr::null_mut();
+        (*page).owner.store(0, Ordering::Release);
+        let len = pool.empty_len.get();
+        if len < EMPTY_PAGES {
+            pool.empty[len].set(page);
+            pool.empty_len.set(len + 1);
+        } else {
+            // The page came from System with exactly this layout.
+            System.dealloc(page.cast::<u8>(), page_layout());
         }
     }
 }
 
-thread_local! {
-    /// Per-thread pool; no destructor, so it stays valid for the whole thread.
-    static POOL: Pool = const { Pool::new() };
-}
-
-/// Pop a recycled block or carve one from the current slab, allocating a new
-/// slab when the current one is exhausted.
+/// Pop a recycled block or carve one from a page, taking a new page when every
+/// page of this class is full.
 #[inline]
 unsafe fn allocate(index: usize) -> *mut u8 {
     POOL.with(|pool| {
-        let free = pool.free[index].get();
-        if !free.is_null() {
-            // SAFETY: a freed block was at least 16 bytes and stores the next
-            // free block in its first word; it is no longer live.
-            pool.free[index].set(unsafe { free.cast::<*mut u8>().read() });
-            return free;
+        let state = &pool.classes[index];
+        let current = state.current.get();
+        if !current.is_null() {
+            // SAFETY: `current` is a live page owned by this thread.
+            if let Some(block) = unsafe { allocate_from_page(current) } {
+                return block;
+            }
         }
-        let block = pool.next[index].get();
-        if block.is_null() || block == pool.end[index].get() {
-            // SAFETY: the pool belongs to this thread and `index` is a class.
-            return unsafe { allocate_slab(pool, index) };
+        let mut cursor = state.pages.get();
+        while !cursor.is_null() {
+            // SAFETY: every linked page is live and owned by this thread.
+            let next = unsafe { (*cursor).next };
+            if cursor != current {
+                // SAFETY: as above.
+                if let Some(block) = unsafe { allocate_from_page(cursor) } {
+                    state.current.set(cursor);
+                    return block;
+                }
+            }
+            cursor = next;
         }
-        // SAFETY: `block` is inside the slab and at least its class size bytes
-        // remain before `end`.
-        pool.next[index].set(unsafe { block.add(CLASS_SIZES[index]) });
-        block
+        // SAFETY: the pool belongs to this thread and `index` is a class.
+        let page = unsafe { new_page(pool, index) };
+        if page.is_null() {
+            return page.cast::<u8>();
+        }
+        // SAFETY: a fresh page always has at least one bump block.
+        unsafe { allocate_from_page(page) }.unwrap_or(ptr::null_mut())
     })
 }
 
-/// Take a fresh slab, publish it as the current one, and return its first
-/// block. Out of line: the common path above must stay small.
-#[cold]
-#[inline(never)]
-unsafe fn allocate_slab(pool: &Pool, index: usize) -> *mut u8 {
-    let block_size = CLASS_SIZES[index];
-    let blocks = (SLAB_TARGET / block_size).max(1);
-    let bytes = block_size * blocks;
-    // SAFETY: `bytes` is a non-zero multiple of 16 bytes, so alignment 16 is
-    // valid, and the size does not exceed `isize::MAX`.
-    let slab = unsafe { System.alloc(Layout::from_size_align_unchecked(bytes, 16)) };
-    if slab.is_null() {
-        return slab;
-    }
-    // SAFETY: the slab owns exactly `bytes` bytes, and the first `block_size`
-    // of them are returned as the first block.
-    pool.end[index].set(unsafe { slab.add(bytes) });
-    // SAFETY: `block_size` is at most the slab size.
-    pool.next[index].set(unsafe { slab.add(block_size) });
-    slab
-}
-
-/// Push a block onto the current thread's free list.
+/// Return a block to its page: locally when this thread owns the page, remotely
+/// through the atomic list otherwise.
 #[inline]
 unsafe fn release(index: usize, block: *mut u8) {
+    // SAFETY: `block` came from this allocator with `index`'s class, so masking
+    // finds its live page header.
+    let page = page_of(block);
     POOL.with(|pool| {
-        // SAFETY: `block` is no longer live, came from this class, and has room
-        // for one pointer (class blocks are at least 16 bytes).
-        unsafe { block.cast::<*mut u8>().write(pool.free[index].get()) };
-        pool.free[index].set(block);
+        // SAFETY: `owner` is atomic and stable while the block is live; a local
+        // free touches only fields this thread owns, and a remote free uses the
+        // atomic list head and a block whose first word is free.
+        unsafe {
+            if (*page).owner.load(Ordering::Acquire) == pool.thread_id() {
+                block.cast::<*mut u8>().write((*page).free);
+                (*page).free = block;
+                let live = (*page).live - 1;
+                (*page).live = live;
+                if live == 0 {
+                    // No block is allocated or queued remotely, so the page
+                    // cannot be reached again.
+                    recycle_page(pool, index, page);
+                }
+                return;
+            }
+            // Remote free: publish the block and leave `live` for the owner to
+            // subtract when it drains the list.
+            let mut head = (*page).remote.load(Ordering::Relaxed);
+            loop {
+                block.cast::<*mut u8>().write(head);
+                match (*page).remote.compare_exchange_weak(
+                    head,
+                    block,
+                    Ordering::Release,
+                    Ordering::Relaxed,
+                ) {
+                    Ok(_) => break,
+                    Err(observed) => head = observed,
+                }
+            }
+        }
     })
 }
 
 #[inline]
 unsafe fn allocate_zeroed(index: usize) -> *mut u8 {
+    // SAFETY: forwarding to this module's class allocator.
     let block = unsafe { allocate(index) };
     if !block.is_null() {
         // SAFETY: the block holds at least `CLASS_SIZES[index]` usable bytes;
@@ -190,10 +427,13 @@ pub(crate) struct SizeClassAllocator;
 // SAFETY: `SizeClassAllocator` satisfies the `GlobalAlloc` contract: every
 // returned block is non-null or null on failure, aligned to at least the
 // requested alignment, usable for the requested size, and each `dealloc`/
-// `realloc` receives the layout the block was allocated with. Class blocks
-// originate from a 16-aligned System slab and are multiples of 16 bytes apart;
-// System-managed layouts keep their exact align and layout. Thread ownership is
-// transferred by `release`, and slabs outlive every block.
+// `realloc` receives the layout the block was allocated with. Class blocks live
+// in 64-KiB pages aligned to 64 KiB, start at a 16-byte-multiple offset, and
+// are class-size multiples apart, so they are 16-aligned; System-managed
+// layouts keep their exact align and layout. `release` either updates the
+// owning thread's page or publishes the block on that page's atomic remote
+// list, and a page is only recycled once its live count proves no block can be
+// freed again.
 unsafe impl GlobalAlloc for SizeClassAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         match class_index_for(layout) {
@@ -323,7 +563,11 @@ mod tests {
         for (index, &size) in CLASS_SIZES.iter().enumerate() {
             assert_eq!(class_index(size), Some(index));
             let block_layout = layout(size, 16);
-            for round in 0..8 {
+            // More blocks than one page holds for the larger classes, so the
+            // page list, the bump area and page replacement are all exercised.
+            let count = (page_blocks(size) + 2).min(300);
+            let mut blocks = Vec::with_capacity(count);
+            for round in 0..count {
                 let byte = (index as u8) ^ (round as u8);
                 // SAFETY: test-only use of the allocator with a valid layout.
                 let block = unsafe { ALLOC.alloc(block_layout) };
@@ -331,16 +575,131 @@ mod tests {
                 assert_eq!(block as usize % 16, 0, "class {size} misaligned");
                 fill(block, size, byte);
                 check_fill(block, size, byte);
+                blocks.push((block, byte));
+            }
+            for (block, byte) in blocks {
+                check_fill(block, size, byte);
                 // SAFETY: `block` came from this allocator with this layout.
                 unsafe { ALLOC.dealloc(block, block_layout) };
             }
-            // Recycled blocks are handed out again with the same contract.
+            // Recycled pages and the empty pool serve the next request too.
             // SAFETY: test-only allocation with a valid layout.
             let block = unsafe { ALLOC.alloc(block_layout) };
             assert!(!block.is_null());
             assert_eq!(block as usize % 16, 0);
             // SAFETY: `block` came from this allocator with this layout.
             unsafe { ALLOC.dealloc(block, block_layout) };
+        }
+    }
+
+    #[test]
+    fn live_count_tracks_local_allocations_and_frees() {
+        let block_layout = layout(64, 8);
+        // SAFETY: test-only allocation with a valid layout.
+        let first = unsafe { ALLOC.alloc(block_layout) };
+        let page = page_of(first);
+        // The test thread's pool already served harness allocations, so work
+        // from the page's current count instead of assuming a fresh page.
+        // SAFETY: `first` is live and belongs to `page`, owned by this thread.
+        let base = unsafe { (*page).live };
+        // SAFETY: test-only allocation with a valid layout.
+        let second = unsafe { ALLOC.alloc(block_layout) };
+        // SAFETY: both blocks are live on the same page.
+        assert_eq!(unsafe { (*page).live }, base + 1);
+        // SAFETY: `first` came from this allocator with this layout.
+        unsafe { ALLOC.dealloc(first, block_layout) };
+        // SAFETY: `page` still has live blocks, so it is not recycled.
+        assert_eq!(unsafe { (*page).live }, base);
+        // SAFETY: `second` came from this allocator with this layout. If it was
+        // the page's last live block the page is recycled, so do not inspect it.
+        unsafe { ALLOC.dealloc(second, block_layout) };
+    }
+
+    #[test]
+    fn remote_free_is_drained_and_reused_by_the_owner() {
+        use std::sync::{Arc, Barrier, atomic::AtomicUsize};
+        const PATTERN: u8 = 0x6d;
+        let block_layout = layout(48, 8);
+        let barrier = Arc::new(Barrier::new(2));
+        let address = Arc::new(AtomicUsize::new(0));
+        let owner = {
+            let barrier = Arc::clone(&barrier);
+            let address = Arc::clone(&address);
+            std::thread::spawn(move || {
+                // SAFETY: test-only allocation with a valid layout.
+                let block = unsafe { ALLOC.alloc(block_layout) };
+                assert!(!block.is_null());
+                // The first word becomes the remote list link, so pattern the
+                // rest and verify it survives the round trip.
+                // SAFETY: the block is live for 48 bytes.
+                unsafe { ptr::write_bytes(block.add(8), PATTERN, 40) };
+                let page = page_of(block);
+                // SAFETY: the page is owned by this thread.
+                let live = unsafe { (*page).live };
+                address.store(block as usize, Ordering::Release);
+                barrier.wait();
+                barrier.wait();
+                // SAFETY: the other thread's free completed before this wait;
+                // it queued the block remotely and left live unchanged.
+                assert_eq!(unsafe { (*page).live }, live);
+                // Reallocate until the queue is drained and the block returns.
+                let mut found = false;
+                for _ in 0..(page_blocks(48) * 2) {
+                    // SAFETY: test-only allocation with a valid layout.
+                    let reused = unsafe { ALLOC.alloc(block_layout) };
+                    assert!(!reused.is_null());
+                    if reused == block {
+                        // SAFETY: the reused block is live for 48 bytes.
+                        let tail = unsafe { std::slice::from_raw_parts(reused.add(8), 40) };
+                        assert!(tail.iter().all(|&b| b == PATTERN), "content lost");
+                        found = true;
+                        break;
+                    }
+                }
+                assert!(found, "remote block was never drained");
+            })
+        };
+        barrier.wait();
+        // SAFETY: the owner allocated this block and published it before the
+        // barrier; it is freed exactly once here.
+        unsafe { ALLOC.dealloc(address.load(Ordering::Acquire) as *mut u8, block_layout) };
+        barrier.wait();
+        owner.join().expect("owner panicked");
+    }
+
+    #[test]
+    fn empty_pages_are_reused_by_another_class() {
+        // Fill several pages of a large class, free every block, then exercise
+        // a different class so recycled pages come back through the empty pool.
+        let large = layout(8192, 16);
+        let count = page_blocks(8192) * 2 + 1;
+        let mut blocks = Vec::with_capacity(count);
+        for _ in 0..count {
+            // SAFETY: test-only allocation with a valid layout.
+            let block = unsafe { ALLOC.alloc(large) };
+            assert!(!block.is_null());
+            fill(block, 8192, 0x3c);
+            blocks.push(block);
+        }
+        for block in blocks {
+            check_fill(block, 8192, 0x3c);
+            // SAFETY: every block came from this allocator with `large`.
+            unsafe { ALLOC.dealloc(block, large) };
+        }
+        let small = layout(24, 8);
+        let mut reused = Vec::new();
+        for _ in 0..1000 {
+            // SAFETY: test-only allocation with a valid layout.
+            let block = unsafe { ALLOC.alloc(small) };
+            assert!(!block.is_null());
+            assert_eq!(block as usize % 16, 0);
+            fill(block, 24, 0x7e);
+            reused.push(block);
+        }
+        for block in reused {
+            check_fill(block, 24, 0x7e);
+            // SAFETY: every block came from this allocator with `small`.
+            unsafe { ALLOC.dealloc(block, small) };
         }
     }
 
@@ -465,7 +824,7 @@ mod tests {
         for worker in workers {
             worker.join().expect("worker panicked");
         }
-        // This thread's blocks were freed elsewhere; its pool is still usable.
+        // This thread's pages still hold remote blocks; allocating drains them.
         // SAFETY: test-only allocation with a valid layout.
         let block = unsafe { ALLOC.alloc(block_layout) };
         assert!(!block.is_null());

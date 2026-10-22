@@ -1,22 +1,16 @@
 # T066: Production size-class global allocator for the CLI
 
 - Status: active.
-- Implementation: present at `51ef019d`; thread-local size-class allocator in
-  `crates/qjs-cli` with nine unit tests. Nothing outside `qjs-cli` changed.
-- Verified at: `51ef019d` (code) and the documentation-only `13507c15`,
-  2026-10-22; local full gate with Test262 deferred (worktree submodules
-  uninitialized), iMac correctness job (compare-qjs and 5170/5170 Test262),
-  86-case instruction pre-gate PASS, RSS cohort and diagnostic triage.
+- Implementation: present; RSS round 1 (lead-authorised page-structured
+  recycling) is the current allocator in `crates/qjs-cli`.
+- Verified at: round-1 code passes the local full gate with Test262 deferred;
+  iMac correctness, pre-gate, RSS and triage measurements are pending.
 - Evidence: [plan](performance-units/cli-size-class-allocator.json), this file,
   [evidence record](archive/T066-allocator-evidence.md).
-- Unresolved: peak RSS is above 1.05 on `big.js/arith` (1.100),
-  `matter-js/simulate` (1.070) and the target `js-yaml/document` (1.065);
-  triage is `unclear` with four sentinel possible regressions (1.004-1.035).
-  The K=6 screen, formal run, held-out acceptance and the RSS review are the
-  lead's.
-- Next action: lead runs the frozen screen/formal gates and decides whether the
-  RSS overage blocks promotion; follow-up work would need per-slab liveness
-  tracking to release retained slabs.
+- Unresolved: round-1 measurement; the earlier free-list candidate was over the
+  1.05 RSS ceiling on three development cases.
+- Next action: run the round-1 iMac jobs, record them, and stop after this round
+  per the lead decision.
 
 ## Goal
 
@@ -86,20 +80,32 @@ targets are inside the plan's rank ceiling 6.
   fragmentation is one 16-byte step at 128 B and one quarter-step above it.
 - A layout with `size > 8192` or `align > 16` is System-managed; zero-sized
   layouts forward to System as well.
-- Each thread has 32 lock-free free lists plus per-class bump slabs allocated
-  from System at 64 KiB. Freeing pushes onto the freeing thread's list, so a
-  cross-thread free transfers ownership and never touches the allocating
-  thread's state. Slabs and lists are retained until process exit.
+- Page-structured, mimalloc-style: a 64-KiB System allocation aligned to 64 KiB
+  per page, header at the base, one class per page, and a per-page free list,
+  bump area and live count. `block & !(PAGE_SIZE - 1)` finds the header.
+- A thread owns its pages through per-class lists and a current page. Allocation
+  takes the current page's free list, then its drained remote list, then bump
+  space; when the current page is full it scans the class list and otherwise
+  takes an empty page or a new one.
+- Free updates the owning page's live count; when it reaches zero the page is
+  unlinked and parked in a thread-local empty pool of at most 8 pages, or
+  returned to System. Empty pages are reusable by any class.
+- Cross-thread free is sound without a lock: the freer pushes the block onto
+  the page's atomic remote list and leaves `live` alone. The owner subtracts
+  the drained count, so `live == 0` proves no block is allocated, no remote
+  entry is queued and no future remote push is possible; only then is the page
+  recycled. A remote push happens-before the owner's drain.
 - `thread_local!` is const-initialized and registers no destructor, so no thread
-  ever observes a destroyed pool; after thread exit its retained blocks leak,
+  ever observes a destroyed pool; pages retained by a thread that exits leak,
   which is sound (no pointer outlives a live owner).
 - `realloc`: same class returns the same block; System-managed to System-managed
   with equal alignment forwards to `System.realloc`; every other case allocates
   the new layout, copies `min(old, new)`, and deallocates the old block.
 - `alloc_zeroed`: System-managed forwards to `System.alloc_zeroed`; a size-class
   block has its whole class cleared, so recycled content never leaks.
-- Audited unsafe only in the allocator module; no dependency, no FFI, no global
-  mutable state beyond the `#[global_allocator]` static.
+- Audited unsafe in the allocator module only; no dependency, no FFI, no global
+  mutable state beyond the `#[global_allocator]` static and the thread-id
+  counter.
 
 ## Acceptance
 
