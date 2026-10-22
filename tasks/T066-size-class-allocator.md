@@ -1,14 +1,22 @@
 # T066: Production size-class global allocator for the CLI
 
 - Status: active.
-- Implementation: in progress; plan frozen before runtime code.
-- Verified at: not recorded.
+- Implementation: present at `51ef019d`; thread-local size-class allocator in
+  `crates/qjs-cli` with nine unit tests. Nothing outside `qjs-cli` changed.
+- Verified at: `51ef019d`, 2026-10-22; local full gate with Test262 deferred
+  (worktree submodules uninitialized), iMac correctness job (compare-qjs and
+  5170/5170 Test262), 86-case instruction pre-gate PASS, RSS cohort and
+  diagnostic triage.
 - Evidence: [plan](performance-units/cli-size-class-allocator.json), this file,
-  [evidence record](archive/T066-allocator-evidence.md) (created at handoff).
-- Unresolved: acceptance screen/K=6/formal promotion belong to the lead; this
-  unit's implementation and diagnostic evidence are the owner's deliverable.
-- Next action: implement the allocator in `crates/qjs-cli`, run the focused and
-  full gates, then submit the non-timing pre-gate/RSS and diagnostic triage jobs.
+  [evidence record](archive/T066-allocator-evidence.md).
+- Unresolved: peak RSS is above 1.05 on `big.js/arith` (1.100),
+  `matter-js/simulate` (1.070) and the target `js-yaml/document` (1.065);
+  triage is `unclear` with four sentinel possible regressions (1.004-1.035).
+  The K=6 screen, formal run, held-out acceptance and the RSS review are the
+  lead's.
+- Next action: lead runs the frozen screen/formal gates and decides whether the
+  RSS overage blocks promotion; follow-up work would need per-slab liveness
+  tracking to release retained slabs.
 
 ## Goal
 
@@ -89,21 +97,21 @@ targets are inside the plan's rank ceiling 6.
   with equal alignment forwards to `System.realloc`; every other case allocates
   the new layout, copies `min(old, new)`, and deallocates the old block.
 - `alloc_zeroed`: System-managed forwards to `System.alloc_zeroed`; a size-class
-  block is zeroed for `layout.size()` bytes, so recycled content never leaks.
+  block has its whole class cleared, so recycled content never leaks.
 - Audited unsafe only in the allocator module; no dependency, no FFI, no global
   mutable state beyond the `#[global_allocator]` static.
 
 ## Acceptance
 
-- [ ] Plan committed and `validate-unit` accepted before runtime code.
-- [ ] Unit tests cover class mapping, alignment, every class, all realloc paths,
+- [x] Plan committed and `validate-unit` accepted before runtime code.
+- [x] Unit tests cover class mapping, alignment, every class, all realloc paths,
       zeroing, cross-thread frees and a mixed stress run.
-- [ ] `./scripts/check.sh` passes; `./scripts/compare-qjs.sh` and the Test262
-      subset agree with base.
-- [ ] Exact-image instruction pre-gate over all 86 policy cases and per-case
+- [x] `./scripts/check.sh` passes; `./scripts/compare-qjs.sh` and the Test262
+      subset agree with base (both ran on the iMac at the exact candidate).
+- [x] Exact-image instruction pre-gate over all 86 policy cases and per-case
       max-RSS for all development cases are recorded.
-- [ ] Diagnostic quick triage on targets and all sentinels is recorded.
-- [ ] Evidence and plan-index row are committed; the lead runs acceptance.
+- [x] Diagnostic quick triage on targets and all sentinels is recorded.
+- [x] Evidence and plan-index row are committed; the lead runs acceptance.
 
 ## Verification
 
