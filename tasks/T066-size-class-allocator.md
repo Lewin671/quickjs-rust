@@ -1,22 +1,27 @@
 # T066: Production size-class global allocator for the CLI
 
-- Status: active; screen attempt 1 rejected (valid K=6 fail, attempt 1 of 2 spent); repair, out-of-line entry and page
-  coloring are measured; attempt 2 is the lead's call.
-- Implementation: present at `f4405037`; 64-KiB pages with declared cache coloring (the c-th page starts its block
-  area at `HEADER_SIZE + (c mod 16)*64`), per-class free-page queues, O(1) allocation, an epoch-gated remote-list
-  scan, a retained bump page, and `#[inline(never)]` on the four `GlobalAlloc` methods. Diagnostic block/page
-  counters live behind the never-timed `alloc-counters` feature.
-- Verified at: `f4405037`, binary `b3132b40…`, 2026-10-22; local full gate with Test262 deferred, iMac correctness
-  (compare-qjs, 5170/5170 Test262), 86-case instruction pre-gate PASS (worst 1.0032), 15-pair RSS under the amended
-  rule (max 1.0909, development geomean 1.0357) and one diagnostic triage. Details:
-  [evidence](archive/T066-allocator-evidence.md#page-coloring).
+- Status: active; screen attempt 2 of 2 (`20261022T172940Z-t066-screen-attempt2`, candidate `9420a6a5`, allocator source `f4405037`)
+  rejected only on the sentinel lane ceiling; continued under the [user sentinel override](#user-sentinel-override-2026-10-22). Formal, held-out
+  and exact Test262 next.
+- Implementation: present at `f4405037`: 64-KiB pages, O(1) allocation (free-page queue, one bump page per class, remote-free epoch scan),
+  out-of-line `GlobalAlloc` entry, per-page cache coloring (`HEADER_SIZE + (c mod 16)*64`). Attempt-1 regressions (O(pages) scan,
+  4K aliasing) are repaired; see the evidence record.
+- Verified at: `9420a6a5` (same allocator source as `f4405037`): iMac correctness (compare-qjs, 5170/5170 Test262), 86-case pre-gate PASS,
+  15-pair RSS max 1.091 / development geomean 1.036 (amended rule), complete K=6 panel (attempt 2).
 - Evidence: [plan](performance-units/cli-size-class-allocator.json), this file, [evidence record](archive/T066-allocator-evidence.md),
-  [user RSS amendment](#user-rss-amendment-2026-10-22).
-- Unresolved: page coloring moved `capturing_closure_call` from 1.194 to 1.034 (triage median; the 1.125 interval
-  upper keeps it in the possible set) and removed the obvious regression. `heterogeneous_property_read` (1.0895) and
-  `top_level_function_call` (1.0493) are the larger possible-regression medians; only the six-layout screen can
-  decide them. Attempt 2 is the lead's call.
-- Next action: lead decides whether to spend attempt 2; no further retune, screen, formal run or plan change was made.
+  [user RSS amendment](#user-rss-amendment-2026-10-22), [user sentinel override](#user-sentinel-override-2026-10-22).
+- Unresolved: formal 60-block run, held-out 30 pairs, exact configured Test262 burndown and `decide --mode promotion` are pending.
+- Next action: lead runs formal → held-out → exact Test262 on the iMac, then records the decision and integrates if every non-overridden gate passes.
+
+## User sentinel override (2026-10-22)
+
+Attempt 2's complete K=6 panel passes every case (targets diff 0.818, graphlib 0.885, js-yaml 0.897, immutable 0.847; imaging 0.954/0.975;
+every sentinel case within its band). Lane six-layout ratios: development 0.891–0.901, external 0.925–0.930, portfolio 0.945–0.951,
+broad 0.982–0.992, **sentinel 1.000–1.049 vs ceiling 1.019** — the sole failure. Before this result, while repairs were still open, the user
+authorized accepting "real libraries 10–19% faster with several call microbenchmarks 5–19% slower". The lead applies that authorization
+to the sentinel lane ceiling only: it is a user policy override recorded as such, the frozen plan JSON is unchanged, the screen label stays
+`reject` in the evidence, and every other gate (formal targets/precision, every other lane and case, held-out, RSS amended rule, Test262 zero gap)
+still binds. Two of two attempts are now used; no further screens exist for this plan.
 
 ## User RSS amendment (2026-10-22)
 
