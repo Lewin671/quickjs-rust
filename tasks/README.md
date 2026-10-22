@@ -12,7 +12,8 @@ it to `archive/` with `git mv` and move its row below.
 | Task | Status | What it is |
 | --- | --- | --- |
 | [T057](T057-string-code-units.md) string code units | active | Stage 1 and UTF-16 correctness extraction integrated; stage 2 abandoned (0 attempts); linear-search follow-up awaits screening. |
-| [T056](T056-interpreter-core-v2.md) interpreter core v2 | active | M2 frames/activation plan being drafted separately; M1 A/B blocked on object-layout → typed-code coupling after T064 K abort; `0a9af81b` spent and one shared A+B reserve unchanged. |
+| [T065](T065-interpreter-core-v3.md) interpreter core v3 | active | Design and gap anatomy complete, pending lead review; proposed whole-core migration, M0 real-program slice and portfolio acceptance. |
+| [T056](T056-interpreter-core-v2.md) interpreter core v2 | active | Remaining M2/M3 superseded by T065 pending review; M1 A/B blocked after T064 K abort; old failure/reserve unchanged. |
 | [T018](T018-broad-performance.md) broad performance | active | The performance campaign contract and its targets against QuickJS-NG. Start performance work here, then follow [the workflow](../docs/performance-workflow.md). |
 | [T040](T040-imac-general-performance.md) x86_64 general optimization | active | Fresh current-main comparison and exact-binary profiles, followed by independent general runtime units. |
 | [T045](T045-typed-loop-boxed-demand-provenance.md) boxed demand provenance | active | Ordinary identity-flow joins lose boxed demand; exact profiles and seed diagnosis precede a compiler-only unit. |
@@ -90,8 +91,8 @@ Each file is under `archive/` with a resume block; outcomes record what happened
 
 ## Other Records In `archive/`
 
+- T065: [gap anatomy and both-engine instruction baseline](archive/T065-gap-anatomy.md).
 - T064: [K1/Repair 1 evidence](archive/T064-k1-record.md), [K0 checker](archive/T064-k0-checker.md), [successor inputs](archive/T064-successor-plan-inputs.md), [lead review](proposals/T064-successor-review.md), [old-plan closure](archive/T064-layout-edges-closure.md), [spike](archive/T064-causal-outlining-spike.md), [isolation/cost inputs](archive/T064-kernel-isolation-inputs.md).
-
 - T058: [fixed-candidate v6 promotion](archive/T058-regexp-lazy-quantifiers.md), [attempt 1 incomplete closure](archive/T058-attempt1-incomplete.md), [attempt 2 inconclusive](archive/T058-attempt2-inconclusive.md), [v6 rejection](archive/T058-v6-rejection.md), [instruction diagnosis](archive/T058-instruction-diagnosis.md).
 - T057: [linear-search repair](archive/T057-search-linear.md), [stage-1 promotion evidence](archive/T057-stage1-evidence.md), [preliminary development baseline](archive/T057-development-baseline.md) [policy v3 qualification](archive/T057-development-policy.md) and [pre-stage-1 log](archive/T057-log.md).
 - T056: [unit 0 part 1 evidence](archive/T056-unit0-part1-evidence.md) (standing, attribution limits, RSS, ABI probes), [part 2](archive/T056-unit0-part2-evidence.md) (mechanism counters, development profiles, first-unit ranking and plan binding) [M1 stage 1](archive/T056-m1-stage1-evidence.md) (atom linking and Value facade), [M1.2 rejection](archive/T056-m1-stage2-evidence.md), [M1.2 diagnosis](archive/T056-m1-stage2-diagnosis.md) (rejected layout shape: mechanisms and ablations) [design inputs](archive/T056-design-inputs.md) [M2 design inputs](archive/T056-m2-design-inputs.md) (development-lane call/frame and compact-driver costs), [M2 plan inputs](archive/T056-m2-plan-inputs.md) (draft targets, reach, budgets and exact-M receipts) and [task history](archive/T056-task-history.md) (owner notes, unit 0 summary, M1 stage 1, design checklist).
@@ -116,5 +117,4 @@ Each file is under `archive/` with a resume block; outcomes record what happened
 - Frozen unit plans and their outcomes are indexed in
   [performance-units/README.md](performance-units/README.md).
 
-Search before repeating an experiment:
-`grep -rn -i "<mechanism>" tasks/`. Records describe their named revisions and never establish current priority.
+Search before repeating an experiment: `grep -rn -i "<mechanism>" tasks/`. Records describe their named revisions and never establish current priority.
