@@ -1,12 +1,12 @@
 # T064 K0 static checker
 
-- Status: amendment2 implemented; final single-run qualification pending. Prior qualification evidence retained below.
+- Status: final amendment2 qualification complete; A/A passes, H+8 fails as positive control, C+8 passes with zero residuals. Checker iteration stopped.
 - Implementation: maintained Python checker and archive-only H+8/C+8 transforms;
-  `scripts/check-kernel-isolation.sh`; no runtime/Cargo/recipe/policy change, no CI hook.
-- Verified at: checker `5c18f47b`; 52 focused / 714 tool tests pass in minimal and symlink TMPDIR environments; fast/full gates and 5,170 subset cases pass; fresh queue job `20261022T053712Z-t064-k0-amend1-main` and local final replay agree.
+  `scripts/check-kernel-isolation.sh`; no production runtime/Cargo/recipe or performance-policy change, no CI hook.
+- Verified at: frozen checker `1d12a973`; 61 focused /723 tool tests and fast/full gates including 5,170 subset passes; sole final queue job `20261022T060712Z-t064-k0-amend2-final` and offline replay agree.
 - Evidence: contract/method and exact current-main identities/results below; raw queue artifacts are fetchable by job ID.
-- Unresolved: final amendment2 qualification pending; after that run report all residuals and stop checker iteration. K1 is outside this tooling brief.
-- Next action: run the final amended matrix once, record identities/results and hand off to the lead; no CI hook or runtime change.
+- Unresolved: none for this checker brief; K1 runtime/performance qualification is outside scope.
+- Next action: lead integrates the checker and freezes the successor plan before K1. No further checker iteration or CI hook in this brief.
 
 The [lead decision](../T064-kernel-isolation.md#lead-decision-2026-10-21)
 is the acceptance contract. Both typed roles are mandatory, including every
@@ -257,12 +257,12 @@ ownership of anonymous metadata, needs a new lead decision before K1.
 ## Feedback 2: final single-run qualification
 
 The lead classified the previous two C+8 failure classes as checker artifacts
-and authorized amendment2 in T064's lead decision. Code outside the protected
+and authorized amendment 2 in T064's lead decision. Code outside the protected
 body inventory now compares by symbol/import identity plus symbol-relative
 offset. No bytes of those functions participate in referent comparison.
-Protected code remains fully compared; data keeps depth2. Missing/ambiguous
+Protected code remains fully compared; data keeps depth 2. Missing/ambiguous
 classification fails closed, including imports without a proven code stub.
-Inline-data records cannot become identity-only code leaves. Schema3 prevents
+Inline-data records cannot become identity-only code leaves. Schema 3 prevents
 mixing this contract with either earlier fingerprint schema.
 
 H+8/C+8 fields and constructor initializers now append on existing lines.
@@ -279,6 +279,52 @@ changes (fail), changed external-code bytes (pass), code offsets, inline data,
 unknown classification, line insertion/movement, CRLF and a final line without
 a newline. Development replay of the previous binaries passes A/A and removes
 77/80 C+8 failures per role; the three old source-line artifacts remain raw.
-This replay is not the required new current-main qualification. Full gates
-and the single final queued matrix are pending; no checker iteration will
-follow that matrix, regardless of its outcome.
+This replay is not the required new current-main qualification. Full/fast
+gates now pass 723 benchmark-tool cases, 35 script tests and 5,170 subset cases.
+The disk guard ran before every local Cargo invocation; target/debug was
+removed after verification. The actual source transform checks 1,897 unchanged
+lines in object.rs and 184 in ordered_data_builder.rs for both H/C probes.
+
+The implementation is frozen at `1d12a973`. The sole final non-timing queue
+job is `20261022T060712Z-t064-k0-amend2-final`, using fixed main
+`4fa3f739902bf4a78035e36522f4c2419f7bb45e`. It started at
+2026-10-22T06:07:13Z, completed all four clean builds in 446 s and returned 1
+solely because H+8 is a failing positive control. No retry, cancellation,
+measurement timing, performance attempt or post-run checker edit occurred.
+The canonical recipe/toolchain identities exactly match feedback 1 above.
+
+| Final comparison | Vm | WideLoopFrame |
+| --- | --- | --- |
+| A/A | PASS, 0 failures | PASS, 0 failures |
+| H+8 | FAIL, 5 categories including relative-PC drift | FAIL, 5 categories including relative-PC drift |
+| C+8 | PASS, 0 residuals; 212 allowed | PASS, 0 residuals; 213 allowed |
+
+C+8's allowed changes are 132/133 instruction-displacement changes plus 80
+referent-pointer-relocation changes per role. All 80/80 previous C+8 failures
+are eliminated. Source witnesses independently rechecked after fetching prove
+1,897/184 original lines preserved for all four archives; no line-number or
+panic-location exception was added to comparison. Layout witnesses remain
+R0=112/400 B, H=120/400 B, C=112/408 B for ObjectData/ObjectColdData.
+The complete function extents/instruction counts match prior controls:
+Vm 13,792 B/2937 and Wide 13,696 B/2920 for R0/C; H grows extents by 16 B in both.
+
+| Final canonical image | SHA-256 |
+| --- | --- |
+| r0a/r0b | `f5822aa32e4c7a3def2aaf5b8eff2107ba005a76252afb25f06077fe25f2e8eb` |
+| h8 | `2db22bd91aaab5125d11d618e82694f1a3cf754f1c6bb79fec380db3cc3414f0` |
+| c8 | `556f27e45819735eb9459cf32a895ba01a14471c611dd952f4f568f841422277` |
+
+After fetching, unmodified `1d12a973` rechecked all image/source SHA values,
+validated the line witnesses against the pinned source revision and decoded
+all four images. Its comparison JSON is byte-identical to the iMac result.
+The lead's amendment 2 supersedes the earlier interpretation of the 80 C+8
+mismatches as kernel coupling: those were checker/perturbation artifacts.
+H+8 still demonstrates actual instruction-PC coupling in unoutlined main;
+this finite result does not qualify a future K1 runtime change.
+
+| Final queue receipt | SHA-256 |
+| --- | --- |
+| request.json | `1624ee7d1de286c6ede6c8a89da77898b56ba2bad509743863188e2a3067b380` |
+| builds.json | `7e2b181206baec2f1b56182b4a8fb8f9319a17d7791ceea367268dd549a4649e` |
+| comparisons.json (queue and final replay) | `7724512692fceaced95798ec388cdaa778d3d0a3e2e8d51ea4f19be00a484490` |
+| result.json | `937d834c8cbcbd7f159aada31a1e7811f9ea85ea8e427582d9c8f99b3968ae13` |
