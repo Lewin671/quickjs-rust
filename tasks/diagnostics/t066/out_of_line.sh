@@ -66,7 +66,10 @@ for role, binary, revision in roles:
         'hot': {},
     }
     for label, size_suffix, call_pattern in HOT:
-        size = next((value for name, value in sizes.items() if name.endswith(size_suffix)), None)
+        # Apple nm on the measurement host does not demangle Rust names, while
+        # the local Xcode nm does; accept either spelling for the size lookup.
+        size = next((value for name, value in sizes.items()
+                     if name.endswith(size_suffix) or call_pattern in name), None)
         allocator_calls = sum(kinds.get('allocator', 0)
                               for name, kinds in calls.items() if call_pattern in name)
         system_calls = sum(kinds.get('system', 0)
@@ -80,6 +83,11 @@ for role, binary, revision in roles:
         name: size for name, size in sizes.items()
         if 'SizeClassAllocator' in name or 'as core::alloc::global::GlobalAlloc' in name
     }
+    report['revisions'][role]['demangled'] = any(
+        '<' in name or '::' in name for name in sizes)
+    report['revisions'][role]['size_samples'] = dict(sorted(
+        ((name, size) for name, size in sizes.items() if 'activation' in name),
+        key=lambda row: -row[1])[:5])
 (out / 'symbols.json').write_text(json.dumps(report, indent=2) + '\n')
 for role in report['revisions']:
     print('REVISION', role, report['revisions'][role]['revision'])
