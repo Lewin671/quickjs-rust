@@ -655,6 +655,10 @@ pub(crate) struct SizeClassAllocator;
 // list, and a page is only recycled once its live count proves no block can be
 // freed again.
 unsafe impl GlobalAlloc for SizeClassAllocator {
+    // Keep one out-of-line entry per operation: under fat LTO an inlined
+    // allocator body would replace the base's single malloc call in every
+    // hot allocation site and perturb its layout.
+    #[inline(never)]
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         match class_index_for(layout) {
             // SAFETY: the class block is at least `layout.size()` bytes and
@@ -665,6 +669,10 @@ unsafe impl GlobalAlloc for SizeClassAllocator {
         }
     }
 
+    // Keep one out-of-line entry per operation: under fat LTO an inlined
+    // allocator body would replace the base's single malloc call in every
+    // hot allocation site and perturb its layout.
+    #[inline(never)]
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
         match class_index_for(layout) {
             // SAFETY: same block contract as `alloc`; the whole class is cleared.
@@ -674,6 +682,10 @@ unsafe impl GlobalAlloc for SizeClassAllocator {
         }
     }
 
+    // Keep one out-of-line entry per operation: under fat LTO an inlined
+    // allocator body would replace the base's single malloc call in every
+    // hot allocation site and perturb its layout.
+    #[inline(never)]
     unsafe fn dealloc(&self, block: *mut u8, layout: Layout) {
         match class_index_for(layout) {
             // SAFETY: the caller passes the layout `block` was allocated with,
@@ -684,6 +696,10 @@ unsafe impl GlobalAlloc for SizeClassAllocator {
         }
     }
 
+    // Keep one out-of-line entry per operation: under fat LTO an inlined
+    // allocator body would replace the base's single malloc call in every
+    // hot allocation site and perturb its layout.
+    #[inline(never)]
     unsafe fn realloc(&self, block: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
         debug_assert!(new_size > 0);
         // The Rust trait fixes the alignment, so only the size can change.
