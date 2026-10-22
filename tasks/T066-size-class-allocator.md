@@ -1,16 +1,22 @@
 # T066: Production size-class global allocator for the CLI
 
 - Status: active.
-- Implementation: present; RSS round 1 (lead-authorised page-structured
-  recycling) is the current allocator in `crates/qjs-cli`.
-- Verified at: round-1 code passes the local full gate with Test262 deferred;
-  iMac correctness, pre-gate, RSS and triage measurements are pending.
+- Implementation: present at `abd6451b`; RSS round 1 page-structured allocator
+  with page headers, per-page free lists/live counts, empty-page recycling and
+  an atomic cross-thread remote list.
+- Verified at: `abd6451b`, 2026-10-22; local full gate with Test262 deferred
+  (worktree submodules uninitialized), iMac correctness (compare-qjs and
+  5170/5170 Test262), 86-case instruction pre-gate PASS, RSS cohort and
+  diagnostic triage. Round-1 details:
+  [evidence](archive/T066-allocator-evidence.md#rss-round-1-page-structured-recycling-lead-decision-2026-10-22).
 - Evidence: [plan](performance-units/cli-size-class-allocator.json), this file,
   [evidence record](archive/T066-allocator-evidence.md).
-- Unresolved: round-1 measurement; the earlier free-list candidate was over the
-  1.05 RSS ceiling on three development cases.
-- Next action: run the round-1 iMac jobs, record them, and stop after this round
-  per the lead decision.
+- Unresolved: RSS is still above 1.05 on `graphlib/paths` (1.073, target) and
+  `big.js/arith` (1.057); triage is `unclear` with six possible regressions.
+  The lead stopped further retuning after this round; the K=6 screen, formal
+  run, held-out acceptance and the RSS review remain the lead's.
+- Next action: lead reviews the round-1 numbers and cause and decides the unit;
+  do not retune further and do not change the frozen plan.
 
 ## Goal
 

@@ -11,7 +11,7 @@ it to `archive/` with `git mv` and move its row below.
 
 | Task | Status | What it is |
 | --- | --- | --- |
-| [T066](T066-size-class-allocator.md) CLI size-class allocator | active | Implementation present at `51ef019d`; pre-gate PASS, triage targets 0.84-0.92, RSS over 1.05 on three development cases; acceptance is the lead's. |
+| [T066](T066-size-class-allocator.md) CLI size-class allocator | active | RSS round 1 at `abd6451b`: page recycling fixed js-yaml/matter-js; graphlib 1.073 and big.js 1.057 still over; pre-gate PASS, triage targets 0.81-0.93; stopped per lead. |
 | [T057](T057-string-code-units.md) string code units | active | Stage 1 and UTF-16 correctness extraction integrated; stage 2 abandoned (0 attempts); linear-search follow-up awaits screening. |
 | [T065](T065-interpreter-core-v3.md) interpreter core v3 | active | Design reviewed, not approved; pre-M0 mechanism ablation on real programs decides rewrite vs incremental ([review](archive/T065-design-review.md)). |
 | [T056](T056-interpreter-core-v2.md) interpreter core v2 | active | Remaining M2/M3 superseded by T065 pending review; M1 A/B blocked after T064 K abort; old failure/reserve unchanged. |

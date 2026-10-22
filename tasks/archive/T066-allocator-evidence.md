@@ -1,17 +1,19 @@
 # T066 allocator evidence
 
 - Status: evidence record; 2026-10-22.
-- Implementation: present at `51ef019d` on `agent/t066-size-class-allocator/cmd`;
-  allocator and its unit tests are in `crates/qjs-cli`.
-- Verified at: `51ef019d`, 2026-10-22; local full gate with Test262 deferred
+- Implementation: present at `abd6451b` on `agent/t066-size-class-allocator/cmd`;
+  the RSS round 1 page-structured allocator and its unit tests are in
+  `crates/qjs-cli`.
+- Verified at: `abd6451b`, 2026-10-22; local full gate with Test262 deferred
   (worktree submodules uninitialized) plus iMac jobs for Test262/compare-qjs,
   the 86-case instruction pre-gate, the RSS cohort and diagnostic triage.
 - Evidence: this file; frozen [plan](../performance-units/cli-size-class-allocator.json);
   raw artifacts under workspace `outputs/imac-bench/<job>/` (not retained in Git).
-- Unresolved: peak RSS is above 1.05 on three development cases; triage is
-  `unclear` with four sentinel possible regressions. Acceptance is the lead's.
-- Next action: lead runs the K=6 screen and formal decision, and reviews the
-  RSS overage; T066 does not claim promotion.
+- Unresolved: peak RSS is still above 1.05 on `big.js/arith` (1.057) and the
+  target `graphlib/paths` (1.073); triage is `unclear` with six possible
+  regressions. Stopped after the authorised one round per the lead decision.
+- Next action: lead reviews the round-1 numbers and cause and decides the unit;
+  T066 does not retune further and does not claim promotion.
 
 ## Plan stage: target selection
 
@@ -45,7 +47,7 @@ only; the four highest measured shares (`diff`, `graphlib`, `js-yaml`,
 (0.909827, 0.952265, 0.952265, 0.929158) require removing 39.4%, 26.5%,
 28.1% and 43.3% of measured allocator time respectively.
 
-## Implementation
+## Implementation, round 0 (superseded)
 
 `crates/qjs-cli/src/allocator.rs`, 549 lines including 281 lines of tests;
 `main.rs` gains the module and the `#[global_allocator]` static. No runtime
@@ -81,7 +83,7 @@ slabs did not change peak RSS and a local 8-classes-per-octave table raised
 absolute RSS slightly (js-yaml 33.8 → 34.1 MB), so the frozen 32-class,
 16-KiB-slab shape was kept. These probes are not timing or acceptance evidence.
 
-## Verification
+## Verification (round 0)
 
 Local gate: `QJS_CHECK_SKIP_TEST262=1 ./scripts/check.sh` passed at
 `f606fcee` and again at `13507c15`, the documentation-only commit whose code is
@@ -99,7 +101,7 @@ submodules are not initialized; the exact candidate ran it on the iMac.
 | Candidate binary (canonical recipe) | `3fafdd9beab455a3704eab88d9f1315383661b8817cca0eee52810531d210f1a` |
 | Base binary | `f5822aa32e4c7a3def2aaf5b8eff2107ba005a76252afb25f06077fe25f2e8eb` |
 
-## Instruction pre-gate (all 86 policy cases, one pair, non-timing)
+## Instruction pre-gate, round 0 (all 86 policy cases, one pair, non-timing)
 
 Final candidate `51ef019d`: **PASS**, no case over `max(1.03, I_i)` (all cutoffs
 1.03). 6 ratios are above 1. Worst first:
@@ -127,7 +129,7 @@ Superseded runs are retained: `f606fcee` (64-KiB slabs) also passed, worst
 `broad/array_index_of` 1.032872, candidate `b196dd58…`, job
 `20261022T110326Z-t066b-pregate`; that shape was replaced.
 
-## Peak RSS (max RSS from wait4, three interleaved runs, medians)
+## Peak RSS, round 0 (max RSS from wait4, three interleaved runs, medians)
 
 Final candidate `51ef019d` versus M. The unit's manual ceiling is 1.05.
 
@@ -154,7 +156,7 @@ quantization, which a slab-size change cannot remove. Job
 `20261022T111043Z-t066c-rss` (exit 3), artifacts `images.json` `6454b3ca…`,
 `rss.json` `5fe8352b…`, `verdict.json` `c62ca215…`.
 
-## Diagnostic quick triage (five natural pairs, v5 workers-4)
+## Diagnostic quick triage, round 0 (five natural pairs, v5 workers-4)
 
 Candidate `51ef019d` versus M, job `20261022T111045Z-t066c-triage`, exit 0,
 283 s end-to-end, budget met, 110/110 valid samples, no obvious regressions,
@@ -194,17 +196,135 @@ K=6 screen, formal run or held-out acceptance. Two earlier triage submissions
 (`20261022T105229Z` on `f606fcee`, `20261022T110333Z` on `41300aa4`) were
 cancelled by the owner before timing and produced no result.
 
+## RSS round 1: page-structured recycling (lead decision, 2026-10-22)
+
+Authorised change: replace per-class retaining slabs with mimalloc-style pages.
+The allocator now takes one 64-KiB, 64-KiB-aligned page per class from System,
+keeps a page header at the base (so `block & !(PAGE_SIZE - 1)` finds it), and
+gives each page its own free list, bump area and live count. A thread owns its
+pages through per-class lists and a current page; allocation takes the current
+page's free list, then its bump space, then its drained remote list. A free
+updates the owning page's live count; when it reaches zero the page is unlinked
+and either parked in a thread-local empty pool of at most 8 pages (reusable by
+any class) or returned to System with its own page layout. Cross-thread frees
+push onto the page's atomic remote list and leave `live` alone; the owner
+subtracts the drained count, so `live == 0` proves no block is allocated, no
+remote entry is queued and no future remote push is possible. The page is only
+recycled under that proof. Class sizes, `realloc`, `alloc_zeroed`, OOM-null,
+destructor-free TLS and the audited-unsafe discipline are unchanged.
+
+Code: `crates/qjs-cli/src/allocator.rs` (908 lines including 400 test lines);
+commits `5afe88ed` (page structure) and `abd6451b` (bump before the remote list,
+avoiding a locked exchange per allocation).
+
+### Verification
+
+| Check | Result |
+| --- | --- |
+| `cargo test -p qjs-cli` | 30 passed (25 unit + 5 integration), 0 failed |
+| `QJS_CHECK_SKIP_TEST262=1 ./scripts/check.sh` | passed locally (Test262 deferred: submodules uninitialized) |
+| iMac job `20261022T115136Z-t066e-correctness` | exit 0: `compare-qjs` all cases ok, Test262 subset 5170/5170 |
+| Candidate binary (canonical recipe) | `eb442f1f075d1ec46db6cee5d9edb1552cc9c2250b4f7e32de1af1edcfcfd656` |
+| Base binary | `f5822aa32e4c7a3def2aaf5b8eff2107ba005a76252afb25f06077fe25f2e8eb` |
+
+Page-specific tests: empty pages are reused by another class, a remote-free
+block is drained and returned to the owner with its payload intact, and live
+counts track local allocations and frees on a shared page. The earlier tests
+for class mapping, alignment, realloc paths, zeroing, cross-thread frees and the
+mixed stress run still pass.
+
+### Instruction pre-gate
+
+Candidate `abd6451b`: **PASS** over all 86 policy cases; 12 ratios above 1 and
+none over `max(1.03, I_i)`. Worst first: `external/kraken-1.1/audio-beat-detection`
+1.029090, `broad/array_index_of` 1.025529, `broad/captured_write` 1.013356,
+`external/kraken-1.1/audio-oscillator` 1.011402, `broad/property_dynamic_read`
+1.009233; median 0.991394. Job `20261022T115139Z-t066e-pregate` (exit 0,
+266 s); artifacts `images.json` `85fc30b1…`, `pregate.json` `e16e7386…`,
+`verdict.json` `7d72aa15…`. The margin on `audio-beat-detection` is 0.0009.
+
+### Peak RSS
+
+| Development case | Base bytes | Candidate bytes | Ratio | Result |
+| --- | ---: | ---: | ---: | --- |
+| `graphlib/paths` (target) | 29,675,520 | 31,850,496 | 1.073292 | **over** |
+| `big.js/arith` | 7,516,160 | 7,946,240 | 1.057221 | **over** |
+| `lodash/transform` | 78,598,144 | 81,145,856 | 1.032414 | ok |
+| `immutable/persistent` (target) | 38,445,056 | 39,153,664 | 1.018432 | ok |
+| `js-yaml/document` (target) | 28,839,936 | 29,200,384 | 1.012498 | ok |
+| `papaparse/csv` | 108,945,408 | 110,223,360 | 1.011730 | ok |
+| `meriyah/parse` | 130,854,912 | 131,870,720 | 1.007763 | ok |
+| `moment/dates` | 19,222,528 | 19,206,144 | 0.999148 | ok |
+| `matter-js/simulate` | 27,680,768 | 26,714,112 | 0.965078 | ok |
+| `diff/compare` (target) | 13,930,496 | 12,738,560 | 0.914437 | ok |
+
+Job `20261022T115140Z-t066e-rss` (exit 3), artifacts `images.json`
+`23b7747b…`, `rss.json` `11de68f7…`, `verdict.json` `c55e33d3…`.
+
+The round-1 shape fixed two of the three round-0 overages: `js-yaml` 1.065 →
+1.012 and `matter-js` 1.070 → 0.965. Two remain: `big.js` 1.100 → 1.057 (still
+0.43 MB over) and `graphlib` 1.026 → 1.073 (now 2.17 MB over). The cause is the
+page allocator's reuse order, not class sizing: allocation prefers the current
+page's bump space, so free blocks sitting on non-current pages of the same class
+are reused only when the current page fills. Graphlib's bursty graph
+construction leaves a few live blocks on many pages, pinning them; the freed
+blocks on those pages cannot be pooled class-wide as they were in round 0, so
+the same live set needs more page memory. `big.js` remains over from class
+quantization on a 7.5-MB process. Per the lead decision this is reported, not
+retuned.
+
+### Diagnostic quick triage
+
+Candidate `abd6451b` versus M, job `20261022T115141Z-t066e-triage`, exit 0,
+277 s end-to-end, budget met, 110/110 valid samples, no obvious regressions,
+verdict `unclear` (six possible regressions). Request SHA-256 `9b7706da…`,
+`triage.json` `cce5f36b…`, `triage.md` `169e36f5…`.
+
+| Case | Wall ratio [95% exploratory] | Instructions |
+| --- | ---: | ---: |
+| `development/diff/compare` (target) | 0.8095 [0.7880, 0.8860] | 0.8136 |
+| `development/graphlib/paths` (target) | 0.8726 [0.8542, 0.9174] | 0.8689 |
+| `development/js-yaml/document` (target) | 0.9331 [0.8983, 0.9592] | 0.8512 |
+| `development/immutable/persistent` (target) | 0.8714 [0.8526, 0.8805] | 0.8659 |
+| `sentinel/capturing_closure_call` | 1.0283 [0.9937, 1.0491] | 0.9988 |
+| `sentinel/heterogeneous_property_read` | 1.0224 [0.9967, 1.0459] | 1.0000 |
+| `sentinel/polymorphic_call_site` | 1.0539 [1.0283, 1.0771] | 0.9988 |
+| `sentinel/prototype_method_call` | 0.9937 [0.9718, 1.0102] | 0.9993 |
+| `sentinel/recursive_call_tree` | 1.0329 [0.9504, 1.0765] | 1.0001 |
+| `sentinel/string_key_map_churn` | 1.0496 [0.6897, 1.1304] | 1.0002 |
+| `broad/property_dynamic_read` | 1.0162 [1.0048, 1.1387] | 1.0093 |
+| `broad/object_allocation` | 0.9956 [0.9763, 1.1374] | 1.0009 |
+| `broad/string_slice` | 0.6390 [0.5530, 0.6470] | 0.6974 |
+| `broad/top_level_function_call` | 1.0301 [0.9900, 1.0598] | 0.9991 |
+| `development/lodash/transform` | 0.9256 [0.9089, 0.9410] | 0.9373 |
+| `development/moment/dates` | 0.9073 [0.8864, 0.9132] | 0.8926 |
+| `external/kraken-1.1/json-stringify-tinderbox` | 0.7837 [0.7746, 0.7919] | 0.7837 |
+| `external/kraken-1.1/json-parse-financial` | 0.5322 [0.5299, 0.5406] | 0.5847 |
+| `external/jetstream3-js-subset/raytrace-public-class-fields` | 0.8649 [0.8489, 0.8898] | 0.8953 |
+| `external/sunspider-1.0/access-binary-trees` | 0.9220 [0.8975, 0.9369] | 0.9037 |
+| `external/kraken-1.1/audio-dft` | 0.9915 [0.9834, 1.0091] | 0.9937 |
+| `external/jetstream3-js-subset/cdjs` | 0.9023 [0.8929, 0.9121] | 0.9035 |
+
+All four targets still beat their frozen payoffs and their exploratory intervals
+stay below them; diff, graphlib and immutable improved against the round-0
+triage, js-yaml was slightly slower. `polymorphic_call_site` (1.0539, lower bound
+1.0283) is the only sentinel whose exploratory wall interval excludes 1.
+Diagnostic only; it cannot promote, spend an attempt, or replace K=6, the formal
+run or held-out acceptance.
+
 ## Open risks
 
-- Peak-RSS ceiling: `big.js/arith` 1.100, `matter-js/simulate` 1.070 and the
-  target `js-yaml/document` 1.065 exceed 1.05. A production allocator that
-  retains freed blocks cannot return them without per-slab liveness tracking;
-  that is a follow-up design, not a retune of this unit. The lead decides
-  whether the ceiling blocks promotion pending review.
+- Peak-RSS ceiling: `graphlib/paths` 1.073 (target) and `big.js/arith` 1.057
+  exceed 1.05 after round 1. The graphlib increase is the page allocator's
+  current-page-first reuse order, which strands free blocks on non-current
+  pages; a class-wide free list or prompt reuse of any page's free blocks would
+  address it, but the lead stopped further retuning after this round.
+- The pre-gate margin on `audio-beat-detection` is 0.0009 under the 1.03 cap;
+  the frozen screen's control rule owns any further instruction judgment.
+- Six cases are triage "possible regressions"; `polymorphic_call_site` is the
+  only one whose exploratory interval excludes 1 (1.0283-1.0771 wall).
 - Peak-RSS medians are sensitive to allocator layout: `matter-js` moved from
-  1.001 to 1.070 across three allocator shapes with the same class table, so a
-  single 3-run median is not a tight estimate.
-- Four sentinels are triage "possible regressions" (1.004-1.035 wall); the
-  frozen screen's control rule, not this diagnostic, decides them.
+  1.001 to 1.070 and back to 0.965 across three allocator shapes, so a single
+  3-run median is not a tight estimate.
 - The allocator is CLI-only by design; library embedders keep their allocator,
   so engine-library consumers do not get these gains.
