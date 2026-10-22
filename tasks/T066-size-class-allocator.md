@@ -1,24 +1,30 @@
 # T066: Production size-class global allocator for the CLI
 
-- Status: active.
-- Implementation: present at `52dd420d`; 64-KiB pages with per-class free-page
-  queues (reuse before extend), page recycling and an atomic cross-thread remote
-  list. A 32-KiB fixed-overhead variant was measured and reverted.
-- Verified at: `52dd420d`, binary `7e837fa8…`, 2026-10-22; local full gate with
-  Test262 deferred (worktree submodules uninitialized), iMac correctness
-  (compare-qjs and 5170/5170 Test262), 86-case instruction pre-gate PASS, RSS
-  cohort and diagnostic triage. Round-2 details:
-  [evidence](archive/T066-allocator-evidence.md#rss-round-2-reuse-before-extend-fixed-overhead-probe-lead-decision-2).
-- Evidence: [plan](performance-units/cli-size-class-allocator.json), this file,
-  [evidence record](archive/T066-allocator-evidence.md).
-- Unresolved: peak RSS is above 1.05 on `lodash/transform` (1.099),
-  `big.js/arith` (1.094) and `matter-js/simulate` (1.077); the candidate's
-  absolute bytes did not grow between rounds, while the base medians moved 4-10%
-  with the same base binary. `graphlib/paths` fell from 1.073 to 1.018. Triage
-  is `likely loss` because `capturing_closure_call`'s wall interval is above its
-  policy band. The lead stopped retuning after this final round.
-- Next action: lead reviews the final numbers; do not retune further and do not
-  change the frozen plan.
+- Status: active; RSS rule amended by the user after measurement (below); formal screen next.
+- Implementation: present at `52dd420d` (allocator source unchanged since; later commits are records and the RSS collector);
+  64-KiB pages with per-class free-page queues (reuse before extend), page recycling and an atomic cross-thread remote list.
+  A 32-KiB fixed-overhead variant was measured and reverted. Lead code review 2026-10-22 found no soundness defect;
+  noted O(pages) class scans on bump exhaustion and O(pages) unlink on recycle as possible large-heap costs.
+- Verified at: `52dd420d`, binary `7e837fa8…`, 2026-10-22; iMac correctness (compare-qjs, 5170/5170 Test262), 86-case instruction
+  pre-gate PASS, diagnostic triage; 15-pair RSS precision job `20261022T130137Z-t066-rss15` at `ca9c30bb` (same runtime source).
+  Details: [evidence](archive/T066-allocator-evidence.md).
+- Evidence: [plan](performance-units/cli-size-class-allocator.json), this file, [evidence record](archive/T066-allocator-evidence.md),
+  [user RSS amendment](#user-rss-amendment-2026-10-22).
+- Unresolved: timed screen, K=6 panel, formal and held-out not yet run; triage flagged sentinel controls (`capturing_closure_call`,
+  `polymorphic_call_site`, `prototype_method_call`) that only the screen's control rule can decide.
+- Next action: lead runs the frozen plan's screen (`perf-loop.sh --plan`) on the iMac, then K=6/formal/held-out per the workflow,
+  applying the amended RSS check before promotion.
+
+## User RSS amendment (2026-10-22)
+
+The 3-run RSS cohort was too noisy to discriminate 5% (same base binary moved 4–10% between rounds). The lead declared and committed a
+15-alternating-pair collector before running it (`tasks/diagnostics/t066/rss15.sh`, metric unchanged: median(candidate)/median(base)).
+Result: big.js 1.0706 (paired IQR 1.068–1.088, +0.52 MB) and matter-js 1.0682 (1.058–1.071, +1.7 MB) exceed 1.05; graphlib 1.042,
+lodash 1.024, js-yaml 1.024, meriyah 1.015, immutable 1.011, moment 1.005, papaparse 0.973, diff 0.937; ten-program geomean ≈1.016.
+The lead put the trade-off to the user, who **accepted it after seeing these results**: for this unit the manual RSS check becomes
+per-case median ratio ≤1.10 and development geomean ≤1.05 (the independent T065 review's recommended form). This is a user policy
+decision recorded as such, not a threshold derived by the lead from the data; the frozen plan JSON is unchanged and every timing,
+band, attempt and correctness gate stays as frozen.
 
 ## Goal
 
