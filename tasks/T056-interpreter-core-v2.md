@@ -1,20 +1,13 @@
 # T056: Interpreter core v2
 
-- Status: active; M1 stage 1 integrated into main (`ab9c29b6`); the M1.2 shape `873c9bc5`
-  was rejected on its sole screen and is closed; its replacement is frozen as plan
-  [`interpreter-core-v2-layout-edges`](performance-units/interpreter-core-v2-layout-edges.json) (stage A next).
-- Implementation: stage 1 on main. No M1.2 runtime code on main; the rejected candidate stays on
-  `agent/t056-m1-stage2/codex`.
-- Verified at: stage 1 `11c9fc08` gates (see its record); M1.2 diagnosis 2026-10-20 at
-  `873c9bc5` versus `ab9c29b6` (instruction, counter and sampling jobs in the diagnosis record).
-- Evidence: [part 1](archive/T056-unit0-part1-evidence.md), [part 2](archive/T056-unit0-part2-evidence.md),
-  [M1 stage 1](archive/T056-m1-stage1-evidence.md), [M1.2 rejection](archive/T056-m1-stage2-evidence.md),
-  [M1.2 diagnosis](archive/T056-m1-stage2-diagnosis.md), [M2 design inputs](archive/T056-m2-design-inputs.md);
-  plans [`interpreter-core-v2-atoms-layouts`](performance-units/interpreter-core-v2-atoms-layouts.json) (closed),
-  [`interpreter-core-v2-layout-edges`](performance-units/interpreter-core-v2-layout-edges.json).
-- Unresolved: M2 (revised 2026-10-20 to five stages, cost-first) needs fresh post-M1 profiles.
-- Next action: implement stage A on a branch from the plan commit (no diagnostic cherry-picks),
-  pass the work-count obligations and the instruction pre-gate, then the stage A screen.
+- Status: blocked on [T064](T064-kernel-isolation.md); stage1 integrated; stage A remains unpromoted on its own branch.
+- Implementation: main06e199fe has stage1, not stage-A5dd3a810. T064's spike retains no production runtime changes.
+- Verified at: historical stage-A/runtime and startup/allocation receipts summarized in [T064 inputs](archive/T064-kernel-isolation-inputs.md); main spike tracked in T064.
+- Evidence: [stage1](archive/T056-m1-stage1-evidence.md), [M1.2 rejection](archive/T056-m1-stage2-evidence.md),
+  [M1.2 diagnosis](archive/T056-m1-stage2-diagnosis.md), [M2 inputs](archive/T056-m2-design-inputs.md), [isolation/cost inputs](archive/T064-kernel-isolation-inputs.md).
+- Unresolved: object/header changes move off-path instructions in typed execution; unpack allocation and +7.1% historical startup instruction excess remain attribution priorities.
+- Next action: per the [T064 lead decision](T064-kernel-isolation.md#lead-decision-2026-10-21), A/B continue in the K→A→B successor plan;
+  until then attribute unpack allocations and startup instructions without timing. Old layout-edges plan untouched:0a9af81b failed1/2, one shared A+B reserve remains, no reset.
 
 ## Goal and scope
 
@@ -128,8 +121,7 @@ The [diagnosis](archive/T056-m1-stage2-diagnosis.md) reproduces the screen's ins
 and its ablations remove most of the excess. The replacement is
 [property layouts](../docs/design/property-layouts.md), which assumes T063's invariant that
 stored strings keep valid surrogate pairs as scalars, so typed keys need no canonicalization scan.
-It needs a new queue/profile-bound plan (the closed shape's data is not reused) and the
-work-count obligations listed in that design before any screen.
+Its replacement received the queue/profile-bound plan below (the closed shape's data was not reused); continuation is now blocked on T064, with the work-count obligations preserved.
 
 Plan `interpreter-core-v2-layout-edges` (base and queue candidate `f58c696e`, post-T063; queue `c50ee7df`)
 freezes these parameters: migration, stages A (layout replacement)
