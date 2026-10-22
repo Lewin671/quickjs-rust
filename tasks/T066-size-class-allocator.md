@@ -25,7 +25,8 @@ their own policy.
   `crates/qjs-cli/src/main.rs` (module + `#[global_allocator]` wiring),
   `tasks/T066-size-class-allocator.md`, `tasks/README.md`,
   `tasks/performance-units/cli-size-class-allocator.json`,
-  `tasks/performance-units/README.md`, `tasks/archive/T066-allocator-evidence.md`.
+  `tasks/performance-units/README.md`, `tasks/diagnostics/t066/rss.sh`,
+  `tasks/archive/T066-allocator-evidence.md`.
 - Forbidden paths: `crates/qjs-runtime`, `crates/qjs-ast`, `crates/qjs-lexer`,
   `crates/qjs-parser`, `third_party/**`, workspace `Cargo.toml`/`Cargo.lock`
   dependency changes, benchmark policies/manifests.

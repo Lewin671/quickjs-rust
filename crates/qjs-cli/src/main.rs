@@ -1,5 +1,11 @@
 //! Command-line entry point for the rewrite.
 
+#[allow(unsafe_code)]
+mod allocator;
+
+#[global_allocator]
+static GLOBAL_ALLOCATOR: allocator::SizeClassAllocator = allocator::SizeClassAllocator;
+
 use std::{
     env, fs,
     io::{self, BufRead, IsTerminal, Write},
