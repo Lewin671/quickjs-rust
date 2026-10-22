@@ -79,6 +79,12 @@ mod stats {
     static EMPTY_POOL_HITS: AtomicU64 = AtomicU64::new(0);
     #[cfg(feature = "alloc-counters")]
     static PAGE_RECYCLES: AtomicU64 = AtomicU64::new(0);
+    #[cfg(feature = "alloc-counters")]
+    static BLOCK_ALLOCS: AtomicU64 = AtomicU64::new(0);
+    #[cfg(feature = "alloc-counters")]
+    static BLOCK_FREES: AtomicU64 = AtomicU64::new(0);
+    #[cfg(feature = "alloc-counters")]
+    static SCAN_VISITS: AtomicU64 = AtomicU64::new(0);
 
     #[inline]
     pub(super) fn system_page_alloc() {
@@ -104,14 +110,35 @@ mod stats {
         PAGE_RECYCLES.fetch_add(1, Ordering::Relaxed);
     }
 
+    #[inline]
+    pub(super) fn block_alloc() {
+        #[cfg(feature = "alloc-counters")]
+        BLOCK_ALLOCS.fetch_add(1, Ordering::Relaxed);
+    }
+
+    #[inline]
+    pub(super) fn block_free() {
+        #[cfg(feature = "alloc-counters")]
+        BLOCK_FREES.fetch_add(1, Ordering::Relaxed);
+    }
+
+    #[inline]
+    pub(super) fn scan_visit() {
+        #[cfg(feature = "alloc-counters")]
+        SCAN_VISITS.fetch_add(1, Ordering::Relaxed);
+    }
+
     pub(crate) fn report() {
         #[cfg(feature = "alloc-counters")]
         eprintln!(
-            "QJS_ALLOC_COUNTERS system_page_allocs={} system_page_frees={} empty_pool_hits={} page_recycles={}",
+            "QJS_ALLOC_COUNTERS system_page_allocs={} system_page_frees={} empty_pool_hits={} page_recycles={} block_allocs={} block_frees={} scan_visits={}",
             SYSTEM_PAGE_ALLOCS.load(Ordering::Relaxed),
             SYSTEM_PAGE_FREES.load(Ordering::Relaxed),
             EMPTY_POOL_HITS.load(Ordering::Relaxed),
             PAGE_RECYCLES.load(Ordering::Relaxed),
+            BLOCK_ALLOCS.load(Ordering::Relaxed),
+            BLOCK_FREES.load(Ordering::Relaxed),
+            SCAN_VISITS.load(Ordering::Relaxed),
         );
     }
 }
@@ -355,6 +382,7 @@ unsafe fn bump_block(page: *mut PageHeader) -> *mut u8 {
         let bump = (*page).bump;
         (*page).bump = bump.add(CLASS_SIZES[(*page).class]);
         (*page).live += 1;
+        stats::block_alloc();
         bump
     }
 }
@@ -382,6 +410,7 @@ unsafe fn take_queued(pool: &Pool, index: usize, page: *mut PageHeader) -> Optio
         }
         (*page).free = block.cast::<*mut u8>().read();
         (*page).live += 1;
+        stats::block_alloc();
         pool.classes[index].current.set(page);
         if (*page).free.is_null() && (*page).remote.load(Ordering::Relaxed).is_null() {
             dequeue_free(pool, index, page);
@@ -503,6 +532,7 @@ unsafe fn allocate(index: usize) -> *mut u8 {
             let mut bump_page: *mut PageHeader = ptr::null_mut();
             let mut cursor = state.pages.get();
             while !cursor.is_null() {
+                stats::scan_visit();
                 // SAFETY: every linked page is live and owned by this thread.
                 let next = unsafe { (*cursor).next };
                 if !unsafe { (*cursor).remote.load(Ordering::Relaxed) }.is_null() {
@@ -550,6 +580,7 @@ unsafe fn release(index: usize, block: *mut u8) {
             if (*page).owner.load(Ordering::Acquire) == pool.thread_id() {
                 block.cast::<*mut u8>().write((*page).free);
                 (*page).free = block;
+                stats::block_free();
                 enqueue_free(pool, index, page);
                 let live = (*page).live - 1;
                 (*page).live = live;
