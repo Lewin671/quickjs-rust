@@ -9,7 +9,7 @@
   Legacy retained decisions remain verified only at their recorded revisions.
 - Evidence: [T055](archive/T055-layout-noise-control.md) owns B calibration and hashes;
   [T037](T037-integration-batch-1.md) owns historical unstable-base decisions.
-- Unresolved: ruleset check unconfigured.
+- Unresolved: ruleset check unconfigured; [T065 core-migration amendment](proposals/T065-core-migration-acceptance.md) is a proposal for lead review, not active policy.
 - Next action: freeze fresh schema-3 queue/unit plans against the qualified policy for their collection schedule (new workers-4 plans bind v6; v5 screens and panels are 2.55x faster than serial, T060); preserve the independent promotion gates below.
 
 Commands and their interpretation are in

@@ -1,11 +1,11 @@
 # T056: Interpreter core v2
 
-- Status: active for M2 frames/activation planning; M1 stages A/B remain blocked on object-layout → typed-code coupling with no accepted remedy. T064 stage K and its successor plan are closed before timing by the lead decision of 2026-10-22.
-- Implementation: M1 stage 1 is on main; stage-A `5dd3a810` is unpromoted. K1 `671e9943` and Repair 1 `773c42f7` remain on `agent/t064-k1/codex`; this closure imports no runtime changes. M2 plan is being drafted separately; no M2 implementation is authorized here.
+- Status: active; remaining M2/M3 superseded by [T065](T065-interpreter-core-v3.md) pending lead review; M1 stages A/B remain blocked on object-layout → typed-code coupling with no accepted remedy. T064 stage K and its successor plan are closed before timing by the lead decision of 2026-10-22.
+- Implementation: M1 stage 1 is on main; stage-A `5dd3a810` is unpromoted. K1 `671e9943` and Repair 1 `773c42f7` remain on `agent/t064-k1/codex`; this closure imports no runtime changes. M2 draft remains historical input to T065; no M2/M3 implementation is authorized here.
 - Verified at: [K1/repair receipts](archive/T064-k1-record.md) bind full/fast correctness, 256 NG fixtures, 5,170 subset and both-role A/A/H+8/C+8 passes to their candidate sources; both exact-image instruction pre-gates block the same 46/86 cases. Historical M1/profile receipts remain bound to their original revisions.
 - Evidence: [T064 final decision](archive/T064-kernel-isolation.md#lead-decision-2026-10-22), [successor closure/ledger](archive/T064-kernel-layout-authority-closure.md), [M2 design inputs](archive/T056-m2-design-inputs.md), [frame activation design](../docs/design/frame-activation.md).
-- Unresolved: M1's coupling remedy and separate unpack/startup attribution remain open; M2 needs a fresh profile-bound, validated migration plan before runtime edits.
-- Next action: draft and validate the M2 frames/activation plan separately. Preserve `0a9af81b` and exactly one shared A+B remaining failure for any future M1 continuation; no automatic port of `5dd3a810` or further K repair/screen.
+- Unresolved: M1's coupling remedy and separate unpack/startup attribution remain open; T065's replacement architecture and acceptance proposal await review; old M2/M3 route is not the next implementation action.
+- Next action: review T065 before any further M2/M3 plan or runtime work. Preserve `0a9af81b` and exactly one shared A+B remaining failure for any future M1 continuation; no automatic port of `5dd3a810` or further K repair/screen.
 
 ## Goal and scope
 
@@ -204,4 +204,4 @@ M2 re-plan verification on the documentation change over `290e3f51`:
 `PYTHONDONTWRITEBYTECODE=1 ./scripts/check-touched.sh --staged --explain` passed.
 Runtime gates were not rerun for this design-only change; the 2026-10-20 revision
 (`agent/t056-m2-design/claude`, base `9ec13250`) passed the same two checks. Current M2 next action:
-refresh the proposed targets' profiles and freeze the complete five-stage plan.
+review T065; the old five-stage M2 plan is superseded pending that review.
