@@ -1,7 +1,7 @@
 # T064 read-only allocation attribution
 
 [Input record](../../archive/T064-kernel-isolation-inputs.md) owns conclusions;
-[T064](../../T064-kernel-isolation.md) owns next work. `allocation-attribution.json`
+[T064](../../archive/T064-kernel-isolation.md) records the closed outlining experiment. `allocation-attribution.json`
 contains complete function-stack sites, non-overlapping family totals, exact image
 and source hashes and the six source-stack JSON hashes from job222209Z.
 No new runtime build/measurement/tool implementation is present.

@@ -1,11 +1,11 @@
 # T056: Interpreter core v2
 
-- Status: blocked on [T064](T064-kernel-isolation.md) K; K→A→B successor frozen after lead feedback 1; old layout-edges continuation closed-superseded.
-- Implementation: main06e199fe has stage1, not stage-A5dd3a810; this handoff adds no runtime implementation or timing screen.
-- Verified at: exact-M9eba7a1d profiles and freeze validation/checks on the `4a2c7993` documentation follow-up are in the [lead review](proposals/T064-successor-review.md); historical runtime receipts remain bound to their original revisions.
-- Evidence: [frozen successor](performance-units/interpreter-core-v2-kernel-layout-authority.json), [old-plan closure](archive/T064-layout-edges-closure.md), [fresh profile inputs](archive/T064-successor-plan-inputs.md), [isolation/cost inputs](archive/T064-kernel-isolation-inputs.md).
-- Unresolved: K qualification/cost and separate unpack/startup attribution remain; the successor's manual ledger, stage-band and per-case RSS checks must precede each stage decision.
-- Next action: await lead's K1 handoff and passing K stage; after K integration at I, refresh exact I profiles before porting A, keeping cumulative base M fixed. Preserve old0a9af81b and exactly one shared A+B remaining failure; no automatic port of5dd3.
+- Status: active for M2 frames/activation planning; M1 stages A/B remain blocked on object-layout → typed-code coupling with no accepted remedy. T064 stage K and its successor plan are closed before timing by the lead decision of 2026-10-22.
+- Implementation: M1 stage 1 is on main; stage-A `5dd3a810` is unpromoted. K1 `671e9943` and Repair 1 `773c42f7` remain on `agent/t064-k1/codex`; this closure imports no runtime changes. M2 plan is being drafted separately; no M2 implementation is authorized here.
+- Verified at: [K1/repair receipts](archive/T064-k1-record.md) bind full/fast correctness, 256 NG fixtures, 5,170 subset and both-role A/A/H+8/C+8 passes to their candidate sources; both exact-image instruction pre-gates block the same 46/86 cases. Historical M1/profile receipts remain bound to their original revisions.
+- Evidence: [T064 final decision](archive/T064-kernel-isolation.md#lead-decision-2026-10-22), [successor closure/ledger](archive/T064-kernel-layout-authority-closure.md), [M2 design inputs](archive/T056-m2-design-inputs.md), [frame activation design](../docs/design/frame-activation.md).
+- Unresolved: M1's coupling remedy and separate unpack/startup attribution remain open; M2 needs a fresh profile-bound, validated migration plan before runtime edits.
+- Next action: draft and validate the M2 frames/activation plan separately. Preserve `0a9af81b` and exactly one shared A+B remaining failure for any future M1 continuation; no automatic port of `5dd3a810` or further K repair/screen.
 
 ## Goal and scope
 
@@ -78,9 +78,9 @@ portfolios and held-out applications selected by operations, and serialize timin
 M2.1–M2.4 use the **stage budget**, cumulatively against M2's fixed base, even
 when an individual stage removes real work; only M2.5 claims the final payoff.
 Order rationale, cohorts, native env, driver contract and M1 interface: [frame activation](../docs/design/frame-activation.md)
-(inputs: [M2 design inputs](archive/T056-m2-design-inputs.md)). M2's plan waits until M1 finishes (B accepted or M1 closed).
+(inputs: [M2 design inputs](archive/T056-m2-design-inputs.md)). The 2026-10-22 lead decision moves effort to M2 planning while M1 A/B remain blocked.
 The named cases are proposed development/suite targets and diagnostics, not a
-frozen plan or speed forecast. Refresh their exact-binary reach after M1; bind
+frozen plan or speed forecast. Refresh their exact-binary reach on the proposed M2 base; bind
 numeric stage cap, final per-case payoff, memory ceilings, K=6 and attempt limits
 in one validated migration plan before M2.1. Follow the current policy, not M1's
 v3 numbers. No held-out case selects targets, scope or profiles; held-out stays
@@ -119,7 +119,7 @@ The [diagnosis](archive/T056-m1-stage2-diagnosis.md) reproduces the screen's ins
 and its ablations remove most of the excess. The replacement is
 [property layouts](../docs/design/property-layouts.md), which assumes T063's invariant that
 stored strings keep valid surrogate pairs as scalars, so typed keys need no canonicalization scan.
-Its replacement's historical contract is below; that continuation is closed-superseded by the frozen K→A→B plan in the resume block. Work-count obligations remain applicable.
+Its replacement's historical contract is below; that continuation was closed-superseded by K→A→B, now [closed at K](archive/T064-kernel-layout-authority-closure.md). Work-count obligations remain applicable to any future M1 continuation.
 
 **Historical closed-superseded contract (not the successor).**
 
@@ -203,5 +203,5 @@ M2 re-plan verification on the documentation change over `290e3f51`:
 `./scripts/check-context.py` and
 `PYTHONDONTWRITEBYTECODE=1 ./scripts/check-touched.sh --staged --explain` passed.
 Runtime gates were not rerun for this design-only change; the 2026-10-20 revision
-(`agent/t056-m2-design/claude`, base `9ec13250`) passed the same two checks. Next M2 action after
-M1: refresh the proposed targets' profiles and freeze the complete five-stage plan.
+(`agent/t056-m2-design/claude`, base `9ec13250`) passed the same two checks. Current M2 next action:
+refresh the proposed targets' profiles and freeze the complete five-stage plan.

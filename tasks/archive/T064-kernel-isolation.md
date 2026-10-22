@@ -1,12 +1,41 @@
 # T064: Kernel isolation prerequisite
 
-- Status: active; K→A→B successor frozen ([plan](performance-units/interpreter-core-v2-kernel-layout-authority.json), lead review below); K0 checker integrated and qualified on main (A/A and C+8 pass, H+8 fails as the relative-PC positive control); stage K not implemented or screened. Old layout-edges closed-superseded.
-- Implementation: maintained [K0 checker](archive/T064-k0-checker.md) and diagnostic archive transformations; production runtime/Cargo/recipe unchanged. No kernel crate.
-- Verified at: checker `1d12a973` fast/full gates, 61 focused/723 tool tests, 5,170 subset; main `4fa3f739` final queue job `20261022T060712Z-t064-k0-amend2-final` (C+8 0 residuals). Plan SHA-256 `a23cba70…`, `validate-unit` valid against M `9eba7a1d` receipts.
-- Evidence: [K0 record](archive/T064-k0-checker.md), [successor inputs](archive/T064-successor-plan-inputs.md), [lead review/freeze](proposals/T064-successor-review.md), [closure](archive/T064-layout-edges-closure.md),
-  [spike](archive/T064-causal-outlining-spike.md), [design/ABI](../docs/design/interpreter-core-v2.md#kernel-isolation-prerequisite-k0-before-m1-resumes), [allocation/startup inputs](archive/T064-kernel-isolation-inputs.md), [lead decision](#lead-decision-2026-10-21).
-- Unresolved: K's own cost (outlined service calls, entry constants) is unpriced until its screen; manual ledger/stage-band/RSS gates remain mandatory.
-- Next action: K1 — production cold outlining of object-bearing typed arms (Vm and WideLoopFrame) on a branch from main, passing `scripts/check-kernel-isolation.sh` (H+8 and C+8), correctness gates and the exact-image instruction pre-gate before the stage-K screen.
+- Status: closed-rejected; lead decision 2026-10-22 aborts successor stage K before any timed screen and abandons kernel isolation by outlining. M1 A/B remain blocked; T056 moves to M2 planning.
+- Implementation: K0 checker retained on main; K1 `671e9943` and Repair 1 `773c42f7` remain only on `agent/t064-k1/codex`. No production runtime/Cargo/recipe change is imported by this closure.
+- Verified at: K1 and Repair 1 pass full/fast correctness gates, 256 NG fixtures, 5,170 curated cases and A/A/H+8/C+8 static checks for both roles; both exact-image instruction pre-gates block the same 46/86 cases. Receipts and limits are in the K1 record; no full exact Test262 scan or timing result is claimed.
+- Evidence: [K1/repair record](T064-k1-record.md), [successor closure and ledger](T064-kernel-layout-authority-closure.md), [K0 record](T064-k0-checker.md), [lead review/freeze](../proposals/T064-successor-review.md), [final lead decision](#lead-decision-2026-10-22).
+- Unresolved: object-layout → typed-code coupling has no accepted remedy; exact per-symbol instruction/spill deltas remain unmeasured. Static isolation alone does not qualify K's cost.
+- Next action: none for T064. [T056](../T056-interpreter-core-v2.md) drafts the M2 frames/activation plan; any future M1 continuation needs a new accepted remedy and preserves the carried ledger.
+
+## Lead decision (2026-10-22)
+
+Stage K of the frozen successor is aborted before any timed screen. K1
+`671e9943` and Repair 1 `773c42f7` (false-cold-hint removal) both pass the
+static isolation checker (A/A, H+8, C+8; both roles) and all correctness
+gates run, but fail the exact-image instruction pre-gate on the same 46/86
+cases. Repair's separate whole-process attribution ratios are big.js 1.636,
+access-nbody 1.493, math_abs 1.464 and string_key_map_churn 1.443; the
+[K1 record](T064-k1-record.md) distinguishes them from policy pre-gate ratios.
+
+The lead attributes the cost to the boundary: every object/boxed operation
+in a typed loop (property/array reads and writes, MoveBoxed, native calls)
+becomes an out-of-line call with argument passing and a second op dispatch,
+estimated at about 2–3x the inline operation cost. Removing the cold hint did
+not remove the excess. This is the lead's boundary-cost interpretation;
+sampling does not measure an exact per-operation instruction multiplier or
+apportion the excess among calls, argument transport, dispatch and spills.
+
+Per the earlier time box, kernel isolation by outlining is abandoned.
+Abort closes this implementation shape, not the mechanism family. Zero timed
+attempts were spent; K's failure allowance is untouched but moot. The
+[closure ledger](T064-kernel-layout-authority-closure.md) preserves the one
+shared A+B reserve and carried `0a9af81b` failure for any future M1
+continuation. M1 stages A/B remain blocked on object-layout → typed-code
+coupling, with no accepted remedy. T056 effort moves to M2
+(frames/activation), whose plan is being drafted separately.
+
+The remaining sections record the earlier contract and proposals; they do
+not authorize another K repair or screen after this closure.
 
 ## Lead decision (2026-10-21)
 
@@ -79,7 +108,7 @@ If A/A does not reproduce, stop interpreting perturbations. If unoutlined contro
 
 ## Prospective CI, reduced after review
 
-The spike implemented no CI/checker infrastructure; the subsequent [K0 checker](archive/T064-k0-checker.md) is tooling only, with no CI hook. K1 remains blocked on the result and a separately frozen implementation contract.
+The spike implemented no CI/checker infrastructure; the subsequent [K0 checker](T064-k0-checker.md) is tooling only, with no CI hook. K1 was subsequently frozen and implemented on its branch; the final decision above closes it.
 Per PR: structural runtime-type/field-access firewall plus **one targeted perturbation, two clean builds on the production target**.
 Full A/A/features/header/cold/helper/combined matrix runs nightly and on compiler/linker/recipe/ABI changes; avoid a full multi-target matrix on every PR.
 Use canned binaries for checker negative fixtures:3B insertion/relative-PC drift, hot byte, RIP literal, jump-table target, missing/duplicate/cloned role,
@@ -105,13 +134,13 @@ final diagnostic startup instructions were +7.1% versus its historical base, and
 
 Lead feedback 1 (2026-10-21) approved the priority override, revised targets,
 manual failure accounts, stricter stage-band audit and per-case RSS ceiling.
-The [frozen schema-3 successor](performance-units/interpreter-core-v2-kernel-layout-authority.json)
+The [frozen schema-3 successor](../performance-units/interpreter-core-v2-kernel-layout-authority.json)
 is the K→A→B migration on fixed M9eba7a1d; its mechanism owns the full stage,
-static, scope and manual gate contract. [Lead review](proposals/T064-successor-review.md)
+static, scope and manual gate contract. [Lead review](../proposals/T064-successor-review.md)
 records target selection and final validation. K/A advance only; B earns payoff.
 
 The old `interpreter-core-v2-layout-edges.json` is **closed-superseded** by the
-[closure record](archive/T064-layout-edges-closure.md). Its f58c696e base and
+[closure record](T064-layout-edges-closure.md). Its f58c696e base and
 M1-only isolation cannot include current main and K. Keep its JSON SHA d184dbcc…
 and valid failed candidate0a9af81b permanently; one shared A+B failure remains,
 with no reset from static/instruction/mini diagnostics. Final standing remains
@@ -126,11 +155,11 @@ No K1 implementation or timing screen starts in this freeze handoff.
 
 ## Historical spike (original raw-byte contract)
 
-[Complete record](archive/T064-causal-outlining-spike.md): A/A whole images reproduce; unoutlined H/C both detect raw drift.
+[Complete record](T064-causal-outlining-spike.md): A/A whole images reproduce; unoutlined H/C both detect raw drift.
 Outlining stabilized selected loop PCs/bytes, tables and spills, but H changed entry constants/math call fixups and failed the spike's original raw-byte contract.
 The later lead decision/amendments above supersede that static interpretation; the outlined images were not requalified by this final checker run.
 C's selected closure including entry loads passed raw equality; whole bodies retained cold cleanup/deopt fixup differences.
 A crate alone does not fix final literal/import distances; the opaque-object fallback was not proved uniquely necessary.
-The spike implemented no K1/CI. Current unoutlined-main qualification is owned by the [K0 record](archive/T064-k0-checker.md); K1 still needs the frozen successor plan.
+The spike implemented no K1/CI. Current unoutlined-main qualification is owned by the [K0 record](T064-k0-checker.md); the later K1/repair results are in the record linked above.
 All7 images passed256 NG cases; generated outlined C source passed2346 runtime tests; that production full gate included5170 subset cases.
 No performance result or old-attempt reset;5dd3 stays unpromoted and untimed.

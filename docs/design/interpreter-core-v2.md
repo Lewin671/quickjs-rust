@@ -65,7 +65,7 @@ Safe views retain RefCell checks. Miri/ownership tests supplement conformance; m
 
 ## Kernel isolation prerequisite (K0, before M1 resumes)
 
-[T064](../../tasks/T064-kernel-isolation.md) owns the implementation sequence, CI matrix, budget transition and review checklist.
+[T064](../../tasks/archive/T064-kernel-isolation.md) records the outlining experiment and its closure; M1 A/B remain blocked without an accepted coupling remedy. The following is an unqualified target architecture.
 **Invariant:** the hot numeric/dispatch kernel's machine code (bytes and intra-function relative layout of hot blocks) is invariant under object-model and cold-runtime changes.
 This is an artifact-enforced contract for a pinned toolchain/recipe, not a Rust compiler theorem or a promise of stable wall time/cache behavior.
 Protected scope is typed dispatch shared by Vm/WideLoopFrame, then the wide compact dispatch/numeric core; general Vm and numeric-mutation/compact executors remain separate.
@@ -74,7 +74,7 @@ The old29ca position is diagnostic history, not the new reference address. Do no
 ### Narrow Rust ABI and ownership
 
 Target hot IR contains no runtime types or object-layout accesses. A proposed internal std-only `qjs-kernel` crate can enforce that auditably; it is not itself a codegen firewall.
-Run T064's same-crate causal outlining spike before choosing a crate; K1 is not authorized. The prospective crate depends on no runtime/AST/property/value crate.
+T064 abandoned same-crate per-op outlining before timing; any new remedy requires separate review. The prospective crate depends on no runtime/AST/property/value crate.
 It owns scalar/op/cursor types and non-generic `typed_run` / `wide_numeric_run`; translate AST operators once during lowering, preserving all admissions and op semantics.
 Protected entries and runtime service entry points use `inline(never)`, verified from emitted artifacts rather than trusted as a guarantee.
 Proposed signature: `run(ops: &[KernelOp], scalars: &mut [KernelScalar], cursor: &mut Cursor) -> StopTag` (safe Rust, no extern ABI).
