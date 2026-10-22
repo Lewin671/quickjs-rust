@@ -22,6 +22,9 @@ agents = ["qjs-runtime/agents"]
 # Forwards to `qjs-runtime/perf-counters`: prints the runtime's execution
 # counters to stderr after evaluation. Diagnostic only, never for timing.
 perf-counters = ["qjs-runtime/perf-counters"]
+# Diagnostic allocator counters (page allocs/frees, empty-pool hits, recycles)
+# printed to stderr after the run. Adds atomics; never used for timing.
+alloc-counters = []
 
 [dependencies]
 qjs-runtime = { path = "../qjs-runtime" }

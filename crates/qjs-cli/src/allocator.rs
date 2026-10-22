@@ -65,6 +65,57 @@ use std::{
     sync::atomic::{AtomicPtr, AtomicUsize, Ordering},
 };
 
+/// Diagnostic counters for the repair round. Compiled only with the
+/// `alloc-counters` feature, which is never part of a timed build.
+mod stats {
+    #[cfg(feature = "alloc-counters")]
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    #[cfg(feature = "alloc-counters")]
+    static SYSTEM_PAGE_ALLOCS: AtomicU64 = AtomicU64::new(0);
+    #[cfg(feature = "alloc-counters")]
+    static SYSTEM_PAGE_FREES: AtomicU64 = AtomicU64::new(0);
+    #[cfg(feature = "alloc-counters")]
+    static EMPTY_POOL_HITS: AtomicU64 = AtomicU64::new(0);
+    #[cfg(feature = "alloc-counters")]
+    static PAGE_RECYCLES: AtomicU64 = AtomicU64::new(0);
+
+    #[inline]
+    pub(super) fn system_page_alloc() {
+        #[cfg(feature = "alloc-counters")]
+        SYSTEM_PAGE_ALLOCS.fetch_add(1, Ordering::Relaxed);
+    }
+
+    #[inline]
+    pub(super) fn system_page_free() {
+        #[cfg(feature = "alloc-counters")]
+        SYSTEM_PAGE_FREES.fetch_add(1, Ordering::Relaxed);
+    }
+
+    #[inline]
+    pub(super) fn empty_pool_hit() {
+        #[cfg(feature = "alloc-counters")]
+        EMPTY_POOL_HITS.fetch_add(1, Ordering::Relaxed);
+    }
+
+    #[inline]
+    pub(super) fn page_recycle() {
+        #[cfg(feature = "alloc-counters")]
+        PAGE_RECYCLES.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub(crate) fn report() {
+        #[cfg(feature = "alloc-counters")]
+        eprintln!(
+            "QJS_ALLOC_COUNTERS system_page_allocs={} system_page_frees={} empty_pool_hits={} page_recycles={}",
+            SYSTEM_PAGE_ALLOCS.load(Ordering::Relaxed),
+            SYSTEM_PAGE_FREES.load(Ordering::Relaxed),
+            EMPTY_POOL_HITS.load(Ordering::Relaxed),
+            PAGE_RECYCLES.load(Ordering::Relaxed),
+        );
+    }
+}
+
 /// Largest size served by an explicit class with 16-byte steps.
 const SMALL_LIMIT: usize = 128;
 /// Largest size served by any class; larger layouts are System-managed.
@@ -349,12 +400,14 @@ unsafe fn new_page(pool: &Pool, index: usize) -> *mut PageHeader {
     unsafe {
         let len = pool.empty_len.get();
         let page = if len == 0 {
+            stats::system_page_alloc();
             let raw = System.alloc(page_layout());
             if raw.is_null() {
                 return ptr::null_mut();
             }
             raw.cast::<PageHeader>()
         } else {
+            stats::empty_pool_hit();
             let page = pool.empty[len - 1].get();
             pool.empty_len.set(len - 1);
             page
@@ -389,6 +442,7 @@ unsafe fn recycle_page(pool: &Pool, index: usize, page: *mut PageHeader) {
     // freed again and the page is owned by this thread. Unlinking and the
     // System deallocation use the page's own bookkeeping.
     unsafe {
+        stats::page_recycle();
         dequeue_free(pool, index, page);
         let state = &pool.classes[index];
         if state.current.get() == page {
@@ -414,6 +468,7 @@ unsafe fn recycle_page(pool: &Pool, index: usize, page: *mut PageHeader) {
             pool.empty_len.set(len + 1);
         } else {
             // The page came from System with exactly this layout.
+            stats::system_page_free();
             System.dealloc(page.cast::<u8>(), page_layout());
         }
     }
@@ -535,6 +590,11 @@ unsafe fn allocate_zeroed(index: usize) -> *mut u8 {
         unsafe { ptr::write_bytes(block, 0, CLASS_SIZES[index]) };
     }
     block
+}
+
+/// Print allocator counters when built with `alloc-counters`; otherwise no-op.
+pub(crate) fn report_counters() {
+    stats::report();
 }
 
 pub(crate) struct SizeClassAllocator;
