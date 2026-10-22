@@ -101,11 +101,12 @@ targets are inside the plan's rank ceiling 6.
   per page, header at the base, one class per page, and a per-page free list,
   bump area and live count. `block & !(PAGE_SIZE - 1)` finds the header. A
   32-KiB variant was measured and reverted; see the round-2 record.
-- A thread owns its pages through per-class lists, a current page, and a queue
-  of pages with free blocks. Allocation reuses a queued free block first; it
-  bumps the current page only when no page has a free block, then scans the
-  remaining remote lists and any stranded bump space, and takes an empty or new
-  page last.
+- A thread owns its pages through per-class lists, a queue of pages with free
+  blocks, and at most one page with bump space. Allocation is O(1): a queued
+  free block first, then the bump page, then a new page. The class list is
+  scanned only when a per-class remote-free epoch changed, so single-threaded
+  programs never pay that scan. An empty bump page is kept rather than
+  recycled, so a 0-live/1-live oscillation cannot recycle it repeatedly.
 - Free updates the owning page's live count; when it reaches zero the page is
   unlinked and parked in a thread-local empty pool of at most 8 pages, or
   returned to System. Empty pages are reusable by any class.
