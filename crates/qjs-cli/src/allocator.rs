@@ -15,15 +15,20 @@
 //!   header sits at the page base, so `block & !(PAGE_SIZE - 1)` recovers it.
 //!   Each page serves exactly one class, keeps its own free list, bump area and
 //!   live count, and is linked into its owning thread's class list.
-//! - Per-thread state: the class lists, the current page per class, and a
-//!   bounded pool of at most `EMPTY_PAGES` empty pages reusable by any class.
-//!   Pages beyond that bound are returned to System.
+//! - Per-thread state: the class lists, the current page per class, a queue of
+//!   pages with free blocks (most recently freed first), and a bounded pool of
+//!   at most `EMPTY_PAGES` empty pages reusable by any class. Pages beyond that
+//!   bound are returned to System. Allocation reuses a queued free block before
+//!   extending: it bumps the current page only when no page has a free block,
+//!   scans the remaining remote lists and bump space next, and takes a new or
+//!   empty page last.
 //!
 //! Invariants that keep it sound:
 //!
 //! - A page's ordinary fields (`class`, `live`, `free`, `bump`, `bump_end`,
-//!   `next`) are touched only by the thread that owns the page. Remote frees
-//!   use only `owner` and the atomic `remote` stack.
+//!   `next`, `free_next`, `free_prev`, `queued`) are touched only by the thread
+//!   that owns the page. Remote frees use only `owner` and the atomic `remote`
+//!   stack.
 //! - `live` counts blocks that are allocated plus blocks sitting in `remote`.
 //!   A remote free pushes the block and never touches `live`; the owner
 //!   subtracts the drained count when it takes the remote list. Therefore
@@ -70,7 +75,7 @@ const CLASS_COUNT: usize = 32;
 const PAGE_SIZE: usize = 64 * 1024;
 const PAGE_MASK: usize = PAGE_SIZE - 1;
 /// Space reserved for the page header at the page base (16-byte multiple).
-const HEADER_SIZE: usize = 64;
+const HEADER_SIZE: usize = 96;
 /// Empty pages a thread keeps for reuse; the rest go back to System.
 const EMPTY_PAGES: usize = 8;
 
@@ -102,6 +107,11 @@ struct PageHeader {
     /// Next unallocated block and the end of the block area; owner-only.
     bump: *mut u8,
     bump_end: *mut u8,
+    /// Thread-local queue of pages with free blocks; owner-only.
+    free_next: *mut PageHeader,
+    free_prev: *mut PageHeader,
+    /// Whether `free_next`/`free_prev` currently link this page; owner-only.
+    queued: bool,
 }
 
 const _: () = assert!(std::mem::size_of::<PageHeader>() <= HEADER_SIZE);
@@ -110,6 +120,8 @@ const _: () = assert!(std::mem::size_of::<PageHeader>() <= HEADER_SIZE);
 struct ClassState {
     pages: Cell<*mut PageHeader>,
     current: Cell<*mut PageHeader>,
+    /// Pages with at least one free block, most recently freed first.
+    free_pages: Cell<*mut PageHeader>,
 }
 
 impl ClassState {
@@ -117,6 +129,7 @@ impl ClassState {
         Self {
             pages: const { Cell::new(ptr::null_mut()) },
             current: const { Cell::new(ptr::null_mut()) },
+            free_pages: const { Cell::new(ptr::null_mut()) },
         }
     }
 }
@@ -206,56 +219,123 @@ fn page_of(block: *mut u8) -> *mut PageHeader {
     (block as usize & !PAGE_MASK) as *mut PageHeader
 }
 
-/// Take a block from a page the calling thread owns: free list, then bump
-/// space, then drained remote entries. Returns `None` when the page is full.
+/// Link a page into its class's free-block queue. Owner-only.
 #[inline]
-unsafe fn allocate_from_page(page: *mut PageHeader) -> Option<*mut u8> {
-    // SAFETY: the caller guarantees `page` is a live page owned by this thread,
-    // so none of its owner-only fields is touched concurrently; the remote
-    // list is exchanged atomically.
+unsafe fn enqueue_free(pool: &Pool, index: usize, page: *mut PageHeader) {
+    // SAFETY: the page is live and owned by this thread.
     unsafe {
-        let free = (*page).free;
-        if !free.is_null() {
-            // A free block stores the next free block in its first word;
-            // class blocks are at least 16 bytes, so the word fits.
-            (*page).free = free.cast::<*mut u8>().read();
-            (*page).live += 1;
-            return Some(free);
+        if (*page).queued {
+            return;
         }
+        let state = &pool.classes[index];
+        (*page).queued = true;
+        (*page).free_prev = ptr::null_mut();
+        (*page).free_next = state.free_pages.get();
+        if !(*page).free_next.is_null() {
+            (*(*page).free_next).free_prev = page;
+        }
+        state.free_pages.set(page);
+    }
+}
+
+/// Unlink a page from its class's free-block queue. Owner-only.
+#[inline]
+unsafe fn dequeue_free(pool: &Pool, index: usize, page: *mut PageHeader) {
+    // SAFETY: the page is owned by this thread.
+    unsafe {
+        if !(*page).queued {
+            return;
+        }
+        let state = &pool.classes[index];
+        if (*page).free_prev.is_null() {
+            state.free_pages.set((*page).free_next);
+        } else {
+            (*(*page).free_prev).free_next = (*page).free_next;
+        }
+        if !(*page).free_next.is_null() {
+            (*(*page).free_next).free_prev = (*page).free_prev;
+        }
+        (*page).free_next = ptr::null_mut();
+        (*page).free_prev = ptr::null_mut();
+        (*page).queued = false;
+    }
+}
+
+/// Move a page's remotely freed blocks onto its local free list. Owner-only.
+#[inline]
+unsafe fn drain_remote(page: *mut PageHeader) {
+    // SAFETY: the page is owned by this thread; the remote list is atomic and
+    // is exchanged so each queued block is drained exactly once.
+    unsafe {
+        let mut cursor = (*page).remote.swap(ptr::null_mut(), Ordering::AcqRel);
+        if cursor.is_null() {
+            return;
+        }
+        let mut drained = 0usize;
+        while !cursor.is_null() {
+            // Remote entries are blocks of this page and were at least 16
+            // bytes, so each stores the next entry in its first word.
+            let next = cursor.cast::<*mut u8>().read();
+            cursor.cast::<*mut u8>().write((*page).free);
+            (*page).free = cursor;
+            cursor = next;
+            drained += 1;
+        }
+        // Queued blocks were counted in `live`; they are free now.
+        (*page).live -= drained;
+    }
+}
+
+#[inline]
+unsafe fn has_bump(page: *mut PageHeader) -> bool {
+    // SAFETY: the page is owned by this thread.
+    unsafe {
         let bump = (*page).bump;
-        if !bump.is_null() && bump < (*page).bump_end {
-            // The bump area was sized to whole blocks, so `bump` has
-            // `CLASS_SIZES[class]` bytes before `bump_end`.
-            (*page).bump = bump.add(CLASS_SIZES[(*page).class]);
-            (*page).live += 1;
-            return Some(bump);
-        }
-        // Only touch the atomic list when it is non-empty; a plain load keeps
-        // the common path free of a locked exchange.
-        if (*page).remote.load(Ordering::Relaxed).is_null() {
+        !bump.is_null() && bump < (*page).bump_end
+    }
+}
+
+/// Carve the next block from a page's bump area. The caller checked `has_bump`.
+#[inline]
+unsafe fn bump_block(page: *mut PageHeader) -> *mut u8 {
+    // SAFETY: the bump area was sized to whole blocks, so `bump` has
+    // `CLASS_SIZES[class]` bytes before `bump_end`.
+    unsafe {
+        let bump = (*page).bump;
+        (*page).bump = bump.add(CLASS_SIZES[(*page).class]);
+        (*page).live += 1;
+        bump
+    }
+}
+
+/// Take one block from `page`, which is the free-queue head. Returns `None` when
+/// the entry is stale (no local or remote block left).
+#[inline]
+unsafe fn take_queued(pool: &Pool, index: usize, page: *mut PageHeader) -> Option<*mut u8> {
+    // SAFETY: the page is live and owned by this thread, and it is the queue
+    // head, so no other thread touches its owner-only fields.
+    unsafe {
+        if (*page).live == 0 {
+            // Defensive: a fully free page should have been recycled already.
+            dequeue_free(pool, index, page);
+            recycle_page(pool, index, page);
             return None;
         }
-        let mut cursor = (*page).remote.swap(ptr::null_mut(), Ordering::AcqRel);
-        if !cursor.is_null() {
-            let mut drained = 0usize;
-            while !cursor.is_null() {
-                // Remote entries are blocks of this page and were at least 16
-                // bytes, so each stores the next entry in its first word.
-                let next = cursor.cast::<*mut u8>().read();
-                cursor.cast::<*mut u8>().write((*page).free);
-                (*page).free = cursor;
-                cursor = next;
-                drained += 1;
-            }
-            // Remote blocks were counted in `live` while queued; they are free
-            // now, and the drain pushed at least one block.
-            (*page).live -= drained;
-            let block = (*page).free;
-            (*page).free = block.cast::<*mut u8>().read();
-            (*page).live += 1;
-            return Some(block);
+        if (*page).free.is_null() {
+            drain_remote(page);
         }
-        None
+        let block = (*page).free;
+        if block.is_null() {
+            dequeue_free(pool, index, page);
+            return None;
+        }
+        (*page).free = block.cast::<*mut u8>().read();
+        (*page).live += 1;
+        pool.classes[index].current.set(page);
+        if (*page).free.is_null() && (*page).remote.load(Ordering::Relaxed).is_null() {
+            dequeue_free(pool, index, page);
+        }
+        Some(block)
     }
 }
 
@@ -290,6 +370,9 @@ unsafe fn new_page(pool: &Pool, index: usize) -> *mut PageHeader {
         // and the block area holds `page_blocks` whole blocks.
         (*page).bump = base.add(HEADER_SIZE);
         (*page).bump_end = base.add(HEADER_SIZE + page_blocks(block_size) * block_size);
+        (*page).free_next = ptr::null_mut();
+        (*page).free_prev = ptr::null_mut();
+        (*page).queued = false;
         let state = &pool.classes[index];
         (*page).next = state.pages.get();
         state.pages.set(page);
@@ -306,6 +389,7 @@ unsafe fn recycle_page(pool: &Pool, index: usize, page: *mut PageHeader) {
     // freed again and the page is owned by this thread. Unlinking and the
     // System deallocation use the page's own bookkeeping.
     unsafe {
+        dequeue_free(pool, index, page);
         let state = &pool.classes[index];
         if state.current.get() == page {
             state.current.set(ptr::null_mut());
@@ -335,39 +419,64 @@ unsafe fn recycle_page(pool: &Pool, index: usize, page: *mut PageHeader) {
     }
 }
 
-/// Pop a recycled block or carve one from a page, taking a new page when every
-/// page of this class is full.
+/// Reuse a free block before extending: the class's free-page queue first, then
+/// the current page's bump area, then a scan that drains remote lists and looks
+/// for stranded bump space, and only then a new page.
 #[inline]
 unsafe fn allocate(index: usize) -> *mut u8 {
     POOL.with(|pool| {
         let state = &pool.classes[index];
-        let current = state.current.get();
-        if !current.is_null() {
-            // SAFETY: `current` is a live page owned by this thread.
-            if let Some(block) = unsafe { allocate_from_page(current) } {
-                return block;
-            }
-        }
-        let mut cursor = state.pages.get();
-        while !cursor.is_null() {
-            // SAFETY: every linked page is live and owned by this thread.
-            let next = unsafe { (*cursor).next };
-            if cursor != current {
-                // SAFETY: as above.
-                if let Some(block) = unsafe { allocate_from_page(cursor) } {
-                    state.current.set(cursor);
+        loop {
+            let queued = state.free_pages.get();
+            if !queued.is_null() {
+                // SAFETY: the queue holds live pages owned by this thread.
+                if let Some(block) = unsafe { take_queued(pool, index, queued) } {
                     return block;
                 }
+                continue;
             }
-            cursor = next;
+            let current = state.current.get();
+            if !current.is_null() {
+                // SAFETY: `current` is a live page owned by this thread.
+                if unsafe { has_bump(current) } {
+                    return unsafe { bump_block(current) };
+                }
+            }
+            // No known free block and no bump on the current page. Drain every
+            // page's remote list and remember whether any page still has bump
+            // space before taking a new page.
+            let mut bump_page: *mut PageHeader = ptr::null_mut();
+            let mut cursor = state.pages.get();
+            while !cursor.is_null() {
+                // SAFETY: every linked page is live and owned by this thread.
+                let next = unsafe { (*cursor).next };
+                if !unsafe { (*cursor).remote.load(Ordering::Relaxed) }.is_null() {
+                    unsafe { drain_remote(cursor) };
+                    if !unsafe { (*cursor).free.is_null() } {
+                        unsafe { enqueue_free(pool, index, cursor) };
+                    }
+                }
+                if bump_page.is_null() && unsafe { has_bump(cursor) } {
+                    bump_page = cursor;
+                }
+                cursor = next;
+            }
+            if !state.free_pages.get().is_null() {
+                continue;
+            }
+            if !bump_page.is_null() {
+                state.current.set(bump_page);
+                // SAFETY: the page has bump space.
+                return unsafe { bump_block(bump_page) };
+            }
+            // SAFETY: the pool belongs to this thread and `index` is a class.
+            let page = unsafe { new_page(pool, index) };
+            if page.is_null() {
+                return page.cast::<u8>();
+            }
+            // SAFETY: a fresh page always has bump space.
+            return unsafe { bump_block(page) };
         }
-        // SAFETY: the pool belongs to this thread and `index` is a class.
-        let page = unsafe { new_page(pool, index) };
-        if page.is_null() {
-            return page.cast::<u8>();
-        }
-        // SAFETY: a fresh page always has at least one bump block.
-        unsafe { allocate_from_page(page) }.unwrap_or(ptr::null_mut())
     })
 }
 
@@ -386,6 +495,7 @@ unsafe fn release(index: usize, block: *mut u8) {
             if (*page).owner.load(Ordering::Acquire) == pool.thread_id() {
                 block.cast::<*mut u8>().write((*page).free);
                 (*page).free = block;
+                enqueue_free(pool, index, page);
                 let live = (*page).live - 1;
                 (*page).live = live;
                 if live == 0 {
@@ -705,6 +815,38 @@ mod tests {
             check_fill(block, 24, 0x7e);
             // SAFETY: every block came from this allocator with `small`.
             unsafe { ALLOC.dealloc(block, small) };
+        }
+    }
+
+    #[test]
+    fn non_current_free_blocks_are_reused_before_bump() {
+        let block_layout = layout(8192, 16);
+        let blocks_per_page = page_blocks(8192);
+        let mut blocks = Vec::new();
+        // Fill the first page and start a second one, so the first page is no
+        // longer the current page.
+        for _ in 0..(blocks_per_page + 1) {
+            // SAFETY: test-only allocation with a valid layout.
+            blocks.push(unsafe { ALLOC.alloc(block_layout) });
+        }
+        let first = blocks[0];
+        let second_page = blocks[blocks_per_page];
+        assert_ne!(page_of(first), page_of(second_page));
+        // SAFETY: `first` came from this allocator with this layout.
+        unsafe { ALLOC.dealloc(first, block_layout) };
+        // Reuse before extend: the freed block on the non-current page must come
+        // back before the current page's bump space is touched.
+        // SAFETY: test-only allocation with a valid layout.
+        let reused = unsafe { ALLOC.alloc(block_layout) };
+        assert_eq!(
+            reused, first,
+            "freed block on a non-current page was skipped"
+        );
+        // SAFETY: `reused` came from this allocator with this layout.
+        unsafe { ALLOC.dealloc(reused, block_layout) };
+        for block in blocks.into_iter().skip(1) {
+            // SAFETY: every remaining block is live and freed once here.
+            unsafe { ALLOC.dealloc(block, block_layout) };
         }
     }
 
