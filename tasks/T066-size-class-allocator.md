@@ -1,19 +1,20 @@
 # T066: Production size-class global allocator for the CLI
 
-- Status: active; screen attempt 1 rejected (valid K=6 fail, attempt 1 of 2 spent); repair round in progress.
-- Implementation: present at `52dd420d` (allocator source unchanged since; later commits are records and the RSS collector);
-  64-KiB pages with per-class free-page queues (reuse before extend), page recycling and an atomic cross-thread remote list.
-  A 32-KiB fixed-overhead variant was measured and reverted. Lead code review 2026-10-22 found no soundness defect;
-  noted O(pages) class scans on bump exhaustion and O(pages) unlink on recycle as possible large-heap costs.
-- Verified at: `52dd420d`, binary `7e837fa8…`, 2026-10-22; iMac correctness (compare-qjs, 5170/5170 Test262), 86-case instruction
-  pre-gate PASS, diagnostic triage; 15-pair RSS precision job `20261022T130137Z-t066-rss15` at `ca9c30bb` (same runtime source).
-  Details: [evidence](archive/T066-allocator-evidence.md).
+- Status: active; screen attempt 1 rejected (valid K=6 fail, attempt 1 of 2 spent); repair round complete; attempt 2 is the lead's call.
+- Implementation: present at `4e7dda32`; 64-KiB pages, per-class free-page queues, O(1) allocation (free block,
+  bump page, or new page), an epoch-gated remote-list scan and a retained bump page. The repair removes the O(pages)
+  class scan the lead code review flagged, which attempt 1's profile showed at 67M visits on imaging-darkroom.
+  Diagnostic block/page counters live behind the never-timed `alloc-counters` feature.
+- Verified at: `4e7dda32`, binary `cc5b4dd5…`, 2026-10-22; local full gate with Test262 deferred, iMac correctness
+  (compare-qjs, 5170/5170 Test262), 86-case instruction pre-gate PASS (worst 1.0256), H1 rusage/counters before and
+  after the fix, 15-pair RSS under the amended rule (max 1.0999, development geomean 1.0367) and one diagnostic triage.
+  Details: [evidence](archive/T066-allocator-evidence.md#repair-after-attempt-1).
 - Evidence: [plan](performance-units/cli-size-class-allocator.json), this file, [evidence record](archive/T066-allocator-evidence.md),
   [user RSS amendment](#user-rss-amendment-2026-10-22).
-- Unresolved: screen attempt 1 rejected on persistent wall cost in `imaging-darkroom` (1.535 vs 1.070 band),
-  `imaging-desaturate` (1.418 vs 1.064) and `capturing_closure_call` (1.067 vs 1.050) with flat instructions; the
-  sentinel lane exceeded its ceiling. Repair diagnosis and verification are in progress; the second attempt is the lead's call.
-- Next action: complete the H1/H2/H3 diagnosis and the smallest supported fix, record it, and leave attempt 2 to the lead.
+- Unresolved: the repair makes `imaging-darkroom` 0.963 and `imaging-desaturate` 0.961 in triage and passes the
+  amended RSS rule, but `capturing_closure_call` regressed to 1.205 (triage, obvious regression) from 1.067 in the
+  attempt-1 screen; the allocator is not screen-ready as it stands. Attempt 2 is the lead's call.
+- Next action: lead decides whether to spend attempt 2; no further retune, screen, formal run or plan change was made.
 
 ## User RSS amendment (2026-10-22)
 

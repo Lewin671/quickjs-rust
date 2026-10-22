@@ -1,6 +1,6 @@
 # T066 allocator evidence
 
-- Status: evidence record; 2026-10-22; screen attempt 1 rejected, repair in progress.
+- Status: evidence record; 2026-10-22; screen attempt 1 rejected, repair round complete; attempt 2 is the lead's call.
 - Implementation: present at `52dd420d` on `agent/t066-size-class-allocator/cmd`;
   64-KiB pages with per-class free-page queues, page recycling and an atomic
   cross-thread remote list. The compiled candidate is byte-identical to
@@ -15,9 +15,9 @@
   `matter-js/simulate`; the per-case ratio is dominated by whole-process variance
   in the base medians (4-10% between cohorts with the same base binary).
   `graphlib/paths` fell from 1.073 to 1.018, so the diagnosed stranding is fixed.
-- Next action: record attempt 1, diagnose the wall regressions (H1 page churn,
-  H2 recycle thrash, H3 aliasing), apply the smallest supported fix and verify;
-  the second and final attempt is the lead's call.
+- Next action: lead decides whether to spend attempt 2 on the repaired
+  allocator; the repair removes the imaging regressions but the closure
+  sentinel regressed further in the diagnostic triage.
 
 ## Plan stage: target selection
 
@@ -467,6 +467,157 @@ wall payoff and the six-layout aggregate; the development lane measured
 1.006849), broad 0.9825-0.9915 and external 0.9550-0.9567. The three failures
 have flat instructions (0.992-0.999) against +7% to +53% wall, which points at
 kernel/memory-system cost rather than user code.
+
+## Repair after attempt 1
+
+### Diagnosis
+
+H1 (page churn / page faults) is falsified. Non-timing job
+`20261022T150643Z-t066-h1-rusage` (base M versus the attempt-1 code, five
+alternating pairs per case, `ru_minflt`/`ru_majflt`, user/system time, peak RSS)
+and its counters build:
+
+| Case | minflt ratio | stime ratio | utime ratio | max-RSS ratio |
+| --- | ---: | ---: | ---: | ---: |
+| `imaging-darkroom` | 0.973 | 1.006 | **1.625** | 1.038 |
+| `imaging-desaturate` | 1.019 | 1.046 | **1.453** | 0.930 |
+| `capturing_closure_call` | 1.066 | 1.003 | 1.037 | 1.081 |
+| `diff/compare` | 0.952 | 0.834 | 0.852 | 0.940 |
+| `graphlib/paths` | 1.033 | 0.894 | 0.880 | 1.034 |
+
+Page faults and kernel time are flat; the regression is user CPU. Page churn is
+small (darkroom: 240 System page allocs, 198 frees, 104 pool hits, 310 recycles
+over ~2 s), so H1 does not explain it.
+
+H2 (recycle thrash) is also not the driver: the same counters put recycles at
+111-570 per CPU second, and a recycle costs O(1) plus the class-list unlink.
+H3 (cache-set aliasing of page-aligned blocks) was checked because H1/H2 failed,
+and the profile falsified it as the primary cause: job
+`20261022T151730Z-t066-h3-profile` (sampled, non-timing) shows the candidate's
+extra time entirely inside the allocator. For darkroom, base 1116 vs candidate
+1853 samples; darkroom's plan loop is 477 vs 460, while
+`LocalKey<Pool>::with::{closure}` (the inlined `allocate`) is **736 self
+samples** in the candidate and absent from base (base `nanov2_*` total ~7).
+Desaturate: base 1480 vs candidate 2132, plan loop 1067 vs 1062, `allocate`
+**696**. Instructions stay flat at 0.9925/0.9968 while user time rises 62%/45%.
+
+Block counters on the attempt-1 code (`20261022T152615Z-t066-counters`) name the
+path: **67,062,575 page-list scan visits for 1,727,865 block allocations on
+imaging-darkroom**, and 66,937,911 on desaturate, versus 4,884 on the 27.4M-block
+`diff/compare` and 26 on `capturing_closure_call`. `allocate` walked every page
+of the class at each bump exhaustion (chasing 64-KiB-strided page headers) before
+taking a new page; with thousands of pages this is O(pages) per refill and
+O(pages^2) overall. That is where the +40-50% wall with flat instructions came
+from, and it matches the lead code review's note about O(pages) class scans.
+
+### Fix
+
+Commit `4e7dda32` removes the scan from allocation:
+
+- Each class keeps its single page with bump space (`bump_page`) instead of
+  scanning for one; allocation is now a free-queue pop, a bump, or a new page.
+- The class list is scanned only when a per-class **remote-free epoch** changed.
+  A remote free increments a monotone per-class atomic after publishing the
+  block; the owner records the epoch it drained, so a single-threaded program
+  never scans. H1/H2/remote draining semantics are unchanged otherwise.
+- An empty bump page is retained rather than recycled (hysteresis), so a
+  0-live/1-live page cannot be recycled and reinitialised repeatedly.
+
+Commit `dd71e37f` added the block/scan counters behind the diagnostic
+`alloc-counters` feature (never timed). Tests were extended with the
+non-current-page reuse case in round 2; all 31 pass.
+
+### Verification (candidate `4e7dda32`, binary `cc5b4dd5…`)
+
+| Check | Result |
+| --- | --- |
+| `cargo test -p qjs-cli` | 31 passed (26 unit + 5 integration), 0 failed |
+| `QJS_CHECK_SKIP_TEST262=1 ./scripts/check.sh` | passed locally (Test262 deferred: submodules uninitialized) |
+| iMac correctness `20261022T153953Z` | exit 0: compare-qjs all ok, Test262 subset 5170/5170 |
+| iMac pre-gate `20261022T153954Z` | PASS, 86/86; worst `array_index_of` 1.025646, `audio-beat-detection` 1.021285, `captured_write` 1.013516; median 0.992431; artifacts `images.json` `ee60bca4…`, `pregate.json` `40ca552b…`, `verdict.json` `76e0a028…` |
+
+H1 after the fix (`20261022T153221Z-t066-h1-repair`, same collector):
+
+| Case | minflt ratio | stime ratio | utime ratio | max-RSS ratio | scan visits |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `imaging-darkroom` | 1.013 | 1.027 | **0.965** | 0.963 | 0 |
+| `imaging-desaturate` | 0.957 | 0.965 | **0.958** | 0.987 | 0 |
+| `capturing_closure_call` | 1.076 | 1.078 | **1.137** | 1.093 | 0 |
+| `diff/compare` | 0.963 | 0.838 | 0.841 | 0.956 | 0 |
+| `graphlib/paths` | 1.064 | 0.907 | 0.880 | 1.066 | 0 |
+
+The two attempt-1 imaging regressions are gone (they are now slightly faster
+than base) and every scan visit is eliminated. `capturing_closure_call` is
+worse than before (utime 1.037 → 1.137, RSS 1.081 → 1.093); its workload does
+only 14.9k block allocations, so this is not allocation work and looks like the
+fat-LTO layout band of the changed allocator.
+
+15-pair RSS (`20261022T153955Z`, same candidate) under the user-amended rule
+(per case ≤1.10, development geomean ≤1.05):
+
+| Case | Base bytes | Candidate bytes | Ratio | Paired median [IQR] |
+| --- | ---: | ---: | ---: | ---: |
+| `matter-js/simulate` | 24,899,584 | 27,385,856 | 1.099852 | 1.0999 [1.0847, 1.1049] |
+| `big.js/arith` | 7,335,936 | 7,909,376 | 1.078169 | 1.0782 [1.0663, 1.0934] |
+| `js-yaml/document` (target) | 28,442,624 | 30,265,344 | 1.064084 | 1.0639 [1.0548, 1.0699] |
+| `lodash/transform` | 75,018,240 | 78,159,872 | 1.041878 | 1.0553 [1.0126, 1.0677] |
+| `graphlib/paths` (target) | 29,130,752 | 30,187,520 | 1.036277 | 1.0405 [1.0253, 1.0499] |
+| `moment/dates` | 19,087,360 | 19,779,584 | 1.036266 | 1.0363 [1.0310, 1.0380] |
+| `immutable/persistent` (target) | 38,203,392 | 39,530,496 | 1.034738 | 1.0378 [1.0297, 1.0510] |
+| `meriyah/parse` | 130,609,152 | 133,275,648 | 1.020416 | 1.0215 [1.0200, 1.0302] |
+| `papaparse/csv` | 107,900,928 | 107,769,856 | 0.998785 | 1.0115 [0.9888, 1.0424] |
+| `diff/compare` (target) | 13,221,888 | 12,734,464 | 0.963135 | 0.9660 [0.9501, 0.9713] |
+
+Maximum per-case ratio 1.099852 (≤1.10, margin 0.00015) and development geomean
+1.0367 (≤1.05). `rss15.sh` still exits 3 because its hardcoded per-case ceiling
+is the superseded 1.05; the declared rule is the amended one. Artifacts
+`images.json` `06960942…`, `rss.json` `c6fc408a…`, `verdict.json` `514f362b…`.
+The repair raises RSS over the round-2 run (matter-js 1.0682 → 1.0999, js-yaml
+1.024 → 1.064) by retaining the bump page of each touched class.
+
+Diagnostic quick triage on imaging-darkroom, imaging-desaturate,
+capturing_closure_call, all sentinels and the four targets
+(`20261022T153956Z`, 5 natural pairs, 120/120 valid, 280 s):
+
+| Case | Wall ratio [95% exploratory] | Instructions |
+| --- | ---: | ---: |
+| `external/kraken-1.1/imaging-darkroom` | 0.9626 [0.9357, 0.9740] | 0.9560 |
+| `external/kraken-1.1/imaging-desaturate` | 0.9605 [0.8956, 0.9671] | 0.9731 |
+| `sentinel/capturing_closure_call` | **1.2050 [1.0908, 1.2626]** | 0.9989 |
+| `development/diff/compare` (target) | 0.8447 [0.8141, 0.9292] | 0.8205 |
+| `development/graphlib/paths` (target) | 0.8948 [0.8748, 0.9482] | 0.8741 |
+| `development/js-yaml/document` (target) | 0.9172 [0.8610, 0.9558] | 0.8573 |
+| `development/immutable/persistent` (target) | 0.8878 [0.8739, 0.8985] | 0.8710 |
+| `sentinel/heterogeneous_property_read` | 1.0176 [0.9028, 1.2558] | 1.0001 |
+| `sentinel/polymorphic_call_site` | 1.0584 [0.9981, 1.0796] | 0.9988 |
+| `sentinel/prototype_method_call` | 1.0256 [0.9974, 1.1741] | 0.9992 |
+| `sentinel/recursive_call_tree` | 1.0466 [0.9402, 1.0812] | 1.0001 |
+| `sentinel/string_key_map_churn` | 1.0490 [0.7834, 1.1401] | 1.0001 |
+| `broad/property_dynamic_read` | 1.0382 [0.7530, 1.6315] | 1.0092 |
+| `broad/top_level_function_call` | 1.0411 [1.0243, 1.0554] | 0.9991 |
+| `broad/string_slice` | 0.6154 [0.5769, 0.6553] | 0.7083 |
+| `development/lodash/transform` | 0.9348 [0.9202, 0.9408] | 0.9403 |
+| `development/moment/dates` | 0.9198 [0.9026, 0.9346] | 0.8966 |
+| `external/kraken-1.1/json-stringify-tinderbox` | 0.8259 [0.8112, 0.8420] | 0.7977 |
+| `external/kraken-1.1/json-parse-financial` | 0.5456 [0.5417, 0.5480] | 0.5989 |
+| `external/jetstream3-js-subset/raytrace-public-class-fields` | 0.8859 [0.8771, 0.9071] | 0.8996 |
+| `external/sunspider-1.0/access-binary-trees` | 0.9227 [0.9063, 0.9316] | 0.9075 |
+| `external/kraken-1.1/audio-dft` | 0.9904 [0.8845, 1.0376] | 0.9937 |
+| `external/jetstream3-js-subset/cdjs` | 0.9140 [0.9106, 0.9889] | 0.9085 |
+
+Verdict `likely loss`, with `capturing_closure_call` the single obvious
+regression: its wall ratio is 1.205 and the interval excludes 1. The attempt-1
+imaging regressions are resolved (0.963/0.961), and all four plan targets remain
+well below their payoffs. Request `74720c27…`, `triage.json` `1c3b5af1…`,
+`triage.md` (candidate `cc5b4dd5…`).
+
+### Outcome
+
+The evidence-supported fix removes the page-list scan that caused the
+attempt-1 imaging wall regressions, and the amended RSS rule passes. It does
+not repair `capturing_closure_call`, which regressed further in the natural
+layout; the allocator is not screen-ready as it stands. Attempt 2 remains the
+lead's call; no screen, formal run or plan change was made in this round.
 
 ## Open risks
 
