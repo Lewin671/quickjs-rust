@@ -1,12 +1,12 @@
 # T064: Kernel isolation prerequisite
 
-- Status: active; causal spike complete; lead decision 2026-10-21 approves K as the address-operand contract below; K1 not started.
-- Implementation: diagnostic archive transformations only; production runtime/Cargo/recipe unchanged. No kernel crate.
-- Verified at: main `06e199fec9e9e51742cdae7633c5dc758c326752`; iMac seven-build job235604Z and semantics000011Z done0; full local gate passed.
-- Evidence: [spike result/identities](archive/T064-causal-outlining-spike.md), [design/ABI](../docs/design/interpreter-core-v2.md#kernel-isolation-prerequisite-k0-before-m1-resumes),
+- Status: active; final K0 amendment 2 qualified: A/A and C+8 pass, H+8 fails as the relative-PC positive control; checker iteration stopped; lead decision 2026-10-21 approves the address-operand contract below; K1 not started.
+- Implementation: diagnostic archive transformations plus maintained [K0 checker](archive/T064-k0-checker.md); production runtime/Cargo/recipe unchanged. No kernel crate.
+- Verified at: checker `1d12a973` fast/full gates, 61 focused /723 tool tests and 5,170 subset passes; main `4fa3f739` sole final queue job `20261022T060712Z-t064-k0-amend2-final` and offline replay agree; C+8 has 0 residuals.
+- Evidence: [K0 qualification/identities](archive/T064-k0-checker.md), [spike result/identities](archive/T064-causal-outlining-spike.md), [design/ABI](../docs/design/interpreter-core-v2.md#kernel-isolation-prerequisite-k0-before-m1-resumes),
   [allocation/startup inputs](archive/T064-kernel-isolation-inputs.md), [producer](diagnostics/t064-k-spike/README.md), [lead decision](#lead-decision-2026-10-21).
 - Unresolved: K's own cost (outlined service calls, entry constants) is unpriced; successor K→A→B plan needs a fresh queue/profiles on recorded main M.
-- Next action: lead runs the fresh current-main formal comparison/queue; meanwhile K0 checker tooling (no runtime change) and T056 unpack/startup attribution proceed. Freeze the successor plan before K1 runtime code.
+- Next action: lead integrates the frozen checker and reviews fresh profiles/plan before K1. No checker iteration or CI hook in this brief.
 
 ## Lead decision (2026-10-21)
 
@@ -18,6 +18,20 @@ The user delegated this decision to the lead. Decisions, binding on later owners
    Raw whole-body byte equality is not required. The spike's H+8 differences are all of the allowed class; the T056 failure mechanism
    (an off-path 3B shortening moving Add `29ca→29be`) is a relative-PC change and stays a hard failure.
    This changes only the static artifact contract; no timing, band, attempt or correctness gate is relaxed.
+   **Amendment (lead feedback 1, 2026-10-21):** pointer-sized referent slots compare relocated target identity
+   (section, symbol or import, offset within symbol) and target contents under the same rule, not raw pointer values.
+   The checker traverses local target graphs to depth 2; cycles revisit already checked nodes, and new nodes beyond the bound,
+   unknown/unresolvable slots and partial slots fail closed. Non-pointer bytes stay raw; owned tables remain fully protected.
+   Exact external dyld import bindings are leaves: their definitions are outside the linked executable.
+   Identical resolved targets with moved pointer values are reported in the allowed displacement class.
+   LEA spans end at the containing symbol's extent when known; through-next-data-boundary is the anonymous fallback.
+   **Amendment 2 (lead feedback 2, 2026-10-21):** confirmed code targets outside the protected-body set are identity-only
+   (same symbol/import and offset within symbol); their function bytes are excluded. Code inside the protected set retains full comparison;
+   data targets retain depth 2. Mach-O instruction flags, unique function identities and inline-data ranges classify local targets;
+   imports require a matching x86 code stub/bind identity. Unknown classification fails closed. Owned tables remain fully protected.
+   H+8/C+8 transformations insert fields/initializers on existing lines and assert unchanged per-file line counts and every original
+   line's number/content after removing only the declared insertions. No panic-location/line-number allowance is added.
+   Run the final current-main matrix once; report any residual and stop checker iteration after that run.
 2. **No crate, no FFI, no linker/literal ownership work.** K1 is production-quality cold outlining of the object-bearing typed arms for both
    Vm and WideLoopFrame on fresh main, following the spike's boundary. A type/field firewall check may be source-level; a crate is not required.
 3. **Plan.** Adopt the K→A→B successor migration and the failure sub-budgets proposed below (at most one K failure; A+B keep one shared failure;
@@ -65,7 +79,7 @@ If A/A does not reproduce, stop interpreting perturbations. If unoutlined contro
 
 ## Prospective CI, reduced after review
 
-No CI/checker infrastructure is implemented by this spike. K1 remains blocked on the result and a separately frozen implementation contract.
+The spike implemented no CI/checker infrastructure; the subsequent [K0 checker](archive/T064-k0-checker.md) is tooling only, with no CI hook. K1 remains blocked on the result and a separately frozen implementation contract.
 Per PR: structural runtime-type/field-access firewall plus **one targeted perturbation, two clean builds on the production target**.
 Full A/A/features/header/cold/helper/combined matrix runs nightly and on compiler/linker/recipe/ABI changes; avoid a full multi-target matrix on every PR.
 Use canned binaries for checker negative fixtures:3B insertion/relative-PC drift, hot byte, RIP literal, jump-table target, missing/duplicate/cloned role,
@@ -116,13 +130,13 @@ Historical M1 gains (.904 global/.960 local etc.) and T046 recipe gains are not 
 If a profile change is selected instead, first study old/new recipes on identical M source and qualify the new policy/identity;
 then freeze successor M and both base/candidate builds under that same recipe. Preserve the recipe-only cost separately and never compare mixed recipes under the old plan.
 
-## Spike result and present verification
+## Historical spike (original raw-byte contract)
 
 [Complete record](archive/T064-causal-outlining-spike.md): A/A whole images reproduce; unoutlined H/C both detect raw drift.
-Outlining stabilizes all selected loop PCs/bytes, tables and spills, but H still changes entry constants and numeric math call fixups;
-therefore **outlining alone fails the full artifact contract**. Final section-distance movement explains the residual; no internal IPO/table/spill rewrite was observed.
-C's selected closure including entry loads passes; its whole body still has cold cleanup/deopt fixup changes. No normalization converts H to a pass.
-A crate is an enforcement option for the field/type boundary, not a cure for these final literal/import distances; the opaque-object fallback is not proved uniquely necessary.
-No K1/CI investment is approved by the spike. Review literal/local-call ownership or constant-input ABI feasibility before choosing the next architecture step.
-All7 images pass256 NG cases; generated outlined C source passes2346 runtime tests; production full gate includes5170 subset cases.
-Context/file-size/staged checks and exact identities are in the record/commit. No performance result or old-attempt reset;5dd3 stays unpromoted and untimed.
+Outlining stabilized selected loop PCs/bytes, tables and spills, but H changed entry constants/math call fixups and failed the spike's original raw-byte contract.
+The later lead decision/amendments above supersede that static interpretation; the outlined images were not requalified by this final checker run.
+C's selected closure including entry loads passed raw equality; whole bodies retained cold cleanup/deopt fixup differences.
+A crate alone does not fix final literal/import distances; the opaque-object fallback was not proved uniquely necessary.
+The spike implemented no K1/CI. Current unoutlined-main qualification is owned by the [K0 record](archive/T064-k0-checker.md); K1 still needs the frozen successor plan.
+All7 images passed256 NG cases; generated outlined C source passed2346 runtime tests; that production full gate included5170 subset cases.
+No performance result or old-attempt reset;5dd3 stays unpromoted and untimed.

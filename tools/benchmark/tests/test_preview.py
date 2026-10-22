@@ -338,7 +338,7 @@ class PreviewPreparationTests(unittest.TestCase):
             # Mock a build script that wrongly rewrites tracked source.
             subprocess.run(["sh", "-c", "printf dirty > tracked.txt"], cwd=source, check=True)
             with self.assertRaisesRegex(
-                PreviewError, f"{re.escape(str(source))}.*dirty after build"
+                PreviewError, f"{re.escape(str(source.resolve()))}.*dirty after build"
             ):
                 verify_source(args)
             result = run_bounded(
@@ -349,7 +349,7 @@ class PreviewPreparationTests(unittest.TestCase):
                 cwd=ROOT, capture_output=True, text=True, check=False,
             )
             self.assertEqual(result.returncode, 2)
-            self.assertIn(str(source), result.stderr)
+            self.assertIn(str(source.resolve()), result.stderr)
             self.assertIn("tracked.txt", result.stderr)
 
     def test_repository_urls_reject_option_and_markdown_attacks(self) -> None:
