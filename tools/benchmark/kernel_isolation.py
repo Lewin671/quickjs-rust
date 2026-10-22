@@ -18,9 +18,12 @@ from .kernel_referents import CONTRACT
 def fingerprint(binary, output=None):
     image = Image(binary)
     family, roles, adapters = select_roles(image.symbols)
+    image.protected_bodies = [(image.symbols.addresses[s],
+                               image.symbols.addresses[s]+image.symbols.sizes[s])
+                              for s in roles.values()]
     decoder = apple_tool_identity('otool')
     listing, rows = assembly(binary, decoder['path'])
-    result = {'schema': 2, 'referent_contract': CONTRACT.copy(), 'target': 'x86_64-apple-darwin', 'family': family,
+    result = {'schema': 3, 'referent_contract': CONTRACT.copy(), 'target': 'x86_64-apple-darwin', 'family': family,
               'sha256': hashlib.sha256(image.data).hexdigest(), 'adapters': adapters,
               'decoder': decoder, 'roles': {}}
     for role, symbol in roles.items():
@@ -49,7 +52,7 @@ def non_address(row):
 def compare(left, right):
     """Compare validated fingerprints; return all role-level failures."""
     for report in (left, right):
-        if (report['schema'] != 2 or report.get('referent_contract') != CONTRACT or
+        if (report['schema'] != 3 or report.get('referent_contract') != CONTRACT or
                 report['target'] != 'x86_64-apple-darwin'):
             raise ValueError('unknown artifact schema/target')
         if set(report['roles']) != set(ROLES):

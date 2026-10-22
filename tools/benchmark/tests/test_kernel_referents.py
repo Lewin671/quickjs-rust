@@ -5,6 +5,7 @@ import unittest
 from tools.benchmark.kernel_decode import decode_body
 from tools.benchmark.kernel_isolation import compare
 from tools.benchmark.kernel_macho import Image
+from tools.benchmark.layout_tables import TextSymbols
 from tools.benchmark.kernel_referents import Referents
 from tools.benchmark.kernel_relocations import Stream, decode_stream, pointer_fixups
 from tools.benchmark.tests.test_kernel_isolation import report
@@ -33,8 +34,26 @@ def image(target=0x4000, destination=0x4000, payload=b'contents', kind='rebase')
                     target: ['_target_a'], target+8: ['_target_b']}
     result.name_starts = sorted(result.names)
     result.unbacked, result.imports, result.tables = set(), {}, []
+    result.section_flags = {(start, name): (0x80000400 if name == '__TEXT/__text' else 0)
+                            for start, _, name, _ in result.sections}
+    result.protected_bodies = [(0x1000, 0x1008)]
+    result.symbols = TextSymbols(0x1000, ('_protected',), {'_protected': 0x1000},
+                                 {'_protected': 8}, {'_protected': 1})
     result.pointer_fixups = {0x2000: {'kind': kind}}
     result.referents = Referents(result)
+    return result
+
+
+def code_image(destination=0x4000, payload=b'\x90'*7+b'\xc3', protected=False):
+    result = image(destination=destination, payload=payload)
+    result.sections[-1] = (0x4000, 16, '__TEXT/__text', 0x300)
+    result.section_flags[(0x4000, '__TEXT/__text')] = 0x80000400
+    result.symbols = TextSymbols(0x1000, ('_protected', '_target_a', '_target_b'),
+                                {'_protected': 0x1000, '_target_a': 0x4000, '_target_b': 0x4008},
+                                {'_protected': 8, '_target_a': 8, '_target_b': 8},
+                                {'_protected': 1, '_target_a': 1, '_target_b': 1})
+    if protected:
+        result.protected_bodies.append((0x4000, 0x4008))
     return result
 
 
@@ -96,6 +115,14 @@ class ReferentTests(unittest.TestCase):
         for img, library in ((a, 'lib-a'), (b, 'lib-b')):
             img.pointer_fixups[0x2000] = {'kind': 'bind', 'library': library,
                                          'symbol': '_foo', 'addend': 0, 'flags': 0}
+            # A code stub proves this binding is a function, not unknown data.
+            data = bytearray(img.data)
+            data[0x200:0x208] = b'\0'*8
+            data[0x380:0x386] = b'\xff\x25' + struct.pack('<i', 0x2000-0x6006)
+            img.data = bytes(data)
+            img.sections.append((0x6000, 6, '__TEXT/__stubs', 0x380))
+            img.section_flags[(0x6000, '__TEXT/__stubs')] = 0x80000408
+            img.imports[0x6000] = '_foo'
         self.assertNotEqual(a.referent(0x2000, 16)['sha256'], b.referent(0x2000, 16)['sha256'])
 
     def test_depth_budget_rejects_new_unchecked_target_nodes(self):
@@ -129,6 +156,50 @@ class ReferentTests(unittest.TestCase):
         img.data = bytes(data)
         img.referents = Referents(img)
         self.assertNotEqual(before['sha256'], img.referent(0x2000, 16)['sha256'])
+
+
+    def test_external_code_bytes_are_not_compared(self):
+        self.assertTrue(compare(decoded(code_image()),
+                                decoded(code_image(payload=b'\x91'+b'\x90'*6+b'\xc3')))['pass'])
+
+    def test_code_pointer_retargeted_to_another_function_fails(self):
+        self.assertFalse(compare(decoded(code_image()), decoded(code_image(destination=0x4008)))['pass'])
+
+    def test_code_pointer_offset_within_function_is_protected(self):
+        self.assertFalse(compare(decoded(code_image()), decoded(code_image(destination=0x4001)))['pass'])
+
+    def test_protected_code_pointer_retains_full_byte_comparison(self):
+        self.assertFalse(compare(decoded(code_image(protected=True)),
+                                 decoded(code_image(payload=b'\x91'+b'\x90'*6+b'\xc3', protected=True)))['pass'])
+
+    def test_inline_table_in_code_section_is_data_not_a_code_leaf(self):
+        a, b = code_image(), code_image(payload=b'\x91'+b'\x90'*6+b'\xc3')
+        a.tables = b.tables = [(0x4000, 8, 4)]
+        self.assertFalse(compare(decoded(a), decoded(b))['pass'])
+
+    def test_unknown_classification_and_protected_inventory_fail_closed(self):
+        for issue in ('missing-flags', 'conflicting-flags', 'missing-function', 'unknown-inline-data-kind', 'unknown-protected-set'):
+            img = code_image()
+            if issue == 'missing-flags':
+                del img.section_flags[(0x4000, '__TEXT/__text')]
+            elif issue == 'conflicting-flags':
+                img.section_flags[(0x4000, '__TEXT/__text')] = 0
+            elif issue == 'missing-function':
+                del img.names[0x4000]
+                img.name_starts = sorted(img.names)
+            elif issue == 'unknown-inline-data-kind':
+                img.tables = [(0x4000, 8, 99)]
+            else:
+                img.protected_bodies = None
+            with self.subTest(issue=issue), self.assertRaises(ValueError):
+                decoded(img)
+
+    def test_import_without_proven_code_stub_fails_closed(self):
+        img = image()
+        img.pointer_fixups[0x2000] = {'kind': 'bind', 'library': 'lib-a',
+                                     'symbol': '_data', 'addend': 0, 'flags': 0}
+        with self.assertRaisesRegex(ValueError, 'classification'):
+            decoded(img)
 
 
 class DyldTests(unittest.TestCase):

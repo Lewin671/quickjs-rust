@@ -1,12 +1,12 @@
 # T064 K0 static checker
 
-- Status: feedback 1 complete; amended checker qualified; A/A passes and unoutlined H/C fail. Initial raw-pointer evidence retained below.
+- Status: amendment2 implemented; final single-run qualification pending. Prior qualification evidence retained below.
 - Implementation: maintained Python checker and archive-only H+8/C+8 transforms;
   `scripts/check-kernel-isolation.sh`; no runtime/Cargo/recipe/policy change, no CI hook.
 - Verified at: checker `5c18f47b`; 52 focused / 714 tool tests pass in minimal and symlink TMPDIR environments; fast/full gates and 5,170 subset cases pass; fresh queue job `20261022T053712Z-t064-k0-amend1-main` and local final replay agree.
 - Evidence: contract/method and exact current-main identities/results below; raw queue artifacts are fetchable by job ID.
-- Unresolved: anonymous LEA fallback includes cold code/metadata; its remaining failures are explained below. K1 and any further contract amendment are outside this tooling brief.
-- Next action: lead reviews the recursive code-target and anonymous-span consequences below before freezing K1; CI remains prospective.
+- Unresolved: final amendment2 qualification pending; after that run report all residuals and stop checker iteration. K1 is outside this tooling brief.
+- Next action: run the final amended matrix once, record identities/results and hand off to the lead; no CI hook or runtime change.
 
 The [lead decision](../T064-kernel-isolation.md#lead-decision-2026-10-21)
 is the acceptance contract. Both typed roles are mandatory, including every
@@ -40,12 +40,15 @@ never certifies an opaque pointer by checking an arbitrary short prefix.
 Under [feedback-1 amendment](../T064-kernel-isolation.md#lead-decision-2026-10-21),
 `kernel_relocations.py` decodes native-pointer dyld rebase/bind streams.
 `kernel_referents.py` compares section/symbol/offset or exact external binding
-identities, keeping every non-pointer byte raw. Local target contents form a
-breadth-first graph of depth 2; every node, including cycles, is checked.
+identities, keeping non-pointer bytes raw. Confirmed code outside the protected
+set is an identity-only leaf; protected code remains fully compared. Data and
+protected-code contents form a breadth-first graph of depth 2, with cycles
+checked once. Mach-O instruction flags, function symbols and inline data
+classify local targets; imported code needs an x86 stub matching the exact bind.
 Unresolved targets, partial slots, weak/chained/threaded/unknown fixups or new
 nodes beyond the budget fail closed. External imports are resolved binding
-identities, not a claim about bytes in external dylibs. Schema 2 fingerprints
-record the contract and reject schema 1 comparisons. Pointer-value changes
+identities, not a claim about bytes in external dylibs. Schema3 fingerprints
+record the amendment and reject prior-schema comparisons. Pointer-value changes
 with equal graph contents are explicitly allowed displacement changes.
 The checker proves equality for this pair under this decoder, not future
 compiler isolation, wall-time neutrality, or structural type/field separation.
@@ -63,6 +66,8 @@ Default mode builds reference plus H+8 (or `--perturbation C8`); `--full`
 builds r0a/r0b/h8/c8. Each uses the same source/target paths after deleting
 the canonical target; no executable cache. Independent test builds witness
 sizes and header offsets, then remove probe code before canonical builds.
+Canonical field/initializer insertions preserve source lines, with per-file
+witnesses in builds.json; panic-location metadata retains raw comparison.
 Unchanged canonical images or incorrect/missing layout witnesses reject a
 perturbation. A failed A/A stops interpretation. Nonzero status 1 means
 contract drift; 2 means invalid/incomplete evidence. H+8 failure on current
@@ -166,7 +171,7 @@ The 80 failures per role are address-span LEA referents, not rejected numeric
 literal displacement changes. This qualification detects current coupling;
 it does not establish that outlining or a future K1 would pass.
 
-## Feedback 1: amended qualification
+## Feedback 1: amended qualification (superseded contract, retained evidence)
 
 The lead supplied the pointer comparison amendment and a macOS temporary-path
 failure. `admit_host` now resolves both BENCH_OUT and output. Its test creates
@@ -248,3 +253,32 @@ ownership of anonymous metadata, needs a new lead decision before K1.
 | builds.json | `5972cec36027e924769d7b8afa2d880604b2a6f5827a1d6cab0d65b8a841bf93` |
 | comparisons.json (queue and final replay) | `01fc8fe8135eb55ccdfd19b5a15b5ddca19375bba5d817041d5b33033ef190ad` |
 | result.json | `70e79e9771374d2479c21195269d80403eebd11991b5c142e7c7e3ae8fa57b73` |
+
+## Feedback 2: final single-run qualification
+
+The lead classified the previous two C+8 failure classes as checker artifacts
+and authorized amendment2 in T064's lead decision. Code outside the protected
+body inventory now compares by symbol/import identity plus symbol-relative
+offset. No bytes of those functions participate in referent comparison.
+Protected code remains fully compared; data keeps depth2. Missing/ambiguous
+classification fails closed, including imports without a proven code stub.
+Inline-data records cannot become identity-only code leaves. Schema3 prevents
+mixing this contract with either earlier fingerprint schema.
+
+H+8/C+8 fields and constructor initializers now append on existing lines.
+The transform validates both input files before writing either: file line
+counts match, and removing only the two declared inline insertions restores
+every pre-existing line at its original number, including its line ending.
+R0 also records this witness. builds.json retains per-file before/after line
+counts and the original SHA. The separate test-only layout probe is removed
+before release builds; no panic-location or line-number exception exists.
+
+61 focused tests pass before the final tooling commit. Added cases include
+code-pointer retargeting to another function (fail), protected-code byte
+changes (fail), changed external-code bytes (pass), code offsets, inline data,
+unknown classification, line insertion/movement, CRLF and a final line without
+a newline. Development replay of the previous binaries passes A/A and removes
+77/80 C+8 failures per role; the three old source-line artifacts remain raw.
+This replay is not the required new current-main qualification. Full gates
+and the single final queued matrix are pending; no checker iteration will
+follow that matrix, regardless of its outcome.

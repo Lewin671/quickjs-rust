@@ -1,10 +1,11 @@
 """Bounded, relocation-aware referent graphs for the amended K0 contract.
 
 Only dyld-declared native pointer slots are normalized; all other bytes stay
-raw. Local edges carry section/symbol/offset identity and bounded target bytes.
+raw. Data/protected-code edges carry identity and bounded target contents;
+confirmed code outside the protected set is an identity-only leaf.
 Breadth-first traversal checks every reachable node once, including cycles.
-Unknown/partial slots or new nodes beyond MAX_DEPTH fail closed. Imports are
-exact external dyld bindings, whose definitions are outside this linked image.
+Unknown classification/partial slots or new nodes beyond MAX_DEPTH fail closed.
+Import leaves require exact dyld bindings proven to be code by an x86 stub.
 """
 import bisect
 import hashlib
@@ -12,7 +13,8 @@ import json
 import struct
 
 MAX_DEPTH = 2
-CONTRACT = {'pointer_slots': 'dyld64-v1', 'max_depth': MAX_DEPTH}
+CONTRACT = {'pointer_slots': 'dyld64-v2', 'max_depth': MAX_DEPTH,
+            'external_code': 'identity-only', 'protected_code': 'full'}
 
 
 def digest(value):
@@ -44,14 +46,20 @@ class Referents:
             normalized[at:at+8] = b'\0'*8
             target = None
             if fixup['kind'] == 'bind':
+                classification = image.classify_import(fixup)
                 identity = {'import': fixup['symbol'], 'library': fixup['library'],
                             'offset': fixup['addend'], 'flags': fixup['flags']}
             elif fixup['kind'] == 'rebase':
                 identity, target_width = image.referent_target(value)
-                target = (value, target_width)
+                classification = image.classify_target(value)
+                if classification in ('data', 'protected-code'):
+                    target = (value, target_width)
+                elif classification != 'external-code':
+                    raise ValueError('unknown referent target classification')
             else:
                 raise ValueError('unknown referent pointer relocation')
-            slots.append({'offset': at, 'identity': identity, 'target': target})
+            slots.append({'offset': at, 'identity': identity, 'target': target,
+                          'classification': classification})
             values.append({'offset': at, 'value': value})
         result = {'width': width, 'non_pointer_sha256': hashlib.sha256(normalized).hexdigest(),
                   'pointers': slots, 'values': values, 'raw_sha256': hashlib.sha256(raw).hexdigest()}
@@ -71,9 +79,10 @@ class Referents:
             pointers = []
             for slot in node['pointers']:
                 child = slot['target']
-                edge = {'offset': slot['offset'], 'identity': slot['identity']}
+                edge = {'offset': slot['offset'], 'identity': slot['identity'],
+                        'classification': slot['classification']}
                 if child is None:
-                    edge['target'] = {'external_import': True}
+                    edge['target'] = {'identity_only': True}
                 else:
                     if child not in seen:
                         if depth >= MAX_DEPTH:

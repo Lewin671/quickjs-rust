@@ -100,6 +100,7 @@ class Image:
                 self.imports[int(match[1], 16)] = match[2]
         self.tables = self.data_in_code()
         self.pointer_fixups = pointer_fixups(self.data, self.sections)
+        self.protected_bodies = None
         self.referents = Referents(self)
 
     def section(self, address, width=1):
@@ -173,12 +174,49 @@ class Image:
             identity = {'section': section[2], 'symbol': None, 'offset': address-start}
         return identity, end-address
 
+    def classify_target(self, address):
+        """Classify local targets from Mach-O flags, symbols and inline data."""
+        section = self.section(address)
+        flags = self.section_flags.get((section[0], section[2]))
+        if flags is None:
+            raise ValueError('unknown referent section classification')
+        for start, width, kind in self.tables:
+            if start <= address < start+width:
+                if kind not in (1, 2, 3, 4, 5):
+                    raise ValueError('unknown inline code/data classification')
+                return 'data'
+        if not flags & (0x80000000 | 0x400):  # PURE/SOME_INSTRUCTIONS
+            if section[2] in ('__TEXT/__text', '__TEXT/__stubs', '__TEXT/__stub_helper'):
+                raise ValueError('ambiguous code/data section classification')
+            return 'data'
+        extent = self.symbol_extent(address)
+        if not extent or not self.symbols.size_of(extent[2]):
+            raise ValueError('code referent has no unique function identity')
+        if self.protected_bodies is None:
+            raise ValueError('protected-body inventory is not configured')
+        return ('protected-code' if any(a <= address < b for a, b in self.protected_bodies)
+                else 'external-code')
+
+    def classify_import(self, binding):
+        """An import is known code only when its dyld slot has an x86 stub."""
+        for address in self.imports:
+            if self.section(address)[2] != '__TEXT/__stubs':
+                continue
+            raw = self.raw(address, 6)
+            if raw[:2] != b'\xff\x25':
+                raise ValueError('unknown import code stub')
+            slot = address+6+struct.unpack_from('<i', raw, 2)[0]
+            if self.pointer_fixups.get(slot) == binding:
+                return 'external-code-import'
+        raise ValueError('unknown code/data classification for import referent')
+
     def referent(self, address, width):
         return self.referents.snapshot(address, width)
 
     def data_in_code(self):
         cursor, records = 32, []
         self.unbacked = set()
+        self.section_flags = {}
         for _ in range(struct.unpack_from('<I', self.data, 16)[0]):
             kind, size = struct.unpack_from('<II', self.data, cursor)
             if kind == 0x19:
@@ -188,8 +226,12 @@ class Image:
                     if struct.unpack_from('<I', self.data, section+60)[0]:
                         raise ValueError('unknown unresolved section relocation')
                     flags = struct.unpack_from('<I', self.data, section+64)[0]
+                    name = self.data[section:section+16].rstrip(b'\0').decode()
+                    segment = self.data[section+16:section+32].rstrip(b'\0').decode()
+                    start = struct.unpack_from('<Q', self.data, section+32)[0]
+                    self.section_flags[(start, segment+'/'+name)] = flags
                     if flags & 0xff in (1, 12, 18):  # Mach-O zero-fill kinds
-                        self.unbacked.add(struct.unpack_from('<Q', self.data, section+32)[0])
+                        self.unbacked.add(start)
             if kind == 0x29:
                 if size != 16:
                     raise ValueError('invalid data-in-code command')

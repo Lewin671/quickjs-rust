@@ -99,7 +99,7 @@ def build_one(root, ref, output, name, kind):
     subprocess.run(['tar', '-x', '-C', str(source)], input=archive, check=True)
     if run(['rustc', '-vV'], cwd=source) != run(['rustc', '-vV'], cwd=root):
         raise ValueError('source revision selects a different compiler/toolchain')
-    perturb(source, kind)
+    line_preservation = perturb(source, kind)
     for path in (OBJECT, BUILDER):
         shutil.copy2(source / path, dest / path.name)
     original = install_layout_probe(source)
@@ -122,7 +122,7 @@ def build_one(root, ref, output, name, kind):
     if run([dest / 'qjs', '--raw', '-e', 'let s=0; for(let i=0;i<100;i++)s+=i; s;']) != '4950':
         raise ValueError('canonical smoke failed')
     report = fingerprint(dest / 'qjs', dest / 'fingerprint.json')
-    record = {'kind': kind, 'sha256': sha(dest / 'qjs'), 'layout': layout,
+    record = {'kind': kind, 'sha256': sha(dest / 'qjs'), 'layout': layout, 'line_preservation': line_preservation,
               'source_sha256': {str(p): sha(source / p) for p in (OBJECT, BUILDER)}}
     return record, report
 

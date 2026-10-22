@@ -1,12 +1,12 @@
 # T064: Kernel isolation prerequisite
 
-- Status: active; K0 feedback-1 pointer amendment qualified (A/A passes, H fails, C retains 80 mismatches per role); lead decision 2026-10-21 approves the address-operand contract below; K1 not started.
+- Status: active; K0 amendment2 implemented; final single-run qualification pending; lead decision 2026-10-21 approves the address-operand contract below; K1 not started.
 - Implementation: diagnostic archive transformations plus maintained [K0 checker](archive/T064-k0-checker.md); production runtime/Cargo/recipe unchanged. No kernel crate.
-- Verified at: checker `5c18f47b` full/fast gates, 52 focused / 714 tools clean/symlink and 5,170 subset cases pass; main `4fa3f739` queue job `20261022T053712Z-t064-k0-amend1-main` completes four builds and final replay agrees (see record).
+- Verified at: amendment1 `5c18f47b` evidence is retained; amendment2 has61 focused passes, full/fast gates and one fresh canonical matrix pending.
 - Evidence: [K0 qualification/identities](archive/T064-k0-checker.md), [spike result/identities](archive/T064-causal-outlining-spike.md), [design/ABI](../docs/design/interpreter-core-v2.md#kernel-isolation-prerequisite-k0-before-m1-resumes),
   [allocation/startup inputs](archive/T064-kernel-isolation-inputs.md), [producer](diagnostics/t064-k-spike/README.md), [lead decision](#lead-decision-2026-10-21).
 - Unresolved: K's own cost (outlined service calls, entry constants) is unpriced; successor K→A→B plan needs a fresh queue/profiles on recorded main M.
-- Next action: lead reviews the remaining C+8 code-target/raw-line-metadata failures under the amendment and fresh profiles, then freezes the successor before K1. No CI hook yet.
+- Next action: run the final amended checker once on recorded main, report counts/residuals and stop iteration as instructed; then hand off to lead before K1. No CI hook yet.
 
 ## Lead decision (2026-10-21)
 
@@ -25,6 +25,13 @@ The user delegated this decision to the lead. Decisions, binding on later owners
    Exact external dyld import bindings are leaves: their definitions are outside the linked executable.
    Identical resolved targets with moved pointer values are reported in the allowed displacement class.
    LEA spans end at the containing symbol's extent when known; through-next-data-boundary is the anonymous fallback.
+   **Amendment 2 (lead feedback 2, 2026-10-21):** confirmed code targets outside the protected-body set are identity-only
+   (same symbol/import and offset within symbol); their function bytes are excluded. Code inside the protected set retains full comparison;
+   data targets retain depth 2. Mach-O instruction flags, unique function identities and inline-data ranges classify local targets;
+   imports require a matching x86 code stub/bind identity. Unknown classification fails closed. Owned tables remain fully protected.
+   H+8/C+8 transformations insert fields/initializers on existing lines and assert unchanged per-file line counts and every original
+   line's number/content after removing only the declared insertions. No panic-location/line-number allowance is added.
+   Run the final current-main matrix once; report any residual and stop checker iteration after that run.
 2. **No crate, no FFI, no linker/literal ownership work.** K1 is production-quality cold outlining of the object-bearing typed arms for both
    Vm and WideLoopFrame on fresh main, following the spike's boundary. A type/field firewall check may be source-level; a crate is not required.
 3. **Plan.** Adopt the K→A→B successor migration and the failure sub-budgets proposed below (at most one K failure; A+B keep one shared failure;

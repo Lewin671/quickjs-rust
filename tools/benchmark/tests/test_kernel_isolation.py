@@ -14,7 +14,7 @@ from unittest.mock import patch
 from tools.benchmark.kernel_decode import decode_body, memory_width, rip_position
 from tools.benchmark.kernel_isolation import compare
 from tools.benchmark.kernel_macho import Image, ROLES, assembly, select_roles
-from tools.benchmark.kernel_perturb import (BUILDER, FIELDS, OBJECT, install_layout_probe,
+from tools.benchmark.kernel_perturb import (BUILDER, FIELDS, OBJECT, assert_line_preserving, install_layout_probe,
                                            perturb, validate_layout)
 from tools.benchmark.kernel_build import matrix, parse_layout
 from tools.benchmark.kernel_referents import CONTRACT, Referents
@@ -62,7 +62,7 @@ def body(literal=b'12345678', displacement=0xff8, call_disp=0x1ff3):
 
 
 def report(b=None):
-    return {'schema': 2, 'referent_contract': CONTRACT.copy(), 'target': 'x86_64-apple-darwin', 'family': 'run',
+    return {'schema': 3, 'referent_contract': CONTRACT.copy(), 'target': 'x86_64-apple-darwin', 'family': 'run',
             'decoder': {'sha256': 'audited-decoder'}, 'adapters': [],
             'roles': {r: deepcopy(b if b is not None else body()) for r in ROLES}}
 
@@ -289,7 +289,10 @@ class PerturbationTests(unittest.TestCase):
                 (root / OBJECT).write_text('struct ObjectData {\nstruct ObjectColdData {\n' +
                                            'Self(Rc::new(ObjectData {\n'*3)
                 (root / BUILDER).write_text('ObjectRef(Rc::new(ObjectData {')
-                perturb(root, kind)
+                before = {p: (root / p).read_text() for p in (OBJECT, BUILDER)}
+                witness = perturb(root, kind)
+                for path, original in before.items():
+                    self.assertEqual(witness[str(path)], assert_line_preserving(original, (root / path).read_text()))
                 self.assertEqual((root / OBJECT).read_text().count('_kernel_probe_word'), 4 if kind == 'H8' else 1)
                 original = install_layout_probe(root)
                 self.assertNotIn('fn kernel_isolation_layout_probe', original)
@@ -301,9 +304,28 @@ class PerturbationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / OBJECT).parent.mkdir(parents=True)
+            (root / BUILDER).parent.mkdir(parents=True, exist_ok=True)
+            (root / BUILDER).write_text('ObjectRef(Rc::new(ObjectData {')
             (root / OBJECT).write_text('struct ObjectData {')
             with self.assertRaisesRegex(ValueError, 'source shape changed'):
                 perturb(root, 'H8')
+
+    def test_line_preservation_rejects_inserted_or_moved_original_lines(self):
+        before = 'first\nsecond\nthird\n'
+        for after in ('first\ninserted\nsecond\nthird\n', 'second\nfirst\nthird\n'):
+            with self.subTest(after=after), self.assertRaisesRegex(ValueError, 'line'):
+                assert_line_preserving(before, after)
+
+    def test_line_preservation_keeps_crlf_and_final_line_without_newline(self):
+        before = 'struct ObjectColdData {\r\n original\r\n}'
+        after = before.replace('struct ObjectColdData {',
+                               'struct ObjectColdData { _kernel_probe_word: usize,')
+        witness = assert_line_preserving(before, after)
+        self.assertEqual(witness['before_lines'], 3)
+        self.assertEqual(witness['after_lines'], 3)
+        self.assertTrue(witness['preexisting_lines_preserved'])
+        with self.assertRaisesRegex(ValueError, 'existing source line'):
+            assert_line_preserving(before, after.replace('\r\n', '\n'))
 
     def test_matrix_and_layout_parser(self):
         self.assertEqual(len(matrix(False, 'H8')), 2)
