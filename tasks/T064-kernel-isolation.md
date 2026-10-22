@@ -1,12 +1,12 @@
 # T064: Kernel isolation prerequisite
 
-- Status: active; K0 feedback-1 pointer amendment implemented; fresh qualification pending; lead decision 2026-10-21 approves the address-operand contract below; K1 not started.
+- Status: active; K0 feedback-1 pointer amendment qualified (A/A passes, H fails, C retains 80 mismatches per role); lead decision 2026-10-21 approves the address-operand contract below; K1 not started.
 - Implementation: diagnostic archive transformations plus maintained [K0 checker](archive/T064-k0-checker.md); production runtime/Cargo/recipe unchanged. No kernel crate.
-- Verified at: initial schema1 checker `36ab76e3` fast/full gates and 5,170 subset cases pass; feedback1 schema2 has 52 focused passes and original34/696 clean/symlink passes; fresh canonical qualification pending.
+- Verified at: checker `5c18f47b` full/fast gates, 52 focused / 714 tools clean/symlink and 5,170 subset cases pass; main `4fa3f739` queue job `20261022T053712Z-t064-k0-amend1-main` completes four builds and final replay agrees (see record).
 - Evidence: [K0 qualification/identities](archive/T064-k0-checker.md), [spike result/identities](archive/T064-causal-outlining-spike.md), [design/ABI](../docs/design/interpreter-core-v2.md#kernel-isolation-prerequisite-k0-before-m1-resumes),
   [allocation/startup inputs](archive/T064-kernel-isolation-inputs.md), [producer](diagnostics/t064-k-spike/README.md), [lead decision](#lead-decision-2026-10-21).
 - Unresolved: K's own cost (outlined service calls, entry constants) is unpriced; successor K→A→B plan needs a fresh queue/profiles on recorded main M.
-- Next action: qualify the amended K0 contract on recorded current main, explain remaining C+8 mismatches, then hand results to the lead before K1. No CI hook yet.
+- Next action: lead reviews the remaining C+8 code-target/raw-line-metadata failures under the amendment and fresh profiles, then freezes the successor before K1. No CI hook yet.
 
 ## Lead decision (2026-10-21)
 
@@ -20,7 +20,7 @@ The user delegated this decision to the lead. Decisions, binding on later owners
    This changes only the static artifact contract; no timing, band, attempt or correctness gate is relaxed.
    **Amendment (lead feedback 1, 2026-10-21):** pointer-sized referent slots compare relocated target identity
    (section, symbol or import, offset within symbol) and target contents under the same rule, not raw pointer values.
-   The checker traverses local target graphs to depth2; cycles revisit already checked nodes, and new nodes beyond the bound,
+   The checker traverses local target graphs to depth 2; cycles revisit already checked nodes, and new nodes beyond the bound,
    unknown/unresolvable slots and partial slots fail closed. Non-pointer bytes stay raw; owned tables remain fully protected.
    Exact external dyld import bindings are leaves: their definitions are outside the linked executable.
    Identical resolved targets with moved pointer values are reported in the allowed displacement class.

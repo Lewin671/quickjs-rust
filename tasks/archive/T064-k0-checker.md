@@ -1,12 +1,12 @@
 # T064 K0 static checker
 
-- Status: feedback-1 amendment implemented; fresh qualification pending. Initial raw-pointer result retained below.
+- Status: feedback 1 complete; amended checker qualified; A/A passes and unoutlined H/C fail. Initial raw-pointer evidence retained below.
 - Implementation: maintained Python checker and archive-only H+8/C+8 transforms;
   `scripts/check-kernel-isolation.sh`; no runtime/Cargo/recipe/policy change, no CI hook.
-- Verified at: initial checker `36ab76e3` full-gate evidence below; feedback1: original34/696 tests pass in minimal and symlink TMPDIR environments, new52 focused cases pass; amended full gate and new canonical matrix pending.
+- Verified at: checker `5c18f47b`; 52 focused / 714 tool tests pass in minimal and symlink TMPDIR environments; fast/full gates and 5,170 subset cases pass; fresh queue job `20261022T053712Z-t064-k0-amend1-main` and local final replay agree.
 - Evidence: contract/method and exact current-main identities/results below; raw queue artifacts are fetchable by job ID.
-- Unresolved: amended current-main canonical qualification and remaining C+8 attribution pending; K1 is outside this tooling brief.
-- Next action: run the amended full matrix through the iMac queue, attribute remaining C+8 mismatches and update this record; CI remains prospective.
+- Unresolved: anonymous LEA fallback includes cold code/metadata; its remaining failures are explained below. K1 and any further contract amendment are outside this tooling brief.
+- Next action: lead reviews the recursive code-target and anonymous-span consequences below before freezing K1; CI remains prospective.
 
 The [lead decision](../T064-kernel-isolation.md#lead-decision-2026-10-21)
 is the acceptance contract. Both typed roles are mandatory, including every
@@ -41,11 +41,11 @@ Under [feedback-1 amendment](../T064-kernel-isolation.md#lead-decision-2026-10-2
 `kernel_relocations.py` decodes native-pointer dyld rebase/bind streams.
 `kernel_referents.py` compares section/symbol/offset or exact external binding
 identities, keeping every non-pointer byte raw. Local target contents form a
-breadth-first graph of depth2; every node, including cycles, is checked.
+breadth-first graph of depth 2; every node, including cycles, is checked.
 Unresolved targets, partial slots, weak/chained/threaded/unknown fixups or new
 nodes beyond the budget fail closed. External imports are resolved binding
-identities, not a claim about bytes in external dylibs. Schema2 fingerprints
-record the contract and reject schema1 comparisons. Pointer-value changes
+identities, not a claim about bytes in external dylibs. Schema 2 fingerprints
+record the contract and reject schema 1 comparisons. Pointer-value changes
 with equal graph contents are explicitly allowed displacement changes.
 The checker proves equality for this pair under this decoder, not future
 compiler isolation, wall-time neutrality, or structural type/field separation.
@@ -171,7 +171,7 @@ it does not establish that outlining or a future K1 would pass.
 The lead supplied the pointer comparison amendment and a macOS temporary-path
 failure. `admit_host` now resolves both BENCH_OUT and output. Its test creates
 its own physical/alias directories and controls environment and platform;
-it does not rely on caller TMPDIR or BENCH_OUT. Original34 focused tests and
+it does not rely on caller TMPDIR or BENCH_OUT. Original 34 focused tests and
 696 benchmark-tool tests pass in both a minimal environment and a deliberate
 `/var/folders/.../T/.../alias` TMPDIR resolving through `/private/var/folders`.
 The caller BENCH_OUT is deliberately invalid in the alias run. The complete
@@ -185,4 +185,66 @@ retargeting to a different symbol with identical bytes (fail), changed target
 bytes, non-pointer changes, unresolved/partial slots, imports, symbol bounds,
 cycles and depth exhaustion. Dyld stream cases cover opcode families, segment
 bounds, lazy-state reset, unsigned backward additions, truncation/overflow,
-resource bounds and unsupported chained/threaded forms. Fresh results pending.
+resource bounds and unsupported chained/threaded forms. The final suite has
+52 focused / 714 benchmark cases; minimal and symlink TMPDIR runs both pass.
+The full local gate also passes 35 script tests and 5,170 Test262 subset cases.
+Before every local Cargo invocation the disk guard checked available space;
+`target/debug` was removed after the final full gate.
+
+Fresh non-timing job `20261022T053712Z-t064-k0-amend1-main` uses producer
+`5c18f47b` and fixed main `4fa3f739902bf4a78035e36522f4c2419f7bb45e`.
+That main differs from the previous `9eba7a1d` only in T040 documentation;
+no source, Cargo or recipe input changes. It ran at 2026-10-22T05:37:14Z,
+finished all four clean builds in 426 s and returned 1 for contract differences;
+no timing, cancellation, retry or attempt debit. The four executable SHA-256
+identities and layout witnesses exactly reproduce the initial table above.
+
+After fetching, final checker 5c18f47b verified each image SHA, decoded all four
+images again and produced byte-identical comparisons.json to the new queue.
+The iMac's cctools 1001.2 / LLVM 14 decoder and local cctools 1040 / LLVM 21 decoder
+therefore agree; their exact identities are recorded above.
+
+| Amended comparison | Vm / WideLoopFrame |
+| --- | --- |
+| A/A | PASS; full executable byte equality and complete body equality repeat. |
+| H+8 | FAIL; same five categories, including instruction boundaries/relative PCs. Positive control survives the amendment. |
+| C+8 | FAIL; 80/80 original mismatches remain in each role: 77 recursive target-content differences, 3 direct non-pointer differences. 132 / 133 direct displacement changes remain allowed. |
+
+Both roles reference the exact same 80 failing address/width pairs. Every
+pointer identity, target-node inventory and graph edge matches across C+8.
+The pointer-address changes themselves no longer determine the failures:
+
+- **77 referents:** the immediate non-pointer bytes match, but recursively
+  reachable symbol-owned function bytes differ. Across the 80 referents,
+  173 distinct __TEXT/__text target extents differ; all changes are explained
+  by 649 RIP-disp32, 286 E8-call and 48 E9-tail-branch fields, with unchanged
+  instruction boundaries. Examples include `core::fmt::Debug` formatters and
+  `drop_in_place<Vec<TypedOp>>`. This is diagnostic attribution, not a relaxed
+  comparison: the amendment keeps non-pointer target bytes raw, including
+  these 4-byte instruction operands. The checker consequently rejects them.
+- **3 referents:** Vm+0x3104/+0x3110/+0x311c and Wide+0x30a5/+0x30b1/+0x30bd additionally
+  cover raw panic-location metadata via the anonymous LEA fallback. All 63
+  changed non-pointer bytes belong to 62 location records for
+  `crates/qjs-runtime/src/value/object.rs`; each u32 line number increases by 1
+  (for example 777→778 and 743→744), with unchanged filename length/column.
+  These ranges also share the recursive code-target changes.
+
+The first failing metadata LEA (Vm+0x2b80 / Wide+0x2ad4) illustrates the closure:
+35,360 B anonymous span, 625 reachable nodes and 1,707 pointer occurrences;
+its immediate normalized bytes and all pointer identities match, while 166
+reachable function targets change bytes. No known containing data symbol was
+available for these anonymous spans; symbol-bounded LEAs are covered by the
+new focused fixture. Bounds were not tuned to make this finite matrix pass.
+
+Thus the amendment allows a moved pointer with unchanged identity/content
+(the positive synthetic fixture reports `referent-pointer-relocation`), but
+does not make this unoutlined C+8 artifact isolated. Further treatment of
+instruction-address operands inside recursively referenced code, or tighter
+ownership of anonymous metadata, needs a new lead decision before K1.
+
+| Amended queue receipt | SHA-256 |
+| --- | --- |
+| request.json | `d0eb495c87e20fb1c957742504529bfcff24b2f3c48690ad06ba0040265c6315` |
+| builds.json | `5972cec36027e924769d7b8afa2d880604b2a6f5827a1d6cab0d65b8a841bf93` |
+| comparisons.json (queue and final replay) | `01fc8fe8135eb55ccdfd19b5a15b5ddca19375bba5d817041d5b33033ef190ad` |
+| result.json | `70e79e9771374d2479c21195269d80403eebd11991b5c142e7c7e3ae8fa57b73` |
