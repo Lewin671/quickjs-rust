@@ -1,12 +1,29 @@
 # T064: Kernel isolation prerequisite
 
-- Status: active; causal spike complete, strict final-linked invariant failed; K1 not started.
+- Status: active; causal spike complete; lead decision 2026-10-21 approves K as the address-operand contract below; K1 not started.
 - Implementation: diagnostic archive transformations only; production runtime/Cargo/recipe unchanged. No kernel crate.
 - Verified at: main `06e199fec9e9e51742cdae7633c5dc758c326752`; iMac seven-build job235604Z and semantics000011Z done0; full local gate passed.
 - Evidence: [spike result/identities](archive/T064-causal-outlining-spike.md), [design/ABI](../docs/design/interpreter-core-v2.md#kernel-isolation-prerequisite-k0-before-m1-resumes),
-  [allocation/startup inputs](archive/T064-kernel-isolation-inputs.md), [producer](diagnostics/t064-k-spike/README.md).
-- Unresolved: final literal/import-stub placement under fat LTO/linking; no full IR/type firewall, performance pricing or approved successor budgets.
-- Next action: review literal/linker ownership and ROI before K1; preserve T056 allocation/startup attribution. No owner timing or PMU work.
+  [allocation/startup inputs](archive/T064-kernel-isolation-inputs.md), [producer](diagnostics/t064-k-spike/README.md), [lead decision](#lead-decision-2026-10-21).
+- Unresolved: K's own cost (outlined service calls, entry constants) is unpriced; successor K→A→B plan needs a fresh queue/profiles on recorded main M.
+- Next action: lead runs the fresh current-main formal comparison/queue; meanwhile K0 checker tooling (no runtime change) and T056 unpack/startup attribution proceed. Freeze the successor plan before K1 runtime code.
+
+## Lead decision (2026-10-21)
+
+The user delegated this decision to the lead. Decisions, binding on later owners until a new recorded decision:
+
+1. **Contract.** K's static invariant for protected bodies is: identical instruction boundaries and intra-function relative PCs, identical
+   non-address bytes, identical owned table bytes/targets/relative positions and stack layout, and every RIP-relative operand resolving to a referent
+   with identical bytes and width. Displacement-only changes of RIP operands and call/import fixups are classified, reported, and allowed.
+   Raw whole-body byte equality is not required. The spike's H+8 differences are all of the allowed class; the T056 failure mechanism
+   (an off-path 3B shortening moving Add `29ca→29be`) is a relative-PC change and stays a hard failure.
+   This changes only the static artifact contract; no timing, band, attempt or correctness gate is relaxed.
+2. **No crate, no FFI, no linker/literal ownership work.** K1 is production-quality cold outlining of the object-bearing typed arms for both
+   Vm and WideLoopFrame on fresh main, following the spike's boundary. A type/field firewall check may be source-level; a crate is not required.
+3. **Plan.** Adopt the K→A→B successor migration and the failure sub-budgets proposed below (at most one K failure; A+B keep one shared failure;
+   max_attempts ≤ 2). Close `interpreter-core-v2-layout-edges` as closed-superseded when the successor plan is committed.
+4. **Time box.** A valid K screen failure stops kernel isolation; the lead then moves T056 effort to M2 (frames/calls) rather than redesigning K.
+5. **Parallel work.** T056 unpack allocation and startup-instruction attribution continue without timing; findings land as A-stage inputs.
 
 ## Goal and mechanism after review
 

@@ -12,7 +12,7 @@ it to `archive/` with `git mv` and move its row below.
 
 | Task | Status | What it is |
 | --- | --- | --- |
-| [T064](T064-kernel-isolation.md) kernel isolation | active | [Spike result](archive/T064-causal-outlining-spike.md): A/A repeats, outlining stabilizes internal PCs but H+8 still moves literal/math fixups; K1 awaits review; [cost inputs](archive/T064-kernel-isolation-inputs.md). |
+| [T064](T064-kernel-isolation.md) kernel isolation | active | [Spike result](archive/T064-causal-outlining-spike.md): A/A repeats, outlining stabilizes internal PCs but H+8 still moves literal/math fixups; lead decision 2026-10-21: address-operand contract, K→A→B successor, no crate; fresh queue next; [cost inputs](archive/T064-kernel-isolation-inputs.md). |
 | [T057](T057-string-code-units.md) string code units | active | Stage 1 and UTF-16 correctness extraction integrated; stage 2 abandoned (0 attempts); linear-search follow-up awaits screening. |
 | [T056](T056-interpreter-core-v2.md) interpreter core v2 | blocked | T064 causal spike before kernel/M1 work; stage A unpromoted,1/2 attempts spent and shared A+B reserve unchanged; unpack/startup cost attribution remains open. |
 | [T018](T018-broad-performance.md) broad performance | active | The performance campaign contract and its targets against QuickJS-NG. Start performance work here, then follow [the workflow](../docs/performance-workflow.md). |

@@ -6,7 +6,8 @@
 - Evidence: [stage1](archive/T056-m1-stage1-evidence.md), [M1.2 rejection](archive/T056-m1-stage2-evidence.md),
   [M1.2 diagnosis](archive/T056-m1-stage2-diagnosis.md), [M2 inputs](archive/T056-m2-design-inputs.md), [isolation/cost inputs](archive/T064-kernel-isolation-inputs.md).
 - Unresolved: object/header changes move off-path instructions in typed execution; unpack allocation and +7.1% historical startup instruction excess remain attribution priorities.
-- Next action: review T064's non-timing causal spike before K1/M1 continuation; no owner timing. Keep old frozen layout-edges plan untouched:0a9af81b failed1/2, one shared A+B reserve remains, no reset.
+- Next action: per the [T064 lead decision](T064-kernel-isolation.md#lead-decision-2026-10-21), A/B continue in the K→A→B successor plan;
+  until then attribute unpack allocations and startup instructions without timing. Old layout-edges plan untouched:0a9af81b failed1/2, one shared A+B reserve remains, no reset.
 
 ## Goal and scope
 
