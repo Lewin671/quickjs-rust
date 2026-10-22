@@ -206,8 +206,8 @@ fn page_of(block: *mut u8) -> *mut PageHeader {
     (block as usize & !PAGE_MASK) as *mut PageHeader
 }
 
-/// Take a block from a page the calling thread owns: free list, then drained
-/// remote entries, then the bump area. Returns `None` when the page is full.
+/// Take a block from a page the calling thread owns: free list, then bump
+/// space, then drained remote entries. Returns `None` when the page is full.
 #[inline]
 unsafe fn allocate_from_page(page: *mut PageHeader) -> Option<*mut u8> {
     // SAFETY: the caller guarantees `page` is a live page owned by this thread,
@@ -221,6 +221,19 @@ unsafe fn allocate_from_page(page: *mut PageHeader) -> Option<*mut u8> {
             (*page).free = free.cast::<*mut u8>().read();
             (*page).live += 1;
             return Some(free);
+        }
+        let bump = (*page).bump;
+        if !bump.is_null() && bump < (*page).bump_end {
+            // The bump area was sized to whole blocks, so `bump` has
+            // `CLASS_SIZES[class]` bytes before `bump_end`.
+            (*page).bump = bump.add(CLASS_SIZES[(*page).class]);
+            (*page).live += 1;
+            return Some(bump);
+        }
+        // Only touch the atomic list when it is non-empty; a plain load keeps
+        // the common path free of a locked exchange.
+        if (*page).remote.load(Ordering::Relaxed).is_null() {
+            return None;
         }
         let mut cursor = (*page).remote.swap(ptr::null_mut(), Ordering::AcqRel);
         if !cursor.is_null() {
@@ -241,14 +254,6 @@ unsafe fn allocate_from_page(page: *mut PageHeader) -> Option<*mut u8> {
             (*page).free = block.cast::<*mut u8>().read();
             (*page).live += 1;
             return Some(block);
-        }
-        let bump = (*page).bump;
-        if !bump.is_null() && bump < (*page).bump_end {
-            // The bump area was sized to whole blocks, so `bump` has
-            // `CLASS_SIZES[class]` bytes before `bump_end`.
-            (*page).bump = bump.add(CLASS_SIZES[(*page).class]);
-            (*page).live += 1;
-            return Some(bump);
         }
         None
     }

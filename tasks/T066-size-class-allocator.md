@@ -84,8 +84,8 @@ targets are inside the plan's rank ceiling 6.
   per page, header at the base, one class per page, and a per-page free list,
   bump area and live count. `block & !(PAGE_SIZE - 1)` finds the header.
 - A thread owns its pages through per-class lists and a current page. Allocation
-  takes the current page's free list, then its drained remote list, then bump
-  space; when the current page is full it scans the class list and otherwise
+  takes the current page's free list, then bump space, then its drained
+  remote list; when the current page is full it scans the class list and otherwise
   takes an empty page or a new one.
 - Free updates the owning page's live count; when it reaches zero the page is
   unlinked and parked in a thread-local empty pool of at most 8 pages, or
