@@ -3,10 +3,10 @@
 - Status: active.
 - Implementation: present at `51ef019d`; thread-local size-class allocator in
   `crates/qjs-cli` with nine unit tests. Nothing outside `qjs-cli` changed.
-- Verified at: `51ef019d`, 2026-10-22; local full gate with Test262 deferred
-  (worktree submodules uninitialized), iMac correctness job (compare-qjs and
-  5170/5170 Test262), 86-case instruction pre-gate PASS, RSS cohort and
-  diagnostic triage.
+- Verified at: `51ef019d` (code) and the documentation-only `13507c15`,
+  2026-10-22; local full gate with Test262 deferred (worktree submodules
+  uninitialized), iMac correctness job (compare-qjs and 5170/5170 Test262),
+  86-case instruction pre-gate PASS, RSS cohort and diagnostic triage.
 - Evidence: [plan](performance-units/cli-size-class-allocator.json), this file,
   [evidence record](archive/T066-allocator-evidence.md).
 - Unresolved: peak RSS is above 1.05 on `big.js/arith` (1.100),

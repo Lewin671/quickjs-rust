@@ -83,11 +83,13 @@ absolute RSS slightly (js-yaml 33.8 → 34.1 MB), so the frozen 32-class,
 
 ## Verification
 
-Local gate at `51ef019d`: `QJS_CHECK_SKIP_TEST262=1 ./scripts/check.sh` passed
-(format, clippy, default/agents/perf-counters lints and tests, workspace tests,
-tool tests, plan checks, context, script tests, hooks, file size). Test262 was
-deferred only because this worktree's `third_party` submodules are not
-initialized; the exact candidate ran it on the iMac.
+Local gate: `QJS_CHECK_SKIP_TEST262=1 ./scripts/check.sh` passed at
+`f606fcee` and again at `13507c15`, the documentation-only commit whose code is
+the final `51ef019d` (format, clippy, default/agents/perf-counters lints and
+tests, workspace tests, tool tests, plan checks, context, script tests, hooks,
+file size). At `51ef019d` the focused `cargo test -p qjs-cli` and clippy also
+passed. Test262 was deferred only because this worktree's `third_party`
+submodules are not initialized; the exact candidate ran it on the iMac.
 
 | Check | Result |
 | --- | --- |
