@@ -1,0 +1,118 @@
+# T066: Production size-class global allocator for the CLI
+
+- Status: active.
+- Implementation: in progress; plan frozen before runtime code.
+- Verified at: not recorded.
+- Evidence: [plan](performance-units/cli-size-class-allocator.json), this file,
+  [evidence record](archive/T066-allocator-evidence.md) (created at handoff).
+- Unresolved: acceptance screen/K=6/formal promotion belong to the lead; this
+  unit's implementation and diagnostic evidence are the owner's deliverable.
+- Next action: implement the allocator in `crates/qjs-cli`, run the focused and
+  full gates, then submit the non-timing pre-gate/RSS and diagnostic triage jobs.
+
+## Goal
+
+Replace the CLI process's global allocator (std `System`, i.e. macOS system
+malloc) with a production thread-local size-class allocator and show, under the
+frozen layout policy, that whole-program wall time on the selected development
+targets improves without breaking controls. The allocator is a CLI concern:
+`qjs-runtime` and every library crate keep their allocator so embedders decide
+their own policy.
+
+## Scope
+
+- Allowed paths: `crates/qjs-cli/src/allocator.rs` (new),
+  `crates/qjs-cli/src/main.rs` (module + `#[global_allocator]` wiring),
+  `tasks/T066-size-class-allocator.md`, `tasks/README.md`,
+  `tasks/performance-units/cli-size-class-allocator.json`,
+  `tasks/performance-units/README.md`, `tasks/archive/T066-allocator-evidence.md`.
+- Forbidden paths: `crates/qjs-runtime`, `crates/qjs-ast`, `crates/qjs-lexer`,
+  `crates/qjs-parser`, `third_party/**`, workspace `Cargo.toml`/`Cargo.lock`
+  dependency changes, benchmark policies/manifests.
+- Owner boundary: single owner; base `9eba7a1d`, branch
+  `agent/t066-size-class-allocator/cmd`, worktree
+  `worktrees/quickjs-rust/t066-allocator`.
+
+## Target selection (frozen before implementation)
+
+Rule: rank every development program that has an exact-M profile receipt by
+its allocator self-sample share, then take the highest shares whose frozen v6
+payoff `min(0.97, 1/B_i)` is credible given the measured share. The mechanism
+is instruction-blind, so the payoff is a memory-sensitive wall target and every
+target is also a memory wall target. The T065 ablation is diagnostic priority
+evidence only: it is not used to choose or order targets.
+
+Allocator self samples are the self time of the macOS malloc family
+(`nanov2_*`, `free`, `default_zone_*`, `_malloc_zone_*`, `malloc`, `calloc`,
+`realloc`) plus Rust alloc shims (`__rust_alloc*`, `alloc::alloc::*`,
+`RawVecInner::reserve/grow`), computed from each receipt's `profile.sample`
+call tree (self = inclusive minus direct children). Fractions below are pooled
+over the three windows; reach is not a removable fraction or a speed forecast.
+
+| Development program | Exact-M receipts | Allocator share | B_i | Payoff | Allocator time that must disappear | Decision |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| `diff/compare` | J0 | 0.25164 | 1.099110 | 0.909827 | 39.4% | target |
+| `graphlib/paths` | J1 | 0.18906 | 1.050127 | 0.952265 | 26.5% | target |
+| `js-yaml/document` | J0 | 0.17833 | 1.050127 | 0.952265 | 28.1% | target |
+| `immutable/persistent` | J0 | 0.17606 | 1.076243 | 0.929158 | 43.3% | target |
+| `moment/dates` | J0 | 0.13827 | 1.050127 | 0.952265 | 36.3% | control |
+| `meriyah/parse` | J0 | 0.13584 | 1.071895 | 0.932927 | 52.9% | control |
+
+`big.js/arith`, `papaparse/csv`, `matter-js/simulate` and `lodash/transform`
+have no exact-M profile receipt, so their share is unmeasured and they cannot
+be selected here; they stay controls and are named as a limitation. J0 is
+`20261022T050553Z-t064-successor-exact-profiles`; J1 is
+`20261022T072707Z-t056-m2-plan-graphlib-exact`. The ablation's own development
+geomean 0.89 and per-program 0.80-0.90 support the credibility of these
+payoffs, but the ranking above stands without it.
+
+Queue binding: candidate `9eba7a1d`, queue SHA-256 `f6666a68...`; development
+ranks js-yaml 1, immutable 2, moment 3, diff 4, meriyah 5, graphlib 6. All four
+targets are inside the plan's rank ceiling 6.
+
+## Design (frozen)
+
+- 32 size classes: 16-byte steps to 128 B, then four equal classes per power of
+  two up to 8 KiB (160, 192, 224, 256, 320, ..., 8192). Largest internal
+  fragmentation is one 16-byte step at 128 B and one quarter-step above it.
+- A layout with `size > 8192` or `align > 16` is System-managed; zero-sized
+  layouts forward to System as well.
+- Each thread has 32 lock-free free lists plus per-class bump slabs allocated
+  from System at 64 KiB. Freeing pushes onto the freeing thread's list, so a
+  cross-thread free transfers ownership and never touches the allocating
+  thread's state. Slabs and lists are retained until process exit.
+- `thread_local!` is const-initialized and registers no destructor, so no thread
+  ever observes a destroyed pool; after thread exit its retained blocks leak,
+  which is sound (no pointer outlives a live owner).
+- `realloc`: same class returns the same block; System-managed to System-managed
+  with equal alignment forwards to `System.realloc`; every other case allocates
+  the new layout, copies `min(old, new)`, and deallocates the old block.
+- `alloc_zeroed`: System-managed forwards to `System.alloc_zeroed`; a size-class
+  block is zeroed for `layout.size()` bytes, so recycled content never leaks.
+- Audited unsafe only in the allocator module; no dependency, no FFI, no global
+  mutable state beyond the `#[global_allocator]` static.
+
+## Acceptance
+
+- [ ] Plan committed and `validate-unit` accepted before runtime code.
+- [ ] Unit tests cover class mapping, alignment, every class, all realloc paths,
+      zeroing, cross-thread frees and a mixed stress run.
+- [ ] `./scripts/check.sh` passes; `./scripts/compare-qjs.sh` and the Test262
+      subset agree with base.
+- [ ] Exact-image instruction pre-gate over all 86 policy cases and per-case
+      max-RSS for all development cases are recorded.
+- [ ] Diagnostic quick triage on targets and all sentinels is recorded.
+- [ ] Evidence and plan-index row are committed; the lead runs acceptance.
+
+## Verification
+
+```sh
+cargo test -p qjs-cli
+./scripts/check.sh
+./scripts/compare-qjs.sh
+./scripts/test262-subset.sh
+./scripts/performance-decision.sh validate-unit \
+  --unit tasks/performance-units/cli-size-class-allocator.json \
+  --queue /Users/qingyingliu/Code/co-work-space/tmp/qjs-lead-briefs/current-main-9eba7a1d-queue.json \
+  --profile-root /Users/qingyingliu/Code/co-work-space/outputs/imac-bench
+```
