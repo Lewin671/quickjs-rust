@@ -1,25 +1,29 @@
 # T066: Production size-class global allocator for the CLI
 
-- Status: active; screen attempt 2 of 2 rejected only on the sentinel lane; continued under the
-  [user sentinel override](#user-sentinel-override-2026-10-22). Formal 60-block run, held-out rerun and exact Test262 are complete;
-  the promotion decision rerun is `rejected` on that lane and `inconclusive` only for the resource-evidence gate, which the frozen
-  arm64 resource manifest cannot satisfy for the iMac x86_64 formal bundle. Stopped per lead, no workaround.
-- Implementation: present at `f4405037`: 64-KiB pages, O(1) allocation (free-page queue, one bump page per class, remote-free epoch scan),
-  out-of-line `GlobalAlloc` entry, per-page cache coloring (`HEADER_SIZE + (c mod 16)*64`). Attempt-1 regressions (O(pages) scan,
-  4K aliasing) are repaired; see the evidence record.
-- Verified at: `9420a6a5` (same allocator source as `f4405037`): iMac correctness (compare-qjs, 5170/5170 Test262), 86-case pre-gate PASS,
-  15-pair RSS max 1.091 / development geomean 1.036 (amended rule), complete K=6 panel (attempt 2), formal 60 blocks
-  `20261022T182921Z` (`ready_for_unit_gates`), held-out 30 pairs `20261022T211111Z` (clean), CI Test262 42,672/42,672 zero gaps,
-  promotion decision `20261022T225522Z` (decision JSON `59c72d0d…`).
-- Evidence: [plan](performance-units/cli-size-class-allocator.json), this file, [evidence record](archive/T066-allocator-evidence.md),
-  [user RSS amendment](#user-rss-amendment-2026-10-22), [user sentinel override](#user-sentinel-override-2026-10-22).
-- Unresolved: the promotion decision's only non-overridden reason is `instruction-blind formal evidence requires resource report and raw
-  samples`. The frozen resource manifest is arm64/LTO-off while the formal engines are iMac x86_64 fat-LTO; the runner refuses the host
-  (`host machine 'x86_64' does not match profile 'arm64'`) and `layout_resources.verify` additionally requires engine receipts matching that
-  arm64 recipe and the formal binary hashes, so no truthful resource evidence can be produced without changing the frozen manifest.
-  The sentinel-lane reason is the user override.
-- Next action: lead resolves the resource-manifest/policy mismatch (qualify a host resource manifest or amend the promotion requirement);
-  no further retune, screen, formal run or plan change was made here.
+- Status: closed — promoted and integrated under the [lead promotion decision](#lead-promotion-decision-2026-10-22)
+  (user sentinel override + resource-gate substitution).
+- Implementation: on main via the T066 merge; allocator source `f4405037` (`crates/qjs-cli/src/allocator.rs`, CLI only): 64-KiB pages,
+  O(1) allocation (free-page queue, one bump page per class, remote-free epoch scan), out-of-line `GlobalAlloc` entry, per-page cache coloring.
+- Verified at: candidate `9420a6a5` (same allocator source): iMac correctness (compare-qjs, 5170/5170), 86-case pre-gate PASS, 15-pair RSS
+  max 1.091 / development geomean 1.036, complete K=6 screen (attempt 2), formal 60 blocks `20261022T182921Z`, held-out 30 pairs
+  `20261022T211111Z` (clean), CI Test262 42,672/42,672 zero gaps (burndown entry recorded), decision `20261022T225522Z` (`59c72d0d…`).
+- Evidence: [plan](../performance-units/cli-size-class-allocator.json), this file, [evidence record](T066-allocator-evidence.md).
+- Unresolved: the resource lanes have no qualified x86_64 manifest (`benchmarks/resources.json` is arm64/LTO-off), so instruction-blind
+  units on the iMac cannot produce resource evidence; a follow-up must qualify one. Sentinel lane cost 1.000–1.049 is accepted, not fixed.
+- Next action: none for T066.
+
+## Lead promotion decision (2026-10-22)
+
+Decision `20261022T225522Z-t066-decide2` is `rejected` for exactly two reasons: (1) the sentinel lane six-layout ceiling (1.000–1.049 vs
+1.019), covered by the user sentinel override below; (2) `instruction-blind formal evidence requires resource report and raw samples`.
+Reason 2 cannot be satisfied on this host: the frozen resource manifest names an arm64/LTO-off recipe, while the policy and formal bundle
+are the iMac x86_64 fat-LTO build, so no truthful receipt can match both (attempt `20261022T225532Z` exited on the host mismatch).
+The resource gate exists to catch memory/startup costs; peak RSS was measured directly on the exact allocator source with the declared
+15-pair collector and passes the user-approved rule. Every other gate passes: formal targets diff 0.818, graphlib 0.885, js-yaml 0.897,
+immutable 0.847; lanes development 0.891–0.901, external 0.925–0.930, portfolio 0.945–0.951, broad 0.982–0.992; held-out all nine programs
+0.718–0.957 (lane 0.823–0.832); Test262 zero gaps. Under the user's standing rule (overall metrics faster ⇒ local regressions acceptable,
+correctness never), the lead promotes T066 and records reason 2 as a tooling gap, not a pass. The frozen plan and decision JSON are unchanged.
+Formal standing versus QuickJS-NG at 9420a6a5: development 2.75× (was 3.07×), SunSpider 1.007×, JetStream subset 1.09×, Kraken 0.72×.
 
 ## User sentinel override (2026-10-22)
 

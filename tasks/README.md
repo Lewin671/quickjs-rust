@@ -11,7 +11,6 @@ it to `archive/` with `git mv` and move its row below.
 
 | Task | Status | What it is |
 | --- | --- | --- |
-| [T066](T066-size-class-allocator.md) CLI size-class allocator | active | Attempt 2 rejected on the sentinel lane only (user-overridden); formal/held-out/Test262 pass; decision `20261022T225522Z` is inconclusive only for resource evidence, blocked by the frozen arm64 resource manifest vs the x86 formal bundle. |
 | [T057](T057-string-code-units.md) string code units | active | Stage 1 and UTF-16 correctness extraction integrated; stage 2 abandoned (0 attempts); linear-search follow-up awaits screening. |
 | [T065](T065-interpreter-core-v3.md) interpreter core v3 | active | Design reviewed, not approved; pre-M0 mechanism ablation on real programs decides rewrite vs incremental ([review](archive/T065-design-review.md)). |
 | [T056](T056-interpreter-core-v2.md) interpreter core v2 | active | Remaining M2/M3 superseded by T065 pending review; M1 A/B blocked after T064 K abort; old failure/reserve unchanged. |
@@ -41,6 +40,7 @@ Each file is under `archive/` with a resume block; outcomes record what happened
 
 | Task | Outcome |
 | --- | --- |
+| `T066-size-class-allocator.md` | Promoted under the lead decision: CLI size-class allocator, development 0.898× main (NG 3.07×→2.75×), held-out 0.72–0.96; sentinel lane cost accepted by the user; resource gate unsatisfiable on x86 (tooling gap). |
 | [T064 kernel isolation](archive/T064-kernel-isolation.md) | Stage K aborted before timing: K1/Repair 1 static and correctness gates pass, same 46/86 instruction cases block; outlining abandoned; [plan closure/ledger](archive/T064-kernel-layout-authority-closure.md), M1 A/B blocked, T056 moves to M2. |
 | `T063-string-canonical.md` | Surrogate pairs stored canonically at construction; instruction repair; regression screen passed (lanes 0.998-1.008); integrated ([correctness](archive/T063-correctness-verification.md), [instructions](archive/T063-instruction-diagnosis.md)). |
 | `T058-regexp-lazy-quantifiers.md` | Fixed-candidate v6 unit retained: papaparse/csv 0.0806 at formal, 86/86 selection and 9/9 held-out pass, Test262 42,672/42,672; candidate `736200aa`, integration pending. |
