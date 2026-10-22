@@ -1,12 +1,12 @@
 # T064: Kernel isolation prerequisite
 
 - Status: active; causal spike complete; lead decision 2026-10-21 approves K as the address-operand contract below; K1 not started.
-- Implementation: diagnostic archive transformations only; production runtime/Cargo/recipe unchanged. No kernel crate.
-- Verified at: main `06e199fec9e9e51742cdae7633c5dc758c326752`; iMac seven-build job235604Z and semantics000011Z done0; full local gate passed.
+- Implementation: diagnostic archive transformations plus maintained [K0 checker](archive/T064-k0-checker.md); production runtime/Cargo/recipe unchanged. No kernel crate.
+- Verified at: spike on main `06e199fec9e9e51742cdae7633c5dc758c326752`, jobs235604Z/000011Z done0 and full gate; K0 on `9eba7a1d`-based branch: 32 focused tests and fast gate pass, canonical qualification pending.
 - Evidence: [spike result/identities](archive/T064-causal-outlining-spike.md), [design/ABI](../docs/design/interpreter-core-v2.md#kernel-isolation-prerequisite-k0-before-m1-resumes),
   [allocation/startup inputs](archive/T064-kernel-isolation-inputs.md), [producer](diagnostics/t064-k-spike/README.md), [lead decision](#lead-decision-2026-10-21).
 - Unresolved: K's own cost (outlined service calls, entry constants) is unpriced; successor K→A→B plan needs a fresh queue/profiles on recorded main M.
-- Next action: lead runs the fresh current-main formal comparison/queue; meanwhile K0 checker tooling (no runtime change) and T056 unpack/startup attribution proceed. Freeze the successor plan before K1 runtime code.
+- Next action: lead runs the fresh current-main formal comparison/queue; qualify the implemented K0 checker on current main and continue T056 unpack/startup attribution. Freeze the successor plan before K1 runtime code.
 
 ## Lead decision (2026-10-21)
 
@@ -65,7 +65,7 @@ If A/A does not reproduce, stop interpreting perturbations. If unoutlined contro
 
 ## Prospective CI, reduced after review
 
-No CI/checker infrastructure is implemented by this spike. K1 remains blocked on the result and a separately frozen implementation contract.
+The spike implemented no CI/checker infrastructure; the subsequent [K0 checker](archive/T064-k0-checker.md) is tooling only, with no CI hook. K1 remains blocked on the result and a separately frozen implementation contract.
 Per PR: structural runtime-type/field-access firewall plus **one targeted perturbation, two clean builds on the production target**.
 Full A/A/features/header/cold/helper/combined matrix runs nightly and on compiler/linker/recipe/ABI changes; avoid a full multi-target matrix on every PR.
 Use canned binaries for checker negative fixtures:3B insertion/relative-PC drift, hot byte, RIP literal, jump-table target, missing/duplicate/cloned role,

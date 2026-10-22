@@ -56,6 +56,10 @@ artifacts mean.
 
 ## Performance
 
+- `check-kernel-isolation.sh`: queued Darwin x86_64 K0 static artifact contract;
+  two clean builds per targeted probe, `--full` for A/A + H+8 + C+8.
+  See [K0 method and qualification](../tasks/archive/T064-k0-checker.md); no timing or CI hook.
+
 - `perf-loop.sh`: inner loop for one unit: builds, runs the counter screen,
   lists symbol-size changes, optional trace. Diagnostic only. Workflow.
 - `quick-triage.sh`: queue-only fixed-subset v5 diagnostic, prospective request,
