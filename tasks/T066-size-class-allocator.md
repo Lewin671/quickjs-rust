@@ -52,7 +52,7 @@ their own policy.
   `tasks/performance-units/README.md`, `tasks/diagnostics/t066/rss.sh`,
   `tasks/diagnostics/t066/rss15.sh`, `tasks/diagnostics/t066/h1.sh`,
   `tasks/diagnostics/t066/h3_profile.sh`, `tasks/diagnostics/t066/counters.sh`,
-  `tasks/diagnostics/t066/out_of_line.sh`,
+  `tasks/diagnostics/t066/out_of_line.sh`, `tasks/diagnostics/t066/decide.sh`,
   `crates/qjs-cli/Cargo.toml` (diagnostic `alloc-counters` feature),
   `tasks/archive/T066-allocator-evidence.md`.
 - Forbidden paths: `crates/qjs-runtime`, `crates/qjs-ast`, `crates/qjs-lexer`,

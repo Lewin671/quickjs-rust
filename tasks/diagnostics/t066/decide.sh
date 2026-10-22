@@ -17,7 +17,10 @@ JSON
   --unit tasks/performance-units/cli-size-class-allocator.json --queue "$BENCH_OUT/queue.json" --profile-root "$Q" \
   --summary "$F/summary.json" --broad-report "$F/report.json" --sentinel-report "$F/sentinel-report.json" \
   --external-report "$F/external-report.json" \
-  --layout-panel "$Q/20261022T172940Z-t066-screen-attempt2/out/attempt/screen/panel.json" \
+  --layout-panel "$Q/20261022T172940Z-t066-screen-attempt2/out/attempt/screen/complete.json" \
   --held-out-panel "$Q/20261022T211111Z-t066-heldout30-r2/out/heldout/panel.json" \
-  --test262-burndown "$BENCH_OUT/burndown.json" --output "$BENCH_OUT/decision.json" || true
+  --test262-burndown "$BENCH_OUT/burndown.json" \
+  ${RESOURCE_REPORT:+--resource-report "$RESOURCE_REPORT"} \
+  ${RESOURCE_RAW:+--resource-raw "$RESOURCE_RAW"} \
+  --output "$BENCH_OUT/decision.json" || true
 cat "$BENCH_OUT/decision.json"
