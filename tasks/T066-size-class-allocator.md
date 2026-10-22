@@ -1,17 +1,25 @@
 # T066: Production size-class global allocator for the CLI
 
-- Status: active; screen attempt 2 of 2 (`20261022T172940Z-t066-screen-attempt2`, candidate `9420a6a5`, allocator source `f4405037`)
-  rejected only on the sentinel lane ceiling; continued under the [user sentinel override](#user-sentinel-override-2026-10-22). Formal, held-out
-  and exact Test262 next.
+- Status: active; screen attempt 2 of 2 rejected only on the sentinel lane; continued under the
+  [user sentinel override](#user-sentinel-override-2026-10-22). Formal 60-block run, held-out rerun and exact Test262 are complete;
+  the promotion decision rerun is `rejected` on that lane and `inconclusive` only for the resource-evidence gate, which the frozen
+  arm64 resource manifest cannot satisfy for the iMac x86_64 formal bundle. Stopped per lead, no workaround.
 - Implementation: present at `f4405037`: 64-KiB pages, O(1) allocation (free-page queue, one bump page per class, remote-free epoch scan),
   out-of-line `GlobalAlloc` entry, per-page cache coloring (`HEADER_SIZE + (c mod 16)*64`). Attempt-1 regressions (O(pages) scan,
   4K aliasing) are repaired; see the evidence record.
 - Verified at: `9420a6a5` (same allocator source as `f4405037`): iMac correctness (compare-qjs, 5170/5170 Test262), 86-case pre-gate PASS,
-  15-pair RSS max 1.091 / development geomean 1.036 (amended rule), complete K=6 panel (attempt 2).
+  15-pair RSS max 1.091 / development geomean 1.036 (amended rule), complete K=6 panel (attempt 2), formal 60 blocks
+  `20261022T182921Z` (`ready_for_unit_gates`), held-out 30 pairs `20261022T211111Z` (clean), CI Test262 42,672/42,672 zero gaps,
+  promotion decision `20261022T225522Z` (decision JSON `59c72d0d…`).
 - Evidence: [plan](performance-units/cli-size-class-allocator.json), this file, [evidence record](archive/T066-allocator-evidence.md),
   [user RSS amendment](#user-rss-amendment-2026-10-22), [user sentinel override](#user-sentinel-override-2026-10-22).
-- Unresolved: formal 60-block run, held-out 30 pairs, exact configured Test262 burndown and `decide --mode promotion` are pending.
-- Next action: lead runs formal → held-out → exact Test262 on the iMac, then records the decision and integrates if every non-overridden gate passes.
+- Unresolved: the promotion decision's only non-overridden reason is `instruction-blind formal evidence requires resource report and raw
+  samples`. The frozen resource manifest is arm64/LTO-off while the formal engines are iMac x86_64 fat-LTO; the runner refuses the host
+  (`host machine 'x86_64' does not match profile 'arm64'`) and `layout_resources.verify` additionally requires engine receipts matching that
+  arm64 recipe and the formal binary hashes, so no truthful resource evidence can be produced without changing the frozen manifest.
+  The sentinel-lane reason is the user override.
+- Next action: lead resolves the resource-manifest/policy mismatch (qualify a host resource manifest or amend the promotion requirement);
+  no further retune, screen, formal run or plan change was made here.
 
 ## User sentinel override (2026-10-22)
 

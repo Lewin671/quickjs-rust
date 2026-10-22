@@ -11,7 +11,7 @@ it to `archive/` with `git mv` and move its row below.
 
 | Task | Status | What it is |
 | --- | --- | --- |
-| [T066](T066-size-class-allocator.md) CLI size-class allocator | active | Attempt 1 of 2 rejected by K=6; repair fixed imaging; page coloring `f4405037` moved closure 1.194→1.034, pre-gate 1.0032, amended RSS rule passes; attempt 2 is the lead's call. |
+| [T066](T066-size-class-allocator.md) CLI size-class allocator | active | Attempt 2 rejected on the sentinel lane only (user-overridden); formal/held-out/Test262 pass; decision `20261022T225522Z` is inconclusive only for resource evidence, blocked by the frozen arm64 resource manifest vs the x86 formal bundle. |
 | [T057](T057-string-code-units.md) string code units | active | Stage 1 and UTF-16 correctness extraction integrated; stage 2 abandoned (0 attempts); linear-search follow-up awaits screening. |
 | [T065](T065-interpreter-core-v3.md) interpreter core v3 | active | Design reviewed, not approved; pre-M0 mechanism ablation on real programs decides rewrite vs incremental ([review](archive/T065-design-review.md)). |
 | [T056](T056-interpreter-core-v2.md) interpreter core v2 | active | Remaining M2/M3 superseded by T065 pending review; M1 A/B blocked after T064 K abort; old failure/reserve unchanged. |

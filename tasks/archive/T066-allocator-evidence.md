@@ -1,6 +1,7 @@
 # T066 allocator evidence
 
-- Status: evidence record; 2026-10-22; screen attempt 1 rejected; repair, out-of-line entry and page coloring measured; attempt 2 is the lead's call.
+- Status: evidence record; 2026-10-22; attempt 2 rejected on the sentinel lane only (user overridden); promotion decision rerun
+  with the complete panel; resource evidence is blocked by the frozen arm64 resource manifest.
 - Implementation: present at `52dd420d` on `agent/t066-size-class-allocator/cmd`;
   64-KiB pages with per-class free-page queues, page recycling and an atomic
   cross-thread remote list. The compiled candidate is byte-identical to
@@ -15,10 +16,12 @@
   `matter-js/simulate`; the per-case ratio is dominated by whole-process variance
   in the base medians (4-10% between cohorts with the same base binary).
   `graphlib/paths` fell from 1.073 to 1.018, so the diagnosed stranding is fixed.
-- Next action: lead decides whether to spend attempt 2. Page coloring moved
-  `capturing_closure_call` from 1.194 to 1.034 (triage median, no obvious
-  regression), supporting the 4K-aliasing hypothesis; imaging stays fixed and
-  the amended RSS rule passes.
+- Next action: lead decides how to resolve the resource-evidence gate. Every
+  other promotion input is complete and passes: formal targets, held-out, lane
+  gates, Test262 and the amended RSS rule; the only layout failure is the
+  user-overridden sentinel lane. The frozen resource manifest is arm64 while
+  the formal bundle is iMac x86_64, so no truthful resource run can satisfy
+  `layout_resources.verify`.
 
 ## Plan stage: target selection
 
@@ -805,6 +808,88 @@ points at data placement rather than allocator work. Imaging stays fixed, the
 pre-gate improves to a 1.0032 worst case, and the amended RSS rule passes.
 Attempt 2 remains the lead's call; no screen, formal run or plan change was
 made.
+
+## Promotion decision
+
+Inputs: queue `f6666a68…` (from the sealed selection bundle), formal 60 blocks
+`20261022T182921Z-t066-formal60` (base `9eba7a1d`, candidate `9420a6a5`,
+`ready_for_unit_gates`), attempt-2 screen `20261022T172940Z-t066-screen-attempt2`,
+held-out rerun `20261022T211111Z-t066-heldout30-r2` (clean), CI Test262 Coverage
+run `39832778267` at `9420a6a5` (42,672/42,672, zero actionable gaps).
+
+### Queue and panel
+
+The first decision (`20261022T211151Z`, reason list quoted above) was given
+`.../attempt/screen/panel.json`, which is the perf-loop's one-panel screen
+artifact. The six-layout evidence is `.../attempt/screen/complete.json`
+(`panels` length 6, `pairs` 5, `artifact_type quickjs-layout-panel`, SHA-256
+`f4f53ff7…`). Replaying it locally with the policy and the formal engines
+returns six panels, and decide consumes it; the three "K=6 required" reasons
+disappear.
+
+### Held-out
+
+`.../heldout/panel.json` (SHA-256 `5db1c5f8…`) has six layouts and 30 pairs.
+Ratios: acorn 0.9571, crypto-js 0.8418, d3-array 0.7177, decimal.js 0.8901,
+esprima 0.9062, handlebars 0.7324, marked 0.8253, mustache 0.8112, ramda
+0.8187; six-layout lane ratios 0.8227-0.8315 against the 1.018686 ceiling, no
+events.
+
+### Decision rerun `20261022T225522Z-t066-decide2` (non-timing)
+
+`decision.json` SHA-256 `59c72d0d…`; decision `rejected`, readiness
+`inconclusive`, layout verdict `reject`. Formal target medians: diff 0.8178,
+graphlib 0.8845, js-yaml 0.8971, immutable 0.8469 (all pass), and
+`capturing_closure_call` 1.0079 (inside its 1.050 band). Formal lanes:
+development 0.8910-0.9005, external 0.9254-0.9297, portfolio 0.9448-0.9507,
+broad 0.9821-0.9920, sentinel 0.9995-1.0485 (five of six layouts above the
+1.018672 ceiling; the user override covers exactly this lane).
+
+Remaining reasons, verbatim:
+
+1. `target improvement or control regression gate failed for ['sentinel: six-layout lane geomean or every layout exceeds ceiling']`
+2. `instruction-blind formal evidence requires resource report and raw samples`
+
+The first is the user-overridden sentinel lane; the per-case events
+(`branch_arithmetic`, `heterogeneous_property_read`,
+`polymorphic_call_site`) were resolved as non-persistent by the panel. Targets,
+held-out, every other lane, RSS (amended rule) and Test262 are complete and
+passing.
+
+### Resource evidence is structurally blocked
+
+Attempt `20261022T225532Z-t066-resource-attempt` ran the size lane with the
+formal engines on the iMac and exited 2 with the runner's exact message:
+
+```
+error: host machine 'x86_64' does not match profile 'arm64'
+```
+
+The frozen resource manifest `benchmarks/resources.json` is
+`macos-arm64-release-v1` (`darwin`/`arm64`) with LTO-off recipes targeting
+`aarch64-apple-darwin`; the layout policy and formal bundle are the iMac
+x86_64 `fat16-abort` build (candidate `b3132b40…`, base `f5822aa3…`).
+`layout_resources.verify` loads that same frozen manifest, replays the raw run
+against it (so `run_start.host.machine` and `build_recipes` must be arm64/LTO
+off), and then requires each engine's receipt to match both that manifest
+recipe and the formal bundle's exact binary hash and revision. The formal
+engines are x86 fat-LTO binaries, so no truthful receipt can satisfy both, and
+a receipt-less run would be rejected by `verify` when it reads the missing
+receipt. Running the x86 binaries on the arm64 host does not help: the receipt
+would still have to claim the arm64/LTO-off recipe.
+
+No valid resource evidence exists for this formal bundle without changing the
+frozen resource manifest (a policy change) or fabricating a receipt; both are
+workarounds outside this task. Per the lead instruction, the work stopped here
+rather than working around the gate.
+
+### Outcome
+
+Every promotion gate that can be evaluated passes except the user-overridden
+sentinel lane; the decision is `rejected` for that lane and `inconclusive`
+only because instruction-blind promotion additionally requires resource
+evidence that the frozen arm64 resource manifest cannot produce for the iMac
+x86_64 formal bundle. The frozen plan is unchanged.
 
 ## Open risks
 
