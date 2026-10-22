@@ -35,7 +35,7 @@ nothing about whether the code exists.
 
 | Plan (`<name>.json`) | Task | Base | Recorded outcome |
 | --- | --- | --- | --- |
-| `cli-size-class-allocator` | T066 | `9eba7a1d` 2026-10-21 | RSS round 1 at `abd6451b`: page recycling fixed js-yaml/matter-js; still over 1.05 on graphlib 1.073 and big.js 1.057; pre-gate PASS, triage targets 0.81-0.93; stopped per lead, no screen or decision; [evidence](../archive/T066-allocator-evidence.md) |
+| `cli-size-class-allocator` | T066 | `9eba7a1d` 2026-10-21 | RSS round 2 final at `52dd420d` (binary `7e837fa8`): reuse queue fixed graphlib (1.073→1.018); lodash/big.js/matter-js over, driven by base-median variance; 32-KiB probe blocked the pre-gate and was reverted; pre-gate PASS, triage `likely loss`; stopped per lead, no screen or decision; [evidence](../archive/T066-allocator-evidence.md) |
 | `regexp-lazy-quantifier-current-base-v6` (runner plan `979741ca`) | T058 | `a68a9f46` 2026-10-19 | rejected on sole valid K=6 screen: recursive instruction hard cap; first disturbed run invalid, no reset/re-decision; [record](../archive/T058-v6-rejection.md) |
 | `regexp-lazy-quantifier-bounded-helper-v6` (runner plan `6747434f`) | T058 | `a68a9f46` 2026-10-19 | retained (`ready_for_unit_gates`) on its sole attempt: K=6 selection pass, papaparse/csv formal 0.0806, held-out pass, Test262 zero gap; candidate `736200aa`; [record](../archive/T058-regexp-lazy-quantifiers.md) |
 | `regexp-lazy-quantifier-steps-v5-remeasure` | T058 | `351004f3` 2026-10-19 | closed inconclusive: sole bitops formal width 3.7343% at 240; all jobs clean, decision exit 1; old unit exhausted, no v6 re-decision |

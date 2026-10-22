@@ -1,17 +1,24 @@
 # T066: Production size-class global allocator for the CLI
 
 - Status: active.
-- Implementation: present; RSS round 2 adds a per-class queue of pages with
-  free blocks and reuses those blocks before extending (the round-1 page
-  structure and cross-thread remote list are unchanged).
-- Verified at: round-2 code passes the local full gate with Test262 deferred;
-  iMac correctness, pre-gate, RSS and triage measurements are pending.
+- Implementation: present at `52dd420d`; 64-KiB pages with per-class free-page
+  queues (reuse before extend), page recycling and an atomic cross-thread remote
+  list. A 32-KiB fixed-overhead variant was measured and reverted.
+- Verified at: `52dd420d`, binary `7e837fa8…`, 2026-10-22; local full gate with
+  Test262 deferred (worktree submodules uninitialized), iMac correctness
+  (compare-qjs and 5170/5170 Test262), 86-case instruction pre-gate PASS, RSS
+  cohort and diagnostic triage. Round-2 details:
+  [evidence](archive/T066-allocator-evidence.md#rss-round-2-reuse-before-extend-fixed-overhead-probe-lead-decision-2).
 - Evidence: [plan](performance-units/cli-size-class-allocator.json), this file,
   [evidence record](archive/T066-allocator-evidence.md).
-- Unresolved: round-2 measurement; round 1 left RSS over 1.05 on
-  `graphlib/paths` (1.073) and `big.js/arith` (1.057).
-- Next action: run the round-2 measurement set and record it; this is the final
-  round.
+- Unresolved: peak RSS is above 1.05 on `lodash/transform` (1.099),
+  `big.js/arith` (1.094) and `matter-js/simulate` (1.077); the candidate's
+  absolute bytes did not grow between rounds, while the base medians moved 4-10%
+  with the same base binary. `graphlib/paths` fell from 1.073 to 1.018. Triage
+  is `likely loss` because `capturing_closure_call`'s wall interval is above its
+  policy band. The lead stopped retuning after this final round.
+- Next action: lead reviews the final numbers; do not retune further and do not
+  change the frozen plan.
 
 ## Goal
 
