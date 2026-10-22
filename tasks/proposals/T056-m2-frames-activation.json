@@ -1,0 +1,130 @@
+{
+  "schema_version": 3,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_kind": "migration",
+  "unit_id": "interpreter-core-v2-frames-activation",
+  "base_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+  "queue": {
+    "candidate_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+    "sha256": "f6666a68cb8e1841418d6f5012e6f7810b0c25ebf982b45ef6d5564855e0ae13"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "development/graphlib/paths",
+      "development/immutable/persistent"
+    ],
+    "rank_ceiling": 6,
+    "override_reason": "DRAFT for lead review, not approved or frozen. Select M2.1 indexed callee-ordinary entry as stage 1 of the existing five-stage M2 migration after lead reports K isolation stopped. Exact M receipts, not candidate measurements, give graphlib rank 6 entry-owner 11.21% plus Vm/prepared-call 5.11%, and immutable rank 2 entry-owner 9.41% plus Vm/prepared-call 10.73%. Final payoffs min(.97,1/B_i) are 0.9522653829309299 and 0.9291583451202204. These require removing 29.24% and 35.17% of the disjoint entry+Vm envelope across the whole migration. M2.1 need not meet final payoff: immutable alone would need 75.31% of its entry share. Graphlib has high entry reach under the tight floor band. Js-yaml rank 1 remains a control (entry 7.30%, Vm 3.10%, string-heavy); diff has more entry reach but needs 9.02% total payoff; moment/meriyah have less entry reach. Lodash is absent from the supplied queue and is not a target. See tasks/archive/T056-m2-plan-inputs.md for every considered case and assumptions. This draft does not settle the active T056/T064 status or reset any old M1/K failure account."
+  },
+  "mechanism": {
+    "summary": "DRAFT ONLY; no implementation authorization. One fixed-M five-stage architectural migration following docs/design/frame-activation.md and T056, not a dispatch-preamble or frame-movement leaf. M2.1: BindingPlan resolves parameter/received-cell/slot-kind/self/arguments/global-shadow facts once; CallSeed consumes caller arguments into slots once; ActivationContext owns typed caller-varying state. For callee-ordinary entries replace the entire function_env/FrameBindings/name import/export/write-back/realm refresh/direct-leaf CallEnv route, including nested Vm construction adapters. Vm borrows a services environment instead of owning a cloned CallEnv. Other entries retain one complete legacy route. Caller-ordinary and callee-ordinary are separate predicates, excluding transitively eval/with-capable closures. Native readers reborrow typed fields under an unwind-safe current-activation guard; audited native writers stay wholly legacy. No mirrored legacy name entries. M2.2: ScopeLease and lazy dynamic consumers replace remaining eval/with/deopt/name consumers; delete legacy CallEnv name storage, preserve canonical slot/cell authority. M2.3: persistent frame store plus same-Vm generic-to-generic driver together, fieldwise initialization, zero-based windows, no per-op FrameId resolution, no in-memory aggregate call/return transition or program-owner re-resolution. No generator/async leases yet. M2.4: compact windows join that store/driver, retire thread-local pool and call_from_activation adapters, clear written high-water only; mapped exits resume on their own slot, unmapped conversions counted once, declined backedges stop exiting. M2.5: route constructors, synchronous native callbacks, eval and detachable generator/async leases through the context; native capability API, zero nested Vms and no hot compatibility adapter; only this stage claims payoff. Full contracts, ownership boundaries and prior T021/T024/T027 failures are linked in the inputs.",
+    "generality": "Admission uses code metadata, slot/cell ownership, call population and transitive eval/with capability. No source/bytecode template, library/benchmark/function/property spelling, checksum, path or iteration recognizer. Preserve current tier eligibility, object/property layout, Value representation, compiler recipe, slot-indexed locals and shared upvalue cells. No per-call name-keyed snapshot, new crate/dependency, FFI or unsafe. CODE-LAYOUT RISK: M2 does not inherit a kernel firewall. Keep typed op enum/scalar sizing, object services and tier admission unchanged; do not revive T064 service-yield outlining. M2.1/2 change entry and helpers before the dispatch driver; this reduces direct hot-loop churn but fat LTO can still move typed and wide relative PCs/spills. Compare exact linked M/candidate kernels, relative block PCs, stack spills, tables and hot callees at every stage, with independent A/A where interpreting drift. Use scripts/check-kernel-isolation.sh --ref <candidate> --full --output \"$BENCH_OUT/kernel-diagnostic\" in a queued non-timing job when attributing cold/object coupling; it diagnoses perturbation susceptibility, is NOT an M2 pass prerequisite, and does not compare M/candidate by itself. In stages 3/4 intentional wide-driver changes are recorded separately from accidental typed-kernel drift. All six placements, instructions, complete lanes and formal gates price any coupling. No padding, winning-offset selection, golden refresh or altered recipe to hide it.",
+    "semantic_risks": [
+      "Ordinary-cohort reach is not measured by sampling. Before freeze/implementation audit every NativeFunction-reachable CallEnv writer into a concrete exclusion inventory and resolve callee/caller cohorts, including eval or with nested three closures deep. The missing audit is an open draft item, not an empty writer list. M2.1 zero-work counters must prove the whole legacy route is absent rather than moved or mirrored.",
+      "Native services must retain module host/referrer/imports, private environment, with stack, catch bindings, var conflicts, deopt and new.target through guarded re-entry/unwind. After each native call assert these and frame bindings unchanged. Cover module -> indirect eval/Function -> import(), private-name isolation, with callbacks and new.target.",
+      "Preserve defaults/rest/destructuring/TDZ order, duplicate mapped parameters, immutable self, sibling/loop cells, module live cells, global deletion/accessor/recreation, cross-realm and derived-this/super. Scope leases must outlive creator frames without retaining reusable FrameIds or copied name/value authority.",
+      "No frame/program/register/RefCell borrow survives observer re-entry. Deep/mutual recursion, callbacks through accessors/Proxy/coercion/iterator, throw/finally/using, constructor substitution, generator yield*/executing rejection, await/FIFO/jobs and detachable lease lifetimes need focused coverage and full configured Test262 zero gap each stage.",
+      "PLAN/BUDGET: stages=5, current_stage=1, one cumulative M, stage cap min(1.025,B_i) manually audited on every policy case, no intermediate retain. K=6 always, five pairs per layout, workers-4 v6, 60-block canonical formal after each passing stage screen. At most two valid failed screens/stage aborts across the entire M2 migration, shared across stages, no borrowing from old M1/K or reset by stage advance. A second valid failure closes this implementation shape. Record every invocation; incomplete evidence follows frozen completion rules, never replaces adverse valid evidence. At most seven valid full screen sets and six canonical formal bundles; no repeated successful stage run for a favorable result. V6 mandatory two-look continuations to the policy cap 240, complete events/panels and load-only recovery remain inside the contract; no ad hoc extra formal look. Final 30-pair held-out acceptance, required held-out K=6 event/diagnostic completion; held-out never selects work.",
+      "RESOURCES: instruction-blind, both targets memory-sensitive. Require replayed complete resource report/raw and per-case paired process max-RSS candidate/M medians <=1.05 for all 86 selection policy cases at each stage, including every development case; no lane or generic probe substitute. Bind raw RSS samples to exact M/candidate, host, case/block identities in the formal cohort; missing coverage blocks decision. Excess blocks advance/promotion pending lead review. Record per-case allocation/env work/frame entry counts and retained buffer high-water; warm slot allocations must plateau at stages 3/4. The schema does not enforce this numeric/manual ceiling.",
+      "BEFORE EVERY STAGE: focused semantic/counter tests, check.sh, compare-qjs.sh, full configured Test262 scan with burndown and no exclusions; diagnostic instrumented binaries never time. M2.1 ordinary entries have zero call_env_constructions/frame_binding_inserts/env_write_backs/env_exports/realm_refresh_scans/argument_vectors/name_slot_lookups/native with_stack_clones; nonordinary fixtures still prove fallback. Later stage work-count and emitted-code obligations are exactly those in T056 and frame-activation. Final payoff applies independently to both targets, every pair improving and all six target medians aggregated, with every non-target a control and all lane/portfolio/instruction/precision/held-out gates unchanged."
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "20261022T072707Z-t056-m2-plan-graphlib-exact/out/profiles/development--graphlib--paths/0/receipt/receipt.json",
+      "sha256": "1f3e44ea5e2249e9697bca3ccfa8f17ebf1704a7e683e906a7b5092f29fc5282",
+      "base_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+      "opportunity_ids": [
+        "development/graphlib/paths"
+      ],
+      "shared_cost": "Exact M executable f5822aa3, independent process repeat 0, sample 10 s at 1 ms. Entry-name union envelope 216/1207 main-thread samples; disjoint nearest semantic-owner entry counts 136, Vm/prepared-call 62. Pooled entry 11.2119% and Vm/prepared-call 5.1113%. This includes required work and nonordinary entries, not removable time or cohort proof. All three windows used. Exact masks/attribution, payoff arithmetic and limitations: tasks/archive/T056-m2-plan-inputs.md.",
+      "inclusive_fraction": 0.17895608947804473
+    },
+    {
+      "source": "20261022T072707Z-t056-m2-plan-graphlib-exact/out/profiles/development--graphlib--paths/1/receipt/receipt.json",
+      "sha256": "04b8e574dcfa6228a190ac9e56380d1125acb92f488a069e67c5f47af8d6ee10",
+      "base_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+      "opportunity_ids": [
+        "development/graphlib/paths"
+      ],
+      "shared_cost": "Exact M executable f5822aa3, independent process repeat 1, sample 10 s at 1 ms. Entry-name union envelope 189/1217 main-thread samples; disjoint nearest semantic-owner entry counts 134, Vm/prepared-call 58. Pooled entry 11.2119% and Vm/prepared-call 5.1113%. This includes required work and nonordinary entries, not removable time or cohort proof. All three windows used. Exact masks/attribution, payoff arithmetic and limitations: tasks/archive/T056-m2-plan-inputs.md.",
+      "inclusive_fraction": 0.1552999178307313
+    },
+    {
+      "source": "20261022T072707Z-t056-m2-plan-graphlib-exact/out/profiles/development--graphlib--paths/2/receipt/receipt.json",
+      "sha256": "45b6a49b61a9d64eefb4fd9789b3576b97bc89af2f169bfdce6ebff5a3f961dc",
+      "base_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+      "opportunity_ids": [
+        "development/graphlib/paths"
+      ],
+      "shared_cost": "Exact M executable f5822aa3, independent process repeat 2, sample 10 s at 1 ms. Entry-name union envelope 212/1215 main-thread samples; disjoint nearest semantic-owner entry counts 138, Vm/prepared-call 66. Pooled entry 11.2119% and Vm/prepared-call 5.1113%. This includes required work and nonordinary entries, not removable time or cohort proof. All three windows used. Exact masks/attribution, payoff arithmetic and limitations: tasks/archive/T056-m2-plan-inputs.md.",
+      "inclusive_fraction": 0.17448559670781894
+    },
+    {
+      "source": "20261022T050553Z-t064-successor-exact-profiles/out/profiles/development--immutable--persistent/0/receipt/receipt.json",
+      "sha256": "4bd4be1fe233af02abc63df3ab8d91701ff912796d5f4d69408195da02f87803",
+      "base_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+      "opportunity_ids": [
+        "development/immutable/persistent"
+      ],
+      "shared_cost": "Exact M executable f5822aa3, independent process repeat 0, sample 10 s at 1 ms. Entry-name union envelope 383/3572 main-thread samples; disjoint nearest semantic-owner entry counts 326, Vm/prepared-call 378. Pooled entry 9.4063% and Vm/prepared-call 10.7340%. This includes required work and nonordinary entries, not removable time or cohort proof. All three windows used. Exact masks/attribution, payoff arithmetic and limitations: tasks/archive/T056-m2-plan-inputs.md.",
+      "inclusive_fraction": 0.10722284434490481
+    },
+    {
+      "source": "20261022T050553Z-t064-successor-exact-profiles/out/profiles/development--immutable--persistent/1/receipt/receipt.json",
+      "sha256": "5e9e0d1a56bc33ef08eac9c60a079eab72e069296f55c9ca102985183ac64269",
+      "base_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+      "opportunity_ids": [
+        "development/immutable/persistent"
+      ],
+      "shared_cost": "Exact M executable f5822aa3, independent process repeat 1, sample 10 s at 1 ms. Entry-name union envelope 415/3568 main-thread samples; disjoint nearest semantic-owner entry counts 341, Vm/prepared-call 395. Pooled entry 9.4063% and Vm/prepared-call 10.7340%. This includes required work and nonordinary entries, not removable time or cohort proof. All three windows used. Exact masks/attribution, payoff arithmetic and limitations: tasks/archive/T056-m2-plan-inputs.md.",
+      "inclusive_fraction": 0.11631165919282511
+    },
+    {
+      "source": "20261022T050553Z-t064-successor-exact-profiles/out/profiles/development--immutable--persistent/2/receipt/receipt.json",
+      "sha256": "4182e437551456dd8f43ee072cdecfd03b62f075e1efe529563d754fb9b0ea16",
+      "base_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+      "opportunity_ids": [
+        "development/immutable/persistent"
+      ],
+      "shared_cost": "Exact M executable f5822aa3, independent process repeat 2, sample 10 s at 1 ms. Entry-name union envelope 407/3555 main-thread samples; disjoint nearest semantic-owner entry counts 339, Vm/prepared-call 375. Pooled entry 9.4063% and Vm/prepared-call 10.7340%. This includes required work and nonordinary entries, not removable time or cohort proof. All three windows used. Exact masks/attribution, payoff arithmetic and limitations: tasks/archive/T056-m2-plan-inputs.md.",
+      "inclusive_fraction": 0.11448663853727145
+    }
+  ],
+  "migration": {
+    "stages": 5,
+    "current_stage": 1,
+    "cumulative_target_ids": [
+      "development/graphlib/paths",
+      "development/immutable/persistent"
+    ],
+    "stage_max_candidate_over_base": 1.025
+  },
+  "fast_gate": {
+    "target_ids": [
+      "development/graphlib/paths",
+      "development/immutable/persistent"
+    ],
+    "target_max_candidate_over_base": 0.97,
+    "max_attempts": 2
+  },
+  "layout_gate": {
+    "policy_path": "benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v6.json",
+    "policy_sha256": "be123f7c5cfd46aa863467256eb8bf6947ff64f72541efc371f05a36c5535a31",
+    "mechanism_class": "instruction-blind",
+    "memory_wall_targets": [
+      "development/graphlib/paths",
+      "development/immutable/persistent"
+    ],
+    "panel_required": true,
+    "panel_pairs": 5,
+    "held_out_pairs": 30,
+    "formal_blocks": 60
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
