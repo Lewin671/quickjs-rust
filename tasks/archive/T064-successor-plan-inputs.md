@@ -1,11 +1,11 @@
 # T064/T056 successor plan inputs (2026-10-22 UTC)
 
-- Status: historical-campaign; input collection and draft review record, not a frozen plan.
-- Implementation: none; no production change, timing screen, plan freeze or old-plan closure.
-- Verified at: code revision `4fa3f739902bf4a78035e36522f4c2419f7bb45e` plus this documentation delta; full local gate passed; exact M profiles and draft validation below.
-- Evidence: [review contract](../proposals/T064-successor-review.md), [closure draft](../proposals/T064-layout-edges-closure.md), [schema-3 draft](../proposals/T064-kernel-layout-authority.json); exact identities below.
-- Unresolved: lead approval, K0 integration/qualification and the proposed resource-ceiling choice remain open; no successor is frozen.
-- Next action: lead reviews the draft/override/budgets, then freezes it and enacts the old-plan closure together before K1; do not implement or screen from this proposal.
+- Status: historical-campaign; input collection retained; lead feedback 1 (2026-10-21) approved the revised successor freeze and old-plan closure.
+- Implementation: no production change or new timing; revised plan frozen and old continuation closed-superseded in the feedback-1 handoff.
+- Verified at: code revision `4fa3f739902bf4a78035e36522f4c2419f7bb45e` plus this documentation delta; full local gate passed; exact M profiles and initial validation below; final freeze validation/checks are in the review.
+- Evidence: [lead decision/freeze](../proposals/T064-successor-review.md), [closure](T064-layout-edges-closure.md), [frozen schema-3 plan](../performance-units/interpreter-core-v2-kernel-layout-authority.json); exact identities below.
+- Unresolved: K0 integration/qualification and separate T056 allocation/startup input review remain; no K1 implementation or screen has started.
+- Next action: lead handles the separate K0/input integration and K1 handoff; use the frozen fixed-M plan and record manual ledger/stage-band/RSS checks before decisions.
 
 ## Input identities and jobs
 
@@ -70,7 +70,7 @@ raw receipts and workload assets below are independently content-verified.
 The analysis script is local, not retained in Git; its algorithm and the
 measured counts/shares are recorded here. Receipt asset verification through
 `tools.benchmark.profile.verify_profiles` passed **27/27**, including the 18
-control windows not required by the draft's target-only profile list.
+control windows not required by the frozen plan's target-only profile list.
 
 ## Attribution method and limits
 
@@ -110,37 +110,41 @@ observed named envelope spans 25.67–26.55%, diff 31.52–31.80%, meriyah
 intervals. External/sentinel samples are small diagnostics; no missing-path
 claim follows from a zero sampled count.
 
-## Fresh shares and target selection
+## Fresh shares and lead-approved target selection
 
 Named-incl = union envelope; Named-owner = partitioned self ownership.
 Vm+env+call and Strings/RegExp are separate owner groups; every percentage is
 of all sampled main-thread samples, including startup/teardown if observed.
-Ranks are lane-local from this queue, not historical priorities.
+Ranks are lane-local from this queue, not historical priorities. The Role
+column reflects lead feedback 1 (2026-10-21); measured counts/shares are unchanged.
 
 | Case | Queue rank / Rust:NG | Samples | Named-incl | Named-owner | Vm+env+call | Strings/RegExp | Loop / virtual | Role |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
 | `development/moment/dates` | 3 / 3.6504 | 24836 | 26.13% | 19.96% | 17.58% | 9.26% | 37.68% / 0.04% | target |
-| `development/diff/compare` | 4 / 3.6178 | 18244 | 31.69% | 23.73% | 26.78% | 8.38% | 32.19% / 0.05% | target |
+| `development/diff/compare` | 4 / 3.6178 | 18244 | 31.69% | 23.73% | 26.78% | 8.38% | 32.19% / 0.05% | control |
 | `development/meriyah/parse` | 5 / 3.3434 | 7310 | 33.04% | 28.10% | 14.66% | 2.93% | 49.81% / 0.68% | target |
 | `development/js-yaml/document` | 1 / 4.3374 | 12432 | 16.02% | 13.11% | 17.29% | 20.83% | 43.43% / 0.25% | control |
 | `development/immutable/persistent` | 2 / 4.0096 | 10695 | 15.94% | 11.74% | 28.99% | 1.06% | 47.42% / 0.68% | control |
-| `external/jetstream3-js-subset/hash-map` | 7 / 1.5026 | 1489 | 21.69% | 19.01% | 1.07% | 0.00% | 76.02% / 0.00% | control |
+| `external/jetstream3-js-subset/hash-map` | 7 / 1.5026 | 1489 | 21.69% | 19.01% | 1.07% | 0.00% | 76.02% / 0.00% | target |
 | `external/jetstream3-js-subset/raytrace-public-class-fields` | 24 / 1.0691 | 2165 | 16.95% | 14.60% | 9.38% | 0.00% | 69.15% / 0.00% | control |
 | `sentinel/heterogeneous_property_read` | 1 / 1.4232 | 675 | 16.00% | 16.00% | 0.00% | 0.15% | 76.44% / 0.00% | control |
 | `broad/property_read` | 1 / 5.1528 | 1305 | 0.00% | 0.00% | 0.00% | 0.00% | 35.40% / 64.60% | control |
 
-Selected targets are development ranks 3–5: the strongest named owner/envelope
-among the five leading development cases sampled here, with Rust/NG gaps above
-3.3x. This selects a general ordinary-path mechanism, not a special admission
-rule for any library. The loop remains the largest owner; the named envelope
-is only evidence of material reach, not a promise that the final gates are easy.
+Lead decision 2026-10-21: targets are moment/dates (development rank 3),
+meriyah/parse (development rank 5) and hash-map (external rank 7), priced by
+the v6 per-target payoff as well as named reach. Diff/compare becomes a control:
+its B=1.0991 requires a 0.9098 ratio, about 9.02% total improvement or 38% of its
+23.73% named owner share, judged not credible from reach. The final payoff
+values are recomputed from the policy below. **Prior stage-A measurements
+were not used for this selection**; only the exact-M profiles and v6 bands.
+The original reach-only choice of diff at draft4a2c7993 is superseded.
 
-Higher-ranked js-yaml has more string/RegExp ownership (20.83%) than named
-ownership (13.11%); immutable has 28.99% Vm/env/call versus 11.74% named. Keep
-both as controls rather than crediting string or activation work to M1.
-Hash-map has material named reach (19.01% owner) but a smaller 1.50x NG gap;
-raytrace has 14.60% named plus 9.28% call and 5.13% other function work.
-Both guard accelerated access, construction and class-field costs. The
+Js-yaml stays a control: string/RegExp ownership (20.83%) exceeds named (13.11%).
+Immutable stays a control: Vm/env/call 28.99% versus named 11.74%. Hash-map's
+21.69% inclusive / 19.01% owner reach now supports the 0.9523 policy payoff;
+its smaller NG gap does not by itself disqualify this target. Raytrace remains
+a control with 14.60% named, 9.28% call and 5.13% other function ownership,
+guarding accelerated access, construction and class-field costs. The
 heterogeneous sentinel actually samples typed execution (65.78% owner) and
 literal-data slot reads (16.00%); it remains a mandatory generic control.
 Broad/property_read is 64.60% virtual-object ownership (62.07% specifically
@@ -154,16 +158,17 @@ Top owners and concrete named-path owners, pooled across all windows:
 | Target | Largest concrete owners | Concrete named owners |
 | --- | --- | --- |
 | moment/dates | wide activation `run` 21.06%; native `call_native_family` 6.12%; `Vm::run_current_activation` 6.10% | `own_data_property_read` 2.68%; `op_get_prop_named` 1.95%; `NamedPropertyCache::probe` 1.37% |
-| diff/compare | `Vm::run_current_activation` 12.82%; wide activation `run` 12.25%; `apply_env` 2.97% | `object_data_literal` 2.64%; `property_value` 2.15%; `property_value_key_with_receiver` 1.96% |
 | meriyah/parse | wide activation `run` 27.55%; `Vm::run_current_activation` 9.99%; `own_data_property_read` 5.18% | `own_data_property_read` 5.18%; `PropertyStorage::insert` 2.59%; `write_existing_own_data_property` 2.08% |
+| hash-map | wide activation `run` 57.76%; numeric-plan `run_leaf` 4.23%; `NamedPropertyCache::probe` 3.96% | `NamedPropertyCache::probe` 3.96%; compact `get_prop_named` 3.02%; `own_data_slot_value` 2.01% |
 
-## Draft plan and validator
+## Lead-approved freeze and validator
 
-Plan SHA-256 `584d22cf4638c368d3e61bfb100517c438396a550b2338b6469564a2d9cf4d0f`; unit `interpreter-core-v2-kernel-layout-authority`.
-The [review notes](../proposals/T064-successor-review.md) explain stage handoff,
-manual checks and freeze prerequisites; the JSON mechanism owns the full
-proposed stage/ledger contract and its typed fields bind the checked budget. It uses the proposed structural-prerequisite override,
-not an assertion that a neutral K leaf earns normal retention.
+Final frozen plan SHA-256 `a23cba70f9ffe45870d171f6065192eda06604befb26e2e7eae978e5c39822fb`; unit `interpreter-core-v2-kernel-layout-authority`.
+The [lead review](../proposals/T064-successor-review.md) records the 2026-10-21
+approval, target/payoff reasoning, accepted manual ledger/stage-band checks,
+quantitative RSS ceiling and amended static contract. The frozen JSON owns the
+full mechanism and typed fields. K's gate cites the pointer-slot amendment in
+[T064](../T064-kernel-isolation.md#lead-decision-2026-10-21), not a checker commit.
 
 K→A→B keeps M fixed. K/A stage cap is 1.025, further limited by each case's
 policy band; final target payoff is min(.97, 1/B_i). New workers-4 policy v6,
@@ -171,18 +176,21 @@ SHA-256 `be123f7c5cfd46aa863467256eb8bf6947ff64f72541efc371f05a36c5535a31`;
 instruction-blind with all three targets declared memory-sensitive, 5 pairs ×
 6 layouts, 60 formal blocks and 30-pair held-out acceptance plus required
 continuations/panels. Resource report/raw completeness and all existing
-instruction/lane/portfolio/held-out gates remain. No numeric RSS ceiling is
-invented; review that limitation before freezing.
+instruction/lane/portfolio/held-out gates remain. Lead feedback 1 adds the
+manual per-case median max-RSS candidate/M ≤1.05 ceiling for every target and
+every development case, checked before each stage decision; excess blocks
+advance/promotion pending lead review. Tooling does not enforce this cap or
+the 11-case sample coverage; generic resource-probe replay alone is insufficient.
 
 | Target | B_i | Final candidate/M maximum |
 | --- | ---: | ---: |
 | `moment/dates` | 1.050127431 | 0.952265383 |
-| `diff/compare` | 1.099109904 | 0.909827121 |
 | `meriyah/parse` | 1.071894924 | 0.932927265 |
+| `external/jetstream3-js-subset/hash-map` | 1.050127431 | 0.952265383 |
 
 Failure budget: successor K ≤1; A+B share exactly one remaining failure;
 successor aggregate ≤2 with no borrowing. Old `0a9af81b` remains the spent
-failure of the original account, identified in the [closure draft](../proposals/T064-layout-edges-closure.md).
+failure of the original account, identified in the [closure](T064-layout-edges-closure.md).
 A valid K failure stops the route and redirects effort to M2. The stricter
 per-stage ledger and diagnostic-only stage-band audit are manual contract
 obligations, not features of the schema validator.
@@ -191,19 +199,24 @@ Validation command (paths relative to workspace root for the external inputs):
 
 ```sh
 ./scripts/performance-decision.sh validate-unit \
-  --unit tasks/proposals/T064-kernel-layout-authority.json \
+  --unit tasks/performance-units/interpreter-core-v2-kernel-layout-authority.json \
   --queue <workspace>/outputs/imac-bench/20261022T050553Z-t064-successor-exact-profiles/out/queue.json \
   --profile-root <workspace>/outputs/imac-bench/20261022T050553Z-t064-successor-exact-profiles/out/profiles
 ```
 
 Exit 0: `status=valid`, `priority_mode=override`, `base_sha=9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30`;
-queue `f6666a68cb8e1841418d6f5012e6f7810b0c25ebf982b45ef6d5564855e0ae13`; unit `584d22cf4638c368d3e61bfb100517c438396a550b2338b6469564a2d9cf4d0f`.
-Validation output SHA-256 `3c2a99a12b9dbfc41fa3aa98027c5ba376d87b0973e8e8fedac6928066e6df95`.
+queue `f6666a68cb8e1841418d6f5012e6f7810b0c25ebf982b45ef6d5564855e0ae13`; unit `a23cba70f9ffe45870d171f6065192eda06604befb26e2e7eae978e5c39822fb`.
+Validation output SHA-256 `5a791c13024757eb732768f0af2096fd1dadbaf68e17f34b74184e05eca386a2`.
 All nine target receipts (three windows each) pass the validator's executable,
 queue, opportunity and copied-asset hash checks. The separate 27/27 receipt
-verification also covers every control window. Validation verifies bindings
-and structure, not the lead's approval, interpretation of profile reach,
-manual ledger/static gate or runtime performance.
+verification also covers every control window. Validation verifies bindings and structure; the lead approval is recorded
+separately. It does not verify manual ledger/static/RSS checks or performance.
+
+Original draft validation at4a2c7993 remains historical: unit SHA-256
+`584d22cf4638c368d3e61bfb100517c438396a550b2338b6469564a2d9cf4d0f`,
+output SHA-256 `3c2a99a12b9dbfc41fa3aa98027c5ba376d87b0973e8e8fedac6928066e6df95`,
+status valid. That draft was under `tasks/proposals/T064-kernel-layout-authority.json`
+at that commit; its target choice is superseded by the lead decision above.
 
 ## Receipt manifest
 
@@ -273,16 +286,17 @@ whitespace checks passed; no runtime change means
 no new focused semantic slice is needed. `target/debug` was deleted after
 checks; no local release build, origin push, merge or worktree removal.
 
-The original frozen JSON still hashes to d184dbcc…; the index is corrected to
-show its already-spent valid failure, without enacting supersession. The
-[T064 resume block](../T064-kernel-isolation.md) points here for lead review.
+The original frozen JSON still hashes to d184dbcc…; its valid failed screen
+is permanently spent. The feedback-1 freeze enacts **closed-superseded** with
+unresolved final standing, not a new screen/abort/decide result. The index and
+T056/T064 resume blocks now point to the frozen successor and closure.
 
-Open for the lead: approve the prerequisite override and stage caps, accept
-the instruction-blind/60-block/resource approach (or define a resource ceiling
-before freezing), integrate/review K0's actual checker and separate T056
-allocation/startup inputs, then freeze the successor and enact the closure
-in one handoff. Exact I profiles and actual K/A/B gates remain future work;
-these M samples certify none of them.
+The lead approved the priority override, manual ledger/stage-band checks and
+RSS ceiling on 2026-10-21. Separate K0 integration/qualification and T056
+allocation/startup review remain open; exact I profiles and K/A/B gates are
+future work. No new timing or K1 implementation is part of the freeze.
+Final freeze validation and checks are recorded in the lead review; the
+initial full-gate results above remain bound to their recorded code revision.
 
 Outside this branch's document boundary, `docs/design/property-layouts.md`
 still describes T063 as not yet on main; that dependency-status sentence is

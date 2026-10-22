@@ -1,0 +1,163 @@
+{
+  "schema_version": 3,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_kind": "migration",
+  "unit_id": "interpreter-core-v2-kernel-layout-authority",
+  "base_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+  "queue": {
+    "candidate_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+    "sha256": "f6666a68cb8e1841418d6f5012e6f7810b0c25ebf982b45ef6d5564855e0ae13"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "development/moment/dates",
+      "development/meriyah/parse",
+      "external/jetstream3-js-subset/hash-map"
+    ],
+    "rank_ceiling": 5,
+    "override_reason": "Lead decision 2026-10-21 (plan-feedback-1): approved structural prerequisite K before M1 A/B; K and A may advance, only B may retain. Target selection uses fresh exact-M named reach under the per-case T022 payoff min(.97,1/B_i), not prior stage-A measurements. Targets: development/moment/dates (26.13% inclusive, 19.96% named owner, B=1.0501274307821105, payoff=0.9522653829309299), development/meriyah/parse (33.04%, 28.10%, B=1.0718949238841748, payoff=0.9329272652736775), external/jetstream3-js-subset/hash-map (21.69%, 19.01%, B=1.0501274307821105, payoff=0.9522653829309299). Diff/compare becomes a control: B=1.0991099041376808 requires 0.9098271212327591, a 9.02% total reduction or about 38% of its 23.73% named owner share, judged not credible from reach. Js-yaml/immutable and every other policy non-target stay controls. Rank ceiling 5 remains a reference only in override mode; hash-map is external rank 7. Lead decisions and final validation are in tasks/proposals/T064-successor-review.md; measurements are in tasks/archive/T064-successor-plan-inputs.md."
+  },
+  "mechanism": {
+    "summary": "LEAD-APPROVED FREEZE (plan-feedback-1, 2026-10-21); no K1 implementation or timing screen is started by this handoff. One three-stage successor K -> A -> B; fixed base M=9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30 for every cumulative stage/formal decision, including K cost. Stage 1 K (T064) cold-outlines object-bearing typed arms for both Vm and WideLoopFrame along the reviewed spike boundary; no crate, FFI or recipe change. Static gate scripts/check-kernel-isolation.sh (delivered separately on agent/t064-k0-checker/codex) must enforce T064's lead-decision contract: identical instruction boundaries/intra-function relative PCs, non-address bytes, owned table bytes/targets/relative positions and stack layout; identical RIP referent widths and non-pointer bytes. Pointer-sized slots inside referents compare relocated target identity (section, symbol or import, offset within symbol) and target contents under the same rule, not raw pointer values, under the lead-feedback-1 amendment in tasks/T064-kernel-isolation.md#lead-decision-2026-10-21; cite that contract, not a checker commit. Unknown/unresolvable or partial slots fail closed; non-pointer bytes and owned tables remain protected. Classify/report displacement-only RIP and call/import fixups as allowed; unknown decoding/relocation, missing/duplicate/cloned roles and ineffective perturbations fail closed. Full A/A/H+8/C+8 qualification for K, targeted actual-candidate perturbations before A/B, full matrix on kernel/ABI/toolchain/recipe changes. Stage 2 A (T056) makes owned bounded transitions/layouts the authority for all ordinary named stores, replacing Dynamic's name map and ObjectLiteralShape.lookup in the same stage, one probe per add and one layout pointer, ObjectData <=120 bytes, per docs/design/property-layouts.md and T056 work-count tests. Stage 3 B routes ordinary/shared accelerated Get/Set through atoms/layouts and retires rejecting probes/redundant revisions. Do not automatically port 5dd3a810's 112-byte diagnostic shape; justify header/batch/key edits from fresh inputs. After K integrates at I, exact I profiles must reconfirm M1 reach before A; changed priority/scope stops for new review without retargeting or budget reset. I->A attribution is supplemental only. Every acceptance candidate is M plus reviewed K/M1 runtime commits, with tooling/docs merges allowed; record git diff M <candidate> -- crates before every screen and stop for unrelated runtime changes. FAILURE LEDGER: original interpreter-core-v2-layout-edges plan SHA-256 d184dbcc122a060a219b367ffe3f3bb02c216f542f75f51eee1925387ef23284 and failed candidate 0a9af81bebcef80e9239954f8db191a71f10316e remain permanent. That valid K=6 failure spent 1/2 of old A+B; exactly ONE unused A+B failure transfers, shared across successor stages 2 and 3. Successor stage 1 K has at most ONE independent failed screen, with no transfer/borrowing to A+B; a valid K failure immediately stops isolation and sends the lead to M2. Successor aggregate max_attempts=2 is only an upper bound, never permission to continue after K failure. No new successor failure has been spent. Stage aborts count; incomplete evidence follows existing completion rules and replenishes nothing; static/correctness/pre-gate failures stop before timing without spending a timing attempt. Validate-unit does not enforce these manual per-stage ledger caps. GATES: before every timed screen, exact M/candidate images run once per role on all 86 policy cases for instructions; a ratio above max(1.03,I_i) blocks timing, all pre-gates recorded, and the screen uses the exact image that passed. K and A require cumulative neutrality at min(B_i,1.025) on every case with unchanged instruction/lane/portfolio ceilings, complete 5-pair K=6, then cumulative formal advance. Explicitly audit this stricter cap on diagnostic-only cases where the schema stage evaluator uses 1.025 alone. All stages are instruction-blind, with memory wall targets equal to final targets, 60 formal blocks, mandatory replayed complete resource report/raw for exact M/candidate and host, and existing v6 continuation/precision/load rules. MANUAL RESOURCE CEILING (lead decision 2026-10-21): for every target and every development case (11 distinct cases), require per-process max RSS candidate/M <=1.05, using the median of the paired per-process max-RSS candidate/M ratios over the complete formal run resource sample cohort for that case. Bind the case-level resource samples to the formal run, exact candidate/M images, host and block identities; missing case coverage or samples blocks a stage decision. Existing generic resource-probe evidence alone does not cover these cases. Exceeding 1.05 blocks advance/promotion pending lead review. Tooling does not enforce this numerical ceiling or per-case cohort coverage; record the ratios, sample coverage and manual verdict before every stage decision, alongside mandatory replayed resource report/raw completeness. Do not use instructions or aggregate RSS to waive a case excess. Record services, projections/publications, moved bytes, allocation counts and scratch high-water/retention; numeric-only loops have zero per-iteration services/allocations. Full correctness/NG/curated subset/exact configured Test262 zero gap and static gates precede advancing a stage. Only final B may retain, with per-target min(.97,1/B_i), every pair improving, natural and required six-layout aggregate, all controls/lanes, resources and 30-pair held-out acceptance with mandatory K=6 event/diagnostic completion. No held-out selection. This freeze spends no screen/formal attempt and enacts the old layout-edges continuation as closed-superseded; its final performance standing remains unresolved. Keep its JSON/failed result unchanged and fabricate no decide outcome. The closure is recorded in tasks/archive/T064-layout-edges-closure.md; the lead decision and manual checks are in tasks/proposals/T064-successor-review.md. No prior stage-A measurement was used to choose these targets; diff/compare is a control.",
+    "generality": "Admission is ordinary named-property semantics, receiver kind, atom domain/layout identity and numeric versus object-bearing typed operations. No source/bytecode-template, property-spelling, benchmark/library identity, checksum, path or iteration-count admission. Preserve slot-indexed locals and shared upvalue cells; no per-call name-keyed snapshot, new crate/dependency, FFI, unsafe or recipe/CPU policy change.",
+    "semantic_risks": [
+      "Cold outlining must retain scalar widths/alignment, admission/tier reach, NaN/minus-zero/coercion order, residency and exact deopt PC/stack/publication. Services execute once; release borrows before observers/throws and reacquire afterward.",
+      "Layout/descriptor/enumeration and delete-reinsert order remain correct across Small/Dynamic/Shaped/dictionary encodings, equal keys with different attributes, lazy properties, seal/freeze, class fields, constructor substitution and keys beyond 32/128 properties.",
+      "Computed keys perform ToPropertyKey once. Atom domains remain realm-correct under eval/with, cross-realm/native/host/null-prototype inputs and escaping values; canonical/surrogate key equality is preserved.",
+      "Bound transition/shape/atom retention under churn; dictionaries keep independent identity/version, stable ordered slots and tombstone compaction. Never retain duplicate lookup authority or re-link/create a domain per store.",
+      "Proxy/accessor/callback/native re-entry and TypedArray detachment preserve observable order and shared-cell/TDZ authority; object/layout borrows cannot survive re-entry.",
+      "Static artifact equality is not speed or placement immunity. Boundary calls, spills, startup, allocations and scratch transport remain priced against M on the full v6 portfolio. Resource completeness alone cannot waive the manual per-case median max-RSS candidate/M ceiling of 1.05 for all targets and development cases; exceeding it blocks advance/promotion pending lead review."
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "development--moment--dates/0/receipt/receipt.json",
+      "sha256": "6802d8b30b2dddfcbefb595d0a4b97d3a9902794170d3645325df75e880b3eac",
+      "base_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+      "opportunity_ids": [
+        "development/moment/dates"
+      ],
+      "shared_cost": "Exact M queue image f5822aa3; macOS sample, repeat 0, 10 seconds at 1 ms. Named-property/layout union envelope 2169/8288 main-thread samples (26.17%); nearest semantic-caller owner attribution charges 19.79% to named storage/cache/Get/Set/literal work. All three independent process windows are bound, with no window selected for a larger share. Includes required lookup/ownership and inlined work; reach, not a removable fraction or speed forecast. Method, aggregate shares and control receipts are in tasks/archive/T064-successor-plan-inputs.md.",
+      "inclusive_fraction": 0.26170366795366795
+    },
+    {
+      "source": "development--moment--dates/1/receipt/receipt.json",
+      "sha256": "9001a05770443424201f00c83deab997d5fc534c8dd6b9851a2e770ca5d8d5b5",
+      "base_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+      "opportunity_ids": [
+        "development/moment/dates"
+      ],
+      "shared_cost": "Exact M queue image f5822aa3; macOS sample, repeat 1, 10 seconds at 1 ms. Named-property/layout union envelope 2129/8293 main-thread samples (25.67%); nearest semantic-caller owner attribution charges 19.50% to named storage/cache/Get/Set/literal work. All three independent process windows are bound, with no window selected for a larger share. Includes required lookup/ownership and inlined work; reach, not a removable fraction or speed forecast. Method, aggregate shares and control receipts are in tasks/archive/T064-successor-plan-inputs.md.",
+      "inclusive_fraction": 0.25672253707946463
+    },
+    {
+      "source": "development--moment--dates/2/receipt/receipt.json",
+      "sha256": "c24083cb1300f1a814175c48b38413bad61fbfe90fffebb34ce21757ffac60f2",
+      "base_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+      "opportunity_ids": [
+        "development/moment/dates"
+      ],
+      "shared_cost": "Exact M queue image f5822aa3; macOS sample, repeat 2, 10 seconds at 1 ms. Named-property/layout union envelope 2192/8255 main-thread samples (26.55%); nearest semantic-caller owner attribution charges 20.61% to named storage/cache/Get/Set/literal work. All three independent process windows are bound, with no window selected for a larger share. Includes required lookup/ownership and inlined work; reach, not a removable fraction or speed forecast. Method, aggregate shares and control receipts are in tasks/archive/T064-successor-plan-inputs.md.",
+      "inclusive_fraction": 0.2655360387643852
+    },
+    {
+      "source": "development--meriyah--parse/0/receipt/receipt.json",
+      "sha256": "c4d2eee2804151f76dc00a81e10792794bca0967d16039d82aa3354047396905",
+      "base_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+      "opportunity_ids": [
+        "development/meriyah/parse"
+      ],
+      "shared_cost": "Exact M queue image f5822aa3; macOS sample, repeat 0, 10 seconds at 1 ms. Named-property/layout union envelope 836/2436 main-thread samples (34.32%); nearest semantic-caller owner attribution charges 29.23% to named storage/cache/Get/Set/literal work. All three independent process windows are bound, with no window selected for a larger share. Includes required lookup/ownership and inlined work; reach, not a removable fraction or speed forecast. Method, aggregate shares and control receipts are in tasks/archive/T064-successor-plan-inputs.md.",
+      "inclusive_fraction": 0.34318555008210183
+    },
+    {
+      "source": "development--meriyah--parse/1/receipt/receipt.json",
+      "sha256": "19ccf988fec17697bd5c0adeeaa5276c1c83c2c4332ec233024b1c072ab1a93f",
+      "base_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+      "opportunity_ids": [
+        "development/meriyah/parse"
+      ],
+      "shared_cost": "Exact M queue image f5822aa3; macOS sample, repeat 1, 10 seconds at 1 ms. Named-property/layout union envelope 797/2442 main-thread samples (32.64%); nearest semantic-caller owner attribution charges 27.76% to named storage/cache/Get/Set/literal work. All three independent process windows are bound, with no window selected for a larger share. Includes required lookup/ownership and inlined work; reach, not a removable fraction or speed forecast. Method, aggregate shares and control receipts are in tasks/archive/T064-successor-plan-inputs.md.",
+      "inclusive_fraction": 0.3263718263718264
+    },
+    {
+      "source": "development--meriyah--parse/2/receipt/receipt.json",
+      "sha256": "3a640068934f8a83d2bfbf2e7a73b73409d7b8b9e0ff4d60a04d7753f04940ed",
+      "base_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+      "opportunity_ids": [
+        "development/meriyah/parse"
+      ],
+      "shared_cost": "Exact M queue image f5822aa3; macOS sample, repeat 2, 10 seconds at 1 ms. Named-property/layout union envelope 782/2432 main-thread samples (32.15%); nearest semantic-caller owner attribution charges 27.30% to named storage/cache/Get/Set/literal work. All three independent process windows are bound, with no window selected for a larger share. Includes required lookup/ownership and inlined work; reach, not a removable fraction or speed forecast. Method, aggregate shares and control receipts are in tasks/archive/T064-successor-plan-inputs.md.",
+      "inclusive_fraction": 0.3215460526315789
+    },
+    {
+      "source": "external--jetstream3-js-subset--hash-map/0/receipt/receipt.json",
+      "sha256": "1144e11e32699ae01dc37af744caa16668c4be9d066c25c85925fbfe8db456f7",
+      "base_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/hash-map"
+      ],
+      "shared_cost": "Exact M queue image f5822aa3; macOS sample, repeat 0, 2-second window at 1 ms; the workload completed by sampler return. Named-property/layout union envelope 117/497 main-thread samples (23.54%); nearest semantic-caller owner attribution charges 19.72% to named storage/cache/Get/Set/literal work. All three process windows are bound; pooled named reach is 21.69% inclusive / 19.01% owner, including NamedPropertyCache::probe and compact get_prop_named. Small diagnostic sample; includes required lookup/ownership and inlined work, so reach is not a removable fraction or speed forecast. Selection is from these exact-M profiles and the v6 payoff, never prior stage-A measurements. Method and all receipts are in tasks/archive/T064-successor-plan-inputs.md.",
+      "inclusive_fraction": 0.23541247484909456
+    },
+    {
+      "source": "external--jetstream3-js-subset--hash-map/1/receipt/receipt.json",
+      "sha256": "6ef40b6d100fb75a5d839596986e7d2253a2fc4ef8d847cc8ffa844323d6c33b",
+      "base_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/hash-map"
+      ],
+      "shared_cost": "Exact M queue image f5822aa3; macOS sample, repeat 1, 2-second window at 1 ms; the workload completed by sampler return. Named-property/layout union envelope 106/497 main-thread samples (21.33%); nearest semantic-caller owner attribution charges 19.52% to named storage/cache/Get/Set/literal work. All three process windows are bound; pooled named reach is 21.69% inclusive / 19.01% owner, including NamedPropertyCache::probe and compact get_prop_named. Small diagnostic sample; includes required lookup/ownership and inlined work, so reach is not a removable fraction or speed forecast. Selection is from these exact-M profiles and the v6 payoff, never prior stage-A measurements. Method and all receipts are in tasks/archive/T064-successor-plan-inputs.md.",
+      "inclusive_fraction": 0.21327967806841047
+    },
+    {
+      "source": "external--jetstream3-js-subset--hash-map/2/receipt/receipt.json",
+      "sha256": "104a84d8f459dadc6f05c71695bed9aa2aa861bc7fcf8259e69c106f0e138627",
+      "base_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/hash-map"
+      ],
+      "shared_cost": "Exact M queue image f5822aa3; macOS sample, repeat 2, 2-second window at 1 ms; the workload completed by sampler return. Named-property/layout union envelope 100/495 main-thread samples (20.20%); nearest semantic-caller owner attribution charges 17.78% to named storage/cache/Get/Set/literal work. All three process windows are bound; pooled named reach is 21.69% inclusive / 19.01% owner, including NamedPropertyCache::probe and compact get_prop_named. Small diagnostic sample; includes required lookup/ownership and inlined work, so reach is not a removable fraction or speed forecast. Selection is from these exact-M profiles and the v6 payoff, never prior stage-A measurements. Method and all receipts are in tasks/archive/T064-successor-plan-inputs.md.",
+      "inclusive_fraction": 0.20202020202020202
+    }
+  ],
+  "migration": {
+    "stages": 3,
+    "current_stage": 1,
+    "cumulative_target_ids": [
+      "development/moment/dates",
+      "development/meriyah/parse",
+      "external/jetstream3-js-subset/hash-map"
+    ],
+    "stage_max_candidate_over_base": 1.025
+  },
+  "fast_gate": {
+    "target_ids": [
+      "development/moment/dates",
+      "development/meriyah/parse",
+      "external/jetstream3-js-subset/hash-map"
+    ],
+    "target_max_candidate_over_base": 0.97,
+    "max_attempts": 2
+  },
+  "layout_gate": {
+    "policy_path": "benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v6.json",
+    "policy_sha256": "be123f7c5cfd46aa863467256eb8bf6947ff64f72541efc371f05a36c5535a31",
+    "mechanism_class": "instruction-blind",
+    "memory_wall_targets": [
+      "development/moment/dates",
+      "development/meriyah/parse",
+      "external/jetstream3-js-subset/hash-map"
+    ],
+    "panel_required": true,
+    "panel_pairs": 5,
+    "held_out_pairs": 30,
+    "formal_blocks": 60
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
