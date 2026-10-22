@@ -34,6 +34,26 @@ benchmark-identity or source-template recognition. Workload profiles identify
 costs; they do not define admission rules. Multiple independent external
 workloads and the complete regression portfolio must check generalization.
 
+## Current measured standing (2026-10-21)
+
+Job `20261022T041140Z-current-main-9eba7a1d-formal` (exit 0, 2665 s, workers-4, 30 blocks): candidate main
+`9eba7a1d` (binary `f5822aa3…`), base `9a0eeeca` (`926ee634…`), NG `f7830186` (`919f7235…`).
+Summary SHA-256 `205e8829…`; queue `target/comparison/current-main-9eba7a1d-queue.json` SHA-256 `f6666a68…`
+(workspace-local, like the bundle under `outputs/imac-bench/<job>/`). Readiness inconclusive only because base
+`9a0eeeca` has no lodash comparison; every other case is complete and healthy.
+
+| Lane | Cases | Rust / NG wall geomean |
+| --- | ---: | ---: |
+| Broad | 25 | 0.990 |
+| Sentinel | 6 | 1.045 |
+| Development (npm libraries) | 10 | 3.071 |
+| JetStream subset / Kraken / SunSpider | 5 / 14 / 26 | 1.163 / 0.780 / 1.084 |
+
+Worst against NG: development js-yaml 4.34, immutable 4.01, moment 3.65, diff 3.62, meriyah 3.34, lodash 2.76;
+broad property_read 5.15, property_write 3.78, array_read 3.26, dynamic_method_call 3.09. External/sentinel
+standing matches 2026-10-16 within noise. Ordinary-path costs (named access, env/call, value glue, allocation and
+the interpreter loop itself) dominate real programs; see [T056 part 2](archive/T056-unit0-part2-evidence.md#sampled-shares-canonical-image-main-thread).
+
 ## Current measured standing (2026-10-16)
 
 Job 20261016T122024Z-general-current-baseline measured base/candidate 9a0eeeca
