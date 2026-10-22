@@ -1,6 +1,6 @@
 # T066 allocator evidence
 
-- Status: evidence record; 2026-10-22; screen attempt 1 rejected, repair round complete; attempt 2 is the lead's call.
+- Status: evidence record; 2026-10-22; screen attempt 1 rejected, repair complete, out-of-line entry measured; attempt 2 is the lead's call.
 - Implementation: present at `52dd420d` on `agent/t066-size-class-allocator/cmd`;
   64-KiB pages with per-class free-page queues, page recycling and an atomic
   cross-thread remote list. The compiled candidate is byte-identical to
@@ -15,9 +15,10 @@
   `matter-js/simulate`; the per-case ratio is dominated by whole-process variance
   in the base medians (4-10% between cohorts with the same base binary).
   `graphlib/paths` fell from 1.073 to 1.018, so the diagnosed stranding is fixed.
-- Next action: lead decides whether to spend attempt 2 on the repaired
-  allocator; the repair removes the imaging regressions but the closure
-  sentinel regressed further in the diagnostic triage.
+- Next action: lead decides whether to spend attempt 2. The out-of-line entry
+  restores the base call shape and improves the pre-gate, but
+  `capturing_closure_call` remains ~1.19 in triage, so the inlining hypothesis
+  does not explain that regression.
 
 ## Plan stage: target selection
 
@@ -618,6 +619,97 @@ attempt-1 imaging wall regressions, and the amended RSS rule passes. It does
 not repair `capturing_closure_call`, which regressed further in the natural
 layout; the allocator is not screen-ready as it stands. Attempt 2 remains the
 lead's call; no screen, formal run or plan change was made in this round.
+
+## Out-of-line allocator entry
+
+Declared change (`561a8795`): mark the four `GlobalAlloc` methods
+`#[inline(never)]`, so every call site keeps the base's single out-of-line call
+shape instead of receiving an inlined allocator body under fat LTO. No other
+change. The allocator's fast path stays inside the entry.
+
+### Symbol and call evidence
+
+Job `20261022T163533Z-t066-oosignals2` (non-timing) builds base `9eba7a1d`,
+the inlined attempt code `4e7dda32` and the out-of-line HEAD `560c8f56` with the
+canonical recipe, then reads `nm` address distances and `otool -tV` call
+targets. (The first run, `20261022T162904Z`, could not match demangled sizes
+because the host's Apple nm does not demangle Rust names; commit `4712e2e0`
+fixed the checker and the job was rerun. Artifact `symbols.json` `cd8e8388…`.)
+
+| Hot function | Base size | Inlined size | Out-of-line size | Base system calls | Inlined alloc/system | Out-of-line alloc/system |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `compact_fn::wide::activation::run` | 24,640 | 25,024 | 24,864 | 12 | 6 / 5 | 8 / 0 |
+| `compact_fn::activation::run` | 10,144 | 10,576 | 10,224 | 6 | 2 / 2 | 6 / 0 |
+| `Vm::run_current_activation` | 9,632 | 9,808 | 9,712 | 6 | 9 / 5 | 10 / 0 |
+| `Vm::run_completion` | 912 | 912 | 912 | 1 | 1 / 0 | 1 / 0 |
+
+Allocator entry symbols: the inlined build exposes only `dealloc` 192 B and
+`realloc` 672 B out of line (`alloc`/`alloc_zeroed` were inlined away); the
+out-of-line build exposes `alloc` 208 B, `alloc_zeroed` 304 B, `dealloc` 192 B
+and `realloc` 672 B. The hot functions now contain calls to the allocator
+entry and no direct `malloc`-family calls, and their sizes move back toward
+base (−160/−352/−96 B versus the inlined build, +224/+80/+80 B versus base).
+The declared mechanism is therefore real and the code shape is restored.
+
+### Verification
+
+| Check | Result |
+| --- | --- |
+| `cargo test -p qjs-cli` | 31 passed (26 unit + 5 integration), 0 failed |
+| `QJS_CHECK_SKIP_TEST262=1 ./scripts/check.sh` | passed locally (Test262 deferred) |
+| iMac correctness `20261022T162906Z` | exit 0: compare-qjs ok, Test262 subset 5170/5170 |
+| iMac pre-gate `20261022T162907Z` | PASS, 86/86; worst `audio-beat-detection` 1.008640, `audio-oscillator` 1.003087; median 0.991464; candidate `fdd0136c…`; artifacts `images.json` `bcb4b498…`, `pregate.json` `df50f465…`, `verdict.json` `cb4cca7c…` |
+
+Peak RSS is unaffected: the change only sets function placement/inlining. The
+class sizes, page size, bump/reuse/recycle policy, empty-pool bound and the
+allocation sequence are byte-identical in behaviour, so the same blocks and
+pages are retained. No RSS rerun was made.
+
+Diagnostic quick triage (`20261022T162908Z`, 120/120 valid, 276 s, candidate
+`fdd0136c…`; request `cb18ba4b…`, `triage.json` `9b91b349…`, `triage.md`
+`1549b855…`):
+
+| Case | Wall ratio [95% exploratory] | Instructions |
+| --- | ---: | ---: |
+| `development/diff/compare` (target) | 0.8108 [0.7792, 0.8294] | 0.8130 |
+| `development/graphlib/paths` (target) | 0.8776 [0.8629, 0.9059] | 0.8690 |
+| `development/js-yaml/document` (target) | 0.9215 [0.8695, 0.9408] | 0.8535 |
+| `development/immutable/persistent` (target) | 0.8541 [0.8419, 0.8744] | 0.8648 |
+| `external/kraken-1.1/imaging-darkroom` | 0.9485 [0.9058, 0.9518] | 0.9564 |
+| `external/kraken-1.1/imaging-desaturate` | 0.9697 [0.8885, 0.9892] | 0.9747 |
+| `sentinel/capturing_closure_call` | **1.1937 [1.1361, 1.4276]** | 0.9990 |
+| `sentinel/heterogeneous_property_read` | 1.0000 [0.9382, 1.2299] | 1.0000 |
+| `sentinel/polymorphic_call_site` | 1.0779 [0.9252, 1.0919] | 0.9988 |
+| `sentinel/prototype_method_call` | 1.0906 [1.0406, 1.2123] | 0.9994 |
+| `sentinel/recursive_call_tree` | 1.0525 [1.0060, 1.0776] | 1.0000 |
+| `sentinel/string_key_map_churn` | 1.1114 [0.9489, 1.2515] | 1.0001 |
+| `broad/property_dynamic_read` | 0.9876 [0.9306, 1.1287] | 1.0000 |
+| `broad/object_allocation` | 0.9907 [0.9765, 1.0422] | 0.9999 |
+| `broad/string_slice` | 0.6481 [0.5958, 0.6807] | 0.6931 |
+| `broad/top_level_function_call` | 1.0164 [1.0050, 1.0237] | 0.9992 |
+| `development/lodash/transform` | 0.9102 [0.9052, 0.9400] | 0.9293 |
+| `development/moment/dates` | 0.9029 [0.8798, 0.9087] | 0.8883 |
+| `external/kraken-1.1/json-stringify-tinderbox` | 0.8264 [0.8127, 0.8437] | 0.7985 |
+| `external/kraken-1.1/json-parse-financial` | 0.5595 [0.5415, 0.5619] | 0.6061 |
+| `external/jetstream3-js-subset/raytrace-public-class-fields` | 0.8559 [0.8517, 0.8656] | 0.8929 |
+| `external/sunspider-1.0/access-binary-trees` | 0.9083 [0.8989, 0.9288] | 0.9037 |
+| `external/kraken-1.1/audio-dft` | 0.9886 [0.9780, 1.0650] | 0.9931 |
+| `external/jetstream3-js-subset/cdjs` | 0.9079 [0.8945, 0.9401] | 0.8983 |
+
+Verdict `likely loss`, with `capturing_closure_call` the only obvious
+regression: 1.1937 versus 1.2050 for the previous repair build and 1.0672 in
+the attempt-1 screen. The imaging cases stay fixed (0.949/0.970) and the four
+plan targets remain well below their payoffs. The pre-gate improved
+substantially (worst 1.0256 → 1.0086).
+
+### Outcome
+
+The change does what it declared — the hot functions call the allocator entry
+instead of carrying its body, and their sizes return toward base — but the
+closure regression is unchanged. Fat-LTO inlining of the allocator body is
+therefore confirmed as a code-shape effect and falsified as the cause of the
+closure cost. Per the brief this was the one change: no further tuning, no
+screen, formal run or plan change. Attempt 2 remains the lead's call.
 
 ## Open risks
 

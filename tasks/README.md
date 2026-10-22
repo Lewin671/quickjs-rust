@@ -11,7 +11,7 @@ it to `archive/` with `git mv` and move its row below.
 
 | Task | Status | What it is |
 | --- | --- | --- |
-| [T066](T066-size-class-allocator.md) CLI size-class allocator | active | Attempt 1 of 2 rejected by K=6; repair `4e7dda32` fixed both imaging regressions, passes the amended RSS rule, but closure regressed to 1.205; attempt 2 is the lead's call. |
+| [T066](T066-size-class-allocator.md) CLI size-class allocator | active | Attempt 1 of 2 rejected by K=6; repair `4e7dda32` fixed imaging and passes the amended RSS rule; out-of-line entry `561a8795` restores the base call shape but closure stays 1.194; attempt 2 is the lead's call. |
 | [T057](T057-string-code-units.md) string code units | active | Stage 1 and UTF-16 correctness extraction integrated; stage 2 abandoned (0 attempts); linear-search follow-up awaits screening. |
 | [T065](T065-interpreter-core-v3.md) interpreter core v3 | active | Design reviewed, not approved; pre-M0 mechanism ablation on real programs decides rewrite vs incremental ([review](archive/T065-design-review.md)). |
 | [T056](T056-interpreter-core-v2.md) interpreter core v2 | active | Remaining M2/M3 superseded by T065 pending review; M1 A/B blocked after T064 K abort; old failure/reserve unchanged. |

@@ -1,19 +1,22 @@
 # T066: Production size-class global allocator for the CLI
 
-- Status: active; screen attempt 1 rejected (valid K=6 fail, attempt 1 of 2 spent); repair round complete; attempt 2 is the lead's call.
-- Implementation: present at `4e7dda32`; 64-KiB pages, per-class free-page queues, O(1) allocation (free block,
-  bump page, or new page), an epoch-gated remote-list scan and a retained bump page. The repair removes the O(pages)
-  class scan the lead code review flagged, which attempt 1's profile showed at 67M visits on imaging-darkroom.
-  Diagnostic block/page counters live behind the never-timed `alloc-counters` feature.
-- Verified at: `4e7dda32`, binary `cc5b4dd5…`, 2026-10-22; local full gate with Test262 deferred, iMac correctness
-  (compare-qjs, 5170/5170 Test262), 86-case instruction pre-gate PASS (worst 1.0256), H1 rusage/counters before and
-  after the fix, 15-pair RSS under the amended rule (max 1.0999, development geomean 1.0367) and one diagnostic triage.
-  Details: [evidence](archive/T066-allocator-evidence.md#repair-after-attempt-1).
+- Status: active; screen attempt 1 rejected (valid K=6 fail, attempt 1 of 2 spent); repair and the declared out-of-line
+  entry change are measured; attempt 2 is the lead's call.
+- Implementation: present at `561a8795`; 64-KiB pages, per-class free-page queues, O(1) allocation (free block,
+  bump page, or new page), an epoch-gated remote-list scan and a retained bump page, with the four `GlobalAlloc`
+  methods marked `#[inline(never)]`. The repair removes the O(pages) class scan attempt 1's profile showed at 67M
+  visits; the out-of-line entry restores the base call shape under fat LTO. Diagnostic block/page counters live
+  behind the never-timed `alloc-counters` feature.
+- Verified at: `561a8795`, binary `fdd0136c…`, 2026-10-22; local full gate with Test262 deferred, iMac correctness
+  (compare-qjs, 5170/5170 Test262), 86-case instruction pre-gate PASS (worst 1.0086), canonical symbol/call comparison
+  versus base and the inlined build, one diagnostic triage, and the earlier H1/15-pair RSS evidence for the repair.
+  Details: [evidence](archive/T066-allocator-evidence.md#out-of-line-allocator-entry).
 - Evidence: [plan](performance-units/cli-size-class-allocator.json), this file, [evidence record](archive/T066-allocator-evidence.md),
   [user RSS amendment](#user-rss-amendment-2026-10-22).
-- Unresolved: the repair makes `imaging-darkroom` 0.963 and `imaging-desaturate` 0.961 in triage and passes the
-  amended RSS rule, but `capturing_closure_call` regressed to 1.205 (triage, obvious regression) from 1.067 in the
-  attempt-1 screen; the allocator is not screen-ready as it stands. Attempt 2 is the lead's call.
+- Unresolved: `capturing_closure_call` is 1.194 in triage after both the repair and the out-of-line change (1.067 in
+  the attempt-1 screen), so allocator-body inlining does not explain it; `prototype_method_call` (1.091) and
+  `recursive_call_tree` (1.053) are the next sentinels. The allocator is not screen-ready as it stands; attempt 2 is
+  the lead's call.
 - Next action: lead decides whether to spend attempt 2; no further retune, screen, formal run or plan change was made.
 
 ## User RSS amendment (2026-10-22)
