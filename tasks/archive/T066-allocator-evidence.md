@@ -1,6 +1,6 @@
 # T066 allocator evidence
 
-- Status: evidence record; 2026-10-22; round 2 is final.
+- Status: evidence record; 2026-10-22; screen attempt 1 rejected, repair in progress.
 - Implementation: present at `52dd420d` on `agent/t066-size-class-allocator/cmd`;
   64-KiB pages with per-class free-page queues, page recycling and an atomic
   cross-thread remote list. The compiled candidate is byte-identical to
@@ -15,8 +15,9 @@
   `matter-js/simulate`; the per-case ratio is dominated by whole-process variance
   in the base medians (4-10% between cohorts with the same base binary).
   `graphlib/paths` fell from 1.073 to 1.018, so the diagnosed stranding is fixed.
-- Next action: lead reviews the final round-2 numbers; no further retune, no plan
-  change, no promotion claimed.
+- Next action: record attempt 1, diagnose the wall regressions (H1 page churn,
+  H2 recycle thrash, H3 aliasing), apply the smallest supported fix and verify;
+  the second and final attempt is the lead's call.
 
 ## Plan stage: target selection
 
@@ -440,6 +441,32 @@ The lead declared this the final round. Both authorised steps were carried out;
 step 2 was measured and reverted on pre-gate evidence. No further retuning and no
 plan change. The unit still has to be judged by the K=6 screen, formal run and
 held-out acceptance, which were not run here.
+
+## Attempt 1 of 2: valid K=6 rejection
+
+Screen job `20261022T140141Z-t066-screen-attempt1` (candidate `9b26bf52`, whose
+allocator source is `52dd420d`; unit SHA-256 `be05d5e8…`) completed a full K=6
+panel and was labelled **reject**. This is a valid failed screen: attempt 1 of 2
+is spent. Artifacts: `verdict.json` `50fa5e4a…`, `screen/panel.json`
+`f06758b1…`, `screen/complete.json` `7df1b19c…`.
+
+| Case | Wall median | Wall band | Instructions | Label |
+| --- | ---: | ---: | ---: | --- |
+| `external/kraken-1.1/imaging-darkroom` | 1.534911 | 1.070312 | 0.992548 | reject: persistent six-layout wall cost |
+| `external/kraken-1.1/imaging-desaturate` | 1.418010 | 1.064339 | 0.996851 | reject: persistent six-layout wall cost |
+| `sentinel/capturing_closure_call` | 1.067181 | 1.050127 | 0.998908 | reject: persistent six-layout wall cost |
+| `development/diff/compare` (target) | 0.836267 | 1.099110 | 0.819517 | pass |
+| `development/graphlib/paths` (target) | 0.895801 | 1.050127 | 0.873768 | pass |
+| `development/js-yaml/document` (target) | 0.888757 | 1.050127 | 0.856288 | pass |
+| `development/immutable/persistent` (target) | 0.872222 | 1.076243 | 0.870358 | pass |
+
+The sentinel lane exceeded its 1.018672 ceiling with per-layout ratios
+1.0070-1.0354, so the verdict also carries a lane event. Targets met both their
+wall payoff and the six-layout aggregate; the development lane measured
+0.9049-0.9152 (ceiling 1.009347), the portfolio 0.9623-0.9645 (ceiling
+1.006849), broad 0.9825-0.9915 and external 0.9550-0.9567. The three failures
+have flat instructions (0.992-0.999) against +7% to +53% wall, which points at
+kernel/memory-system cost rather than user code.
 
 ## Open risks
 

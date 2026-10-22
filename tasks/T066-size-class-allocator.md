@@ -1,6 +1,6 @@
 # T066: Production size-class global allocator for the CLI
 
-- Status: active; RSS rule amended by the user after measurement (below); formal screen next.
+- Status: active; screen attempt 1 rejected (valid K=6 fail, attempt 1 of 2 spent); repair round in progress.
 - Implementation: present at `52dd420d` (allocator source unchanged since; later commits are records and the RSS collector);
   64-KiB pages with per-class free-page queues (reuse before extend), page recycling and an atomic cross-thread remote list.
   A 32-KiB fixed-overhead variant was measured and reverted. Lead code review 2026-10-22 found no soundness defect;
@@ -10,10 +10,10 @@
   Details: [evidence](archive/T066-allocator-evidence.md).
 - Evidence: [plan](performance-units/cli-size-class-allocator.json), this file, [evidence record](archive/T066-allocator-evidence.md),
   [user RSS amendment](#user-rss-amendment-2026-10-22).
-- Unresolved: timed screen, K=6 panel, formal and held-out not yet run; triage flagged sentinel controls (`capturing_closure_call`,
-  `polymorphic_call_site`, `prototype_method_call`) that only the screen's control rule can decide.
-- Next action: lead runs the frozen plan's screen (`perf-loop.sh --plan`) on the iMac, then K=6/formal/held-out per the workflow,
-  applying the amended RSS check before promotion.
+- Unresolved: screen attempt 1 rejected on persistent wall cost in `imaging-darkroom` (1.535 vs 1.070 band),
+  `imaging-desaturate` (1.418 vs 1.064) and `capturing_closure_call` (1.067 vs 1.050) with flat instructions; the
+  sentinel lane exceeded its ceiling. Repair diagnosis and verification are in progress; the second attempt is the lead's call.
+- Next action: complete the H1/H2/H3 diagnosis and the smallest supported fix, record it, and leave attempt 2 to the lead.
 
 ## User RSS amendment (2026-10-22)
 
