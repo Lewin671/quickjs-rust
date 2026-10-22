@@ -1,0 +1,187 @@
+{
+  "schema_version": 3,
+  "unit_kind": "leaf",
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "cli-size-class-allocator",
+  "base_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+  "queue": {
+    "candidate_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+    "sha256": "f6666a68cb8e1841418d6f5012e6f7810b0c25ebf982b45ef6d5564855e0ae13"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "development/diff/compare",
+      "development/graphlib/paths",
+      "development/js-yaml/document",
+      "development/immutable/persistent"
+    ],
+    "rank_ceiling": 6,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "T066: replace the CLI process's global allocator (std System = macOS system malloc) with a thread-local size-class allocator that reuses freed blocks. 32 classes: 16-byte steps to 128 B, then four equal classes per power of two up to 8 KiB (160..8192); a layout larger than 8 KiB or with align > 16 stays System-managed, as do zero-sized layouts. Each thread keeps 32 free lists and per-class 64-KiB bump slabs from System; a freed block is pushed onto the freeing thread's list, so a cross-thread free transfers ownership without touching the allocating thread. realloc returns the same block inside one class, forwards to System.realloc only when both layouts are System-managed with equal alignment, and otherwise allocates the new layout, copies min(old,new) and deallocates the old block. alloc_zeroed zeroes layout.size() bytes of a recycled class block and forwards System-managed layouts. Slabs/free lists are retained until process exit and the const-initialized thread_local has no destructor, so no thread observes a destroyed pool. The allocator lives in qjs-cli; library crates and embedders keep their own allocator. Target selection used only each development program's exact-M allocator self-sample share and the frozen v6 payoff min(0.97,1/B_i); the T065 ablation is diagnostic priority evidence only and did not choose or order targets.",
+    "generality": "Admission is only a layout's size and alignment: any allocation up to 8 KiB with alignment at most 16 from any thread of the CLI process. No source text, bytecode, benchmark/library identity, path, checksum, iteration count or program shape is inspected; the same classes serve every allocation the engine or the workload makes, and the mechanism is the process-wide allocator contract rather than a workload-specific fast path.",
+    "semantic_risks": [
+      "Every class block must be aligned to at least 16 bytes and at least layout.size() bytes usable; System-managed layouts must retain their exact requested align and be freed with the same layout they were allocated with.",
+      "realloc must preserve min(old,new) bytes across class changes and must not forward to System.realloc when the new layout changes alignment; a same-class realloc must keep the pointer and contents.",
+      "alloc_zeroed must clear recycled block content for layout.size() bytes; returning stale free-list pointers or unzeroed memory is a correctness bug.",
+      "Cross-thread frees only push into the freeing thread's list; no pointer may be pushed twice, and after thread exit retained blocks must never be reachable by another thread's live allocation.",
+      "TLS must stay usable from any thread at any point in its life; the pool is const-initialized with no destructor so nested/agent threads never observe destroyed TLS.",
+      "Out-of-memory must return null from every GlobalAlloc method (and System forward) rather than aborting inside the allocator; Rust's alloc error handler still owns the abort policy.",
+      "Instruction-blind mechanism: flat instructions do not waive wall or RSS costs, and the manual per-case median max-RSS candidate/M ceiling of 1.05 must be checked for every target and development case before promotion."
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "20261022T050553Z-t064-successor-exact-profiles/out/profiles/development--diff--compare/0/receipt/receipt.json",
+      "sha256": "d06fae470d1a190aaa81199e69113f3575a8075602a31c6cd684fdc570367b73",
+      "base_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+      "opportunity_ids": [
+        "development/diff/compare"
+      ],
+      "shared_cost": "Exact M queue image f5822aa3; macOS sample, repeat 0, 10 s at 1 ms; all 5944 main-thread samples. Allocator self-sample share 1553/5944 (26.13%): self time in the macOS malloc/free/realloc family (nanov2_*, free, default_zone_*, _malloc_zone_*) and Rust alloc shims (__rust_alloc*, alloc::alloc::*, RawVecInner reserve/grow). All three windows of this program are bound, with no window selected for a larger share. Includes allocator-internal metadata/coalescing work; it is reach, not a removable fraction or a speed forecast. Method and ranking are in tasks/T066-size-class-allocator.md.",
+      "inclusive_fraction": 0.26127187079407804
+    },
+    {
+      "source": "20261022T050553Z-t064-successor-exact-profiles/out/profiles/development--diff--compare/1/receipt/receipt.json",
+      "sha256": "030684664ef18a78903c7e470eafd690ae70eb621ee5d3acab0188dd88dc8a45",
+      "base_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+      "opportunity_ids": [
+        "development/diff/compare"
+      ],
+      "shared_cost": "Exact M queue image f5822aa3; macOS sample, repeat 1, 10 s at 1 ms; all 6133 main-thread samples. Allocator self-sample share 1517/6133 (24.74%): self time in the macOS malloc/free/realloc family (nanov2_*, free, default_zone_*, _malloc_zone_*) and Rust alloc shims (__rust_alloc*, alloc::alloc::*, RawVecInner reserve/grow). All three windows of this program are bound, with no window selected for a larger share. Includes allocator-internal metadata/coalescing work; it is reach, not a removable fraction or a speed forecast. Method and ranking are in tasks/T066-size-class-allocator.md.",
+      "inclusive_fraction": 0.2473503994782325
+    },
+    {
+      "source": "20261022T050553Z-t064-successor-exact-profiles/out/profiles/development--diff--compare/2/receipt/receipt.json",
+      "sha256": "fc87eeecf035d819d38e91d714672eac2f7e945de004e047c12ef3c65475694a",
+      "base_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+      "opportunity_ids": [
+        "development/diff/compare"
+      ],
+      "shared_cost": "Exact M queue image f5822aa3; macOS sample, repeat 2, 10 s at 1 ms; all 6167 main-thread samples. Allocator self-sample share 1521/6167 (24.66%): self time in the macOS malloc/free/realloc family (nanov2_*, free, default_zone_*, _malloc_zone_*) and Rust alloc shims (__rust_alloc*, alloc::alloc::*, RawVecInner reserve/grow). All three windows of this program are bound, with no window selected for a larger share. Includes allocator-internal metadata/coalescing work; it is reach, not a removable fraction or a speed forecast. Method and ranking are in tasks/T066-size-class-allocator.md.",
+      "inclusive_fraction": 0.24663531700989136
+    },
+    {
+      "source": "20261022T072707Z-t056-m2-plan-graphlib-exact/out/profiles/development--graphlib--paths/0/receipt/receipt.json",
+      "sha256": "1f3e44ea5e2249e9697bca3ccfa8f17ebf1704a7e683e906a7b5092f29fc5282",
+      "base_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+      "opportunity_ids": [
+        "development/graphlib/paths"
+      ],
+      "shared_cost": "Exact M queue image f5822aa3; macOS sample, repeat 0, 10 s at 1 ms; all 1207 main-thread samples. Allocator self-sample share 243/1207 (20.13%): self time in the macOS malloc/free/realloc family (nanov2_*, free, default_zone_*, _malloc_zone_*) and Rust alloc shims (__rust_alloc*, alloc::alloc::*, RawVecInner reserve/grow). All three windows of this program are bound, with no window selected for a larger share. Includes allocator-internal metadata/coalescing work; it is reach, not a removable fraction or a speed forecast. Method and ranking are in tasks/T066-size-class-allocator.md.",
+      "inclusive_fraction": 0.20132560066280034
+    },
+    {
+      "source": "20261022T072707Z-t056-m2-plan-graphlib-exact/out/profiles/development--graphlib--paths/1/receipt/receipt.json",
+      "sha256": "04b8e574dcfa6228a190ac9e56380d1125acb92f488a069e67c5f47af8d6ee10",
+      "base_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+      "opportunity_ids": [
+        "development/graphlib/paths"
+      ],
+      "shared_cost": "Exact M queue image f5822aa3; macOS sample, repeat 1, 10 s at 1 ms; all 1217 main-thread samples. Allocator self-sample share 226/1217 (18.57%): self time in the macOS malloc/free/realloc family (nanov2_*, free, default_zone_*, _malloc_zone_*) and Rust alloc shims (__rust_alloc*, alloc::alloc::*, RawVecInner reserve/grow). All three windows of this program are bound, with no window selected for a larger share. Includes allocator-internal metadata/coalescing work; it is reach, not a removable fraction or a speed forecast. Method and ranking are in tasks/T066-size-class-allocator.md.",
+      "inclusive_fraction": 0.18570254724732949
+    },
+    {
+      "source": "20261022T072707Z-t056-m2-plan-graphlib-exact/out/profiles/development--graphlib--paths/2/receipt/receipt.json",
+      "sha256": "45b6a49b61a9d64eefb4fd9789b3576b97bc89af2f169bfdce6ebff5a3f961dc",
+      "base_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+      "opportunity_ids": [
+        "development/graphlib/paths"
+      ],
+      "shared_cost": "Exact M queue image f5822aa3; macOS sample, repeat 2, 10 s at 1 ms; all 1215 main-thread samples. Allocator self-sample share 219/1215 (18.02%): self time in the macOS malloc/free/realloc family (nanov2_*, free, default_zone_*, _malloc_zone_*) and Rust alloc shims (__rust_alloc*, alloc::alloc::*, RawVecInner reserve/grow). All three windows of this program are bound, with no window selected for a larger share. Includes allocator-internal metadata/coalescing work; it is reach, not a removable fraction or a speed forecast. Method and ranking are in tasks/T066-size-class-allocator.md.",
+      "inclusive_fraction": 0.18024691358024691
+    },
+    {
+      "source": "20261022T050553Z-t064-successor-exact-profiles/out/profiles/development--js-yaml--document/0/receipt/receipt.json",
+      "sha256": "f39836a8ad44dbd40e6f39b7c960d9fc685202124dfcdd910fcd06c032061580",
+      "base_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+      "opportunity_ids": [
+        "development/js-yaml/document"
+      ],
+      "shared_cost": "Exact M queue image f5822aa3; macOS sample, repeat 0, 10 s at 1 ms; all 4115 main-thread samples. Allocator self-sample share 718/4115 (17.45%): self time in the macOS malloc/free/realloc family (nanov2_*, free, default_zone_*, _malloc_zone_*) and Rust alloc shims (__rust_alloc*, alloc::alloc::*, RawVecInner reserve/grow). All three windows of this program are bound, with no window selected for a larger share. Includes allocator-internal metadata/coalescing work; it is reach, not a removable fraction or a speed forecast. Method and ranking are in tasks/T066-size-class-allocator.md.",
+      "inclusive_fraction": 0.17448359659781287
+    },
+    {
+      "source": "20261022T050553Z-t064-successor-exact-profiles/out/profiles/development--js-yaml--document/1/receipt/receipt.json",
+      "sha256": "986280c0ed12ad1097034b38aad6b6cabe07171836f6970495fd6bfcabef0be9",
+      "base_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+      "opportunity_ids": [
+        "development/js-yaml/document"
+      ],
+      "shared_cost": "Exact M queue image f5822aa3; macOS sample, repeat 1, 10 s at 1 ms; all 4162 main-thread samples. Allocator self-sample share 729/4162 (17.52%): self time in the macOS malloc/free/realloc family (nanov2_*, free, default_zone_*, _malloc_zone_*) and Rust alloc shims (__rust_alloc*, alloc::alloc::*, RawVecInner reserve/grow). All three windows of this program are bound, with no window selected for a larger share. Includes allocator-internal metadata/coalescing work; it is reach, not a removable fraction or a speed forecast. Method and ranking are in tasks/T066-size-class-allocator.md.",
+      "inclusive_fraction": 0.17515617491590582
+    },
+    {
+      "source": "20261022T050553Z-t064-successor-exact-profiles/out/profiles/development--js-yaml--document/2/receipt/receipt.json",
+      "sha256": "17080dab8d98e2d34f49570121c2ad7b16c64f7d51d699e6456a8624ea61cf46",
+      "base_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+      "opportunity_ids": [
+        "development/js-yaml/document"
+      ],
+      "shared_cost": "Exact M queue image f5822aa3; macOS sample, repeat 2, 10 s at 1 ms; all 4155 main-thread samples. Allocator self-sample share 770/4155 (18.53%): self time in the macOS malloc/free/realloc family (nanov2_*, free, default_zone_*, _malloc_zone_*) and Rust alloc shims (__rust_alloc*, alloc::alloc::*, RawVecInner reserve/grow). All three windows of this program are bound, with no window selected for a larger share. Includes allocator-internal metadata/coalescing work; it is reach, not a removable fraction or a speed forecast. Method and ranking are in tasks/T066-size-class-allocator.md.",
+      "inclusive_fraction": 0.18531889290012032
+    },
+    {
+      "source": "20261022T050553Z-t064-successor-exact-profiles/out/profiles/development--immutable--persistent/0/receipt/receipt.json",
+      "sha256": "4bd4be1fe233af02abc63df3ab8d91701ff912796d5f4d69408195da02f87803",
+      "base_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+      "opportunity_ids": [
+        "development/immutable/persistent"
+      ],
+      "shared_cost": "Exact M queue image f5822aa3; macOS sample, repeat 0, 10 s at 1 ms; all 3572 main-thread samples. Allocator self-sample share 611/3572 (17.11%): self time in the macOS malloc/free/realloc family (nanov2_*, free, default_zone_*, _malloc_zone_*) and Rust alloc shims (__rust_alloc*, alloc::alloc::*, RawVecInner reserve/grow). All three windows of this program are bound, with no window selected for a larger share. Includes allocator-internal metadata/coalescing work; it is reach, not a removable fraction or a speed forecast. Method and ranking are in tasks/T066-size-class-allocator.md.",
+      "inclusive_fraction": 0.17105263157894737
+    },
+    {
+      "source": "20261022T050553Z-t064-successor-exact-profiles/out/profiles/development--immutable--persistent/1/receipt/receipt.json",
+      "sha256": "5e9e0d1a56bc33ef08eac9c60a079eab72e069296f55c9ca102985183ac64269",
+      "base_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+      "opportunity_ids": [
+        "development/immutable/persistent"
+      ],
+      "shared_cost": "Exact M queue image f5822aa3; macOS sample, repeat 1, 10 s at 1 ms; all 3568 main-thread samples. Allocator self-sample share 603/3568 (16.90%): self time in the macOS malloc/free/realloc family (nanov2_*, free, default_zone_*, _malloc_zone_*) and Rust alloc shims (__rust_alloc*, alloc::alloc::*, RawVecInner reserve/grow). All three windows of this program are bound, with no window selected for a larger share. Includes allocator-internal metadata/coalescing work; it is reach, not a removable fraction or a speed forecast. Method and ranking are in tasks/T066-size-class-allocator.md.",
+      "inclusive_fraction": 0.16900224215246637
+    },
+    {
+      "source": "20261022T050553Z-t064-successor-exact-profiles/out/profiles/development--immutable--persistent/2/receipt/receipt.json",
+      "sha256": "4182e437551456dd8f43ee072cdecfd03b62f075e1efe529563d754fb9b0ea16",
+      "base_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+      "opportunity_ids": [
+        "development/immutable/persistent"
+      ],
+      "shared_cost": "Exact M queue image f5822aa3; macOS sample, repeat 2, 10 s at 1 ms; all 3555 main-thread samples. Allocator self-sample share 669/3555 (18.82%): self time in the macOS malloc/free/realloc family (nanov2_*, free, default_zone_*, _malloc_zone_*) and Rust alloc shims (__rust_alloc*, alloc::alloc::*, RawVecInner reserve/grow). All three windows of this program are bound, with no window selected for a larger share. Includes allocator-internal metadata/coalescing work; it is reach, not a removable fraction or a speed forecast. Method and ranking are in tasks/T066-size-class-allocator.md.",
+      "inclusive_fraction": 0.1881856540084388
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "development/diff/compare",
+      "development/graphlib/paths",
+      "development/js-yaml/document",
+      "development/immutable/persistent"
+    ],
+    "target_max_candidate_over_base": 0.97,
+    "max_attempts": 2
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  },
+  "layout_gate": {
+    "policy_path": "benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v6.json",
+    "policy_sha256": "be123f7c5cfd46aa863467256eb8bf6947ff64f72541efc371f05a36c5535a31",
+    "mechanism_class": "instruction-blind",
+    "memory_wall_targets": [
+      "development/diff/compare",
+      "development/graphlib/paths",
+      "development/js-yaml/document",
+      "development/immutable/persistent"
+    ],
+    "panel_required": true,
+    "panel_pairs": 5,
+    "held_out_pairs": 30,
+    "formal_blocks": 60
+  }
+}

@@ -40,6 +40,7 @@ Each file is under `archive/` with a resume block; outcomes record what happened
 
 | Task | Outcome |
 | --- | --- |
+| `T066-size-class-allocator.md` | Promoted under the lead decision: CLI size-class allocator, development 0.898× main (NG 3.07×→2.75×), held-out 0.72–0.96; sentinel lane cost accepted by the user; resource gate unsatisfiable on x86 (tooling gap). |
 | [T064 kernel isolation](archive/T064-kernel-isolation.md) | Stage K aborted before timing: K1/Repair 1 static and correctness gates pass, same 46/86 instruction cases block; outlining abandoned; [plan closure/ledger](archive/T064-kernel-layout-authority-closure.md), M1 A/B blocked, T056 moves to M2. |
 | `T063-string-canonical.md` | Surrogate pairs stored canonically at construction; instruction repair; regression screen passed (lanes 0.998-1.008); integrated ([correctness](archive/T063-correctness-verification.md), [instructions](archive/T063-instruction-diagnosis.md)). |
 | `T058-regexp-lazy-quantifiers.md` | Fixed-candidate v6 unit retained: papaparse/csv 0.0806 at formal, 86/86 selection and 9/9 held-out pass, Test262 42,672/42,672; candidate `736200aa`, integration pending. |
@@ -91,7 +92,7 @@ Each file is under `archive/` with a resume block; outcomes record what happened
 
 ## Other Records In `archive/`
 
-- T065: [rounds 1–2 ablation](archive/T065-ablation-r1.md), [gap anatomy and both-engine instruction baseline](archive/T065-gap-anatomy.md), [independent design review](archive/T065-design-review.md).
+- T065: [rounds 1–2 ablation](archive/T065-ablation-r1.md), [gap anatomy and both-engine instruction baseline](archive/T065-gap-anatomy.md), [independent design review](archive/T065-design-review.md); T066: [allocator evidence](archive/T066-allocator-evidence.md).
 - T064: [K1/Repair 1 evidence](archive/T064-k1-record.md), [K0 checker](archive/T064-k0-checker.md), [successor inputs](archive/T064-successor-plan-inputs.md), [lead review](proposals/T064-successor-review.md), [old-plan closure](archive/T064-layout-edges-closure.md), [spike](archive/T064-causal-outlining-spike.md), [isolation/cost inputs](archive/T064-kernel-isolation-inputs.md).
 - T058: [fixed-candidate v6 promotion](archive/T058-regexp-lazy-quantifiers.md), [attempt 1 incomplete closure](archive/T058-attempt1-incomplete.md), [attempt 2 inconclusive](archive/T058-attempt2-inconclusive.md), [v6 rejection](archive/T058-v6-rejection.md), [instruction diagnosis](archive/T058-instruction-diagnosis.md).
 - T057: [linear-search repair](archive/T057-search-linear.md), [stage-1 promotion evidence](archive/T057-stage1-evidence.md), [preliminary development baseline](archive/T057-development-baseline.md) [policy v3 qualification](archive/T057-development-policy.md) and [pre-stage-1 log](archive/T057-log.md).
@@ -103,9 +104,7 @@ Each file is under `archive/` with a resume block; outcomes record what happened
 - Audio DFT one-factor diagnostics: `T038-audio-dft-diagnostic-data.md`; [Gaussian engine tails](archive/T038-gaussian-wall-tail-data.md).
 - Executable launch controls: `T017-launch-preflight-diagnostic.md`; resource-lane launch admission: [T017-resource-launch-admission](archive/T017-resource-launch-admission.md); loaded-host test failures: [T017-test-wall-timeouts](archive/T017-test-wall-timeouts.md) and [follow-up](archive/T017-git-lock-and-race-tests.md).
 - Design measurement record: [T036-mixed-call-execution-measurements.md](archive/T036-mixed-call-execution-measurements.md).
-- Case-level formal standing: `T018-af4d0d3c-case-standing.md`.
-- Prior formal standing: `T018-e54e33eb-standing.md`.
-- Batch 1 leaf handoffs: `T018-batch-1-leaf-screens.md`.
+- Case-level formal standing: `T018-af4d0d3c-case-standing.md`; prior formal standing: `T018-e54e33eb-standing.md`; batch 1 leaf handoffs: `T018-batch-1-leaf-screens.md`.
 - Experiment logs split out of task files: `T017-performance-benchmark-system-log.md`,
   `T018-broad-performance-log.md`, `T033-screen-log.md`.
 - Plans and measurements moved out of current documents:

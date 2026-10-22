@@ -1,5 +1,11 @@
 //! Command-line entry point for the rewrite.
 
+#[allow(unsafe_code)]
+mod allocator;
+
+#[global_allocator]
+static GLOBAL_ALLOCATOR: allocator::SizeClassAllocator = allocator::SizeClassAllocator;
+
 use std::{
     env, fs,
     io::{self, BufRead, IsTerminal, Write},
@@ -45,7 +51,9 @@ Options:
 }
 
 fn main() -> ExitCode {
-    match run() {
+    let result = run();
+    allocator::report_counters();
+    match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("error: {}", error.message);
