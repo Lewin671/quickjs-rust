@@ -1,0 +1,163 @@
+{
+  "schema_version": 3,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_kind": "migration",
+  "unit_id": "interpreter-core-v2-kernel-layout-authority",
+  "base_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+  "queue": {
+    "candidate_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+    "sha256": "f6666a68cb8e1841418d6f5012e6f7810b0c25ebf982b45ef6d5564855e0ae13"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "development/moment/dates",
+      "development/diff/compare",
+      "development/meriyah/parse"
+    ],
+    "rank_ceiling": 5,
+    "override_reason": "Proposed structural-prerequisite priority override for lead review under T064's 2026-10-21 lead decision: K establishes the reviewed address-operand contract before the M1 layout migration can resume; K itself is an intermediate neutral stage, not a claimed direct payoff. Fresh exact-M profiles support the ordinary named-property mechanism on development ranks 3-5 (moment/dates, diff/compare, meriyah/parse). Higher-ranked js-yaml/document and immutable/persistent, external hash-map/raytrace and broad/sentinel property cases stay controls for the reasons and measured owner shares recorded in tasks/archive/T064-successor-plan-inputs.md. This committed proposal under tasks/proposals is not a frozen plan or implementation authorization; lead approval and a frozen performance-units commit remain required."
+  },
+  "mechanism": {
+    "summary": "DRAFT FOR LEAD REVIEW ONLY. One three-stage successor K -> A -> B; fixed base M=9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30 for every cumulative stage/formal decision, including K cost. Stage 1 K (T064) cold-outlines object-bearing typed arms for both Vm and WideLoopFrame along the reviewed spike boundary; no crate, FFI or recipe change. Static gate scripts/check-kernel-isolation.sh (delivered separately on agent/t064-k0-checker/codex) must enforce T064's lead-decision contract: identical instruction boundaries/intra-function relative PCs, non-address bytes, owned table bytes/targets/relative positions and stack layout; identical RIP referent bytes/width. Classify/report displacement-only RIP and call/import fixups as allowed; unknown decoding/relocation, missing/duplicate/cloned roles and ineffective perturbations fail closed. Full A/A/H+8/C+8 qualification for K, targeted actual-candidate perturbations before A/B, full matrix on kernel/ABI/toolchain/recipe changes. Stage 2 A (T056) makes owned bounded transitions/layouts the authority for all ordinary named stores, replacing Dynamic's name map and ObjectLiteralShape.lookup in the same stage, one probe per add and one layout pointer, ObjectData <=120 bytes, per docs/design/property-layouts.md and T056 work-count tests. Stage 3 B routes ordinary/shared accelerated Get/Set through atoms/layouts and retires rejecting probes/redundant revisions. Do not automatically port 5dd3a810's 112-byte diagnostic shape; justify header/batch/key edits from fresh inputs. After K integrates at I, exact I profiles must reconfirm M1 reach before A; changed priority/scope stops for new review without retargeting or budget reset. I->A attribution is supplemental only. Every acceptance candidate is M plus reviewed K/M1 runtime commits, with tooling/docs merges allowed; record git diff M <candidate> -- crates before every screen and stop for unrelated runtime changes. FAILURE LEDGER: original interpreter-core-v2-layout-edges plan SHA-256 d184dbcc122a060a219b367ffe3f3bb02c216f542f75f51eee1925387ef23284 and failed candidate 0a9af81bebcef80e9239954f8db191a71f10316e remain permanent. That valid K=6 failure spent 1/2 of old A+B; exactly ONE unused A+B failure transfers, shared across successor stages 2 and 3. Successor stage 1 K has at most ONE independent failed screen, with no transfer/borrowing to A+B; a valid K failure immediately stops isolation and sends the lead to M2. Successor aggregate max_attempts=2 is only an upper bound, never permission to continue after K failure. No new successor failure has been spent. Stage aborts count; incomplete evidence follows existing completion rules and replenishes nothing; static/correctness/pre-gate failures stop before timing without spending a timing attempt. Validate-unit does not enforce these manual per-stage ledger caps. GATES: before every timed screen, exact M/candidate images run once per role on all 86 policy cases for instructions; a ratio above max(1.03,I_i) blocks timing, all pre-gates recorded, and the screen uses the exact image that passed. K and A require cumulative neutrality at min(B_i,1.025) on every case with unchanged instruction/lane/portfolio ceilings, complete 5-pair K=6, then cumulative formal advance. Explicitly audit this stricter cap on diagnostic-only cases where the schema stage evaluator uses 1.025 alone. All stages are instruction-blind, with memory wall targets equal to final targets, 60 formal blocks, mandatory replayed complete resource report/raw for exact M/candidate and host, and existing v6 continuation/precision/load rules. Resource completeness is not a claim of quantitative RSS neutrality; resolve any additional resource ceiling at lead review before freezing. Record services, projections/publications, moved bytes, allocation counts and scratch high-water/retention; numeric-only loops have zero per-iteration services/allocations. Full correctness/NG/curated subset/exact configured Test262 zero gap and static gates precede advancing a stage. Only final B may retain, with per-target min(.97,1/B_i), every pair improving, natural and required six-layout aggregate, all controls/lanes, resources and 30-pair held-out acceptance with mandatory K=6 event/diagnostic completion. No held-out selection. This proposal spends no screen/formal attempt and enacts no closure; close the old plan as closed-superseded only when the approved successor is frozen, never by rewriting its JSON/failed result or fabricating a decide outcome. Manual contract and closure draft live beside this proposal.",
+    "generality": "Admission is ordinary named-property semantics, receiver kind, atom domain/layout identity and numeric versus object-bearing typed operations. No source/bytecode-template, property-spelling, benchmark/library identity, checksum, path or iteration-count admission. Preserve slot-indexed locals and shared upvalue cells; no per-call name-keyed snapshot, new crate/dependency, FFI, unsafe or recipe/CPU policy change.",
+    "semantic_risks": [
+      "Cold outlining must retain scalar widths/alignment, admission/tier reach, NaN/minus-zero/coercion order, residency and exact deopt PC/stack/publication. Services execute once; release borrows before observers/throws and reacquire afterward.",
+      "Layout/descriptor/enumeration and delete-reinsert order remain correct across Small/Dynamic/Shaped/dictionary encodings, equal keys with different attributes, lazy properties, seal/freeze, class fields, constructor substitution and keys beyond 32/128 properties.",
+      "Computed keys perform ToPropertyKey once. Atom domains remain realm-correct under eval/with, cross-realm/native/host/null-prototype inputs and escaping values; canonical/surrogate key equality is preserved.",
+      "Bound transition/shape/atom retention under churn; dictionaries keep independent identity/version, stable ordered slots and tombstone compaction. Never retain duplicate lookup authority or re-link/create a domain per store.",
+      "Proxy/accessor/callback/native re-entry and TypedArray detachment preserve observable order and shared-cell/TDZ authority; object/layout borrows cannot survive re-entry.",
+      "Static artifact equality is not speed or placement immunity. Boundary calls, spills, startup, allocations and scratch transport remain priced against M on the full v6 portfolio; resource completeness alone establishes no numeric memory regression ceiling."
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "development--moment--dates/0/receipt/receipt.json",
+      "sha256": "6802d8b30b2dddfcbefb595d0a4b97d3a9902794170d3645325df75e880b3eac",
+      "base_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+      "opportunity_ids": [
+        "development/moment/dates"
+      ],
+      "shared_cost": "Exact M queue image f5822aa3; macOS sample, repeat 0, 10 seconds at 1 ms. Named-property/layout union envelope 2169/8288 main-thread samples (26.17%); nearest semantic-caller owner attribution charges 19.79% to named storage/cache/Get/Set/literal work. All three independent process windows are bound, with no window selected for a larger share. Includes required lookup/ownership and inlined work; reach, not a removable fraction or speed forecast. Method, aggregate shares and control receipts are in tasks/archive/T064-successor-plan-inputs.md.",
+      "inclusive_fraction": 0.26170366795366795
+    },
+    {
+      "source": "development--moment--dates/1/receipt/receipt.json",
+      "sha256": "9001a05770443424201f00c83deab997d5fc534c8dd6b9851a2e770ca5d8d5b5",
+      "base_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+      "opportunity_ids": [
+        "development/moment/dates"
+      ],
+      "shared_cost": "Exact M queue image f5822aa3; macOS sample, repeat 1, 10 seconds at 1 ms. Named-property/layout union envelope 2129/8293 main-thread samples (25.67%); nearest semantic-caller owner attribution charges 19.50% to named storage/cache/Get/Set/literal work. All three independent process windows are bound, with no window selected for a larger share. Includes required lookup/ownership and inlined work; reach, not a removable fraction or speed forecast. Method, aggregate shares and control receipts are in tasks/archive/T064-successor-plan-inputs.md.",
+      "inclusive_fraction": 0.25672253707946463
+    },
+    {
+      "source": "development--moment--dates/2/receipt/receipt.json",
+      "sha256": "c24083cb1300f1a814175c48b38413bad61fbfe90fffebb34ce21757ffac60f2",
+      "base_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+      "opportunity_ids": [
+        "development/moment/dates"
+      ],
+      "shared_cost": "Exact M queue image f5822aa3; macOS sample, repeat 2, 10 seconds at 1 ms. Named-property/layout union envelope 2192/8255 main-thread samples (26.55%); nearest semantic-caller owner attribution charges 20.61% to named storage/cache/Get/Set/literal work. All three independent process windows are bound, with no window selected for a larger share. Includes required lookup/ownership and inlined work; reach, not a removable fraction or speed forecast. Method, aggregate shares and control receipts are in tasks/archive/T064-successor-plan-inputs.md.",
+      "inclusive_fraction": 0.2655360387643852
+    },
+    {
+      "source": "development--diff--compare/0/receipt/receipt.json",
+      "sha256": "d06fae470d1a190aaa81199e69113f3575a8075602a31c6cd684fdc570367b73",
+      "base_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+      "opportunity_ids": [
+        "development/diff/compare"
+      ],
+      "shared_cost": "Exact M queue image f5822aa3; macOS sample, repeat 0, 10 seconds at 1 ms. Named-property/layout union envelope 1887/5944 main-thread samples (31.75%); nearest semantic-caller owner attribution charges 24.18% to named storage/cache/Get/Set/literal work. All three independent process windows are bound, with no window selected for a larger share. Includes required lookup/ownership and inlined work; reach, not a removable fraction or speed forecast. Method, aggregate shares and control receipts are in tasks/archive/T064-successor-plan-inputs.md.",
+      "inclusive_fraction": 0.3174629878869448
+    },
+    {
+      "source": "development--diff--compare/1/receipt/receipt.json",
+      "sha256": "030684664ef18a78903c7e470eafd690ae70eb621ee5d3acab0188dd88dc8a45",
+      "base_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+      "opportunity_ids": [
+        "development/diff/compare"
+      ],
+      "shared_cost": "Exact M queue image f5822aa3; macOS sample, repeat 1, 10 seconds at 1 ms. Named-property/layout union envelope 1950/6133 main-thread samples (31.80%); nearest semantic-caller owner attribution charges 23.45% to named storage/cache/Get/Set/literal work. All three independent process windows are bound, with no window selected for a larger share. Includes required lookup/ownership and inlined work; reach, not a removable fraction or speed forecast. Method, aggregate shares and control receipts are in tasks/archive/T064-successor-plan-inputs.md.",
+      "inclusive_fraction": 0.31795206261209846
+    },
+    {
+      "source": "development--diff--compare/2/receipt/receipt.json",
+      "sha256": "fc87eeecf035d819d38e91d714672eac2f7e945de004e047c12ef3c65475694a",
+      "base_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+      "opportunity_ids": [
+        "development/diff/compare"
+      ],
+      "shared_cost": "Exact M queue image f5822aa3; macOS sample, repeat 2, 10 seconds at 1 ms. Named-property/layout union envelope 1944/6167 main-thread samples (31.52%); nearest semantic-caller owner attribution charges 23.59% to named storage/cache/Get/Set/literal work. All three independent process windows are bound, with no window selected for a larger share. Includes required lookup/ownership and inlined work; reach, not a removable fraction or speed forecast. Method, aggregate shares and control receipts are in tasks/archive/T064-successor-plan-inputs.md.",
+      "inclusive_fraction": 0.31522620398897355
+    },
+    {
+      "source": "development--meriyah--parse/0/receipt/receipt.json",
+      "sha256": "c4d2eee2804151f76dc00a81e10792794bca0967d16039d82aa3354047396905",
+      "base_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+      "opportunity_ids": [
+        "development/meriyah/parse"
+      ],
+      "shared_cost": "Exact M queue image f5822aa3; macOS sample, repeat 0, 10 seconds at 1 ms. Named-property/layout union envelope 836/2436 main-thread samples (34.32%); nearest semantic-caller owner attribution charges 29.23% to named storage/cache/Get/Set/literal work. All three independent process windows are bound, with no window selected for a larger share. Includes required lookup/ownership and inlined work; reach, not a removable fraction or speed forecast. Method, aggregate shares and control receipts are in tasks/archive/T064-successor-plan-inputs.md.",
+      "inclusive_fraction": 0.34318555008210183
+    },
+    {
+      "source": "development--meriyah--parse/1/receipt/receipt.json",
+      "sha256": "19ccf988fec17697bd5c0adeeaa5276c1c83c2c4332ec233024b1c072ab1a93f",
+      "base_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+      "opportunity_ids": [
+        "development/meriyah/parse"
+      ],
+      "shared_cost": "Exact M queue image f5822aa3; macOS sample, repeat 1, 10 seconds at 1 ms. Named-property/layout union envelope 797/2442 main-thread samples (32.64%); nearest semantic-caller owner attribution charges 27.76% to named storage/cache/Get/Set/literal work. All three independent process windows are bound, with no window selected for a larger share. Includes required lookup/ownership and inlined work; reach, not a removable fraction or speed forecast. Method, aggregate shares and control receipts are in tasks/archive/T064-successor-plan-inputs.md.",
+      "inclusive_fraction": 0.3263718263718264
+    },
+    {
+      "source": "development--meriyah--parse/2/receipt/receipt.json",
+      "sha256": "3a640068934f8a83d2bfbf2e7a73b73409d7b8b9e0ff4d60a04d7753f04940ed",
+      "base_sha": "9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30",
+      "opportunity_ids": [
+        "development/meriyah/parse"
+      ],
+      "shared_cost": "Exact M queue image f5822aa3; macOS sample, repeat 2, 10 seconds at 1 ms. Named-property/layout union envelope 782/2432 main-thread samples (32.15%); nearest semantic-caller owner attribution charges 27.30% to named storage/cache/Get/Set/literal work. All three independent process windows are bound, with no window selected for a larger share. Includes required lookup/ownership and inlined work; reach, not a removable fraction or speed forecast. Method, aggregate shares and control receipts are in tasks/archive/T064-successor-plan-inputs.md.",
+      "inclusive_fraction": 0.3215460526315789
+    }
+  ],
+  "migration": {
+    "stages": 3,
+    "current_stage": 1,
+    "cumulative_target_ids": [
+      "development/moment/dates",
+      "development/diff/compare",
+      "development/meriyah/parse"
+    ],
+    "stage_max_candidate_over_base": 1.025
+  },
+  "fast_gate": {
+    "target_ids": [
+      "development/moment/dates",
+      "development/diff/compare",
+      "development/meriyah/parse"
+    ],
+    "target_max_candidate_over_base": 0.97,
+    "max_attempts": 2
+  },
+  "layout_gate": {
+    "policy_path": "benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v6.json",
+    "policy_sha256": "be123f7c5cfd46aa863467256eb8bf6947ff64f72541efc371f05a36c5535a31",
+    "mechanism_class": "instruction-blind",
+    "memory_wall_targets": [
+      "development/moment/dates",
+      "development/diff/compare",
+      "development/meriyah/parse"
+    ],
+    "panel_required": true,
+    "panel_pairs": 5,
+    "held_out_pairs": 30,
+    "formal_blocks": 60
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

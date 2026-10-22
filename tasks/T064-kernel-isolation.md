@@ -1,12 +1,12 @@
 # T064: Kernel isolation prerequisite
 
-- Status: active; causal spike complete; lead decision 2026-10-21 approves K as the address-operand contract below; K1 not started.
+- Status: active; causal spike complete; K→A→B successor draft validated from exact current-M profiles, awaiting lead review; K1 not started.
 - Implementation: diagnostic archive transformations only; production runtime/Cargo/recipe unchanged. No kernel crate.
-- Verified at: main `06e199fec9e9e51742cdae7633c5dc758c326752`; iMac seven-build job235604Z and semantics000011Z done0; full local gate passed.
+- Verified at: spike at main `06e199fec9e9e51742cdae7633c5dc758c326752`; iMac seven-build job235604Z and semantics000011Z done0; successor draft at `4fa3f739`, exact M9eba7a1d profiles/validation and full local gate recorded in the inputs below.
 - Evidence: [spike result/identities](archive/T064-causal-outlining-spike.md), [design/ABI](../docs/design/interpreter-core-v2.md#kernel-isolation-prerequisite-k0-before-m1-resumes),
-  [allocation/startup inputs](archive/T064-kernel-isolation-inputs.md), [producer](diagnostics/t064-k-spike/README.md), [lead decision](#lead-decision-2026-10-21).
-- Unresolved: K's own cost (outlined service calls, entry constants) is unpriced; successor K→A→B plan needs a fresh queue/profiles on recorded main M.
-- Next action: lead runs the fresh current-main formal comparison/queue; meanwhile K0 checker tooling (no runtime change) and T056 unpack/startup attribution proceed. Freeze the successor plan before K1 runtime code.
+  [allocation/startup inputs](archive/T064-kernel-isolation-inputs.md), [producer](diagnostics/t064-k-spike/README.md), [lead decision](#lead-decision-2026-10-21), [successor inputs/draft validation](archive/T064-successor-plan-inputs.md).
+- Unresolved: K cost remains unpriced; draft priority override/stage caps/resources need lead approval, K0 integration and T056 allocation/startup input review. Old plan remains open with its failed attempt intact.
+- Next action: lead reviews the validated successor draft on M9eba7a1d, then freezes it and enacts old-plan supersession together before K1. No runtime implementation or timing screen is authorized by the draft.
 
 ## Lead decision (2026-10-21)
 
