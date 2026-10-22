@@ -1,11 +1,11 @@
 # T056 M2 plan inputs: ordinary entry before the shared driver
 
-- Status: historical-campaign; draft planning inputs, not an approved freeze.
-- Implementation: none. The [proposal](../proposals/T056-m2-frames-activation.json), this record and its task-index link are added; no runtime, object layout or recipe change.
-- Verified at: `d1e80fec` plus this planning delta, 2026-10-22 UTC; exact-M profile identities and validation below. Runtime/build diff from M to this branch base is empty.
+- Status: historical-campaign; feedback-1 measured pricing complete; original two-target draft is not ready to freeze.
+- Implementation: no runtime on this plan branch; diagnostic indexed-entry prototype `9dafdebe` and counter audit `232196d5` stay on their separate scratch branch.
+- Verified at: exact M versus `9dafdebe`, 2026-10-22 UTC; full prototype gate, cohort/instruction/profile receipts and diagnostic limits below. Plan-only checks apply to this evidence delta over `93ff53ab`.
 - Evidence: this record, the proposal and [earlier exact-M receipts](T064-successor-plan-inputs.md); raw artifacts are workspace-local, not retained in Git.
-- Unresolved: ordinary-cohort coverage, native-writer audit and lead approval; layout coupling remains. Estimates below are conditional, not measured gains.
-- Next action: lead reviews targets, budget and native audit, resolves the stale M1/K status, then freezes a separately approved plan; no implementation or timing follows from this draft.
+- Unresolved: graphlib cold/self/lexical contexts remain unpriced; wall/layout/RSS acceptance and strict kernel decoder coverage are unverified. Projections are conditional, not measured wall gains.
+- Next action: lead reviews the measured immutable margin and graphlib shortfall; do not freeze or automatically retarget this draft. Preserve old budgets and the separate diagnostic prototype.
 
 ## Decision and scope
 
@@ -289,3 +289,331 @@ script, Cargo file or executable example changed, so no Test262 slice matched
 and `check.sh` was not rerun for this proposal. No local build was needed;
 `df` showed 69 GiB free before work, and `target/debug` is absent at handoff.
 No freeze, implementation, benchmark timing, push or merge.
+
+## Measured cohort and pricing prototype
+
+Lead feedback 1 requests one non-timing pricing round before any freeze. The
+40–60% net-removal assumption above remains historical planning arithmetic;
+**coverage is now counted, but an unmeasured elimination fraction is not a
+payoff forecast**. The proposed JSON remains unchanged and unfrozen.
+
+The scratch branch is `agent/t056-m2-pricing/codex`, based on main `9be6373d`
+(which closes/abandons T064 K). Baseline cohort overlay `0ce6f3162908760d452e7492b6d44d62fc685f02`
+is based on the same runtime as queue M; the indexed-entry prototype is
+`9dafdebe401b27786fb05605872c08b1c9fc9fb9`. No prototype code is on this plan
+branch. The scratch ownership boundary is runtime sources, its architecture
+paragraph and diagnostic task/index; branch-scope validation passed.
+
+**Counter method.** The agents/perf-counters build records actual bytecode
+activations at the general, direct-leaf, compact-inline, successful typed-loop
+closed-form and virtual-function-literal boundaries. Native-origin guards
+separate a native's immediate JS callback from subsequent JS-to-JS calls.
+Proxy/bound wrappers count separately from the body they forward to. Folded
+helper graphs are not dynamic activations; generator invocation is counted,
+resume is not. Existing `ordinary_call_attempts` is not used as the denominator:
+it double-counts some forwarded direct-leaf calls and omits some numeric wide
+inline successes. New counters partition their own explicit denominator.
+
+Admission follows frame-activation's two ordinary rules: no own direct eval or
+with, no active deopt unless bypassed, no parameter/body eval split, and no
+transitively eval/with-capable descendant. The transitive fact walks functions,
+class constructors/methods, private elements, static blocks and deferred keys,
+once at compilation. Generator/async and construction are later-stage
+populations. Parameter shape/captured cells/module/lexical state do not narrow
+the full ordinary count; they may narrow the pricing prototype. Reason order
+is generator, async, construction, own eval, own with, retained deopt,
+descendant dynamic, ordinary; primary reasons partition activations.
+
+Collection job `20261022T075213Z-t056-m2-cohort-complete` is **done 0**:
+five requested development programs plus all six sentinels, all checksums valid,
+no timing flag or result. It used the canonical release recipe with only
+`agents,perf-counters` as the feature set. Counter metadata changes are not an
+exact canonical-image performance comparison. Copied raw stdout/stderr and
+identities are under the workspace's `outputs/imac-bench/<job>/out/`.
+`identity.json` SHA-256 `a8e0ba7b4fdec0d9a018ec55959421ae850eb47dbe85820b27d52029dfc07266`;
+`counts.json` SHA-256 `523fcf3d522d6d3eea48a94868fb6709f5ee3d77fb9b4c26f65cf5831346db2c`.
+
+| Case | Activations | JS-to-JS | Native callbacks | Full ordinary | Construction excluded | Ordinary / JS-to-JS |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| graphlib/paths | 1,000,770 | 925,385 | 75,385 | 1,000,622 | 148 | 99.98401% |
+| immutable/persistent | 5,429,466 | 4,917,207 | 512,259 | 5,299,633 | 129,833 | 97.35962% |
+| moment/dates | 7,758,058 | 7,645,258 | 112,800 | 7,590,056 | 168,002 | 97.80253% |
+| meriyah/parse | 2,303,861 | 2,301,202 | 2,659 | 2,303,860 | 1 | 99.99996% |
+| diff/compare | 2,462,190 | 2,397,132 | 65,058 | 2,462,174 | 16 | 99.99933% |
+| sentinel/recursive_call_tree | 5 | 5 | 0 | 5 | 0 | 100% |
+| sentinel/prototype_method_call | 3,000,069 | 3,000,069 | 0 | 3,000,005 | 64 | 99.99787% |
+| sentinel/polymorphic_call_site | 3,000,004 | 3,000,004 | 0 | 3,000,004 | 0 | 100% |
+| sentinel/capturing_closure_call | 3,000,008 | 3,000,008 | 0 | 3,000,008 | 0 | 100% |
+| sentinel/heterogeneous_property_read | 5 | 5 | 0 | 5 | 0 | 100% |
+| sentinel/string_key_map_churn | 5 | 5 | 0 | 5 | 0 | 100% |
+
+The last column uses **JS-ordinary / JS-to-JS**, excluding ordinary native
+callbacks from its numerator. All other primary exclusion counts (eval, with,
+retained deopt, descendant dynamic, generator, async, missing), plus Proxy and
+bound dispatches, are **zero in every counted case**. This is coverage of
+these programs, not removal of those fallback cohorts from the architecture.
+For all activations, graphlib ordinary is 99.98521%, immutable 97.60873%.
+The three five-call sentinels provide little entry-path coverage despite their
+large nominal iteration count; the call-heavy sentinels mostly take existing
+closed-form tiers. They remain mandatory controls, not evidence that the new
+entry executes millions of times.
+
+**Native writer audit, closed conservatively.** `global::native_global_eval`
+can replace the lent `*env`; coercion can reach
+`conversion::sync_to_primitive_method_env` and write existing caller cells;
+callback completion can restore an immutable caller name. An Eval-only writer
+list would therefore be unsound. Constructor new.target changes/restoration
+also remain on legacy routing. `$262.evalScript` uses a separate frame and
+shared realm cells; installation writes and dynamic Function's fresh global
+snapshot are not writes to the lent activation. Property/realm effects remain
+observable and are not optimized away.
+
+The frozen scratch exclusion is every `NativeFunction` variant except eight
+proved non-coercing activation-read-only natives: `ArrayIsArray`, `ArrayBufferIsView`,
+`NumberIsFinite`, `NumberIsInteger`, `NumberIsNaN`, `NumberIsSafeInteger`,
+`ObjectIs`, `IsHtmlDda`. The source enum has **592** variants; the **584**-member
+conservative exclusion includes all unproved callback/coercion paths, not a
+claim that every member writes on every invocation. A default exclusion also
+covers future variants. Enum source SHA-256
+`f709e944ee98a554e51a43c1975067f2cd588bdc4d1de29433c19f69e88237bf`.
+All native boundaries, including the eight readers, remain legacy in this
+small prototype; **no native environment saving is credited**.
+
+| Case | Observed native dispatches | Conservative writer exclusions |
+| --- | ---: | ---: |
+| graphlib | 161,604 | 161,603 |
+| immutable | 830,677 | 639,073 |
+| moment | 4,652,876 | 4,652,876 |
+| meriyah | 157,000 | 47,788 |
+| diff | 1,675,476 | 1,674,996 |
+| recursive / polymorphic / capturing sentinels (each) | 3 | 2 |
+| prototype / heterogeneous sentinels (each) | 67 | 66 |
+| string-key-map sentinel | 1,027 | 1,026 |
+
+These are dispatches through `call_native_function`; already-specialized native
+fast paths do not build that boundary. This is a separate native denominator,
+never subtracted from ordinary JS activations. The conservative exclusion set
+is complete; the minimal actual-writer set is not claimed.
+
+**Implemented pricing scope.** The prototype preserves all existing direct-leaf
+tiers, then replaces name assembly for a narrower general-call population:
+plain identifier parameters (defaults allowed), static shared captures, no
+own arguments/name/immutable-name/lexical-this/lexical-arguments/cold lexical
+state, retained with chain, synthetic/foreign realm, super, suspension, class
+creation or lexical-this child. It uses a typed ActivationContext guard and
+borrowed services alternative in FrameEnvironment. Caller binding storage is
+moved aside and restored, never cloned into a name/value mirror; arguments,
+this and received cells use the existing positional metadata. Parent locals
+captured by ordinary closures receive their required cell vector.
+
+Nested Vms, argument vectors, caller env exports and native boundaries remain.
+This is a partial M2.1 price, not an implementation or price of all five stages.
+The first exercising tests caught the old direct-leaf initializer's omitted
+parent-cell vector when admitting static closures; the correction is included
+before collection. Five focused tests now prove new-route reach, escaping
+shared cells, callback/throw restoration, transitive eval exclusion and exact
+recursion accounting. `check.sh` passed on the prototype delta: 2,335 default
+runtime tests, agents/perf-counters checks, 723 benchmark-tool tests, 35 script
+tests, context/size/hooks and all 5,170 curated Test262 cases. Full log and
+staged fast-gate hashes will be recorded with final collection identities.
+
+**Pricing collection and provenance.** Job
+`20261022T075812Z-t056-m2-pricing-instructions-complete` is **done 0**, without
+`--timing`. It built canonical agents/fat16/abort `9dafdebe`, plus its separate
+agents/perf-counters image. Exact M was reused and its hash checked. Each of
+the same 11 cases has three alternating instruction pairs, validated stdout,
+and three independent `sample` windows per role (10 s development, 2 s
+sentinel, 1 ms interval). All 66 instruction records and 66 profile receipts
+are retained; 33/33 receipts per role pass executable/source/opportunity and
+copied-profile/workload hash verification. `/usr/bin/time -l` is used solely
+for retired instructions; elapsed, user time and cycles do not decide or
+support a speed claim. No wall screen, formal bundle or acceptance candidate
+was collected. The non-timing queue does not certify a quiet/timing-valid host.
+
+Canonical prototype executable SHA-256:
+`d62dc9059d0e46a72c6d8e649fe3ac99b046bc086fc3a23fc00ef3dfbbbc254b`;
+its counter image:
+`17e485ab95130075a443fa6e7bd9452c04939d218329c0f6eb4f315b3c32f367`.
+Rust is 1.95.0 / LLVM 22.1.2 on x86_64-apple-darwin. No recipe or object-layout
+change, dependency, unsafe or FFI was introduced. Existing tier priority is
+retained; source admission has no workload/name/checksum/path recognizer.
+
+The first collector jobs are retained: `20261022T074651Z-t056-m2-cohort-m`
+failed before a case because its workload directory was absent;
+`20261022T075714Z-t056-m2-pricing-instructions` failed at import (the real helper
+is `parse_macos_time`). Neither produced a candidate result to select or omit.
+The complete jobs repair those collector errors, not an adverse measurement.
+
+A perf-counters-only decline audit at
+`232196d5f5fdeb8b3d938aff6c39168ffc0433d4`, job
+`20261022T081053Z-t056-m2-pricing-decline-audit` (**done 0**), explains the narrow
+prototype's coverage without replacing the measured canonical `9dafdebe`
+image. All 11 cases retain exactly the same activation/cohort totals and
+prototype entry counts; every decline is partitioned by the additional
+counters. Six focused counter tests and the staged fast gate passed at that
+audit delta. It is not a second runtime-price implementation attempt.
+
+| Case | Prototype entries / all activations | Narrow prototype declines by primary reason |
+| --- | ---: | --- |
+| graphlib | 847 / 1,000,770 (0.084635%) | cold home/private context 33,503; self/name 17,203; lexical context 2,002; arguments 1 |
+| immutable | 187,601 / 5,429,466 (3.455239%) | self/name 25,008; arguments 25,009 |
+| moment | 12,151 / 7,758,058 (0.156624%) | arguments 43,273 |
+| meriyah | 0 / 2,303,861 | self/name 10,400; arguments 2,602 |
+| diff | 320 / 2,462,190 (0.012997%) | cold 37,440; lexical 23,690; arguments 5,441; self/name 5,378 |
+| capturing sentinel | 4 / 3,000,008 | none |
+| other five sentinels | 0 | none (already answered by existing tiers) |
+
+Construction calls bypass this narrower ordinary-call test and were excluded
+separately above. Existing leaf/compact/closed-form calls are not narrow
+prototype declines. Therefore neither ordinary/total nor entries/total is a
+cost fraction. In particular, graphlib's 99.98% semantic cohort does **not**
+mean that this prototype removes 99.98% of its entry cost. Most of its general
+calls still need cold or self/lexical context support. Count-based scaling
+would erase exactly the unimplemented work the review asked to price.
+
+**Per-symbol attribution.** Use the earlier nearest-semantic-owner algorithm
+on the new base/prototype receipts, including all windows. Add
+`activation_context|ActivationContext|FrameEnvironment|try_indexed_entry` to E,
+recognize ActivationContext/FrameEnvironment trait owners before skipping
+trait glue, and add `with_frame_environment|eval_indexed_entry` to V. Thus new
+guard, borrowed-environment and indexed-wrapper costs are charged, not lost
+under a new symbol. No entire wide/Vm run body is credited to entry work.
+
+| Case | Samples M / prototype | E share M → prototype | V share M → prototype | E+V share M → prototype |
+| --- | ---: | ---: | ---: | ---: |
+| graphlib | 3,661 / 3,652 | 10.63% → 8.95% | 5.27% → 5.12% | 15.90% → 14.07% |
+| immutable | 10,660 / 8,951 | 9.11% → 5.07% | 9.98% → 6.32% | 19.09% → 11.40% |
+| moment | 24,886 / 24,880 | 5.36% → 5.38% | 2.28% → 2.10% | 7.65% → 7.48% |
+| meriyah | 7,274 / 7,400 | 4.36% → 4.12% | 3.22% → 3.22% | 7.57% → 7.34% |
+| diff | 18,088 / 18,101 | 12.99% → 12.67% | 2.07% → 2.02% | 15.06% → 14.70% |
+
+Concrete owner counts (each column has its own process-sample denominator):
+
+| Owner | graphlib M / prototype | immutable M / prototype |
+| --- | ---: | ---: |
+| `function_env` | 102 / 72 | 264 / 94 |
+| `FrameBindings` get/insert/cell family | 77 / 73 | 140 / 69 |
+| Vm construction (`new_with_globals*`, `with_frame_*`) | 114 / 114 | 720 / 378 |
+| CallEnv drop | 69 / 60 | 215 / 73 |
+| new typed context/borrow/entry owners | 0 / 1 | 0 / 42 |
+| new indexed Vm wrapper | 0 / 2 | 0 / 54 |
+
+These are sampled owner counts, not instructions per symbol or independently
+additive inclusive fractions. Sampling variance and normalized denominators
+matter: graphlib's apparent E+V-share drop cannot override its flat whole
+instructions. Six sentinel E/V samples are zero under this narrow partition;
+that is not proof that their setup performs no work.
+
+**Measured projection and payoff decision.** Let R be the median of the three
+whole-process prototype/M instruction ratios, and fM/fP the pooled E+V sample
+fractions. A diagnostic wall-cost projection at unchanged process wall time
+per retired instruction gives attributable removal `D = fM - R*fP`. Credit
+`max(0, min(1-R, D))`: entry/Vm credit cannot exceed the observed net instruction
+saving. This is a transparent inference, **not** measured wall time, a lower
+bound, a confidence interval or a new acceptance rule. It assumes that the
+sampled owner distribution represents cost and that the wall/instruction
+conversion does not change; kernel drift below weakens the latter assumption.
+
+No additional gain is credited for unimplemented native/argument work,
+M2.2–2.5 or a larger ordinary cohort. That is the supported projection for the
+full-M2 proposal using this prototype's measured scope, not a forecast that
+future stages cannot improve it. In particular, do not multiply by
+ordinary/prototype call-count ratios: per-call costs and declined mechanisms
+differ, and no later-stage price was measured.
+
+| Case | Instruction R (all-three range) | E+V cost D | Credited projection | Required payoff gain | Clears with margin in this model? |
+| --- | ---: | ---: | ---: | ---: | --- |
+| graphlib | .996932 (.996851–.997512) | 1.866% | **0.307%** | 4.773% | **No**, short by 4.467 pp |
+| immutable | .846112 (.844461–.847388) | 9.448% | **9.448%** | 7.084% | **Yes conditionally**, +2.364 pp |
+| moment | .995377 (.995148–.995620) | .202% | .202% | 4.773% | No |
+| meriyah | .999954 (.999688–1.011330) | .237% | .0046% | 6.707% | No |
+| diff | .998905 (.998809–.998914) | .380% | .110% | 9.017% | No |
+
+Immutable's E+V removal envelope using **every combination** of the three
+base shares, three prototype shares and three instruction ratios is
+**8.510–10.359%**, still above 7.084% within this model. This is an observed
+sensitivity envelope, not a statistical interval. Whole instructions fall
+15.389%, but only 9.448% is credited to the priced owner classes; no 15.4%
+wall-speed claim is made. For reference, the uncapped whole-instruction proxy
+could tolerate at most about 9.82% worse wall/instruction conversion before
+missing .929158; that conversion was not measured.
+
+None of the other measured cases clears its payoff in this projection. All
+six sentinel instruction medians are within 0.009% of unity: recursive
+1.000020, prototype method 1.000019, polymorphic 1.000009, capturing .999995,
+heterogeneous .999993, string-key-map 1.000084. Meriyah's third pair is retained
+at 1.011330; no pair, window or case was dropped. Js-yaml and the other policy
+cases were not priced in this review and receive no claim from this table.
+
+**Conclusion for the lead:** M2.1 now has measured cost support on immutable;
+graphlib does not clear with this prototype. **Do not freeze the original
+two-target plan as written.** A graphlib projection still requires pricing its
+cold/self/lexical contexts, rather than counting them as already removed.
+A revised target/scope decision belongs to the lead, not automatic retargeting
+from these candidate results. Wall, K=6, resources and final promotion remain
+unverified; no performance attempt budget is spent by this diagnostic round.
+
+**Typed/wide relative-PC risk.** Invoking the requested
+`check-kernel-isolation.sh --ref 9dafdebe --full` through non-timing job
+`20261022T075715Z-t056-m2-pricing-kernel-diagnostic` returns **exit 2**:
+`K0 error: unknown tail alignment` on r0a. No complete A/A, H8 or C8 matrix
+exists, and this is not a static pass or a performance rejection. The pricing
+job's strict fingerprint also records this decode error. No decoder or golden
+was changed to turn it into a pass.
+
+Supplemental non-timing job `20261022T080212Z-t056-m2-raw-kernel-diagnostic`
+is **done 0**. It uses structural role selection and raw-byte-checked Apple
+otool instructions. Compare the whole symbol extent/raw hash plus the
+contiguous instruction prefix **before the first owned data table**; assert
+that every prefix byte decodes contiguously and equals the image. This
+avoids claiming an interpretation of the unsupported tail. It is an
+observational drift diagnostic, not a replacement kernel CFG/relocation gate.
+
+| Role | M → prototype symbol bytes | Trusted-prefix instructions | Relative-PC observation |
+| --- | ---: | ---: | --- |
+| typed `Vm` | 13,792 → 13,888 | 2,937 → 2,956 | boundaries/tables/stack differ; first changed subsequent PC +0x242 → +0x243 |
+| typed `WideLoopFrame` | 13,696 → 13,696 | 2,920 → 2,920 | prefix boundaries/tables/stack equal; full bytes differ, so no isolation claim |
+| wide activation `run` | 24,640 → 24,960 | 5,141 → 5,193 | boundaries/tables/stack differ; first changed subsequent PC +0x1b3 → +0x1b0 |
+
+Thus entry-only changes **did not avoid typed/wide codegen coupling**. This is
+a concrete reason not to turn an instruction-price projection into a wall
+claim. Complete layout/wall pricing remains necessary before acceptance.
+
+Artifacts below are SHA-256, relative to each named job directory; all are
+workspace-local raw evidence, not committed build outputs:
+
+| Job / artifact | SHA-256 |
+| --- | --- |
+| pricing `command.sh` | `b413be01be02b8bcf5b455da92284e1dfe95df670b62efb77a4f575e51654fbd` |
+| pricing `out/identity.json` | `4d607aee363a24a6d002115d071e26ed75a72fe69f5e507a44ab6cf2deb29dc7` |
+| pricing `out/counts.json` | `f5eaa2036cfce82e22adc521319d9ef8dfe0d04c2578c160b89fea5a42f361b2` |
+| pricing `out/instructions.json` | `54fdcb64c4b30b30334cb9a275a67ca0fcdf745057adb2aeec7b72662ee29c99` |
+| pricing `out/profiles.json` (all 66 receipts) | `0a662e93d0bead257148ebd573ff331dd4a2803750ff50589ca88949ffadcb22` |
+| pricing `out/kernel-difference.json` | `c4df4a02f343773a5ebc5aaa66ddf567fb0fb7c7f61f7a5c4e30a37bbf1fb020` |
+| strict checker `out/kernel-diagnostic/result.json` | `86ebb5f3b0cdcdf2e622136791632426f2324d4135cd660b8f643027437dff1c` |
+| raw-layout `command.sh` | `3a8585cdf24dd66f733f06cae937a564e8562e0799218734b83a9ab68daa24a1` |
+| raw-layout `out/comparison.json` | `9a85bef14be27ff69508e0c565f9899c7a62396002d99faf04d2bd84977cc486` |
+| decline-audit `out/identity.json` | `d87ad36f6e961e7915e625f38bdeeb0bd67d80a61ab0bd412635d5e9ed95a774` |
+| decline-audit `out/counts.json` | `2b77877bcb68cdfe05ebb639e6dd7a35e077396af500e2204270716c02816cfe` |
+
+The local derivation uses the exact masks and formula above:
+`tmp/qjs-lead-briefs/m2-price-analysis.py` SHA-256
+`5a3e4cfbfa1d7126954b661d1d84b22e5ecb7686776b0bcb2f8ea7122ff49a9b`;
+final `m2-price-analysis.json` SHA-256
+`f3667c477ad6462edfcc4c0997fff05b433905b294224b0e0280dc1bc04e03d7`.
+These are derivatives, not sealed performance decisions.
+
+Canonical prototype full-gate log SHA-256
+`f5edc1413698a0777c41a0fbc19464a70d540bb736dbd4263c551afea2a77988`;
+its staged fast gate
+`97cfa95dd90614f253260c8cb6d1f225f4a398794413d58a48e062e088e4468f`.
+Counter-audit six-test log SHA-256
+`4906ffc7476094b5d5f6c5687e4fe65ebcf2b000961fcc2daa172a30727cd3d8`;
+its fast gate
+`65519b0230cbcc8f8cfe79715105bb4b4cab67c0674b62a40280ba9fcd08c73f`.
+Full correctness applies to the measured `9dafdebe` runtime, not an asserted
+HEAD-wide new acceptance result. This plan branch changes only this record;
+context/whitespace/staged fast gate and unchanged draft validation are checked
+before committing. Disk stayed above 8 GiB (local observed minimum 63 GiB);
+local pricing/counts/plan `target/debug` directories are removed before handoff.
+No freeze, push, merge, wall timing, layout-panel or formal decision.
