@@ -1,12 +1,12 @@
 # T064 K0 static checker
 
-- Status: implementation present; current-main qualification pending.
+- Status: complete tooling qualification; current unoutlined main fails isolation as expected.
 - Implementation: maintained Python checker and archive-only H+8/C+8 transforms;
   `scripts/check-kernel-isolation.sh`; no runtime/Cargo/recipe/policy change, no CI hook.
-- Verified at: tooling `7ed7479f`; 32 focused tests, staged fast gate and full local `check.sh` pass (694 benchmark tests, 35 script tests, 5,170 Test262 subset cases).
-- Evidence: contract/method below; queued build identities/results will be recorded here.
-- Unresolved: current-main A/A, H+8 and C+8 results pending in queued job `20261022T043602Z-t064-k0-main`.
-- Next action: queue the full non-timing canonical matrix, then record exact results and gates.
+- Verified at: final checker `36ab76e3`; 34 focused tests, staged fast gate and full local `check.sh` pass (696 benchmark tests, 35 script tests, 5,170 Test262 subset cases).
+- Evidence: contract/method and exact current-main identities/results below; raw queue artifacts are fetchable by job ID.
+- Unresolved: K1 isolation is outside this tooling brief; LEA bounds remain deliberately conservative.
+- Next action: lead reviews these static results with the fresh queue/profiles and freezes the successor plan before K1; CI remains prospective.
 
 The [lead decision](../T064-kernel-isolation.md#lead-decision-2026-10-21)
 is the acceptance contract. Both typed roles are mandatory, including every
@@ -94,5 +94,65 @@ for disk budget only. All local build outputs stayed under `target/`;
 
 Final review added RIP import-identity and zero-fill negatives (34 focused
 tests pass). This changes checker validation only; the queued canonical
-builds at producer `7ed7479f` remain usable. Re-fingerprint all four linked
-images with the final checker before interpreting its qualification.
+builds at producer `7ed7479f` remain usable. Final checker `36ab76e3`
+re-fingerprinted all four downloaded images after verifying every executable
+hash against builds.json. Its comparison JSON is byte-identical to the queue
+receipt below. The replay used local Apple otool cctools 1040 / LLVM 21.0.0,
+SHA-256 `8353ad3c42743a93e9ca7d0d4e9d3df22305252d169c42c543ee22eeb8c33809`.
+Both decoders agree on the complete roles and results; all canonical builds
+were on the queued iMac, not on this laptop.
+
+## Current-main canonical qualification
+
+Non-timing queue job `20261022T043602Z-t064-k0-main`, start
+2026-10-22T05:03:43Z, completed with exit 1 after 419 s of build/check work.
+This is the expected contract-failure result, not a timing or performance
+rejection; 0 attempts consumed. No existing job was cancelled or bypassed.
+Input main is `9eba7a1d6ae8b67397d20e0d6c93ac79037f5e30`; producer is
+`7ed7479ff9db1e984719c80ca71328af47ad6056`. All four archives are unoutlined.
+Rust 1.95.0 commit 59807616e1fa2540724bfbac14d7976d7e4a3860 / LLVM 22.1.2;
+Apple clang 14.0.0; canonical fat16/abort/agents/v0/align-functions4 recipe.
+Inherited build-identity environment and global Cargo configs are empty.
+Actual iMac tools: ld SHA-256
+`c1266cbb6d485669d91a1944c455579b94bc3c40ca33d5411e63da3dc32874b5`;
+otool cctools 1001.2 / LLVM 14.0.0 SHA-256
+`11dee92ac5a151aeb5f896b2beb8a4ddc269b22b4113c9a35a9fbc25c4df3815`.
+
+| Build | ObjectData / ObjectColdData | Canonical executable SHA-256 |
+| --- | --- | --- |
+| r0a | 112 / 400 B | `f5822aa32e4c7a3def2aaf5b8eff2107ba005a76252afb25f06077fe25f2e8eb` |
+| r0b | 112 / 400 B | `f5822aa32e4c7a3def2aaf5b8eff2107ba005a76252afb25f06077fe25f2e8eb` |
+| h8 | 120 / 400 B | `b6b434cbf698d43dbeb12066abe0d36b9ee66ea78a902a115a77b0569dc83912` |
+| c8 | 112 / 408 B | `5cb7897cc00d275fc9df274bc7b70a787b637887a7e448990e0e4a6f9b07fe38` |
+
+H shifts symbol/module brand offsets 108/110→116/118. C leaves all observed
+header fields unchanged. All four canonical images pass the 4950 smoke;
+probe source is absent from release builds. R0a/R0b transformed-source hashes
+also match. Header size/offset witnesses and changed canonical images admit
+both perturbations; no optimized-away probe is counted as a result.
+
+| Comparison | Vm / WideLoopFrame result |
+| --- | --- |
+| A/A | PASS; whole executables also byte-identical. Complete bodies have 2937 / 2920 instructions. |
+| H+8 | FAIL in both roles: extent, owned tables, padding, stack-instruction PCs and instruction boundaries/relative PCs change (5 failure categories each). |
+| C+8 | FAIL in both roles: 80 RIP referent-content mismatches per role; instruction boundaries, non-address bytes, tables and stack operands match. 132 / 133 displacement-only changes pass referent/call checks and are explicitly allowed. |
+
+| Queue receipt | SHA-256 |
+| --- | --- |
+| request.json | `7404f3f421e9b12001ac91e882e988f2c786a47bc0cbfaa8e4d704c8dc93c7ed` |
+| builds.json | `5972cec36027e924769d7b8afa2d880604b2a6f5827a1d6cab0d65b8a841bf93` |
+| comparisons.json | `2871222e1ce92e764c0d758c6380c6fe48a486530434a8dde0d4210dee986cad` |
+| result.json | `aadf9c7adea2006531cd0ce258c7e2049b8f55d2dce7a406bc094bcccb1450e2` |
+
+Each role owns five decoded tables. Base Vm/Wide extents are 13,792/13,696 B;
+H grows them to 13,808/13,712 B, while C retains the base extents. Every
+variant retains the 0x178 entry stack reserve and the same ordered stack
+operations/operands; H's stack report fails because their relative PCs move,
+not because a new spill/frame-layout change was demonstrated.
+C's first mismatch is Vm+0x2b80 / Wide+0x2ad4: an address-only LEA of metadata
+with a checked span of 35,360 B in both images. Its first eight bytes change
+`faf7500001000000`→`0af8500001000000`. Thus this failure already exists at
+byte0; it is not caused solely by conservatively checking distant data.
+The 80 failures per role are address-span LEA referents, not rejected numeric
+literal displacement changes. This qualification detects current coupling;
+it does not establish that outlining or a future K1 would pass.

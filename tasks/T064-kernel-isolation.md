@@ -1,12 +1,12 @@
 # T064: Kernel isolation prerequisite
 
-- Status: active; causal spike complete; lead decision 2026-10-21 approves K as the address-operand contract below; K1 not started.
+- Status: active; K0 checker qualified on unoutlined main (A/A passes, H/C fail); lead decision 2026-10-21 approves the address-operand contract below; K1 not started.
 - Implementation: diagnostic archive transformations plus maintained [K0 checker](archive/T064-k0-checker.md); production runtime/Cargo/recipe unchanged. No kernel crate.
-- Verified at: spike on main `06e199fec9e9e51742cdae7633c5dc758c326752`, jobs235604Z/000011Z done0 and full gate; K0 on `9eba7a1d`-based branch: 32 focused tests and fast gate pass, canonical qualification pending.
-- Evidence: [spike result/identities](archive/T064-causal-outlining-spike.md), [design/ABI](../docs/design/interpreter-core-v2.md#kernel-isolation-prerequisite-k0-before-m1-resumes),
+- Verified at: checker `36ab76e3` fast/full gates and 5,170 subset cases pass; main `9eba7a1d` canonical queue job `20261022T043602Z-t064-k0-main` completed all four builds; final-checker replay agrees (see record).
+- Evidence: [K0 qualification/identities](archive/T064-k0-checker.md), [spike result/identities](archive/T064-causal-outlining-spike.md), [design/ABI](../docs/design/interpreter-core-v2.md#kernel-isolation-prerequisite-k0-before-m1-resumes),
   [allocation/startup inputs](archive/T064-kernel-isolation-inputs.md), [producer](diagnostics/t064-k-spike/README.md), [lead decision](#lead-decision-2026-10-21).
 - Unresolved: K's own cost (outlined service calls, entry constants) is unpriced; successor K→A→B plan needs a fresh queue/profiles on recorded main M.
-- Next action: lead runs the fresh current-main formal comparison/queue; qualify the implemented K0 checker on current main and continue T056 unpack/startup attribution. Freeze the successor plan before K1 runtime code.
+- Next action: lead reviews fresh current-main queue/profiles and K0 failures, then freezes the successor plan before K1 runtime code; T056 unpack/startup attribution continues. No CI hook yet.
 
 ## Lead decision (2026-10-21)
 
