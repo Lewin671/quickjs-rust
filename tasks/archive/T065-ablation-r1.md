@@ -132,6 +132,16 @@ caches already answer most accesses. Named-key authority is **not** the main sou
 canonical-atom store is deferred. A narrow sound receiver-miss proof / Small-store canonical key for diff/moment stays a
 candidate incremental unit.
 
+## Round-3a result: general `Op` size (dsh, 2026-10-23)
+
+Branch `agent/t065-abl-opsize/dsh`, sound prototype `9401c478` over main `95b6f03d`: `size_of::<Op>()` 96 → 32 bytes (cold
+payloads boxed: NewFunction, EnterTry, template/with/sloppy-store records; named get/set carry a u32 pool index; 32-bit slot
+operands). Executed op counts on all seven development programs are bit-identical to base; full gate passes (5170/5170).
+Static out-of-line sites 0.8–2.9% (mostly NewFunction). Triage `20261023T041959Z-t065-opsize-triage` (done 0, 115/115 pairs,
+not disturbed): seven-program development geomean **wall 0.998, instructions 0.993**; 19 controls 0.999/0.992; sentinels
+1.028 wall (polymorphic_call_site 1.091, capturing_closure_call 1.141, instructions ≤1.005: layout/noise). Op fetch footprint is
+not a lever on real programs, consistent with T024. Not integrated; branch retained.
+
 ## Correctness and cleanup
 
 All three new variants pass `cargo check -p qjs-cli --features agents` and

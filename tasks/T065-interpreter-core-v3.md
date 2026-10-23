@@ -1,6 +1,6 @@
 # T065: Interpreter core v3
 
-- Status: active; design reviewed (dsh), not approved. User decision 2026-10-22: run a pre-M0 mechanism ablation on real programs before choosing between this rewrite and an incremental path.
+- Status: active; rewrite **not approved** — lead decision 2026-10-23 after the pre-M0 ablation (see Lead decision below): continue incrementally.
 - Implementation: none; documentation only. Existing runtime remains unchanged;
   no new crate, dependency, unsafe block, schema kind or performance plan exists.
 - Verified at: design tree over 0ab98e3920629da1d7d6efae46f24f0b43bfa018,
@@ -13,9 +13,18 @@
   [independent review and lead outcome](archive/T065-design-review.md).
 - Unresolved: target level (the proposed 0.80×M leaves ~2.46× NG), shared-window frames (T021), collector choice, effort (review: 45–70 one-owner weeks);
   per-mechanism wall attribution is unmeasured.
-- Next action: rounds 1–2 measured ([record](archive/T065-ablation-r1.md)): allocator landed as T066 (~10%), call prototype 0.961,
-  ownership oracle over the allocator 0.913 wall / 0.945 instructions; named-lookup oracle moves only diff (0.947). Next: bytecode/Op size (round 3a), then decide rewrite vs incremental.
-  T056's remaining M2/M3 work stays superseded pending that decision.
+- Next action: none for the rewrite. Incremental units are chosen from a fresh post-T066 profile (lead decision below).
+
+## Lead decision (2026-10-23)
+
+Rounds 1–3 ([record](archive/T065-ablation-r1.md)) priced each candidate mechanism on real libraries separately:
+allocator ~10% (landed incrementally as T066), call-entry prototype 0.961, count-free ownership oracle 0.913 wall /
+0.945 instructions, lookup-free named-property oracle only diff 0.947, 3× smaller `Op` 0.998 / 0.993. No priced
+mechanism carries a large share of the 2.38× instruction gap, and the ones that pay can land one at a time under the
+overall-first rule. A 45–70-week rewrite has no measured multiplier to justify it, so it is not approved. Unpriced:
+property-cache machinery itself (the oracle kept probes/validation), complete call/frame construction, builtins and
+parse/compile. Next: attribute instructions on the post-T066 main by owner for the development programs, then freeze
+incremental units by measured reach. The design documents stay as reference; T056 M2/M3 return to that queue.
 
 ## Intent
 
