@@ -35,6 +35,7 @@ nothing about whether the code exists.
 
 | Plan (`<name>.json`) | Task | Base | Recorded outcome |
 | --- | --- | --- | --- |
+| `ownership-aware-register-transfer` | T070 | `b93e4daa` 2026-10-23 | Closed without promotion; lead declined screen 1; `b74a84a9` broader triage 0.975245 misses <=0.97; last screen unused; correctness pass, source retained on branch |
 | `cli-size-class-allocator` | T066 | `9eba7a1d` 2026-10-21 | decision `20261022T225522Z` rejected on the sentinel lane (user override) and the unsatisfiable x86 resource gate; promoted by the [lead decision](../archive/T066-size-class-allocator.md#lead-promotion-decision-2026-10-22) and integrated |
 | `regexp-lazy-quantifier-current-base-v6` (runner plan `979741ca`) | T058 | `a68a9f46` 2026-10-19 | rejected on sole valid K=6 screen: recursive instruction hard cap; first disturbed run invalid, no reset/re-decision; [record](../archive/T058-v6-rejection.md) |
 | `regexp-lazy-quantifier-bounded-helper-v6` (runner plan `6747434f`) | T058 | `a68a9f46` 2026-10-19 | retained (`ready_for_unit_gates`) on its sole attempt: K=6 selection pass, papaparse/csv formal 0.0806, held-out pass, Test262 zero gap; candidate `736200aa`; [record](../archive/T058-regexp-lazy-quantifiers.md) |

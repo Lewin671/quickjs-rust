@@ -1,0 +1,154 @@
+{
+  "schema_version": 3,
+  "unit_kind": "leaf",
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "ownership-aware-register-transfer",
+  "base_sha": "b93e4daa5d9d53f1780a66f31b31a96e2bfe1895",
+  "queue": {
+    "candidate_sha": "b93e4daa5d9d53f1780a66f31b31a96e2bfe1895",
+    "sha256": "71bf531c39224650b54956e054e2c4f7935798ce6aa109a85b4b1813fe074221"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "development/graphlib/paths",
+      "development/big.js/arith",
+      "development/immutable/persistent"
+    ],
+    "rank_ceiling": 6,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Compute backward fixed-point liveness over basic blocks of the final wide compact register IR after existing forwarding, peepholes and jump relocation. Encode private dead-source register copies as ownership takes. Encode a binary operation with distinct inputs as consuming only when every newly consumed old input is private and dead, including inputs overwritten by the result; retain its numeric fast path. Preserve explicit Drop uses, checked lexical reads, received-cell loads/stores, observable property stores, register indices, instruction counts and resume maps. An interpreter exit reads every local and the operands in its compiler-verified stack depth. Resource-bearing transfers clear their owning source and publish through the existing register store; scalar fast paths may keep cheap copies. No call entry, activation preparation, Value width, heap model, binding architecture or dependency changes. Target selection is the prospective rule in tasks/T070-value-transport.md. T022 overall-first is frozen prospectively: overall gates are development, external, equal-case portfolio and held-out; when all improve, local lane ceilings, individual microbenchmarks/sentinels and RSS do not block lead promotion. Correctness and zero Test262 gaps are never waivable. Report every local regression. RSS defaults: per-case median <=1.10, development geomean <=1.05, at least 15 alternating pairs; resources use the T067 derived iMac manifest. Only the lead runs final decide/promotion.",
+    "generality": "Admission depends only on closed-IR operation effects, control/data flow, private own-local provenance and last consumption. The compiler proves the same property across joins and loop backedges for every admitted function and every Value kind. It never examines source text, paths, names, library or benchmark identity, checksums, iteration counts or bytecode templates. Existing aliases continue to own their references, and shared binding cells remain the only locations for captured bindings.",
+    "semantic_risks": [
+      "A source still read on either successor or a loop backedge must keep its copy; every new opcode must explicitly declare all value and control-flow effects.",
+      "Exit inputs include all locals and all operands within the verified depth; interpreter and typed-loop resumption must never observe an emptied live source.",
+      "An explicit Drop is a source use and definition, preserving explicit release points. Destination publication and prior-value drop use the existing store order.",
+      "Captured/received cells and observable stores keep existing cloning and identity semantics. Raw source locals qualify only under the own-local mask and existing authoritative-slot admission.",
+      "Binary inputs may be taken only when distinct; a repeated source needs two values, and evaluation/coercion/error order and aliases must remain unchanged. A result destination defines a new value rather than keeping its old input live.",
+      "Shared strings and object identities must remain intact when reference-count uniqueness enables existing copy-on-write paths.",
+      "New analysis adds one-time compilation work and temporary storage; wide dispatch/inlining and resource costs must be measured over the full portfolio, not inferred from flat instruction counts."
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "20261023T052723Z-t070-exact-profiles-r2/out/profiles/development--graphlib--paths/0/receipt/receipt.json",
+      "sha256": "b860f12e958216d5a9c0f714cd833fda8bd3a476d38be2238be1e234c66b8e55",
+      "base_sha": "b93e4daa5d9d53f1780a66f31b31a96e2bfe1895",
+      "opportunity_ids": [
+        "development/graphlib/paths"
+      ],
+      "shared_cost": "Exact b93e4daa queue image b3132b40; process-complete macOS sample, repeat 0, 1 ms. T068 taxonomy v2 attributes 214/1079 self samples and 222/1079 inclusive samples to Value/container clone/drop and ownership transport. Inclusive stacks overlap; this is reach, not a removable fraction or speed forecast. Targets were selected by the written T068 above-family-mean rule in tasks/T070-value-transport.md, not these replacement windows. All three windows are bound.",
+      "inclusive_fraction": 0.2057460611677479
+    },
+    {
+      "source": "20261023T052723Z-t070-exact-profiles-r2/out/profiles/development--graphlib--paths/1/receipt/receipt.json",
+      "sha256": "3709a0614f9f5a9426cc0f87fcc4da7b2a86d7d7cfc30a26875d987286d3238d",
+      "base_sha": "b93e4daa5d9d53f1780a66f31b31a96e2bfe1895",
+      "opportunity_ids": [
+        "development/graphlib/paths"
+      ],
+      "shared_cost": "Exact b93e4daa queue image b3132b40; process-complete macOS sample, repeat 1, 1 ms. T068 taxonomy v2 attributes 208/1073 self samples and 218/1073 inclusive samples to Value/container clone/drop and ownership transport. Inclusive stacks overlap; this is reach, not a removable fraction or speed forecast. Targets were selected by the written T068 above-family-mean rule in tasks/T070-value-transport.md, not these replacement windows. All three windows are bound.",
+      "inclusive_fraction": 0.2031686859273066
+    },
+    {
+      "source": "20261023T052723Z-t070-exact-profiles-r2/out/profiles/development--graphlib--paths/2/receipt/receipt.json",
+      "sha256": "a0fdb72716cbf6793f1158b575da61266f93e0e88043280829755deca819662f",
+      "base_sha": "b93e4daa5d9d53f1780a66f31b31a96e2bfe1895",
+      "opportunity_ids": [
+        "development/graphlib/paths"
+      ],
+      "shared_cost": "Exact b93e4daa queue image b3132b40; process-complete macOS sample, repeat 2, 1 ms. T068 taxonomy v2 attributes 198/1073 self samples and 207/1073 inclusive samples to Value/container clone/drop and ownership transport. Inclusive stacks overlap; this is reach, not a removable fraction or speed forecast. Targets were selected by the written T068 above-family-mean rule in tasks/T070-value-transport.md, not these replacement windows. All three windows are bound.",
+      "inclusive_fraction": 0.1929170549860205
+    },
+    {
+      "source": "20261023T052723Z-t070-exact-profiles-r2/out/profiles/development--big.js--arith/0/receipt/receipt.json",
+      "sha256": "c0f912171bd26e0373bd49feb5e944b08814da1768adbdb73ef497ead97a315c",
+      "base_sha": "b93e4daa5d9d53f1780a66f31b31a96e2bfe1895",
+      "opportunity_ids": [
+        "development/big.js/arith"
+      ],
+      "shared_cost": "Exact b93e4daa queue image b3132b40; process-complete macOS sample, repeat 0, 1 ms. T068 taxonomy v2 attributes 286/1794 self samples and 291/1794 inclusive samples to Value/container clone/drop and ownership transport. Inclusive stacks overlap; this is reach, not a removable fraction or speed forecast. Targets were selected by the written T068 above-family-mean rule in tasks/T070-value-transport.md, not these replacement windows. All three windows are bound.",
+      "inclusive_fraction": 0.16220735785953178
+    },
+    {
+      "source": "20261023T052723Z-t070-exact-profiles-r2/out/profiles/development--big.js--arith/1/receipt/receipt.json",
+      "sha256": "da7a6e89d9dbd4db7f639cad67dacedb526d047c2ec49dd759c431e98ece978b",
+      "base_sha": "b93e4daa5d9d53f1780a66f31b31a96e2bfe1895",
+      "opportunity_ids": [
+        "development/big.js/arith"
+      ],
+      "shared_cost": "Exact b93e4daa queue image b3132b40; process-complete macOS sample, repeat 1, 1 ms. T068 taxonomy v2 attributes 297/1819 self samples and 302/1819 inclusive samples to Value/container clone/drop and ownership transport. Inclusive stacks overlap; this is reach, not a removable fraction or speed forecast. Targets were selected by the written T068 above-family-mean rule in tasks/T070-value-transport.md, not these replacement windows. All three windows are bound.",
+      "inclusive_fraction": 0.16602528862012095
+    },
+    {
+      "source": "20261023T052723Z-t070-exact-profiles-r2/out/profiles/development--big.js--arith/2/receipt/receipt.json",
+      "sha256": "9dca4c31e72a6a97dd48b70bfbd72074cc17df97cb814a2160554aec02614cb8",
+      "base_sha": "b93e4daa5d9d53f1780a66f31b31a96e2bfe1895",
+      "opportunity_ids": [
+        "development/big.js/arith"
+      ],
+      "shared_cost": "Exact b93e4daa queue image b3132b40; process-complete macOS sample, repeat 2, 1 ms. T068 taxonomy v2 attributes 294/1805 self samples and 299/1805 inclusive samples to Value/container clone/drop and ownership transport. Inclusive stacks overlap; this is reach, not a removable fraction or speed forecast. Targets were selected by the written T068 above-family-mean rule in tasks/T070-value-transport.md, not these replacement windows. All three windows are bound.",
+      "inclusive_fraction": 0.16565096952908587
+    },
+    {
+      "source": "20261023T052723Z-t070-exact-profiles-r2/out/profiles/development--immutable--persistent/0/receipt/receipt.json",
+      "sha256": "6f8b75e53a119f71d85740bbac524f9d0051b45a3104676dddfe93ef5696026c",
+      "base_sha": "b93e4daa5d9d53f1780a66f31b31a96e2bfe1895",
+      "opportunity_ids": [
+        "development/immutable/persistent"
+      ],
+      "shared_cost": "Exact b93e4daa queue image b3132b40; process-complete macOS sample, repeat 0, 1 ms. T068 taxonomy v2 attributes 383/3098 self samples and 409/3098 inclusive samples to Value/container clone/drop and ownership transport. Inclusive stacks overlap; this is reach, not a removable fraction or speed forecast. Targets were selected by the written T068 above-family-mean rule in tasks/T070-value-transport.md, not these replacement windows. All three windows are bound.",
+      "inclusive_fraction": 0.13202065848934796
+    },
+    {
+      "source": "20261023T052723Z-t070-exact-profiles-r2/out/profiles/development--immutable--persistent/1/receipt/receipt.json",
+      "sha256": "c76795c80796098fc617131c9630a81e1e5f9b354aff09d7dc67aedaa3b5d2e4",
+      "base_sha": "b93e4daa5d9d53f1780a66f31b31a96e2bfe1895",
+      "opportunity_ids": [
+        "development/immutable/persistent"
+      ],
+      "shared_cost": "Exact b93e4daa queue image b3132b40; process-complete macOS sample, repeat 1, 1 ms. T068 taxonomy v2 attributes 374/3086 self samples and 412/3086 inclusive samples to Value/container clone/drop and ownership transport. Inclusive stacks overlap; this is reach, not a removable fraction or speed forecast. Targets were selected by the written T068 above-family-mean rule in tasks/T070-value-transport.md, not these replacement windows. All three windows are bound.",
+      "inclusive_fraction": 0.1335061568373299
+    },
+    {
+      "source": "20261023T052723Z-t070-exact-profiles-r2/out/profiles/development--immutable--persistent/2/receipt/receipt.json",
+      "sha256": "3845771d1c4f670578a24dcf7ec33115bed8abefc51ba5574b09fb6ba811f240",
+      "base_sha": "b93e4daa5d9d53f1780a66f31b31a96e2bfe1895",
+      "opportunity_ids": [
+        "development/immutable/persistent"
+      ],
+      "shared_cost": "Exact b93e4daa queue image b3132b40; process-complete macOS sample, repeat 2, 1 ms. T068 taxonomy v2 attributes 366/3067 self samples and 390/3067 inclusive samples to Value/container clone/drop and ownership transport. Inclusive stacks overlap; this is reach, not a removable fraction or speed forecast. Targets were selected by the written T068 above-family-mean rule in tasks/T070-value-transport.md, not these replacement windows. All three windows are bound.",
+      "inclusive_fraction": 0.12716009129442452
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "development/graphlib/paths",
+      "development/big.js/arith",
+      "development/immutable/persistent"
+    ],
+    "target_max_candidate_over_base": 0.97,
+    "max_attempts": 2
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  },
+  "layout_gate": {
+    "policy_path": "benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v6.json",
+    "policy_sha256": "be123f7c5cfd46aa863467256eb8bf6947ff64f72541efc371f05a36c5535a31",
+    "mechanism_class": "instruction-blind",
+    "memory_wall_targets": [
+      "development/graphlib/paths",
+      "development/big.js/arith",
+      "development/immutable/persistent"
+    ],
+    "panel_required": true,
+    "panel_pairs": 5,
+    "held_out_pairs": 30,
+    "formal_blocks": 60
+  }
+}

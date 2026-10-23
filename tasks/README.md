@@ -1,7 +1,6 @@
 # Tasks
 
 Active and blocked tasks open with a resume block; historical records live under `archive/`.
-
 For a new task, copy [TEMPLATE.md](TEMPLATE.md). One slice of a task is one
 reviewable unit: verify it with its focused command before and after, and
 update the resume block in the commit that lands it. When a task closes, move
@@ -40,6 +39,7 @@ Each file is under `archive/` with a resume block; outcomes record what happened
 
 | Task | Outcome |
 | --- | --- |
+| [T070 ownership transfer](archive/T070-value-transport.md) | Closed without promotion: attempt 1 declined; broader triage 0.975245 misses <=0.97; one screen unused; implementation retained on owner branch. |
 | `T067-x86-resource-manifest.md` | Resource lane derives a qualified manifest for the measuring host (iMac x86_64 fat16-abort); base-vs-base qualification size 1.0, fresh 0.990, RSS 1.0. |
 | `T066-size-class-allocator.md` | Promoted under the lead decision: CLI size-class allocator, development 0.898× main (NG 3.07×→2.75×), held-out 0.72–0.96; sentinel lane cost accepted by the user; resource gate unsatisfiable on x86 (tooling gap). |
 | [T064 kernel isolation](archive/T064-kernel-isolation.md) | Stage K aborted before timing: K1/Repair 1 static and correctness gates pass, same 46/86 instruction cases block; outlining abandoned; [plan closure/ledger](archive/T064-kernel-layout-authority-closure.md), M1 A/B blocked, T056 moves to M2. |
@@ -93,7 +93,7 @@ Each file is under `archive/` with a resume block; outcomes record what happened
 
 ## Other Records In `archive/`
 
-- T068: [per-program profiles and receipt manifest](archive/T068-profile-evidence.md). T065: [rounds 1–3 ablation](archive/T065-ablation-r1.md), [gap anatomy and both-engine instruction baseline](archive/T065-gap-anatomy.md), [independent design review](archive/T065-design-review.md); T066: [allocator evidence](archive/T066-allocator-evidence.md), [remote-free test diagnosis](archive/T066-remote-free-test.md).
+- T070: [triage](archive/T070-triage.md), [ownership producers](archive/T070-producer-attribution.md), [first screen](archive/T070-screen-attempt1.md), [broader triage](archive/T070-broader-transport.md). T068: [per-program profiles and receipt manifest](archive/T068-profile-evidence.md). T065: [rounds 1–3 ablation](archive/T065-ablation-r1.md), [gap anatomy and both-engine instruction baseline](archive/T065-gap-anatomy.md), [independent design review](archive/T065-design-review.md); T066: [allocator evidence](archive/T066-allocator-evidence.md), [remote-free test diagnosis](archive/T066-remote-free-test.md).
 - T064: [K1/Repair 1 evidence](archive/T064-k1-record.md), [K0 checker](archive/T064-k0-checker.md), [successor inputs](archive/T064-successor-plan-inputs.md), [lead review](proposals/T064-successor-review.md), [old-plan closure](archive/T064-layout-edges-closure.md), [spike](archive/T064-causal-outlining-spike.md), [isolation/cost inputs](archive/T064-kernel-isolation-inputs.md).
 - T058: [fixed-candidate v6 promotion](archive/T058-regexp-lazy-quantifiers.md), [attempt 1 incomplete closure](archive/T058-attempt1-incomplete.md), [attempt 2 inconclusive](archive/T058-attempt2-inconclusive.md), [v6 rejection](archive/T058-v6-rejection.md), [instruction diagnosis](archive/T058-instruction-diagnosis.md).
 - T057: [linear-search repair](archive/T057-search-linear.md), [stage-1 promotion evidence](archive/T057-stage1-evidence.md), [preliminary development baseline](archive/T057-development-baseline.md) [policy v3 qualification](archive/T057-development-policy.md) and [pre-stage-1 log](archive/T057-log.md).
