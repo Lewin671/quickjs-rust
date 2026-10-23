@@ -7,6 +7,7 @@ update the resume block in the commit that lands it. When a task closes, move it
 ## Active
 | Task | Status | What it is |
 | --- | --- | --- |
+| [T076](T076-executor-bundle.md) executor bundle | active | Three candidates correctly tested then dropped by frozen instruction gates; runtime restored, evidence complete for lead review. |
 | [T075](T075-executor-anatomy.md) executor anatomy | active | Diagnosis complete: exact-PC/source attribution opens the post-T069 loop bucket; four incremental proposals await selection. |
 | [T073](T073-local-read-bimodal.md) local-read bimodality | active | Diagnosis complete: candidate text-layout CPU tails; T017 adopts case-health containment only. |
 | [T074](T074-direct-eval-scope-model.md) direct eval scope model | design needed | Architecture review before code; tracks eval visibility, declarations, mutability, context and suspension constraints. |

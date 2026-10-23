@@ -35,6 +35,7 @@ nothing about whether the code exists.
 
 | Plan (`<name>.json`) | Task | Base | Recorded outcome |
 | --- | --- | --- | --- |
+| `executor-bundle` | T076 | `19125d48` 2026-10-23 | All three instruction-filter misses retained; U1 target 1.008294/14 control breaches, U2 target 0.997339, U3 target 0.987715/audio control 1.010866; runtime restored, no survivor, 0/2 screens spent; lead decision reserved |
 | `live-named-property-proof` | T072 | `6e899d24` 2026-10-23 | Closed without promotion: candidate 6c122407, triage 0.949774 / 0.913469, zero exact gaps; both screens incomplete on collection failures, 2/2 spent |
 | `positional-call-activation` | T069 | `b93e4daa` 2026-10-23 | promoted by the [lead decision](../archive/T069-call-activation.md#lead-promotion-decision-2026-10-23) under overall-first: formal development 0.957, external 0.998, portfolio 0.992, held-out 0.930; strict moment/diff/graphlib payoff misses recorded; receiver repair `e38e85fc`; integrated |
 | `ownership-aware-register-transfer` | T070 | `b93e4daa` 2026-10-23 | Closed without promotion; lead declined screen 1; `b74a84a9` broader triage 0.975245 misses <=0.97; last screen unused; correctness pass, source retained on branch |

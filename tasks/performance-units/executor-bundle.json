@@ -1,0 +1,275 @@
+{
+  "schema_version": 3,
+  "unit_kind": "leaf",
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "executor-bundle",
+  "base_sha": "19125d48c626869d776df9a501c44f3a00566e32",
+  "queue": {
+    "candidate_sha": "19125d48c626869d776df9a501c44f3a00566e32",
+    "sha256": "fa992f84c3974e9a92dafc89be7dc4c5246c0eb0bdab2f7e6108c08d5b1cfd25"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "development/big.js/arith",
+      "development/graphlib/paths",
+      "development/immutable/persistent",
+      "development/js-yaml/document",
+      "development/lodash/transform",
+      "development/matter-js/simulate",
+      "development/papaparse/csv"
+    ],
+    "rank_ceiling": 10,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "T076 bundles T075 proposals 1, 2 and 4: destination-aware immediate publication, scalar numeric indices through boxed consumers, immutable received-upvalue indices. Per-unit non-timing retired-instruction targets are frozen in tasks/T076-executor-bundle.md (above each T075 population mean); target geomean <=0.995 and every control <=1.003, all 86 selection cases measured, full correctness gate per unit. A miss is kept on a side branch and dropped without wall tuning. Combined seven-development-program triage wall geomean <=0.97 is required before a screen. Two K=6 screen attempts, formal 30, held-out 30 K=6, RSS 15 alternating pairs, T067 host resources. Following T069, a complete screen with improved development/external/portfolio aggregates permits remaining evidence collection despite strict local payoff misses; preserve the strict verdict. Incomplete/health evidence cannot advance. T022 overall-first: development, external, all-case portfolio and held-out are overall gates; lane ceilings, individual microbenchmarks/sentinels and RSS are local, reported to the lead. Correctness and zero Test262 gaps are never waived. RSS defaults per-case <=1.10 and development geomean <=1.05. No final decide or promotion step is authorized.",
+    "generality": "Admission depends only on primitive Value variants, register data flow with exact scalar/boxed recovery, and compiler slot-to-cell metadata under existing runtime owner checks. No source/library/benchmark/bytecode-template recognition, Value ABI change, new tier, per-call name-keyed snapshot, new dependency or unsafe. T045 identity-join candidate is not imported; T070 ownership-taking and T075 hot/cold cache proposal are excluded.",
+    "semantic_risks": [
+      "U1 preserves self-copy, immediate bit patterns, owned alias counts and old-value destruction order; TDZ markers stay opaque owning Values and checked lexical operations keep their checks.",
+      "U2 uses existing indexed operations only when scalar data flow proves the same key; multi-successor joins, source overwrites, zero-trip loops, exact deopt stack/IP and local writeback remain correct. Unknown provenance stays boxed; no speculative tier or identity assumptions.",
+      "U3 metadata indexes the same live shared upvalue cells, including writes and TDZ; runtime source-owner/layout admission and lexical initialization checks are retained.",
+      "Codegen and layout may perturb unrelated controls. No wall-driven per-unit tuning; T073-style bimodality is reported with raw processes instead of rerunning away the tail. Timing never starts during iMac local 02:45-05:00; DISTURBED jobs are replaced whole."
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "profiles/development--big.js--arith/0/receipt/receipt.json",
+      "sha256": "5be9b02df9df250a2c9eb2ceb4261deab0991efeca2827d96b78e845c6d2de8c",
+      "base_sha": "19125d48c626869d776df9a501c44f3a00566e32",
+      "opportunity_ids": [
+        "development/big.js/arith"
+      ],
+      "inclusive_fraction": 0.9932885906040269,
+      "shared_cost": "Exact-base canonical complete-process 1ms sample, repeat 0: wide/typed execution inclusive union 1776/1788 main-thread samples; recursive descendants counted once. Broad reach includes required operations and callees, not savings. All three repeats bound. Targets were selected before candidate measurement by T075 above-mean transport/indexed/received-index self fractions, not this supplementary sample. T075 retains exact-PC subpopulation evidence."
+    },
+    {
+      "source": "profiles/development--big.js--arith/1/receipt/receipt.json",
+      "sha256": "08fa6b4d501505df6270d95cf4e5593522e00f03ccd1126b819a599fb5a84257",
+      "base_sha": "19125d48c626869d776df9a501c44f3a00566e32",
+      "opportunity_ids": [
+        "development/big.js/arith"
+      ],
+      "inclusive_fraction": 0.9955898566703418,
+      "shared_cost": "Exact-base canonical complete-process 1ms sample, repeat 1: wide/typed execution inclusive union 1806/1814 main-thread samples; recursive descendants counted once. Broad reach includes required operations and callees, not savings. All three repeats bound. Targets were selected before candidate measurement by T075 above-mean transport/indexed/received-index self fractions, not this supplementary sample. T075 retains exact-PC subpopulation evidence."
+    },
+    {
+      "source": "profiles/development--big.js--arith/2/receipt/receipt.json",
+      "sha256": "eb6e58a5ab31ecaf24fa55ac836e9cff3afb59ef488a0edb30dee81cac55313f",
+      "base_sha": "19125d48c626869d776df9a501c44f3a00566e32",
+      "opportunity_ids": [
+        "development/big.js/arith"
+      ],
+      "inclusive_fraction": 0.9950055493895672,
+      "shared_cost": "Exact-base canonical complete-process 1ms sample, repeat 2: wide/typed execution inclusive union 1793/1802 main-thread samples; recursive descendants counted once. Broad reach includes required operations and callees, not savings. All three repeats bound. Targets were selected before candidate measurement by T075 above-mean transport/indexed/received-index self fractions, not this supplementary sample. T075 retains exact-PC subpopulation evidence."
+    },
+    {
+      "source": "profiles/development--graphlib--paths/0/receipt/receipt.json",
+      "sha256": "2b41ebf20df627540c793ed6ec44f5918d0046ba3c6f36af523ab93b8af676e3",
+      "base_sha": "19125d48c626869d776df9a501c44f3a00566e32",
+      "opportunity_ids": [
+        "development/graphlib/paths"
+      ],
+      "inclusive_fraction": 0.8926499032882012,
+      "shared_cost": "Exact-base canonical complete-process 1ms sample, repeat 0: wide/typed execution inclusive union 923/1034 main-thread samples; recursive descendants counted once. Broad reach includes required operations and callees, not savings. All three repeats bound. Targets were selected before candidate measurement by T075 above-mean transport/indexed/received-index self fractions, not this supplementary sample. T075 retains exact-PC subpopulation evidence."
+    },
+    {
+      "source": "profiles/development--graphlib--paths/1/receipt/receipt.json",
+      "sha256": "f769d042bb99ac9c5b341ba8162126c81607901f5a1c2a7bc8be8535de9f1d49",
+      "base_sha": "19125d48c626869d776df9a501c44f3a00566e32",
+      "opportunity_ids": [
+        "development/graphlib/paths"
+      ],
+      "inclusive_fraction": 0.8946859903381642,
+      "shared_cost": "Exact-base canonical complete-process 1ms sample, repeat 1: wide/typed execution inclusive union 926/1035 main-thread samples; recursive descendants counted once. Broad reach includes required operations and callees, not savings. All three repeats bound. Targets were selected before candidate measurement by T075 above-mean transport/indexed/received-index self fractions, not this supplementary sample. T075 retains exact-PC subpopulation evidence."
+    },
+    {
+      "source": "profiles/development--graphlib--paths/2/receipt/receipt.json",
+      "sha256": "12c3cadb59cf8e0f227528ba87532fff2cbcd5f72348427d883cec8ef2c71f79",
+      "base_sha": "19125d48c626869d776df9a501c44f3a00566e32",
+      "opportunity_ids": [
+        "development/graphlib/paths"
+      ],
+      "inclusive_fraction": 0.8952929875120077,
+      "shared_cost": "Exact-base canonical complete-process 1ms sample, repeat 2: wide/typed execution inclusive union 932/1041 main-thread samples; recursive descendants counted once. Broad reach includes required operations and callees, not savings. All three repeats bound. Targets were selected before candidate measurement by T075 above-mean transport/indexed/received-index self fractions, not this supplementary sample. T075 retains exact-PC subpopulation evidence."
+    },
+    {
+      "source": "profiles/development--immutable--persistent/0/receipt/receipt.json",
+      "sha256": "101178461ac08a6683d438ad196fcc52b26cb8dbf134f78b6ec43b9c9b936079",
+      "base_sha": "19125d48c626869d776df9a501c44f3a00566e32",
+      "opportunity_ids": [
+        "development/immutable/persistent"
+      ],
+      "inclusive_fraction": 0.9334045584045584,
+      "shared_cost": "Exact-base canonical complete-process 1ms sample, repeat 0: wide/typed execution inclusive union 2621/2808 main-thread samples; recursive descendants counted once. Broad reach includes required operations and callees, not savings. All three repeats bound. Targets were selected before candidate measurement by T075 above-mean transport/indexed/received-index self fractions, not this supplementary sample. T075 retains exact-PC subpopulation evidence."
+    },
+    {
+      "source": "profiles/development--immutable--persistent/1/receipt/receipt.json",
+      "sha256": "d7020d944a2f52603aecc433ad640ef639e0110995ba9d98b8d987e430b82fe2",
+      "base_sha": "19125d48c626869d776df9a501c44f3a00566e32",
+      "opportunity_ids": [
+        "development/immutable/persistent"
+      ],
+      "inclusive_fraction": 0.9317538896746818,
+      "shared_cost": "Exact-base canonical complete-process 1ms sample, repeat 1: wide/typed execution inclusive union 2635/2828 main-thread samples; recursive descendants counted once. Broad reach includes required operations and callees, not savings. All three repeats bound. Targets were selected before candidate measurement by T075 above-mean transport/indexed/received-index self fractions, not this supplementary sample. T075 retains exact-PC subpopulation evidence."
+    },
+    {
+      "source": "profiles/development--immutable--persistent/2/receipt/receipt.json",
+      "sha256": "169bac248429fc86b6f9518cf3c90ed25b609df846bd4633a0008ca50e63cb2a",
+      "base_sha": "19125d48c626869d776df9a501c44f3a00566e32",
+      "opportunity_ids": [
+        "development/immutable/persistent"
+      ],
+      "inclusive_fraction": 0.9294620591378696,
+      "shared_cost": "Exact-base canonical complete-process 1ms sample, repeat 2: wide/typed execution inclusive union 2609/2807 main-thread samples; recursive descendants counted once. Broad reach includes required operations and callees, not savings. All three repeats bound. Targets were selected before candidate measurement by T075 above-mean transport/indexed/received-index self fractions, not this supplementary sample. T075 retains exact-PC subpopulation evidence."
+    },
+    {
+      "source": "profiles/development--js-yaml--document/0/receipt/receipt.json",
+      "sha256": "13f3695a5ead0de870f31084feaf3d901f3fe11a48f92952e2338fe38fd429e5",
+      "base_sha": "19125d48c626869d776df9a501c44f3a00566e32",
+      "opportunity_ids": [
+        "development/js-yaml/document"
+      ],
+      "inclusive_fraction": 0.9991479693268958,
+      "shared_cost": "Exact-base canonical complete-process 1ms sample, repeat 0: wide/typed execution inclusive union 3518/3521 main-thread samples; recursive descendants counted once. Broad reach includes required operations and callees, not savings. All three repeats bound. Targets were selected before candidate measurement by T075 above-mean transport/indexed/received-index self fractions, not this supplementary sample. T075 retains exact-PC subpopulation evidence."
+    },
+    {
+      "source": "profiles/development--js-yaml--document/1/receipt/receipt.json",
+      "sha256": "a87f135841bbc173d3386e384fc60517ae8f141251da536cbcca39a890189890",
+      "base_sha": "19125d48c626869d776df9a501c44f3a00566e32",
+      "opportunity_ids": [
+        "development/js-yaml/document"
+      ],
+      "inclusive_fraction": 0.9991445680068435,
+      "shared_cost": "Exact-base canonical complete-process 1ms sample, repeat 1: wide/typed execution inclusive union 3504/3507 main-thread samples; recursive descendants counted once. Broad reach includes required operations and callees, not savings. All three repeats bound. Targets were selected before candidate measurement by T075 above-mean transport/indexed/received-index self fractions, not this supplementary sample. T075 retains exact-PC subpopulation evidence."
+    },
+    {
+      "source": "profiles/development--js-yaml--document/2/receipt/receipt.json",
+      "sha256": "2f8142fdbafea6c47c41cd9d7119102811ed65d1288dcd794519dae2e40ea504",
+      "base_sha": "19125d48c626869d776df9a501c44f3a00566e32",
+      "opportunity_ids": [
+        "development/js-yaml/document"
+      ],
+      "inclusive_fraction": 0.9994339088593264,
+      "shared_cost": "Exact-base canonical complete-process 1ms sample, repeat 2: wide/typed execution inclusive union 3531/3533 main-thread samples; recursive descendants counted once. Broad reach includes required operations and callees, not savings. All three repeats bound. Targets were selected before candidate measurement by T075 above-mean transport/indexed/received-index self fractions, not this supplementary sample. T075 retains exact-PC subpopulation evidence."
+    },
+    {
+      "source": "profiles/development--lodash--transform/0/receipt/receipt.json",
+      "sha256": "c1c17ca537a18c8280d54b05bc374aef1f7e11b5fda7d35babeb172c598ab6ee",
+      "base_sha": "19125d48c626869d776df9a501c44f3a00566e32",
+      "opportunity_ids": [
+        "development/lodash/transform"
+      ],
+      "inclusive_fraction": 0.9414802065404475,
+      "shared_cost": "Exact-base canonical complete-process 1ms sample, repeat 0: wide/typed execution inclusive union 1094/1162 main-thread samples; recursive descendants counted once. Broad reach includes required operations and callees, not savings. All three repeats bound. Targets were selected before candidate measurement by T075 above-mean transport/indexed/received-index self fractions, not this supplementary sample. T075 retains exact-PC subpopulation evidence."
+    },
+    {
+      "source": "profiles/development--lodash--transform/1/receipt/receipt.json",
+      "sha256": "017a0dc954261065ee12613b3789c8a54904877fc7b02402853b757ca3bc8e70",
+      "base_sha": "19125d48c626869d776df9a501c44f3a00566e32",
+      "opportunity_ids": [
+        "development/lodash/transform"
+      ],
+      "inclusive_fraction": 0.9443507588532883,
+      "shared_cost": "Exact-base canonical complete-process 1ms sample, repeat 1: wide/typed execution inclusive union 1120/1186 main-thread samples; recursive descendants counted once. Broad reach includes required operations and callees, not savings. All three repeats bound. Targets were selected before candidate measurement by T075 above-mean transport/indexed/received-index self fractions, not this supplementary sample. T075 retains exact-PC subpopulation evidence."
+    },
+    {
+      "source": "profiles/development--lodash--transform/2/receipt/receipt.json",
+      "sha256": "b7aa453adce1c3a42bc01bcb9332fe74da3d9e76bc75c8df93125fec53bb6e1f",
+      "base_sha": "19125d48c626869d776df9a501c44f3a00566e32",
+      "opportunity_ids": [
+        "development/lodash/transform"
+      ],
+      "inclusive_fraction": 0.9415305245055889,
+      "shared_cost": "Exact-base canonical complete-process 1ms sample, repeat 2: wide/typed execution inclusive union 1095/1163 main-thread samples; recursive descendants counted once. Broad reach includes required operations and callees, not savings. All three repeats bound. Targets were selected before candidate measurement by T075 above-mean transport/indexed/received-index self fractions, not this supplementary sample. T075 retains exact-PC subpopulation evidence."
+    },
+    {
+      "source": "profiles/development--matter-js--simulate/0/receipt/receipt.json",
+      "sha256": "1f9cd341f5fdfa4cd898e483005b32d3c9841695b006497c862c2c34aa4c44ae",
+      "base_sha": "19125d48c626869d776df9a501c44f3a00566e32",
+      "opportunity_ids": [
+        "development/matter-js/simulate"
+      ],
+      "inclusive_fraction": 0.994990366088632,
+      "shared_cost": "Exact-base canonical complete-process 1ms sample, repeat 0: wide/typed execution inclusive union 2582/2595 main-thread samples; recursive descendants counted once. Broad reach includes required operations and callees, not savings. All three repeats bound. Targets were selected before candidate measurement by T075 above-mean transport/indexed/received-index self fractions, not this supplementary sample. T075 retains exact-PC subpopulation evidence."
+    },
+    {
+      "source": "profiles/development--matter-js--simulate/1/receipt/receipt.json",
+      "sha256": "da9185ac613f78358db5ea807d97edc431cb20a66c36752128b7714d7980fdb0",
+      "base_sha": "19125d48c626869d776df9a501c44f3a00566e32",
+      "opportunity_ids": [
+        "development/matter-js/simulate"
+      ],
+      "inclusive_fraction": 0.9961479198767335,
+      "shared_cost": "Exact-base canonical complete-process 1ms sample, repeat 1: wide/typed execution inclusive union 2586/2596 main-thread samples; recursive descendants counted once. Broad reach includes required operations and callees, not savings. All three repeats bound. Targets were selected before candidate measurement by T075 above-mean transport/indexed/received-index self fractions, not this supplementary sample. T075 retains exact-PC subpopulation evidence."
+    },
+    {
+      "source": "profiles/development--matter-js--simulate/2/receipt/receipt.json",
+      "sha256": "db195cb5df30d37ffdb87a003d29dfd6a1c42d2396d09eaa6f4571b572340a8a",
+      "base_sha": "19125d48c626869d776df9a501c44f3a00566e32",
+      "opportunity_ids": [
+        "development/matter-js/simulate"
+      ],
+      "inclusive_fraction": 0.9969040247678018,
+      "shared_cost": "Exact-base canonical complete-process 1ms sample, repeat 2: wide/typed execution inclusive union 2576/2584 main-thread samples; recursive descendants counted once. Broad reach includes required operations and callees, not savings. All three repeats bound. Targets were selected before candidate measurement by T075 above-mean transport/indexed/received-index self fractions, not this supplementary sample. T075 retains exact-PC subpopulation evidence."
+    },
+    {
+      "source": "profiles/development--papaparse--csv/0/receipt/receipt.json",
+      "sha256": "b725faeb0bc5b60c21df16c689f15f52d72f25a55748bda79ef3fdf6cfa3d7f5",
+      "base_sha": "19125d48c626869d776df9a501c44f3a00566e32",
+      "opportunity_ids": [
+        "development/papaparse/csv"
+      ],
+      "inclusive_fraction": 0.9900932400932401,
+      "shared_cost": "Exact-base canonical complete-process 1ms sample, repeat 0: wide/typed execution inclusive union 1699/1716 main-thread samples; recursive descendants counted once. Broad reach includes required operations and callees, not savings. All three repeats bound. Targets were selected before candidate measurement by T075 above-mean transport/indexed/received-index self fractions, not this supplementary sample. T075 retains exact-PC subpopulation evidence."
+    },
+    {
+      "source": "profiles/development--papaparse--csv/1/receipt/receipt.json",
+      "sha256": "4f38c264162a7350419351e8c56137d2093d677d00f95f9850e6ebc4f6aab1eb",
+      "base_sha": "19125d48c626869d776df9a501c44f3a00566e32",
+      "opportunity_ids": [
+        "development/papaparse/csv"
+      ],
+      "inclusive_fraction": 0.989540964555491,
+      "shared_cost": "Exact-base canonical complete-process 1ms sample, repeat 1: wide/typed execution inclusive union 1703/1721 main-thread samples; recursive descendants counted once. Broad reach includes required operations and callees, not savings. All three repeats bound. Targets were selected before candidate measurement by T075 above-mean transport/indexed/received-index self fractions, not this supplementary sample. T075 retains exact-PC subpopulation evidence."
+    },
+    {
+      "source": "profiles/development--papaparse--csv/2/receipt/receipt.json",
+      "sha256": "b274e449df4d8f2b28aa491b1875d35278ffd481120e95ca64ed7499e7f55155",
+      "base_sha": "19125d48c626869d776df9a501c44f3a00566e32",
+      "opportunity_ids": [
+        "development/papaparse/csv"
+      ],
+      "inclusive_fraction": 0.9906868451688009,
+      "shared_cost": "Exact-base canonical complete-process 1ms sample, repeat 2: wide/typed execution inclusive union 1702/1718 main-thread samples; recursive descendants counted once. Broad reach includes required operations and callees, not savings. All three repeats bound. Targets were selected before candidate measurement by T075 above-mean transport/indexed/received-index self fractions, not this supplementary sample. T075 retains exact-PC subpopulation evidence."
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "development/big.js/arith",
+      "development/graphlib/paths",
+      "development/immutable/persistent",
+      "development/js-yaml/document",
+      "development/lodash/transform",
+      "development/matter-js/simulate",
+      "development/papaparse/csv"
+    ],
+    "target_max_candidate_over_base": 0.97,
+    "max_attempts": 2
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  },
+  "layout_gate": {
+    "policy_path": "benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v6.json",
+    "policy_sha256": "be123f7c5cfd46aa863467256eb8bf6947ff64f72541efc371f05a36c5535a31",
+    "mechanism_class": "cpu-work",
+    "memory_wall_targets": [],
+    "panel_required": true,
+    "panel_pairs": 5,
+    "held_out_pairs": 30,
+    "formal_blocks": 30
+  }
+}

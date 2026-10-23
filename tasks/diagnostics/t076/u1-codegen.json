@@ -1,0 +1,20 @@
+{
+  "base": {
+    "address": "0x1000ff750",
+    "end": "0x1001058b0",
+    "symbol_span_bytes": 24928,
+    "listing_rows": 5482,
+    "stack_operand_rows": 1209,
+    "binary_sha256": "cbb471c7047917f02e13d0ecf83516d9d6e57c050f2170ddde3b5e6e17ed735e",
+    "asm_sha256": "58ab4c23bdede0acc825ed7e1ecba8db4b4afc3670d1c11b99adc7eae1d4e686"
+  },
+  "candidate": {
+    "address": "0x1001008b0",
+    "end": "0x100106fe0",
+    "symbol_span_bytes": 26416,
+    "listing_rows": 5817,
+    "stack_operand_rows": 1248,
+    "binary_sha256": "4f9ef5c67099a7be60b98c56e0add582c26f9a8385865d961f5d2d307064dbc6",
+    "asm_sha256": "0bf606b1f9f9de97d9593859e420350de2f79332c963252f64a25e0bf7842394"
+  }
+}

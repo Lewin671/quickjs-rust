@@ -1,0 +1,63 @@
+[
+  {
+    "workload": "development--big.js--arith",
+    "trace_sha256": "26bf9e693da7658ca4a3d34e48e57ec9b3aafce64ae5ed1ff3a5d1540f0ca971",
+    "regions": 29,
+    "computed_reads": 23,
+    "box_derived_reads": [
+      {
+        "region": "TLFINAL region 167..216 registers 10 boxed 15",
+        "operation": 9,
+        "boxed_key": 2,
+        "scalar_source": 0
+      },
+      {
+        "region": "TLFINAL region 167..216 registers 10 boxed 15",
+        "operation": 10,
+        "boxed_key": 2,
+        "scalar_source": 0
+      },
+      {
+        "region": "TLFINAL region 279..397 registers 18 boxed 20",
+        "operation": 7,
+        "boxed_key": 2,
+        "scalar_source": 1
+      },
+      {
+        "region": "TLFINAL region 174..432 registers 30 boxed 24",
+        "operation": 57,
+        "boxed_key": 4,
+        "scalar_source": 1
+      },
+      {
+        "region": "TLFINAL region 283..405 registers 19 boxed 20",
+        "operation": 8,
+        "boxed_key": 2,
+        "scalar_source": 1
+      },
+      {
+        "region": "TLFINAL region 210..286 registers 12 boxed 10",
+        "operation": 7,
+        "boxed_key": 5,
+        "scalar_source": 0
+      }
+    ],
+    "revision": "19125d48c626869d776df9a501c44f3a00566e32",
+    "diagnostic_image_sha256": "ad408f6d7222b35474dd80f63dd8b11fe30b756cd7c1032a5edb58c76384fbc0",
+    "workload_sha256": "6a044d09d50474adc03898681e4308740c5852975c411d36330871e4b8a4d346",
+    "stdout_sha256": "3dd899a0e2dfb1a6c8e2e594a5e3d7ef07abd6929d7afb607de20ab33becfe02",
+    "timing": false
+  },
+  {
+    "workload": "development--matter-js--simulate",
+    "trace_sha256": "58dd56ae6b36a0f9843e4a33fd2f5aff82a70178116fd2f90a817016621af635",
+    "regions": 39,
+    "computed_reads": 0,
+    "box_derived_reads": [],
+    "revision": "19125d48c626869d776df9a501c44f3a00566e32",
+    "diagnostic_image_sha256": "ad408f6d7222b35474dd80f63dd8b11fe30b756cd7c1032a5edb58c76384fbc0",
+    "workload_sha256": "e96eb031af93f5afa39748c115421cad8a1e8c2b9cf7a04b118fe4a013a75fcc",
+    "stdout_sha256": "eaf4316d5d2b01eeae2fe013186c7bc8dd08ada5d3478b428034a6a25fbd246d",
+    "timing": false
+  }
+]
