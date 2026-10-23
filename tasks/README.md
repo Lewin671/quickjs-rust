@@ -5,11 +5,11 @@ reviewable unit: verify it with its focused command before and after, and
 update the resume block in the commit that lands it. When a task closes, move it to `archive/` with `git mv` and move its row below.
 
 ## Active
-
 | Task | Status | What it is |
 | --- | --- | --- |
 | [T075](T075-executor-anatomy.md) executor anatomy | active | Diagnosis complete: exact-PC/source attribution opens the post-T069 loop bucket; four incremental proposals await selection. |
 | [T073](T073-local-read-bimodal.md) local-read bimodality | active | Diagnosis complete: candidate text-layout CPU tails; T017 adopts case-health containment only. |
+| [T074](T074-direct-eval-scope-model.md) direct eval scope model | design needed | Architecture review before code; tracks eval visibility, declarations, mutability, context and suspension constraints. |
 | [T068](T068-post-t066-profile.md) post-T066 profiles | active | All ten development programs profiled on exact f49be95c/NG; owner attribution complete, ranked incremental proposals await selection. |
 | [T057](T057-string-code-units.md) string code units | active | Stage 1 and UTF-16 correctness extraction integrated; stage 2 abandoned (0 attempts); linear-search follow-up awaits screening. |
 | [T065](T065-interpreter-core-v3.md) interpreter core v3 | active | Ablation complete; rewrite not approved (lead, 2026-10-23); incremental units come from a fresh post-T066 profile. |
@@ -38,6 +38,7 @@ Each file is under `archive/` with a resume block; outcomes record what happened
 | Task | Outcome |
 | --- | --- |
 | [T072 live property proof](archive/T072-live-property-proof.md) | Closed without promotion under the lead decision: both unchanged-candidate screens incomplete on collection failures; triage 0.949774 and exact zero gaps remain, full performance standing unavailable. |
+| [T071 lexical context](archive/T071-lexical-context-gaps.md) | Parked by the lead, not integrated: deferred class-key fixes pass correctness but cost ordinary code up to +3% instructions after three repair rounds; [review](archive/T071-lexical-context-review.md); folded into T074 design. Branch `agent/t071-lexical-context-gaps/codex` retained. |
 | [T070 ownership transfer](archive/T070-value-transport.md) | Closed without promotion: attempt 1 declined; broader triage 0.975245 misses <=0.97; one screen unused; implementation retained on owner branch. |
 | `T069-call-activation.md` | Promoted by the lead under overall-first: formal development 0.957, external 0.998, portfolio 0.992, held-out 0.930, zero Test262 gaps; deferred-key receiver regression found in review and repaired. |
 | `T067-x86-resource-manifest.md` | Resource lane derives a qualified manifest for the measuring host (iMac x86_64 fat16-abort); base-vs-base qualification size 1.0, fresh 0.990, RSS 1.0. |
@@ -62,11 +63,7 @@ Each file is under `archive/` with a resume block; outcomes record what happened
 | `T043-derived-constructor-eval-context.md` | Shared derived-this cell and arrow owner verified; two unrelated baseline gaps remain recorded. |
 | `T042-prepared-readonly-eval.md` | Two failed screens exhausted the budget; runtime reverted, general measurement fixes retained. |
 | `T041-own-data-cache-hot-answers.md` | Frozen x86_64 screen rejected the implementation; runtime reverted, owner commit retained for diagnosis. |
-| `T001-lexer-coverage.md` | Bootstrap work item. |
-| `T002-parser-expressions.md` | Bootstrap work item. |
-| `T003-runtime-values.md` | Bootstrap work item. |
-| `T004-quickjs-comparison.md` | Bootstrap work item. |
-| `T005-test262-subset.md` | Bootstrap work item. |
+| `T001-lexer-coverage.md`, `T002-parser-expressions.md`, `T003-runtime-values.md`, `T004-quickjs-comparison.md`, `T005-test262-subset.md` | Bootstrap work items. |
 | `T006-class-campaign.md` | Landed. |
 | `T007-async-foundation-campaign.md` | Landed. |
 | `T008-destructuring-completion-campaign.md` | Landed. |
@@ -93,7 +90,7 @@ Each file is under `archive/` with a resume block; outcomes record what happened
 
 ## Other Records In `archive/`
 
-- T069: [receiver repair](archive/T069-call-context-fix.md), [measurements](archive/T069-final-evidence.md), [first candidate](archive/T069-first-candidate.md). T070: [triage](archive/T070-triage.md), [ownership producers](archive/T070-producer-attribution.md), [first screen](archive/T070-screen-attempt1.md), [broader triage](archive/T070-broader-transport.md). T068: [per-program profiles and receipt manifest](archive/T068-profile-evidence.md). T065: [rounds 1–3 ablation](archive/T065-ablation-r1.md), [gap anatomy and both-engine instruction baseline](archive/T065-gap-anatomy.md), [independent design review](archive/T065-design-review.md); T066: [allocator evidence](archive/T066-allocator-evidence.md), [remote-free test diagnosis](archive/T066-remote-free-test.md).
+- T071: [review verification](archive/T071-review-verification.md), [dd312dac evidence](archive/T071-dd312dac-verification.md), [flat iterations](archive/T071-flat-correctness-iterations.md), [narrowing attempts](archive/T071-narrowing-evidence.md). T069: [receiver repair](archive/T069-call-context-fix.md), [measurements](archive/T069-final-evidence.md), [first candidate](archive/T069-first-candidate.md). T070: [triage](archive/T070-triage.md), [ownership producers](archive/T070-producer-attribution.md), [first screen](archive/T070-screen-attempt1.md), [broader triage](archive/T070-broader-transport.md). T068: [per-program profiles and receipt manifest](archive/T068-profile-evidence.md). T065: [rounds 1–3 ablation](archive/T065-ablation-r1.md), [gap anatomy and both-engine instruction baseline](archive/T065-gap-anatomy.md), [independent design review](archive/T065-design-review.md); T066: [allocator evidence](archive/T066-allocator-evidence.md), [remote-free test diagnosis](archive/T066-remote-free-test.md).
 - T064: [K1/Repair 1 evidence](archive/T064-k1-record.md), [K0 checker](archive/T064-k0-checker.md), [successor inputs](archive/T064-successor-plan-inputs.md), [lead review](proposals/T064-successor-review.md), [old-plan closure](archive/T064-layout-edges-closure.md), [spike](archive/T064-causal-outlining-spike.md), [isolation/cost inputs](archive/T064-kernel-isolation-inputs.md).
 - T058: [fixed-candidate v6 promotion](archive/T058-regexp-lazy-quantifiers.md), [attempt 1 incomplete closure](archive/T058-attempt1-incomplete.md), [attempt 2 inconclusive](archive/T058-attempt2-inconclusive.md), [v6 rejection](archive/T058-v6-rejection.md), [instruction diagnosis](archive/T058-instruction-diagnosis.md).
 - T057: [linear-search repair](archive/T057-search-linear.md), [stage-1 promotion evidence](archive/T057-stage1-evidence.md), [preliminary development baseline](archive/T057-development-baseline.md) [policy v3 qualification](archive/T057-development-policy.md) and [pre-stage-1 log](archive/T057-log.md).
