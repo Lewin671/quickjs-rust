@@ -1,0 +1,93 @@
+[
+  {
+    "role": "canonical",
+    "symbol": "qjs_runtime::bytecode::compact_fn::wide::activation::run",
+    "family": "wide",
+    "canonical_start": "0x1000ff750",
+    "debug_start": "0x1000fded0",
+    "canonical_bytes": 24928,
+    "debug_bytes": 25280,
+    "instructions": 5181,
+    "debug_instructions": 5263,
+    "mapped": false,
+    "verified_prefix_bytes": 13
+  },
+  {
+    "role": "canonical",
+    "symbol": "qjs_runtime::bytecode::compact_fn::activation::run_numeric_plan",
+    "family": "compact",
+    "canonical_start": "0x100105ae0",
+    "debug_start": "0x1001043c0",
+    "canonical_bytes": 400,
+    "debug_bytes": 400,
+    "instructions": 102,
+    "debug_instructions": 102,
+    "mapped": true,
+    "verified_prefix_bytes": 397
+  },
+  {
+    "role": "canonical",
+    "symbol": "qjs_runtime::bytecode::compact_fn::activation::run",
+    "family": "compact",
+    "canonical_start": "0x100105c70",
+    "debug_start": "0x100104550",
+    "canonical_bytes": 10224,
+    "debug_bytes": 10224,
+    "instructions": 2095,
+    "debug_instructions": 2095,
+    "mapped": true,
+    "verified_prefix_bytes": 10223
+  },
+  {
+    "role": "canonical",
+    "symbol": "<qjs_runtime::bytecode::vm::Vm>::run_current_activation",
+    "family": "vm",
+    "canonical_start": "0x100112160",
+    "debug_start": "0x100110bc0",
+    "canonical_bytes": 9712,
+    "debug_bytes": 10096,
+    "instructions": 1871,
+    "debug_instructions": 1942,
+    "mapped": false,
+    "verified_prefix_bytes": 13
+  },
+  {
+    "role": "canonical",
+    "symbol": "qjs_runtime::bytecode::typed_loop::execute::run::<qjs_runtime::bytecode::vm::Vm>",
+    "family": "typed-vm",
+    "canonical_start": "0x100250c90",
+    "debug_start": "0x100254970",
+    "canonical_bytes": 13792,
+    "debug_bytes": 13792,
+    "instructions": 2939,
+    "debug_instructions": 2939,
+    "mapped": true,
+    "verified_prefix_bytes": 13791
+  },
+  {
+    "role": "canonical",
+    "symbol": "qjs_runtime::bytecode::typed_loop::execute::run::<qjs_runtime::bytecode::compact_fn::wide::loop_frame::WideLoopFrame>",
+    "family": "typed-wide",
+    "canonical_start": "0x100260bd0",
+    "debug_start": "0x100264940",
+    "canonical_bytes": 13696,
+    "debug_bytes": 13696,
+    "instructions": 2922,
+    "debug_instructions": 2922,
+    "mapped": true,
+    "verified_prefix_bytes": 13695
+  },
+  {
+    "role": "ng",
+    "symbol": "_JS_CallInternal",
+    "family": "ng",
+    "canonical_start": "0x10003ef80",
+    "debug_start": "0x10003ef80",
+    "canonical_bytes": 76256,
+    "debug_bytes": 76256,
+    "instructions": 18302,
+    "debug_instructions": 18302,
+    "mapped": true,
+    "verified_prefix_bytes": 76108
+  }
+]

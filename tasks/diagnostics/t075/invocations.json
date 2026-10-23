@@ -1,0 +1,2522 @@
+[
+  {
+    "id": "development/lodash/transform",
+    "repeat": 0,
+    "role": "canonical",
+    "pid": 43860,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/canonical-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--lodash--transform.js"
+    ],
+    "sample_command": [
+      "sample",
+      "43860",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--lodash--transform/canonical/0/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--lodash--transform/canonical/0/raw.sample",
+    "raw_sha256": "27f976c6d35f76311608602651a76eccba79f621f333a8333b079029961edb08",
+    "workload_sha256": "991439c433c02d22d7c3bd49246059cf1fbb3b0b5d0500d34ea1b7f68925583b",
+    "stdout_sha256": "cd6540f17bc20757d3c4e753aa6d18c7e47658bbf6ac3b756504e0c6381b6dc8"
+  },
+  {
+    "id": "development/lodash/transform",
+    "repeat": 0,
+    "role": "debug",
+    "pid": 43862,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/debug-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--lodash--transform.js"
+    ],
+    "sample_command": [
+      "sample",
+      "43862",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--lodash--transform/debug/0/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--lodash--transform/debug/0/raw.sample",
+    "raw_sha256": "cec56394dc9d07e9d453ac4eb6ac1f6dafb1929beaf7ef212c199a568c0ef1c3",
+    "workload_sha256": "991439c433c02d22d7c3bd49246059cf1fbb3b0b5d0500d34ea1b7f68925583b",
+    "stdout_sha256": "cd6540f17bc20757d3c4e753aa6d18c7e47658bbf6ac3b756504e0c6381b6dc8"
+  },
+  {
+    "id": "development/lodash/transform",
+    "repeat": 0,
+    "role": "ng",
+    "pid": 43864,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/ng-stripped",
+      "--script",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--lodash--transform.js"
+    ],
+    "sample_command": [
+      "sample",
+      "43864",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--lodash--transform/ng/0/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--lodash--transform/ng/0/raw.sample",
+    "raw_sha256": "a657e8c0de0a09d0cfe320cc0fbaf571a2acbf8410ab46a2882fb700b21e6da4",
+    "workload_sha256": "991439c433c02d22d7c3bd49246059cf1fbb3b0b5d0500d34ea1b7f68925583b",
+    "stdout_sha256": "a6b603147fecd4c2ad45d69e55ececf551beda3a5c3ff55c2bd3b1ffb2ca2288"
+  },
+  {
+    "id": "development/lodash/transform",
+    "repeat": 1,
+    "role": "ng",
+    "pid": 43866,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/ng-stripped",
+      "--script",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--lodash--transform.js"
+    ],
+    "sample_command": [
+      "sample",
+      "43866",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--lodash--transform/ng/1/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--lodash--transform/ng/1/raw.sample",
+    "raw_sha256": "04b71c1c0315ff4ca1eca94dc336f3d4108f9c8388c994108c79ca5a2cd006c4",
+    "workload_sha256": "991439c433c02d22d7c3bd49246059cf1fbb3b0b5d0500d34ea1b7f68925583b",
+    "stdout_sha256": "a6b603147fecd4c2ad45d69e55ececf551beda3a5c3ff55c2bd3b1ffb2ca2288"
+  },
+  {
+    "id": "development/lodash/transform",
+    "repeat": 1,
+    "role": "debug",
+    "pid": 43868,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/debug-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--lodash--transform.js"
+    ],
+    "sample_command": [
+      "sample",
+      "43868",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--lodash--transform/debug/1/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--lodash--transform/debug/1/raw.sample",
+    "raw_sha256": "041c923eb25be8408d10ea0bb437818eca20f3db9a5685a669a1b882de836833",
+    "workload_sha256": "991439c433c02d22d7c3bd49246059cf1fbb3b0b5d0500d34ea1b7f68925583b",
+    "stdout_sha256": "cd6540f17bc20757d3c4e753aa6d18c7e47658bbf6ac3b756504e0c6381b6dc8"
+  },
+  {
+    "id": "development/lodash/transform",
+    "repeat": 1,
+    "role": "canonical",
+    "pid": 43870,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/canonical-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--lodash--transform.js"
+    ],
+    "sample_command": [
+      "sample",
+      "43870",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--lodash--transform/canonical/1/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--lodash--transform/canonical/1/raw.sample",
+    "raw_sha256": "9c4f48e247f74da2ca3a107870cf50494da91910109644769eec074e19829b54",
+    "workload_sha256": "991439c433c02d22d7c3bd49246059cf1fbb3b0b5d0500d34ea1b7f68925583b",
+    "stdout_sha256": "cd6540f17bc20757d3c4e753aa6d18c7e47658bbf6ac3b756504e0c6381b6dc8"
+  },
+  {
+    "id": "development/lodash/transform",
+    "repeat": 2,
+    "role": "canonical",
+    "pid": 43872,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/canonical-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--lodash--transform.js"
+    ],
+    "sample_command": [
+      "sample",
+      "43872",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--lodash--transform/canonical/2/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--lodash--transform/canonical/2/raw.sample",
+    "raw_sha256": "4e425f0a71144b921f89330ccc93d77b0f38407bb41d24dccc7285150513b384",
+    "workload_sha256": "991439c433c02d22d7c3bd49246059cf1fbb3b0b5d0500d34ea1b7f68925583b",
+    "stdout_sha256": "cd6540f17bc20757d3c4e753aa6d18c7e47658bbf6ac3b756504e0c6381b6dc8"
+  },
+  {
+    "id": "development/lodash/transform",
+    "repeat": 2,
+    "role": "debug",
+    "pid": 43874,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/debug-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--lodash--transform.js"
+    ],
+    "sample_command": [
+      "sample",
+      "43874",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--lodash--transform/debug/2/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--lodash--transform/debug/2/raw.sample",
+    "raw_sha256": "424ac54ead6c599f8fc4e93b170eb54f4d8dd6cbc1f3db179d777482cf1126a4",
+    "workload_sha256": "991439c433c02d22d7c3bd49246059cf1fbb3b0b5d0500d34ea1b7f68925583b",
+    "stdout_sha256": "cd6540f17bc20757d3c4e753aa6d18c7e47658bbf6ac3b756504e0c6381b6dc8"
+  },
+  {
+    "id": "development/lodash/transform",
+    "repeat": 2,
+    "role": "ng",
+    "pid": 43876,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/ng-stripped",
+      "--script",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--lodash--transform.js"
+    ],
+    "sample_command": [
+      "sample",
+      "43876",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--lodash--transform/ng/2/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--lodash--transform/ng/2/raw.sample",
+    "raw_sha256": "b42f31c3eca0d2ecff19258f19f080e272e48a40f3354671f81b7e9d3be8bb66",
+    "workload_sha256": "991439c433c02d22d7c3bd49246059cf1fbb3b0b5d0500d34ea1b7f68925583b",
+    "stdout_sha256": "a6b603147fecd4c2ad45d69e55ececf551beda3a5c3ff55c2bd3b1ffb2ca2288"
+  },
+  {
+    "id": "development/meriyah/parse",
+    "repeat": 0,
+    "role": "canonical",
+    "pid": 43878,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/canonical-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--meriyah--parse.js"
+    ],
+    "sample_command": [
+      "sample",
+      "43878",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--meriyah--parse/canonical/0/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--meriyah--parse/canonical/0/raw.sample",
+    "raw_sha256": "ebb55234f5f50d5d6769b334680bbb9118e8a961c8e436bb54e7a75cc999b46a",
+    "workload_sha256": "349b451206a4f46670b0ca0f5fd1cc27e459b411806231b5203390d8909c6bd1",
+    "stdout_sha256": "153243f2c83cb96c1d75e43291f73592aa34d503534091b39ac8167a11bda28f"
+  },
+  {
+    "id": "development/meriyah/parse",
+    "repeat": 0,
+    "role": "debug",
+    "pid": 43880,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/debug-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--meriyah--parse.js"
+    ],
+    "sample_command": [
+      "sample",
+      "43880",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--meriyah--parse/debug/0/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--meriyah--parse/debug/0/raw.sample",
+    "raw_sha256": "67e186237818d909cb0b6e9fe52350bd9eef351535c38409437a3b26a041dd3e",
+    "workload_sha256": "349b451206a4f46670b0ca0f5fd1cc27e459b411806231b5203390d8909c6bd1",
+    "stdout_sha256": "153243f2c83cb96c1d75e43291f73592aa34d503534091b39ac8167a11bda28f"
+  },
+  {
+    "id": "development/meriyah/parse",
+    "repeat": 0,
+    "role": "ng",
+    "pid": 44667,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/ng-stripped",
+      "--script",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--meriyah--parse.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44667",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--meriyah--parse/ng/0/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--meriyah--parse/ng/0/raw.sample",
+    "raw_sha256": "63a121d3b91edfa54a710bf7136a59d05339ca341cbdc031067bcba3c15c28fe",
+    "workload_sha256": "349b451206a4f46670b0ca0f5fd1cc27e459b411806231b5203390d8909c6bd1",
+    "stdout_sha256": "f78e96ac4f590df41d41aa6c2fdf987320f410c60c3570adff8b4c2e7a3d7d43"
+  },
+  {
+    "id": "development/meriyah/parse",
+    "repeat": 1,
+    "role": "ng",
+    "pid": 44669,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/ng-stripped",
+      "--script",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--meriyah--parse.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44669",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--meriyah--parse/ng/1/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--meriyah--parse/ng/1/raw.sample",
+    "raw_sha256": "fc9aed22de9f9d6f3b75a307db0f7fac9ac0a9673491690a16617cef2b7824ae",
+    "workload_sha256": "349b451206a4f46670b0ca0f5fd1cc27e459b411806231b5203390d8909c6bd1",
+    "stdout_sha256": "f78e96ac4f590df41d41aa6c2fdf987320f410c60c3570adff8b4c2e7a3d7d43"
+  },
+  {
+    "id": "development/meriyah/parse",
+    "repeat": 1,
+    "role": "debug",
+    "pid": 44671,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/debug-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--meriyah--parse.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44671",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--meriyah--parse/debug/1/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--meriyah--parse/debug/1/raw.sample",
+    "raw_sha256": "22bd352ea1f8403ec035bed1c2bd93aa672e61f7aebfa2e56e6a1d74978f125c",
+    "workload_sha256": "349b451206a4f46670b0ca0f5fd1cc27e459b411806231b5203390d8909c6bd1",
+    "stdout_sha256": "153243f2c83cb96c1d75e43291f73592aa34d503534091b39ac8167a11bda28f"
+  },
+  {
+    "id": "development/meriyah/parse",
+    "repeat": 1,
+    "role": "canonical",
+    "pid": 44673,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/canonical-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--meriyah--parse.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44673",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--meriyah--parse/canonical/1/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--meriyah--parse/canonical/1/raw.sample",
+    "raw_sha256": "159161f791c3d8d54d360bbf305eab9fb0abd10fc4e2580a7077dfdf411245de",
+    "workload_sha256": "349b451206a4f46670b0ca0f5fd1cc27e459b411806231b5203390d8909c6bd1",
+    "stdout_sha256": "153243f2c83cb96c1d75e43291f73592aa34d503534091b39ac8167a11bda28f"
+  },
+  {
+    "id": "development/meriyah/parse",
+    "repeat": 2,
+    "role": "canonical",
+    "pid": 44683,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/canonical-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--meriyah--parse.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44683",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--meriyah--parse/canonical/2/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--meriyah--parse/canonical/2/raw.sample",
+    "raw_sha256": "dee4780f38ba715d094c027f707fce2c6d9e30618f85efdc3cecc8d54795f3ae",
+    "workload_sha256": "349b451206a4f46670b0ca0f5fd1cc27e459b411806231b5203390d8909c6bd1",
+    "stdout_sha256": "153243f2c83cb96c1d75e43291f73592aa34d503534091b39ac8167a11bda28f"
+  },
+  {
+    "id": "development/meriyah/parse",
+    "repeat": 2,
+    "role": "debug",
+    "pid": 44685,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/debug-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--meriyah--parse.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44685",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--meriyah--parse/debug/2/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--meriyah--parse/debug/2/raw.sample",
+    "raw_sha256": "60fdf92487099370368af10014950b05386960efca76bad58e28a0e5815af171",
+    "workload_sha256": "349b451206a4f46670b0ca0f5fd1cc27e459b411806231b5203390d8909c6bd1",
+    "stdout_sha256": "153243f2c83cb96c1d75e43291f73592aa34d503534091b39ac8167a11bda28f"
+  },
+  {
+    "id": "development/meriyah/parse",
+    "repeat": 2,
+    "role": "ng",
+    "pid": 44687,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/ng-stripped",
+      "--script",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--meriyah--parse.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44687",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--meriyah--parse/ng/2/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--meriyah--parse/ng/2/raw.sample",
+    "raw_sha256": "405f5e8234edef1072d97da96a4d3db5dd9591de9979c4f46962c60613ba2f78",
+    "workload_sha256": "349b451206a4f46670b0ca0f5fd1cc27e459b411806231b5203390d8909c6bd1",
+    "stdout_sha256": "f78e96ac4f590df41d41aa6c2fdf987320f410c60c3570adff8b4c2e7a3d7d43"
+  },
+  {
+    "id": "development/immutable/persistent",
+    "repeat": 0,
+    "role": "canonical",
+    "pid": 44689,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/canonical-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--immutable--persistent.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44689",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--immutable--persistent/canonical/0/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--immutable--persistent/canonical/0/raw.sample",
+    "raw_sha256": "48033738c730f6492e2bae00bf4a2913f07568628175bc30a86468e4f75cc78f",
+    "workload_sha256": "98aff279f5ab31b94f89cce2dcc94616744c7186b70b2e16466e4640c8fc5ec1",
+    "stdout_sha256": "6af33b6d0464d2e3a9f1d0532bd9d4997cec3864a5e62951cbffb2ab40a38d5e"
+  },
+  {
+    "id": "development/immutable/persistent",
+    "repeat": 0,
+    "role": "debug",
+    "pid": 44691,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/debug-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--immutable--persistent.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44691",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--immutable--persistent/debug/0/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--immutable--persistent/debug/0/raw.sample",
+    "raw_sha256": "a47a2fa5c4f2efc430c1e32d7df8d396adb66d32c9f7eea57f84b788866be1c5",
+    "workload_sha256": "98aff279f5ab31b94f89cce2dcc94616744c7186b70b2e16466e4640c8fc5ec1",
+    "stdout_sha256": "6af33b6d0464d2e3a9f1d0532bd9d4997cec3864a5e62951cbffb2ab40a38d5e"
+  },
+  {
+    "id": "development/immutable/persistent",
+    "repeat": 0,
+    "role": "ng",
+    "pid": 44693,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/ng-stripped",
+      "--script",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--immutable--persistent.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44693",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--immutable--persistent/ng/0/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--immutable--persistent/ng/0/raw.sample",
+    "raw_sha256": "5a59b65c77bdec3f699574f1935f6bf5ccbcda527c3f26b6153bec4bd85d9c6f",
+    "workload_sha256": "98aff279f5ab31b94f89cce2dcc94616744c7186b70b2e16466e4640c8fc5ec1",
+    "stdout_sha256": "8e9c7fd553a044a7b2ccd17ba53919f9c3901262f6fd54a08eeef8a2b47d2452"
+  },
+  {
+    "id": "development/immutable/persistent",
+    "repeat": 1,
+    "role": "ng",
+    "pid": 44695,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/ng-stripped",
+      "--script",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--immutable--persistent.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44695",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--immutable--persistent/ng/1/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--immutable--persistent/ng/1/raw.sample",
+    "raw_sha256": "b352f4c02584ba28f422e93bf2343da87b37670c82db0c13ea05838c047413e5",
+    "workload_sha256": "98aff279f5ab31b94f89cce2dcc94616744c7186b70b2e16466e4640c8fc5ec1",
+    "stdout_sha256": "8e9c7fd553a044a7b2ccd17ba53919f9c3901262f6fd54a08eeef8a2b47d2452"
+  },
+  {
+    "id": "development/immutable/persistent",
+    "repeat": 1,
+    "role": "debug",
+    "pid": 44697,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/debug-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--immutable--persistent.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44697",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--immutable--persistent/debug/1/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--immutable--persistent/debug/1/raw.sample",
+    "raw_sha256": "abaa3077acfa9317a240f7533a44649dd65793377f118de780806a7167626149",
+    "workload_sha256": "98aff279f5ab31b94f89cce2dcc94616744c7186b70b2e16466e4640c8fc5ec1",
+    "stdout_sha256": "6af33b6d0464d2e3a9f1d0532bd9d4997cec3864a5e62951cbffb2ab40a38d5e"
+  },
+  {
+    "id": "development/immutable/persistent",
+    "repeat": 1,
+    "role": "canonical",
+    "pid": 44699,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/canonical-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--immutable--persistent.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44699",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--immutable--persistent/canonical/1/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--immutable--persistent/canonical/1/raw.sample",
+    "raw_sha256": "7553d7a67bdc8b1ba51b19508e7373c7bd46b71dfa4d3fab8accdae9f93275b4",
+    "workload_sha256": "98aff279f5ab31b94f89cce2dcc94616744c7186b70b2e16466e4640c8fc5ec1",
+    "stdout_sha256": "6af33b6d0464d2e3a9f1d0532bd9d4997cec3864a5e62951cbffb2ab40a38d5e"
+  },
+  {
+    "id": "development/immutable/persistent",
+    "repeat": 2,
+    "role": "canonical",
+    "pid": 44701,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/canonical-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--immutable--persistent.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44701",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--immutable--persistent/canonical/2/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--immutable--persistent/canonical/2/raw.sample",
+    "raw_sha256": "8307a38e8dd0e114c6b2f5b3deeb44f836acf1cd4ac4e091dc4b0d08bf0704a8",
+    "workload_sha256": "98aff279f5ab31b94f89cce2dcc94616744c7186b70b2e16466e4640c8fc5ec1",
+    "stdout_sha256": "6af33b6d0464d2e3a9f1d0532bd9d4997cec3864a5e62951cbffb2ab40a38d5e"
+  },
+  {
+    "id": "development/immutable/persistent",
+    "repeat": 2,
+    "role": "debug",
+    "pid": 44703,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/debug-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--immutable--persistent.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44703",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--immutable--persistent/debug/2/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--immutable--persistent/debug/2/raw.sample",
+    "raw_sha256": "8c3313698a7c17807896456383466661f3dcea03ea310e3479653edbe2b12490",
+    "workload_sha256": "98aff279f5ab31b94f89cce2dcc94616744c7186b70b2e16466e4640c8fc5ec1",
+    "stdout_sha256": "6af33b6d0464d2e3a9f1d0532bd9d4997cec3864a5e62951cbffb2ab40a38d5e"
+  },
+  {
+    "id": "development/immutable/persistent",
+    "repeat": 2,
+    "role": "ng",
+    "pid": 44705,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/ng-stripped",
+      "--script",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--immutable--persistent.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44705",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--immutable--persistent/ng/2/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--immutable--persistent/ng/2/raw.sample",
+    "raw_sha256": "d8aa6d1154dc67b0d3583af319f5a0fdb983def029bec44ab386dcaaa490d8b5",
+    "workload_sha256": "98aff279f5ab31b94f89cce2dcc94616744c7186b70b2e16466e4640c8fc5ec1",
+    "stdout_sha256": "8e9c7fd553a044a7b2ccd17ba53919f9c3901262f6fd54a08eeef8a2b47d2452"
+  },
+  {
+    "id": "development/moment/dates",
+    "repeat": 0,
+    "role": "canonical",
+    "pid": 44707,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/canonical-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--moment--dates.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44707",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--moment--dates/canonical/0/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--moment--dates/canonical/0/raw.sample",
+    "raw_sha256": "7e8cf4bfd583f0932a9cd9fed947eea94be0e4ad549707a40603a8f6cc2ed50a",
+    "workload_sha256": "54b2f358cc54092074a4460f199771508cdc8369170027a47446d7b6761c1090",
+    "stdout_sha256": "1f5ed2f7fa6d5a866549a188cf46bac0701315cb594c1b4303e2f9b7750222cb"
+  },
+  {
+    "id": "development/moment/dates",
+    "repeat": 0,
+    "role": "debug",
+    "pid": 44709,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/debug-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--moment--dates.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44709",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--moment--dates/debug/0/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--moment--dates/debug/0/raw.sample",
+    "raw_sha256": "db3987d438206c86907d85f7aa81ba482205c3474ac37256606366eed3106adc",
+    "workload_sha256": "54b2f358cc54092074a4460f199771508cdc8369170027a47446d7b6761c1090",
+    "stdout_sha256": "1f5ed2f7fa6d5a866549a188cf46bac0701315cb594c1b4303e2f9b7750222cb"
+  },
+  {
+    "id": "development/moment/dates",
+    "repeat": 0,
+    "role": "ng",
+    "pid": 44711,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/ng-stripped",
+      "--script",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--moment--dates.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44711",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--moment--dates/ng/0/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--moment--dates/ng/0/raw.sample",
+    "raw_sha256": "a5f1d49723f86ebdf7a48ab285d2b7672304779ad8c665651d4e7977b238d87c",
+    "workload_sha256": "54b2f358cc54092074a4460f199771508cdc8369170027a47446d7b6761c1090",
+    "stdout_sha256": "d04d1d8800f428785f09498184eaff8f5d10eb1607e6a19f81349a8624e11de6"
+  },
+  {
+    "id": "development/moment/dates",
+    "repeat": 1,
+    "role": "ng",
+    "pid": 44713,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/ng-stripped",
+      "--script",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--moment--dates.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44713",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--moment--dates/ng/1/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--moment--dates/ng/1/raw.sample",
+    "raw_sha256": "a4044d4b99f4a4516c7d21dfd683238acc011d5866a5176a27d8817a7b4452c7",
+    "workload_sha256": "54b2f358cc54092074a4460f199771508cdc8369170027a47446d7b6761c1090",
+    "stdout_sha256": "d04d1d8800f428785f09498184eaff8f5d10eb1607e6a19f81349a8624e11de6"
+  },
+  {
+    "id": "development/moment/dates",
+    "repeat": 1,
+    "role": "debug",
+    "pid": 44715,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/debug-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--moment--dates.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44715",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--moment--dates/debug/1/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--moment--dates/debug/1/raw.sample",
+    "raw_sha256": "d2a5cf8a2c9c0de6f26e529c539d2ea19bc558050234e2d6e40b9430e3394ae8",
+    "workload_sha256": "54b2f358cc54092074a4460f199771508cdc8369170027a47446d7b6761c1090",
+    "stdout_sha256": "1f5ed2f7fa6d5a866549a188cf46bac0701315cb594c1b4303e2f9b7750222cb"
+  },
+  {
+    "id": "development/moment/dates",
+    "repeat": 1,
+    "role": "canonical",
+    "pid": 44717,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/canonical-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--moment--dates.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44717",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--moment--dates/canonical/1/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--moment--dates/canonical/1/raw.sample",
+    "raw_sha256": "e6d4f7750e2553d16ef89b17d6ab04d9f1d0982fb0f49ebaf5632b41bc4f339d",
+    "workload_sha256": "54b2f358cc54092074a4460f199771508cdc8369170027a47446d7b6761c1090",
+    "stdout_sha256": "1f5ed2f7fa6d5a866549a188cf46bac0701315cb594c1b4303e2f9b7750222cb"
+  },
+  {
+    "id": "development/moment/dates",
+    "repeat": 2,
+    "role": "canonical",
+    "pid": 44724,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/canonical-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--moment--dates.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44724",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--moment--dates/canonical/2/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--moment--dates/canonical/2/raw.sample",
+    "raw_sha256": "e571d6803cf35ac4caf0691fadc9cfae69ae153f1193aeb656efb3882fcb09f8",
+    "workload_sha256": "54b2f358cc54092074a4460f199771508cdc8369170027a47446d7b6761c1090",
+    "stdout_sha256": "1f5ed2f7fa6d5a866549a188cf46bac0701315cb594c1b4303e2f9b7750222cb"
+  },
+  {
+    "id": "development/moment/dates",
+    "repeat": 2,
+    "role": "debug",
+    "pid": 44726,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/debug-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--moment--dates.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44726",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--moment--dates/debug/2/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--moment--dates/debug/2/raw.sample",
+    "raw_sha256": "10c9db3e3517b8e4f8c4c015e63a04040f7709b5414c45293525bcc82c050f68",
+    "workload_sha256": "54b2f358cc54092074a4460f199771508cdc8369170027a47446d7b6761c1090",
+    "stdout_sha256": "1f5ed2f7fa6d5a866549a188cf46bac0701315cb594c1b4303e2f9b7750222cb"
+  },
+  {
+    "id": "development/moment/dates",
+    "repeat": 2,
+    "role": "ng",
+    "pid": 44728,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/ng-stripped",
+      "--script",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--moment--dates.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44728",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--moment--dates/ng/2/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--moment--dates/ng/2/raw.sample",
+    "raw_sha256": "3f3c0bde1120fb67b9fbd6d263710ad17b595f88a6de9bc97051f86d308dc464",
+    "workload_sha256": "54b2f358cc54092074a4460f199771508cdc8369170027a47446d7b6761c1090",
+    "stdout_sha256": "d04d1d8800f428785f09498184eaff8f5d10eb1607e6a19f81349a8624e11de6"
+  },
+  {
+    "id": "development/diff/compare",
+    "repeat": 0,
+    "role": "canonical",
+    "pid": 44730,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/canonical-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--diff--compare.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44730",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--diff--compare/canonical/0/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--diff--compare/canonical/0/raw.sample",
+    "raw_sha256": "41c51571ada7346a3974b2e832587aabcaf50bde2b0f3d600a353979fae34513",
+    "workload_sha256": "fbb64c6f59b7718700595025d56b2aa6f5413bba10d41f9fca158ac31d6d00eb",
+    "stdout_sha256": "261c1d7ede1a570a8b2ea494b8947976f0297ffa8967af0917121a69b7de7b30"
+  },
+  {
+    "id": "development/diff/compare",
+    "repeat": 0,
+    "role": "debug",
+    "pid": 44732,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/debug-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--diff--compare.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44732",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--diff--compare/debug/0/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--diff--compare/debug/0/raw.sample",
+    "raw_sha256": "041699ffcc7277b9207ee5b94abbde32ad58cc4a8c215d5b08be309163426dfd",
+    "workload_sha256": "fbb64c6f59b7718700595025d56b2aa6f5413bba10d41f9fca158ac31d6d00eb",
+    "stdout_sha256": "261c1d7ede1a570a8b2ea494b8947976f0297ffa8967af0917121a69b7de7b30"
+  },
+  {
+    "id": "development/diff/compare",
+    "repeat": 0,
+    "role": "ng",
+    "pid": 44734,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/ng-stripped",
+      "--script",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--diff--compare.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44734",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--diff--compare/ng/0/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--diff--compare/ng/0/raw.sample",
+    "raw_sha256": "3cedeed399cc3ea7f1222142c8d68534bd5269356b900ad788b0358a432a1102",
+    "workload_sha256": "fbb64c6f59b7718700595025d56b2aa6f5413bba10d41f9fca158ac31d6d00eb",
+    "stdout_sha256": "b5acfb6d30de3af7c6e504e120ced6b83d052228d7011bec4e8b06c11161272a"
+  },
+  {
+    "id": "development/diff/compare",
+    "repeat": 1,
+    "role": "ng",
+    "pid": 44736,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/ng-stripped",
+      "--script",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--diff--compare.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44736",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--diff--compare/ng/1/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--diff--compare/ng/1/raw.sample",
+    "raw_sha256": "4ece9637da899c4a0d01e85a1c786fe53f1b4206cc5ce28e5c564f3123469b43",
+    "workload_sha256": "fbb64c6f59b7718700595025d56b2aa6f5413bba10d41f9fca158ac31d6d00eb",
+    "stdout_sha256": "b5acfb6d30de3af7c6e504e120ced6b83d052228d7011bec4e8b06c11161272a"
+  },
+  {
+    "id": "development/diff/compare",
+    "repeat": 1,
+    "role": "debug",
+    "pid": 44738,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/debug-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--diff--compare.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44738",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--diff--compare/debug/1/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--diff--compare/debug/1/raw.sample",
+    "raw_sha256": "e086146e08ab042c29e04f76fad02a5cbec49228aaf4c6ccec86ade62d722e7e",
+    "workload_sha256": "fbb64c6f59b7718700595025d56b2aa6f5413bba10d41f9fca158ac31d6d00eb",
+    "stdout_sha256": "261c1d7ede1a570a8b2ea494b8947976f0297ffa8967af0917121a69b7de7b30"
+  },
+  {
+    "id": "development/diff/compare",
+    "repeat": 1,
+    "role": "canonical",
+    "pid": 44740,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/canonical-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--diff--compare.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44740",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--diff--compare/canonical/1/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--diff--compare/canonical/1/raw.sample",
+    "raw_sha256": "00565ddfa4a5d86678eaa77b6b51c92329e36e5b180b40b1762e13dcff7bbe9d",
+    "workload_sha256": "fbb64c6f59b7718700595025d56b2aa6f5413bba10d41f9fca158ac31d6d00eb",
+    "stdout_sha256": "261c1d7ede1a570a8b2ea494b8947976f0297ffa8967af0917121a69b7de7b30"
+  },
+  {
+    "id": "development/diff/compare",
+    "repeat": 2,
+    "role": "canonical",
+    "pid": 44742,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/canonical-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--diff--compare.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44742",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--diff--compare/canonical/2/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--diff--compare/canonical/2/raw.sample",
+    "raw_sha256": "38ee8377c22e8107859777d1541323c862e01f046e76d09fefffafa0b798e0c6",
+    "workload_sha256": "fbb64c6f59b7718700595025d56b2aa6f5413bba10d41f9fca158ac31d6d00eb",
+    "stdout_sha256": "261c1d7ede1a570a8b2ea494b8947976f0297ffa8967af0917121a69b7de7b30"
+  },
+  {
+    "id": "development/diff/compare",
+    "repeat": 2,
+    "role": "debug",
+    "pid": 44744,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/debug-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--diff--compare.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44744",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--diff--compare/debug/2/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--diff--compare/debug/2/raw.sample",
+    "raw_sha256": "8d8ca6782f268acfd3b10d590235948efaaf6e06bc59b14f75c2702a2a739675",
+    "workload_sha256": "fbb64c6f59b7718700595025d56b2aa6f5413bba10d41f9fca158ac31d6d00eb",
+    "stdout_sha256": "261c1d7ede1a570a8b2ea494b8947976f0297ffa8967af0917121a69b7de7b30"
+  },
+  {
+    "id": "development/diff/compare",
+    "repeat": 2,
+    "role": "ng",
+    "pid": 44747,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/ng-stripped",
+      "--script",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--diff--compare.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44747",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--diff--compare/ng/2/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--diff--compare/ng/2/raw.sample",
+    "raw_sha256": "184b220c92f5ec535d85ca985f3e07d2304cd75b861d9a8f19cd06d0fae35939",
+    "workload_sha256": "fbb64c6f59b7718700595025d56b2aa6f5413bba10d41f9fca158ac31d6d00eb",
+    "stdout_sha256": "b5acfb6d30de3af7c6e504e120ced6b83d052228d7011bec4e8b06c11161272a"
+  },
+  {
+    "id": "development/papaparse/csv",
+    "repeat": 0,
+    "role": "canonical",
+    "pid": 44758,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/canonical-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--papaparse--csv.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44758",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--papaparse--csv/canonical/0/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--papaparse--csv/canonical/0/raw.sample",
+    "raw_sha256": "5fbb0f48d86e367d462bb4295359996f5b97fe5991bab8114af2b08bc155ed71",
+    "workload_sha256": "f417c24c26a51bb1b8c2e288887530e3013a68e4cc7cd9c46cb04beb7a8dd1e7",
+    "stdout_sha256": "f2e2c9e62549ca9cd8fd870f7cbf23218457cd8035bf021f4b112e1229841eb0"
+  },
+  {
+    "id": "development/papaparse/csv",
+    "repeat": 0,
+    "role": "debug",
+    "pid": 44760,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/debug-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--papaparse--csv.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44760",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--papaparse--csv/debug/0/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--papaparse--csv/debug/0/raw.sample",
+    "raw_sha256": "ccb94518dd4b3a0738263eff94f55f2594910c0be363a2d0e35b3a9591bb24bf",
+    "workload_sha256": "f417c24c26a51bb1b8c2e288887530e3013a68e4cc7cd9c46cb04beb7a8dd1e7",
+    "stdout_sha256": "f2e2c9e62549ca9cd8fd870f7cbf23218457cd8035bf021f4b112e1229841eb0"
+  },
+  {
+    "id": "development/papaparse/csv",
+    "repeat": 0,
+    "role": "ng",
+    "pid": 44762,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/ng-stripped",
+      "--script",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--papaparse--csv.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44762",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--papaparse--csv/ng/0/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--papaparse--csv/ng/0/raw.sample",
+    "raw_sha256": "b78afa7173eb7595f7d74273c310c30ccc1007b1298966cdd35f369c617a67a4",
+    "workload_sha256": "f417c24c26a51bb1b8c2e288887530e3013a68e4cc7cd9c46cb04beb7a8dd1e7",
+    "stdout_sha256": "3cb052e44f0946e65d7a7c6565a9fefaf61af227f33b44cb8977e275b2067152"
+  },
+  {
+    "id": "development/papaparse/csv",
+    "repeat": 1,
+    "role": "ng",
+    "pid": 44764,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/ng-stripped",
+      "--script",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--papaparse--csv.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44764",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--papaparse--csv/ng/1/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--papaparse--csv/ng/1/raw.sample",
+    "raw_sha256": "4308daf17d5fac932501466225c3b093c2817d25facc44a15f7a496a94776ec1",
+    "workload_sha256": "f417c24c26a51bb1b8c2e288887530e3013a68e4cc7cd9c46cb04beb7a8dd1e7",
+    "stdout_sha256": "3cb052e44f0946e65d7a7c6565a9fefaf61af227f33b44cb8977e275b2067152"
+  },
+  {
+    "id": "development/papaparse/csv",
+    "repeat": 1,
+    "role": "debug",
+    "pid": 44766,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/debug-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--papaparse--csv.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44766",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--papaparse--csv/debug/1/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--papaparse--csv/debug/1/raw.sample",
+    "raw_sha256": "2a8d40dd8448c04bcb9ecd808f2af1b54f8a79851ef35728767894f986653752",
+    "workload_sha256": "f417c24c26a51bb1b8c2e288887530e3013a68e4cc7cd9c46cb04beb7a8dd1e7",
+    "stdout_sha256": "f2e2c9e62549ca9cd8fd870f7cbf23218457cd8035bf021f4b112e1229841eb0"
+  },
+  {
+    "id": "development/papaparse/csv",
+    "repeat": 1,
+    "role": "canonical",
+    "pid": 44768,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/canonical-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--papaparse--csv.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44768",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--papaparse--csv/canonical/1/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--papaparse--csv/canonical/1/raw.sample",
+    "raw_sha256": "34f386fe700783dbac10387a413f54185f1a49b1a770f7957117e9177408fc2f",
+    "workload_sha256": "f417c24c26a51bb1b8c2e288887530e3013a68e4cc7cd9c46cb04beb7a8dd1e7",
+    "stdout_sha256": "f2e2c9e62549ca9cd8fd870f7cbf23218457cd8035bf021f4b112e1229841eb0"
+  },
+  {
+    "id": "development/papaparse/csv",
+    "repeat": 2,
+    "role": "canonical",
+    "pid": 44770,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/canonical-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--papaparse--csv.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44770",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--papaparse--csv/canonical/2/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--papaparse--csv/canonical/2/raw.sample",
+    "raw_sha256": "2e6631b5bd115a0488045ddf17c0fa9ed934a2dcd58d4dbac3feb0a3d512eee9",
+    "workload_sha256": "f417c24c26a51bb1b8c2e288887530e3013a68e4cc7cd9c46cb04beb7a8dd1e7",
+    "stdout_sha256": "f2e2c9e62549ca9cd8fd870f7cbf23218457cd8035bf021f4b112e1229841eb0"
+  },
+  {
+    "id": "development/papaparse/csv",
+    "repeat": 2,
+    "role": "debug",
+    "pid": 44772,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/debug-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--papaparse--csv.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44772",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--papaparse--csv/debug/2/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--papaparse--csv/debug/2/raw.sample",
+    "raw_sha256": "fbaefa506da6dc79fe51ef088840d5498d8fe0c5127f246cbee57be46de6a6d6",
+    "workload_sha256": "f417c24c26a51bb1b8c2e288887530e3013a68e4cc7cd9c46cb04beb7a8dd1e7",
+    "stdout_sha256": "f2e2c9e62549ca9cd8fd870f7cbf23218457cd8035bf021f4b112e1229841eb0"
+  },
+  {
+    "id": "development/papaparse/csv",
+    "repeat": 2,
+    "role": "ng",
+    "pid": 44774,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/ng-stripped",
+      "--script",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--papaparse--csv.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44774",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--papaparse--csv/ng/2/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--papaparse--csv/ng/2/raw.sample",
+    "raw_sha256": "8e9783eec55d28833aed564d9feaccb616503c9ff752bb4bb23d9db9d8565562",
+    "workload_sha256": "f417c24c26a51bb1b8c2e288887530e3013a68e4cc7cd9c46cb04beb7a8dd1e7",
+    "stdout_sha256": "3cb052e44f0946e65d7a7c6565a9fefaf61af227f33b44cb8977e275b2067152"
+  },
+  {
+    "id": "development/js-yaml/document",
+    "repeat": 0,
+    "role": "canonical",
+    "pid": 44776,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/canonical-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--js-yaml--document.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44776",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--js-yaml--document/canonical/0/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--js-yaml--document/canonical/0/raw.sample",
+    "raw_sha256": "3c90c758613a82c2d4298e0ed8c2232ec9c391aff574709618c23b21591bbf0a",
+    "workload_sha256": "fc1411db299a717af599ac2e308e68018df72c79cca569c9f3e354e40debe9fa",
+    "stdout_sha256": "291f299ce4a10efb6d21c0ff43fa0f08c2e6897514924beab123de93dd0dc4e4"
+  },
+  {
+    "id": "development/js-yaml/document",
+    "repeat": 0,
+    "role": "debug",
+    "pid": 44783,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/debug-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--js-yaml--document.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44783",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--js-yaml--document/debug/0/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--js-yaml--document/debug/0/raw.sample",
+    "raw_sha256": "9b607c0faaf7665ae30c0e4a0161b6bc4753c158a9229b4f1bf91a49607610c1",
+    "workload_sha256": "fc1411db299a717af599ac2e308e68018df72c79cca569c9f3e354e40debe9fa",
+    "stdout_sha256": "291f299ce4a10efb6d21c0ff43fa0f08c2e6897514924beab123de93dd0dc4e4"
+  },
+  {
+    "id": "development/js-yaml/document",
+    "repeat": 0,
+    "role": "ng",
+    "pid": 44785,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/ng-stripped",
+      "--script",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--js-yaml--document.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44785",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--js-yaml--document/ng/0/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--js-yaml--document/ng/0/raw.sample",
+    "raw_sha256": "2dde3f19c939ed919eb8dce4655e7020464da8fe2f6a23e83605e119d843a945",
+    "workload_sha256": "fc1411db299a717af599ac2e308e68018df72c79cca569c9f3e354e40debe9fa",
+    "stdout_sha256": "632fc8be7d69b8e34f7aa3ae012afb0726eb57523351b2c3760ba0877406f1b4"
+  },
+  {
+    "id": "development/js-yaml/document",
+    "repeat": 1,
+    "role": "ng",
+    "pid": 44787,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/ng-stripped",
+      "--script",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--js-yaml--document.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44787",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--js-yaml--document/ng/1/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--js-yaml--document/ng/1/raw.sample",
+    "raw_sha256": "76878d943d15dd8cc59ee89e9e55d2d92d7acc36d9465bd2b8e01cf477370bd6",
+    "workload_sha256": "fc1411db299a717af599ac2e308e68018df72c79cca569c9f3e354e40debe9fa",
+    "stdout_sha256": "632fc8be7d69b8e34f7aa3ae012afb0726eb57523351b2c3760ba0877406f1b4"
+  },
+  {
+    "id": "development/js-yaml/document",
+    "repeat": 1,
+    "role": "debug",
+    "pid": 44789,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/debug-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--js-yaml--document.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44789",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--js-yaml--document/debug/1/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--js-yaml--document/debug/1/raw.sample",
+    "raw_sha256": "ebaee36668945a99d7a97e97e93b2780db2f197ff36faad43fe7462bd19a2104",
+    "workload_sha256": "fc1411db299a717af599ac2e308e68018df72c79cca569c9f3e354e40debe9fa",
+    "stdout_sha256": "291f299ce4a10efb6d21c0ff43fa0f08c2e6897514924beab123de93dd0dc4e4"
+  },
+  {
+    "id": "development/js-yaml/document",
+    "repeat": 1,
+    "role": "canonical",
+    "pid": 44791,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/canonical-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--js-yaml--document.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44791",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--js-yaml--document/canonical/1/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--js-yaml--document/canonical/1/raw.sample",
+    "raw_sha256": "b35149d254afe6105c05c43e43194d4dd1a8a40e6f909e7ad5709de6e79d435f",
+    "workload_sha256": "fc1411db299a717af599ac2e308e68018df72c79cca569c9f3e354e40debe9fa",
+    "stdout_sha256": "291f299ce4a10efb6d21c0ff43fa0f08c2e6897514924beab123de93dd0dc4e4"
+  },
+  {
+    "id": "development/js-yaml/document",
+    "repeat": 2,
+    "role": "canonical",
+    "pid": 44793,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/canonical-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--js-yaml--document.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44793",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--js-yaml--document/canonical/2/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--js-yaml--document/canonical/2/raw.sample",
+    "raw_sha256": "9be1626d477880097a2510f985a6d13004bbd64885b5cd65dd02edf4ba3d6367",
+    "workload_sha256": "fc1411db299a717af599ac2e308e68018df72c79cca569c9f3e354e40debe9fa",
+    "stdout_sha256": "291f299ce4a10efb6d21c0ff43fa0f08c2e6897514924beab123de93dd0dc4e4"
+  },
+  {
+    "id": "development/js-yaml/document",
+    "repeat": 2,
+    "role": "debug",
+    "pid": 44795,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/debug-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--js-yaml--document.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44795",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--js-yaml--document/debug/2/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--js-yaml--document/debug/2/raw.sample",
+    "raw_sha256": "6ab82afefcb1b2acc9ca54497d1097c6f2fdbdd6100ae7952fcabbfe4b20f03a",
+    "workload_sha256": "fc1411db299a717af599ac2e308e68018df72c79cca569c9f3e354e40debe9fa",
+    "stdout_sha256": "291f299ce4a10efb6d21c0ff43fa0f08c2e6897514924beab123de93dd0dc4e4"
+  },
+  {
+    "id": "development/js-yaml/document",
+    "repeat": 2,
+    "role": "ng",
+    "pid": 44797,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/ng-stripped",
+      "--script",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--js-yaml--document.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44797",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--js-yaml--document/ng/2/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--js-yaml--document/ng/2/raw.sample",
+    "raw_sha256": "e082eefd35be38957ec8a8c83d820bbf88818007191fcc1ec0f150e127aa4a98",
+    "workload_sha256": "fc1411db299a717af599ac2e308e68018df72c79cca569c9f3e354e40debe9fa",
+    "stdout_sha256": "632fc8be7d69b8e34f7aa3ae012afb0726eb57523351b2c3760ba0877406f1b4"
+  },
+  {
+    "id": "development/big.js/arith",
+    "repeat": 0,
+    "role": "canonical",
+    "pid": 44799,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/canonical-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--big.js--arith.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44799",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--big.js--arith/canonical/0/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--big.js--arith/canonical/0/raw.sample",
+    "raw_sha256": "811178fdf8525392851aae266056d7508d3a00bc8d887234e5a67f0d8a31f733",
+    "workload_sha256": "6a044d09d50474adc03898681e4308740c5852975c411d36330871e4b8a4d346",
+    "stdout_sha256": "3dd899a0e2dfb1a6c8e2e594a5e3d7ef07abd6929d7afb607de20ab33becfe02"
+  },
+  {
+    "id": "development/big.js/arith",
+    "repeat": 0,
+    "role": "debug",
+    "pid": 44801,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/debug-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--big.js--arith.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44801",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--big.js--arith/debug/0/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--big.js--arith/debug/0/raw.sample",
+    "raw_sha256": "c9366b6d82aa9fb8f340a512a182e3f907e3d755c204ae478674d5da38bd64ff",
+    "workload_sha256": "6a044d09d50474adc03898681e4308740c5852975c411d36330871e4b8a4d346",
+    "stdout_sha256": "3dd899a0e2dfb1a6c8e2e594a5e3d7ef07abd6929d7afb607de20ab33becfe02"
+  },
+  {
+    "id": "development/big.js/arith",
+    "repeat": 0,
+    "role": "ng",
+    "pid": 44803,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/ng-stripped",
+      "--script",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--big.js--arith.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44803",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--big.js--arith/ng/0/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--big.js--arith/ng/0/raw.sample",
+    "raw_sha256": "558f9b0560b33604208a05b3a99577ab02c8c13b360d4d16e74a90727e57b15e",
+    "workload_sha256": "6a044d09d50474adc03898681e4308740c5852975c411d36330871e4b8a4d346",
+    "stdout_sha256": "7a19122d86ecf960fe4c0d748c0ee12efb7fab9a34366b0e2f2332a8a11ca808"
+  },
+  {
+    "id": "development/big.js/arith",
+    "repeat": 1,
+    "role": "ng",
+    "pid": 44805,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/ng-stripped",
+      "--script",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--big.js--arith.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44805",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--big.js--arith/ng/1/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--big.js--arith/ng/1/raw.sample",
+    "raw_sha256": "8fcb78446f44fbb1a43d69ceccac197c5fb69bd87c7397ce12ded4ae52c41e7e",
+    "workload_sha256": "6a044d09d50474adc03898681e4308740c5852975c411d36330871e4b8a4d346",
+    "stdout_sha256": "7a19122d86ecf960fe4c0d748c0ee12efb7fab9a34366b0e2f2332a8a11ca808"
+  },
+  {
+    "id": "development/big.js/arith",
+    "repeat": 1,
+    "role": "debug",
+    "pid": 44807,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/debug-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--big.js--arith.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44807",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--big.js--arith/debug/1/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--big.js--arith/debug/1/raw.sample",
+    "raw_sha256": "afcfe7c578656a04f3fd57109ba0d72f10a2cbf3a3fde25c11dd438b75a1df13",
+    "workload_sha256": "6a044d09d50474adc03898681e4308740c5852975c411d36330871e4b8a4d346",
+    "stdout_sha256": "3dd899a0e2dfb1a6c8e2e594a5e3d7ef07abd6929d7afb607de20ab33becfe02"
+  },
+  {
+    "id": "development/big.js/arith",
+    "repeat": 1,
+    "role": "canonical",
+    "pid": 44809,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/canonical-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--big.js--arith.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44809",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--big.js--arith/canonical/1/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--big.js--arith/canonical/1/raw.sample",
+    "raw_sha256": "7c856acb97cb71ae4851a428c269620ec4df2de035b5a121dec91fe136b84814",
+    "workload_sha256": "6a044d09d50474adc03898681e4308740c5852975c411d36330871e4b8a4d346",
+    "stdout_sha256": "3dd899a0e2dfb1a6c8e2e594a5e3d7ef07abd6929d7afb607de20ab33becfe02"
+  },
+  {
+    "id": "development/big.js/arith",
+    "repeat": 2,
+    "role": "canonical",
+    "pid": 44811,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/canonical-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--big.js--arith.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44811",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--big.js--arith/canonical/2/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--big.js--arith/canonical/2/raw.sample",
+    "raw_sha256": "cc514098eb115d418b36fe3efeee14164970c6991affb81dfa775633893de60d",
+    "workload_sha256": "6a044d09d50474adc03898681e4308740c5852975c411d36330871e4b8a4d346",
+    "stdout_sha256": "3dd899a0e2dfb1a6c8e2e594a5e3d7ef07abd6929d7afb607de20ab33becfe02"
+  },
+  {
+    "id": "development/big.js/arith",
+    "repeat": 2,
+    "role": "debug",
+    "pid": 44813,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/debug-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--big.js--arith.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44813",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--big.js--arith/debug/2/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--big.js--arith/debug/2/raw.sample",
+    "raw_sha256": "64fc48da2963d5a8e2731a930d2d293e86b918c23d09d41f129950c5ae876124",
+    "workload_sha256": "6a044d09d50474adc03898681e4308740c5852975c411d36330871e4b8a4d346",
+    "stdout_sha256": "3dd899a0e2dfb1a6c8e2e594a5e3d7ef07abd6929d7afb607de20ab33becfe02"
+  },
+  {
+    "id": "development/big.js/arith",
+    "repeat": 2,
+    "role": "ng",
+    "pid": 44815,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/ng-stripped",
+      "--script",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--big.js--arith.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44815",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--big.js--arith/ng/2/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--big.js--arith/ng/2/raw.sample",
+    "raw_sha256": "317a49c20ffa3b5664549e86853dc906cc95213759437ff88a248edc5fae6d4f",
+    "workload_sha256": "6a044d09d50474adc03898681e4308740c5852975c411d36330871e4b8a4d346",
+    "stdout_sha256": "7a19122d86ecf960fe4c0d748c0ee12efb7fab9a34366b0e2f2332a8a11ca808"
+  },
+  {
+    "id": "development/matter-js/simulate",
+    "repeat": 0,
+    "role": "canonical",
+    "pid": 44817,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/canonical-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--matter-js--simulate.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44817",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--matter-js--simulate/canonical/0/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--matter-js--simulate/canonical/0/raw.sample",
+    "raw_sha256": "33b877a1b9cb8ed41e17442c231aa176dd4b58c27121201a94863453a52c1b26",
+    "workload_sha256": "e96eb031af93f5afa39748c115421cad8a1e8c2b9cf7a04b118fe4a013a75fcc",
+    "stdout_sha256": "eaf4316d5d2b01eeae2fe013186c7bc8dd08ada5d3478b428034a6a25fbd246d"
+  },
+  {
+    "id": "development/matter-js/simulate",
+    "repeat": 0,
+    "role": "debug",
+    "pid": 44819,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/debug-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--matter-js--simulate.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44819",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--matter-js--simulate/debug/0/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--matter-js--simulate/debug/0/raw.sample",
+    "raw_sha256": "507a57c60d91219dbbc8af2fe8f64eef79e43a4f51e6c8fa32835d223ec10a3f",
+    "workload_sha256": "e96eb031af93f5afa39748c115421cad8a1e8c2b9cf7a04b118fe4a013a75fcc",
+    "stdout_sha256": "eaf4316d5d2b01eeae2fe013186c7bc8dd08ada5d3478b428034a6a25fbd246d"
+  },
+  {
+    "id": "development/matter-js/simulate",
+    "repeat": 0,
+    "role": "ng",
+    "pid": 44823,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/ng-stripped",
+      "--script",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--matter-js--simulate.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44823",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--matter-js--simulate/ng/0/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--matter-js--simulate/ng/0/raw.sample",
+    "raw_sha256": "16ed04710b930947a51c8b8cb3fbaaecf1f843af3b2cf17e370235cd499c68d6",
+    "workload_sha256": "e96eb031af93f5afa39748c115421cad8a1e8c2b9cf7a04b118fe4a013a75fcc",
+    "stdout_sha256": "6dbdc69f22515207c6c9c82da3b0bced3b072d72d9459799d9283d916bf26cb5"
+  },
+  {
+    "id": "development/matter-js/simulate",
+    "repeat": 1,
+    "role": "ng",
+    "pid": 44825,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/ng-stripped",
+      "--script",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--matter-js--simulate.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44825",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--matter-js--simulate/ng/1/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--matter-js--simulate/ng/1/raw.sample",
+    "raw_sha256": "99c49426c145b8e2c58651d98fe533bf3b691b2cfbb3b1375971631328e0b5fe",
+    "workload_sha256": "e96eb031af93f5afa39748c115421cad8a1e8c2b9cf7a04b118fe4a013a75fcc",
+    "stdout_sha256": "6dbdc69f22515207c6c9c82da3b0bced3b072d72d9459799d9283d916bf26cb5"
+  },
+  {
+    "id": "development/matter-js/simulate",
+    "repeat": 1,
+    "role": "debug",
+    "pid": 44827,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/debug-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--matter-js--simulate.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44827",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--matter-js--simulate/debug/1/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--matter-js--simulate/debug/1/raw.sample",
+    "raw_sha256": "a032c248a9bf3f19471a1d028f8f02d95686b9ffc1a8c347c9e4be0798f68a11",
+    "workload_sha256": "e96eb031af93f5afa39748c115421cad8a1e8c2b9cf7a04b118fe4a013a75fcc",
+    "stdout_sha256": "eaf4316d5d2b01eeae2fe013186c7bc8dd08ada5d3478b428034a6a25fbd246d"
+  },
+  {
+    "id": "development/matter-js/simulate",
+    "repeat": 1,
+    "role": "canonical",
+    "pid": 44829,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/canonical-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--matter-js--simulate.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44829",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--matter-js--simulate/canonical/1/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--matter-js--simulate/canonical/1/raw.sample",
+    "raw_sha256": "b93600024cf6dde9cda88ca71914c95a88592f1df820ee784a1ab1f99797bd21",
+    "workload_sha256": "e96eb031af93f5afa39748c115421cad8a1e8c2b9cf7a04b118fe4a013a75fcc",
+    "stdout_sha256": "eaf4316d5d2b01eeae2fe013186c7bc8dd08ada5d3478b428034a6a25fbd246d"
+  },
+  {
+    "id": "development/matter-js/simulate",
+    "repeat": 2,
+    "role": "canonical",
+    "pid": 44831,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/canonical-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--matter-js--simulate.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44831",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--matter-js--simulate/canonical/2/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--matter-js--simulate/canonical/2/raw.sample",
+    "raw_sha256": "1fb6426f2f5d8e5983680c1c877d8f20f02eb2e6d45a6b6359a8c606dea4616c",
+    "workload_sha256": "e96eb031af93f5afa39748c115421cad8a1e8c2b9cf7a04b118fe4a013a75fcc",
+    "stdout_sha256": "eaf4316d5d2b01eeae2fe013186c7bc8dd08ada5d3478b428034a6a25fbd246d"
+  },
+  {
+    "id": "development/matter-js/simulate",
+    "repeat": 2,
+    "role": "debug",
+    "pid": 44833,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/debug-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--matter-js--simulate.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44833",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--matter-js--simulate/debug/2/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--matter-js--simulate/debug/2/raw.sample",
+    "raw_sha256": "5b674cc5e88932d379d2cc6a14035f4cfccadca25f5d02d5c8e3594446579834",
+    "workload_sha256": "e96eb031af93f5afa39748c115421cad8a1e8c2b9cf7a04b118fe4a013a75fcc",
+    "stdout_sha256": "eaf4316d5d2b01eeae2fe013186c7bc8dd08ada5d3478b428034a6a25fbd246d"
+  },
+  {
+    "id": "development/matter-js/simulate",
+    "repeat": 2,
+    "role": "ng",
+    "pid": 44835,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/ng-stripped",
+      "--script",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--matter-js--simulate.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44835",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--matter-js--simulate/ng/2/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--matter-js--simulate/ng/2/raw.sample",
+    "raw_sha256": "a144861c254e8b69d4962d66bf694f35d8337b033d5cb5b8493c6b7d070637be",
+    "workload_sha256": "e96eb031af93f5afa39748c115421cad8a1e8c2b9cf7a04b118fe4a013a75fcc",
+    "stdout_sha256": "6dbdc69f22515207c6c9c82da3b0bced3b072d72d9459799d9283d916bf26cb5"
+  },
+  {
+    "id": "development/graphlib/paths",
+    "repeat": 0,
+    "role": "canonical",
+    "pid": 44837,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/canonical-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--graphlib--paths.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44837",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--graphlib--paths/canonical/0/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--graphlib--paths/canonical/0/raw.sample",
+    "raw_sha256": "797ed209924033e1c8f3dffd6528b6edae3b488a93b65ea85b754bb5aed9b213",
+    "workload_sha256": "87d777c0409dea06f66052bfa763379f6370cdad05a97301f79dd7e8fbddadaf",
+    "stdout_sha256": "d90061ed42f47c0dd351aa500500922913162fcc7ce0c611950847c2257ea014"
+  },
+  {
+    "id": "development/graphlib/paths",
+    "repeat": 0,
+    "role": "debug",
+    "pid": 44839,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/debug-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--graphlib--paths.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44839",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--graphlib--paths/debug/0/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--graphlib--paths/debug/0/raw.sample",
+    "raw_sha256": "f8ad775fa6bcaa8a71a13348987bae056d2ebde48c9abbc4ffc58aa24d918fc5",
+    "workload_sha256": "87d777c0409dea06f66052bfa763379f6370cdad05a97301f79dd7e8fbddadaf",
+    "stdout_sha256": "d90061ed42f47c0dd351aa500500922913162fcc7ce0c611950847c2257ea014"
+  },
+  {
+    "id": "development/graphlib/paths",
+    "repeat": 0,
+    "role": "ng",
+    "pid": 44841,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/ng-stripped",
+      "--script",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--graphlib--paths.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44841",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--graphlib--paths/ng/0/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--graphlib--paths/ng/0/raw.sample",
+    "raw_sha256": "5c8d52126b7de04372bff32ed7d272b4533d6d7eb2d2d5aa0d12993a6eea5510",
+    "workload_sha256": "87d777c0409dea06f66052bfa763379f6370cdad05a97301f79dd7e8fbddadaf",
+    "stdout_sha256": "00e8baae4e6100cdaae85b9a83c7d0fa93ac2f7ee8fd7c16c85b31f224abf1cb"
+  },
+  {
+    "id": "development/graphlib/paths",
+    "repeat": 1,
+    "role": "ng",
+    "pid": 44843,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/ng-stripped",
+      "--script",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--graphlib--paths.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44843",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--graphlib--paths/ng/1/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--graphlib--paths/ng/1/raw.sample",
+    "raw_sha256": "537ae6200db01b2a0f377284c8461b137aedc5120d069a0bcec83dc2dbc82c6c",
+    "workload_sha256": "87d777c0409dea06f66052bfa763379f6370cdad05a97301f79dd7e8fbddadaf",
+    "stdout_sha256": "00e8baae4e6100cdaae85b9a83c7d0fa93ac2f7ee8fd7c16c85b31f224abf1cb"
+  },
+  {
+    "id": "development/graphlib/paths",
+    "repeat": 1,
+    "role": "debug",
+    "pid": 44845,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/debug-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--graphlib--paths.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44845",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--graphlib--paths/debug/1/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--graphlib--paths/debug/1/raw.sample",
+    "raw_sha256": "d270554a6b7263280931613772d51bfebb9cbfb0399eca5e219d04dcbbabe1b5",
+    "workload_sha256": "87d777c0409dea06f66052bfa763379f6370cdad05a97301f79dd7e8fbddadaf",
+    "stdout_sha256": "d90061ed42f47c0dd351aa500500922913162fcc7ce0c611950847c2257ea014"
+  },
+  {
+    "id": "development/graphlib/paths",
+    "repeat": 1,
+    "role": "canonical",
+    "pid": 44847,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/canonical-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--graphlib--paths.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44847",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--graphlib--paths/canonical/1/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--graphlib--paths/canonical/1/raw.sample",
+    "raw_sha256": "8204e3c3fbd588d57bf35c53b8c60121c241d2f0e6e637117b36e3c9d78ecb16",
+    "workload_sha256": "87d777c0409dea06f66052bfa763379f6370cdad05a97301f79dd7e8fbddadaf",
+    "stdout_sha256": "d90061ed42f47c0dd351aa500500922913162fcc7ce0c611950847c2257ea014"
+  },
+  {
+    "id": "development/graphlib/paths",
+    "repeat": 2,
+    "role": "canonical",
+    "pid": 44854,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/canonical-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--graphlib--paths.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44854",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--graphlib--paths/canonical/2/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--graphlib--paths/canonical/2/raw.sample",
+    "raw_sha256": "2915e2d8f230adaf9ccb584f304c098f593c819c2aaa0c5cc5d16f8d02fcb712",
+    "workload_sha256": "87d777c0409dea06f66052bfa763379f6370cdad05a97301f79dd7e8fbddadaf",
+    "stdout_sha256": "d90061ed42f47c0dd351aa500500922913162fcc7ce0c611950847c2257ea014"
+  },
+  {
+    "id": "development/graphlib/paths",
+    "repeat": 2,
+    "role": "debug",
+    "pid": 44856,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/debug-stripped",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--graphlib--paths.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44856",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--graphlib--paths/debug/2/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--graphlib--paths/debug/2/raw.sample",
+    "raw_sha256": "8854d842cf57a681c08c31b556048a170f3b6ff14a4f3cdcb3f863cc224fb1b3",
+    "workload_sha256": "87d777c0409dea06f66052bfa763379f6370cdad05a97301f79dd7e8fbddadaf",
+    "stdout_sha256": "d90061ed42f47c0dd351aa500500922913162fcc7ce0c611950847c2257ea014"
+  },
+  {
+    "id": "development/graphlib/paths",
+    "repeat": 2,
+    "role": "ng",
+    "pid": 44858,
+    "argv": [
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/ng-stripped",
+      "--script",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/workloads/development--graphlib--paths.js"
+    ],
+    "sample_command": [
+      "sample",
+      "44858",
+      "60",
+      "1",
+      "-mayDie",
+      "-nodsyms",
+      "-file",
+      "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183840Z-t075-unmerged-addresses/out/profiles/development--graphlib--paths/ng/2/raw.sample"
+    ],
+    "process_exit": 0,
+    "sampler_exit": 0,
+    "ended_at_sampler_return": true,
+    "raw_path": "profiles/development--graphlib--paths/ng/2/raw.sample",
+    "raw_sha256": "fde26c60d19b93f7a9aee0f42c3c0e752ade0a24af9ca7f7225c248596f29f3b",
+    "workload_sha256": "87d777c0409dea06f66052bfa763379f6370cdad05a97301f79dd7e8fbddadaf",
+    "stdout_sha256": "00e8baae4e6100cdaae85b9a83c7d0fa93ac2f7ee8fd7c16c85b31f224abf1cb"
+  }
+]

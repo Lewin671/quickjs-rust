@@ -1,0 +1,722 @@
+[
+  {
+    "id": "development/lodash/transform",
+    "role": "canonical",
+    "repeat": 0,
+    "total": 1185,
+    "ambiguous_self": 0,
+    "executor_self": 644
+  },
+  {
+    "id": "development/lodash/transform",
+    "role": "debug",
+    "repeat": 0,
+    "total": 1130,
+    "ambiguous_self": 0,
+    "executor_self": 658
+  },
+  {
+    "id": "development/lodash/transform",
+    "role": "ng",
+    "repeat": 0,
+    "total": 547,
+    "ambiguous_self": 0,
+    "executor_self": 359
+  },
+  {
+    "id": "development/lodash/transform",
+    "role": "ng",
+    "repeat": 1,
+    "total": 551,
+    "ambiguous_self": 0,
+    "executor_self": 370
+  },
+  {
+    "id": "development/lodash/transform",
+    "role": "debug",
+    "repeat": 1,
+    "total": 1162,
+    "ambiguous_self": 0,
+    "executor_self": 661
+  },
+  {
+    "id": "development/lodash/transform",
+    "role": "canonical",
+    "repeat": 1,
+    "total": 1183,
+    "ambiguous_self": 0,
+    "executor_self": 647
+  },
+  {
+    "id": "development/lodash/transform",
+    "role": "canonical",
+    "repeat": 2,
+    "total": 1187,
+    "ambiguous_self": 0,
+    "executor_self": 650
+  },
+  {
+    "id": "development/lodash/transform",
+    "role": "debug",
+    "repeat": 2,
+    "total": 1177,
+    "ambiguous_self": 0,
+    "executor_self": 634
+  },
+  {
+    "id": "development/lodash/transform",
+    "role": "ng",
+    "repeat": 2,
+    "total": 556,
+    "ambiguous_self": 0,
+    "executor_self": 362
+  },
+  {
+    "id": "development/meriyah/parse",
+    "role": "canonical",
+    "repeat": 0,
+    "total": 2200,
+    "ambiguous_self": 0,
+    "executor_self": 782
+  },
+  {
+    "id": "development/meriyah/parse",
+    "role": "debug",
+    "repeat": 0,
+    "total": 2123,
+    "ambiguous_self": 0,
+    "executor_self": 781
+  },
+  {
+    "id": "development/meriyah/parse",
+    "role": "ng",
+    "repeat": 0,
+    "total": 689,
+    "ambiguous_self": 0,
+    "executor_self": 300
+  },
+  {
+    "id": "development/meriyah/parse",
+    "role": "ng",
+    "repeat": 1,
+    "total": 692,
+    "ambiguous_self": 0,
+    "executor_self": 310
+  },
+  {
+    "id": "development/meriyah/parse",
+    "role": "debug",
+    "repeat": 1,
+    "total": 2222,
+    "ambiguous_self": 0,
+    "executor_self": 765
+  },
+  {
+    "id": "development/meriyah/parse",
+    "role": "canonical",
+    "repeat": 1,
+    "total": 2174,
+    "ambiguous_self": 0,
+    "executor_self": 805
+  },
+  {
+    "id": "development/meriyah/parse",
+    "role": "canonical",
+    "repeat": 2,
+    "total": 2159,
+    "ambiguous_self": 0,
+    "executor_self": 753
+  },
+  {
+    "id": "development/meriyah/parse",
+    "role": "debug",
+    "repeat": 2,
+    "total": 2183,
+    "ambiguous_self": 0,
+    "executor_self": 778
+  },
+  {
+    "id": "development/meriyah/parse",
+    "role": "ng",
+    "repeat": 2,
+    "total": 708,
+    "ambiguous_self": 0,
+    "executor_self": 308
+  },
+  {
+    "id": "development/immutable/persistent",
+    "role": "canonical",
+    "repeat": 0,
+    "total": 2839,
+    "ambiguous_self": 0,
+    "executor_self": 1151
+  },
+  {
+    "id": "development/immutable/persistent",
+    "role": "debug",
+    "repeat": 0,
+    "total": 2823,
+    "ambiguous_self": 0,
+    "executor_self": 1095
+  },
+  {
+    "id": "development/immutable/persistent",
+    "role": "ng",
+    "repeat": 0,
+    "total": 845,
+    "ambiguous_self": 0,
+    "executor_self": 406
+  },
+  {
+    "id": "development/immutable/persistent",
+    "role": "ng",
+    "repeat": 1,
+    "total": 845,
+    "ambiguous_self": 0,
+    "executor_self": 407
+  },
+  {
+    "id": "development/immutable/persistent",
+    "role": "debug",
+    "repeat": 1,
+    "total": 2805,
+    "ambiguous_self": 0,
+    "executor_self": 1088
+  },
+  {
+    "id": "development/immutable/persistent",
+    "role": "canonical",
+    "repeat": 1,
+    "total": 2812,
+    "ambiguous_self": 0,
+    "executor_self": 1056
+  },
+  {
+    "id": "development/immutable/persistent",
+    "role": "canonical",
+    "repeat": 2,
+    "total": 2801,
+    "ambiguous_self": 0,
+    "executor_self": 1137
+  },
+  {
+    "id": "development/immutable/persistent",
+    "role": "debug",
+    "repeat": 2,
+    "total": 2808,
+    "ambiguous_self": 0,
+    "executor_self": 1128
+  },
+  {
+    "id": "development/immutable/persistent",
+    "role": "ng",
+    "repeat": 2,
+    "total": 846,
+    "ambiguous_self": 0,
+    "executor_self": 384
+  },
+  {
+    "id": "development/moment/dates",
+    "role": "canonical",
+    "repeat": 0,
+    "total": 8609,
+    "ambiguous_self": 0,
+    "executor_self": 2318
+  },
+  {
+    "id": "development/moment/dates",
+    "role": "debug",
+    "repeat": 0,
+    "total": 8810,
+    "ambiguous_self": 0,
+    "executor_self": 2249
+  },
+  {
+    "id": "development/moment/dates",
+    "role": "ng",
+    "repeat": 0,
+    "total": 2598,
+    "ambiguous_self": 0,
+    "executor_self": 1056
+  },
+  {
+    "id": "development/moment/dates",
+    "role": "ng",
+    "repeat": 1,
+    "total": 2585,
+    "ambiguous_self": 0,
+    "executor_self": 1059
+  },
+  {
+    "id": "development/moment/dates",
+    "role": "debug",
+    "repeat": 1,
+    "total": 8705,
+    "ambiguous_self": 0,
+    "executor_self": 2227
+  },
+  {
+    "id": "development/moment/dates",
+    "role": "canonical",
+    "repeat": 1,
+    "total": 8676,
+    "ambiguous_self": 0,
+    "executor_self": 2234
+  },
+  {
+    "id": "development/moment/dates",
+    "role": "canonical",
+    "repeat": 2,
+    "total": 8650,
+    "ambiguous_self": 0,
+    "executor_self": 2317
+  },
+  {
+    "id": "development/moment/dates",
+    "role": "debug",
+    "repeat": 2,
+    "total": 8858,
+    "ambiguous_self": 0,
+    "executor_self": 2272
+  },
+  {
+    "id": "development/moment/dates",
+    "role": "ng",
+    "repeat": 2,
+    "total": 2639,
+    "ambiguous_self": 0,
+    "executor_self": 1017
+  },
+  {
+    "id": "development/diff/compare",
+    "role": "canonical",
+    "repeat": 0,
+    "total": 4842,
+    "ambiguous_self": 0,
+    "executor_self": 1343
+  },
+  {
+    "id": "development/diff/compare",
+    "role": "debug",
+    "repeat": 0,
+    "total": 4607,
+    "ambiguous_self": 0,
+    "executor_self": 1344
+  },
+  {
+    "id": "development/diff/compare",
+    "role": "ng",
+    "repeat": 0,
+    "total": 1604,
+    "ambiguous_self": 0,
+    "executor_self": 492
+  },
+  {
+    "id": "development/diff/compare",
+    "role": "ng",
+    "repeat": 1,
+    "total": 1614,
+    "ambiguous_self": 0,
+    "executor_self": 497
+  },
+  {
+    "id": "development/diff/compare",
+    "role": "debug",
+    "repeat": 1,
+    "total": 4668,
+    "ambiguous_self": 0,
+    "executor_self": 1310
+  },
+  {
+    "id": "development/diff/compare",
+    "role": "canonical",
+    "repeat": 1,
+    "total": 4825,
+    "ambiguous_self": 0,
+    "executor_self": 1346
+  },
+  {
+    "id": "development/diff/compare",
+    "role": "canonical",
+    "repeat": 2,
+    "total": 4756,
+    "ambiguous_self": 0,
+    "executor_self": 1271
+  },
+  {
+    "id": "development/diff/compare",
+    "role": "debug",
+    "repeat": 2,
+    "total": 4612,
+    "ambiguous_self": 0,
+    "executor_self": 1302
+  },
+  {
+    "id": "development/diff/compare",
+    "role": "ng",
+    "repeat": 2,
+    "total": 1608,
+    "ambiguous_self": 0,
+    "executor_self": 528
+  },
+  {
+    "id": "development/papaparse/csv",
+    "role": "canonical",
+    "repeat": 0,
+    "total": 1718,
+    "ambiguous_self": 0,
+    "executor_self": 354
+  },
+  {
+    "id": "development/papaparse/csv",
+    "role": "debug",
+    "repeat": 0,
+    "total": 1711,
+    "ambiguous_self": 0,
+    "executor_self": 320
+  },
+  {
+    "id": "development/papaparse/csv",
+    "role": "ng",
+    "repeat": 0,
+    "total": 895,
+    "ambiguous_self": 0,
+    "executor_self": 198
+  },
+  {
+    "id": "development/papaparse/csv",
+    "role": "ng",
+    "repeat": 1,
+    "total": 891,
+    "ambiguous_self": 0,
+    "executor_self": 161
+  },
+  {
+    "id": "development/papaparse/csv",
+    "role": "debug",
+    "repeat": 1,
+    "total": 1736,
+    "ambiguous_self": 0,
+    "executor_self": 316
+  },
+  {
+    "id": "development/papaparse/csv",
+    "role": "canonical",
+    "repeat": 1,
+    "total": 1702,
+    "ambiguous_self": 0,
+    "executor_self": 305
+  },
+  {
+    "id": "development/papaparse/csv",
+    "role": "canonical",
+    "repeat": 2,
+    "total": 1723,
+    "ambiguous_self": 0,
+    "executor_self": 352
+  },
+  {
+    "id": "development/papaparse/csv",
+    "role": "debug",
+    "repeat": 2,
+    "total": 1722,
+    "ambiguous_self": 0,
+    "executor_self": 386
+  },
+  {
+    "id": "development/papaparse/csv",
+    "role": "ng",
+    "repeat": 2,
+    "total": 886,
+    "ambiguous_self": 0,
+    "executor_self": 183
+  },
+  {
+    "id": "development/js-yaml/document",
+    "role": "canonical",
+    "repeat": 0,
+    "total": 3526,
+    "ambiguous_self": 0,
+    "executor_self": 1229
+  },
+  {
+    "id": "development/js-yaml/document",
+    "role": "debug",
+    "repeat": 0,
+    "total": 3551,
+    "ambiguous_self": 0,
+    "executor_self": 1257
+  },
+  {
+    "id": "development/js-yaml/document",
+    "role": "ng",
+    "repeat": 0,
+    "total": 901,
+    "ambiguous_self": 0,
+    "executor_self": 502
+  },
+  {
+    "id": "development/js-yaml/document",
+    "role": "ng",
+    "repeat": 1,
+    "total": 901,
+    "ambiguous_self": 0,
+    "executor_self": 500
+  },
+  {
+    "id": "development/js-yaml/document",
+    "role": "debug",
+    "repeat": 1,
+    "total": 3558,
+    "ambiguous_self": 0,
+    "executor_self": 1201
+  },
+  {
+    "id": "development/js-yaml/document",
+    "role": "canonical",
+    "repeat": 1,
+    "total": 3524,
+    "ambiguous_self": 0,
+    "executor_self": 1200
+  },
+  {
+    "id": "development/js-yaml/document",
+    "role": "canonical",
+    "repeat": 2,
+    "total": 3512,
+    "ambiguous_self": 0,
+    "executor_self": 1227
+  },
+  {
+    "id": "development/js-yaml/document",
+    "role": "debug",
+    "repeat": 2,
+    "total": 3571,
+    "ambiguous_self": 0,
+    "executor_self": 1182
+  },
+  {
+    "id": "development/js-yaml/document",
+    "role": "ng",
+    "repeat": 2,
+    "total": 899,
+    "ambiguous_self": 0,
+    "executor_self": 523
+  },
+  {
+    "id": "development/big.js/arith",
+    "role": "canonical",
+    "repeat": 0,
+    "total": 1818,
+    "ambiguous_self": 0,
+    "executor_self": 1195
+  },
+  {
+    "id": "development/big.js/arith",
+    "role": "debug",
+    "repeat": 0,
+    "total": 1801,
+    "ambiguous_self": 0,
+    "executor_self": 1159
+  },
+  {
+    "id": "development/big.js/arith",
+    "role": "ng",
+    "repeat": 0,
+    "total": 737,
+    "ambiguous_self": 0,
+    "executor_self": 447
+  },
+  {
+    "id": "development/big.js/arith",
+    "role": "ng",
+    "repeat": 1,
+    "total": 739,
+    "ambiguous_self": 0,
+    "executor_self": 459
+  },
+  {
+    "id": "development/big.js/arith",
+    "role": "debug",
+    "repeat": 1,
+    "total": 1791,
+    "ambiguous_self": 0,
+    "executor_self": 1157
+  },
+  {
+    "id": "development/big.js/arith",
+    "role": "canonical",
+    "repeat": 1,
+    "total": 1853,
+    "ambiguous_self": 0,
+    "executor_self": 1215
+  },
+  {
+    "id": "development/big.js/arith",
+    "role": "canonical",
+    "repeat": 2,
+    "total": 1826,
+    "ambiguous_self": 0,
+    "executor_self": 1233
+  },
+  {
+    "id": "development/big.js/arith",
+    "role": "debug",
+    "repeat": 2,
+    "total": 1798,
+    "ambiguous_self": 0,
+    "executor_self": 1166
+  },
+  {
+    "id": "development/big.js/arith",
+    "role": "ng",
+    "repeat": 2,
+    "total": 738,
+    "ambiguous_self": 0,
+    "executor_self": 433
+  },
+  {
+    "id": "development/matter-js/simulate",
+    "role": "canonical",
+    "repeat": 0,
+    "total": 2589,
+    "ambiguous_self": 0,
+    "executor_self": 1442
+  },
+  {
+    "id": "development/matter-js/simulate",
+    "role": "debug",
+    "repeat": 0,
+    "total": 2586,
+    "ambiguous_self": 0,
+    "executor_self": 1465
+  },
+  {
+    "id": "development/matter-js/simulate",
+    "role": "ng",
+    "repeat": 0,
+    "total": 1166,
+    "ambiguous_self": 0,
+    "executor_self": 921
+  },
+  {
+    "id": "development/matter-js/simulate",
+    "role": "ng",
+    "repeat": 1,
+    "total": 1162,
+    "ambiguous_self": 0,
+    "executor_self": 938
+  },
+  {
+    "id": "development/matter-js/simulate",
+    "role": "debug",
+    "repeat": 1,
+    "total": 2567,
+    "ambiguous_self": 0,
+    "executor_self": 1487
+  },
+  {
+    "id": "development/matter-js/simulate",
+    "role": "canonical",
+    "repeat": 1,
+    "total": 2594,
+    "ambiguous_self": 0,
+    "executor_self": 1450
+  },
+  {
+    "id": "development/matter-js/simulate",
+    "role": "canonical",
+    "repeat": 2,
+    "total": 2575,
+    "ambiguous_self": 0,
+    "executor_self": 1436
+  },
+  {
+    "id": "development/matter-js/simulate",
+    "role": "debug",
+    "repeat": 2,
+    "total": 2574,
+    "ambiguous_self": 0,
+    "executor_self": 1457
+  },
+  {
+    "id": "development/matter-js/simulate",
+    "role": "ng",
+    "repeat": 2,
+    "total": 1162,
+    "ambiguous_self": 0,
+    "executor_self": 914
+  },
+  {
+    "id": "development/graphlib/paths",
+    "role": "canonical",
+    "repeat": 0,
+    "total": 1030,
+    "ambiguous_self": 0,
+    "executor_self": 328
+  },
+  {
+    "id": "development/graphlib/paths",
+    "role": "debug",
+    "repeat": 0,
+    "total": 1043,
+    "ambiguous_self": 0,
+    "executor_self": 365
+  },
+  {
+    "id": "development/graphlib/paths",
+    "role": "ng",
+    "repeat": 0,
+    "total": 393,
+    "ambiguous_self": 0,
+    "executor_self": 147
+  },
+  {
+    "id": "development/graphlib/paths",
+    "role": "ng",
+    "repeat": 1,
+    "total": 393,
+    "ambiguous_self": 0,
+    "executor_self": 159
+  },
+  {
+    "id": "development/graphlib/paths",
+    "role": "debug",
+    "repeat": 1,
+    "total": 1042,
+    "ambiguous_self": 0,
+    "executor_self": 343
+  },
+  {
+    "id": "development/graphlib/paths",
+    "role": "canonical",
+    "repeat": 1,
+    "total": 1037,
+    "ambiguous_self": 0,
+    "executor_self": 342
+  },
+  {
+    "id": "development/graphlib/paths",
+    "role": "canonical",
+    "repeat": 2,
+    "total": 1030,
+    "ambiguous_self": 0,
+    "executor_self": 348
+  },
+  {
+    "id": "development/graphlib/paths",
+    "role": "debug",
+    "repeat": 2,
+    "total": 1048,
+    "ambiguous_self": 0,
+    "executor_self": 387
+  },
+  {
+    "id": "development/graphlib/paths",
+    "role": "ng",
+    "repeat": 2,
+    "total": 392,
+    "ambiguous_self": 0,
+    "executor_self": 149
+  }
+]

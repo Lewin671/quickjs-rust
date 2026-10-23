@@ -1,0 +1,244 @@
+{
+  "revision": "59eb72e511cca013cf59d6736922c9c666cb883f",
+  "images": {
+    "canonical": {
+      "path": "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/target/perf-loop/compiler-fat16-abort-v1/rev-59eb72e511cca013cf59d6736922c9c666cb883f/qjs",
+      "sha256": "cbb471c7047917f02e13d0ecf83516d9d6e57c050f2170ddde3b5e6e17ed735e",
+      "sections": {
+        "__text": {
+          "address": 4294979584,
+          "bytes": 4941792,
+          "sha256": "00e20aad602bf2299f9e30474f20feb903ac7f51d41dd5c60a83fc0c3cf58f5a"
+        },
+        "__stubs": {
+          "address": 4299921376,
+          "bytes": 654,
+          "sha256": "8e01c5dc546256b0c4c427b789ff3a2843c76d3238f518f07cf98e12e6b2ad25"
+        },
+        "__stub_helper": {
+          "address": 4299922032,
+          "bytes": 1106,
+          "sha256": "7bc86a7e89be94b582dda72b038fffb55a75ba9820cd2c03b039a75a069c2171"
+        },
+        "__const": {
+          "address": 4299923152,
+          "bytes": 430328,
+          "sha256": "092664632bf1e1669805740d10f8d7ee22970fd2ba0ee7181531fb7ec6b76fc8"
+        },
+        "__gcc_except_tab": {
+          "address": 4300353480,
+          "bytes": 4640,
+          "sha256": "de564cb91a558b59b0a6453bc12a95db082e7247c8ca7ba25a5857bef199b088"
+        },
+        "__cstring": {
+          "address": 4300358120,
+          "bytes": 26468,
+          "sha256": "137c71b23896c3ee09dc926915501687f3a372a799372b06f31cafbec0c49cab"
+        },
+        "__unwind_info": {
+          "address": 4300384588,
+          "bytes": 13148,
+          "sha256": "50be7243e3da4aa01542f41b3a1331e5c9596c9b480e7721652334366d222b7d"
+        },
+        "__eh_frame": {
+          "address": 4300397736,
+          "bytes": 6584,
+          "sha256": "266c75e6ffba5cde11471b15d7367e9f4725687e5bfa824010d5d441b4d151ec"
+        }
+      },
+      "sampled_sha256": "9ccdac00e1ecb548290241d5efc024f8c32c25246ffd596c81e12afd9a53c2b8"
+    },
+    "debug": {
+      "path": "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T183753Z-t075-metadata-preserving-debug/out/debug-qjs",
+      "sha256": "3c4c022a5b75c480a293f30c3037dffdbf7bc0c36c792af4d2a9b8cae80c0044",
+      "sections": {
+        "__text": {
+          "address": 4294975488,
+          "bytes": 4930768,
+          "sha256": "fec2be1d66c036ceecc210010f9dd940af6b94f728fb8f63f721630064317bf6"
+        },
+        "__stubs": {
+          "address": 4299906256,
+          "bytes": 654,
+          "sha256": "489d6d1791a4bdcd9b956f56517dd187397655c6a83cac25574979f898bca621"
+        },
+        "__stub_helper": {
+          "address": 4299906912,
+          "bytes": 1106,
+          "sha256": "69f6c1b8ab72c546ff3ba0006fdea215001b461c49628dd332addda857f92b99"
+        },
+        "__const": {
+          "address": 4299908032,
+          "bytes": 428936,
+          "sha256": "ae760e5a7b406ca4603cf827d1c3129682260ab87875926173144d5a4320e091"
+        },
+        "__gcc_except_tab": {
+          "address": 4300336968,
+          "bytes": 4640,
+          "sha256": "478c37c151a00c483ee3dd1355c65ec71f481fee509f8bd0fdb7d7975a5b5f35"
+        },
+        "__cstring": {
+          "address": 4300341608,
+          "bytes": 26468,
+          "sha256": "2173d7aae0d767c4a5041314bd239ce3a6350d497c93da8edcb15da703bb6678"
+        },
+        "__unwind_info": {
+          "address": 4300368076,
+          "bytes": 13032,
+          "sha256": "f3607579b8a05a3fd11c6f3307893de718d30ac16a1dda761e136f6af94dae04"
+        },
+        "__eh_frame": {
+          "address": 4300381112,
+          "bytes": 6584,
+          "sha256": "e6c1113c703aad84b2b91eec7cde8486696f9d0e9092d3556eb05f1882e89a8f"
+        }
+      },
+      "sampled_sha256": "67463a969c41b167a462d0567f77a0c679adfb1cb8996b319cc58f03ce987cda"
+    },
+    "ng": {
+      "path": "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/third_party/quickjs-ng/build/qjs",
+      "sha256": "919f7235f61412ba69faf6aa05b534869aa7d69d1583b3d7aab3cd5b67cd6f40",
+      "sections": {
+        "__text": {
+          "address": 4294979760,
+          "bytes": 1205609,
+          "sha256": "1954d58d6c056bc1b53435c0d11629bf525cedc690a21b19112ac65f37c72c66"
+        },
+        "__stubs": {
+          "address": 4296185370,
+          "bytes": 912,
+          "sha256": "287d5b8a7e80a6e468233cf6df0125c23121bedb02a9243c02f990efb9ea0d5a"
+        },
+        "__stub_helper": {
+          "address": 4296186284,
+          "bytes": 1536,
+          "sha256": "f75399f969c5b0c3469c54116ebe2fd8dbf98a86d7d64bb69481fff66a7d57af"
+        },
+        "__const": {
+          "address": 4296187824,
+          "bytes": 79360,
+          "sha256": "3f1a412cb50fc9192376ab7dbe431b6b0fdc3fb564806f790287fcaf97fb6137"
+        },
+        "__cstring": {
+          "address": 4296267184,
+          "bytes": 24613,
+          "sha256": "5ca430f0480d0b8030e4b92e9fee540b4a7dcdf080aaa408580380c8805fd175"
+        },
+        "__unwind_info": {
+          "address": 4296291800,
+          "bytes": 2588,
+          "sha256": "4796c7b1df40e8bbdfd2fccbcaa48a44d9a1b3051c4bf5cc9e762d641100a06e"
+        }
+      },
+      "sampled_sha256": "f4dc54555b894fe16060c5ca96f9ed24e2c0beaf2810d7bf51426db462fb74fa"
+    }
+  },
+  "clock": "Sat Oct 24 02:43:30 CST 2026",
+  "reference_revision": "f7830186043e4488f2998759d60a514faf07cbc9",
+  "recipe": {
+    "opt_level": 3,
+    "lto": "fat",
+    "codegen_units": 16,
+    "panic": "abort",
+    "incremental": false,
+    "features": [
+      "agents"
+    ],
+    "rustflags": [
+      "-Csymbol-mangling-version=v0",
+      "-Cllvm-args=-align-all-functions=4"
+    ]
+  },
+  "line_tables_image": {
+    "host": "aarch64-apple-darwin cross-compiling x86_64-apple-darwin",
+    "binary_sha256": "db489e14637fb5eacb24281c2fa1280ce4bdfbfb5b70488669b39eb9dde94b60",
+    "sections": {
+      "__text": {
+        "address": 4294971392,
+        "bytes": 4941792,
+        "sha256": "e234789bc0c77472805f8c8f86ba1dcb280688ef9edb013382e2d8759d21922b"
+      },
+      "__stubs": {
+        "address": 4299913184,
+        "bytes": 654,
+        "sha256": "453ba6bfdb7bf27d7c9d0a6d4de908b75a60a9c5165a295a03c9dfa00af0eecf"
+      },
+      "__stub_helper": {
+        "address": 4299913840,
+        "bytes": 1322,
+        "sha256": "966ff8b07d818a788c4673c6d1b04f87234f7a3dcd42e27ae4bb4c0207ae2c26"
+      },
+      "__const": {
+        "address": 4299915168,
+        "bytes": 430328,
+        "sha256": "3f300275161a96686aba1d5370e3940648ee9814f1046ee31b9adea87f45f3ca"
+      },
+      "__gcc_except_tab": {
+        "address": 4300345496,
+        "bytes": 4640,
+        "sha256": "de564cb91a558b59b0a6453bc12a95db082e7247c8ca7ba25a5857bef199b088"
+      },
+      "__cstring": {
+        "address": 4300350136,
+        "bytes": 28753,
+        "sha256": "f26e5b759cee2d64790c3d70159391533b3b0a4d2b8b55641868fd65d2bfbb66"
+      },
+      "__unwind_info": {
+        "address": 4300378892,
+        "bytes": 10712,
+        "sha256": "d7431e5c3c9182bf27682715db677d743c74c8f553c598ee2f544e93490279a3"
+      },
+      "__eh_frame": {
+        "address": 4300389608,
+        "bytes": 6584,
+        "sha256": "843180fb044528dc8396d80787c6900e67f229461e209da17db036ba88c72c60"
+      }
+    },
+    "dwarf_sha256": "284214c4380b9cc21c4b148a7c66b3e8223a3d723e4b85ff5f3df7edd27e2c8d",
+    "wrapper_flags": [
+      "-Cdebuginfo=line-tables-only",
+      "-Cstrip=none",
+      "-Csplit-debuginfo=packed"
+    ]
+  },
+  "full_debug_dwarf_sha256": "20357b901f2b8fdf7da2f48f5b1018f16271a37c90b9ba723dd419abb69c783d",
+  "ng_debug": {
+    "sha256": "c7643b7b9bba5ab7479d237fb6040552d95d4891e9e6abdff51ad5ab3cd66e4b",
+    "sections": {
+      "__text": {
+        "address": 4294979760,
+        "bytes": 1205609,
+        "sha256": "1954d58d6c056bc1b53435c0d11629bf525cedc690a21b19112ac65f37c72c66"
+      },
+      "__stubs": {
+        "address": 4296185370,
+        "bytes": 912,
+        "sha256": "287d5b8a7e80a6e468233cf6df0125c23121bedb02a9243c02f990efb9ea0d5a"
+      },
+      "__stub_helper": {
+        "address": 4296186284,
+        "bytes": 1536,
+        "sha256": "f75399f969c5b0c3469c54116ebe2fd8dbf98a86d7d64bb69481fff66a7d57af"
+      },
+      "__const": {
+        "address": 4296187824,
+        "bytes": 79360,
+        "sha256": "3f1a412cb50fc9192376ab7dbe431b6b0fdc3fb564806f790287fcaf97fb6137"
+      },
+      "__cstring": {
+        "address": 4296267184,
+        "bytes": 24613,
+        "sha256": "5ca430f0480d0b8030e4b92e9fee540b4a7dcdf080aaa408580380c8805fd175"
+      },
+      "__unwind_info": {
+        "address": 4296291800,
+        "bytes": 2588,
+        "sha256": "4796c7b1df40e8bbdfd2fccbcaa48a44d9a1b3051c4bf5cc9e762d641100a06e"
+      }
+    },
+    "flags": "-O3 -DNDEBUG -g",
+    "dwarf_sha256": "24c2d704c032e6c460ea020ea839783e415a5acc3bd6c09af94317dd44dc936d"
+  },
+  "rustc_local": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: aarch64-apple-darwin\nrelease: 1.95.0\nLLVM version: 22.1.2\n",
+  "llvm_local": "llvm-symbolizer\nHomebrew LLVM version 21.1.8\n  Optimized build.\n"
+}

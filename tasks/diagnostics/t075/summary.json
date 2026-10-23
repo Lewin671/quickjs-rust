@@ -1,0 +1,587 @@
+{
+  "canonical": {
+    "total_samples": 90955,
+    "main_thread_percent": {
+      "dispatch": 5.704172604924458,
+      "transport": 7.927330248087546,
+      "tags": 3.991200645583876,
+      "rc": 0.036626660664422925,
+      "bounds": 0.5089609237534145,
+      "named-property": 3.2790022702284425,
+      "indexed-access": 4.0687919922769265,
+      "bindings": 2.64769618783539,
+      "calls": 4.586952048769014,
+      "completion": 0.2078882769392333,
+      "typed-guards": 0.13621927787089377,
+      "arithmetic": 2.645181057528938,
+      "other": 3.572632892175163
+    },
+    "executor_percent": {
+      "dispatch": 14.509761786258219,
+      "transport": 20.16483046137992,
+      "tags": 10.152457616480033,
+      "rc": 0.09316760870947188,
+      "bounds": 1.2946490707172031,
+      "named-property": 8.340831376059787,
+      "indexed-access": 10.349827513074535,
+      "bindings": 6.734971682783482,
+      "calls": 11.667876511164742,
+      "completion": 0.5288075213467178,
+      "typed-guards": 0.3465023605520717,
+      "arithmetic": 6.7285739202795005,
+      "other": 9.087742571194315
+    },
+    "executor_main_percent": 39.31265508663772,
+    "programs": {
+      "development/big.js/arith": {
+        "total": 5497,
+        "categories": {
+          "indexed-access": 1467,
+          "dispatch": 643,
+          "tags": 371,
+          "other": 288,
+          "bounds": 84,
+          "transport": 375,
+          "arithmetic": 291,
+          "typed-guards": 60,
+          "named-property": 20,
+          "calls": 37,
+          "bindings": 6,
+          "completion": 1
+        }
+      },
+      "development/diff/compare": {
+        "total": 14423,
+        "categories": {
+          "calls": 330,
+          "named-property": 266,
+          "dispatch": 882,
+          "transport": 832,
+          "other": 474,
+          "indexed-access": 55,
+          "tags": 332,
+          "arithmetic": 178,
+          "bounds": 43,
+          "completion": 103,
+          "bindings": 465
+        }
+      },
+      "development/graphlib/paths": {
+        "total": 3097,
+        "categories": {
+          "calls": 172,
+          "tags": 110,
+          "transport": 304,
+          "other": 94,
+          "dispatch": 133,
+          "arithmetic": 23,
+          "named-property": 83,
+          "indexed-access": 41,
+          "bindings": 41,
+          "bounds": 8,
+          "completion": 6,
+          "rc": 3
+        }
+      },
+      "development/immutable/persistent": {
+        "total": 8452,
+        "categories": {
+          "dispatch": 460,
+          "bindings": 344,
+          "calls": 601,
+          "transport": 682,
+          "tags": 333,
+          "named-property": 298,
+          "other": 285,
+          "arithmetic": 195,
+          "indexed-access": 82,
+          "bounds": 38,
+          "completion": 24,
+          "rc": 2
+        }
+      },
+      "development/js-yaml/document": {
+        "total": 10562,
+        "categories": {
+          "bindings": 350,
+          "dispatch": 465,
+          "transport": 821,
+          "calls": 505,
+          "named-property": 399,
+          "tags": 541,
+          "other": 306,
+          "arithmetic": 155,
+          "bounds": 59,
+          "indexed-access": 40,
+          "rc": 7,
+          "completion": 8
+        }
+      },
+      "development/lodash/transform": {
+        "total": 3555,
+        "categories": {
+          "transport": 537,
+          "calls": 410,
+          "bindings": 160,
+          "dispatch": 159,
+          "named-property": 45,
+          "indexed-access": 96,
+          "other": 188,
+          "tags": 217,
+          "arithmetic": 115,
+          "bounds": 11,
+          "rc": 2,
+          "completion": 1
+        }
+      },
+      "development/matter-js/simulate": {
+        "total": 7758,
+        "categories": {
+          "indexed-access": 535,
+          "dispatch": 621,
+          "other": 356,
+          "named-property": 895,
+          "arithmetic": 645,
+          "tags": 281,
+          "bounds": 51,
+          "transport": 735,
+          "typed-guards": 21,
+          "calls": 140,
+          "bindings": 46,
+          "completion": 2
+        }
+      },
+      "development/meriyah/parse": {
+        "total": 6533,
+        "categories": {
+          "dispatch": 376,
+          "bindings": 197,
+          "calls": 301,
+          "arithmetic": 133,
+          "transport": 513,
+          "named-property": 264,
+          "rc": 3,
+          "other": 226,
+          "tags": 235,
+          "indexed-access": 37,
+          "completion": 18,
+          "bounds": 37
+        }
+      },
+      "development/moment/dates": {
+        "total": 25935,
+        "categories": {
+          "named-property": 752,
+          "dispatch": 1027,
+          "tags": 687,
+          "transport": 1109,
+          "calls": 1279,
+          "arithmetic": 296,
+          "bounds": 90,
+          "other": 759,
+          "rc": 15,
+          "completion": 90,
+          "bindings": 708,
+          "indexed-access": 57
+        }
+      },
+      "development/papaparse/csv": {
+        "total": 5143,
+        "categories": {
+          "transport": 222,
+          "dispatch": 149,
+          "bindings": 185,
+          "named-property": 44,
+          "calls": 133,
+          "tags": 117,
+          "indexed-access": 29,
+          "other": 84,
+          "arithmetic": 35,
+          "rc": 1,
+          "completion": 6,
+          "bounds": 6
+        }
+      }
+    }
+  },
+  "debug": {
+    "total_samples": 90792,
+    "main_thread_percent": {
+      "dispatch": 5.602344511807593,
+      "transport": 8.244173636823518,
+      "tags": 3.910440359405526,
+      "rc": 0.0339534417476121,
+      "bounds": 0.33991960537559346,
+      "named-property": 3.35002535403393,
+      "indexed-access": 3.805809273883468,
+      "bindings": 2.630383499660638,
+      "calls": 4.568341471764072,
+      "completion": 0.26333314531288743,
+      "typed-guards": 0.14034997153561002,
+      "arithmetic": 2.4568417376646003,
+      "other": 4.222769658506986
+    },
+    "executor_percent": {
+      "dispatch": 14.158530710071059,
+      "transport": 20.8350959799262,
+      "tags": 9.882664267049977,
+      "rc": 0.08580886924804043,
+      "bounds": 0.8590621589804267,
+      "named-property": 8.466354890285452,
+      "indexed-access": 9.618235252648978,
+      "bindings": 6.647639301852414,
+      "calls": 11.545345504143862,
+      "completion": 0.6655089520171533,
+      "typed-guards": 0.3546996044167553,
+      "arithmetic": 6.209055712156686,
+      "other": 10.671998797202997
+    },
+    "executor_main_percent": 39.56868566752203,
+    "programs": {
+      "development/big.js/arith": {
+        "total": 5390,
+        "categories": {
+          "indexed-access": 1325,
+          "tags": 391,
+          "dispatch": 550,
+          "other": 397,
+          "bounds": 81,
+          "transport": 352,
+          "arithmetic": 261,
+          "typed-guards": 61,
+          "named-property": 20,
+          "calls": 38,
+          "bindings": 5,
+          "completion": 1
+        }
+      },
+      "development/diff/compare": {
+        "total": 13887,
+        "categories": {
+          "calls": 379,
+          "other": 446,
+          "dispatch": 877,
+          "transport": 844,
+          "named-property": 204,
+          "arithmetic": 138,
+          "indexed-access": 65,
+          "tags": 363,
+          "bounds": 38,
+          "bindings": 483,
+          "completion": 119
+        }
+      },
+      "development/graphlib/paths": {
+        "total": 3133,
+        "categories": {
+          "transport": 330,
+          "tags": 138,
+          "calls": 179,
+          "dispatch": 127,
+          "arithmetic": 24,
+          "named-property": 78,
+          "other": 119,
+          "indexed-access": 43,
+          "bindings": 41,
+          "completion": 5,
+          "rc": 3,
+          "bounds": 8
+        }
+      },
+      "development/immutable/persistent": {
+        "total": 8436,
+        "categories": {
+          "other": 323,
+          "calls": 620,
+          "dispatch": 420,
+          "transport": 704,
+          "named-property": 297,
+          "tags": 317,
+          "arithmetic": 160,
+          "bindings": 341,
+          "completion": 32,
+          "indexed-access": 83,
+          "bounds": 12,
+          "rc": 2
+        }
+      },
+      "development/js-yaml/document": {
+        "total": 10680,
+        "categories": {
+          "dispatch": 516,
+          "bindings": 345,
+          "other": 401,
+          "completion": 23,
+          "arithmetic": 169,
+          "transport": 784,
+          "tags": 517,
+          "named-property": 375,
+          "calls": 470,
+          "indexed-access": 25,
+          "rc": 3,
+          "bounds": 12
+        }
+      },
+      "development/lodash/transform": {
+        "total": 3469,
+        "categories": {
+          "transport": 572,
+          "dispatch": 214,
+          "bindings": 174,
+          "tags": 177,
+          "calls": 370,
+          "other": 216,
+          "indexed-access": 103,
+          "named-property": 31,
+          "arithmetic": 88,
+          "bounds": 5,
+          "rc": 2,
+          "completion": 1
+        }
+      },
+      "development/matter-js/simulate": {
+        "total": 7727,
+        "categories": {
+          "indexed-access": 482,
+          "dispatch": 543,
+          "other": 427,
+          "arithmetic": 656,
+          "named-property": 1012,
+          "transport": 811,
+          "tags": 246,
+          "bounds": 29,
+          "typed-guards": 21,
+          "calls": 134,
+          "bindings": 45,
+          "completion": 3
+        }
+      },
+      "development/meriyah/parse": {
+        "total": 6528,
+        "categories": {
+          "transport": 515,
+          "dispatch": 370,
+          "other": 257,
+          "tags": 235,
+          "calls": 290,
+          "arithmetic": 132,
+          "bindings": 171,
+          "named-property": 262,
+          "completion": 28,
+          "indexed-access": 39,
+          "bounds": 22,
+          "rc": 3
+        }
+      },
+      "development/moment/dates": {
+        "total": 26373,
+        "categories": {
+          "transport": 1096,
+          "dispatch": 1083,
+          "calls": 1253,
+          "named-property": 769,
+          "other": 774,
+          "tags": 723,
+          "completion": 98,
+          "bindings": 616,
+          "bounds": 37,
+          "arithmetic": 257,
+          "indexed-access": 34,
+          "rc": 8
+        }
+      },
+      "development/papaparse/csv": {
+        "total": 5169,
+        "categories": {
+          "transport": 237,
+          "bindings": 186,
+          "dispatch": 138,
+          "named-property": 63,
+          "other": 85,
+          "calls": 165,
+          "tags": 83,
+          "arithmetic": 24,
+          "indexed-access": 25,
+          "rc": 3,
+          "completion": 7,
+          "bounds": 6
+        }
+      }
+    }
+  },
+  "ng": {
+    "total_samples": 31182,
+    "main_thread_percent": {
+      "dispatch": 2.874220547679075,
+      "transport": 6.42032567195268,
+      "tags": 0.230997128831932,
+      "rc": 3.3054579742227217,
+      "bounds": 0.0,
+      "named-property": 7.674172986492232,
+      "indexed-access": 0.0,
+      "bindings": 1.301698491300354,
+      "calls": 5.1980644832171,
+      "completion": 0.0,
+      "typed-guards": 0.0,
+      "arithmetic": 1.9313067652174418,
+      "other": 19.452260981486706
+    },
+    "executor_percent": {
+      "dispatch": 5.939882924412185,
+      "transport": 13.268286895656496,
+      "tags": 0.4773801725984451,
+      "rc": 6.831081001874425,
+      "bounds": 0.0,
+      "named-property": 15.85949593125662,
+      "indexed-access": 0.0,
+      "bindings": 2.690098589494669,
+      "calls": 10.742353953591659,
+      "completion": 0.0,
+      "typed-guards": 0.0,
+      "arithmetic": 3.991251153562384,
+      "other": 40.20016937755311
+    },
+    "executor_main_percent": 48.388505030400246,
+    "programs": {
+      "development/big.js/arith": {
+        "total": 2214,
+        "categories": {
+          "other": 648,
+          "bindings": 2,
+          "transport": 315,
+          "dispatch": 80,
+          "rc": 74,
+          "named-property": 127,
+          "arithmetic": 79,
+          "calls": 6,
+          "tags": 8
+        }
+      },
+      "development/diff/compare": {
+        "total": 4826,
+        "categories": {
+          "calls": 125,
+          "named-property": 334,
+          "dispatch": 126,
+          "other": 519,
+          "transport": 183,
+          "arithmetic": 57,
+          "tags": 23,
+          "rc": 109,
+          "bindings": 41
+        }
+      },
+      "development/graphlib/paths": {
+        "total": 1178,
+        "categories": {
+          "other": 191,
+          "transport": 83,
+          "calls": 40,
+          "dispatch": 26,
+          "named-property": 70,
+          "rc": 37,
+          "arithmetic": 4,
+          "bindings": 4
+        }
+      },
+      "development/immutable/persistent": {
+        "total": 2536,
+        "categories": {
+          "other": 453,
+          "transport": 129,
+          "calls": 180,
+          "rc": 102,
+          "named-property": 183,
+          "dispatch": 61,
+          "bindings": 48,
+          "arithmetic": 37,
+          "tags": 4
+        }
+      },
+      "development/js-yaml/document": {
+        "total": 2701,
+        "categories": {
+          "calls": 226,
+          "named-property": 243,
+          "arithmetic": 57,
+          "other": 552,
+          "dispatch": 117,
+          "bindings": 73,
+          "transport": 201,
+          "rc": 52,
+          "tags": 4
+        }
+      },
+      "development/lodash/transform": {
+        "total": 1654,
+        "categories": {
+          "calls": 215,
+          "transport": 99,
+          "other": 480,
+          "tags": 6,
+          "named-property": 64,
+          "dispatch": 50,
+          "rc": 98,
+          "bindings": 38,
+          "arithmetic": 41
+        }
+      },
+      "development/matter-js/simulate": {
+        "total": 3490,
+        "categories": {
+          "other": 1155,
+          "dispatch": 146,
+          "calls": 35,
+          "transport": 376,
+          "named-property": 622,
+          "rc": 228,
+          "arithmetic": 198,
+          "bindings": 9,
+          "tags": 4
+        }
+      },
+      "development/meriyah/parse": {
+        "total": 2089,
+        "categories": {
+          "named-property": 172,
+          "other": 353,
+          "calls": 127,
+          "dispatch": 67,
+          "arithmetic": 21,
+          "bindings": 27,
+          "tags": 8,
+          "transport": 94,
+          "rc": 49
+        }
+      },
+      "development/moment/dates": {
+        "total": 7822,
+        "categories": {
+          "calls": 518,
+          "named-property": 696,
+          "dispatch": 174,
+          "other": 1017,
+          "rc": 182,
+          "transport": 278,
+          "tags": 21,
+          "bindings": 164,
+          "arithmetic": 82
+        }
+      },
+      "development/papaparse/csv": {
+        "total": 2672,
+        "categories": {
+          "calls": 95,
+          "named-property": 83,
+          "dispatch": 25,
+          "other": 213,
+          "rc": 33,
+          "bindings": 32,
+          "transport": 48,
+          "arithmetic": 12,
+          "tags": 1
+        }
+      }
+    }
+  }
+}

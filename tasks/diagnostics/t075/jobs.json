@@ -1,0 +1,56 @@
+[
+  {
+    "job": "20261023T183202Z-t075-capabilities",
+    "status": "done 0",
+    "command_sha256": "c167bbce1ff29a942323b19f20ba8b50c9edf417bb0bc9411b1e20b46badb988",
+    "log_sha256": "6ff2b43ea53f53ea40903fb7347f14d02744656f33e300bb15ab548c6ba3da83"
+  },
+  {
+    "job": "20261023T183230Z-t075-sampler-options",
+    "status": "done 127",
+    "command_sha256": "2204a88a42c944af2148504b11e329fd65482425bbfb51b8396992bc55e40686",
+    "log_sha256": "8db56ed8a3dc757448a10b08e2185ebf93f6168fd23a3ac649ab2ef79a3f0e30"
+  },
+  {
+    "job": "20261023T183253Z-t075-build-and-pilot",
+    "status": "done 0",
+    "command_sha256": "f6afa6c2bbb9ee2a98458614712365fabcf506fcdf4a167030e24865895bef2b",
+    "log_sha256": "0beb72f7e34880437bde2f6c8887a11ac655e89bbd2206b097101a5ea976026b"
+  },
+  {
+    "job": "20261023T183500Z-t075-address-profiles",
+    "status": "done 1",
+    "command_sha256": "fd2f1a9c55bb1e20bcdcfb4e5d0aa64ca130dce15df8f1f5aec4a4cd85705e69",
+    "log_sha256": "b49e9867867c8c30c85b61ab8d39f1d9dd288bced69adb4d1469113143b399c2"
+  },
+  {
+    "job": "20261023T183602Z-t075-ng-debug",
+    "status": "done 0",
+    "command_sha256": "02c32bb6824f3a8b5bb6fe4287e8f9840cee30170b6c288a0440e3b47c374df2",
+    "log_sha256": "ead69ae4e02c591c06da832f78365d6600b0d35492587b4bddb0589e53e28f2e"
+  },
+  {
+    "job": "20261023T183647Z-t075-address-profiles-v2",
+    "status": "done 1",
+    "command_sha256": "89dbe400f8ee5c306fdffa5f5c874d37475f0997889498d2a9e09e4dc2c82996",
+    "log_sha256": "108addbe709b404622a7cdafda70045f5bbf775b7531a149eb479882b496cb61"
+  },
+  {
+    "job": "20261023T183715Z-t075-address-profiles-v3",
+    "status": "done 0",
+    "command_sha256": "a8b3414e73ecc65d3b82056b7c67fa6713624159f94b7136a8f7fb5e0907abff",
+    "log_sha256": "1e984cd45dc5d54c49e57d54afcd6a8d6714a1d565774a86f9176e4f1d14ef96"
+  },
+  {
+    "job": "20261023T183753Z-t075-metadata-preserving-debug",
+    "status": "done 0",
+    "command_sha256": "adf46f0a85ae0529e4e27324c85bd1da5cd11eab8c7c52df8e54816eb753c36f",
+    "log_sha256": "86071fa5bd39d5704f17381415de0823689ae45b890a843488a540fd75313658"
+  },
+  {
+    "job": "20261023T183840Z-t075-unmerged-addresses",
+    "status": "done 0",
+    "command_sha256": "f1f640827267a1bee6036dc3583e555d06812eecf079e6165e14a2e6161dc5cd",
+    "log_sha256": "57e933be4b0f0817460959f46e8d0f17762371b9fb45405f17af2e1524ac2ebd"
+  }
+]

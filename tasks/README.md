@@ -1,7 +1,6 @@
 # Tasks
 
-Active and blocked tasks open with a resume block; historical records live under `archive/`.
-For a new task, copy [TEMPLATE.md](TEMPLATE.md). One slice of a task is one
+Active and blocked tasks open with a resume block; historical records live under `archive/`. For a new task, copy [TEMPLATE.md](TEMPLATE.md). One slice of a task is one
 reviewable unit: verify it with its focused command before and after, and
 update the resume block in the commit that lands it. When a task closes, move it to `archive/` with `git mv` and move its row below.
 
@@ -9,6 +8,7 @@ update the resume block in the commit that lands it. When a task closes, move it
 
 | Task | Status | What it is |
 | --- | --- | --- |
+| [T075](T075-executor-anatomy.md) executor anatomy | active | Diagnosis complete: exact-PC/source attribution opens the post-T069 loop bucket; four incremental proposals await selection. |
 | [T073](T073-local-read-bimodal.md) local-read bimodality | active | Diagnosis complete: candidate text-layout CPU tails; T017 adopts case-health containment only. |
 | [T068](T068-post-t066-profile.md) post-T066 profiles | active | All ten development programs profiled on exact f49be95c/NG; owner attribution complete, ranked incremental proposals await selection. |
 | [T057](T057-string-code-units.md) string code units | active | Stage 1 and UTF-16 correctness extraction integrated; stage 2 abandoned (0 attempts); linear-search follow-up awaits screening. |
