@@ -266,6 +266,7 @@ mod tests {
             Vec::new(),
             Vec::new(),
             None,
+            None,
         )
         .into_frame();
         vm.push_frame(callee, FrameContinuation::PushResult);

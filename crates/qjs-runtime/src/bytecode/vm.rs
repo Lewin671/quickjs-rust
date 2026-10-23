@@ -66,14 +66,16 @@ pub(super) fn eval_function_bytecode<'a>(
     with_stack: Vec<Value>,
     persist_global_lexicals: bool,
     direct_call_slots: Option<DirectCallSlots<'_>>,
+    positional_arguments: Option<&[Value]>,
 ) -> FunctionBytecodeResult<'a> {
     let direct_eval_with_stack = !env.direct_eval_with_stack().is_empty();
-    let mut vm = Vm::new_with_globals_upvalues_with_stack_and_direct_call_slots(
-        bytecode,
+    let mut vm = Vm::with_frame_bytecode(
+        FrameBytecode::Borrowed(bytecode),
         env,
         upvalues,
         with_stack,
         direct_call_slots,
+        positional_arguments,
     );
     vm.persist_global_lexicals = persist_global_lexicals;
     // Ordinary functions created inside `with` are compiled with explicit

@@ -10,7 +10,45 @@ use super::ir::{Bytecode, Op};
 impl Bytecode {
     /// Whether the code reads `new.target`.
     pub(crate) fn reads_new_target(&self) -> bool {
-        self.code.iter().any(|op| matches!(op, Op::LoadNewTarget))
+        self.frame_init_plan.reads_new_target
+    }
+
+    /// Any direct eval/with in this body or its statically nested code.
+    pub(crate) fn has_dynamic_scope_tree(&self) -> bool {
+        self.frame_init_plan.dynamic_scope_tree
+    }
+
+    /// Positional inputs cannot depend on dynamic names or outlive call entry.
+    pub(crate) fn supports_positional_entry(&self) -> bool {
+        !self.global_scope
+            && !self.suspends()
+            && !self.has_dynamic_scope_tree()
+            && !self.needs_arguments_object()
+    }
+
+    pub(crate) fn needs_call_receiver(&self) -> bool {
+        self.frame_init_plan.needs_receiver
+    }
+
+    pub(crate) fn has_direct_seedable_parameters(&self) -> bool {
+        self.frame_init_plan.parameters.direct_seedable
+    }
+
+    pub(crate) fn parameters_shadow_arguments(&self) -> bool {
+        self.frame_init_plan.parameters.shadows_arguments
+    }
+
+    pub(crate) fn positional_parameter_bindings(&self) -> impl Iterator<Item = &str> {
+        self.parameter_slots()
+            .iter()
+            .map(|&slot| self.locals[slot].name.as_str())
+    }
+
+    pub(crate) fn rest_parameter_binding(&self) -> Option<&str> {
+        self.frame_init_plan
+            .parameters
+            .rest_slot
+            .map(|slot| self.locals[slot].name.as_str())
     }
 
     /// Whether an immutable environment binding named `name` -- a class's

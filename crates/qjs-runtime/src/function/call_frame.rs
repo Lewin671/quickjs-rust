@@ -70,10 +70,12 @@ impl CallCompletionPolicy {
 pub(crate) struct PreparedBytecodeCall<'a> {
     pub(crate) bytecode: Rc<Bytecode>,
     pub(crate) env: CallEnv,
-    /// Present when the callee's parameters and receiver can be seeded
-    /// directly into frame slots, absent when it needs the general
-    /// name-keyed prologue.
+    /// The direct-leaf entry contract: receiver, parameters and received cells
+    /// can use the compact tiers and the minimal frame initializer.
     pub(crate) slots: Option<DirectCallSlots<'a>>,
+    /// General synchronous entry seeds these before constructing capture cells.
+    /// Special call context remains owned by `env`; this is not a leaf contract.
+    pub(crate) positional_arguments: Option<&'a [Value]>,
     /// Only the general path needs these; a slot-seeded call carries its
     /// upvalues inside `slots`.
     pub(crate) upvalues: Vec<Upvalue>,

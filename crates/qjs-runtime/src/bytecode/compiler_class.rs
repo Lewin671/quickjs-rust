@@ -787,9 +787,11 @@ fn compile_default_derived_constructor_bytecode(
     compiler.emit(Op::Pop);
     compiler.emit_load_undefined();
     compiler.emit(Op::Return);
-    Ok(Bytecode::new(
+    Ok(Bytecode::new_function(
         compiler.constants,
         compiler.locals,
         compiler.code,
+        Vec::new(),
+        params,
     ))
 }

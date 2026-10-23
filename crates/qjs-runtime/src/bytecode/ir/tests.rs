@@ -103,7 +103,13 @@ fn a_recycler_handle_outlives_the_bytecode_it_came_from() {
 
 #[test]
 fn direct_parameter_slots_preserve_duplicate_positions() {
-    let bytecode = Bytecode::new_function(Vec::new(), Vec::new(), Vec::new(), vec![3, 3, 7]);
+    let bytecode = Bytecode::new_function(
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        vec![3, 3, 7],
+        &qjs_ast::FunctionParams::positional(vec![]),
+    );
 
     assert_eq!(bytecode.parameter_slots(), &[3, 3, 7]);
 }

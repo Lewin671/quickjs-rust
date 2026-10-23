@@ -1042,6 +1042,10 @@ impl CallEnv {
         self.module_live_bindings = Some(bindings);
     }
 
+    pub(crate) fn has_module_live_bindings(&self) -> bool {
+        self.module_live_bindings.is_some()
+    }
+
     pub(crate) fn module_live_binding_cell(&self, name: &str) -> Option<Upvalue> {
         self.module_live_bindings
             .as_ref()

@@ -383,6 +383,7 @@ impl Compiler {
             self.locals,
             self.code,
             direct_parameter_slots,
+            params,
         ))
     }
 

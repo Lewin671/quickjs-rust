@@ -1,14 +1,15 @@
 # T069: Positional call and activation preparation
 
-- Status: active; frozen plan prepared before runtime changes.
-- Implementation: none.
-- Verified at: base `b93e4daa`, full local gate 2026-10-23: 2,335 runtime
-  tests, 732 benchmark-tool tests, 35 script tests and 5,170 curated Test262
-  cases pass; runtime is still unchanged.
+- Status: active; first implementation ready for committed measurement.
+- Implementation: present in the working tree over frozen-plan commit `982d19b5`.
+- Verified at: this runtime working tree, 2026-10-23: full gate passes,
+  2,359 runtime tests (24 new), 732 benchmark-tool tests, 35 script tests,
+  5,170 curated Test262 cases; dedicated activation and IR tests pass.
 - Evidence: this task, [plan](performance-units/positional-call-activation.json),
   [T068 profiles](archive/T068-profile-evidence.md).
-- Unresolved: implementation/measurements not started; pre-existing dynamic-closure gap below.
-- Next action: commit the validated schema-3 plan, then implement the architecture below.
+- Unresolved: candidate measurement, complete candidate conformance and lead decision;
+  pre-existing dynamic-closure gap below.
+- Next action: commit the candidate, run queued QuickJS-NG comparisons and triage.
 
 ## Goal and selection
 
@@ -81,8 +82,9 @@ do not encode the wrong result as a behavioral regression test. The current
 - Owner: `agent/t069-call-activation/codex`, base
   `b93e4daa5d9d53f1780a66f31b31a96e2bfe1895`, this worktree.
 - Runtime paths: `function/call*`, bytecode frame/binding initialization,
-  immutable IR activation metadata, `bytecode/compiler.rs` (passing existing
-  parameter AST metadata only), focused tests and module documentation.
+  immutable IR activation metadata, `bytecode/compiler*.rs` (passing existing
+  parameter metadata, including synthetic constructors), focused tests and
+  module/binding-model documentation.
 - T070 owns executor operand/register transfer; do not restructure those paths.
 - No push, merge, main-checkout edits or promotion decision.
 
@@ -149,8 +151,8 @@ included in the configured-case claim. Raw evidence is local, not retained.
 - Plan validation: `validate-unit` passes against queue SHA-256
   `71bf531c39224650b54956e054e2c4f7935798ce6aa109a85b4b1813fe074221`;
   frozen plan SHA-256 `548257aa6d218fbdcf7f3b5036c770025952a78f1b7b731db8e77df8db708dd9`.
-- [ ] Validated frozen schema-3 plan committed before runtime changes.
-- [ ] Focused parameter/cell/context restoration tests and full local gate.
+- [x] Validated frozen schema-3 plan committed before runtime changes (`982d19b5`).
+- [x] Focused parameter/cell/context restoration tests and full local gate.
 - [ ] QuickJS-NG comparisons and zero-gap complete Test262 evidence.
 - [ ] Quick triage; if promising, finite-budget screen, formal, held-out,
   RSS and resource evidence on the serialized iMac queue.

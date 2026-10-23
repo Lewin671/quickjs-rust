@@ -2,6 +2,8 @@
 //!
 //! - Compiler (`compiler*.rs`): AST to `Bytecode`. `upvalue_resolver.rs`
 //!   decides which locals a frame boxes into shared cells.
+//!   `frame_init_plan.rs` caches the immutable parameter, cell and context
+//!   requirements consumed by frame construction.
 //! - IR (`ir*.rs`): the `Op` set and `Bytecode`, which also caches every
 //!   tier's compiled program in a `OnceCell`. `linked_code.rs` owns a body's
 //!   property-name pool and its cached per-domain atom links.
@@ -57,6 +59,7 @@ mod compiler_pattern;
 mod compiler_try;
 mod compiler_values;
 mod enumerate_keys_cache;
+mod frame_init_plan;
 mod frame_program;
 mod frame_stack;
 mod ir;
@@ -79,6 +82,7 @@ mod vm_class;
 mod vm_direct_upvalues;
 mod vm_dispose;
 mod vm_errors;
+mod vm_frame_bindings;
 mod vm_frame_init;
 mod vm_generator;
 mod vm_import;
@@ -216,13 +220,14 @@ pub(crate) fn compile_function_body_with_kind(
     )
 }
 
-pub(crate) fn eval_function_bytecode(
-    bytecode: &Bytecode,
+pub(crate) fn eval_function_bytecode<'a>(
+    bytecode: &'a Bytecode,
     env: crate::CallEnv,
     upvalues: Vec<crate::function::Upvalue>,
     with_stack: Vec<Value>,
     persist_global_lexicals: bool,
-) -> FunctionBytecodeResult<'_> {
+    positional_arguments: Option<&[Value]>,
+) -> FunctionBytecodeResult<'a> {
     vm::eval_function_bytecode(
         bytecode,
         env,
@@ -230,6 +235,7 @@ pub(crate) fn eval_function_bytecode(
         with_stack,
         persist_global_lexicals,
         None,
+        positional_arguments,
     )
 }
 
@@ -491,7 +497,7 @@ pub(crate) fn eval_bytecode_with_env(
     env: crate::CallEnv,
 ) -> FunctionBytecodeResult<'_> {
     let with_stack = env.direct_eval_with_stack();
-    vm::eval_function_bytecode(bytecode, env, Vec::new(), with_stack, true, None)
+    vm::eval_function_bytecode(bytecode, env, Vec::new(), with_stack, true, None, None)
 }
 
 pub(crate) fn eval_bytecode_with_env_ephemeral_global_lexicals(
@@ -499,5 +505,5 @@ pub(crate) fn eval_bytecode_with_env_ephemeral_global_lexicals(
     env: crate::CallEnv,
 ) -> FunctionBytecodeResult<'_> {
     let with_stack = env.direct_eval_with_stack();
-    vm::eval_function_bytecode(bytecode, env, Vec::new(), with_stack, false, None)
+    vm::eval_function_bytecode(bytecode, env, Vec::new(), with_stack, false, None, None)
 }

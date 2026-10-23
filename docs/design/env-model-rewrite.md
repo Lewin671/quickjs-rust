@@ -139,12 +139,12 @@ Tests: `closure_state.rs::direct_eval_and_closures_share_the_same_local_cell`,
 
 ## What `CallEnv` is and is not
 
-`CallEnv` (`function/env.rs`) is per-call context, not binding storage. It
-shares the realm scope through one `Rc` and carries a small `frame_bindings`
-vector (call metadata, native and dynamic consumers), the optional
-`deopt_bindings`, and private-name, module and host state. An ordinary call
-builds no locals map. `BindingSnapshot` is an owned copy for the few
-consumers that enumerate a frame; it never takes part in identity.
+`CallEnv` (`function/env.rs`) is per-call context, not binding storage: one realm-scope `Rc`,
+a small `frame_bindings` vector for call/native/dynamic metadata, optional `deopt_bindings`, and private-name/module/host state.
+Ordinary calls build no locals map. Static synchronous general calls seed raw positional arguments before capture cells;
+bytecode owns their immutable preparation plans (`bytecode/frame_init_plan.rs`), while special context stays in an owned `CallEnv`.
+Mapped arguments, dynamic scope and suspension retain compatibility entry; positional preparation never borrows or replaces the caller binding view.
+`BindingSnapshot` is an owned copy for the few consumers that enumerate a frame; it never takes part in binding identity.
 
 The compact tiers run only when the environment can answer no name at all
 (`environment_is_slot_only` in `bytecode/compact_fn/activation.rs`). A

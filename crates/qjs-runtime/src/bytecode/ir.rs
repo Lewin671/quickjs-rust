@@ -637,8 +637,9 @@ pub(super) struct Local {
 impl Local {
     /// Whether this slot is an outer binding received through
     /// `Function.upvalues`. Function parameters and body `var` bindings are
-    /// also seeded from `CallEnv` today, so `from_env` alone is not sufficient
-    /// to identify an indexed upvalue.
+    /// also carry `from_env` for compatibility entry, so that flag alone cannot
+    /// identify an indexed upvalue. Static synchronous entry seeds raw parameters
+    /// directly, before creating this activation's captured cells.
     pub(super) fn is_received_upvalue(&self) -> bool {
         self.from_env && !self.parameter && !self.hoisted
     }
@@ -691,6 +692,7 @@ pub struct Bytecode {
     /// preserves duplicate parameter positions so direct-call seeding can use
     /// this vector without repeating name-table lookups.
     parameter_slots: Vec<usize>,
+    pub(super) frame_init_plan: super::frame_init_plan::FrameInitPlan,
     received_upvalue_slots: Vec<usize>,
     /// Whether direct-call frame setup may need per-local upvalue storage for
     /// an outer capture or sloppy global fallback. Module imports are tracked
@@ -811,8 +813,9 @@ impl Bytecode {
         locals: Vec<Local>,
         code: Vec<Op>,
         parameter_slots: Vec<usize>,
+        params: &FunctionParams,
     ) -> Self {
-        Self::with_scope_global_lexical_names_and_strict_with_parameter_slots(
+        let mut bytecode = Self::with_scope_global_lexical_names_and_strict_with_parameter_slots(
             constants,
             locals,
             code,
@@ -820,7 +823,10 @@ impl Bytecode {
             Vec::new(),
             false,
             Some(parameter_slots),
-        )
+        );
+        bytecode.frame_init_plan.parameters =
+            super::frame_init_plan::ParameterInfo::compile(&bytecode, params);
+        bytecode
     }
 
     pub(super) fn with_scope(
@@ -927,6 +933,7 @@ impl Bytecode {
             this_slot,
             constant_return,
             parameter_slots,
+            frame_init_plan: super::frame_init_plan::FrameInitPlan::default(),
             received_upvalue_slots,
             has_direct_local_upvalue_routes,
             direct_readonly_received_upvalue_slots: 0,
@@ -1033,6 +1040,7 @@ impl Bytecode {
         } else {
             bytecode.readonly_received_upvalue_slots
         };
+        bytecode.frame_init_plan = super::frame_init_plan::FrameInitPlan::compile(&bytecode);
         bytecode
     }
 

@@ -97,6 +97,7 @@ impl<'a> Vm<'a> {
             upvalues,
             with_stack,
             direct_call_slots,
+            None,
         )
     }
 
@@ -112,6 +113,7 @@ impl<'a> Vm<'a> {
         upvalues: Vec<Upvalue>,
         with_stack: Vec<Value>,
         direct_call_slots: Option<DirectCallSlots<'_>>,
+        positional_arguments: Option<&[Value]>,
     ) -> Self {
         crate::diagnostics::count!(nested_vm_constructions);
         let bytecode: &Bytecode = &handle;
@@ -147,6 +149,9 @@ impl<'a> Vm<'a> {
         } else {
             Self::initial_slots(bytecode, &env)
         };
+        if let Some(arguments) = positional_arguments {
+            Self::seed_positional_arguments(bytecode.parameter_slots(), &mut locals, arguments);
+        }
         let direct_upvalue_source = direct_call_slots
             .as_ref()
             .map(|direct_call_slots| direct_call_slots.upvalues);
@@ -257,15 +262,23 @@ impl<'a> Vm<'a> {
         } else {
             None
         };
-        for (index, &slot) in direct_call_slots.parameter_slots.iter().enumerate() {
-            let value = direct_call_slots
-                .arguments
-                .get(index)
-                .cloned()
-                .unwrap_or(Value::Undefined);
+        Self::seed_positional_arguments(
+            direct_call_slots.parameter_slots,
+            locals,
+            direct_call_slots.arguments,
+        );
+        direct_this
+    }
+
+    fn seed_positional_arguments(
+        parameter_slots: &[usize],
+        locals: &mut [Slot],
+        arguments: &[Value],
+    ) {
+        for (index, &slot) in parameter_slots.iter().enumerate() {
+            let value = arguments.get(index).cloned().unwrap_or(Value::Undefined);
             locals[slot] = Some(value);
         }
-        direct_this
     }
 
     pub(super) fn initial_direct_call_slots(bytecode: &Bytecode) -> Vec<Slot> {
