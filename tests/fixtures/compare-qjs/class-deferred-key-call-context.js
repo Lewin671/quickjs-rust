@@ -1,9 +1,9 @@
 (() => {
   class Outer {
-    static #key = "method";
+    static #staticKey = "method";
     #key = "method";
     static method() {
-      class D { [this.#key]() { return 1; } }
+      class D { [this.#staticKey]() { return 1; } }
       return new D().method();
     }
     method() {
@@ -18,12 +18,12 @@
       return new D().method;
     })();
     static field = (() => {
-      class D { [this.#key]() { return 5; } }
+      class D { [this.#staticKey]() { return 5; } }
       return new D().method();
     })();
     static {
       this.field += (() => {
-        class D { [this.#key] = 6; }
+        class D { [this.#staticKey] = 6; }
         return new D().method;
       })();
     }
