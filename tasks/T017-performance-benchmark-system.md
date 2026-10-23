@@ -27,9 +27,9 @@
   assessment had landed in first samples): [record](archive/T017-resource-launch-admission.md); tool tests use
   CPU-time bounds, not wall timeouts: [record](archive/T017-test-wall-timeouts.md), [follow-up](archive/T017-git-lock-and-race-tests.md).
 
-A new-file launch delay and the symmetric screen preflight are recorded in
-[the diagnostic](archive/T017-launch-preflight-diagnostic.md); fixed-hardware
-noise qualification is still open.
+New-file launch delay/symmetric preflight: [diagnostic](archive/T017-launch-preflight-diagnostic.md).
+Fixed-hardware noise qualification remains open. T073
+[proposes case-health reporting](diagnostics/t073/protocol.md) that finishes unrelated collection while failing closed; this is not adopted policy.
 
 Record of the landed milestones, the original assignment and the notes:
 `tasks/archive/T017-performance-benchmark-system-log.md`.
