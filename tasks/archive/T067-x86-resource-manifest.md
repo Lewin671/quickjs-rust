@@ -1,6 +1,7 @@
 # T067: A resource manifest for the measuring host
 
-- Status: active.
+- Status: closed 2026-10-23. Lead accepted the contract: derived (gitignored) host manifest like broad/sentinel,
+  decisions needing it run on the measuring host, host-derivation fact in performance-workflow, decision contract in layout-policy-artifacts.
 - Implementation: present. `tools/benchmark/host_manifest.py` derives
   `benchmarks/.host-<platform>-resources.json` from the frozen
   `benchmarks/resources.json` with only `profile` and `build_recipes`

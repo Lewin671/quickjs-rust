@@ -17,13 +17,12 @@ it to `archive/` with `git mv` and move its row below.
 | [T018](T018-broad-performance.md) broad performance | active | The performance campaign contract and its targets against QuickJS-NG. Start performance work here, then follow [the workflow](../docs/performance-workflow.md). |
 | [T040](T040-imac-general-performance.md) x86_64 general optimization | active | Fresh current-main comparison and exact-binary profiles, followed by independent general runtime units. |
 | [T045](T045-typed-loop-boxed-demand-provenance.md) boxed demand provenance | active | Ordinary identity-flow joins lose boxed demand; exact profiles and seed diagnosis precede a compiler-only unit. |
-| [T022](T022-performance-priority-controller.md) priority controller | active | The rules that select and stop performance units. |
+| [T022](T022-performance-priority-controller.md) priority controller | active | The rules that select and stop performance units ([staged-migration rationale](archive/T022-staged-migration-rationale.md)). |
 | [T038](T038-audio-dft-variance.md) audio-dft variance | active | Top infrastructure item: isolated-case cycle variance and allocation/ASLR diagnosis. |
 | [T037](T037-integration-batch-1.md) integration batch 1 | active | Both promotions retained under the lead amendment; implementation is integrated into main; audio placement remains open. |
 | [T033](T033-wide-tier-interpreter-exits.md) wide-tier interpreter exits | active | Code is present; the frozen unit was formally rejected; candidates for the next unit are listed there. |
 | [T036](T036-mixed-call-execution-design.md) mixed-call migration | active | Pricing/attribution and standalone replay; four-stage migration not approved, leaf units re-ranked. |
 | [T017](T017-performance-benchmark-system.md) benchmark system | active | The measurement platform; an x86_64 measurement host is characterized, the fixed-hardware milestones are open. |
-| [T067](T067-x86-resource-manifest.md) x86_64 resource manifest | active | The resource lane derives a qualified manifest for the measuring host; iMac base-vs-base qualification is recorded. |
 | [T013](T013-temporal-campaign.md) Temporal | blocked | Not started. Temporal is outside ES2025 and the reference engine's Test262 configuration skips it. |
 
 The last recorded full scan passes every configured case (see
@@ -41,6 +40,7 @@ Each file is under `archive/` with a resume block; outcomes record what happened
 
 | Task | Outcome |
 | --- | --- |
+| `T067-x86-resource-manifest.md` | Resource lane derives a qualified manifest for the measuring host (iMac x86_64 fat16-abort); base-vs-base qualification size 1.0, fresh 0.990, RSS 1.0. |
 | `T066-size-class-allocator.md` | Promoted under the lead decision: CLI size-class allocator, development 0.898× main (NG 3.07×→2.75×), held-out 0.72–0.96; sentinel lane cost accepted by the user; resource gate unsatisfiable on x86 (tooling gap). |
 | [T064 kernel isolation](archive/T064-kernel-isolation.md) | Stage K aborted before timing: K1/Repair 1 static and correctness gates pass, same 46/86 instruction cases block; outlining abandoned; [plan closure/ledger](archive/T064-kernel-layout-authority-closure.md), M1 A/B blocked, T056 moves to M2. |
 | `T063-string-canonical.md` | Surrogate pairs stored canonically at construction; instruction repair; regression screen passed (lanes 0.998-1.008); integrated ([correctness](archive/T063-correctness-verification.md), [instructions](archive/T063-instruction-diagnosis.md)). |
@@ -93,7 +93,6 @@ Each file is under `archive/` with a resume block; outcomes record what happened
 
 ## Other Records In `archive/`
 
-- T022: [why staged migrations exist](archive/T022-staged-migration-rationale.md).
 - T065: [rounds 1–2 ablation](archive/T065-ablation-r1.md), [gap anatomy and both-engine instruction baseline](archive/T065-gap-anatomy.md), [independent design review](archive/T065-design-review.md); T066: [allocator evidence](archive/T066-allocator-evidence.md).
 - T064: [K1/Repair 1 evidence](archive/T064-k1-record.md), [K0 checker](archive/T064-k0-checker.md), [successor inputs](archive/T064-successor-plan-inputs.md), [lead review](proposals/T064-successor-review.md), [old-plan closure](archive/T064-layout-edges-closure.md), [spike](archive/T064-causal-outlining-spike.md), [isolation/cost inputs](archive/T064-kernel-isolation-inputs.md).
 - T058: [fixed-candidate v6 promotion](archive/T058-regexp-lazy-quantifiers.md), [attempt 1 incomplete closure](archive/T058-attempt1-incomplete.md), [attempt 2 inconclusive](archive/T058-attempt2-inconclusive.md), [v6 rejection](archive/T058-v6-rejection.md), [instruction diagnosis](archive/T058-instruction-diagnosis.md).
