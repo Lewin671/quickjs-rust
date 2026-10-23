@@ -51,7 +51,7 @@ resample block IDs with 20,000 draws, seed 0, and require >=30 blocks and
 its program/lane bands as well as point estimates. Legacy decisions retain
 their own schema and statistics. Shared formal snapshots use equal-length role/hash
 prefixes that preserve the role-dash, and exclusive creation; measurement protocols are
-throughput v10, sentinels v3 and resources v3.
+throughput v10, sentinels v3 and resources v4.
 
 
 Queue schema 3 additionally records the measured host. Schema-3 unit
