@@ -3,8 +3,10 @@
 A receipt states which clean source revision and which frozen build recipe
 produced an executable. For qjs-rust the live toolchain must equal the
 manifest recipe's; for QuickJS-NG the reference submodule must sit clean at
-the pinned revision. Used by scripts/perf-compare.sh; hosted previews write
-their receipts through `preview prepare` instead.
+the pinned revision. The `--manifest` may be a throughput manifest or the
+resource manifest: both carry the profile id and the two build recipes a
+receipt names. Used by scripts/perf-compare.sh; hosted previews write their
+receipts through `preview prepare` instead.
 """
 
 from __future__ import annotations
@@ -16,10 +18,19 @@ import subprocess
 import sys
 from pathlib import Path
 
+from .resource_schema import ResourceManifestError, load_resource_manifest
 from .schema import ManifestError, load_manifest
 
 ROOT = Path(__file__).resolve().parents[2]
 RUST_REPO = "https://github.com/Lewin671/quickjs-rust.git"
+
+
+def measurement_manifest(path: Path):
+    """The manifest at `path`, whichever independently versioned schema it uses."""
+    try:
+        return load_manifest(path)
+    except ManifestError:
+        return load_resource_manifest(path)
 
 
 class LocalReceiptError(RuntimeError):
@@ -44,7 +55,7 @@ def rust_toolchain() -> str:
 
 
 def receipt(identity: str, revision: str, binary: Path, manifest_path: Path) -> dict:
-    manifest = load_manifest(manifest_path)
+    manifest = measurement_manifest(manifest_path)
     recipe = manifest.build_recipes[identity]
     if identity == "qjs-rust":
         repo = RUST_REPO
@@ -91,7 +102,7 @@ def main(argv: list[str] | None = None) -> int:
             raise LocalReceiptError(f"refusing to overwrite {args.output}")
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(content, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    except (LocalReceiptError, ManifestError, OSError, KeyError) as error:
+    except (LocalReceiptError, ManifestError, ResourceManifestError, OSError, KeyError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
     print(args.output)

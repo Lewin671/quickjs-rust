@@ -12,6 +12,11 @@ manifests ignoring exactly these two keys
 (`performance_evidence.load_archived_manifest`). The copies sit next to the
 frozen manifests because the loader resolves protocol files relative to its
 manifest.
+
+The broad and sentinel lanes and the resource lane are all derived here. The
+resource manifest has a per-lane profile shape: `platform` and `machine` are
+separate and `rss_raw_unit` follows the platform, where the throughput lanes
+carry a single combined `platform` name.
 """
 
 from __future__ import annotations
@@ -30,6 +35,7 @@ from .local_receipt import rust_toolchain
 
 ROOT = Path(__file__).resolve().parents[2]
 LANES = ("manifest.json", "generic-sentinels-manifest.json")
+RESOURCE_LANE = "resources.json"
 REFERENCE_BUILD = ROOT / "third_party/quickjs-ng/build"
 
 
@@ -79,11 +85,25 @@ def live_facts(build: Path = REFERENCE_BUILD) -> dict[str, str]:
     }
 
 
+def _profile(frozen: dict, host: str) -> dict:
+    """The frozen lane's profile rewritten for `host` in that lane's shape."""
+    if "machine" not in frozen:
+        return {"id": f"{host}-fat16-abort-v1", "platform": host}
+    system, _, machine = host.partition("-")
+    platform_name = "darwin" if system == "macos" else system
+    return {
+        "id": f"{host}-fat16-abort-v1",
+        "platform": platform_name,
+        "machine": machine,
+        "rss_raw_unit": {"darwin": "bytes", "linux": "kibibytes"}[platform_name],
+    }
+
+
 def derive(frozen: dict, host: str, facts: dict[str, str]) -> dict:
     """`frozen` with its profile and recipes rewritten for `host`."""
     reference = frozen["reference_engine"]["identity"]
     derived = dict(frozen)
-    derived["profile"] = {"id": f"{host}-fat16-abort-v1", "platform": host}
+    derived["profile"] = _profile(frozen["profile"], host)
     recipes = []
     for recipe in frozen["build_recipes"]:
         recipe = dict(recipe)
@@ -122,11 +142,26 @@ def manifests(root: Path = ROOT, host: str | None = None, facts: dict[str, str] 
     return result
 
 
+def resource_manifests(root: Path = ROOT, host: str | None = None,
+                       facts: dict[str, str] | None = None) -> list[Path]:
+    """The resource manifest to measure with on this host."""
+    host = host or host_platform()
+    facts = facts or live_facts(root / "third_party/quickjs-ng/build")
+    frozen = json.loads((root / "benchmarks" / RESOURCE_LANE).read_text(encoding="utf-8"))
+    path = root / "benchmarks" / f".host-{host}-{RESOURCE_LANE}"
+    _write_replace(path, (json.dumps(derive(frozen, host, facts), indent=2) + "\n").encode())
+    return [path]
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python3 -m tools.benchmark.host_manifest", description=__doc__)
-    parser.parse_args(argv)
+    parser.add_argument(
+        "--resources", action="store_true",
+        help="print the resource manifest for this host instead of the broad and sentinel ones",
+    )
+    args = parser.parse_args(argv)
     try:
-        for path in manifests():
+        for path in resource_manifests() if args.resources else manifests():
             print(path)
     except (HostManifestError, OSError, KeyError, ValueError) as error:
         print(f"error: {error}", file=sys.stderr)

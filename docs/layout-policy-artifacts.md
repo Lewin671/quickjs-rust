@@ -59,8 +59,10 @@ validation checks that host against the policy and refuses stale inventories
 before implementation. New queues require schema-3 plans; older queue schema 2 remains readable
 for historical plans.
 Instruction-blind decisions require `--resource-report` and `--resource-raw`:
-the current resource analyzer replays the report, binds both engines and
-host, and retains all reported costs. Missing/incomplete resource evidence
+the current resource analyzer replays the report against the manifest it
+names -- the frozen `benchmarks/resources.json` or the qualified manifest the
+policy host derives from the live recipe -- binds both engines and host, and
+retains all reported costs. Missing/incomplete resource evidence
 blocks promotion. `layout_replay` is diagnostic-only; it accepts a qualified
 policy or explicitly unqualified `--diagnostic-bands` and never reopens an
 old unit's budget or changes its standing.

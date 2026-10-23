@@ -29,11 +29,12 @@ External and both npm lanes' times include startup, parsing and shutdown; held-o
 
 - macOS with the toolchain pinned in `rust-toolchain.toml`; `perf-compare.sh`
   refuses a `rustc`/`cargo` that differs from the recipe. The checked-in
-  recipes in `benchmarks/manifest.json` describe an arm64 host; on another
-  platform `perf-compare.sh` measures with copies that name the live host's
-  profile, targets and reference compiler (`tools/benchmark/host_manifest.py`).
-  Cases, policy and protocol are unchanged. Bundles from different hosts are
-  never compared: a queue, its plans and their decisions all come from one host.
+  recipes in `benchmarks/manifest.json` and `benchmarks/resources.json` describe
+  an arm64 host; elsewhere host copies name the live profile, targets and
+  reference compiler (`tools/benchmark/host_manifest.py`; `--resources` derives
+  the resource copy for `resource-benchmark.sh`, `local_receipt.py` and the
+  decision verifier). Cases, policy and protocol are unchanged; bundles from
+  different hosts are never compared, so a queue, its plans and decisions share one host.
 - Python 3.10 or newer as `python3`.
 - A built reference engine at `third_party/quickjs-ng/build/qjs`, with the
   submodule clean at the pinned revision:

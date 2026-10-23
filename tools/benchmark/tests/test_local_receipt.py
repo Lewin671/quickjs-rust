@@ -7,10 +7,12 @@ from unittest import mock
 
 from tools.benchmark import local_receipt
 from tools.benchmark.receipts import load_receipt
+from tools.benchmark.resource_schema import load_resource_manifest
 from tools.benchmark.schema import load_manifest
 
 ROOT = Path(__file__).resolve().parents[3]
 MANIFEST = ROOT / "benchmarks/manifest.json"
+RESOURCE_MANIFEST = ROOT / "benchmarks/resources.json"
 
 
 class LocalReceiptTests(unittest.TestCase):
@@ -34,6 +36,15 @@ class LocalReceiptTests(unittest.TestCase):
             expected_engine_identity="qjs-rust", expected_profile_id=self.manifest.profile.id,
             expected_recipe=self.recipe)
         self.assertFalse(loaded.source_dirty)
+
+    def test_a_resource_manifest_names_its_own_profile_and_recipe(self):
+        manifest = load_resource_manifest(RESOURCE_MANIFEST)
+        recipe = manifest.build_recipes["qjs-rust"]
+        with mock.patch.object(local_receipt, "rust_toolchain", return_value=recipe.toolchain):
+            content = local_receipt.receipt("qjs-rust", "a" * 40, self.binary, RESOURCE_MANIFEST)
+        self.assertEqual(content["profile_id"], manifest.profile.id)
+        self.assertEqual(content["build"]["target"], recipe.target)
+        self.assertEqual(content["build"]["lto"], recipe.lto)
 
     def test_a_different_toolchain_is_refused(self):
         with mock.patch.object(local_receipt, "rust_toolchain", return_value="rustc 0.0.0"):
