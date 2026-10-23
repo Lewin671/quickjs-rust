@@ -229,7 +229,7 @@ impl Compiler {
         // `this` from `function_local_names`; force that outer slot into their
         // received-upvalue plan. Ordinary methods/constructors retain their own
         // `this` local and do not enter this branch.
-        if function_bytecode.uses_lexical_this()
+        if function_bytecode.needs_call_receiver()
             && function_local_names
                 .binary_search_by(|local| local.as_str().cmp("this"))
                 .is_err()

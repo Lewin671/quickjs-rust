@@ -142,7 +142,7 @@ Tests: `closure_state.rs::direct_eval_and_closures_share_the_same_local_cell`,
 `CallEnv` (`function/env.rs`) is per-call context, not binding storage: one realm-scope `Rc`,
 a small `frame_bindings` vector for call/native/dynamic metadata, optional `deopt_bindings`, and private-name/module/host state.
 Ordinary calls build no locals map. Static callbacks use shared cells without exporting caller names; dynamic/marked closure contexts retain their views.
-Bytecode owns immutable preparation plans (`bytecode/frame_init_plan.rs`); positional inputs precede cell creation and completed calls recycle cleared slot storage.
+Bytecode preparation plans (`bytecode/frame_init_plan.rs`) include receiver use through deferred keys and lexical arrows; positional inputs precede cell creation and completed calls recycle cleared storage.
 Special context stays owned; mapped arguments, dynamic scope and suspension retain compatibility entry. Cells are never recycled or caller views borrowed.
 `BindingSnapshot` is an owned copy for the few consumers that enumerate a frame; it never takes part in binding identity.
 

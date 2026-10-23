@@ -1735,3 +1735,7 @@ mod tests {
 #[cfg(test)]
 #[path = "call_activation_tests.rs"]
 mod activation_tests;
+
+#[cfg(test)]
+#[path = "call_context_tests.rs"]
+mod context_tests;

@@ -584,7 +584,7 @@ impl Compiler {
                     *is_async,
                     &local_names,
                 )?;
-                if *lexical_this && bytecode.uses_lexical_this() && !self.global_scope {
+                if *lexical_this && bytecode.needs_call_receiver() && !self.global_scope {
                     self.own_call_frame_slot("this");
                     local_names.retain(|name| name != "this");
                     (bytecode, lexical_captures) = self.compile_nested_function_body(
@@ -766,7 +766,7 @@ impl Compiler {
                     *is_async,
                     &local_names,
                 )?;
-                if *lexical_this && bytecode.uses_lexical_this() && !self.global_scope {
+                if *lexical_this && bytecode.needs_call_receiver() && !self.global_scope {
                     self.own_call_frame_slot("this");
                     local_names.retain(|name| name != "this");
                     (bytecode, lexical_captures) = self.compile_nested_function_body(
@@ -836,7 +836,7 @@ impl Compiler {
             *is_async,
             &local_names,
         )?;
-        if *lexical_this && bytecode.uses_lexical_this() && !self.global_scope {
+        if *lexical_this && bytecode.needs_call_receiver() && !self.global_scope {
             self.own_call_frame_slot("this");
             local_names.retain(|name| name != "this");
             (bytecode, lexical_captures) = self.compile_nested_function_body(

@@ -150,6 +150,7 @@ impl FrameInitPlan {
             needs_receiver: bytecode.uses_lexical_this()
                 || bytecode.this_slot().is_some()
                 || bytecode.contains_super_operation()
+                || nested_receiver(bytecode)
                 || dynamic_scope_tree,
             reads_new_target: bytecode
                 .code
@@ -157,6 +158,24 @@ impl FrameInitPlan {
                 .any(|op| matches!(op, Op::LoadNewTarget)),
         }
     }
+}
+
+/// Only these children execute with the enclosing receiver. Ordinary functions,
+/// methods, field initializers and static blocks establish their own receiver;
+/// their own plans account for any deferred keys or arrows nested inside them.
+fn nested_receiver(bytecode: &Bytecode) -> bool {
+    bytecode.code.iter().any(|op| match op {
+        Op::NewFunction {
+            lexical_this: true,
+            bytecode,
+            ..
+        } => bytecode.needs_call_receiver(),
+        Op::NewClass { definition } => definition.computed_keys.iter().any(|key| {
+            matches!(key, ClassComputedKeyDef::Deferred { bytecode, .. }
+                if bytecode.needs_call_receiver())
+        }),
+        _ => false,
+    })
 }
 
 fn binds_arguments(binding: &BindingPattern) -> bool {

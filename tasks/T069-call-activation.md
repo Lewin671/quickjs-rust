@@ -1,18 +1,18 @@
 # T069: Positional call and activation preparation
 
-- Status: active; owner implementation/evidence complete, lead review pending.
-- Implementation: broader candidate `9aac3558`; first candidate remains committed.
-- Verified at: broader candidate `9aac3558`, 2026-10-23: full gate
-  passes, 2,366 runtime tests (31 new), 732 benchmark-tool tests, 35 script
-  tests and 5,170 curated Test262 cases. Complete candidate scan also passes
-  all 42,672 configured cases with zero parity gaps at `9aac3558`.
+- Status: active; lead-requested deferred-class-key receiver repair in progress.
+- Implementation: broader candidate rebased to `66e31330`; receiver requirement
+  now includes deferred keys and lexical arrows, with compiler capture support.
+- Verified at: repair working tree, 2026-10-23: focused context tests pass;
+  complete local gates and queued iMac comparison/triage remain pending.
+  Previous candidate `9aac3558` passed all 42,672 configured Test262 cases.
 - Evidence: [final measured record](archive/T069-final-evidence.md),
   [plan](performance-units/positional-call-activation.json),
   [first candidate](archive/T069-first-candidate.md).
-- Unresolved: strict moment/diff/graphlib payoff misses require lead review
-  under the prospectively frozen overall-first rule; pre-existing gap below.
-- Next action: lead adjudicates promotion from the complete evidence. No final
-  decide/promotion, origin push or merge was performed by this owner.
+- Unresolved: verify repaired candidate and audit results; strict original
+  moment/diff/graphlib payoff misses still require lead review; baseline gaps below.
+- Next action: complete the full gate, exact scan and iMac comparison/diagnostic
+  triage requested by the lead. No promotion decision, push or merge.
 
 ## Goal and selection
 
@@ -93,6 +93,16 @@ do not encode the wrong result as a behavioral regression test. The current
 
 ## Evidence and current revision
 
+Lead review reproduced a receiver-elision regression after rebase onto
+`311bff0e` (documentation-only difference from the measured runtime). A class
+computed key that mentions a private name is compiled separately: its thunk
+reads the enclosing frame's `this`, invisible to an own-body opcode scan.
+The repair propagates immutable receiver requirements through deferred keys
+and lexical arrows, and makes arrow compilation allocate/capture that receiver
+cell. Ordinary functions, methods, fields and static blocks own their receiver
+and stop propagation; each still prepares its own nested code. Focused tests
+cover these boundaries, escaping arrows, defaults, modules and other context.
+
 The [first candidate record](archive/T069-first-candidate.md) freezes baseline,
 profile, correctness and triage receipts. Candidate `74e8f8aa` passes all 42,672
 configured Test262 cases, but its triage is `likely loss`; that gate deferred
@@ -121,7 +131,7 @@ or active-frame scheduler is changed.
   both wall and instructions. This is a diagnostic spending trigger, not an
   acceptance change: the complete K=6 screen keeps every frozen gate.
 - The trigger passed: target wall geomean 0.929874, instructions 0.921258.
-  Attempt 1 is collecting. Full candidate conformance passes and is recorded
+  Attempt 1 completed with the strict misses above. Candidate conformance is recorded
   in the burndown; local release/agents image SHA-256
   `564d32f4c423a05495c81f6a161c335b20d1fbfb9b0f982fafb27a368238ec59`.
 - `20261023T082854Z-t069-rss15`: exit 0, all 15-pair RSS limits pass;
