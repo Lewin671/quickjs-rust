@@ -81,13 +81,10 @@ impl<'a> Vm<'a> {
         // afterwards -- is therefore unobservable work for most calls, and it
         // dominated builtin-heavy workloads.
         //
-        // Three kinds of caller keep the snapshot. A frame that can resolve
-        // names dynamically needs it for itself: a direct `eval`, a `with`
-        // body, or one already carrying deoptimized bindings. A frame that
-        // creates a closure needs it for the callee's sake, because that
-        // closure may be handed to the builtin and may run a direct `eval`,
-        // which resolves free names through the environment the builtin was
-        // invoked with.
+        // Eval/with anywhere in nested code, retained with/deopt scopes and
+        // marked-realm closure contexts keep the legacy view. Static
+        // callbacks observe captured bindings through shared cells; exporting
+        // their caller's names adds no authority those callbacks need.
         VmCallEnv {
             env: self.callee_env(),
             origin: self.callee_env_origin(),
@@ -97,30 +94,22 @@ impl<'a> Vm<'a> {
     /// The provenance matching [`Self::callee_env`]. Kept beside it so the two
     /// cannot answer differently.
     fn callee_env_origin(&self) -> VmCallEnvOrigin {
-        if self.bytecode.contains_direct_eval()
-            || self.bytecode.contains_with()
-            || self.bytecode.creates_closures()
+        if self.bytecode.has_dynamic_scope_tree()
+            || !self.with_stack().is_empty()
             || self.env.deopt_bindings().is_some()
+            || self.bytecode.creates_closures() && self.env.has_realm_override_context()
         {
             return VmCallEnvOrigin::InheritedDynamicFrame;
         }
         VmCallEnvOrigin::RealmOnly
     }
 
-    /// The environment to hand to code that runs on this frame's behalf but
-    /// does not close over it: a native builtin, a getter or setter, a Proxy
-    /// trap, or a `toString`/`valueOf` hook. Such code resolves names through
-    /// the realm, so the caller's slots need not be materialized as a
-    /// name-keyed frame -- unless this frame can resolve names dynamically
-    /// (direct `eval`, `with`, or deoptimized bindings), or it creates a
-    /// closure that could be handed onward and run a direct `eval`, which
-    /// resolves free names through the environment it was invoked with.
+    /// Services for native calls, getters, setters, traps and coercion hooks.
+    /// Static closures use shared cells, including writes through callbacks;
+    /// only a frame with dynamic lookup requirements exports a named view.
+    /// Natives still own their environment and may mutate the realm/cells.
     pub(super) fn callee_env(&self) -> CallEnv {
-        if self.bytecode.contains_direct_eval()
-            || self.bytecode.contains_with()
-            || self.bytecode.creates_closures()
-            || self.env.deopt_bindings().is_some()
-        {
+        if self.callee_env_origin() == VmCallEnvOrigin::InheritedDynamicFrame {
             return self.current_env();
         }
         self.realm_env()
@@ -129,5 +118,68 @@ impl<'a> Vm<'a> {
     pub(super) fn apply_call_env(&mut self, env: VmCallEnv) {
         self.apply_env(env.env);
         self.refresh_realm_backed_locals_from_realm();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bytecode::compiler::compile_script;
+
+    #[test]
+    fn static_callbacks_need_cells_without_a_caller_name_view() {
+        let script = qjs_parser::parse_script(
+            "let value = 1; const callback = function () { value++; }; [1].forEach(callback);",
+        )
+        .unwrap();
+        let code = compile_script(&script).unwrap();
+        assert!(code.creates_closures());
+        let vm = Vm::new(&code).unwrap();
+        assert_eq!(vm.callee_env_origin(), VmCallEnvOrigin::RealmOnly);
+        assert!(!vm.callee_env().has_writable_frame_state());
+    }
+
+    #[test]
+    fn nested_dynamic_callbacks_keep_the_caller_name_view() {
+        for source in [
+            "let value = 1; const callback = function () { return eval('value'); };",
+            "let value = 1; class C { method() { return eval('value'); } }",
+            "let value = 1; with ({}) { value++; }",
+        ] {
+            let script = qjs_parser::parse_script(source).unwrap();
+            let code = compile_script(&script).unwrap();
+            let vm = Vm::new(&code).unwrap();
+            assert_eq!(
+                vm.callee_env_origin(),
+                VmCallEnvOrigin::InheritedDynamicFrame,
+                "{source}"
+            );
+        }
+    }
+
+    #[test]
+    fn static_closures_preserve_marked_realm_views_even_when_disabled() {
+        let script =
+            qjs_parser::parse_script("const callback = function () { return 1; };").unwrap();
+        let code = compile_script(&script).unwrap();
+        let mut vm = Vm::new(&code).unwrap();
+        for marker in [
+            Value::Object(crate::ObjectRef::new(std::collections::HashMap::new())),
+            Value::Boolean(false),
+        ] {
+            vm.env.insert(
+                "__quickjsRustDynamicFunctionRealm".to_owned(),
+                marker.clone(),
+            );
+            assert_eq!(
+                vm.callee_env_origin(),
+                VmCallEnvOrigin::InheritedDynamicFrame
+            );
+            assert_eq!(
+                vm.callee_env()
+                    .get_local("__quickjsRustDynamicFunctionRealm"),
+                Some(marker)
+            );
+        }
     }
 }

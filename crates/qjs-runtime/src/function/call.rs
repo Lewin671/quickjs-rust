@@ -22,8 +22,8 @@ use crate::{
     FIELD_INITIALIZER_EVAL_BINDING, Function, GLOBAL_THIS_BINDING, NativeFunction, ObjectRef,
     RuntimeError, Value,
     bytecode::{
-        DirectCallSlots, DirectCallUpvalues, eval_direct_call_bytecode, eval_function_bytecode,
-        try_eval_numeric_leaf, try_eval_this_property_leaf,
+        DirectCallSlots, DirectCallUpvalues, eval_call_bytecode, eval_direct_call_bytecode,
+        eval_function_bytecode, try_eval_numeric_leaf, try_eval_this_property_leaf,
     },
     function_prototype,
     native::call_native_function,
@@ -336,6 +336,11 @@ fn run_prepared_bytecode_call(
         let result = eval_direct_call_bytecode(&bytecode, env, slots);
         apply_completion_to_caller(&mut completion, caller_env);
         return result;
+    }
+    if !completion.finishes_derived_construct() {
+        let value = eval_call_bytecode(&bytecode, env, upvalues, with_stack, positional_arguments);
+        apply_completion_to_caller(&mut completion, caller_env);
+        return value;
     }
     let result = eval_function_bytecode(
         &bytecode,

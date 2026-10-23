@@ -239,6 +239,16 @@ pub(crate) fn eval_function_bytecode<'a>(
     )
 }
 
+pub(crate) fn eval_call_bytecode(
+    bytecode: &Bytecode,
+    env: crate::CallEnv,
+    upvalues: Vec<crate::function::Upvalue>,
+    with_stack: Vec<Value>,
+    positional_arguments: Option<&[Value]>,
+) -> Result<Value, RuntimeError> {
+    vm::eval_call_bytecode(bytecode, env, upvalues, with_stack, positional_arguments)
+}
+
 /// The immutable source of received-upvalue cells for a slot-seeded call.
 ///
 /// User functions retain their upvalue vector for their whole lifetime. A

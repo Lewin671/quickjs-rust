@@ -161,13 +161,13 @@ fn an_ordinary_call_hands_over_an_environment_that_cannot_carry_markers() {
 fn a_callee_handed_the_callers_dynamic_view_still_scrubs() {
     // A Proxy callee is neither a user bytecode function (which would get its
     // own fresh frame) nor a plain native (which resolves through the realm),
-    // so a closure-creating caller hands it that caller's own dynamic name
-    // view. That environment can carry markers, so the scrub must remain.
+    // so a caller with an eval-bearing closure retains its dynamic name view.
+    // That environment can carry markers, so the scrub must remain.
     let (_, counters) = counted(
         "var proxied = new Proxy(function (value) { return value; }, {});
          function caller(value) {
              var captured = value;
-             var closure = function () { return captured; };
+             var closure = function () { return captured + eval('0'); };
              return proxied(value) + closure();
          }
          var total = 0;

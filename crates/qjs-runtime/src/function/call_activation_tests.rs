@@ -296,3 +296,43 @@ fn generator_prologue_retains_parameter_context() {
         Ok(Value::Number(5.0))
     );
 }
+
+#[test]
+fn static_native_callbacks_keep_cells_live_across_throws() {
+    assert_eq!(
+        eval(
+            "function outer(x) { let read = function () { return x; }; try { [2,3].map(function (a) { let keep = function () { return a; }; a += 10; throw keep(); }); } catch (e) { x += e; } return read(); } outer(5);"
+        ),
+        Ok(Value::Number(17.0))
+    );
+}
+
+#[test]
+fn mapped_arguments_keep_distinct_cells_after_frame_storage_reuse() {
+    assert_eq!(
+        eval(
+            "function make(value) { let args = arguments; let read = function () { return value; }; return {args: args, read: read}; } let a = make(1), b = make(2); a.args[0] = 9; a.read() + ':' + b.read();"
+        ),
+        Ok(Value::String("9:2".to_owned().into()))
+    );
+}
+
+#[test]
+fn escaped_thrown_closures_outlive_recycled_cold_state() {
+    assert_eq!(
+        eval(
+            "function make(value, fail) { let read = function () { return value; }; try { if (fail) throw read; return read; } finally {} } let first; try { make(3, true); } catch (e) { first = e; } let second = make(5, false); first() + ':' + second();"
+        ),
+        Ok(Value::String("3:5".to_owned().into()))
+    );
+}
+
+#[test]
+fn static_coercion_hooks_update_the_shared_parameter_cell() {
+    assert_eq!(
+        eval(
+            "function outer(value) { let read = function () { return value; }; let object = { valueOf() { value += 2; return 1; } }; let result = +object; return read() + ':' + result; } outer(5);"
+        ),
+        Ok(Value::String("7:1".to_owned().into()))
+    );
+}

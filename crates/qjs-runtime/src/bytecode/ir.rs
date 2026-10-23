@@ -692,7 +692,9 @@ pub struct Bytecode {
     /// preserves duplicate parameter positions so direct-call seeding can use
     /// this vector without repeating name-table lookups.
     parameter_slots: Vec<usize>,
-    pub(super) frame_init_plan: super::frame_init_plan::FrameInitPlan,
+    /// Entry-only vectors stay out of the bytecode's hot payload. This one
+    /// allocation belongs to the body, not to any of its activations.
+    pub(super) frame_init_plan: Box<super::frame_init_plan::FrameInitPlan>,
     received_upvalue_slots: Vec<usize>,
     /// Whether direct-call frame setup may need per-local upvalue storage for
     /// an outer capture or sloppy global fallback. Module imports are tracked
@@ -767,7 +769,7 @@ pub struct Bytecode {
     /// single-slot pool only ever served the outermost frame and every nested
     /// call allocated and freed one. Cloned bytecode shares the same pool.
     pub(super) operand_stack_pool: OperandStackRecycler,
-    /// Cleared local-slot allocations reused by slot-seeded direct calls.
+    /// Cleared local-slot allocations reused by completed synchronous calls.
     pub(super) local_slot_pool: super::operand_stack::LocalSlotRecycler,
     /// Cleared cold-frame boxes handed back by completed direct calls, so a
     /// body that opens a `try` on every call does not allocate one per call.
@@ -933,7 +935,7 @@ impl Bytecode {
             this_slot,
             constant_return,
             parameter_slots,
-            frame_init_plan: super::frame_init_plan::FrameInitPlan::default(),
+            frame_init_plan: Box::default(),
             received_upvalue_slots,
             has_direct_local_upvalue_routes,
             direct_readonly_received_upvalue_slots: 0,
@@ -1040,7 +1042,7 @@ impl Bytecode {
         } else {
             bytecode.readonly_received_upvalue_slots
         };
-        bytecode.frame_init_plan = super::frame_init_plan::FrameInitPlan::compile(&bytecode);
+        *bytecode.frame_init_plan = super::frame_init_plan::FrameInitPlan::compile(&bytecode);
         bytecode
     }
 

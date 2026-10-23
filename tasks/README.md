@@ -10,7 +10,7 @@ it to `archive/` with `git mv` and move its row below.
 
 | Task | Status | What it is |
 | --- | --- | --- |
-| [T069](T069-call-activation.md) call activation preparation | active | Freeze the T068 calls/environment unit, then cache immutable frame metadata and seed positional call slots. |
+| [T069](T069-call-activation.md) call activation preparation | active | Broader static-callback preparation after the [first diagnostic](archive/T069-first-candidate.md); frozen targets and budget unchanged. |
 | [T068](T068-post-t066-profile.md) post-T066 profiles | active | All ten development programs profiled on exact f49be95c/NG; owner attribution complete, ranked incremental proposals await selection. |
 | [T057](T057-string-code-units.md) string code units | active | Stage 1 and UTF-16 correctness extraction integrated; stage 2 abandoned (0 attempts); linear-search follow-up awaits screening. |
 | [T065](T065-interpreter-core-v3.md) interpreter core v3 | active | Ablation complete; rewrite not approved (lead, 2026-10-23); incremental units come from a fresh post-T066 profile. |

@@ -23,7 +23,7 @@ impl Bytecode {
 
     /// Takes `len` cleared local slots from this body's pool, or allocates
     /// them. Unlike the operand stack this is not handed out as a cloned
-    /// handle: both call sites already hold the bytecode, and cloning an `Rc`
+    /// handle: call sites already hold the bytecode, and cloning an `Rc`
     /// twice per call to save one allocation is a wash.
     pub(super) fn take_local_slots(&self, len: usize) -> Vec<Option<Value>> {
         self.local_slot_pool.take(len)

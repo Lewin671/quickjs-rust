@@ -1,15 +1,16 @@
 # T069: Positional call and activation preparation
 
-- Status: active; first implementation ready for committed measurement.
-- Implementation: present in the working tree over frozen-plan commit `982d19b5`.
-- Verified at: this runtime working tree, 2026-10-23: full gate passes,
-  2,359 runtime tests (24 new), 732 benchmark-tool tests, 35 script tests,
-  5,170 curated Test262 cases; dedicated activation and IR tests pass.
+- Status: active; broader preparation revision after the first diagnostic.
+- Implementation: repair working tree over `74e8f8aa`; first candidate remains committed.
+- Verified at: broader working tree over `74e8f8aa`, 2026-10-23: full gate
+  passes, 2,366 runtime tests (31 new), 732 benchmark-tool tests, 35 script
+  tests and 5,170 curated Test262 cases. Complete 42,672-case conformance
+  currently applies to first candidate `74e8f8aa`, not yet this revision.
 - Evidence: this task, [plan](performance-units/positional-call-activation.json),
   [T068 profiles](archive/T068-profile-evidence.md).
-- Unresolved: candidate measurement, complete candidate conformance and lead decision;
+- Unresolved: candidate measurement and lead decision;
   pre-existing dynamic-closure gap below.
-- Next action: commit the candidate, run queued QuickJS-NG comparisons and triage.
+- Next action: finish the broader revision gates, commit it, and queue its correctness and triage. Do not change the frozen targets.
 
 ## Goal and selection
 
@@ -88,63 +89,24 @@ do not encode the wrong result as a behavioral regression test. The current
 - T070 owns executor operand/register transfer; do not restructure those paths.
 - No push, merge, main-checkout edits or promotion decision.
 
-## Job ledger
+## Evidence and current revision
 
-- `20261023T044841Z-t069-baseline-queue`: cancelled while queued (130), no
-  measurements. The already-running T070 baseline job has exactly the same
-  base/candidate, 30 blocks and workers-4 command; reuse its sealed bundle
-  `20261023T044840Z-t070-base-queue` rather than duplicate host work.
-- `20261023T045032Z-t069-exact-profiles`: exit 0; three complete-process
-  1ms sample runs for each of the five selected development programs at b93e4daa.
-  All 15 receipts and copied assets verify against exact image
-  `b3132b40cc52b9b39012089db873c25dc7d2a1802e249322c1891577edee58c1`.
-- Shared baseline `20261023T044840Z-t070-base-queue`: exit 0 in 2,085 s,
-  but unhealthy: base `branch_arithmetic` linearity 1.1696704 exceeds 1.15.
-  All 30 blocks and samples are retained; no queue may use it. The Rust roles
-  are byte-identical (`b3132b40...`), so this is not a candidate effect.
-- `20261023T052725Z-t069-baseline-replacement`: exit 0 in 2,016 s; healthy
-  whole-bundle replacement with `ready_for_unit_gates`, no measurement issues,
-  same refs, 30 blocks and workers-4. No samples or lanes are pooled with the
-  invalid bundle. This is a pre-implementation baseline, not a unit attempt.
-- `20261023T052759Z-t069-bind-replacement`: exit 0; queue generated only
-  from that replacement's complete healthy sealed bundle.
+The [first candidate record](archive/T069-first-candidate.md) freezes baseline,
+profile, correctness and triage receipts. Candidate `74e8f8aa` passes all 42,672
+configured Test262 cases, but its triage is `likely loss`; the prospective gate
+correctly deferred. **No screen attempt has been spent (0/2).**
 
-Fresh setup-frame inclusive unions (all three repetitions, recursion counted
-once) bind the preselected programs; they do not retarget the unit:
-
-| Development program | Setup union / main-thread samples |
-| --- | ---: |
-| lodash/transform | 368 / 4,439 |
-| immutable/persistent | 1,278 / 9,249 |
-| diff/compare | 1,015 / 14,787 |
-| graphlib/paths | 386 / 3,248 |
-| moment/dates | 997 / 26,068 |
-
-The union recognizes `function_env`, FrameBindings, initial slot/cell/mask
-routes, function-frame/VM constructors, frame_call_env/callee_env, seeding
-eligibility and captured-cell indexing. It excludes body-level slow binding
-access that positional authority can also remove, but may include coercion
-called during setup. It is reach, not a savings forecast. Receipt hashes and
-per-repetition fractions will be bound in the frozen plan.
-
-Base full-gate log SHA-256:
-`ed6fc08f35cbf3afec8ccfe841e6c00e0651f4f24821af2c27342ccbc5b04015`.
-The log under `target/t069/base-check.log` is local and will be cleaned;
-the counts and revision above are the durable result.
-
-Before runtime changes, a complete local release/agents scan of b93e4daa also
-passes all **42,672 configured cases**, with zero failures/timeouts/not-run
-and zero actionable gaps (NG 42,602 pass / 70 fail). The complete entry is
-appended to `docs/conformance/burndown.jsonl`. Exact unchanged harness scripts
-and copies of the pinned test/harness directories ran under
-`target/t069/conformance`; the reference executables were read-only links to
-the main checkout. No checkout's `third_party` was modified. Eight workers,
-30-second case timeout, `QJS_AGENTS=1`; unsupported NG-excluded cases are not
-included in the configured-case claim. Raw evidence is local, not retained.
-
-- Rust binary SHA-256: `557c0dd0a571d2ddb1b152c162bbf5f573f0e37fcfb7e25043427beb9e9c514d`.
-- Rust case JSONL: `18f6a9a9db9a442f52f9b05ca9ffa618a877488360972eb6ef7a72f9ccc5c549`.
-- NG case JSONL: `aae13b897e579f5f35ba7226d9e0c4a78d7105bb18cc33c7275986aa02e775cb`.
+A broader preparation revision is present over `74e8f8aa`: static callbacks
+keep shared cells without caller name export, marked/dynamic/with contexts
+retain their compatibility views, global refresh visits precomputed fallback
+slots, and ordinary completion recycles cleared storage in place. Derived and
+suspended completion routes stay intact. No caller environment is borrowed.
+Full checks and new callback/storage tests precede its next commit.
+Entry metadata is boxed once per body, keeping its vectors out of the hot
+bytecode payload. Active frames remain independent; recycled slots are cleared
+and captured cells are never recycled. Eval/with, retained scopes and marked
+realm views remain on their compatibility routes. No executor register transfer
+or active-frame scheduler is changed.
 
 ## Acceptance and verification
 

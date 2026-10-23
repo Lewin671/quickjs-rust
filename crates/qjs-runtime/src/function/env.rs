@@ -1483,6 +1483,15 @@ impl CallEnv {
         self.dynamic_function_realm_global().is_some()
     }
 
+    /// Preserve marked-realm compatibility views, including a frame marker
+    /// whose non-object value deliberately disables an outer override.
+    pub(crate) fn has_realm_override_context(&self) -> bool {
+        self.scope.realm.has_dynamic_function_realm_global()
+            || self
+                .frame_bindings
+                .contains_key(DYNAMIC_FUNCTION_REALM_GLOBAL)
+    }
+
     pub(crate) fn cached_direct_eval_bytecode(
         &self,
         source: &JsString,

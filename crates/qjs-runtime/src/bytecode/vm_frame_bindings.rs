@@ -16,34 +16,28 @@ use crate::{
 
 impl Vm<'_> {
     pub(super) fn initial_slots(bytecode: &Bytecode, env: &CallEnv) -> Vec<Slot> {
-        bytecode
-            .frame_init_plan
-            .initial_slots
-            .iter()
-            .enumerate()
-            .map(|(slot, route)| {
-                let name = &bytecode.locals[slot].name;
-                let incoming = || {
-                    env.get_local(name).filter(|value| {
-                        !matches!(value,
-                    Value::Function(function) if function.is_uninitialized_lexical_marker())
-                    })
-                };
-                match route {
-                    InitialSlot::Empty => None,
-                    InitialSlot::Undefined => Some(Value::Undefined),
-                    InitialSlot::Frame => env.get_local(name),
-                    InitialSlot::FrameOrUndefined => {
-                        Some(env.get_local(name).unwrap_or(Value::Undefined))
-                    }
-                    InitialSlot::Incoming => incoming(),
-                    InitialSlot::IncomingOrUndefined => {
-                        Some(incoming().unwrap_or(Value::Undefined))
-                    }
-                    InitialSlot::IncomingOrRealm => incoming().or_else(|| env.get_realm(name)),
+        let mut locals = bytecode.take_local_slots(bytecode.locals.len());
+        for (slot, route) in bytecode.frame_init_plan.initial_slots.iter().enumerate() {
+            let name = &bytecode.locals[slot].name;
+            let incoming = || {
+                env.get_local(name).filter(|value| {
+                    !matches!(value,
+                Value::Function(function) if function.is_uninitialized_lexical_marker())
+                })
+            };
+            locals[slot] = match route {
+                InitialSlot::Empty => None,
+                InitialSlot::Undefined => Some(Value::Undefined),
+                InitialSlot::Frame => env.get_local(name),
+                InitialSlot::FrameOrUndefined => {
+                    Some(env.get_local(name).unwrap_or(Value::Undefined))
                 }
-            })
-            .collect()
+                InitialSlot::Incoming => incoming(),
+                InitialSlot::IncomingOrUndefined => Some(incoming().unwrap_or(Value::Undefined)),
+                InitialSlot::IncomingOrRealm => incoming().or_else(|| env.get_realm(name)),
+            };
+        }
+        locals
     }
 
     pub(super) fn initial_local_upvalues(

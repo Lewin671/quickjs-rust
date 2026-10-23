@@ -105,6 +105,35 @@ pub(super) fn eval_function_bytecode<'a>(
     }
 }
 
+/// An ordinary synchronous caller consumes only the value. Keep completed
+/// state in place and recycle cleared storage; escaped bindings remain in
+/// their shared cells, whose identities are never pooled.
+pub(super) fn eval_call_bytecode(
+    bytecode: &Bytecode,
+    env: CallEnv,
+    upvalues: Vec<Upvalue>,
+    with_stack: Vec<Value>,
+    positional_arguments: Option<&[Value]>,
+) -> Result<Value, RuntimeError> {
+    let direct_eval_with_stack = !env.direct_eval_with_stack().is_empty();
+    let mut vm = Vm::with_frame_bytecode(
+        FrameBytecode::Borrowed(bytecode),
+        env,
+        upvalues,
+        with_stack,
+        None,
+        positional_arguments,
+    );
+    vm.persist_global_lexicals = true;
+    vm.direct_eval_with_stack = direct_eval_with_stack;
+    let value = vm.run();
+    bytecode.recycle_local_slots(std::mem::take(&mut vm.current.locals));
+    if let Some(cold) = vm.current.cold.take() {
+        bytecode.recycle_cold_frame(cold);
+    }
+    value
+}
+
 /// Runs a guarded direct call and drops its completed frame in place.
 pub(super) fn eval_direct_call_bytecode(
     bytecode: &Bytecode,
@@ -1362,10 +1391,8 @@ impl<'a> Vm<'a> {
     }
 
     pub(super) fn refresh_realm_backed_locals_from_realm(&mut self) {
-        for index in 0..self.locals.len() {
-            if !self.bytecode.local_is_sloppy_global_fallback(index) {
-                continue;
-            }
+        for position in 0..self.bytecode.frame_init_plan.sloppy_global_slots.len() {
+            let index = self.bytecode.frame_init_plan.sloppy_global_slots[position];
             let Some(name) = self.current.bytecode.local_name_at(index) else {
                 continue;
             };
