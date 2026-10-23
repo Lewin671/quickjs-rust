@@ -1,4 +1,4 @@
-# T065 rounds 1–2 mechanism ablation
+# T065 rounds 1–3 mechanism ablation
 
 Prospective plan committed as `7453fe25` before scratch implementation:
 [Ablation ladder](../T065-interpreter-core-v3.md#ablation-ladder).
@@ -102,6 +102,35 @@ Reading: removing count traffic for the covered handles is worth up to roughly 9
 more than its instruction share (store/cache traffic). Allocation-heavy controls slow down because nothing is freed; a tracing
 collector pays its own cost instead. This is an envelope for non-owning values + GC, not a price; most of the 2.38× instruction
 gap to NG lies elsewhere (property, call, dispatch).
+
+## Round-3b result: named-property lookup (Codex, 2026-10-23)
+
+Branch `agent/t065-abl-property/codex` over main `95b6f03d`: sound outcome counters `168ce2c0` (perf-counters only; full gate
+5170/5170) and never-landing oracle `a01fb4c9` (thread-local 256Ki-entry memo of (object, layout revision, key pointer) → slot or
+own-miss replacing text scans/hashes on bytecode named reads/writes and ordinary prototype walks; negative entries unsound).
+
+Counters `20261023T035859Z-t065-property-counts` (non-timing, seven checksums valid), share of entered named handlers:
+
+| Program | hot | probe | proto | own-data | chain walk | non-Object | compares/hashes per entry |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| big.js | 15.6 | 3.9 | 1.4 | 0.0 | 0.0 | 72.6 | 0.35 / 0.03 |
+| immutable | 46.9 | 23.1 | 3.9 | 2.6 | 0.0 | 16.7 | 1.56 / 0.23 |
+| js-yaml | 41.6 | 3.6 | 0.1 | 34.4 | 0.0 | 20.2 | 0.37 / 0.37 |
+| graphlib | 45.9 | 40.8 | 2.5 | 2.6 | 0.4 | 7.8 | 0.29 / 0.04 |
+| lodash | 4.2 | 47.1 | 0.0 | 0.0 | 0.0 | 48.6 | 0.02 / 0.01 |
+| diff | 5.1 | 54.3 | 8.6 | 4.4 | 14.7 | 12.7 | 7.06 / 0.08 |
+| moment | 22.6 | 38.4 | 9.6 | 0.4 | 9.2 | 13.2 | 4.73 / 0.42 |
+
+Non-Object receivers are mostly Arrays (big.js 64.9%, lodash 45.8%) and Functions (moment 11.8%); occurrence, not cost.
+Triage `20261023T040414Z-t065-property-triage` exit 2, incomplete: moment failed its checksum (oracle unsoundness), its shard
+never reached access-binary-trees; 21 recovered cases replay-validated (105 pairs). Development wall / instructions: big.js
+1.001/1.000, immutable 1.022/1.001, js-yaml 0.991/0.990, graphlib 1.007/0.998, lodash 1.015/1.000, **diff 0.947/0.934**;
+controls json-parse 1.162/1.036, json-stringify 1.079/1.030 (memo overhead). No seven-program geomean exists.
+
+Lead reading: text compare/hash in named lookup is a lever only for diff (and probably moment); for the other five libraries
+caches already answer most accesses. Named-key authority is **not** the main source of the 2.38× instruction gap; a full
+canonical-atom store is deferred. A narrow sound receiver-miss proof / Small-store canonical key for diff/moment stays a
+candidate incremental unit.
 
 ## Correctness and cleanup
 
