@@ -5,7 +5,7 @@
 - Verified at: exact `9aac3558`, 2026-10-23 UTC; full local gate, iMac comparisons/subset, complete local Test262, K=6 selection/held-out, formal and resource replay.
 - Evidence: this frozen record, [plan](../performance-units/positional-call-activation.json), [first candidate](T069-first-candidate.md).
 - Unresolved: strict moment/diff/graphlib target payoff misses require lead adjudication under the prospectively frozen overall-first rule; no final decide/promotion was run.
-- Next action: lead reviews the complete evidence via [active T069](../T069-call-activation.md); do not tune work from held-out results.
+- Next action: lead reviews the complete evidence via [T069](T069-call-activation.md); do not tune work from held-out results.
 
 ## Result for lead review
 

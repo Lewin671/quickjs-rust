@@ -1,7 +1,7 @@
 # T069: First candidate and pre-implementation evidence
 
 - Status: historical-campaign; first engineering candidate diagnosed, no screen attempt started.
-- Implementation: candidate `74e8f8aa`; superseding preparation revision is tracked in [T069](../T069-call-activation.md).
+- Implementation: candidate `74e8f8aa`; superseding preparation revision is tracked in [T069](T069-call-activation.md).
 - Verified at: `74e8f8aa`, 2026-10-23 UTC; full gates, iMac comparisons/subset, complete local conformance and five-pair triage.
 - Evidence: this immutable record and [frozen plan](../performance-units/positional-call-activation.json).
 - Unresolved: no layout-robust performance or formal/held-out claim for this candidate.

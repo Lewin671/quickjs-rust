@@ -1,19 +1,30 @@
 # T069: Positional call and activation preparation
 
-- Status: active; owner receiver repair and verification complete, lead review pending.
+- Status: closed 2026-10-23 — promoted and integrated under the [lead decision](#lead-promotion-decision-2026-10-23).
 - Implementation: receiver repair `e38e85fc`; corrected comparison fixture
   `6c512032`; broader preparation remains present (rebased `66e31330`).
 - Verified at: runtime `6c512032`, 2026-10-23: full gate passes, 2,382 runtime
   tests (16 repair tests), 5,170 curated cases, iMac 257-fixture comparison and
   diagnostic triage; complete exact scan passes 42,672 configured cases, zero gaps.
-- Evidence: [receiver repair and binding audit](archive/T069-call-context-fix.md),
-  [original measurements](archive/T069-final-evidence.md),
-  [plan](performance-units/positional-call-activation.json),
-  [first candidate](archive/T069-first-candidate.md).
-- Unresolved: original moment/diff/graphlib payoff misses, four possible repair
-  triage wall-control flags, and documented pre-existing lexical-thunk gaps.
-- Next action: lead adjudicates the measured unit and control uncertainty;
-  lexical deferred-key context is a conformance follow-up. No promotion, push or merge.
+- Evidence: [receiver repair and binding audit](T069-call-context-fix.md),
+  [original measurements](T069-final-evidence.md),
+  [plan](../performance-units/positional-call-activation.json),
+  [first candidate](T069-first-candidate.md).
+- Unresolved: pre-existing deferred-thunk/eval context gaps (main too) move to a conformance follow-up task.
+- Next action: none for T069.
+
+## Lead promotion decision (2026-10-23)
+
+Overall gates, frozen prospectively under the T022 overall-first rule, all pass on `9aac3558`: formal development 0.957
+(joint 95% 0.956–0.959), external 0.998, equal-case portfolio 0.992, held-out K=6 0.930; RSS development geomean 0.998;
+complete exact Test262 42,672/42,672 with zero gaps. Local failures, recorded not hidden: moment/diff/graphlib miss their
+strict payoff gates (none is slower), one sentinel layout 1.042 over its 1.019 ceiling, and K=6 microbenchmarks up to
+1.029 (array_index_of, plain_function_call) with flat instructions. An independent dsh review found a real regression
+(receiver elided for deferred class computed keys), reproduced by the lead; repair `e38e85fc` adds 16 context tests and
+re-passes the full gate, 257 reference fixtures and the complete scan. Its diagnostic triage keeps the five targets
+(lodash 0.797, immutable 0.927, diff 0.981, graphlib 0.973, moment 1.007) with control instructions within limits, so per
+the lead's prospective condition the full chain is not rerun. The lead promotes T069; no decide command was run, the frozen
+plan is unchanged.
 
 ## Goal and selection
 
@@ -57,7 +68,7 @@ The lead makes the final promotion decision; this owner does not run decide.
    construction completion and suspended-frame ownership remain intact.
    This is neither T021's shared-frame driver nor a register-transfer rewrite.
 
-The protected [binding model](../docs/design/env-model-rewrite.md) is the
+The protected [binding model](../../docs/design/env-model-rewrite.md) is the
 authority: no per-call name-keyed snapshot, no copied binding authority.
 Admission depends on operations and binding requirements, never program names.
 No dependency, unsafe code, compiler recipe or third-party edit is planned.
@@ -106,10 +117,10 @@ cover these boundaries, escaping arrows, defaults, modules and other context.
 
 ## Original measured revisions
 
-The [first candidate record](archive/T069-first-candidate.md) owns the baseline,
+The [first candidate record](T069-first-candidate.md) owns the baseline,
 profile, correctness and rejected initial triage. The broader `9aac3558`
 (rebased `66e31330`) completed the full performance chain recorded in the
-[original frozen measurements](archive/T069-final-evidence.md). Its screen
+[original frozen measurements](T069-final-evidence.md). Its screen
 strictly rejects the moment/diff/graphlib payoff gates while overall aggregates
 improve; one of two screen attempts is spent, with no reset or promotion.
 Those formal/held-out/resource results describe that original binary.
@@ -117,7 +128,7 @@ Those formal/held-out/resource results describe that original binary.
 The lead requested a receiver repair, full correctness gates and one quick
 triage on the same five targets against original base `b93e4daa`. The repaired
 runtime is `e38e85fc`; `6c512032` corrects only the new comparison fixture.
-The [repair record](archive/T069-call-context-fix.md) owns its binding audit,
+The [repair record](T069-call-context-fix.md) owns its binding audit,
 three pre-existing lexical-thunk gaps, correctness results, job ledger, full
 triage table and raw identities. The fixed diagnostic rule finds no obvious
 regression; four possible wall-control flags remain, notably prototype-method
@@ -144,7 +155,7 @@ scope, and the old formal intervals are not claims about this repaired binary.
 ```
 
 Final full gate passes on runtime `6c512032` with the handoff documentation;
-the [repair record](archive/T069-call-context-fix.md) retains its checksum.
+the [repair record](T069-call-context-fix.md) retains its checksum.
 Branch descent/path-scope validation uses the lead's rebased base `311bff0e`.
 Remote CI is unrun because the user requested no origin branch publication.
 Cleanup and complete-scan results are recorded with the repair evidence.

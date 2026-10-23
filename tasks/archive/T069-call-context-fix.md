@@ -114,7 +114,7 @@ class Outer extends Parent { static #k=0; static f() {
 Deferred keys currently run as receiver-owning function thunks, with their own
 arguments/target setup and the new class constructor as home object. Repairing
 that lexical thunk model is a separate conformance action. The unchanged
-eval-only returned-closure gap remains in [active T069](../T069-call-activation.md).
+eval-only returned-closure gap remains in [T069](T069-call-activation.md).
 
 ## Verification and jobs
 
