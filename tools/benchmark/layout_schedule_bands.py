@@ -19,6 +19,9 @@ def estimate(raw, held_aa, selection_ids, held_ids):
     ids = set(selection_ids) | set(held_ids)
     if set(raw) != {(k, n) for k in range(6) for n in ids}:
         raise ValueError('schedule calibration A2 inventory mismatch')
+    from .case_health import require_healthy
+    for record in raw.values():
+        require_healthy(record)
     pairs = rows(held_aa, held_ids, 30)
     bias = {m: max(reciprocal(statistics.median(raw[(0, n)]['ratios'][m])) for n in ids)
             for m in ('wall_ns', 'instructions')}

@@ -79,6 +79,8 @@ PREVIEW_IMPLEMENTATION_FILES = (
     "tools/benchmark/layout_calibration.py",
     "tools/benchmark/layout_iteration.py",
     "tools/benchmark/layout_panel.py",
+    "tools/benchmark/layout_qualification.py",
+    "tools/benchmark/layout_replay.py",
     "tools/benchmark/screen_recording.py",
     "tools/benchmark/pair_recording.py",
     "tools/benchmark/compare.py",

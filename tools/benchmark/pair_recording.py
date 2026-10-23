@@ -67,19 +67,31 @@ def measure(case, candidate, base, pairs, tool, timeout, output, monitor=None, *
             if rows:
                 attempts.append({'index': pair_offset + len(attempts), 'started_at': rows[0]['started_at'],
                                  'ended_at': rows[-1]['ended_at'], 'samples': rows})
-            snapshot = monitor.snapshot()
-            rounds.append({'attempt_count': len(attempts), 'load': snapshot})
-            flags = eligibility(attempts, snapshot)
             packet = {'id': case.id, 'kind': case.kind, 'iterations': iterations, **contract,
                       'calibration': calibration, 'attempts': attempts, 'rounds': rounds,
                       'pair_index_offset': pair_offset, 'complete': False,
-                      'expected_stdout': case.expected_stdout,
-                      'valid_attempt_indices': [i for i, flag in enumerate(flags) if flag]}
-            from .case_health_replay import process_health
-            packet['health'] = process_health(packet, pairs, {'base': str(base), 'candidate': str(candidate)})
-            if case.id.startswith('development/') and digest(case.workload) != contract['workload_sha256']:
-                raise ValueError('development workload changed during measurement')
+                      'expected_stdout': case.expected_stdout}
+            # This is still the recorder's unsealed packet: preserve it before
+            # any secondary check, then atomically finalize it before returning.
             write_json(output, packet)
+            def finalize():
+                pending = output.with_suffix('.unsealed')
+                write_json(pending, packet)
+                pending.replace(output)
+            try:
+                snapshot = monitor.snapshot()
+                rounds.append({'attempt_count': len(attempts), 'load': snapshot})
+                flags = eligibility(attempts, snapshot)
+                packet['valid_attempt_indices'] = [i for i, flag in enumerate(flags) if flag]
+                from .case_health_replay import process_health
+                packet['health'] = process_health(packet, pairs, {'base': str(base), 'candidate': str(candidate)})
+                if case.id.startswith('development/') and digest(case.workload) != contract['workload_sha256']:
+                    raise ValueError('development workload changed during measurement')
+            except Exception as error:
+                packet['error'] = str(error)
+                finalize()
+                raise
+            finalize()
             return failed_result(packet)
         except Exception as error:
             write_json(output, {'id': case.id, 'kind': case.kind, 'iterations': iterations,

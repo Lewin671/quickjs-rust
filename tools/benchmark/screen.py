@@ -659,7 +659,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         except symbols.SymbolError as error:
             print(f"\nsymbol sizes unavailable: {error}")
     if args.json:
-        args.json.write_text(json.dumps({
+        payload = {
             "artifact_type": "quickjs-screen",
             "decision_evidence": False,
             "candidate": str(candidate),
@@ -671,7 +671,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             "cases": [{"id": r.id, "kind": r.kind, "iterations": r.iterations, "ratios": r.ratios,
                        **({"health": r.health} if hasattr(r, "health") else {})} for r in results],
             "gate": verdict,
-        }, indent=2) + "\n", encoding="utf-8")
+        }
+        from .case_health import mark_readiness
+        mark_readiness(payload)
+        args.json.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    if any(hasattr(result, "health") for result in results):
+        from .case_health import INCOMPLETE_EXIT
+        return INCOMPLETE_EXIT
     return 3 if verdict is not None and not verdict["passed"] else 0
 
 

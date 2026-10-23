@@ -10,6 +10,7 @@ import shutil
 from pathlib import Path
 
 from . import screen
+from .case_health import mark_readiness, exit_status
 from .layout_identity import digest, host_identity, write_json
 from .screen_recording import held_out_cases, measure
 
@@ -56,9 +57,9 @@ def collect(binary, sha256, lane, output, workers=1):
     import json
     disturbance = monitor.snapshot()
     conservation = verify_run([json.loads(p.read_text()) for p in (out / 'cases').glob('*.json')], disturbance)
-    write_json(out / 'screen.json', {'artifact_type': 'quickjs-layout-calibration',
+    write_json(out / 'screen.json', mark_readiness({'artifact_type': 'quickjs-layout-calibration',
         'pairs': 30, 'cases': results, **scheduling, 'disturbance': disturbance,
-        'disturbance_counts': conservation, 'quieting': quieting, 'launch_preflight': preflight, 'host': identity, **binding})
+        'disturbance_counts': conservation, 'quieting': quieting, 'launch_preflight': preflight, 'host': identity, **binding}))
 
     if any('health' in row for row in results):
         # Retain the completed inventory, but do not allocate precision retries
@@ -97,8 +98,10 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--workers', type=int, choices=range(1, 9), default=1)
     args = parser.parse_args()
-    collect(args.binary, args.sha256, args.lane, args.output, args.workers)
+    import json
+    path = collect(args.binary, args.sha256, args.lane, args.output, args.workers)
+    return exit_status(json.loads(path.read_text()))
 
 
 if __name__ == '__main__':
-    main()
+    raise SystemExit(main())

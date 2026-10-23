@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 
 from .layout_identity import digest, host_identity, write_json
+from .case_health import CaseHealthFailure, INCOMPLETE_EXIT, exit_status, require_healthy
 
 
 def load(path):
@@ -26,7 +27,10 @@ def retry(output, count, run):
         target = output / f'attempt{attempt}'
         try:
             result = run(target)
-            write_json(output / 'result.json', {'path': str(result), 'sha256': digest(result)})
+            payload = {'path': str(result), 'sha256': digest(result)}
+            if exit_status(load(result)):
+                payload.update(readiness='incomplete', inventory_complete=True)
+            write_json(output / 'result.json', payload)
             return result
         except (ValueError, subprocess.CalledProcessError) as error:
             # Subprocess errors need their retained stderr checked by the caller;
@@ -40,6 +44,7 @@ def receipt(folder):
     path = Path(value['path'])
     if digest(path) != value['sha256']:
         raise ValueError('calibration stage receipt changed')
+    require_healthy(load(path))
     return path
 
 
@@ -72,6 +77,16 @@ def main():
     parser.add_argument('--formal', type=Path)
     parser.add_argument('--formal-power', type=Path)
     args = parser.parse_args()
+    try:
+        return run(args)
+    except CaseHealthFailure as error:
+        write_json(Path(os.environ['BENCH_OUT'])/'incomplete.json', {
+            'readiness': 'incomplete', 'inventory_complete': True,
+            'health': error.health, 'error': str(error)})
+        return INCOMPLETE_EXIT
+
+
+def run(args):
     plan = load(args.plan)
     from .case_schedule import binding
     if plan['measurement_schedule'] != binding(4):
@@ -100,11 +115,13 @@ def main():
         from .layout_development_a2 import collect
         source = args.inputs / ('portfolio-matrix' if args.lane == 'portfolio' else 'npm-matrix') / 'identity.json'
         image = plan['portfolio_image'] if args.lane == 'portfolio' else plan['npm_image']
-        retry(out, plan['max_load_replacements'], lambda target: collect(source, target, image, args.lane, 4))
+        result = retry(out, plan['max_load_replacements'], lambda target: collect(source, target, image, args.lane, 4))
+        return exit_status(load(result))
     elif stage in ('estimator', 'pilot'):
         binary = args.inputs/'npm-matrix/binaries/variant0/qjs'
         from .layout_calibration import collect
-        retry(out, plan['max_load_replacements'], lambda target: collect(binary, plan['npm_image'], args.lane, target, 4))
+        result = retry(out, plan['max_load_replacements'], lambda target: collect(binary, plan['npm_image'], args.lane, target, 4))
+        return exit_status(load(result))
     elif stage == 'seed':
         from .layout_schedule_bands import inputs
         lanes = {load(receipt(p))['artifact_type'].removeprefix('quickjs-').removesuffix('-layout-a2'): receipt(p) for p in args.a2}
@@ -126,10 +143,20 @@ def main():
         root = out/'panel'
         base, cand = [args.inputs/p/'identity.json' for p in ('base000','cand000')]
         natural = measure_panel(base, cand, root, natural=True, development=True, workers=args.workers)
+        if exit_status(natural):
+            write_json(out/'speed.json', {'workers': args.workers, 'screen_seconds': natural['collection_seconds'],
+                       'panel_seconds': None, 'natural_sha256': digest(root/'panel.json'), 'panel_sha256': None,
+                       'readiness': 'incomplete', 'inventory_complete': True,
+                       'completion_skipped': 'natural case health failure'})
+            return INCOMPLETE_EXIT
         panel = measure_panel(base, cand, root, complete=True, development=True, workers=args.workers)
-        write_json(out/'speed.json', {'workers': args.workers, 'screen_seconds': natural['collection_seconds'],
-                   'panel_seconds': sum(r['collection_seconds'] for r in panel['disturbance_runs']),
-                   'natural_sha256':digest(root/'panel.json'), 'panel_sha256':digest(root/'complete.json')})
+        value = {'workers': args.workers, 'screen_seconds': natural['collection_seconds'],
+                 'panel_seconds': sum(r['collection_seconds'] for r in panel['disturbance_runs']),
+                 'natural_sha256':digest(root/'panel.json'), 'panel_sha256':digest(root/'complete.json')}
+        if exit_status(panel):
+            value.update(readiness='incomplete', inventory_complete=True)
+        write_json(out/'speed.json', value)
+        return exit_status(value)
     return 0
 
 

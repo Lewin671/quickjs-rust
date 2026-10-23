@@ -5,6 +5,23 @@ from .screen import MIN_INCREMENT_NS
 from .case_health import CaseHealthFailure, diagnostics
 
 
+def development_contract(raw):
+    """Use the same frozen development identity for healthy and failed cases."""
+    from .development import load_development_manifest, MANIFEST_PATH
+    from .external_preview import _EXPECTED_STDOUT_BY_ROLE
+    _, suite_id, case_id = raw['id'].split('/')
+    manifest = load_development_manifest(MANIFEST_PATH)
+    if raw.get('development_manifest_sha256') != manifest.sha256:
+        raise ValueError('development screen manifest mismatch')
+    if raw.get('timeout_seconds') != manifest.measurement.timeout_for(suite_id, case_id):
+        raise ValueError('development screen timeout mismatch')
+    from .performance_schema import _sha256
+    _sha256(raw.get('workload_sha256'), 'development screen workload')
+    case = next(c for s in manifest.suites if s.id == suite_id for c in s.cases if c.id == case_id)
+    expected = f'CHECKSUM {case.expected_checksum}\n' + _EXPECTED_STDOUT_BY_ROLE['candidate']
+    return expected
+
+
 def _costs(raw, pairs, binaries, indices=None, accepted=None):
     if raw['kind'] not in ('internal', 'whole'):
         raise ValueError('unknown screen case kind')
@@ -16,18 +33,7 @@ def _costs(raw, pairs, binaries, indices=None, accepted=None):
         raise ValueError('screen internal iterations must be a positive integer')
     samples = raw['samples']
     if raw['id'].startswith('development/'):
-        from .development import load_development_manifest, MANIFEST_PATH
-        from .external_preview import _EXPECTED_STDOUT_BY_ROLE
-        _, suite_id, case_id = raw['id'].split('/')
-        manifest = load_development_manifest(MANIFEST_PATH)
-        if raw.get('development_manifest_sha256') != manifest.sha256:
-            raise ValueError('development screen manifest mismatch')
-        if raw.get('timeout_seconds') != manifest.measurement.timeout_for(suite_id, case_id):
-            raise ValueError('development screen timeout mismatch')
-        from .performance_schema import _sha256
-        _sha256(raw.get('workload_sha256'), 'development screen workload')
-        case = next(c for s in manifest.suites if s.id == suite_id for c in s.cases if c.id == case_id)
-        expected = f'CHECKSUM {case.expected_checksum}\n' + _EXPECTED_STDOUT_BY_ROLE['candidate']
+        expected = development_contract(raw)
         if any(row['sample']['stdout'] != expected for row in samples):
             raise ValueError('development screen checksum mismatch')
     if len(samples) != pairs * (4 if internal else 2):

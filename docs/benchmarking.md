@@ -288,7 +288,7 @@ Schema-3 plans bind a versioned host policy and frozen measurement budget.
 Decision schema 5 replays panel/held-out raw samples and canonical formal
 case/lane statistics, binding natural binary hashes to the sealed bundle.
 Field contracts, precision, builder audit and protocol versions live in
-[layout policy artifacts](layout-policy-artifacts.md). Case health failures finish unrelated requested collection while keeping readiness incomplete and suppressing aggregates; the [load-only recovery contract](layout-policy-artifacts.md#load-only-pair-recovery) owns the raw and replay rules. Standing rules live in
+[layout policy artifacts](layout-policy-artifacts.md). Case health failures finish unrelated requested collection, expose top-level incomplete readiness and exit status 4, and suppress aggregates; the [load-only recovery contract](layout-policy-artifacts.md#load-only-pair-recovery) owns the raw and replay rules. Standing rules live in
 [T022](../tasks/T022-performance-priority-controller.md#layout-robust-decisions).
 
 ## Execution counters

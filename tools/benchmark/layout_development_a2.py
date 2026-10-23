@@ -13,6 +13,7 @@ import statistics
 from pathlib import Path
 
 from . import screen
+from .case_health import mark_readiness, exit_status
 from .development import MANIFEST_PATH, opportunity_ids
 from .layout_identity import OFFSETS, digest, host_identity, write_json
 from .layout_panel import matrix
@@ -101,7 +102,10 @@ def collect(matrix_path, output, expected_hash, lane='development', workers=1):
              key: manifest_digest(manifest), **scheduling,
              'binaries': binaries, 'panels': packets, 'case_files': files,
              'quieting': quieting, 'launch_preflight': preflight, 'load': load, 'counts': counts}
+    mark_readiness(value)
     write_json(out / 'a2.json', value)
+    if exit_status(value):
+        return out / 'a2.json'
     replay(out / 'a2.json', expected_hash, lane)
     return out / 'a2.json'
 
@@ -180,8 +184,9 @@ def main():
     parser.add_argument('--lane', choices=LANES, default='development')
     parser.add_argument('--workers', type=int, choices=range(1, 9), default=1)
     args = parser.parse_args()
-    collect(args.matrix, args.output, args.sha256, args.lane, args.workers)
+    path = collect(args.matrix, args.output, args.sha256, args.lane, args.workers)
+    return exit_status(json.loads(path.read_text()))
 
 
 if __name__ == '__main__':
-    main()
+    raise SystemExit(main())

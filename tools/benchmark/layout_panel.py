@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 
 from . import screen
+from .case_health import mark_readiness, exit_status
 from .layout_identity import OFFSETS, digest, host_identity, write_json
 from .layout_policy import load_policy
 from .screen_recording import held_out_cases, measure
@@ -92,6 +93,7 @@ def measure_panel(base_path, candidate_path, output, pairs=5, held=False, natura
     if development and not held:
         from .development import MANIFEST_PATH
         evidence.update(development=True, development_manifest_sha256=digest(MANIFEST_PATH))
+    mark_readiness(evidence)
     write_json(output / ('complete.json' if complete else 'panel.json'), evidence)
     return evidence
 
@@ -114,8 +116,9 @@ def main():
         parser.error('--held-out measures natural placement already')
     if args.pairs < (30 if args.held_out else 5):
         raise ValueError('need >=5 panel pairs or >=30 held-out promotion pairs')
-    measure_panel(args.base_matrix, args.candidate_matrix, args.output, args.pairs, args.held_out, args.natural, args.complete, args.held_out_panel, args.development, args.workers)
+    evidence = measure_panel(args.base_matrix, args.candidate_matrix, args.output, args.pairs, args.held_out, args.natural, args.complete, args.held_out_panel, args.development, args.workers)
+    return exit_status(evidence)
 
 
 if __name__ == '__main__':
-    main()
+    raise SystemExit(main())

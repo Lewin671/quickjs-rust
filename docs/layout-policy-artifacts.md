@@ -146,7 +146,13 @@ Its `complete: true` means the requested process inventory completed, not that
 acceptance evidence is usable. Timeout, nonzero engine exit, or checksum failure
 instead records `collection: failed`, `complete: false`, the partial attempt or
 calibration, and the failed process result/output when available. These failures
-are never waived by load eligibility. Infrastructure errors (spawn failure,
+are never waived by load eligibility. The recorder writes the unsealed raw
+failure packet before monitor/replay/workload checks, then atomically finalizes
+its own packet before returning. A secondary error is retained alongside all
+available raw processes and re-raised; replay refuses packets carrying that
+infrastructure error. Failed development packets use the healthy path's frozen
+manifest, timeout and workload-hash contract, and expected stdout is derived
+from the lane contract rather than trusted from the raw file. Infrastructure errors (spawn failure,
 missing counters, malformed load history, I/O, caps) still abort; they are not
 converted into usable case evidence.
 
@@ -154,7 +160,21 @@ Serial and case-sharded schedulers finish all other already requested cases
 and layouts after a terminal case failure. Failed summary rows have empty
 `ratios` and the replayed `health`; healthy rows keep their historical shape.
 Affected panel packets say `inventory_complete: true`, `readiness: incomplete`.
-Incomplete verdicts list every case's collection and analysis state.
+Incomplete verdicts list every case's collection and analysis state. Calibration,
+A2, panel, screen, replay and iteration artifacts also expose these markers at
+their top level when health fails; healthy artifact bytes are unchanged. Their
+commands exit **4** for case-health incompleteness (ordinary gate failure remains
+3). Schedule-calibration estimator/pilot/A2 receipts and speed reports propagate
+the same state and exit status; health failures never trigger load replacements.
+Statistical consumers raise `CaseHealthFailure`, rather than reading absent
+costs/ratios. Other infrastructure errors retain their existing failure paths.
+
+After a natural health failure, automatic iteration and speed collection stop
+before requesting variants 1..5, even when K=6 would be mandatory for acceptance:
+those samples cannot repair the failed required case. Every case/layout already
+requested from the scheduler still finishes. An explicit panel collection or
+`--complete` remains available for a separately requested diagnostic inventory;
+it cannot change the failed attempt's standing or budget.
 A missing/interrupted case is not a terminal health result: replay still refuses
 an incomplete inventory. Failed raw packets carry no usable `samples`, `costs`
 or `ratios`. Screen and panel replay authenticate health from raw processes,

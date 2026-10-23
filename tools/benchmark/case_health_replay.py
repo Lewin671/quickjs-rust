@@ -23,8 +23,23 @@ def process_health(raw, pairs, binaries):
         # Calibration may fail before a usable N exists.
         if raw['attempts'] or raw['iterations'] is not None:
             raise ValueError('invalid failed case iterations')
-    case = screen.CaseSpec(raw['id'], raw['kind'], Path('/unused'),
-                           expected_stdout=raw.get('expected_stdout'))
+    expected = raw.get('expected_stdout')
+    if raw['id'].startswith('development/'):
+        from .screen_replay import development_contract
+        expected = development_contract(raw)
+    elif raw['id'].startswith('external/'):
+        from .external_preview import _EXPECTED_STDOUT_BY_ROLE
+        expected = _EXPECTED_STDOUT_BY_ROLE['candidate']
+    elif raw['id'].startswith('held-out/'):
+        from .held_out import load_held_out_manifest, MANIFEST_PATH
+        from .external_preview import _EXPECTED_STDOUT_BY_ROLE
+        _, suite, name = raw['id'].split('/')
+        manifest = load_held_out_manifest(MANIFEST_PATH)
+        case = next(c for s in manifest.suites if s.id == suite for c in s.cases if c.id == name)
+        expected = f'CHECKSUM {case.expected_checksum}\n' + _EXPECTED_STDOUT_BY_ROLE['candidate']
+    if expected != raw.get('expected_stdout'):
+        raise ValueError('failed case stdout contract mismatch')
+    case = screen.CaseSpec(raw['id'], raw['kind'], Path('/unused'), expected_stdout=expected)
 
     def check(row, role, count, location):
         nonlocal workload
@@ -81,6 +96,8 @@ def process_health(raw, pairs, binaries):
 
 def replay_health(raw, pairs, binaries):
     from .screen_replay import replay_attempts
+    if 'error' in raw:
+        raise ValueError('case recording infrastructure failure: ' + raw['error'])
     if any(raw.get(key) for key in ('ratios', 'costs', 'samples')):
         raise ValueError('failed case carries usable analysis')
     if raw['health']['collection'] == 'failed':

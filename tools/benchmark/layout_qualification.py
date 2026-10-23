@@ -129,6 +129,8 @@ def replay_calibration(path, binary_sha256):
         file = folder / 'cases' / (case['id'].replace('/', '--') + '.json')
         expected_files.add(file.name)
         raw = json.loads(file.read_text())
+        from .case_health import require_healthy
+        require_healthy(raw)
         if raw['id'] != case['id'] or raw['ratios'] != case['ratios']:
             raise ValueError('calibration raw/report mismatch')
         replay_case(raw, 30, dict(zip(('base', 'candidate'), binaries)))

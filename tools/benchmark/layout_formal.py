@@ -44,16 +44,23 @@ def evaluate_formal(unit, summary, broad, external, sentinel, mode, panel_path, 
         memory_targets=gate['memory_wall_targets'], promotion=mode == 'promotion',
         panel_required=gate['panel_required'], stage=mode == 'stage',
         stage_limit=unit.get('migration', {}).get('stage_max_candidate_over_base', 1.25))
-    if verdict.get('case_health'):
-        # Authenticated failed inventory can never reach formal log/geomean or
-        # resource analysis, even if an unrelated formal bundle is complete.
-        hashes = {'policy_sha256': gate['policy_sha256'], 'layout_panel_sha256': digest(panel_path),
-                  'held_out_panel_sha256': digest(held_path) if held_path else None}
-        return verdict, verdict['missing'], [], hashes
     missing.extend(verdict['missing'])
     failed.extend(verdict['failures'])
     if gate['panel_required'] and len(panels) != 6:
         missing.append('frozen plan requires K=6')
+    if verdict.get('case_health'):
+        # Preserve bindings and pre-existing diagnostics without computing any
+        # formal aggregate. Supplied continuation chains still need raw replay.
+        continuation_hashes = {}
+        if formal_continuations:
+            if formal_bundle is None:
+                raise ValueError('formal continuation requires its sealed formal bundle')
+            from .layout_formal_raw import extract
+            wall = extract(formal_bundle, policy['host_node'], development='development' in policy['lanes'])
+            _, continuation_hashes = continued_cases(policy, formal_bundle, wall, formal_continuations)
+        verdict['missing'] = missing
+        return verdict, missing, failed, evidence_hashes(gate, panel_path, held_path,
+                                                        held_policy_sha, continuation_hashes)
     wall = {}
     if formal_bundle is None:
         missing.append('canonical raw formal bundle required')
@@ -157,13 +164,17 @@ def evaluate_formal(unit, summary, broad, external, sentinel, mode, panel_path, 
         resources, resource_missing = verify(resource_report, resource_raw, policy, summary['engines'])
         verdict['resources'] = resources
         missing.extend(resource_missing)
-    hashes = {'policy_sha256': gate['policy_sha256'], 'layout_panel_sha256': digest(panel_path),
-              'held_out_panel_sha256': digest(held_path) if held_path else None,
-              **({'formal_continuation_sha256': continuation_hashes} if continuation_hashes else {}),
-              **({'held_out_policy_sha256': held_policy_sha} if held_policy_sha else {})}
+    hashes = evidence_hashes(gate, panel_path, held_path, held_policy_sha, continuation_hashes)
     verdict['label'] = 'reject' if failed else ('incomplete' if missing else 'pass')
     verdict['passed'] = not failed and not missing
     return verdict, missing, failed, hashes
+
+
+def evidence_hashes(gate, panel_path, held_path, held_policy_sha, continuation_hashes):
+    return {'policy_sha256': gate['policy_sha256'], 'layout_panel_sha256': digest(panel_path),
+              'held_out_panel_sha256': digest(held_path) if held_path else None,
+              **({'formal_continuation_sha256': continuation_hashes} if continuation_hashes else {}),
+              **({'held_out_policy_sha256': held_policy_sha} if held_policy_sha else {})}
 
 
 def continued_cases(policy, bundle, wall, paths):

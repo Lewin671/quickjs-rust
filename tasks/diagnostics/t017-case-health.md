@@ -1,5 +1,8 @@
 # T017: case-health containment adoption
 
+Initial adoption: `63b6fb82`. Subsequent [review fixes](t017-case-health-review.md)
+own current job reporting and replay bindings.
+
 Owner: [T017](../T017-performance-benchmark-system.md). Base `eeaf696e`; branch
 `agent/t017-case-health/codex`. Adopt T073 proposal part 1 prospectively; part 2
 is not adopted. Runtime, qualified policy JSON, frozen unit plans, thresholds,

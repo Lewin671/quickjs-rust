@@ -40,7 +40,7 @@ def recorded(case, candidate, base, pairs, tool, timeout, path, monitor, **kwarg
         if case.id == 'broad/slow' and argv[0] == str(candidate) and n == 1 and not slow:
             wall = 300_000_000
             slow = True
-        return screen.Sample(n*10, 0, wall, wall, output(n) if case.kind == 'internal' else 'ok')
+        return screen.Sample(n*10, 0, wall, wall, output(n) if case.kind == 'internal' else case.expected_stdout or 'ok')
 
     with patch('tools.benchmark.screen.calibrate', return_value=1), \
             patch('tools.benchmark.pair_recording.time.time', side_effect=lambda: next(ticks)), \
@@ -168,7 +168,7 @@ class HealthTests(unittest.TestCase):
         for kind in ('timeout', 'exit', 'checksum', 'calibration'):
             with self.subTest(kind=kind), tempfile.TemporaryDirectory() as tmp:
                 path = Path(tmp) / 'raw.json'
-                spec = cases()[0] if kind == 'calibration' else screen.CaseSpec('external/s/c', 'whole', Path('/work'), expected_stdout='ok')
+                spec = cases()[0] if kind == 'calibration' else screen.CaseSpec('external/s/c', 'whole', Path('/work'), expected_stdout=screen._EXPECTED_STDOUT_BY_ROLE['candidate'])
                 result = ProcessResult('now', 1, 2, 1, -9 if kind == 'timeout' else 2,
                                        kind == 'timeout', 'partial', 'error', False, False)
                 def take(*args):
@@ -251,7 +251,7 @@ class HealthTests(unittest.TestCase):
         for workers in (1, 4):
             for reason in ('timeout', 'checksum'):
                 with self.subTest(workers=workers, reason=reason), tempfile.TemporaryDirectory() as tmp:
-                    inventory = [screen.CaseSpec('external/s/' + name, 'whole', Path('/work'), expected_stdout='ok')
+                    inventory = [screen.CaseSpec('external/s/' + name, 'whole', Path('/work'), expected_stdout=screen._EXPECTED_STDOUT_BY_ROLE['candidate'])
                                  for name in ('bad', 'good', 'last')]
                     result = ProcessResult('now', 1, 2, 1, -9, True, 'partial', 'timeout', False, False)
                     def take(case, candidate, base, pairs, tool, timeout, path, monitor, **kwargs):
@@ -301,7 +301,7 @@ class HealthTests(unittest.TestCase):
             args = SimpleNamespace(policy=None, diagnostic_bands=bands, screen=path,
                                    target=[], payoff=.97, output=root/'replay.json')
             with contextlib.redirect_stdout(io.StringIO()):
-                self.assertEqual(run(args), 0)
+                self.assertEqual(run(args), 4)
             result = json.loads(args.output.read_text())
             self.assertEqual(result['label'], 'incomplete')
             self.assertFalse(result['claim_eligible'])

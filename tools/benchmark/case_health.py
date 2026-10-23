@@ -83,3 +83,45 @@ def incomplete(packets, inventories):
             'missing': [name + ': case health failure' for name in failures],
             'events': {}, 'event_resolution': None, 'panel_required': False,
             'cases': states, 'lanes': {}, 'held_out': None, 'case_health': failures}
+
+
+INCOMPLETE_EXIT = 4
+
+
+def first_health(value):
+    """Find terminal health in a case, screen, or complete panel inventory."""
+    if not isinstance(value, dict):
+        return None
+    if value.get('analysis') == 'failed' and 'reasons' in value:
+        validate_health(value)
+        return value
+    health = value.get('health')
+    if isinstance(health, dict) and health.get('analysis') == 'failed':
+        validate_health(health)
+        return health
+    children = []
+    for key in ('cases', 'panels', 'case_health'):
+        group = value.get(key, [])
+        children.extend(group.values() if isinstance(group, dict) else group)
+    for child in children:
+        health = first_health(child)
+        if health is not None:
+            return health
+    return None
+
+
+def mark_readiness(value):
+    """Add job-facing status only to failed artifacts; preserve healthy bytes."""
+    if first_health(value) is not None:
+        value.update(inventory_complete=True, readiness='incomplete')
+    return value
+
+
+def exit_status(value):
+    return INCOMPLETE_EXIT if value.get('readiness') == 'incomplete' or first_health(value) is not None else 0
+
+
+def require_healthy(value):
+    health = first_health(value)
+    if health is not None:
+        raise CaseHealthFailure(health)

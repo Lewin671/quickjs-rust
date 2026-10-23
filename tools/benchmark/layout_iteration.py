@@ -63,12 +63,14 @@ def main():
     evidence = measure_panel(base, candidate, out / 'screen', natural=True, development=development, workers=args.workers)
     result = evaluate_attempt(unit, policy, evidence['panels'])
     mandatory = gate['panel_required'] or gate['mechanism_class'] == 'instruction-blind' or needs_panel(policy)
-    if mandatory or (result['panel_required'] and not result['failures']):
+    if not result.get('case_health') and (mandatory or (result['panel_required'] and not result['failures'])):
         evidence = measure_panel(base, candidate, out / 'screen', complete=True, development=development, workers=args.workers)
         result = evaluate_attempt(unit, policy, evidence['panels'])
-    write_json(out / 'verdict.json', {'unit_sha256': unit_hash, **result})
+    from .case_health import mark_readiness
+    write_json(out / 'verdict.json', mark_readiness({'unit_sha256': unit_hash, **result}))
     print(json.dumps(result, indent=2))
-    return 0 if result['passed'] else 3
+    from .case_health import INCOMPLETE_EXIT
+    return INCOMPLETE_EXIT if result.get('case_health') else 0 if result['passed'] else 3
 
 
 if __name__ == '__main__':

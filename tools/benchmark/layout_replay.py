@@ -36,9 +36,11 @@ def run(args):
                'claim_eligible': False, 'historical_standing_changed': False,
                'qualified_policy': bool(args.policy), 'policy_sha256': policy_sha,
                'screen_sha256': digest(args.screen), **result}
+    from .case_health import mark_readiness, exit_status
+    mark_readiness(payload)
     _atomic_write(args.output, payload)
     print(json.dumps(payload, sort_keys=True))
-    return 0
+    return exit_status(payload)
 
 
 def main():
