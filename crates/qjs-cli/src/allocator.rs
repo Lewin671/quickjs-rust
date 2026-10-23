@@ -909,15 +909,18 @@ mod tests {
 
     #[test]
     fn remote_free_is_drained_and_reused_by_the_owner() {
-        use std::sync::{Arc, Barrier, atomic::AtomicUsize};
+        use std::sync::atomic::AtomicBool;
+
         const PATTERN: u8 = 0x6d;
         let block_layout = layout(48, 8);
-        let barrier = Arc::new(Barrier::new(2));
-        let address = Arc::new(AtomicUsize::new(0));
-        let owner = {
-            let barrier = Arc::clone(&barrier);
-            let address = Arc::clone(&address);
-            std::thread::spawn(move || {
+        let address = AtomicUsize::new(0);
+        let freed = AtomicBool::new(false);
+        std::thread::scope(|scope| {
+            let owner = scope.spawn(|| {
+                // Reserve before observing `live`; pushes below must not
+                // allocate while we check the page's accounting.
+                let limit = page_blocks(48) * 2;
+                let mut allocations = Vec::with_capacity(limit);
                 // SAFETY: test-only allocation with a valid layout.
                 let block = unsafe { ALLOC.alloc(block_layout) };
                 assert!(!block.is_null());
@@ -929,17 +932,26 @@ mod tests {
                 // SAFETY: the page is owned by this thread.
                 let live = unsafe { (*page).live };
                 address.store(block as usize, Ordering::Release);
-                barrier.wait();
-                barrier.wait();
-                // SAFETY: the other thread's free completed before this wait;
-                // it queued the block remotely and left live unchanged.
+                // Keep this interval allocation-free. On macOS a cold
+                // Barrier::wait can allocate its 48-byte condition variable
+                // on this very page and legitimately increase `live`.
+                while !freed.load(Ordering::Acquire) {
+                    std::hint::spin_loop();
+                }
+                // SAFETY: the other thread published completion of its free;
+                // only the owner can change `live` or drain the remote list.
                 assert_eq!(unsafe { (*page).live }, live);
+                // SAFETY: the page remains owned here and its remote head is atomic.
+                assert_eq!(unsafe { (*page).remote.load(Ordering::Acquire) }, block);
                 // Reallocate until the queue is drained and the block returns.
                 let mut found = false;
-                for _ in 0..(page_blocks(48) * 2) {
+                let mut page_allocations = 0;
+                for _ in 0..limit {
                     // SAFETY: test-only allocation with a valid layout.
                     let reused = unsafe { ALLOC.alloc(block_layout) };
                     assert!(!reused.is_null());
+                    allocations.push(reused);
+                    page_allocations += usize::from(page_of(reused) == page);
                     if reused == block {
                         // SAFETY: the reused block is live for 48 bytes.
                         let tail = unsafe { std::slice::from_raw_parts(reused.add(8), 40) };
@@ -949,14 +961,30 @@ mod tests {
                     }
                 }
                 assert!(found, "remote block was never drained");
-            })
-        };
-        barrier.wait();
-        // SAFETY: the owner allocated this block and published it before the
-        // barrier; it is freed exactly once here.
-        unsafe { ALLOC.dealloc(address.load(Ordering::Acquire) as *mut u8, block_layout) };
-        barrier.wait();
-        owner.join().expect("owner panicked");
+                // SAFETY: `block` is live again, so the page cannot be recycled.
+                // Draining must subtract exactly the one remote free.
+                assert_eq!(unsafe { (*page).live }, live + page_allocations - 1);
+                // SAFETY: only this thread drains the live page's remote list.
+                assert!(unsafe { (*page).remote.load(Ordering::Acquire) }.is_null());
+                for allocation in allocations {
+                    // SAFETY: each allocation (including the reused block) is
+                    // live and freed exactly once with its original layout.
+                    unsafe { ALLOC.dealloc(allocation, block_layout) };
+                }
+            });
+            let block = loop {
+                let address = address.load(Ordering::Acquire);
+                if address != 0 {
+                    break address as *mut u8;
+                }
+                std::hint::spin_loop();
+            };
+            // SAFETY: the owner published this live block, and waits for this
+            // thread to free it exactly once before attempting reuse.
+            unsafe { ALLOC.dealloc(block, block_layout) };
+            freed.store(true, Ordering::Release);
+            owner.join().expect("owner panicked");
+        });
     }
 
     #[test]
