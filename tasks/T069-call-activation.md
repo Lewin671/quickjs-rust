@@ -1,18 +1,19 @@
 # T069: Positional call and activation preparation
 
-- Status: active; lead-requested deferred-class-key receiver repair in progress.
-- Implementation: broader candidate rebased to `66e31330`; receiver requirement
-  now includes deferred keys and lexical arrows, with compiler capture support.
-- Verified at: repair working tree, 2026-10-23: focused context tests pass;
-  complete local gates and queued iMac comparison/triage remain pending.
-  Previous candidate `9aac3558` passed all 42,672 configured Test262 cases.
-- Evidence: [final measured record](archive/T069-final-evidence.md),
+- Status: active; owner receiver repair and verification complete, lead review pending.
+- Implementation: receiver repair `e38e85fc`; corrected comparison fixture
+  `6c512032`; broader preparation remains present (rebased `66e31330`).
+- Verified at: runtime `6c512032`, 2026-10-23: full gate passes, 2,382 runtime
+  tests (16 repair tests), 5,170 curated cases, iMac 257-fixture comparison and
+  diagnostic triage; complete exact scan passes 42,672 configured cases, zero gaps.
+- Evidence: [receiver repair and binding audit](archive/T069-call-context-fix.md),
+  [original measurements](archive/T069-final-evidence.md),
   [plan](performance-units/positional-call-activation.json),
   [first candidate](archive/T069-first-candidate.md).
-- Unresolved: verify repaired candidate and audit results; strict original
-  moment/diff/graphlib payoff misses still require lead review; baseline gaps below.
-- Next action: complete the full gate, exact scan and iMac comparison/diagnostic
-  triage requested by the lead. No promotion decision, push or merge.
+- Unresolved: original moment/diff/graphlib payoff misses, four possible repair
+  triage wall-control flags, and documented pre-existing lexical-thunk gaps.
+- Next action: lead adjudicates the measured unit and control uncertainty;
+  lexical deferred-key context is a conformance follow-up. No promotion, push or merge.
 
 ## Goal and selection
 
@@ -103,56 +104,25 @@ cell. Ordinary functions, methods, fields and static blocks own their receiver
 and stop propagation; each still prepares its own nested code. Focused tests
 cover these boundaries, escaping arrows, defaults, modules and other context.
 
-The [first candidate record](archive/T069-first-candidate.md) freezes baseline,
-profile, correctness and triage receipts. Candidate `74e8f8aa` passes all 42,672
-configured Test262 cases, but its triage is `likely loss`; that gate deferred
-without spending an attempt. The broader candidate has now spent **1/2**:
-its complete K=6 screen strictly rejects three target payoff gates, while all
-six development/external/portfolio aggregates improve. No budget is reset.
+## Original measured revisions
 
-A broader preparation revision is committed at `9aac3558`: static callbacks
-keep shared cells without caller name export, marked/dynamic/with contexts
-retain their compatibility views, global refresh visits precomputed fallback
-slots, and ordinary completion recycles cleared storage in place. Derived and
-suspended completion routes stay intact. No caller environment is borrowed.
-Full checks and new callback/storage tests passed before that commit.
-Entry metadata is boxed once per body, keeping its vectors out of the hot
-bytecode payload. Active frames remain independent; recycled slots are cleared
-and captured cells are never recycled. Eval/with, retained scopes and marked
-realm views remain on their compatibility routes. No executor register transfer
-or active-frame scheduler is changed.
+The [first candidate record](archive/T069-first-candidate.md) owns the baseline,
+profile, correctness and rejected initial triage. The broader `9aac3558`
+(rebased `66e31330`) completed the full performance chain recorded in the
+[original frozen measurements](archive/T069-final-evidence.md). Its screen
+strictly rejects the moment/diff/graphlib payoff gates while overall aggregates
+improve; one of two screen attempts is spent, with no reset or promotion.
+Those formal/held-out/resource results describe that original binary.
 
-- `20261023T081718Z-t069-repair-correctness`: exit 0; iMac comparisons/subset.
-- `20261023T081731Z-t069-repair-triage`: exit 0; diagnostic `unclear`, 105/105
-  valid pairs, no invalid/heavy pairs, 329 s including quieting, within budget.
-- `20261023T082004Z-t069-repair-screen-promising`: queued before seeing the
-  new triage result. Starts attempt 1 only if correctness passes, triage is
-  complete/in budget, and frozen-target geometric means are at most 0.97 in
-  both wall and instructions. This is a diagnostic spending trigger, not an
-  acceptance change: the complete K=6 screen keeps every frozen gate.
-- The trigger passed: target wall geomean 0.929874, instructions 0.921258.
-  Attempt 1 completed with the strict misses above. Candidate conformance is recorded
-  in the burndown; local release/agents image SHA-256
-  `564d32f4c423a05495c81f6a161c335b20d1fbfb9b0f982fafb27a368238ec59`.
-- `20261023T082854Z-t069-rss15`: exit 0, all 15-pair RSS limits pass;
-  development geomean 0.998300, maximum case 1.009052.
-- `20261023T082855Z-t069-resources`: exit 0, healthy/complete; size 1.000975,
-  fresh 0.987491, resource RSS 1.011464 C/B; host replay queued below.
-- `20261023T092154Z-t069-formal30`: exit 0, healthy/complete 30-block bundle;
-  all 86 v6 case precision checks resolved without continuation. Joint wall
-  C/B: development 0.957429, external 0.998279, portfolio 0.991613; intervals
-  all below 1. Development C/NG 2.640021. Strict target payoff misses remain.
-- `20261023T092154Z-t069-heldout30`: cancelled (130) after queue-order race;
-  partial data discarded whole, no metrics read or used for work selection.
-- `20261023T093959Z-t069-heldout30-ordered`: exit 0 in 4,682 s, all six
-  layouts/30 pairs; combined held-out 0.929786, layout ratios 0.925992–0.932820,
-  all intervals below 1. No missing held-out precision evidence.
-- `20261023T095351Z-t069-resource-replay`: exit 0, all raw resource reports
-  authenticate against formal engines/host manifest. Selection/held-out raw
-  replay also passes. No final decide or promotion step is authorized or run.
-- Full-gate log SHA-256:
-  `5917288109336a9a2dc6a16236a890cb60e9c5f0fe990a1dde468574dd50b430`;
-  the commit hook also passed its 117-case mapped slice.
+The lead requested a receiver repair, full correctness gates and one quick
+triage on the same five targets against original base `b93e4daa`. The repaired
+runtime is `e38e85fc`; `6c512032` corrects only the new comparison fixture.
+The [repair record](archive/T069-call-context-fix.md) owns its binding audit,
+three pre-existing lexical-thunk gaps, correctness results, job ledger, full
+triage table and raw identities. The fixed diagnostic rule finds no obvious
+regression; four possible wall-control flags remain, notably prototype-method
+calls at 1.050003 C/B. No new formal chain was run under the lead's diagnostic
+scope, and the old formal intervals are not claims about this repaired binary.
 
 ## Acceptance and verification
 
@@ -162,8 +132,8 @@ or active-frame scheduler is changed.
 - [x] Validated frozen schema-3 plan committed before runtime changes (`982d19b5`).
 - [x] Focused parameter/cell/context restoration tests and full local gate.
 - [x] QuickJS-NG comparisons and zero-gap complete Test262 evidence.
-- [x] Quick triage; if promising, finite-budget screen, formal, held-out,
-  RSS and resource evidence on the serialized iMac queue.
+- [x] Original finite-budget screen, formal, held-out, RSS and resource chain;
+  repaired candidate has its separately identified diagnostic triage.
 - [x] Evidence and local regressions recorded; lead decision remains pending.
 - [x] Final full gate, branch-scope validation and workspace cleanup.
 
@@ -173,10 +143,8 @@ or active-frame scheduler is changed.
 ./scripts/compare-qjs.sh
 ```
 
-Final full gate also passes on unchanged runtime `9aac3558` with the handoff
-record; log SHA-256 `86abe1e1d060467e42ebe7227ecf41c7506cb09ab31fb506baa0c2e0b442435e`.
-Branch descent/path-scope check against b93e4daa passes. Remote CI is unrun
-because the user requested no branch publication.
-Cleanup: `cargo clean` removed 69,304 files / 9.6 GiB; the tracked target file
-was restored with `git checkout -- target`. Free disk is 53 GiB. Handoff
-documentation is committed without rebuilding cleaned binaries.
+Final full gate passes on runtime `6c512032` with the handoff documentation;
+the [repair record](archive/T069-call-context-fix.md) retains its checksum.
+Branch descent/path-scope validation uses the lead's rebased base `311bff0e`.
+Remote CI is unrun because the user requested no origin branch publication.
+Cleanup and complete-scan results are recorded with the repair evidence.
