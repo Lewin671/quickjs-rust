@@ -13,8 +13,8 @@
   [independent review and lead outcome](archive/T065-design-review.md).
 - Unresolved: target level (the proposed 0.80×M leaves ~2.46× NG), shared-window frames (T021), collector choice, effort (review: 45–70 one-owner weeks);
   per-mechanism wall attribution is unmeasured.
-- Next action: plan and run the ablation ladder (value word ownership, global allocator control, compact general bytecode, zero-based
-  per-activation entry) on big.js, immutable and js-yaml with wall and instruction evidence; then decide rewrite vs incremental.
+- Next action: rounds 1–2 measured ([record](archive/T065-ablation-r1.md)): allocator landed as T066 (~10%), call prototype 0.961,
+  ownership oracle over the allocator 0.913 wall / 0.945 instructions. Next: price named-property authority and bytecode/dispatch, then decide rewrite vs incremental.
   T056's remaining M2/M3 work stays superseded pending that decision.
 
 ## Intent

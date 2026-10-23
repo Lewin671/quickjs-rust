@@ -29,7 +29,7 @@ Allocator and ownership experiments overlap; their savings must not be added.
 
 ## Collections
 
-Every failed/unclear collection is retained. Round-1 wall results (lead-completed record, below) come from the three triage jobs; round 2 (ownership oracle) is unmeasured — the Codex run stopped on its usage limit while `20261022T101455Z-t065-ablation-r2-instructions` was running.
+Every failed/unclear collection is retained. Round-1 wall results (lead-completed record, below) come from the three triage jobs; the first round-2 attempt stopped when Codex hit its usage limit during `20261022T101455Z-t065-ablation-r2-instructions` (no result); round 2 was re-measured by the lead (below).
 
 - `20261022T100343Z-t065-ablation-call-wall`: done 0, triage **unclear**;
   115/115 valid pairs, no invalid pair or heavy disturbance; 405.91 s including
@@ -80,6 +80,28 @@ Reading: a 69-line pure-Rust thread-local size-class global allocator captures e
 allocation speed does not need FFI. Much of the allocation cost attributed in earlier profiles is macOS system-malloc cost. The call prototype
 is a large win only where its cohort applies (immutable). Lead decision: land a production allocator as performance unit T066; continue
 ownership/property/bytecode ablations afterwards.
+
+## Round-2 result: ownership oracle over the allocator (lead, 2026-10-23)
+
+The oracle commits were cherry-picked unchanged onto post-T066 main `9f3ab85c` (branch `agent/t065-abl-ownership-r2/claude`,
+candidate `7282babe`), so the price is incremental to the landed allocator. Quick triage `20261023T033351Z-t065-ownership-r2-triage`
+(done 0, 261 s, budget met; request SHA-256 `8f49d354…`, triage `76cca264…`), same four targets and 19 controls, five natural-layout pairs.
+Verdict label *likely loss* comes from controls, expected for a leaking oracle.
+
+| Case | wall | instr | Case | wall | instr |
+| --- | ---: | ---: | --- | ---: | ---: |
+| big.js/arith | 1.027 | 0.913 | lodash/transform | 0.907 | 0.948 |
+| immutable/persistent | 0.863 | 0.940 | diff/compare | 0.895 | 0.950 |
+| js-yaml/document | 0.958 | 0.985 | moment/dates | 0.902 | 0.946 |
+| graphlib/paths | 0.855 | 0.935 | object_allocation | 0.856 | 0.872 |
+| json-parse-financial | 1.305 | 0.985 | string_slice | 1.100 | 0.915 |
+| access-binary-trees | 1.039 | 0.948 | raytrace-public-class-fields | 1.066 | 0.974 |
+
+Seven-program development geomean: wall **0.913**, instructions **0.945**. Sentinels 0.913–1.040 wall, 0.918–1.000 instructions.
+Reading: removing count traffic for the covered handles is worth up to roughly 9% wall on real libraries over the allocator,
+more than its instruction share (store/cache traffic). Allocation-heavy controls slow down because nothing is freed; a tracing
+collector pays its own cost instead. This is an envelope for non-owning values + GC, not a price; most of the 2.38× instruction
+gap to NG lies elsewhere (property, call, dispatch).
 
 ## Correctness and cleanup
 
