@@ -1,7 +1,7 @@
 """Lossless screen samples and costs, with calibration kept out of measured pairs.
 
 The queue-backed recorder retains load-invalid attempts and appends rounds.
-Valid nonpositive/short increments fail; measured values never select pairs.
+Case health failures retain signed increments; measured values never select pairs.
 """
 from __future__ import annotations
 

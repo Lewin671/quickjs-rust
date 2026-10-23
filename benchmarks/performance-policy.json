@@ -51,6 +51,8 @@
       "scripts/external-performance-preview.sh",
       "scripts/performance-policy-audit.sh",
       "scripts/performance-preview.sh",
+      "tools/benchmark/case_health.py",
+      "tools/benchmark/case_health_replay.py",
       "tools/benchmark/case_schedule.py",
       "tools/benchmark/npm_workers.py",
       "tools/benchmark/held_out.py",
@@ -111,7 +113,7 @@
       "tools/benchmark/preview_sentinel.py",
       "tools/benchmark/preview_summary.py"
     ],
-    "aggregate_sha256": "2313dcf5d2e27dccb76ef59d9a0c6061eb592c5b18742581f018867573a5fcc0"
+    "aggregate_sha256": "76b8c92677780a99528ba83c07beb301f8552e839917837d05e045785e0cbf09"
   },
   "hosted_pr": {
     "tier": "informational_preview",

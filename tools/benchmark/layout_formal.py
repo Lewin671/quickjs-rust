@@ -44,6 +44,12 @@ def evaluate_formal(unit, summary, broad, external, sentinel, mode, panel_path, 
         memory_targets=gate['memory_wall_targets'], promotion=mode == 'promotion',
         panel_required=gate['panel_required'], stage=mode == 'stage',
         stage_limit=unit.get('migration', {}).get('stage_max_candidate_over_base', 1.25))
+    if verdict.get('case_health'):
+        # Authenticated failed inventory can never reach formal log/geomean or
+        # resource analysis, even if an unrelated formal bundle is complete.
+        hashes = {'policy_sha256': gate['policy_sha256'], 'layout_panel_sha256': digest(panel_path),
+                  'held_out_panel_sha256': digest(held_path) if held_path else None}
+        return verdict, verdict['missing'], [], hashes
     missing.extend(verdict['missing'])
     failed.extend(verdict['failures'])
     if gate['panel_required'] and len(panels) != 6:

@@ -1,4 +1,4 @@
-"""Append load-invalid pair rounds without selecting on measured values."""
+"""Retain terminal case health; append replacements only for load invalidity."""
 from __future__ import annotations
 
 import dataclasses
@@ -7,6 +7,7 @@ import os
 import time
 
 from . import screen
+from .case_health import CaseHealthFailure, failed_result
 from .layout_identity import write_json
 from .pair_disturbance import Monitor, eligibility
 
@@ -29,18 +30,25 @@ def measure(case, candidate, base, pairs, tool, timeout, output, monitor=None, *
         def run(binary, count, target):
             argv = screen._argv(binary, case, count)
             start = time.time()
-            value = screen.sample(tool, argv, case.timeout_seconds or timeout)
-            row = {'argv': argv, 'sample': dataclasses.asdict(value),
-                   'started_at': start, 'ended_at': time.time()}
+            try:
+                value = screen.sample(tool, argv, case.timeout_seconds or timeout)
+                row = {'argv': argv, 'sample': dataclasses.asdict(value)}
+            except screen.ProcessFailure as error:
+                row = {'argv': argv, 'process_failure': dataclasses.asdict(error.result)}
+                value = None
+            row.update(started_at=start, ended_at=time.time())
             target.append(row)
             stream.write(json.dumps(row) + '\n'); stream.flush()
+            if value is None:
+                raise screen.ProcessFailure(screen.ProcessResult(**row['process_failure']), 'recorded process failure')
             screen._check_output(case, value.stdout)
             return value
 
-        if case.kind == 'internal' and iterations is None:
-            iterations = screen.calibrate(lambda count: run(base, count, calibration))
         missing = pairs
+        rows = []
         try:
+            if case.kind == 'internal' and iterations is None:
+                iterations = screen.calibrate(lambda count: run(base, count, calibration))
             while missing:
                 for _ in range(missing):
                     index = pair_offset + len(attempts)
@@ -55,6 +63,24 @@ def measure(case, candidate, base, pairs, tool, timeout, output, monitor=None, *
                 rounds.append({'attempt_count': len(attempts), 'load': snapshot})
                 flags = eligibility(attempts, snapshot)
                 missing = pairs - sum(flags)
+        except (screen.ProcessFailure, screen.CorrectnessFailure):
+            if rows:
+                attempts.append({'index': pair_offset + len(attempts), 'started_at': rows[0]['started_at'],
+                                 'ended_at': rows[-1]['ended_at'], 'samples': rows})
+            snapshot = monitor.snapshot()
+            rounds.append({'attempt_count': len(attempts), 'load': snapshot})
+            flags = eligibility(attempts, snapshot)
+            packet = {'id': case.id, 'kind': case.kind, 'iterations': iterations, **contract,
+                      'calibration': calibration, 'attempts': attempts, 'rounds': rounds,
+                      'pair_index_offset': pair_offset, 'complete': False,
+                      'expected_stdout': case.expected_stdout,
+                      'valid_attempt_indices': [i for i, flag in enumerate(flags) if flag]}
+            from .case_health_replay import process_health
+            packet['health'] = process_health(packet, pairs, {'base': str(base), 'candidate': str(candidate)})
+            if case.id.startswith('development/') and digest(case.workload) != contract['workload_sha256']:
+                raise ValueError('development workload changed during measurement')
+            write_json(output, packet)
+            return failed_result(packet)
         except Exception as error:
             write_json(output, {'id': case.id, 'kind': case.kind, 'iterations': iterations,
                 'calibration': calibration, 'attempts': attempts, 'rounds': rounds, 'pair_index_offset': pair_offset,
@@ -65,13 +91,17 @@ def measure(case, candidate, base, pairs, tool, timeout, output, monitor=None, *
     packet = {'id': case.id, 'kind': case.kind, 'iterations': iterations, **contract,
               'calibration': calibration, 'attempts': attempts, 'rounds': rounds, 'pair_index_offset': pair_offset,
               'complete': True, 'valid_attempt_indices': [i for i, flag in enumerate(flags) if flag]}
-    # Costs are constructed only after load-only eligibility is sealed. Keep
-    # correctness failures and short/nonpositive increments fatal, never retry.
+    # Costs are constructed only after load eligibility is sealed. A terminal
+    # case health failure has no ratios and never starts a replacement round.
     from .screen_replay import replay_attempts
     try:
         costs, ratios, measured = replay_attempts(packet, pairs,
             {'base': str(base), 'candidate': str(candidate)})
         packet.update(costs=costs, ratios=ratios, samples=measured)
+    except CaseHealthFailure as error:
+        packet['health'] = error.health
+        write_json(output, packet)
+        return failed_result(packet)
     except Exception as error:
         packet.update(complete=False, error=str(error))
         write_json(output, packet)

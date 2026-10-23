@@ -17,6 +17,16 @@ def evaluate(policy, screen, targets, payoff, *, panel=None, held_out=None, held
     from .case_schedule import require_same
     require_same(policy, screen, *(panel or []), *([held_out] if held_out else []),
                  *(held_out_panel or []))
+    from .case_health import incomplete
+    packets = [screen, *(panel or []), *([held_out] if held_out else []), *(held_out_panel or [])]
+    inventories = [policy['cases']] * (1 + len(panel or [])) + [policy.get('held_out', {})] * (
+        int(held_out is not None) + len(held_out_panel or []))
+    health = incomplete(packets, inventories)
+    if health is not None:
+        if (screen['pairs'] < 5 or (panel is not None and len(panel) != 6)
+                or (held_out_panel is not None and len(held_out_panel) != 6)):
+            raise ValueError('incomplete health panel budget/inventory')
+        return health
     data = rows(screen, policy['cases'])
     if screen['pairs'] < 5:
         raise ValueError('layout verdict needs at least five pairs')

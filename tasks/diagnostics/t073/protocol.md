@@ -1,18 +1,19 @@
 # T073 proposal for T017: process tails and invalid increments
 
-This is a prospective proposal, **not an adopted policy or a reinterpretation
-of T072**. The owning task is [T073](../../T073-local-read-bimodal.md).
+Part 1, "Preserve evidence without stopping unrelated cases", is adopted
+prospectively in [T017](../../T017-performance-benchmark-system.md). Part 2 is not
+adopted; neither part reinterprets T072. The owning task is [T073](../../T073-local-read-bimodal.md).
 The standing contract remains [load-only recovery](../../../docs/layout-policy-artifacts.md#load-only-pair-recovery).
 
 ## Preserve evidence without stopping unrelated cases
 
-The current collector retains all five raw pairs, then replay rejects any
-load-valid increment below 50 ms, including a negative one. That exception
-terminates its case shard. T072 therefore loses complete portfolio evidence
+Before adoption, the collector retained all five raw pairs, then replay rejected
+any load-valid increment below 50 ms, including a negative one. That exception
+terminated its case shard. T072 therefore loses complete portfolio evidence
 because one N process is as expensive as its separately launched 2N process.
 A stable instruction increment does not make that CPU-time increment valid.
 
-Change collection, independently of the acceptance statistic:
+Adopted collection changes, independently of the acceptance statistic:
 
 1. Seal the raw packet, load eligibility, checksums and executable identities
    exactly as today. Never classify a process as load-invalid from its timing.

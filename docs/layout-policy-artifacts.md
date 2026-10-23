@@ -132,12 +132,38 @@ other N is tooling capability, not a qualification claim.
 New layout collectors require the serialized timing queue's `BENCH_OUT` and
 adjacent `intruders.log`. Raw packets add `attempts` (cumulative alternating
 index, epoch window, process samples), `rounds` (append count and sealed load
-snapshot), `valid_attempt_indices`, and `complete`. Original `samples`, `costs`
-and `ratios` contain exactly the required valid pairs. A JSONL stream retains
-all processes, including interrupted/failed rounds and separate calibration.
-An invalid-load pair's metrics never choose its replacement; correctness and
-positive sample checks still cover every process. A valid short/nonpositive
-increment fails instead of being replaced.
+snapshot), `valid_attempt_indices`, and `complete`. On healthy cases, original
+`samples`, `costs` and `ratios` contain exactly the required valid pairs. A JSONL
+stream retains all processes, including interrupted/failed rounds and separate
+calibration. An invalid-load pair's metrics never choose its replacement;
+correctness and positive sample checks still cover every process.
+
+A load-valid short/nonpositive increment is a terminal **case health failure**,
+never a replacement trigger. `pair_recording.py` retains every attempt and its
+signed wall/user-CPU/instruction increments, load flags, and per-role N/2N
+process distributions under `health` (`collection: complete`, `analysis: failed`).
+Its `complete: true` means the requested process inventory completed, not that
+acceptance evidence is usable. Timeout, nonzero engine exit, or checksum failure
+instead records `collection: failed`, `complete: false`, the partial attempt or
+calibration, and the failed process result/output when available. These failures
+are never waived by load eligibility. Infrastructure errors (spawn failure,
+missing counters, malformed load history, I/O, caps) still abort; they are not
+converted into usable case evidence.
+
+Serial and case-sharded schedulers finish all other already requested cases
+and layouts after a terminal case failure. Failed summary rows have empty
+`ratios` and the replayed `health`; healthy rows keep their historical shape.
+Affected panel packets say `inventory_complete: true`, `readiness: incomplete`.
+Incomplete verdicts list every case's collection and analysis state.
+A missing/interrupted case is not a terminal health result: replay still refuses
+an incomplete inventory. Failed raw packets carry no usable `samples`, `costs`
+or `ratios`. Screen and panel replay authenticate health from raw processes,
+load selection, identities and hashes; default statistical readers refuse it.
+Any failed required case keeps the overall verdict incomplete, with no lane,
+portfolio, geomean, formal aggregate, or promotion standing. Healthy evidence
+retains the existing statistic and report bytes. Thresholds, attempt accounting,
+load-only eligibility and the meaning of a passing screen are unchanged;
+historical failed packets and closed decisions are never rewritten.
 
 CPU threshold is the existing monitor's >=200% aggregate per UTC second;
 process inclusion remains >=30% and cadence 5 seconds. A pair is invalid if

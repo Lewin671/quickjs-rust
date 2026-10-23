@@ -125,7 +125,12 @@ def collect(cases, variants, binaries, pairs, tool, timeout, output, monitor, wo
             results = []
             for case in cases:
                 raw = json.loads((output / f'variant{k}' / (case.id.replace('/', '--') + '.json')).read_text())
-                results.append(dataclasses.asdict(screen.CaseResult(raw['id'], raw['kind'], raw['iterations'], raw['ratios'])))
+                from .case_health import failed_result
+                result = failed_result(raw) if 'health' in raw else screen.CaseResult(raw['id'], raw['kind'], raw['iterations'], raw['ratios'])
+                results.append(dataclasses.asdict(result))
             packets.append({'pairs': pairs, 'cases': results, 'measurement_schedule': schedule})
+    for packet in packets:
+        if any('health' in case for case in packet['cases']):
+            packet.update(inventory_complete=True, readiness='incomplete')
     return packets, {'measurement_schedule': schedule, 'case_shards': shards,
                      'collection_seconds': time.monotonic() - started}

@@ -54,6 +54,8 @@ PREVIEW_IMPLEMENTATION_FILES = (
     "scripts/external-performance-preview.sh",
     "scripts/performance-policy-audit.sh",
     "scripts/performance-preview.sh",
+    "tools/benchmark/case_health.py",
+    "tools/benchmark/case_health_replay.py",
     "tools/benchmark/case_schedule.py",
     "tools/benchmark/npm_workers.py",
     "tools/benchmark/held_out.py",

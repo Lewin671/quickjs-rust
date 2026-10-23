@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from .screen import MIN_INCREMENT_NS
+from .case_health import CaseHealthFailure, diagnostics
 
 
 def _costs(raw, pairs, binaries, indices=None, accepted=None):
@@ -32,6 +33,7 @@ def _costs(raw, pairs, binaries, indices=None, accepted=None):
     if len(samples) != pairs * (4 if internal else 2):
         raise ValueError('screen raw sample count mismatch')
     costs = {r: {m: [] for m in ('wall_ns', 'instructions')} for r in ('candidate', 'base')}
+    failures = []
     cursor = 0
     workload = None
     for position in range(pairs):
@@ -63,16 +65,28 @@ def _costs(raw, pairs, binaries, indices=None, accepted=None):
                 if accepted is not None and not accepted[position]:
                     continue
                 if value <= 0 or (internal and metric == 'wall_ns' and value < MIN_INCREMENT_NS):
-                    raise ValueError('invalid screen increment')
+                    failures.append(f'attempt {pair} {role}: invalid {metric} increment {value}')
                 costs[role][metric].append(value)
         if outputs['base'] != outputs['candidate']:
-            raise ValueError('screen stdout mismatch')
+            failures.append(f'attempt {pair}: screen stdout mismatch')
+    if failures:
+        flags = accepted if accepted is not None else [True] * pairs
+        packet = raw if 'attempts' in raw else {**raw, 'attempts': [
+            {'index': i, 'samples': samples[i*(4 if internal else 2):(i+1)*(4 if internal else 2)]}
+            for i in range(pairs)]}
+        raise CaseHealthFailure(diagnostics(packet, flags, failures))
     ratios = {metric: [c / b for c, b in zip(costs['candidate'][metric], costs['base'][metric])]
               for metric in ('wall_ns', 'instructions')}
     return costs, ratios
 
 
-def replay_case(raw, pairs, binaries):
+def replay_case(raw, pairs, binaries, *, allow_health=False):
+    if 'health' in raw:
+        from .case_health_replay import replay_health
+        health = replay_health(raw, pairs, binaries)
+        if allow_health:
+            return None
+        raise CaseHealthFailure(health)
     if 'attempts' in raw:
         costs, ratios, samples = replay_attempts(raw, pairs, binaries)
         if samples != raw['samples']:
@@ -89,8 +103,21 @@ def replay_case(raw, pairs, binaries):
 
 def replay_attempts(raw, pairs, binaries):
     """Rebuild every round's load-only selection and exact appended inventory."""
+    flags = selection(raw, pairs)
+    attempts = raw['attempts']
+    offset = raw.get('pair_index_offset', 0)
+    indices = [i for i, flag in enumerate(flags) if flag]
+    all_samples = [s for a in attempts for s in a['samples']]
+    costs, ratios = _costs({**raw, 'samples': all_samples}, len(attempts), binaries,
+                           list(range(offset, offset + len(attempts))), flags)
+    selected = [s for i in indices for s in attempts[i]['samples']]
+    return costs, ratios, selected
+
+
+def selection(raw, pairs, *, terminal=False):
+    """Replay load eligibility independently of process success or costs."""
     from .pair_disturbance import eligibility
-    if raw.get('complete') is not True or not raw.get('rounds'):
+    if (not terminal and raw.get('complete') is not True) or not raw.get('rounds'):
         raise ValueError('incomplete pair recovery')
     offset = raw.get('pair_index_offset', 0)
     if type(offset) is not int or offset < 0:
@@ -102,7 +129,9 @@ def replay_attempts(raw, pairs, binaries):
     previous_text = ''
     for round_ in raw['rounds']:
         count = round_['attempt_count']
-        if count != previous + missing or count > len(attempts) or missing <= 0:
+        final_failure = terminal and round_ is raw['rounds'][-1]
+        if ((count != previous + missing and not (final_failure and previous <= count <= previous + missing))
+                or count > len(attempts) or missing <= 0):
             raise ValueError('appended round count mismatch')
         snapshot = round_['load']
         if not snapshot['text'].startswith(previous_text):
@@ -111,7 +140,7 @@ def replay_attempts(raw, pairs, binaries):
         flags = eligibility(attempts[:count], snapshot)
         missing = pairs - sum(flags)
         previous = count
-    if previous != len(attempts) or missing != 0:
+    if previous != len(attempts) or (missing != 0 and not terminal):
         raise ValueError('valid pair count mismatch')
     indices = [i for i, flag in enumerate(flags) if flag]
     if indices != raw['valid_attempt_indices']:
@@ -127,8 +156,4 @@ def replay_attempts(raw, pairs, binaries):
             if not last <= row['started_at'] <= row['ended_at']:
                 raise ValueError('sample timestamps overlap/reverse')
             last = row['ended_at']
-    all_samples = [s for a in attempts for s in a['samples']]
-    costs, ratios = _costs({**raw, 'samples': all_samples}, len(attempts), binaries,
-                           list(range(offset, offset + len(attempts))), flags)
-    selected = [s for i in indices for s in attempts[i]['samples']]
-    return costs, ratios, selected
+    return flags

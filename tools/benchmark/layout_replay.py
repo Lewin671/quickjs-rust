@@ -24,7 +24,14 @@ def run(args):
         policy['held_out'] = {}
         policy_sha = digest(args.diagnostic_bands)
     packet = json.loads(args.screen.read_text())
-    result = evaluate(policy, packet, args.target, args.payoff)
+    if packet.get('artifact_type') == 'quickjs-layout-panel':
+        from .layout_evidence import replay
+        packet = replay(args.screen, policy)
+        panels = packet['panels']
+        result = evaluate(policy, panels[0], args.target, args.payoff,
+                          panel=panels if len(panels) == 6 else None)
+    else:
+        result = evaluate(policy, packet, args.target, args.payoff)
     payload = {'artifact_type': 'quickjs-layout-diagnostic-replay',
                'claim_eligible': False, 'historical_standing_changed': False,
                'qualified_policy': bool(args.policy), 'policy_sha256': policy_sha,

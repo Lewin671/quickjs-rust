@@ -9,7 +9,7 @@ update the resume block in the commit that lands it. When a task closes, move it
 
 | Task | Status | What it is |
 | --- | --- | --- |
-| [T073](T073-local-read-bimodal.md) local-read bimodality | active | Diagnosis complete: candidate text-layout CPU tails; T017 case-health proposal awaits review. |
+| [T073](T073-local-read-bimodal.md) local-read bimodality | active | Diagnosis complete: candidate text-layout CPU tails; T017 adopts case-health containment only. |
 | [T068](T068-post-t066-profile.md) post-T066 profiles | active | All ten development programs profiled on exact f49be95c/NG; owner attribution complete, ranked incremental proposals await selection. |
 | [T057](T057-string-code-units.md) string code units | active | Stage 1 and UTF-16 correctness extraction integrated; stage 2 abandoned (0 attempts); linear-search follow-up awaits screening. |
 | [T065](T065-interpreter-core-v3.md) interpreter core v3 | active | Ablation complete; rewrite not approved (lead, 2026-10-23); incremental units come from a fresh post-T066 profile. |

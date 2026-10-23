@@ -8,15 +8,16 @@
   `scripts/performance-*.sh`). Formal comparisons and screens run on a
   platform other than the frozen arm64 profile
   (`tools/benchmark/host_manifest.py`, `tools/benchmark/cycle_trust.py`).
-  M6 and M7 are not started.
-- Verified at: 2026-10-12 on the x86_64 host: at `07897ce4` a three-block
+  M6/M7 are not started. T073 part 1 case-health containment is present.
+- Verified at: case-health changes in the working tree based on `eeaf696e`,
+  2026-10-23: full gate, 744 tool tests and byte-identical replay pass (adoption record).
+  Earlier platform evidence: 2026-10-12 on the x86_64 host: at `07897ce4` a three-block
   `perf-compare.sh` bundle (state success, 76 cases, wall time) and a queue
   built from it; at `195b4341` a `perf-loop.sh` screen. The hosted preview's staged,
   sharded workflow was verified at `d9fb83f3`, 2026-10-09. At `d1313d52`,
   `benchmarks/performance-policy.json` still has `fixed_hardware.configured`
   false, an empty `evidence_entries` list and every gate disabled.
-- Evidence: the records below; `benchmarks/performance-policy.json`;
-  `docs/benchmarking.md`. Raw bundles are local artifacts, not retained.
+- Evidence: [case-health adoption](diagnostics/t017-case-health.md), records below, `benchmarks/performance-policy.json` and `docs/benchmarking.md`; raw bundles are not retained.
 - Unresolved: no fixed-hardware fingerprint, no A/A shadow reports, no noise
   envelope, no false-positive budget. Concurrent lanes and four workers are
   qualified on the x86_64 host only, each from one run against the same
@@ -28,11 +29,10 @@
   CPU-time bounds, not wall timeouts: [record](archive/T017-test-wall-timeouts.md), [follow-up](archive/T017-git-lock-and-race-tests.md).
 
 New-file launch delay/symmetric preflight: [diagnostic](archive/T017-launch-preflight-diagnostic.md).
-Fixed-hardware noise qualification remains open. T073
-[proposes case-health reporting](diagnostics/t073/protocol.md) that finishes unrelated collection while failing closed; this is not adopted policy.
+Fixed-hardware noise qualification remains open. [T073 part 1](diagnostics/t073/protocol.md)
+retains terminal case failures and finishes unrelated collection; part 2 is not adopted.
 
-Record of the landed milestones, the original assignment and the notes:
-`tasks/archive/T017-performance-benchmark-system-log.md`.
+Milestones and original assignment: `tasks/archive/T017-performance-benchmark-system-log.md`.
 
 ## Goal
 

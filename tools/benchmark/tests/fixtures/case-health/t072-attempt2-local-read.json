@@ -1,0 +1,549 @@
+{
+  "attempts": [
+    {
+      "ended_at": 1792770864.307231,
+      "index": 0,
+      "samples": [
+        {
+          "argv": [
+            "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T154044Z-t072-screen-attempt2/out/attempt2/base000/binaries/variant0/qjs",
+            "--raw",
+            "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+            "local_read",
+            "23068672"
+          ],
+          "ended_at": 1792770862.6975482,
+          "sample": {
+            "cycles": 0,
+            "instructions": 4572369023,
+            "stdout": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":23068672,\"operations\":46137344,\"checksum\":69206016}\n",
+            "user_ns": 250000000,
+            "wall_ns": 257099774
+          },
+          "started_at": 1792770862.44013
+        },
+        {
+          "argv": [
+            "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T154044Z-t072-screen-attempt2/out/attempt2/base000/binaries/variant0/qjs",
+            "--raw",
+            "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+            "local_read",
+            "46137344"
+          ],
+          "ended_at": 1792770863.211586,
+          "sample": {
+            "cycles": 0,
+            "instructions": 9119913316,
+            "stdout": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":46137344,\"operations\":92274688,\"checksum\":138412032}\n",
+            "user_ns": 500000000,
+            "wall_ns": 513661588
+          },
+          "started_at": 1792770862.697689
+        },
+        {
+          "argv": [
+            "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T154044Z-t072-screen-attempt2/out/attempt2/cand000/binaries/variant0/qjs",
+            "--raw",
+            "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+            "local_read",
+            "23068672"
+          ],
+          "ended_at": 1792770863.784401,
+          "sample": {
+            "cycles": 0,
+            "instructions": 4575767338,
+            "stdout": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":23068672,\"operations\":46137344,\"checksum\":69206016}\n",
+            "user_ns": 560000000,
+            "wall_ns": 572438206
+          },
+          "started_at": 1792770863.21174
+        },
+        {
+          "argv": [
+            "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T154044Z-t072-screen-attempt2/out/attempt2/cand000/binaries/variant0/qjs",
+            "--raw",
+            "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+            "local_read",
+            "46137344"
+          ],
+          "ended_at": 1792770864.307231,
+          "sample": {
+            "cycles": 0,
+            "instructions": 9120051918,
+            "stdout": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":46137344,\"operations\":92274688,\"checksum\":138412032}\n",
+            "user_ns": 510000000,
+            "wall_ns": 522485450
+          },
+          "started_at": 1792770863.784532
+        }
+      ],
+      "started_at": 1792770862.44013
+    },
+    {
+      "ended_at": 1792770865.8659031,
+      "index": 1,
+      "samples": [
+        {
+          "argv": [
+            "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T154044Z-t072-screen-attempt2/out/attempt2/cand000/binaries/variant0/qjs",
+            "--raw",
+            "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+            "local_read",
+            "23068672"
+          ],
+          "ended_at": 1792770864.571815,
+          "sample": {
+            "cycles": 0,
+            "instructions": 4572416629,
+            "stdout": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":23068672,\"operations\":46137344,\"checksum\":69206016}\n",
+            "user_ns": 250000000,
+            "wall_ns": 264221519
+          },
+          "started_at": 1792770864.30737
+        },
+        {
+          "argv": [
+            "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T154044Z-t072-screen-attempt2/out/attempt2/cand000/binaries/variant0/qjs",
+            "--raw",
+            "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+            "local_read",
+            "46137344"
+          ],
+          "ended_at": 1792770865.09372,
+          "sample": {
+            "cycles": 0,
+            "instructions": 9119783336,
+            "stdout": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":46137344,\"operations\":92274688,\"checksum\":138412032}\n",
+            "user_ns": 510000000,
+            "wall_ns": 521521532
+          },
+          "started_at": 1792770864.57192
+        },
+        {
+          "argv": [
+            "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T154044Z-t072-screen-attempt2/out/attempt2/base000/binaries/variant0/qjs",
+            "--raw",
+            "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+            "local_read",
+            "23068672"
+          ],
+          "ended_at": 1792770865.3554938,
+          "sample": {
+            "cycles": 0,
+            "instructions": 4572519239,
+            "stdout": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":23068672,\"operations\":46137344,\"checksum\":69206016}\n",
+            "user_ns": 250000000,
+            "wall_ns": 261271593
+          },
+          "started_at": 1792770865.093837
+        },
+        {
+          "argv": [
+            "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T154044Z-t072-screen-attempt2/out/attempt2/base000/binaries/variant0/qjs",
+            "--raw",
+            "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+            "local_read",
+            "46137344"
+          ],
+          "ended_at": 1792770865.8659031,
+          "sample": {
+            "cycles": 0,
+            "instructions": 9119661588,
+            "stdout": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":46137344,\"operations\":92274688,\"checksum\":138412032}\n",
+            "user_ns": 500000000,
+            "wall_ns": 510036465
+          },
+          "started_at": 1792770865.355635
+        }
+      ],
+      "started_at": 1792770864.30737
+    },
+    {
+      "ended_at": 1792770867.429996,
+      "index": 2,
+      "samples": [
+        {
+          "argv": [
+            "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T154044Z-t072-screen-attempt2/out/attempt2/base000/binaries/variant0/qjs",
+            "--raw",
+            "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+            "local_read",
+            "23068672"
+          ],
+          "ended_at": 1792770866.128417,
+          "sample": {
+            "cycles": 0,
+            "instructions": 4572469245,
+            "stdout": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":23068672,\"operations\":46137344,\"checksum\":69206016}\n",
+            "user_ns": 250000000,
+            "wall_ns": 262156294
+          },
+          "started_at": 1792770865.8660328
+        },
+        {
+          "argv": [
+            "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T154044Z-t072-screen-attempt2/out/attempt2/base000/binaries/variant0/qjs",
+            "--raw",
+            "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+            "local_read",
+            "46137344"
+          ],
+          "ended_at": 1792770866.640806,
+          "sample": {
+            "cycles": 0,
+            "instructions": 9119676294,
+            "stdout": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":46137344,\"operations\":92274688,\"checksum\":138412032}\n",
+            "user_ns": 500000000,
+            "wall_ns": 511885293
+          },
+          "started_at": 1792770866.128552
+        },
+        {
+          "argv": [
+            "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T154044Z-t072-screen-attempt2/out/attempt2/cand000/binaries/variant0/qjs",
+            "--raw",
+            "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+            "local_read",
+            "23068672"
+          ],
+          "ended_at": 1792770866.904855,
+          "sample": {
+            "cycles": 0,
+            "instructions": 4572423242,
+            "stdout": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":23068672,\"operations\":46137344,\"checksum\":69206016}\n",
+            "user_ns": 250000000,
+            "wall_ns": 263591603
+          },
+          "started_at": 1792770866.640914
+        },
+        {
+          "argv": [
+            "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T154044Z-t072-screen-attempt2/out/attempt2/cand000/binaries/variant0/qjs",
+            "--raw",
+            "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+            "local_read",
+            "46137344"
+          ],
+          "ended_at": 1792770867.429996,
+          "sample": {
+            "cycles": 0,
+            "instructions": 9119988135,
+            "stdout": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":46137344,\"operations\":92274688,\"checksum\":138412032}\n",
+            "user_ns": 510000000,
+            "wall_ns": 524706667
+          },
+          "started_at": 1792770866.904979
+        }
+      ],
+      "started_at": 1792770865.8660328
+    },
+    {
+      "ended_at": 1792770869.0786,
+      "index": 3,
+      "samples": [
+        {
+          "argv": [
+            "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T154044Z-t072-screen-attempt2/out/attempt2/cand000/binaries/variant0/qjs",
+            "--raw",
+            "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+            "local_read",
+            "23068672"
+          ],
+          "ended_at": 1792770867.6941109,
+          "sample": {
+            "cycles": 0,
+            "instructions": 4572397349,
+            "stdout": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":23068672,\"operations\":46137344,\"checksum\":69206016}\n",
+            "user_ns": 250000000,
+            "wall_ns": 263534475
+          },
+          "started_at": 1792770867.4301581
+        },
+        {
+          "argv": [
+            "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T154044Z-t072-screen-attempt2/out/attempt2/cand000/binaries/variant0/qjs",
+            "--raw",
+            "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+            "local_read",
+            "46137344"
+          ],
+          "ended_at": 1792770868.306249,
+          "sample": {
+            "cycles": 0,
+            "instructions": 9120745018,
+            "stdout": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":46137344,\"operations\":92274688,\"checksum\":138412032}\n",
+            "user_ns": 600000000,
+            "wall_ns": 611722219
+          },
+          "started_at": 1792770867.694217
+        },
+        {
+          "argv": [
+            "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T154044Z-t072-screen-attempt2/out/attempt2/base000/binaries/variant0/qjs",
+            "--raw",
+            "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+            "local_read",
+            "23068672"
+          ],
+          "ended_at": 1792770868.564918,
+          "sample": {
+            "cycles": 0,
+            "instructions": 4572469479,
+            "stdout": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":23068672,\"operations\":46137344,\"checksum\":69206016}\n",
+            "user_ns": 250000000,
+            "wall_ns": 258203241
+          },
+          "started_at": 1792770868.306416
+        },
+        {
+          "argv": [
+            "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T154044Z-t072-screen-attempt2/out/attempt2/base000/binaries/variant0/qjs",
+            "--raw",
+            "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+            "local_read",
+            "46137344"
+          ],
+          "ended_at": 1792770869.0786,
+          "sample": {
+            "cycles": 0,
+            "instructions": 9119736634,
+            "stdout": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":46137344,\"operations\":92274688,\"checksum\":138412032}\n",
+            "user_ns": 500000000,
+            "wall_ns": 513219629
+          },
+          "started_at": 1792770868.565054
+        }
+      ],
+      "started_at": 1792770867.4301581
+    },
+    {
+      "ended_at": 1792770870.639958,
+      "index": 4,
+      "samples": [
+        {
+          "argv": [
+            "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T154044Z-t072-screen-attempt2/out/attempt2/base000/binaries/variant0/qjs",
+            "--raw",
+            "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+            "local_read",
+            "23068672"
+          ],
+          "ended_at": 1792770869.3413582,
+          "sample": {
+            "cycles": 0,
+            "instructions": 4572479923,
+            "stdout": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":23068672,\"operations\":46137344,\"checksum\":69206016}\n",
+            "user_ns": 250000000,
+            "wall_ns": 262372545
+          },
+          "started_at": 1792770869.078764
+        },
+        {
+          "argv": [
+            "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T154044Z-t072-screen-attempt2/out/attempt2/base000/binaries/variant0/qjs",
+            "--raw",
+            "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+            "local_read",
+            "46137344"
+          ],
+          "ended_at": 1792770869.854468,
+          "sample": {
+            "cycles": 0,
+            "instructions": 9119658616,
+            "stdout": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":46137344,\"operations\":92274688,\"checksum\":138412032}\n",
+            "user_ns": 500000000,
+            "wall_ns": 512749328
+          },
+          "started_at": 1792770869.341473
+        },
+        {
+          "argv": [
+            "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T154044Z-t072-screen-attempt2/out/attempt2/cand000/binaries/variant0/qjs",
+            "--raw",
+            "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+            "local_read",
+            "23068672"
+          ],
+          "ended_at": 1792770870.119849,
+          "sample": {
+            "cycles": 0,
+            "instructions": 4572550513,
+            "stdout": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":23068672,\"operations\":46137344,\"checksum\":69206016}\n",
+            "user_ns": 250000000,
+            "wall_ns": 265044113
+          },
+          "started_at": 1792770869.8545752
+        },
+        {
+          "argv": [
+            "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T154044Z-t072-screen-attempt2/out/attempt2/cand000/binaries/variant0/qjs",
+            "--raw",
+            "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+            "local_read",
+            "46137344"
+          ],
+          "ended_at": 1792770870.639958,
+          "sample": {
+            "cycles": 0,
+            "instructions": 9119833471,
+            "stdout": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":46137344,\"operations\":92274688,\"checksum\":138412032}\n",
+            "user_ns": 510000000,
+            "wall_ns": 519541033
+          },
+          "started_at": 1792770870.119968
+        }
+      ],
+      "started_at": 1792770869.078764
+    }
+  ],
+  "calibration": [
+    {
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T154044Z-t072-screen-attempt2/out/attempt2/base000/binaries/variant0/qjs",
+        "--raw",
+        "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+        "local_read",
+        "1024"
+      ],
+      "ended_at": 1792770862.099155,
+      "sample": {
+        "cycles": 0,
+        "instructions": 25270542,
+        "stdout": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":1024,\"operations\":2048,\"checksum\":3072}\n",
+        "user_ns": 0,
+        "wall_ns": 8593419
+      },
+      "started_at": 1792770862.0903199
+    },
+    {
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T154044Z-t072-screen-attempt2/out/attempt2/base000/binaries/variant0/qjs",
+        "--raw",
+        "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+        "local_read",
+        "8192"
+      ],
+      "ended_at": 1792770862.1073291,
+      "sample": {
+        "cycles": 0,
+        "instructions": 26687907,
+        "stdout": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":8192,\"operations\":16384,\"checksum\":24576}\n",
+        "user_ns": 0,
+        "wall_ns": 7697943
+      },
+      "started_at": 1792770862.099284
+    },
+    {
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T154044Z-t072-screen-attempt2/out/attempt2/base000/binaries/variant0/qjs",
+        "--raw",
+        "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+        "local_read",
+        "65536"
+      ],
+      "ended_at": 1792770862.115614,
+      "sample": {
+        "cycles": 0,
+        "instructions": 37994824,
+        "stdout": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":65536,\"operations\":131072,\"checksum\":196608}\n",
+        "user_ns": 0,
+        "wall_ns": 7975591
+      },
+      "started_at": 1792770862.107466
+    },
+    {
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T154044Z-t072-screen-attempt2/out/attempt2/base000/binaries/variant0/qjs",
+        "--raw",
+        "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+        "local_read",
+        "524288"
+      ],
+      "ended_at": 1792770862.128952,
+      "sample": {
+        "cycles": 0,
+        "instructions": 128432505,
+        "stdout": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":524288,\"operations\":1048576,\"checksum\":1572864}\n",
+        "user_ns": 0,
+        "wall_ns": 13023383
+      },
+      "started_at": 1792770862.1157482
+    },
+    {
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T154044Z-t072-screen-attempt2/out/attempt2/base000/binaries/variant0/qjs",
+        "--raw",
+        "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+        "local_read",
+        "4194304"
+      ],
+      "ended_at": 1792770862.181778,
+      "sample": {
+        "cycles": 0,
+        "instructions": 851850772,
+        "stdout": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":4194304,\"operations\":8388608,\"checksum\":12582912}\n",
+        "user_ns": 40000000,
+        "wall_ns": 52493433
+      },
+      "started_at": 1792770862.129086
+    },
+    {
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261023T154044Z-t072-screen-attempt2/out/attempt2/base000/binaries/variant0/qjs",
+        "--raw",
+        "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+        "local_read",
+        "23068672"
+      ],
+      "ended_at": 1792770862.4400089,
+      "sample": {
+        "cycles": 0,
+        "instructions": 4572350797,
+        "stdout": "QJS_BENCH_RESULT {\"case_id\":\"local_read\",\"iterations\":23068672,\"operations\":46137344,\"checksum\":69206016}\n",
+        "user_ns": 250000000,
+        "wall_ns": 257877675
+      },
+      "started_at": 1792770862.181912
+    }
+  ],
+  "case_shard": 3,
+  "complete": false,
+  "error": "invalid screen increment",
+  "id": "broad/local_read",
+  "iterations": 23068672,
+  "kind": "internal",
+  "measurement_schedule": {
+    "kind": "case-shards-v1",
+    "workers": 4
+  },
+  "pair_index_offset": 0,
+  "rounds": [
+    {
+      "attempt_count": 5,
+      "load": {
+        "anchor": 1792770824.074434,
+        "protocol": {
+          "cpu_threshold": 200,
+          "guard_seconds": 2,
+          "heavy_cluster_seconds": 60,
+          "invalid_fraction_cap": 0.2,
+          "sample_gap_seconds": 6,
+          "settle_seconds": 8,
+          "timestamp_bucket_seconds": 1,
+          "version": 1
+        },
+        "sealed_at": 1792770878.642185,
+        "sha256": "bb3cf530ea0b569cdb8cd1a70f33ed6eb1a36015c2c35b11af4a580c9ffd1143",
+        "text": "15:43:57 66.2 otool-classic\n15:48:59 93.6 otool-classic\n15:53:46 43.0 XprotectService\n"
+      }
+    }
+  ],
+  "valid_attempt_indices": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "worker_pid": 46346
+}

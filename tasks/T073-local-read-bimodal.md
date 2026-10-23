@@ -1,11 +1,11 @@
 # T073: Local-read process bimodality
 
-- Status: active; diagnostic slice complete; remedy proposals await lead review. No T072 attempt reopened.
-- Implementation: diagnostic collectors and records present; no engine or accepted measurement-policy change.
+- Status: active; diagnostic slice complete; collection containment adopted in T017. No T072 attempt reopened.
+- Implementation: diagnostic collectors and records present; T017 adopts proposal part 1 only; no engine or timing-statistic change.
 - Verified at: exact T072 base `6e899d24` / candidate `6c122407`, 2026-10-23 UTC (24 CST), serialized iMac x86_64; local full gate on unchanged runtime `f75bec10`.
 - Evidence: [job ledger and measurements](diagnostics/t073/measurements.md), [T017 proposal](diagnostics/t073/protocol.md), [original T072 failure](diagnostics/t072/attempt2.md).
 - Unresolved: precise hardware stall and separate code/stack-ASLR contributions; no production runtime remedy or acceptance standing.
-- Next action: lead reviews the diagnosis, qualifies T017 case-health reporting, then freezes a separate engine repair if selected.
+- Next action: part 1 adopted in T017; part 2 not adopted. Lead may freeze a separate engine repair from the diagnosis.
 
 ## Scope
 
@@ -46,7 +46,7 @@ so a constant startup-selected fast/slow binary mode is too strong a model.
 
 ## Proposed fixes and boundaries
 
-Adopt the [T017 case-health proposal](diagnostics/t073/protocol.md) prospectively:
+T017 adopts part 1 of the [case-health proposal](diagnostics/t073/protocol.md) prospectively:
 retain the signed invalid increment and every raw process, finish the already
 requested unrelated inventory, and keep overall readiness incomplete. Its
 owning document specifies packet/replay boundaries and qualification tests.

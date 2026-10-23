@@ -60,6 +60,11 @@ def collect(binary, sha256, lane, output, workers=1):
         'pairs': 30, 'cases': results, **scheduling, 'disturbance': disturbance,
         'disturbance_counts': conservation, 'quieting': quieting, 'launch_preflight': preflight, 'host': identity, **binding})
 
+    if any('health' in row for row in results):
+        # Retain the completed inventory, but do not allocate precision retries
+        # or calculate any pilot statistic from a failed required case.
+        return out / 'screen.json'
+
     # The pilot stays sealed. Each deficient case gets a separate immutable
     # chain; original joint lane cohorts never acquire fabricated observations.
     from .layout_continuation import complete

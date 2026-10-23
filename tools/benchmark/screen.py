@@ -69,6 +69,17 @@ class ScreenError(RuntimeError):
     """A screen that cannot produce trustworthy counter ratios."""
 
 
+class ProcessFailure(ScreenError):
+    """An executed engine timed out or exited unsuccessfully; retain its result."""
+    def __init__(self, result, message):
+        self.result = result
+        super().__init__(message)
+
+
+class CorrectnessFailure(ScreenError):
+    """A completed process violated the workload output contract."""
+
+
 class CountersUnavailable(ScreenError):
     """The host cannot report the hardware counters the screen relies on."""
 
@@ -193,9 +204,14 @@ def sample(tool: CounterTool, argv: Sequence[str], timeout: float,
            runner: Callable[[list[str], float], ProcessResult] = run_process) -> Sample:
     result = runner([*tool.prefix, *argv], timeout)
     if result.timed_out:
-        raise ScreenError(f"timed out: {' '.join(argv)}")
+        raise ProcessFailure(result, f"timed out: {' '.join(argv)}")
+    if result.exit_code is None:
+        raise ScreenError("engine process could not be started: " + result.stderr)
     if result.exit_code != 0:
-        raise ScreenError(f"exit status {result.exit_code}: {' '.join(argv)}\n{result.stderr[-2000:]}")
+        # A failed counter wrapper (for example perf permission denial) is
+        # infrastructure failure, not evidence of an executed engine crash.
+        tool.parse(result.stderr)
+        raise ProcessFailure(result, f"exit status {result.exit_code}: {' '.join(argv)}\n{result.stderr[-2000:]}")
     values = tool.parse(result.stderr)
     return Sample(
         instructions=values["instructions"],
@@ -281,11 +297,14 @@ def _check_output(case: CaseSpec, stdout: str) -> str:
     if case.kind == "internal":
         lines = [line for line in stdout.splitlines() if line.startswith(RESULT_PREFIX)]
         if len(lines) != 1:
-            raise ScreenError(f"{case.id}: expected one {RESULT_PREFIX.strip()} line")
-        result = json.loads(lines[0][len(RESULT_PREFIX):])
-        return json.dumps({"operations": result["operations"], "checksum": result["checksum"]})
+            raise CorrectnessFailure(f"{case.id}: expected one {RESULT_PREFIX.strip()} line")
+        try:
+            result = json.loads(lines[0][len(RESULT_PREFIX):])
+            return json.dumps({"operations": result["operations"], "checksum": result["checksum"]})
+        except (ValueError, KeyError, TypeError) as error:
+            raise CorrectnessFailure(f'{case.id}: malformed benchmark result') from error
     if case.expected_stdout is not None and stdout != case.expected_stdout:
-        raise ScreenError(f"{case.id}: stdout did not match the external sentinel contract")
+        raise CorrectnessFailure(f"{case.id}: stdout did not match the external sentinel contract")
     return stdout
 
 
@@ -495,7 +514,7 @@ def render(results: Sequence[CaseResult], pairs: int, aa: bool, metric: str = "c
     ]
 
     def cell(result: CaseResult, metric: str) -> str:
-        if not result.ratios[metric]:
+        if not result.ratios.get(metric):
             return "n/a"
         low, high = result.spread(metric)
         return f"{result.median(metric):.4f} [{low:.4f}, {high:.4f}]"
@@ -507,6 +526,12 @@ def render(results: Sequence[CaseResult], pairs: int, aa: bool, metric: str = "c
             f"{cell(result, 'cycles')} | {cell(result, 'wall_ns')} |"
         )
     lines.append("")
+    if any(hasattr(result, 'health') for result in results):
+        lines.append('Readiness incomplete: case health failure; no aggregate.')
+        for result in results:
+            if hasattr(result, 'health'):
+                lines.append(result.id + ': ' + ', '.join(result.health['reasons']))
+        return "\n".join(lines)
     for metric in METRICS:
         medians = [r.median(metric) for r in results if r.ratios[metric]]
         if medians:
@@ -615,7 +640,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if policy is not None:
             from .layout_rule import evaluate
             packet = {"pairs": args.pairs, "cases": [
-                {"id": r.id, "ratios": r.ratios} for r in results]}
+                {"id": r.id, "ratios": r.ratios, **({"health": r.health} if hasattr(r, "health") else {})} for r in results]}
             contract = gate.layout_unit['layout_gate']
             verdict = evaluate(policy, packet, gate.target_ids, gate.target_max,
                 instruction_blind=contract['mechanism_class'] == 'instruction-blind',
@@ -643,7 +668,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             "pairs": args.pairs,
             "launch_preflight": preflight,
             "load_average": {"before": load_before, "after": load_after},
-            "cases": [{"id": r.id, "kind": r.kind, "iterations": r.iterations, "ratios": r.ratios} for r in results],
+            "cases": [{"id": r.id, "kind": r.kind, "iterations": r.iterations, "ratios": r.ratios,
+                       **({"health": r.health} if hasattr(r, "health") else {})} for r in results],
             "gate": verdict,
         }, indent=2) + "\n", encoding="utf-8")
     return 3 if verdict is not None and not verdict["passed"] else 0

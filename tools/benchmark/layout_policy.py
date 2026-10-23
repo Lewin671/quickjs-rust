@@ -41,12 +41,21 @@ def selection_lanes(policy):
         ('development',) if 'development' in policy['lanes'] else ()), 'portfolio')
 
 
-def rows(packet, expected=None, pairs=None):
+def rows(packet, expected=None, pairs=None, *, allow_health=False):
     result = {}
     for row in packet['cases']:
         name = row['id']
         if name in result:
             raise ValueError('duplicate layout case: ' + name)
+        if 'health' in row:
+            from .case_health import validate_health, CaseHealthFailure
+            validate_health(row['health'])
+            if row.get('ratios') != {}:
+                raise ValueError('failed case carries ratios')
+            if not allow_health:
+                raise CaseHealthFailure(row['health'])
+            result[name] = None
+            continue
         ratios = row['ratios']
         for metric in ('wall_ns', 'instructions'):
             values = ratios[metric]

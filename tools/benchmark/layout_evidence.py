@@ -56,7 +56,7 @@ def replay(path: Path, policy, engines=None, *, held=False):
     raw_panels = {}
     expected_ids = policy['held_out' if held else 'cases']
     for k, packet in enumerate(evidence['panels']):
-        rows(packet, expected_ids, pairs)
+        rows(packet, expected_ids, pairs, allow_health=True)
         raw_panels[k] = []
         for case in packet['cases']:
             relative = f"variant{k}/{case['id'].replace('/', '--')}.json"
@@ -65,11 +65,16 @@ def replay(path: Path, policy, engines=None, *, held=False):
             if digest(file) != evidence['case_files'].get(relative):
                 raise ValueError('layout raw case hash mismatch')
             raw = json.loads(file.read_text())
-            if raw['id'] != case['id'] or raw['ratios'] != case['ratios']:
+            if (raw['id'] != case['id'] or raw.get('ratios', {}) != case['ratios']
+                    or raw.get('health') != case.get('health')):
                 raise ValueError('layout raw/report case mismatch')
             raw_panels[k].append(raw)
-            replay_case(raw, pairs, {role: evidence[role]['variants'][k]['path']
-                                     for role in ('base', 'candidate')})
+            if 'health' in raw:
+                replay_case(raw, pairs, {role: evidence[role]['variants'][k]['path']
+                                         for role in ('base', 'candidate')}, allow_health=True)
+            else:
+                replay_case(raw, pairs, {role: evidence[role]['variants'][k]['path']
+                                         for role in ('base', 'candidate')})
     case_ids = [c['id'] for c in evidence['panels'][0]['cases']]
     verify(evidence, case_ids)
     all_raw = [r for panel in raw_panels.values() for r in panel]
