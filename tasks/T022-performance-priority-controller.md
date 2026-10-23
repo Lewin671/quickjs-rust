@@ -9,7 +9,7 @@
   Legacy retained decisions remain verified only at their recorded revisions.
 - Evidence: [T055](archive/T055-layout-noise-control.md) owns B calibration and hashes;
   [T037](T037-integration-batch-1.md) owns historical unstable-base decisions.
-- Unresolved: ruleset check unconfigured; [T065 core-migration amendment](proposals/T065-core-migration-acceptance.md) is a proposal for lead review, not active policy.
+- Unresolved: ruleset check unconfigured; tooling does not yet encode the [overall-first rule](#overall-first-acceptance-user-rule-2026-10-22) (plans state it in prose); [T065 core-migration amendment](proposals/T065-core-migration-acceptance.md) is a proposal for lead review, not active policy.
 - Next action: freeze fresh schema-3 queue/unit plans against the qualified policy for their collection schedule (new workers-4 plans bind v6; v5 screens and panels are 2.55x faster than serial, T060); preserve the independent promotion gates below.
 
 Commands and their interpretation are in
@@ -131,25 +131,22 @@ The lead authorizes re-deciding the sealed batch-1 bundle with this evidence
 before applying the split/re-measure rule. Mechanics and floor definition:
 [benchmarking](../docs/benchmarking.md#unstable-frozen-base-evidence).
 
+## Overall-first acceptance: user rule, 2026-10-22
+
+The user set this standing rule (first applied in
+[T066](archive/T066-size-class-allocator.md#lead-promotion-decision-2026-10-22)).
+When every whole-portfolio measure is faster — development lane, external
+lane, all-case portfolio, and held-out — a local measure that gets worse
+(one lane ceiling, an individual microbenchmark or sentinel, peak RSS) does
+not block promotion. Correctness and zero Test262 gaps are never waivable.
+New plans state this rule when frozen, naming which gates are overall and
+which are local, so it is never applied after seeing results. Local
+regressions are recorded and reported, not hidden. RSS defaults: per-case
+median ratio ≤1.10, development geomean ≤1.05, at least 15 alternating pairs.
+
 ## Why staged migrations exist
 
-The one-attempt leaf rule is correct for a recognizer and fatal for an
-architecture. Every structural attempt this campaign made was closed after a
-single implementation: the contiguous direct-call frame stack (correct, 1,920
-tests passing, regressed two targets), the realm object arena (1.016x/1.088x),
-transition-shape object storage, the compact generic bytecode core, and
-default data-property storage (two of three targets improved 3%, the third
-regressed 2.2%). Each rejection recorded "do not retry this mechanism", so the
-only changes able to close a 3-6x generic-path gap were made unavailable one
-at a time.
-
-A migration's early stages move real execution onto a new representation
-before any of it is faster. Requiring each to pay for itself is requiring a
-bridge to carry traffic after the first pier. The stage gate keeps every final
-standard — complete broad and external evidence, zero Test262 gap, a real
-improvement — and changes only how the work is allowed to reach that gate. An
-`abort` closes one implementation shape; it does not close "frames", "shapes",
-or "arenas".
+Single-attempt leaf rules closed every structural attempt after one implementation; a migration's early stages cannot pay for themselves. Stage gates keep every final standard and change only how work reaches it ([rationale](archive/T022-staged-migration-rationale.md)). An `abort` closes one implementation shape, not a mechanism family.
 
 Raw timing artifacts remain outside Git. The queue and decision bind their
 SHA-256 values so a small reviewable plan cannot be detached from its evidence.
