@@ -10,6 +10,7 @@ it to `archive/` with `git mv` and move its row below.
 
 | Task | Status | What it is |
 | --- | --- | --- |
+| [T069](T069-call-activation.md) call activation preparation | active | Freeze the T068 calls/environment unit, then cache immutable frame metadata and seed positional call slots. |
 | [T068](T068-post-t066-profile.md) post-T066 profiles | active | All ten development programs profiled on exact f49be95c/NG; owner attribution complete, ranked incremental proposals await selection. |
 | [T057](T057-string-code-units.md) string code units | active | Stage 1 and UTF-16 correctness extraction integrated; stage 2 abandoned (0 attempts); linear-search follow-up awaits screening. |
 | [T065](T065-interpreter-core-v3.md) interpreter core v3 | active | Ablation complete; rewrite not approved (lead, 2026-10-23); incremental units come from a fresh post-T066 profile. |
@@ -29,8 +30,7 @@ The last recorded full scan passes every configured case (see
 [conformance records](../docs/conformance/README.md)); [T043 history](archive/T043-derived-constructor-eval-context.md) records
 two remaining baseline programs outside that standing. Take broader conformance work from `./scripts/find-qjsng-gaps.sh`.
 
-Performance entries record scope and outcomes, not priority. Priority comes from a freshly generated opportunity queue. Reopening a closed proposal needs
-a new profile and a newly frozen plan; a rejected implementation does not ban
+Performance entries record scope and outcomes, not priority. Priority comes from a freshly generated opportunity queue. Reopening a closed proposal needs a new profile and a newly frozen plan; a rejected implementation does not ban
 its whole mechanism family (T022 states the rule).
 
 ## Closed

@@ -1,0 +1,213 @@
+{
+  "schema_version": 3,
+  "unit_kind": "leaf",
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "positional-call-activation",
+  "base_sha": "b93e4daa5d9d53f1780a66f31b31a96e2bfe1895",
+  "queue": {
+    "candidate_sha": "b93e4daa5d9d53f1780a66f31b31a96e2bfe1895",
+    "sha256": "71bf531c39224650b54956e054e2c4f7935798ce6aa109a85b4b1813fe074221"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "development/lodash/transform",
+      "development/immutable/persistent",
+      "development/diff/compare",
+      "development/graphlib/paths",
+      "development/moment/dates"
+    ],
+    "rank_ceiling": 10,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "T069: precompute immutable parameter/capture/frame initialization metadata once per bytecode body; seed ordinary synchronous positional arguments directly into slots before capture cells are initialized, retaining the existing parameter prologue and call-kind dispatch. Materialize compatibility call bindings only where their semantics require them. Existing direct/compact paths keep priority; realm/module/private/host services remain available without borrowing or replacing the caller binding view. Target rule, fixed from T068 development profiles only: calls-plus-environments exclusive self >=18 percent (five programs). T022 overall-first acceptance is declared before results: development lane, external lane, equal-case all-case portfolio and held-out are overall gates; single-lane ceilings, individual sentinels/microbenchmarks and RSS are local gates reported to the lead, who decides promotion. Correctness and zero Test262 gaps are never waivable. Peak RSS uses >=15 alternating pairs, per-case median ratio <=1.10 and development geomean <=1.05; retain T067 host-derived size/fresh/RSS resource evidence.",
+    "generality": "Metadata depends only on immutable bytecode local/capture flags and compiled parameter slots. Positional entry is admitted by synchronous execution, absence of observable parameter-name/mapped-arguments/dynamic-scope requirements, and preserved special-call context. It applies equally to JS calls, native callbacks and forwarded bound/proxy calls reaching the ordinary dispatcher. No workload/source/bytecode-template matching, new shared VM stack, operand/register transfer rewrite, dependency or unsafe code.",
+    "semantic_risks": [
+      "Seed duplicate positional parameters in source order; preserve missing and extra arguments, defaults, destructuring, rest and parameter TDZ through the existing prologue.",
+      "Capture cells must be created after slot seeding and remain shared by declaring frames, escaping and sibling closures; precomputed routes cannot cache realm-specific cell identities.",
+      "Mapped arguments, direct eval, with, inherited deopt scopes, immutable self names and synthetic foreign-realm overlays keep compatibility setup where positional omission could change name resolution.",
+      "Preserve lexical this/arguments/new.target, super/private state, derived constructors, module live imports/exports, native coercion and callback restoration; generator/async suspended frames continue owning their environment.",
+      "Static frame plans must preserve compiler temporary, hoisted, global, incoming-upvalue and module precedence; names above the 128-bit mask range retain the existing slow route.",
+      "CPU-work removal is instruction-visible, but layout/codegen can affect untouched executors. Use fixed quick-triage controls, full policy screens, mandatory K=6, 30-block formal and 30-pair held-out. No decide/promotion by this owner."
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "20261023T045032Z-t069-exact-profiles/out/profiles/development--lodash--transform/0/receipt/receipt.json",
+      "sha256": "7fafa612b0b3541c478649ec17b4f6bfdb16b270cc069e8217eccbbbff6a4815",
+      "base_sha": "b93e4daa5d9d53f1780a66f31b31a96e2bfe1895",
+      "opportunity_ids": [
+        "development/lodash/transform"
+      ],
+      "inclusive_fraction": 0.08605737158105403,
+      "shared_cost": "Fresh exact-b93e4daa complete-process 1ms sample repeat 0; setup-frame inclusive union 129/1499 main-thread samples. Union matches function_env, FrameBindings, initial slot/cell/mask routes, function-frame/VM construction, frame_call_env/callee_env, slot-seeding eligibility and captured-cell indexing. Recursion counted once; setup may invoke JS coercion, so this is reach, not removable cost. All three repetitions bound; targets were chosen prospectively from T068 calls-plus-environments self share >=18%, not these candidate-independent samples."
+    },
+    {
+      "source": "20261023T045032Z-t069-exact-profiles/out/profiles/development--lodash--transform/1/receipt/receipt.json",
+      "sha256": "76be19eb7d965e2fad99831e429f6d735e6eaf197112b315a5dab94a89829009",
+      "base_sha": "b93e4daa5d9d53f1780a66f31b31a96e2bfe1895",
+      "opportunity_ids": [
+        "development/lodash/transform"
+      ],
+      "inclusive_fraction": 0.07818930041152264,
+      "shared_cost": "Fresh exact-b93e4daa complete-process 1ms sample repeat 1; setup-frame inclusive union 114/1458 main-thread samples. Union matches function_env, FrameBindings, initial slot/cell/mask routes, function-frame/VM construction, frame_call_env/callee_env, slot-seeding eligibility and captured-cell indexing. Recursion counted once; setup may invoke JS coercion, so this is reach, not removable cost. All three repetitions bound; targets were chosen prospectively from T068 calls-plus-environments self share >=18%, not these candidate-independent samples."
+    },
+    {
+      "source": "20261023T045032Z-t069-exact-profiles/out/profiles/development--lodash--transform/2/receipt/receipt.json",
+      "sha256": "ab98dd5498d9acb9b36a7dca3ddfe30f9da5270b49883cdfcc3ebab74406023e",
+      "base_sha": "b93e4daa5d9d53f1780a66f31b31a96e2bfe1895",
+      "opportunity_ids": [
+        "development/lodash/transform"
+      ],
+      "inclusive_fraction": 0.08434547908232119,
+      "shared_cost": "Fresh exact-b93e4daa complete-process 1ms sample repeat 2; setup-frame inclusive union 125/1482 main-thread samples. Union matches function_env, FrameBindings, initial slot/cell/mask routes, function-frame/VM construction, frame_call_env/callee_env, slot-seeding eligibility and captured-cell indexing. Recursion counted once; setup may invoke JS coercion, so this is reach, not removable cost. All three repetitions bound; targets were chosen prospectively from T068 calls-plus-environments self share >=18%, not these candidate-independent samples."
+    },
+    {
+      "source": "20261023T045032Z-t069-exact-profiles/out/profiles/development--immutable--persistent/0/receipt/receipt.json",
+      "sha256": "8ad5d530615529b6fcd99655dd89d2e8d6e230cb99d0d8375150f34a9c236aac",
+      "base_sha": "b93e4daa5d9d53f1780a66f31b31a96e2bfe1895",
+      "opportunity_ids": [
+        "development/immutable/persistent"
+      ],
+      "inclusive_fraction": 0.14179346066688248,
+      "shared_cost": "Fresh exact-b93e4daa complete-process 1ms sample repeat 0; setup-frame inclusive union 438/3089 main-thread samples. Union matches function_env, FrameBindings, initial slot/cell/mask routes, function-frame/VM construction, frame_call_env/callee_env, slot-seeding eligibility and captured-cell indexing. Recursion counted once; setup may invoke JS coercion, so this is reach, not removable cost. All three repetitions bound; targets were chosen prospectively from T068 calls-plus-environments self share >=18%, not these candidate-independent samples."
+    },
+    {
+      "source": "20261023T045032Z-t069-exact-profiles/out/profiles/development--immutable--persistent/1/receipt/receipt.json",
+      "sha256": "f29ff03f4c6fb81d504042010f78d490b170c9ab7044f09f9bce57aa28f95154",
+      "base_sha": "b93e4daa5d9d53f1780a66f31b31a96e2bfe1895",
+      "opportunity_ids": [
+        "development/immutable/persistent"
+      ],
+      "inclusive_fraction": 0.1424853610930384,
+      "shared_cost": "Fresh exact-b93e4daa complete-process 1ms sample repeat 1; setup-frame inclusive union 438/3074 main-thread samples. Union matches function_env, FrameBindings, initial slot/cell/mask routes, function-frame/VM construction, frame_call_env/callee_env, slot-seeding eligibility and captured-cell indexing. Recursion counted once; setup may invoke JS coercion, so this is reach, not removable cost. All three repetitions bound; targets were chosen prospectively from T068 calls-plus-environments self share >=18%, not these candidate-independent samples."
+    },
+    {
+      "source": "20261023T045032Z-t069-exact-profiles/out/profiles/development--immutable--persistent/2/receipt/receipt.json",
+      "sha256": "ce38702fd709416b5e099950d9c0b615f71063826d326a0640c2c9380122a45e",
+      "base_sha": "b93e4daa5d9d53f1780a66f31b31a96e2bfe1895",
+      "opportunity_ids": [
+        "development/immutable/persistent"
+      ],
+      "inclusive_fraction": 0.13026571613739468,
+      "shared_cost": "Fresh exact-b93e4daa complete-process 1ms sample repeat 2; setup-frame inclusive union 402/3086 main-thread samples. Union matches function_env, FrameBindings, initial slot/cell/mask routes, function-frame/VM construction, frame_call_env/callee_env, slot-seeding eligibility and captured-cell indexing. Recursion counted once; setup may invoke JS coercion, so this is reach, not removable cost. All three repetitions bound; targets were chosen prospectively from T068 calls-plus-environments self share >=18%, not these candidate-independent samples."
+    },
+    {
+      "source": "20261023T045032Z-t069-exact-profiles/out/profiles/development--diff--compare/0/receipt/receipt.json",
+      "sha256": "61cffdbe4014295f569bdeb145ae388bb3ea3940968a8d78d33b7991a7fc00ed",
+      "base_sha": "b93e4daa5d9d53f1780a66f31b31a96e2bfe1895",
+      "opportunity_ids": [
+        "development/diff/compare"
+      ],
+      "inclusive_fraction": 0.07389362565976451,
+      "shared_cost": "Fresh exact-b93e4daa complete-process 1ms sample repeat 0; setup-frame inclusive union 364/4926 main-thread samples. Union matches function_env, FrameBindings, initial slot/cell/mask routes, function-frame/VM construction, frame_call_env/callee_env, slot-seeding eligibility and captured-cell indexing. Recursion counted once; setup may invoke JS coercion, so this is reach, not removable cost. All three repetitions bound; targets were chosen prospectively from T068 calls-plus-environments self share >=18%, not these candidate-independent samples."
+    },
+    {
+      "source": "20261023T045032Z-t069-exact-profiles/out/profiles/development--diff--compare/1/receipt/receipt.json",
+      "sha256": "ea1f58ff4c7d7fa286d902c2d14aa4dea1b0aab86a79e34c425e6c95ff547e7e",
+      "base_sha": "b93e4daa5d9d53f1780a66f31b31a96e2bfe1895",
+      "opportunity_ids": [
+        "development/diff/compare"
+      ],
+      "inclusive_fraction": 0.06752153876978562,
+      "shared_cost": "Fresh exact-b93e4daa complete-process 1ms sample repeat 1; setup-frame inclusive union 337/4991 main-thread samples. Union matches function_env, FrameBindings, initial slot/cell/mask routes, function-frame/VM construction, frame_call_env/callee_env, slot-seeding eligibility and captured-cell indexing. Recursion counted once; setup may invoke JS coercion, so this is reach, not removable cost. All three repetitions bound; targets were chosen prospectively from T068 calls-plus-environments self share >=18%, not these candidate-independent samples."
+    },
+    {
+      "source": "20261023T045032Z-t069-exact-profiles/out/profiles/development--diff--compare/2/receipt/receipt.json",
+      "sha256": "ae1d6248196c3a793560a51f4b150bc16791b7796d0df141e3a62861b622af51",
+      "base_sha": "b93e4daa5d9d53f1780a66f31b31a96e2bfe1895",
+      "opportunity_ids": [
+        "development/diff/compare"
+      ],
+      "inclusive_fraction": 0.06447638603696099,
+      "shared_cost": "Fresh exact-b93e4daa complete-process 1ms sample repeat 2; setup-frame inclusive union 314/4870 main-thread samples. Union matches function_env, FrameBindings, initial slot/cell/mask routes, function-frame/VM construction, frame_call_env/callee_env, slot-seeding eligibility and captured-cell indexing. Recursion counted once; setup may invoke JS coercion, so this is reach, not removable cost. All three repetitions bound; targets were chosen prospectively from T068 calls-plus-environments self share >=18%, not these candidate-independent samples."
+    },
+    {
+      "source": "20261023T045032Z-t069-exact-profiles/out/profiles/development--graphlib--paths/0/receipt/receipt.json",
+      "sha256": "f91ac4a6733747bf70dd44931959656975a29e5aeb50a87bf13a1c3e2b19348e",
+      "base_sha": "b93e4daa5d9d53f1780a66f31b31a96e2bfe1895",
+      "opportunity_ids": [
+        "development/graphlib/paths"
+      ],
+      "inclusive_fraction": 0.11840888066604996,
+      "shared_cost": "Fresh exact-b93e4daa complete-process 1ms sample repeat 0; setup-frame inclusive union 128/1081 main-thread samples. Union matches function_env, FrameBindings, initial slot/cell/mask routes, function-frame/VM construction, frame_call_env/callee_env, slot-seeding eligibility and captured-cell indexing. Recursion counted once; setup may invoke JS coercion, so this is reach, not removable cost. All three repetitions bound; targets were chosen prospectively from T068 calls-plus-environments self share >=18%, not these candidate-independent samples."
+    },
+    {
+      "source": "20261023T045032Z-t069-exact-profiles/out/profiles/development--graphlib--paths/1/receipt/receipt.json",
+      "sha256": "3f30a290481b27b9ed45afb89b9cc67def7e146aee19d3876cb60af1d5de4e26",
+      "base_sha": "b93e4daa5d9d53f1780a66f31b31a96e2bfe1895",
+      "opportunity_ids": [
+        "development/graphlib/paths"
+      ],
+      "inclusive_fraction": 0.11336405529953918,
+      "shared_cost": "Fresh exact-b93e4daa complete-process 1ms sample repeat 1; setup-frame inclusive union 123/1085 main-thread samples. Union matches function_env, FrameBindings, initial slot/cell/mask routes, function-frame/VM construction, frame_call_env/callee_env, slot-seeding eligibility and captured-cell indexing. Recursion counted once; setup may invoke JS coercion, so this is reach, not removable cost. All three repetitions bound; targets were chosen prospectively from T068 calls-plus-environments self share >=18%, not these candidate-independent samples."
+    },
+    {
+      "source": "20261023T045032Z-t069-exact-profiles/out/profiles/development--graphlib--paths/2/receipt/receipt.json",
+      "sha256": "c1206cf2fbddbce30f4df80d32a468099c6774df5690e023bad0c81b7684dc69",
+      "base_sha": "b93e4daa5d9d53f1780a66f31b31a96e2bfe1895",
+      "opportunity_ids": [
+        "development/graphlib/paths"
+      ],
+      "inclusive_fraction": 0.12476894639556377,
+      "shared_cost": "Fresh exact-b93e4daa complete-process 1ms sample repeat 2; setup-frame inclusive union 135/1082 main-thread samples. Union matches function_env, FrameBindings, initial slot/cell/mask routes, function-frame/VM construction, frame_call_env/callee_env, slot-seeding eligibility and captured-cell indexing. Recursion counted once; setup may invoke JS coercion, so this is reach, not removable cost. All three repetitions bound; targets were chosen prospectively from T068 calls-plus-environments self share >=18%, not these candidate-independent samples."
+    },
+    {
+      "source": "20261023T045032Z-t069-exact-profiles/out/profiles/development--moment--dates/0/receipt/receipt.json",
+      "sha256": "5c3c466ca379675418a5758ec63fea39732ff39fa675d8eda3ba45cad8493157",
+      "base_sha": "b93e4daa5d9d53f1780a66f31b31a96e2bfe1895",
+      "opportunity_ids": [
+        "development/moment/dates"
+      ],
+      "inclusive_fraction": 0.035095767863287074,
+      "shared_cost": "Fresh exact-b93e4daa complete-process 1ms sample repeat 0; setup-frame inclusive union 306/8719 main-thread samples. Union matches function_env, FrameBindings, initial slot/cell/mask routes, function-frame/VM construction, frame_call_env/callee_env, slot-seeding eligibility and captured-cell indexing. Recursion counted once; setup may invoke JS coercion, so this is reach, not removable cost. All three repetitions bound; targets were chosen prospectively from T068 calls-plus-environments self share >=18%, not these candidate-independent samples."
+    },
+    {
+      "source": "20261023T045032Z-t069-exact-profiles/out/profiles/development--moment--dates/1/receipt/receipt.json",
+      "sha256": "4098ba0e2644785e2094a0d6d864135b6b7d188d6006e0af876151b5699a7432",
+      "base_sha": "b93e4daa5d9d53f1780a66f31b31a96e2bfe1895",
+      "opportunity_ids": [
+        "development/moment/dates"
+      ],
+      "inclusive_fraction": 0.04038772213247173,
+      "shared_cost": "Fresh exact-b93e4daa complete-process 1ms sample repeat 1; setup-frame inclusive union 350/8666 main-thread samples. Union matches function_env, FrameBindings, initial slot/cell/mask routes, function-frame/VM construction, frame_call_env/callee_env, slot-seeding eligibility and captured-cell indexing. Recursion counted once; setup may invoke JS coercion, so this is reach, not removable cost. All three repetitions bound; targets were chosen prospectively from T068 calls-plus-environments self share >=18%, not these candidate-independent samples."
+    },
+    {
+      "source": "20261023T045032Z-t069-exact-profiles/out/profiles/development--moment--dates/2/receipt/receipt.json",
+      "sha256": "2609accc4d6ad711472350a76a3f25061ceed6c01c9b303663d42a615cbe34eb",
+      "base_sha": "b93e4daa5d9d53f1780a66f31b31a96e2bfe1895",
+      "opportunity_ids": [
+        "development/moment/dates"
+      ],
+      "inclusive_fraction": 0.03927214096510423,
+      "shared_cost": "Fresh exact-b93e4daa complete-process 1ms sample repeat 2; setup-frame inclusive union 341/8683 main-thread samples. Union matches function_env, FrameBindings, initial slot/cell/mask routes, function-frame/VM construction, frame_call_env/callee_env, slot-seeding eligibility and captured-cell indexing. Recursion counted once; setup may invoke JS coercion, so this is reach, not removable cost. All three repetitions bound; targets were chosen prospectively from T068 calls-plus-environments self share >=18%, not these candidate-independent samples."
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "development/lodash/transform",
+      "development/immutable/persistent",
+      "development/diff/compare",
+      "development/graphlib/paths",
+      "development/moment/dates"
+    ],
+    "target_max_candidate_over_base": 0.97,
+    "max_attempts": 2
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  },
+  "layout_gate": {
+    "policy_path": "benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v6.json",
+    "policy_sha256": "be123f7c5cfd46aa863467256eb8bf6947ff64f72541efc371f05a36c5535a31",
+    "mechanism_class": "cpu-work",
+    "memory_wall_targets": [],
+    "panel_required": true,
+    "panel_pairs": 5,
+    "held_out_pairs": 30,
+    "formal_blocks": 30
+  }
+}
