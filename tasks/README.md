@@ -29,8 +29,7 @@ The last recorded full scan passes every configured case (see
 [conformance records](../docs/conformance/README.md)); [T043 history](archive/T043-derived-constructor-eval-context.md) records
 two remaining baseline programs outside that standing. Take broader conformance work from `./scripts/find-qjsng-gaps.sh`.
 
-Performance entries record scope and outcomes, not priority. Priority comes from a freshly generated opportunity queue. Reopening a closed proposal needs a new profile and a newly frozen plan; a rejected implementation does not ban
-its whole mechanism family (T022 states the rule).
+Performance entries record scope and outcomes, not priority. Priority comes from a freshly generated opportunity queue. Reopening a closed proposal needs a new profile and a newly frozen plan; a rejected implementation does not ban its whole mechanism family (T022 states the rule).
 
 ## Closed
 
@@ -38,6 +37,7 @@ Each file is under `archive/` with a resume block; outcomes record what happened
 
 | Task | Outcome |
 | --- | --- |
+| [T072 live property proof](archive/T072-live-property-proof.md) | Closed without promotion under the lead decision: both unchanged-candidate screens incomplete on collection failures; triage 0.949774 and exact zero gaps remain, full performance standing unavailable. |
 | [T070 ownership transfer](archive/T070-value-transport.md) | Closed without promotion: attempt 1 declined; broader triage 0.975245 misses <=0.97; one screen unused; implementation retained on owner branch. |
 | `T069-call-activation.md` | Promoted by the lead under overall-first: formal development 0.957, external 0.998, portfolio 0.992, held-out 0.930, zero Test262 gaps; deferred-key receiver regression found in review and repaired. |
 | `T067-x86-resource-manifest.md` | Resource lane derives a qualified manifest for the measuring host (iMac x86_64 fat16-abort); base-vs-base qualification size 1.0, fresh 0.990, RSS 1.0. |

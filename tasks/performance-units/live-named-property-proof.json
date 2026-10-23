@@ -1,0 +1,212 @@
+{
+  "schema_version": 3,
+  "unit_kind": "leaf",
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "live-named-property-proof",
+  "base_sha": "6e899d24c167d1393c077bcd69a01b61571dbcd1",
+  "queue": {
+    "candidate_sha": "6e899d24c167d1393c077bcd69a01b61571dbcd1",
+    "sha256": "c6063619ce1daee74f4d7c48254b2844d3d48d76102e9f0f6e9c2876fe7dbb06"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "development/meriyah/parse",
+      "development/moment/dates",
+      "development/diff/compare",
+      "development/js-yaml/document",
+      "development/matter-js/simulate"
+    ],
+    "rank_ceiling": 10,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "T072: share a short-lived receiver/storage view and consume-once live data-slot proof across named cache validation, handler dispatch and storage lookup. Resolve cache-installation metadata from the same lookup; retain weak identities, live values, descriptor checks, layout invalidation and exotic fallbacks. Select T068 development programs whose named-cache plus named-other exclusive self fraction exceeds the equal-program mean 8.844 percent; never select from held-out. T022 overall-first is prospective: development, external, equal-case portfolio and held-out are overall gates; lane ceilings, individual sentinels/microbenchmarks and RSS are local gates, fully reported for lead judgment. Correctness and zero Test262 gaps are never waived. Peak RSS uses >=15 alternating pairs, per-case median <=1.10 and development geomean <=1.05, with T067 derived host resource manifest. Quick triage precedes every screen; require target wall geomean <=0.97 and correctness. Stop after two honest designs miss this threshold. The lead alone decides promotion.",
+    "generality": "Admission depends on ordinary receiver kind, actual live storage/slot, descriptor flags, receiver/holder identity and revisions, shared literal shape or interned stored-key identity. A borrow is scoped to one get/set/method read and ends before any user code; no retained raw pointer, source/bytecode template, benchmark-specific case, new dependency, unsafe or environment/binding rewrite. Arrays, Functions, primitives and exotic receivers preserve their own-property/prototype precedence and fallback.",
+    "semantic_risks": [
+      "No cache or property RefCell borrow may cross getter/setter calls, Proxy traps, coercion, callbacks or any other user code, including reentrant reads/writes through the same instruction site.",
+      "A live slot must retain its storage borrow; identity/layout/shape/key validation and value read/write belong to the same operation. Descriptor replacement, deletion, swap removal, small/dynamic/literal conversion and namespace/typed-array behavior must invalidate or decline.",
+      "Prototype and grandprototype answers require receiver own-miss plus current chain identity and holder layout. Negative proofs are receiver/layout specific; no T065 unsound memo.",
+      "Writes preserve writability, strict/sloppy completion, accessors, global binding mirrors, globalThis intrinsic capture and nonextensibility. Cache entries own only weak receivers/values as before.",
+      "Previous property shortcuts failed portfolio screens (T041/T049/T053). Preserve existing hot paths where possible and inspect instruction-sensitive controls; no post-result layout fishing. At most two K=6 attempts; 30-block formal and 30-pair held-out only after promising triage and screen."
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "profiles/development--meriyah--parse/0/receipt/receipt.json",
+      "sha256": "060d5f98797148ffafe876cbedd39c91caf8026559808550e8c5b7ad05694e83",
+      "base_sha": "6e899d24c167d1393c077bcd69a01b61571dbcd1",
+      "opportunity_ids": [
+        "development/meriyah/parse"
+      ],
+      "inclusive_fraction": 0.33753943217665616,
+      "shared_cost": "Fresh exact-base canonical complete-process 1ms sample repeat 0; union of named-cache, named-handler and storage-owned frames 749/2219 main-thread samples, recursion counted once. Includes required and inlined/unresolved work, not removable cost. All three repeats bound; T068 self-share selection fixed before these profiles."
+    },
+    {
+      "source": "profiles/development--meriyah--parse/1/receipt/receipt.json",
+      "sha256": "f790b14a244d9d5d517a49971b458f1c9f8a0785fdb7c38a6dfe029baa93bb0c",
+      "base_sha": "6e899d24c167d1393c077bcd69a01b61571dbcd1",
+      "opportunity_ids": [
+        "development/meriyah/parse"
+      ],
+      "inclusive_fraction": 0.3410221619176843,
+      "shared_cost": "Fresh exact-base canonical complete-process 1ms sample repeat 1; union of named-cache, named-handler and storage-owned frames 754/2211 main-thread samples, recursion counted once. Includes required and inlined/unresolved work, not removable cost. All three repeats bound; T068 self-share selection fixed before these profiles."
+    },
+    {
+      "source": "profiles/development--meriyah--parse/2/receipt/receipt.json",
+      "sha256": "0841813840a00ec5c01b8f575ba6005ee8f90b258bfc77bd951f78ee8f7605e6",
+      "base_sha": "6e899d24c167d1393c077bcd69a01b61571dbcd1",
+      "opportunity_ids": [
+        "development/meriyah/parse"
+      ],
+      "inclusive_fraction": 0.3331826401446655,
+      "shared_cost": "Fresh exact-base canonical complete-process 1ms sample repeat 2; union of named-cache, named-handler and storage-owned frames 737/2212 main-thread samples, recursion counted once. Includes required and inlined/unresolved work, not removable cost. All three repeats bound; T068 self-share selection fixed before these profiles."
+    },
+    {
+      "source": "profiles/development--moment--dates/0/receipt/receipt.json",
+      "sha256": "4815542f0e0107d5946e2181d85935b7b728229c39d39bd9fabb41e7501479cc",
+      "base_sha": "6e899d24c167d1393c077bcd69a01b61571dbcd1",
+      "opportunity_ids": [
+        "development/moment/dates"
+      ],
+      "inclusive_fraction": 0.2671773444753946,
+      "shared_cost": "Fresh exact-base canonical complete-process 1ms sample repeat 0; union of named-cache, named-handler and storage-owned frames 2302/8616 main-thread samples, recursion counted once. Includes required and inlined/unresolved work, not removable cost. All three repeats bound; T068 self-share selection fixed before these profiles."
+    },
+    {
+      "source": "profiles/development--moment--dates/1/receipt/receipt.json",
+      "sha256": "743a9c7f0c2abd56817a81a97e685b3418e6a96fc66764f9df6043460b35721d",
+      "base_sha": "6e899d24c167d1393c077bcd69a01b61571dbcd1",
+      "opportunity_ids": [
+        "development/moment/dates"
+      ],
+      "inclusive_fraction": 0.25870818915801613,
+      "shared_cost": "Fresh exact-base canonical complete-process 1ms sample repeat 1; union of named-cache, named-handler and storage-owned frames 2243/8670 main-thread samples, recursion counted once. Includes required and inlined/unresolved work, not removable cost. All three repeats bound; T068 self-share selection fixed before these profiles."
+    },
+    {
+      "source": "profiles/development--moment--dates/2/receipt/receipt.json",
+      "sha256": "fc4acf94c832505320aec11fcf0ab593e836c41efbf62a46efe8a6dec52bbeb5",
+      "base_sha": "6e899d24c167d1393c077bcd69a01b61571dbcd1",
+      "opportunity_ids": [
+        "development/moment/dates"
+      ],
+      "inclusive_fraction": 0.27232813402657424,
+      "shared_cost": "Fresh exact-base canonical complete-process 1ms sample repeat 2; union of named-cache, named-handler and storage-owned frames 2357/8655 main-thread samples, recursion counted once. Includes required and inlined/unresolved work, not removable cost. All three repeats bound; T068 self-share selection fixed before these profiles."
+    },
+    {
+      "source": "profiles/development--diff--compare/0/receipt/receipt.json",
+      "sha256": "689cf8702691118f744b8f219e25c9eb9ef01a00b3f30c05da9abbe2cf19a915",
+      "base_sha": "6e899d24c167d1393c077bcd69a01b61571dbcd1",
+      "opportunity_ids": [
+        "development/diff/compare"
+      ],
+      "inclusive_fraction": 0.3191533948030176,
+      "shared_cost": "Fresh exact-base canonical complete-process 1ms sample repeat 0; union of named-cache, named-handler and storage-owned frames 1523/4772 main-thread samples, recursion counted once. Includes required and inlined/unresolved work, not removable cost. All three repeats bound; T068 self-share selection fixed before these profiles."
+    },
+    {
+      "source": "profiles/development--diff--compare/1/receipt/receipt.json",
+      "sha256": "ef26d4e595b58d6dbd148e886cf538dfd55f268dc5e71cc22f6f3af274084dfc",
+      "base_sha": "6e899d24c167d1393c077bcd69a01b61571dbcd1",
+      "opportunity_ids": [
+        "development/diff/compare"
+      ],
+      "inclusive_fraction": 0.2999792831986741,
+      "shared_cost": "Fresh exact-base canonical complete-process 1ms sample repeat 1; union of named-cache, named-handler and storage-owned frames 1448/4827 main-thread samples, recursion counted once. Includes required and inlined/unresolved work, not removable cost. All three repeats bound; T068 self-share selection fixed before these profiles."
+    },
+    {
+      "source": "profiles/development--diff--compare/2/receipt/receipt.json",
+      "sha256": "c89a3132fd25e166e7603fc5b575c780cdbad07826f743eb3fa042358914a920",
+      "base_sha": "6e899d24c167d1393c077bcd69a01b61571dbcd1",
+      "opportunity_ids": [
+        "development/diff/compare"
+      ],
+      "inclusive_fraction": 0.31783601014370244,
+      "shared_cost": "Fresh exact-base canonical complete-process 1ms sample repeat 2; union of named-cache, named-handler and storage-owned frames 1504/4732 main-thread samples, recursion counted once. Includes required and inlined/unresolved work, not removable cost. All three repeats bound; T068 self-share selection fixed before these profiles."
+    },
+    {
+      "source": "profiles/development--js-yaml--document/0/receipt/receipt.json",
+      "sha256": "271ec40f26741fb0b7f152b8a377081b5cb79424ad336c54b9ee1a1c1d343a66",
+      "base_sha": "6e899d24c167d1393c077bcd69a01b61571dbcd1",
+      "opportunity_ids": [
+        "development/js-yaml/document"
+      ],
+      "inclusive_fraction": 0.18394077448747154,
+      "shared_cost": "Fresh exact-base canonical complete-process 1ms sample repeat 0; union of named-cache, named-handler and storage-owned frames 646/3512 main-thread samples, recursion counted once. Includes required and inlined/unresolved work, not removable cost. All three repeats bound; T068 self-share selection fixed before these profiles."
+    },
+    {
+      "source": "profiles/development--js-yaml--document/1/receipt/receipt.json",
+      "sha256": "cf431bfb1d5b481230b41535f940032dfdf78577a12e34faab5d91648c2f236f",
+      "base_sha": "6e899d24c167d1393c077bcd69a01b61571dbcd1",
+      "opportunity_ids": [
+        "development/js-yaml/document"
+      ],
+      "inclusive_fraction": 0.17105263157894737,
+      "shared_cost": "Fresh exact-base canonical complete-process 1ms sample repeat 1; union of named-cache, named-handler and storage-owned frames 598/3496 main-thread samples, recursion counted once. Includes required and inlined/unresolved work, not removable cost. All three repeats bound; T068 self-share selection fixed before these profiles."
+    },
+    {
+      "source": "profiles/development--js-yaml--document/2/receipt/receipt.json",
+      "sha256": "013a69cf34241d659fa582152d94713e7630a031747d378ae60eda5ea456698c",
+      "base_sha": "6e899d24c167d1393c077bcd69a01b61571dbcd1",
+      "opportunity_ids": [
+        "development/js-yaml/document"
+      ],
+      "inclusive_fraction": 0.18519577022006287,
+      "shared_cost": "Fresh exact-base canonical complete-process 1ms sample repeat 2; union of named-cache, named-handler and storage-owned frames 648/3499 main-thread samples, recursion counted once. Includes required and inlined/unresolved work, not removable cost. All three repeats bound; T068 self-share selection fixed before these profiles."
+    },
+    {
+      "source": "profiles/development--matter-js--simulate/0/receipt/receipt.json",
+      "sha256": "f4a9d2bc8704947c8c3ecb4a48074994c262a2d1a3f5acb1d2b1aedfc9f6046e",
+      "base_sha": "6e899d24c167d1393c077bcd69a01b61571dbcd1",
+      "opportunity_ids": [
+        "development/matter-js/simulate"
+      ],
+      "inclusive_fraction": 0.21969988457098885,
+      "shared_cost": "Fresh exact-base canonical complete-process 1ms sample repeat 0; union of named-cache, named-handler and storage-owned frames 571/2599 main-thread samples, recursion counted once. Includes required and inlined/unresolved work, not removable cost. All three repeats bound; T068 self-share selection fixed before these profiles."
+    },
+    {
+      "source": "profiles/development--matter-js--simulate/1/receipt/receipt.json",
+      "sha256": "90cb35e90f57ee456bc7c7057d6720a49de8a055d301d6e377cd4a962317fa16",
+      "base_sha": "6e899d24c167d1393c077bcd69a01b61571dbcd1",
+      "opportunity_ids": [
+        "development/matter-js/simulate"
+      ],
+      "inclusive_fraction": 0.20077369439071566,
+      "shared_cost": "Fresh exact-base canonical complete-process 1ms sample repeat 1; union of named-cache, named-handler and storage-owned frames 519/2585 main-thread samples, recursion counted once. Includes required and inlined/unresolved work, not removable cost. All three repeats bound; T068 self-share selection fixed before these profiles."
+    },
+    {
+      "source": "profiles/development--matter-js--simulate/2/receipt/receipt.json",
+      "sha256": "f77972445323e78e8adfcb243e3d957adc4af4fa0a1c49dda54b12410854906b",
+      "base_sha": "6e899d24c167d1393c077bcd69a01b61571dbcd1",
+      "opportunity_ids": [
+        "development/matter-js/simulate"
+      ],
+      "inclusive_fraction": 0.2272379495026779,
+      "shared_cost": "Fresh exact-base canonical complete-process 1ms sample repeat 2; union of named-cache, named-handler and storage-owned frames 594/2614 main-thread samples, recursion counted once. Includes required and inlined/unresolved work, not removable cost. All three repeats bound; T068 self-share selection fixed before these profiles."
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "development/meriyah/parse",
+      "development/moment/dates",
+      "development/diff/compare",
+      "development/js-yaml/document",
+      "development/matter-js/simulate"
+    ],
+    "target_max_candidate_over_base": 0.97,
+    "max_attempts": 2
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  },
+  "layout_gate": {
+    "policy_path": "benchmarks/policies/imac-x86_64-rust1.95-fat16-layout-v6.json",
+    "policy_sha256": "be123f7c5cfd46aa863467256eb8bf6947ff64f72541efc371f05a36c5535a31",
+    "mechanism_class": "cpu-work",
+    "memory_wall_targets": [],
+    "panel_required": true,
+    "panel_pairs": 5,
+    "held_out_pairs": 30,
+    "formal_blocks": 30
+  }
+}

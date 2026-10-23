@@ -35,6 +35,7 @@ nothing about whether the code exists.
 
 | Plan (`<name>.json`) | Task | Base | Recorded outcome |
 | --- | --- | --- | --- |
+| `live-named-property-proof` | T072 | `6e899d24` 2026-10-23 | Closed without promotion: candidate 6c122407, triage 0.949774 / 0.913469, zero exact gaps; both screens incomplete on collection failures, 2/2 spent |
 | `positional-call-activation` | T069 | `b93e4daa` 2026-10-23 | promoted by the [lead decision](../archive/T069-call-activation.md#lead-promotion-decision-2026-10-23) under overall-first: formal development 0.957, external 0.998, portfolio 0.992, held-out 0.930; strict moment/diff/graphlib payoff misses recorded; receiver repair `e38e85fc`; integrated |
 | `ownership-aware-register-transfer` | T070 | `b93e4daa` 2026-10-23 | Closed without promotion; lead declined screen 1; `b74a84a9` broader triage 0.975245 misses <=0.97; last screen unused; correctness pass, source retained on branch |
 | `cli-size-class-allocator` | T066 | `9eba7a1d` 2026-10-21 | decision `20261022T225522Z` rejected on the sentinel lane (user override) and the unsatisfiable x86 resource gate; promoted by the [lead decision](../archive/T066-size-class-allocator.md#lead-promotion-decision-2026-10-22) and integrated |
