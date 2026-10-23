@@ -1,16 +1,18 @@
 # T069: Positional call and activation preparation
 
-- Status: active; broader preparation revision after the first diagnostic.
-- Implementation: repair working tree over `74e8f8aa`; first candidate remains committed.
-- Verified at: broader working tree over `74e8f8aa`, 2026-10-23: full gate
+- Status: active; owner implementation/evidence complete, lead review pending.
+- Implementation: broader candidate `9aac3558`; first candidate remains committed.
+- Verified at: broader candidate `9aac3558`, 2026-10-23: full gate
   passes, 2,366 runtime tests (31 new), 732 benchmark-tool tests, 35 script
-  tests and 5,170 curated Test262 cases. Complete 42,672-case conformance
-  currently applies to first candidate `74e8f8aa`, not yet this revision.
-- Evidence: this task, [plan](performance-units/positional-call-activation.json),
-  [T068 profiles](archive/T068-profile-evidence.md).
-- Unresolved: candidate measurement and lead decision;
-  pre-existing dynamic-closure gap below.
-- Next action: finish the broader revision gates, commit it, and queue its correctness and triage. Do not change the frozen targets.
+  tests and 5,170 curated Test262 cases. Complete candidate scan also passes
+  all 42,672 configured cases with zero parity gaps at `9aac3558`.
+- Evidence: [final measured record](archive/T069-final-evidence.md),
+  [plan](performance-units/positional-call-activation.json),
+  [first candidate](archive/T069-first-candidate.md).
+- Unresolved: strict moment/diff/graphlib payoff misses require lead review
+  under the prospectively frozen overall-first rule; pre-existing gap below.
+- Next action: lead adjudicates promotion from the complete evidence. No final
+  decide/promotion, origin push or merge was performed by this owner.
 
 ## Goal and selection
 
@@ -93,20 +95,54 @@ do not encode the wrong result as a behavioral regression test. The current
 
 The [first candidate record](archive/T069-first-candidate.md) freezes baseline,
 profile, correctness and triage receipts. Candidate `74e8f8aa` passes all 42,672
-configured Test262 cases, but its triage is `likely loss`; the prospective gate
-correctly deferred. **No screen attempt has been spent (0/2).**
+configured Test262 cases, but its triage is `likely loss`; that gate deferred
+without spending an attempt. The broader candidate has now spent **1/2**:
+its complete K=6 screen strictly rejects three target payoff gates, while all
+six development/external/portfolio aggregates improve. No budget is reset.
 
-A broader preparation revision is present over `74e8f8aa`: static callbacks
+A broader preparation revision is committed at `9aac3558`: static callbacks
 keep shared cells without caller name export, marked/dynamic/with contexts
 retain their compatibility views, global refresh visits precomputed fallback
 slots, and ordinary completion recycles cleared storage in place. Derived and
 suspended completion routes stay intact. No caller environment is borrowed.
-Full checks and new callback/storage tests precede its next commit.
+Full checks and new callback/storage tests passed before that commit.
 Entry metadata is boxed once per body, keeping its vectors out of the hot
 bytecode payload. Active frames remain independent; recycled slots are cleared
 and captured cells are never recycled. Eval/with, retained scopes and marked
 realm views remain on their compatibility routes. No executor register transfer
 or active-frame scheduler is changed.
+
+- `20261023T081718Z-t069-repair-correctness`: exit 0; iMac comparisons/subset.
+- `20261023T081731Z-t069-repair-triage`: exit 0; diagnostic `unclear`, 105/105
+  valid pairs, no invalid/heavy pairs, 329 s including quieting, within budget.
+- `20261023T082004Z-t069-repair-screen-promising`: queued before seeing the
+  new triage result. Starts attempt 1 only if correctness passes, triage is
+  complete/in budget, and frozen-target geometric means are at most 0.97 in
+  both wall and instructions. This is a diagnostic spending trigger, not an
+  acceptance change: the complete K=6 screen keeps every frozen gate.
+- The trigger passed: target wall geomean 0.929874, instructions 0.921258.
+  Attempt 1 is collecting. Full candidate conformance passes and is recorded
+  in the burndown; local release/agents image SHA-256
+  `564d32f4c423a05495c81f6a161c335b20d1fbfb9b0f982fafb27a368238ec59`.
+- `20261023T082854Z-t069-rss15`: exit 0, all 15-pair RSS limits pass;
+  development geomean 0.998300, maximum case 1.009052.
+- `20261023T082855Z-t069-resources`: exit 0, healthy/complete; size 1.000975,
+  fresh 0.987491, resource RSS 1.011464 C/B; host replay queued below.
+- `20261023T092154Z-t069-formal30`: exit 0, healthy/complete 30-block bundle;
+  all 86 v6 case precision checks resolved without continuation. Joint wall
+  C/B: development 0.957429, external 0.998279, portfolio 0.991613; intervals
+  all below 1. Development C/NG 2.640021. Strict target payoff misses remain.
+- `20261023T092154Z-t069-heldout30`: cancelled (130) after queue-order race;
+  partial data discarded whole, no metrics read or used for work selection.
+- `20261023T093959Z-t069-heldout30-ordered`: exit 0 in 4,682 s, all six
+  layouts/30 pairs; combined held-out 0.929786, layout ratios 0.925992–0.932820,
+  all intervals below 1. No missing held-out precision evidence.
+- `20261023T095351Z-t069-resource-replay`: exit 0, all raw resource reports
+  authenticate against formal engines/host manifest. Selection/held-out raw
+  replay also passes. No final decide or promotion step is authorized or run.
+- Full-gate log SHA-256:
+  `5917288109336a9a2dc6a16236a890cb60e9c5f0fe990a1dde468574dd50b430`;
+  the commit hook also passed its 117-case mapped slice.
 
 ## Acceptance and verification
 
@@ -115,14 +151,22 @@ or active-frame scheduler is changed.
   frozen plan SHA-256 `548257aa6d218fbdcf7f3b5036c770025952a78f1b7b731db8e77df8db708dd9`.
 - [x] Validated frozen schema-3 plan committed before runtime changes (`982d19b5`).
 - [x] Focused parameter/cell/context restoration tests and full local gate.
-- [ ] QuickJS-NG comparisons and zero-gap complete Test262 evidence.
-- [ ] Quick triage; if promising, finite-budget screen, formal, held-out,
+- [x] QuickJS-NG comparisons and zero-gap complete Test262 evidence.
+- [x] Quick triage; if promising, finite-budget screen, formal, held-out,
   RSS and resource evidence on the serialized iMac queue.
-- [ ] Evidence and local regressions recorded; lead decision remains pending.
-- [ ] Final full gate, commit, cargo clean and tracked target-file restoration.
+- [x] Evidence and local regressions recorded; lead decision remains pending.
+- [x] Final full gate, branch-scope validation and workspace cleanup.
 
 ```sh
 ./scripts/check-touched.sh --staged --explain
 ./scripts/check.sh
 ./scripts/compare-qjs.sh
 ```
+
+Final full gate also passes on unchanged runtime `9aac3558` with the handoff
+record; log SHA-256 `86abe1e1d060467e42ebe7227ecf41c7506cb09ab31fb506baa0c2e0b442435e`.
+Branch descent/path-scope check against b93e4daa passes. Remote CI is unrun
+because the user requested no branch publication.
+Cleanup: `cargo clean` removed 69,304 files / 9.6 GiB; the tracked target file
+was restored with `git checkout -- target`. Free disk is 53 GiB. Handoff
+documentation is committed without rebuilding cleaned binaries.
