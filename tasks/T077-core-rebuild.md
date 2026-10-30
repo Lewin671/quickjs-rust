@@ -1,11 +1,11 @@
 # T077: In-place core rebuild
 
-- Status: active; S1 implementation in progress; S3a implementation/counters/full gates complete on its owner branch, complete exact scan pending (2026-10-30 UTC).
+- Status: active; S1 implementation in progress; S3a locally complete/committed on its owner branch, awaiting lead formal acceptance (2026-10-30 UTC).
 - Implementation: partial; S3a direct operation entries and native slice transport present on the S3a owner branch; other stages remain unimplemented here.
-- Verified at: `27d503a68e0e5179fd47e8cecb242becf6dca87c`, 2026-10-30 UTC; native/recycler tests (51 optimized), full check (2,395 runtime tests; 5,170 curated cases), 257 NG fixtures and ten two-repeat development counter maps pass; exact scan pending.
+- Verified at: `27d503a68e0e5179fd47e8cecb242becf6dca87c`, 2026-10-30 UTC; full check (2,395 runtime tests; 5,170 curated cases), 51 optimized native tests, 257 NG fixtures, twenty development counter runs and complete configured exact coverage (42,672 Rust passes; zero gaps/not-run; recovered aggregation).
 - Evidence: [target](../docs/design/core-rebuild.md), [S1 brief](proposals/T077-s1-property-authority.md), [S3 plan/inventories](proposals/T077-s3-plan.md), [S3 counts](diagnostics/T077-s3-counts.md). S3a implementation/check record: [S3a results](diagnostics/T077-s3a-results.md).
-- Unresolved: S3a complete exact comparison/burndown and lead formal aggregate acceptance; pending fresh baseline and T074 contracts before S3b. Compact-pointer portability and final campaign progress remain unmeasured.
-- Next action: S3a owner finishes the complete exact scan/burndown; lead performs formal acceptance and reviews T074 before S3b, while S1 continues. Do not queue another baseline or revive closed unit gates.
+- Unresolved: lead formal S3a aggregate acceptance/integration and T074 contracts before S3b; fresh baseline/portability/final campaign standing remain lead-owned and unmeasured here.
+- Next action: lead runs formal S3a acceptance and integrates/rebases with S1 as appropriate, then reviews T074 before S3b. No additional local baseline or closed-unit revival.
 
 ## Authority and scope
 

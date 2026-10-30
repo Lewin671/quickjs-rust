@@ -2,8 +2,9 @@
 
 Owner branch `agent/t077-s3a-native-entries/codex`, base `d19d3aa6`.
 Implementation present at `27d503a6`; native/recycler tests and counters pass;
-full check and 257 NG fixtures pass; complete exact scan pending. No push, merge,
-iMac timing or held-out input access. Lead owns formal aggregate acceptance.
+full check, 257 NG fixtures and complete configured exact coverage pass.
+No push, merge, iMac timing or held-out input access. Formal acceptance remains
+with the lead.
 
 ## Replacement and API
 
@@ -22,7 +23,7 @@ arguments, bound lists, Proxy trap arrays, apply/spread/rest lists still own val
 ## Small corrections and measured costs
 
 - The current interpreter has no explicit Context/activation directory. Use its
-  existing OperandStack take/replace owner; S3c/d can replace that owner without
+  existing OperandStack take/direct-restore owner; S3c/d can replace that owner without
   changing the native ABI. No new driver or backend is introduced.
 - Checked native re-entry needs a realm-local depth and numeric stack-anchor cell
   in `function/env.rs`.
@@ -36,7 +37,7 @@ arguments, bound lists, Proxy trap arrays, apply/spread/rest lists still own val
   The common slice constructor now restores it on that error as well as on callee
   return/throw. The focused test preserves exception identity and outer new.target.
 
-## Verification in progress
+## Initial verification
 
 At the worktree based on `d19d3aa6`, nine `native::tests` pass: retained host and
 bound values; nested native/JS callbacks; callback throw and caller operands;
@@ -74,7 +75,7 @@ The native budget is raised to 256; a general 48-level nested reduce-callback
 regression test accompanies it. The boundary limit/release unit test now uses the
 single declared budget. The old candidate is not claimed as a complete result.
 The obsolete exact scan was stopped while still partial; no burndown was recorded
-for it. The final candidate must run the complete scan and all ten counters again.
+for it. The subsequent candidates and final verification below supersede that incomplete result.
 
 ## Corrected candidate counters
 
@@ -177,8 +178,8 @@ or program recognition. The admission regression uses 32 debug / 48 optimized
 levels, and a new deep-reentry unit requires catchable RangeError plus a subsequent
 successful native call. All eleven focused debug tests pass. Optimized counters
 remain the intended 256-budget measurement. Both obsolete exact scans were
-stopped before completion; neither is a conformance record. A fresh final scan
-is required for the profile-budget revision.
+stopped before completion; neither is a conformance record. That profile-budget revision was subsequently superseded by the stack-space
+guard below.
 
 ## Stack-space guard correction
 
@@ -194,7 +195,7 @@ the S3b service migration ABI are unchanged; there is no FFI/unsafe/global state
 The shallow arithmetic regression uses 16 debug / 48 optimized levels; a separate
 300-level reentry test requires catchable RangeError, successful subsequent native
 work and boundary restoration. Twelve focused tests pass in both debug and optimized library builds;
-final full/NG/exact checks follow. The budget bounds native-to-native callback segments;
+the final full/NG/exact results are recorded below. The budget bounds native-to-native callback segments;
 the existing pure-JS Rust recursion is still S3d's explicit-stack work.
 
 ## Final revision verification commands
@@ -212,7 +213,7 @@ Runtime revision `27d503a68e0e5179fd47e8cecb242becf6dca87c`:
 - All ten development programs also pass once on that clean non-counter binary,
   with exact manifest stdout; the diagnostic two-run full-map checks pass as above.
 - `QJS_AGENTS=1 QJS_CLI_PROFILE=release QJS_CLI_BIN="$PWD/target/release/qjs" TEST262_TIMEOUT_RETRIES=1 TEST262_CASE_TIMEOUT_SECONDS=20 TEST262_BASELINE_JOBS=4 ./scripts/find-qjsng-gaps.sh --exact --all --no-recommend --out-dir target/t077-s3a/exact-27d503a6`:
-  running; append the complete-scan burndown only after completion.
+  all 42,672 configured Rust cases passed; see the complete aggregation/recovery record below.
 
 Scope validation at this revision passes with the native/family/call-routing,
 mechanical service-state and documentation paths declared; no S1 property/object/
@@ -229,7 +230,8 @@ Both new sites now restore the actual owner without recycling that placeholder;
 the pool/activation subsystem itself is unchanged. This preserves the existing
 recycler invariant instead of introducing allocation work at native return.
 The `2bd8d91a` exact scan was stopped while partial for this final routing change;
-no burndown was recorded. Final source checks and counters must be rerun.
+no burndown was recorded for it. The final source checks and counter rerun pass
+as recorded above.
 
 The operand-capacity regression evaluates forty native calls against reused
 bytecode twice, then checks that its recycler still retains a usable allocation.
@@ -237,3 +239,64 @@ It passes with direct restoration; a temporary negative control using the old
 recycle-empty restoration fails exactly with `native return discarded the caller's
 reusable allocation`. The old restoration was restored only for that control and
 is absent from the candidate. This is a construction/reuse test, not timing.
+
+## Complete exact result and aggregation recovery
+
+Runtime `27d503a68e0e5179fd47e8cecb242becf6dca87c`, 2026-10-30 UTC:
+**53,572 corpus paths = 10,900 unchanged NG-config exclusions + 42,672 executed
+configured cases. Rust: 42,672 pass, 0 fail, 0 timeout, 0 not-run. NG: 42,602
+pass, 70 fail, 0 timeout. Gaps and NG-pass/Rust-not-run: zero.** Every configured
+case passed Rust, so no prior configured pass is lost. The NG nonpasses are
+reported as observed; no cause or new NG standing is inferred here.
+
+The execution-session reset during continuation stopped the shell's serial fold
+at 20,232 report rows **after every worker finished**. The original full queue,
+42,672 canonical worker JSONL records and 42,672 status files for each engine
+survived. Recovery did not re-run, reinterpret or replace any engine result:
+
+- Queue indices are exactly 1–42,672, with no per-engine skip reasons.
+- Every worker's path matches its queue row; both statuses match its canonical
+  JSONL; all original partially folded rows match the recovered records.
+- Those records plus all 10,900 original config-skip rows are a bijection with
+  the pinned submodule's **entire tracked test corpus**: no missing/duplicate path.
+- `scripts/test262-aggregate.py --require-complete-parity` over that complete
+  recovered file passes. The local provenance label is explicitly used instead
+  of its default CI label. This is a completed scan with recovered aggregation,
+  not a partial-scan burndown or a claim that the interrupted shell exited 0.
+
+The [recovery audit and hashes](T077-s3a-exact-recovery.json) retain this conclusion.
+The schema-1 result is appended to [the conformance ledger](../../docs/conformance/burndown.jsonl)
+under `27d503a6`, source `local-exact-release-agents`, using the runbook's
+`--entry` path. Earlier obsolete partial scans have no ledger entries.
+
+```sh
+python3 scripts/test262-aggregate.py \
+  --ng-cases target/t077-s3a/exact-27d503a6/cases-complete.jsonl \
+  --rust-cases target/t077-s3a/exact-27d503a6/cases-complete.jsonl \
+  --commit 27d503a68e0e5179fd47e8cecb242becf6dca87c \
+  --require-complete-parity \
+  --summary-out target/t077-s3a/exact-27d503a6/coverage.md \
+  --burndown-out target/t077-s3a/exact-27d503a6/burndown.jsonl \
+  --comparison-cases-out target/t077-s3a/exact-27d503a6/comparison.jsonl
+# Set the generated entry's source to local-exact-release-agents (a local run).
+./scripts/test262-burndown.sh --entry target/t077-s3a/exact-27d503a6/burndown.jsonl
+```
+
+Additional deletion detail at `66301001`: 24 native family files replace 1,875
+old lines with 4,915 lines of operation-specific adapters; the four iterator/
+suspension owners replace 223 old lines with 620 entry/helper lines. The explicit
+installation table and focused tests add source as well; no net shrink is claimed.
+
+## Handoff and remaining decisions
+
+S3a's implementation, counters and local correctness exit are complete on the
+owner branch; no push, merge, iMac timing or held-out access. No new dependency,
+crate, unsafe or FFI. The FunctionData header cost remains 296 → 304 bytes on
+this host; stack-growth observation is a general synchronous boundary guard,
+while pure-JS Rust recursion remains S3d's declared replacement.
+
+The lead must run formal S3a comparisons against the accepted milestone/fixed
+baseline and decide all four aggregate gates, then integration/rebase with S1.
+No performance acceptance or production landing is claimed here. S3b still
+requires accepted S2 and approved T074 contracts; preserve the native boundary's
+shared depth/stack state while mechanically replacing its CallEnv service.

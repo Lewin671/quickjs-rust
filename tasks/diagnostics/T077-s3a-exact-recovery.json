@@ -1,0 +1,19 @@
+{
+  "runtime_revision": "27d503a68e0e5179fd47e8cecb242becf6dca87c",
+  "aggregation_recovery": "Execution-session reset interrupted serial folding after every worker completed; original canonical worker JSONL and statuses were recovered without re-running or changing cases.",
+  "tracked_corpus_paths": 53572,
+  "config_skipped_paths": 10900,
+  "configured_queue_records": 42672,
+  "both_engine_worker_results": 42672,
+  "rust_pass": 42672,
+  "ng_pass": 42602,
+  "ng_fail": 70,
+  "missing_or_duplicate_paths": 0,
+  "missing_or_mismatched_worker_results": 0,
+  "interrupted_aggregate_rows_cross_checked": 20232,
+  "queue_sha256": "5944c1faf1eb481a6e3c2718814df1aa2d38222833a19baafd1251f5e62ad649",
+  "complete_cases_sha256": "2263183d8df546cb37338205c107cc4614a7ddee069a711be6181c0e27c2f61a",
+  "test262_pin": "4249661388e5d3f92a85186213da140a6481490f",
+  "ng_pin": "f7830186043e4488f2998759d60a514faf07cbc9",
+  "canonical_aggregator": "scripts/test262-aggregate.py --require-complete-parity"
+}
