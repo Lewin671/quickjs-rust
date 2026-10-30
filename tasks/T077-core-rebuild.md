@@ -5,7 +5,7 @@
 - Verified at: source audit at `6663738f000135120f0217f6307859d5e13e750b`, 2026-10-29; context, diff and staged fast gates pass on this design tree; no runtime candidate.
 - Evidence: [target](../docs/design/core-rebuild.md), [S1 brief](proposals/T077-s1-property-authority.md), historical T065/T068/T075/T076 records linked from the target.
 - Unresolved: pending fresh baseline; S3 requires T074 eval decisions; compact-pointer portability qualification and final campaign-target progress remain unmeasured.
-- Next action: lead assigns S1 owner using the linked brief; record the pending baseline when available. Do not queue another baseline or revive closed unit gates.
+- Next action: S1 owner implements the linked brief; in parallel the S3 inventory owner splits S3 into landable sub-stages (lead amendment 2026-10-29); lead records the pending baseline. Do not queue another baseline or revive closed unit gates.
 
 ## Authority and scope
 
@@ -113,7 +113,7 @@ plus aggregate improvement is progress, not proof of that campaign target.
 - Exit: universal register Code, no legacy opcode/fallback; ordinary calls no
   Vec/CallEnv/Rust recursion; virtual streams gone, existing typed/mutation
   executors consume common frames directly, with no retained scaffolding.
-- Size: **12–20 weeks**, largest integration risk; one-week Op/capability inventory/checkpoint before broad edits, then re-estimate.
+- Size: **12–20 weeks**, largest integration risk. Lead amendment 2026-10-29: the Op/capability inventory runs in parallel with S1 and must split S3 into independently landable sub-stages (each with the common gates); no multi-month unlandable branch.
 - Parallel: lead owns `ir*`, compiler shared builder, `vm*`, `function/call*` and
   Context; one owner ports `native/arrays.rs` + array builtin family, another
   `native/strings.rs` + string/regexp families after NativeEntry freeze; serialize
