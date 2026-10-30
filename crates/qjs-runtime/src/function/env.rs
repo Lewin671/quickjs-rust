@@ -19,6 +19,8 @@
 //! (getters, setters, Proxy traps, `valueOf`/`toString`, iterators): callers
 //! copy the needed value out, drop the borrow, then call.
 
+mod construction;
+
 use std::{
     cell::{OnceCell, RefCell},
     collections::{HashMap, HashSet},
@@ -56,6 +58,9 @@ pub(crate) struct RealmState {
     /// by literals, classes, or abstract operations that name an intrinsic.
     object_prototype: OnceCell<ObjectRef>,
     array_prototype: OnceCell<ObjectRef>,
+    /// Intrinsic arguments schemas contain only descriptor metadata and this
+    /// realm's well-known symbols; their actual values/accessors stay per object.
+    arguments_layouts: RefCell<Vec<Rc<crate::value::layout::Layout>>>,
     function_prototype: OnceCell<crate::Prototype>,
     function_constructor: OnceCell<Function>,
     /// Stable `%String.prototype%` identity used by primitive String reads.
@@ -108,6 +113,7 @@ impl RealmState {
             bindings: DynamicBindings::from_values(bindings),
             object_prototype: OnceCell::new(),
             array_prototype: OnceCell::new(),
+            arguments_layouts: RefCell::default(),
             function_prototype: OnceCell::new(),
             function_constructor: OnceCell::new(),
             string_prototype: OnceCell::new(),

@@ -4,6 +4,11 @@ use super::*;
 use crate::value::{OwnDataPropertyRead, OwnDataPropertyWrite};
 
 impl NamedStore {
+    /// Shared construction metadata; a retaining caller must own its symbol lifetime.
+    pub(crate) fn shared_layout(&self) -> Option<&Rc<Layout>> {
+        (!self.layout.dictionary && self.layout.mode.is_none()).then_some(&self.layout)
+    }
+
     /// Construction caches retain only an empty layout; the new store owns its edge.
     pub(crate) fn empty_cached(
         cache: &mut Option<Rc<Layout>>,

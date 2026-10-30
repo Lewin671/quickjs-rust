@@ -1,3 +1,5 @@
+//! Per-call arguments values/accessors with realm-owned shared descriptor schemas.
+//! Parameter cells, poison callee and iterator identity retain their existing paths.
 use std::collections::HashMap;
 
 use qjs_ast::BindingPattern;
@@ -54,6 +56,7 @@ pub(super) fn arguments_object(
     }
     define_arguments_iterator(&object, function, env);
     object.set_to_string_tag("Arguments");
+    env.realm().retain_arguments_layout(&object);
     Value::Object(object)
 }
 

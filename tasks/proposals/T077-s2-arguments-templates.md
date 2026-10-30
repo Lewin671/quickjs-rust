@@ -2,7 +2,7 @@
 
 Frozen before implementation. Append-label job
 `20261030T194632Z-t077-s2-r2-shape-labels`, source `74ba5e56`, identifies
-223,722 graphlib append misses: length 42,070; index 0 42,058; strict callee
+223,722 graphlib append misses: length 42,070; index 0 42,058; callee
 28,481 and iterator symbols 28,484, plus larger arities. Moment's 234,228
 misses include length 43,210, index 0 43,211, callee 43,200 and iterator
 symbols 43,203. These are arguments schemas, not dynamic adjacency maps.

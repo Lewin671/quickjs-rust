@@ -211,6 +211,8 @@ if candidate:
     edit('value/layout/edit.rs',lambda s:s.replace('Rc::new(self.layout.copied(true))','Rc::new(self.layout.copied(true)).into()').replace('Rc::new(self.layout.copied(dictionary))','Rc::new(self.layout.copied(dictionary)).into()'))
     edit('value/layout/host.rs',lambda s:s.replace('self.layout = next;', 'self.layout = next.into();'))
     edit('value/layout/prototype.rs',lambda s:s.replace('let root = Layout::root_shape(&self.layout).clone();', 'let root = '+C+'::SchemaRc::clone_raw(Layout::root_shape(&self.layout));'))
+    if (src/'function/env/construction.rs').exists():
+        edit('function/env/construction.rs',lambda s:s.replace('layouts.push(layout.clone());','layouts.push('+C+'::SchemaRc::clone_raw(layout));'))
     edit('value/object/literal.rs',lambda s:s.replace('let layout = store.layout().clone();', 'let layout = '+C+'::SchemaRc::clone_raw(store.layout());'))
 if not candidate:
     for file in ['value/object/class_fields.rs','value/object/dynamic_storage.rs']:

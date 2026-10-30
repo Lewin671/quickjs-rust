@@ -49,6 +49,9 @@ macro_rules! declare_counters {
 }
 
 declare_counters! {
+    property_arguments_template_hits,
+    property_arguments_template_misses,
+    property_arguments_templates_inserted,
     /// Calls a VM call opcode dispatched to a user function with a bytecode
     /// body, before any tier decides how to run it. A workload that claims N
     /// calls must report about N here, or the workload is not measuring calls.
