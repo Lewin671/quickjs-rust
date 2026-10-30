@@ -64,7 +64,7 @@ also compare a nonzero version. Rollover publishes a fresh dictionary allocation
 Private dictionaries with weak observers use safe Rc::make_mut dissociation,
 moving rather than copying fields when uniquely owned. S2 retires the legacy
 exact-value revision and moves prototype ownership into NamedStore; the ordinary
-hot payload is 88 bytes. Debug structural edits reconstruct layout invariants;
+hot payload is 96 nominal bytes (the CLI allocation class stays 112 with its Rc header). Debug structural edits reconstruct layout invariants;
 data-only writes check the affected slot and unchanged cardinalities.
 
 The semantic receiver and IC contract is [objects](core-rebuild-objects.md).

@@ -12,6 +12,7 @@ mod class_super;
 mod classes;
 mod closure_state;
 mod date;
+mod date_branding;
 mod date_format;
 mod date_setters;
 mod diagnostics;

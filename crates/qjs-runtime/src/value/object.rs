@@ -19,6 +19,8 @@ use super::{Property, Value};
 
 mod array_buffer_methods;
 mod class_fields;
+mod cold;
+use cold::ColdPayload;
 mod construction;
 mod data_write;
 mod key_order;
@@ -491,11 +493,11 @@ struct ObjectData {
     /// every write.
     index_property_count: Cell<u32>,
     flags: Cell<u16>,
-    cold: OnceCell<Box<ObjectColdData>>,
+    cold: OnceCell<ColdPayload>,
 }
 
 #[cfg(target_pointer_width = "64")]
-const _: () = assert!(std::mem::size_of::<ObjectData>() == 88);
+const _: () = assert!(std::mem::size_of::<ObjectData>() == 96);
 
 #[derive(Default)]
 struct ObjectColdData {
@@ -586,14 +588,6 @@ impl ObjectData {
     fn set_symbol_brand(&self, brand: SymbolBrand) {
         self.flags
             .set((self.flags.get() & !flags::SYMBOL_MASK) | ((brand as u16) << 7));
-    }
-
-    fn cold(&self) -> &ObjectColdData {
-        self.cold.get_or_init(Box::default).as_ref()
-    }
-
-    fn cold_if_present(&self) -> Option<&ObjectColdData> {
-        self.cold.get().map(Box::as_ref)
     }
 }
 
@@ -1156,7 +1150,7 @@ fn same_prototype_slot(left: Option<&Prototype>, right: Option<&Prototype>) -> b
 }
 
 fn is_internal_property_key(key: &str) -> bool {
-    key.starts_with('\0') && key != "\0StringData"
+    key.starts_with('\0') && !matches!(key, "\0StringData" | "\0DateValue")
 }
 
 /// Parses an array index in its canonical decimal spelling.

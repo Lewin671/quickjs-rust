@@ -43,7 +43,7 @@ slice/key lease share a 24-byte payload, with no extra allocation. No receiver/d
 | --- | --- |
 | `ShapeEntry` | `key:u32, slot:u32, order:u32, attrs:u16, reserved:u16` = 16 bytes |
 | `NamedStore` | `layout:Rc<Layout>` 8, `values:ValueSlots` 32, `accessors:Option<Box<AccessorSlots>>` 8, `epoch:u64` 8, strong prototype owner 8 = 64 bytes; `RefCell` wrapper 72 |
-| Ordinary hot payload | `named:RefCell<NamedStore>` 72, cold pointer 8, index count 4, packed flags/edit count/padding 4 = 88 bytes, excluding RC header |
+| Ordinary hot payload | `named:RefCell<NamedStore>` 72, tagged cold pointer 16, index count 4, packed flags/edit count/padding 4 = 96 bytes, excluding RC header |
 | Array hot/cold payload | 56-byte header: dense Vec RefCell 32, packed length/flags 8, scoped seed owner 8, cold pointer 8. Optional cold payload 104: NamedStore RefCell 72 and holes RefCell 32. Realm shares the default empty seed; probes allocate nothing. |
 | `Slot` | One owning `Value`: initially 16 bytes, S5 target 8; TDZ/hole state separate from ordinary data |
 | `Layout` | Immutable shape or unique dictionary; ID/domain, owned entries/key leases and one key-ID lookup index; transition cache is cold |
@@ -78,7 +78,7 @@ Arrays, functions, wrappers, Map/Set and ordinary objects embed the same NamedSt
 Dense/sparse indices, array length and mapped arguments stay exotic; typed-array
 canonical numeric indices and detachment use their own algorithms. String virtual
 indices, function lazy name/length/prototype, namespace live exports and private
-slots retain semantic hooks. StringData is an internal cold slot, never a named key. Hooks materialize into the same store when required.
+slots retain semantic hooks. StringData and DateValue are typed private slots, never named keys. Date uses a 16-byte boxed scalar/extension payload; other cold metadata remains stable behind its box. Hooks materialize into the same store when required.
 S1's intrinsic Array.prototype is an ObjectRef: its length/index definitions run
 array validation/shrink hooks before NamedStore; ordinary creation and slot-write
 caches decline that receiver.

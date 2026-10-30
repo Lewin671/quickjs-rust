@@ -88,16 +88,6 @@ impl ObjectRef {
     pub(crate) fn define_non_enumerable(&self, key: String, value: Value) {
         self.define_property(key, Property::non_enumerable(value));
     }
-    pub(crate) fn set_internal_non_enumerable(&self, key: &str, value: Value) {
-        let property = match self.own_property(key) {
-            Some(mut p) => {
-                p.value = value;
-                p
-            }
-            None => Property::non_enumerable(value),
-        };
-        self.define_property(key.to_owned(), property);
-    }
     pub(crate) fn has_own_property(&self, key: &str) -> bool {
         self.own_property(key).is_some()
     }

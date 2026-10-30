@@ -62,7 +62,7 @@ fn ordinary_object_keeps_cold_state_unallocated() {
     assert!(object.own_property_symbols().is_empty());
     assert!(object.to_string_tag().is_none());
     assert!(object.0.cold.get().is_none());
-    assert_eq!(mem::size_of::<ObjectData>(), 88);
+    assert_eq!(mem::size_of::<ObjectData>(), 96);
 }
 
 #[test]
