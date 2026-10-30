@@ -45,16 +45,29 @@ impl NamedPropertyCache {
             None
         };
         if let Some(recipe) = object.with_named(|s| s.append_recipe(before, slot)) {
-            self.0.borrow_mut().add = Some(Box::new(AddEntry { recipe, validity }));
+            self.0.state.borrow_mut().add = Some(Box::new(AddEntry { recipe, validity }));
         }
     }
     /// Caller excludes the realm global; the entry proves own writable data.
     #[inline(always)]
     pub(in crate::bytecode) fn write_number(&self, object: &ObjectRef, number: f64) -> bool {
-        let state = self.0.borrow();
+        if let Some(entry) = self.hot_mono() {
+            return object.with_named_mut(|store| {
+                entry.flags & (7 | OWN | WRITABLE | WRITE_FORBIDDEN) == DATA | OWN | WRITABLE
+                    && store.matches_version(&entry.version)
+                    && store.overwrite_guarded_number(entry.slot as usize, number)
+            });
+        }
+        self.write_number_other(object, number)
+    }
+    #[inline(never)]
+    fn write_number_other(&self, object: &ObjectRef, number: f64) -> bool {
+        let state = self.0.state.borrow();
         object.with_named_mut(|store| {
             let entry = match &state.entries {
-                Entries::Mono(entry) => entry,
+                Entries::MonoFirst | Entries::Mono(_) => {
+                    state.entries.mono(&self.0.first).expect("mono")
+                }
                 Entries::Poly(entries) | Entries::SharedOwnPoly(entries) => {
                     let Some(entry) = entries
                         .iter()
@@ -84,12 +97,12 @@ impl NamedPropertyCache {
         value: &Value,
         allow_add: bool,
     ) -> Option<OwnDataPropertyWrite> {
-        let state = self.0.borrow();
+        let state = self.0.state.borrow();
         if let NamedTarget::Object(object) = target {
             let mut appended = None;
             let result = object.with_named_mut(|store| {
                 let entry = match &state.entries {
-                    Entries::Mono(e) => Some(e),
+                    Entries::MonoFirst | Entries::Mono(_) => state.entries.mono(&self.0.first),
                     Entries::Poly(es) | Entries::SharedOwnPoly(es) => {
                         es.iter().find(|e| store.matches_version(&e.version))
                     }
@@ -130,7 +143,7 @@ impl NamedPropertyCache {
             }
             return result;
         }
-        let entry = state.entries.find(target)?;
+        let entry = state.entries.find(target, &self.0.first)?;
         if entry.flags & (7 | OWN | WRITE_FORBIDDEN) != DATA | OWN {
             return None;
         }

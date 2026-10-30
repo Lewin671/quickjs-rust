@@ -52,7 +52,7 @@ fn site_promotes_to_four_ways_then_stays_megamorphic() {
             }
         }
     }
-    assert!(matches!(cache.0.borrow().entries, Entries::Mega));
+    assert!(matches!(cache.0.state.borrow().entries, Entries::Mega));
     cache.update(&objects[0], "x", &Value::Null);
     assert!(cache.get(&objects[0]).is_none());
 }
@@ -170,11 +170,7 @@ fn own_hit_has_no_id_probe_text_hash_or_descriptor_path() {
     cache.update(&o, "x", &Value::Null);
     // Verification intentionally resolves the key and semantic result again.
     #[cfg(debug_assertions)]
-    {
-        if let Entries::Mono(e) = &mut cache.0.borrow_mut().entries {
-            e.flags &= !VERIFY;
-        }
-    }
+    let cache = modified_first(&cache, |e| e.flags &= !VERIFY);
     crate::diagnostics::reset_counters();
     assert_eq!(cache.get(&o), Some(Value::Number(1.0)));
     let c = crate::diagnostics::counters().unwrap();
@@ -280,7 +276,10 @@ fn dead_dictionary_guards_do_not_make_a_site_megamorphic() {
             object.set(format!("p{i}"), Value::Null);
         }
         cache.read_object(&object, "x");
-        assert!(matches!(cache.0.borrow().entries, Entries::Mono(_)));
+        assert!(matches!(
+            cache.0.state.borrow().entries,
+            Entries::MonoFirst | Entries::Mono(_)
+        ));
     }
 }
 
@@ -295,14 +294,11 @@ fn verifier_rejects_a_data_hit_when_pure_lookup_is_exotic() {
     // Simulate an invalid admission: the slot still loads, but the semantic
     // receiver has become a namespace exotic. Verification must fail loudly.
     object.mark_module_namespace_exotic();
-    let mut state = cache.0.borrow_mut();
-    let Entries::Mono(entry) = &mut state.entries else {
-        panic!()
-    };
-    entry.version = object.with_named(|s| s.version());
-    entry.flags |= VERIFY;
-    state.name = Some("x".into());
-    drop(state);
+    let cache = modified_first(&cache, |entry| {
+        entry.version = object.with_named(|s| s.version());
+        entry.flags |= VERIFY;
+    });
+    cache.0.state.borrow_mut().name = Some("x".into());
     cache.get(&object);
 }
 
@@ -317,7 +313,7 @@ fn shared_poly_promotes_to_versioned_guards_when_a_dictionary_arrives() {
     cache.read_object(&a, "x");
     cache.read_object(&b, "x");
     assert!(matches!(
-        cache.0.borrow().entries,
+        cache.0.state.borrow().entries,
         Entries::SharedOwnPoly(_)
     ));
     let dict = object(&domain, "x", 3.0);
@@ -325,7 +321,7 @@ fn shared_poly_promotes_to_versioned_guards_when_a_dictionary_arrives() {
         dict.set(format!("p{i}"), Value::Null);
     }
     cache.read_object(&dict, "x");
-    assert!(matches!(cache.0.borrow().entries, Entries::Poly(_)));
+    assert!(matches!(cache.0.state.borrow().entries, Entries::Poly(_)));
     dict.define_property("x".into(), Property::accessor(None, None, true, true));
     assert!(cache.get(&dict).is_none());
     assert_eq!(cache.get(&a), Some(Value::Number(1.0)));
@@ -344,7 +340,7 @@ fn shared_poly_hits_use_no_text_id_or_descriptor_probe() {
     cache.read_object(&a, "x");
     cache.read_object(&b, "x");
     #[cfg(debug_assertions)]
-    if let Entries::SharedOwnPoly(ways) = &mut cache.0.borrow_mut().entries {
+    if let Entries::SharedOwnPoly(ways) = &mut cache.0.state.borrow_mut().entries {
         for way in ways.iter_mut() {
             way.flags &= !VERIFY;
         }
@@ -390,7 +386,7 @@ fn megamorphic_reads_reuse_static_names_without_pinning_dead_keys() {
         cache.read_object(&o, "x");
         objects.push(o);
     }
-    assert!(matches!(cache.0.borrow().entries, Entries::Mega));
+    assert!(matches!(cache.0.state.borrow().entries, Entries::Mega));
     crate::diagnostics::reset_counters();
     for i in 0..1000 {
         assert_eq!(
@@ -417,7 +413,7 @@ fn append_recipe_reuses_prefix_and_retires_on_prototype_and_integrity_changes() 
     let write = first.write_or_create_data_key(&key, &Value::Number(1.0), false);
     assert!(write.created);
     cache.record_data_slot(&first, &key, write.cache_slot.unwrap(), Some(before), true);
-    assert!(cache.0.borrow().add.is_some());
+    assert!(cache.0.state.borrow().add.is_some());
     let next = make();
     assert!(
         cache.write_hot(&next, &Value::Null).is_none(),
@@ -485,4 +481,68 @@ fn numeric_store_loads_live_types_and_rejects_reconfigured_descriptors() {
     );
     assert!(!cache.write_number(&o, 5.0));
     assert_eq!(o.get("x"), Some(Value::Number(4.0)));
+}
+
+#[cfg(debug_assertions)]
+fn modified_first(cache: &NamedPropertyCache, edit: impl FnOnce(&mut Entry)) -> NamedPropertyCache {
+    let fresh = NamedPropertyCache::default();
+    let mut entry = cache.0.first.get().expect("warm first").clone();
+    edit(&mut entry);
+    fresh.0.first.set(entry).unwrap();
+    {
+        let mut state = fresh.0.state.borrow_mut();
+        state.entries = Entries::MonoFirst;
+        state.name = cache.0.state.borrow().name.clone();
+    }
+    fresh.0.first_active.set(true);
+    fresh
+}
+
+#[test]
+fn immutable_mono_hits_read_live_slots_without_borrowing_mutable_metadata() {
+    let domain = AtomDomain::new();
+    let o = object(&domain, "x", 1.0);
+    let cache = NamedPropertyCache::default();
+    cache.update(&o, "x", &Value::Undefined);
+    #[cfg(debug_assertions)]
+    let cache = modified_first(&cache, |e| e.flags &= !VERIFY);
+    let clone = cache.clone();
+    let _exclusive_metadata = cache.0.state.borrow_mut();
+    assert_eq!(clone.get(&o), Some(Value::Number(1.0)));
+    assert_eq!(clone.get_number(&o), Some(1.0));
+    assert!(clone.write_number(&o, -0.0));
+    assert!(clone.get_number(&o).unwrap().is_sign_negative());
+    o.set("x".into(), Value::String("live".into()));
+    assert_eq!(clone.get(&o), Some(Value::String("live".into())));
+    assert_eq!(clone.get_number(&o), None);
+}
+#[test]
+fn first_guard_is_disabled_on_promotion_and_stays_disabled_after_clear() {
+    let domain = AtomDomain::new();
+    let a = object(&domain, "x", 1.0);
+    let b = object(&domain, "before", 0.0);
+    b.set("x".into(), Value::Number(2.0));
+    let cache = NamedPropertyCache::default();
+    cache.read_object(&a, "x");
+    assert!(cache.0.first_active.get());
+    assert_eq!(cache.read_object(&b, "x"), Some(Value::Number(2.0)));
+    assert!(!cache.0.first_active.get());
+    assert_eq!(cache.get(&a), Some(Value::Number(1.0)));
+    cache.clear();
+    cache.read_object(&b, "x");
+    assert!(!cache.0.first_active.get());
+    assert!(cache.get(&a).is_none());
+    assert_eq!(cache.get(&b), Some(Value::Number(2.0)));
+    let weak = a.downgrade();
+    drop(a);
+    assert!(
+        weak.upgrade().is_none(),
+        "inactive token cannot pin its receiver"
+    );
+    eprintln!(
+        "S2 cache sizes: cache={} state={} entry={}",
+        std::mem::size_of::<CacheData>(),
+        std::mem::size_of::<State>(),
+        std::mem::size_of::<Entry>()
+    );
 }

@@ -22,7 +22,7 @@ fields = '''r2_objects_created r2_arrays_created r2_store_adds r2_slot_allocs
 r2_slot_reallocs r2_slot_capacity_bytes r2_slot_adopted_buffers
 r2_schema_acquires r2_schema_clones r2_schema_drops r2_schema_upgrades
 r2_lease_clones r2_lease_drops r2_lease_upgrades r2_ref_reads r2_ref_writes
-r2_hashes r2_store_ic_probes r2_inline_pairs'''.split()
+r2_hashes r2_store_ic_probes r2_inline_pairs r2_ic_reads r2_ic_writes r2_ic_headers r2_ic_payload_bytes'''.split()
 diag = src / 'diagnostics.rs'
 s = diag.read_text().replace('declare_counters! {', 'declare_counters! {\n'+''.join('    '+f+',\n' for f in fields), 1)
 s += '''
@@ -60,6 +60,12 @@ pub(crate) mod construction {
     }
     pub(crate) fn write<T>(cell: &RefCell<T>) -> RefMut<'_, T> {
         super::count!(r2_ref_writes); cell.borrow_mut()
+    }
+    pub(crate) fn ic_read<T>(cell: &RefCell<T>) -> Ref<'_, T> {
+        super::count!(r2_ic_reads); cell.borrow()
+    }
+    pub(crate) fn ic_write<T>(cell: &RefCell<T>) -> RefMut<'_, T> {
+        super::count!(r2_ic_writes); cell.borrow_mut()
     }
     pub(crate) fn capacity<T>(before: usize, after: usize) {
         if after > before {
@@ -131,6 +137,22 @@ for p in (src/'value/object').glob('*.rs'):
         while depth:depth+=(s[b]=='(')-(s[b]==')');b+=1
         s=s[:a]+'{ crate::diagnostics::count!(r2_objects_created); '+s[a:b]+' }'+s[b:]
     p.write_text(s)
+# Count named-IC metadata separately from object/schema/interner borrows.
+cache_file = src / 'bytecode/named_property_cache.rs'
+cache_text = cache_file.read_text()
+if 'impl Default for NamedPropertyCache' not in cache_text:
+    cache_text = cache_text.replace('#[derive(Clone, Debug, Default)]\npub(super) struct NamedPropertyCache', '#[derive(Clone, Debug)]\npub(super) struct NamedPropertyCache', 1)
+    cache_text += '\nimpl Default for NamedPropertyCache { fn default() -> Self { Self(Rc::new(RefCell::new(NamedPropertyCacheState::default()))) } }\n'
+payload = 'CacheData' if 'struct CacheData {' in cache_text else ('RefCell<State>' if 'struct State {' in cache_text else 'RefCell<NamedPropertyCacheState>')
+cache_text = count_body(cache_text, 'fn default()', 'r2_ic_headers')
+cache_text = cache_text.replace('crate::diagnostics::count!(r2_ic_headers);', 'crate::diagnostics::count!(r2_ic_headers); crate::diagnostics::update(|c| c.r2_ic_payload_bytes += std::mem::size_of::<'+payload+'>() as u64);')
+cache_file.write_text(cache_text)
+for p in [cache_file, src/'bytecode/named_property_cache/stores.rs']:
+    if not p.exists(): continue
+    text = p.read_text()
+    text = re.sub(r'((?:self|cache)\s*\.\s*0(?:\s*\.\s*state)?)\s*\.borrow(_mut)?\(\)', lambda m: C+('::ic_write(&' if m[2] else '::ic_read(&')+re.sub(r'\s+', '', m[1])+')', text)
+    p.write_text(text)
+
 # Hash completion counts a table hash once, including resize rehashing.
 edit('value/name_hash.rs',lambda s:count_body(s,'fn finish(&self)', 'r2_hashes'))
 # Capture actual object/schema/interner storage borrows, excluding CallEnv/TLS.

@@ -44,3 +44,9 @@ An optional third probe argument `--trace-shapes` prints append-miss width/key
 labels for diagnosis. These copies allocate/log while tracing: their allocator
 counts and timing are excluded from work/payoff evidence. Canonical stdout is
 still checked. The default probe has no tracing code or additional branch.
+
+The immutable-mono cohort additionally instruments named-IC metadata reads/writes
+separately from storage borrows, plus allocated IC payload header counts/bytes.
+These new fields are absent from older frozen cohorts; a freshly instrumented
+main provides their paired comparison. Payload bytes exclude Rc headers and
+allocator rounding; bytes/header gives the actual production Rust type size.
