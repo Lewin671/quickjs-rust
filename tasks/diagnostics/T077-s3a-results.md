@@ -25,7 +25,7 @@ arguments, bound lists, Proxy trap arrays, apply/spread/rest lists still own val
   changing the native ABI. No new driver or backend is introduced.
 - Checked native re-entry needs one realm-local depth cell in `function/env.rs`.
   It is shared by callback frames, releases on return/throw, and limits synchronous
-  native depth to 256. No global mutable state or RefCell borrow spans callbacks.
+  native depth to 32 debug / 256 optimized. No global mutable state or RefCell borrow spans callbacks.
   This is the only service-state addition; S3b still replaces CallEnv directly.
 - `FunctionData` grows from 296 to 304 bytes on aarch64: the direct entry pointer
   replaces a one-byte family cache. Its explicit size test now admits that word;
@@ -73,3 +73,106 @@ regression test accompanies it. The boundary limit/release unit test now uses th
 single declared budget. The old candidate is not claimed as a complete result.
 The obsolete exact scan was stopped while still partial; no burndown was recorded
 for it. The final candidate must run the complete scan and all ten counters again.
+
+## Corrected candidate counters
+
+At `b2ead44bfbd310f064002bda4b93b927be3bd9e3`, all ten development programs pass
+with the original workload SHA-256 and exact stdout. Two fresh processes per
+program produce identical complete counter maps. The raw [after counts](T077-s3a-counts.json),
+[temporary patch](T077-s3a-instrumentation.patch) and [identities](T077-s3a-metadata.json)
+are retained. Counter instrumentation is absent from production source.
+No timing/held-out run. The original full-map baseline was reproduced at `d19d3aa6`.
+
+| Event | Before | After |
+| --- | ---: | ---: |
+| Family probes | 86,869,971 | 0 |
+| Family declines | 78,693,537 | 0 |
+| Family/core calls → installed direct entries | 10,986,795 | 10,986,795 |
+| pop_arguments Vec constructions, all routes | 7,438,472 | 1,942,541 |
+| Plain native reaching pop_arguments Vec | not separately counted | 0 |
+| Tier fallback slice-to-Vec constructions | 448,836 | 0 |
+| Host/callback slice fallback-to-Vec constructions | 5,259 | 0 |
+| Native stack slice call entries | not separately counted | 5,481,535 |
+| Native stack slice construct entries | not separately counted | 14,396 |
+
+For **each** program, the pop-argument construction decrease equals native stack
+slice call + construct entries; total **5,495,931**. Remaining pop constructions
+are non-native routes, including general JS calls. The shared slice API also
+removes former tier/host fallback copies for bytecode callees, without changing
+JS activation ownership or implementing S3d. Semantic argument arrays and values
+retained by native algorithms are outside this transport census.
+
+Removed probe/fallback counter names are initialized to zero by the diagnostic
+collector because their production sites no longer exist; source search verifies
+that deletion. A separate live pop_arguments check counts any plain native that
+still reaches the Vec site. Native direct entries exactly equal baseline native
+calls for every input. Maximum synchronous native nesting is 158 (graphlib);
+the other nine programs reach 2–6. These counts establish mechanism removal,
+not speed or process-wide allocation counts.
+
+## Reproduce after counters
+
+Run at the runtime revision above, with clean runtime source. The patch only adds
+counts; it neither disables the depth bound nor changes semantic operations.
+The earlier unlimited-depth diagnostic is not this patch and is not retained as
+production evidence. For baseline reproduction use [the original recipe](T077-s3-counts.md#exact-reproduction-commands)
+at `d19d3aa6` (runtime/tools match the original inventory source).
+
+```sh
+git apply --check tasks/diagnostics/T077-s3a-instrumentation.patch
+git apply tasks/diagnostics/T077-s3a-instrumentation.patch
+cargo build --release -p qjs-cli --features perf-counters --target-dir target/t077-s3a/counter-build
+PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
+from pathlib import Path
+import hashlib, json, os, subprocess
+from tools.benchmark.screen import resolve_cases, DEFAULT_CACHE
+work = Path('target/t077-s3a/programs')
+work.mkdir(parents=True, exist_ok=True)
+cases = resolve_cases(['development'], DEFAULT_CACHE, work)
+records = json.loads(Path('tasks/diagnostics/T077-s3a-counts.json').read_text())
+assert [c.id for c in cases] == [r['id'] for r in records]
+env = {k:v for k,v in os.environ.items() if not k.startswith('QJS_')}
+for case, record in zip(cases, records):
+    assert hashlib.sha256(case.workload.read_bytes()).hexdigest() == record['sha256']
+    for repeat in range(2):
+        run = subprocess.run(['target/t077-s3a/counter-build/release/qjs', '--raw',
+                              str(case.workload)], capture_output=True, text=True,
+                             env=env, timeout=600)
+        assert run.returncode == 0 and run.stdout == case.expected_stdout
+        counters = {}
+        for line in run.stderr.split('QJS_PERF_COUNTERS\n', 1)[1].splitlines():
+            fields = line.split()
+            if len(fields) == 2 and fields[1].isdigit():
+                counters[fields[0]] = int(fields[1])
+        assert counters == record['counters'], (case.id, repeat)
+    print(case.id, 'checksum/stdout and both complete counter maps match')
+PY
+git apply -R tasks/diagnostics/T077-s3a-instrumentation.patch
+```
+
+## Deletion audit
+
+`native.rs` removes **243** old source lines, including the entire **195-line**
+family selector block and the cached probe flow; it adds 65 lines for the new ABI
+and boundary in the first implementation commit (the depth repair adds one net
+line). `function/value.rs` removes the cache field and all four initializers;
+its direct-entry addition is eight added/nine removed lines at the first commit.
+The 24 `native/*` family dispatchers plus iterator/generator/async reaction
+selectors become operation-specific entries; no Option family fallback remains.
+There are 2,476 gross runtime source deletions in the first commit, including
+rewritten adapters. This is not a net source-size reduction: operation-specific
+adapters and the exhaustive installation table add source. Primitive guarded
+fast paths remain as planned; current executor retirement belongs to S3e.
+
+## Debug boundary stress correction
+
+A further 300-level reduce-callback stress at `b2ead44b` caught RangeError in
+the release CLI, but overflowed Rust's larger debug stack frames before reaching
+the 256-level guard in the debug CLI. The boundary now uses budgets **32 with
+Rust debug assertions / 256 optimized**. This is a resource bound, not operation
+or program recognition. The admission regression uses 32 debug / 48 optimized
+levels, and a new deep-reentry unit requires catchable RangeError plus a subsequent
+successful native call. All eleven focused debug tests pass. Optimized counters
+remain the intended 256-budget measurement. Both obsolete exact scans were
+stopped before completion; neither is a conformance record. A fresh final scan
+is required for the profile-budget revision.

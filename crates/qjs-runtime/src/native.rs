@@ -85,7 +85,10 @@ pub(crate) fn call_native_function(
 struct NativeBoundary<'a>(&'a std::cell::Cell<usize>);
 
 impl<'a> NativeBoundary<'a> {
-    const MAX_DEPTH: usize = 256;
+    // Debug Rust frames are much larger than optimized frames. Keep the
+    // synchronous boundary below their stack budget; S3d removes recursive JS
+    // driver frames, but this stage still uses the existing executors.
+    const MAX_DEPTH: usize = if cfg!(debug_assertions) { 32 } else { 256 };
 
     fn enter(realm: &'a crate::function::Realm) -> Result<Self, RuntimeError> {
         let depth = &realm.native_depth;

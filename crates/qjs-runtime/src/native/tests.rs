@@ -210,19 +210,39 @@ fn uninitialized_lexical_has_an_installed_throwing_entry() {
 
 #[test]
 fn nested_native_callbacks_allow_ordinary_graph_traversal_depths() {
+    let depth = NativeBoundary::MAX_DEPTH.min(48);
+    let source = format!(
+        r#"
+        function sum(n) {{
+            if (n === 0) return 0;
+            return [n].reduce(function(total, value) {{
+                return total + value + sum(n - 1);
+            }}, 0);
+        }}
+        sum({depth});
+    "#
+    );
+    assert_eq!(
+        crate::eval(&source).unwrap(),
+        Value::Number((depth * (depth + 1) / 2) as f64)
+    );
+}
+
+#[test]
+fn exceeding_native_callback_depth_throws_without_losing_caller_state() {
     assert_eq!(
         crate::eval(
             r#"
-        function sum(n) {
-            if (n === 0) return 0;
-            return [n].reduce(function(total, value) {
-                return total + value + sum(n - 1);
-            }, 0);
+        function walk(n) {
+            if(n === 0) return 0;
+            return [n].reduce(function() { return walk(n - 1); }, 0);
         }
-        sum(48);
+        var caught = false;
+        try { walk(300); } catch(e) { caught = e instanceof RangeError; }
+        caught + ':' + Math.max(1, 3);
     "#
         )
         .unwrap(),
-        Value::Number(1176.0)
+        Value::String("true:3".into())
     );
 }
