@@ -4,8 +4,8 @@
 - Implementation: none; documentation only. S3 counters use a retained diagnostic patch; runtime/parser/tools remain byte-identical to `dd0905b2`.
 - Verified at: S3 source audit at `dd0905b2cb0236c38619089a27e8342b575dda61`, 2026-10-29; twenty deterministic checksum-checked diagnostic runs; context, diff and staged fast gates pass on this documentation tree; no runtime candidate.
 - Evidence: [target](../docs/design/core-rebuild.md), [S1 brief](proposals/T077-s1-property-authority.md), [S3 plan/inventories](proposals/T077-s3-plan.md), [S3 counts](diagnostics/T077-s3-counts.md).
-- Unresolved: pending fresh baseline; S3 split/payers and T074 scope contracts need lead review; compact-pointer portability qualification and final campaign-target progress remain unmeasured.
-- Next action: S1 and S3a owners implement on their branches; lead reviews T074 decisions before S3b and records the pending baseline. Do not queue another baseline or revive closed unit gates.
+- Unresolved: S3 split/payers and T074 scope contracts need lead review; compact-pointer portability qualification and final campaign-target progress remain unmeasured.
+- Next action: S1 and S3a owners implement on their branches; T074 decisions approved (lead 2026-10-30); baseline recorded. Do not queue another baseline or revive closed unit gates.
 
 ## Authority and scope
 
@@ -52,7 +52,7 @@ repair/re-scope the stage for lead review; do not close on promised later gains.
 Do not change the predeclared contract to fit results. A stage fallback is a
 source revert to the last verified main milestone, never retained dual execution.
 
-Job `20261030T045926Z-core-rebuild-baseline`: **pending baseline**, main vs main vs NG, 30 blocks; no new standing.
+Rebuild baseline ([receipt](diagnostics/T077-baseline.md)): job `20261030T045926Z-core-rebuild-baseline`, source `6663738f`, 30 blocks: Rust/NG development **2.632**, external 0.911, selection 0.971, sentinel 1.046; A/A 1.000.
 Bind its exact source/binary/corpus/recipe hashes when the lead records it.
 T018's 2×-faster-than-NG per-case target stays open; architectural completion
 plus aggregate improvement is progress, not proof of that campaign target.

@@ -1,6 +1,6 @@
 # T077 S3: T074 decisions for Context and activations
 
-Proposal, not approved or implemented. Source audit: `dd0905b2`, 2026-10-29.
+Approved by the lead 2026-10-30: all six decisions below as proposed; not implemented. S3b freezes the verification matrix. Source audit: `dd0905b2`, 2026-10-29.
 [T074](../T074-direct-eval-scope-model.md) owns the known gaps; the
 [stage plan](T077-s3-plan.md) owns scheduling. These decisions are needed
 before S3b; S3a may bind native entries without changing eval semantics.
