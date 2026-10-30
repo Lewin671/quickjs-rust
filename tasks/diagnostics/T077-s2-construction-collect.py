@@ -12,6 +12,7 @@ p.add_argument('--inputs',type=Path,required=True)
 p.add_argument('--base-probe',type=Path,required=True)
 p.add_argument('--candidate-probe',type=Path,required=True)
 p.add_argument('--output',type=Path,required=True)
+p.add_argument('--external-extras-only',action='store_true',help='seven public instruction regressions, separate from the frozen 24-case construction cohort')
 a=p.parse_args();a.output.mkdir(parents=True,exist_ok=False)
 root=Path.cwd();records=[]
 roles={'base':(a.inputs/'base000/qjs',a.base_probe), 'candidate':(a.inputs/'cand000/qjs',a.candidate_probe)}
@@ -24,6 +25,8 @@ for name in ['string_slice','top_level_function_call']:
  cases.append(('broad/'+name,root/'benchmarks/workloads/broad-micro.js',[name,'1000000']))
 for name in ['constructor','literal','class','json']:
  for n in [1000,2000]:cases.append((f'control/{name}/{n}',root/'tasks/diagnostics/T077-s2-construction-micro.js',[name,str(n)]))
+if a.external_extras_only:
+ cases=[('external/'+name.replace('--','/'),a.inputs/'work'/(name+'.js'),[]) for name in ['sunspider-1.0--access-nbody','sunspider-1.0--access-nsieve','sunspider-1.0--date-format-xparb','sunspider-1.0--3d-morph','sunspider-1.0--3d-raytrace','jetstream3-js-subset--gaussian-blur','kraken-1.1--json-stringify-tinderbox']]
 for case,source,args in cases:
  assert source.is_file(),source
  row={'case':case,'source_sha256':hashlib.sha256(source.read_bytes()).hexdigest(),'args':args,'roles':{}}

@@ -50,3 +50,8 @@ separately from storage borrows, plus allocated IC payload header counts/bytes.
 These new fields are absent from older frozen cohorts; a freshly instrumented
 main provides their paired comparison. Payload bytes exclude Rc headers and
 allocator rounding; bytes/header gives the actual production Rust type size.
+
+`construction-collect.py --external-extras-only` is a separate seven-case
+diagnosis of measured public regressions: nbody, nsieve, date-format-xparb,
+3d-morph, 3d-raytrace, JetStream gaussian-blur and Kraken json-stringify. It does
+not replace or change the frozen 24-case construction inventory.
