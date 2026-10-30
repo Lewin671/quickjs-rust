@@ -33,7 +33,9 @@ once, then interns; named bytecode operands use prelinked leases. Host `&str`
 entry points convert once; internal slot access never formats or hashes text.
 Compact/typed static-name misses use domain-checked weak lease links; dead keys
 remain recyclable. Computed JsString keys memoize one live lease in metadata;
-reads never intern, and mutation/COW clears the memo. No receiver/domain is pinned.
+reads never intern, and mutation/COW clears the memo. The production string-value
+header is 72 bytes: the matcher mode occupies scalar padding and the cached
+slice/key lease share a 24-byte payload, with no extra allocation. No receiver/domain is pinned.
 
 ## Physical layout (S2 assertions)
 

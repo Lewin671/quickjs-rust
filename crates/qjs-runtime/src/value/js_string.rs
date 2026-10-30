@@ -28,7 +28,7 @@ const UTF16_LEN_UNKNOWN: usize = usize::MAX;
 
 #[derive(Debug, Default)]
 struct StringCache {
-    matcher_view: Option<(bool, Rc<[char]>)>,
+    matcher_view: Option<Rc<[char]>>,
     key: Option<crate::property::atom::KeyLease>,
 }
 
@@ -40,6 +40,8 @@ struct StringData {
     /// A copy, or a buffer mutated in place, is never an atom.
     atom: Cell<bool>,
     ascii: Cell<u8>,
+    /// Mode for the cached matcher slice; fits existing scalar-header padding.
+    matcher_unicode: Cell<bool>,
     utf16_len: Cell<usize>,
     /// The matcher-indexed character view and the Unicode mode it was built
     /// for. A RegExp scan re-executes against the same subject once per match,
@@ -57,6 +59,7 @@ impl StringData {
             text,
             atom: Cell::new(false),
             ascii: Cell::new(ASCII_UNKNOWN),
+            matcher_unicode: Cell::new(false),
             utf16_len: Cell::new(UTF16_LEN_UNKNOWN),
             cache: RefCell::default(),
             #[cfg(test)]
@@ -67,6 +70,7 @@ impl StringData {
     fn invalidate(&mut self) {
         self.atom.set(false);
         self.ascii.set(ASCII_UNKNOWN);
+        self.matcher_unicode.set(false);
         self.utf16_len.set(UTF16_LEN_UNKNOWN);
         *self.cache.get_mut() = StringCache::default();
     }
@@ -78,6 +82,7 @@ impl Clone for StringData {
             text: self.text.clone(),
             atom: Cell::new(false),
             ascii: Cell::new(self.ascii.get()),
+            matcher_unicode: Cell::new(self.matcher_unicode.get()),
             utf16_len: Cell::new(self.utf16_len.get()),
             cache: RefCell::new(StringCache {
                 matcher_view: self.cache.borrow().matcher_view.clone(),
@@ -181,13 +186,15 @@ impl JsString {
         // In ASCII text a code unit, a scalar value, and a byte all coincide,
         // so one view serves both modes.
         let ascii = self.is_ascii();
-        if let Some((cached_unicode, view)) = self.0.cache.borrow().matcher_view.as_ref()
-            && (ascii || *cached_unicode == unicode)
+        if let Some(view) = self.0.cache.borrow().matcher_view.as_ref()
+            && (ascii || self.0.matcher_unicode.get() == unicode)
         {
             return Rc::clone(view);
         }
         let view: Rc<[char]> = build(&self.0.text).into();
-        self.0.cache.borrow_mut().matcher_view = Some((unicode, Rc::clone(&view)));
+        let mut cache = self.0.cache.borrow_mut();
+        self.0.matcher_unicode.set(unicode);
+        cache.matcher_view = Some(Rc::clone(&view));
         view
     }
 
@@ -436,5 +443,59 @@ mod property_key_tests {
         drop(alias);
         text.make_mut().clear();
         assert!(text.0.cache.borrow().key.is_none());
+    }
+}
+
+#[cfg(all(target_pointer_width = "64", not(test)))]
+const _: () = {
+    assert!(std::mem::size_of::<StringCache>() == 24);
+    assert!(std::mem::size_of::<StringData>() == 72);
+};
+
+#[cfg(test)]
+mod matcher_mode_tests {
+    use super::*;
+    #[test]
+    fn matcher_modes_and_key_memo_coexist_across_cow_and_invalidation() {
+        let domain = crate::property::atom::AtomDomain::new();
+        let key = domain.intern("😀");
+        let original = JsString::from("😀");
+        assert_eq!(original.property_key_lease(&domain), Some(key.clone()));
+        let unicode = original.matcher_view_with(true, |text| text.chars().collect());
+        assert_eq!(&*unicode, &['😀']);
+        assert!(Rc::ptr_eq(
+            &unicode,
+            &original.matcher_view_with(true, |_| panic!("cached"))
+        ));
+        let units = original.matcher_view_with(false, |text| {
+            crate::string::string_code_units(text)
+                .into_iter()
+                .map(crate::string::char_from_code_unit)
+                .collect()
+        });
+        assert_eq!(units.len(), 2);
+        assert!(Rc::ptr_eq(
+            &units,
+            &original.matcher_view_with(false, |_| panic!("cached"))
+        ));
+        assert_eq!(original.property_key_lease(&domain), Some(key));
+        let mut copy = original.clone();
+        copy.make_mut().push('x');
+        assert!(copy.property_key_lease(&domain).is_none());
+        assert_eq!(
+            copy.matcher_view_with(true, |text| text.chars().collect())
+                .len(),
+            2
+        );
+        assert!(Rc::ptr_eq(
+            &units,
+            &original.matcher_view_with(false, |_| panic!("COW alias"))
+        ));
+        assert_eq!(
+            original
+                .matcher_view_with(true, |text| text.chars().collect())
+                .len(),
+            1
+        );
     }
 }
