@@ -1,11 +1,11 @@
 # T077 S3a implementation and review repair
 
-- Status: independent-review repairs present; final full gate/counters/exact scan pending.
+- Status: independent-review repairs present; counters and depth parity pass; full gate passes; fresh complete exact scan pending.
 - Implementation: direct operation entries and borrowed arguments retained; no native/realm depth or stack limit. The rejected original report is [historical](../archive/T077-s3a-initial-results.md).
-- Verified at: guard removal `43a0a5be`; hot-path worktree after it: 2,391 runtime tests and clippy pass, debug/release depth diagnostics below. Final revision will be recorded after commit.
-- Evidence: [depth records](T077-s3a-depth-parity.json), [depth reproducer](T077-s3a-depth-probe.py); older entry/copy counters remain bound to `27d503a6` until the fresh run below.
-- Unresolved: final full gate, comparison fixtures, deterministic counters and complete configured exact scan/burndown; lead formal performance acceptance.
-- Next action: commit the reviewed call routing, run final gates on that revision, then hand off without push/merge.
+- Verified at: runtime `03c8680c`: 2,391 runtime tests and clippy pass; debug/release depth diagnostics and twenty development counter runs pass. Full gate passes; complete exact scan pending.
+- Evidence: [depth records](T077-s3a-depth-parity.json), [depth reproducer](T077-s3a-depth-probe.py); fresh [counter rows](T077-s3a-review-counts.json), [temporary patch](T077-s3a-review-instrumentation.patch), [build identities](T077-s3a-review-metadata.json). Older counters remain bound to `27d503a6`.
+- Unresolved: complete configured exact scan/burndown; lead formal performance acceptance.
+- Next action: finish final gates on `03c8680c`, then hand off without push/merge.
 
 ## What the review corrected
 
@@ -94,9 +94,53 @@ python3 tasks/diagnostics/T077-s3a-depth-probe.py \
   --output target/t077-s3a-review/repaired-depth.json
 ```
 
-## Final gates and counters
+## Fresh deterministic counters
 
-Pending on the reviewed source commit. Original full coverage and counters in
-[the historical report](../archive/T077-s3a-initial-results.md) establish only that
-old revision; they do not establish current HEAD or adequate recursion behavior.
-No performance acceptance, push, merge or held-out access is claimed.
+At `03c8680c`, the ten original development inputs have matching SHA-256 and
+stdout, with two identical complete counter maps each. Native direct entries
+still exactly equal baseline native_calls for every program. No timing or held-out
+input was used. Removed probe/copy sites have explicit zero counters; a live
+pop-argument check also confirms no plain native reaches the old Vec site.
+
+| Event | Base d19d3aa6 | Prior S3a 27d503a6 | Reviewed 03c8680c |
+| --- | ---: | ---: | ---: |
+| family probes | 86,869,971 | 0 | 0 |
+| family declines | 78,693,537 | 0 | 0 |
+| family/core calls → direct entries | 10,986,795 | 10,986,795 | 10,986,795 |
+| pop-argument Vec constructions | 7,438,472 | 1,942,541 | 0 |
+| tier fallback Vec copies | 448,836 | 0 | 0 |
+| host/callback slice fallback Vec copies | 5,259 | 0 | 0 |
+
+The removed pop constructions are partitioned exactly, **for each input**, into
+5,481,535 native call borrows + 14,396 native construct borrows + 1,941,761 other
+call borrows + 780 other construct borrows. These sum to 7,438,472. There is no
+native-kind admission probe in production: the diagnostic patch alone classifies
+these counters. Retained values, spread/apply/rest/bound lists and native-created
+JS arrays are not transport copies in this census. No process-wide allocation or
+wall-time reduction is claimed. Runtime source contains no counter patch.
+
+```sh
+git apply --check tasks/diagnostics/T077-s3a-review-instrumentation.patch
+git apply tasks/diagnostics/T077-s3a-review-instrumentation.patch
+cargo build --release -p qjs-cli --features perf-counters --target-dir target/t077-s3a/counter-build
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=. python3 tasks/diagnostics/T077-s3a-counter-probe.py
+# Writes target/t077-s3a-review/reproduced-counts.json for comparison with the
+# committed T077-s3a-review-counts.json (all full maps must match).
+git apply -R tasks/diagnostics/T077-s3a-review-instrumentation.patch
+```
+
+## Final gates
+
+At frozen runtime `03c8680c`:
+
+- `TEST262_DIR=/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/third_party/test262 TEST262_JOBS=4 ./scripts/check.sh`: all stages pass, including 2,391 runtime tests and 5,170 curated Test262 cases.
+- `QJS_CLI_BIN="$PWD/target/release/qjs" COMPARE_QJS_JOBS=4 ./scripts/compare-qjs.sh`: all 257 fixtures pass (clean agents-enabled release CLI).
+- Full development counter reproduction passes as above; the counter patch is absent from production source.
+- Complete configured exact scan is running on the same frozen binary with
+  `QJS_AGENTS=1 QJS_CLI_PROFILE=release QJS_CLI_BIN="$PWD/target/release/qjs" TEST262_TIMEOUT_RETRIES=1 TEST262_CASE_TIMEOUT_SECONDS=20 TEST262_BASELINE_JOBS=6 ./scripts/find-qjsng-gaps.sh --exact --all --no-recommend --out-dir target/t077-s3a-review/exact`.
+
+The scan uses a detached local runner so a UI/session continuation cannot stop
+aggregation. A fresh complete-scan ledger entry is pending; no earlier ledger
+line or archived evidence is edited. The historical scan establishes only
+`27d503a6`, not current source or adequate recursion behavior. Lead formal
+performance acceptance remains unmeasured; this owner never pushes or merges.

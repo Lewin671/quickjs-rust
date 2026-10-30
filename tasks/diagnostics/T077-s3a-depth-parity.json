@@ -2,7 +2,7 @@
   "base": "d19d3aa6",
   "reviewed": "c8d15de4",
   "guard_removed": "43a0a5be",
-  "head": "hot-path repair worktree; source commit recorded in results",
+  "head": "03c8680c",
   "machine": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
   "rustc": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: aarch64-apple-darwin\nrelease: 1.95.0\nLLVM version: 22.1.2\n",
   "timing": false,
@@ -812,5 +812,6 @@
     8372224,
     67092480
   ],
-  "base_build": "Exact d19d3aa6 crates overlay in this worktree; git diff d19d3aa6 -- crates was empty before both builds; no other checkout used."
+  "base_build": "Exact d19d3aa6 crates overlay in this worktree; git diff d19d3aa6 -- crates was empty before both builds; no other checkout used.",
+  "head_build": "Runtime sources match 03c8680c; diagnostic binaries compiled in that hot-path worktree before its commit. CLI bookkeeping HEAD was 43a0a5be."
 }

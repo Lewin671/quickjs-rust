@@ -1,0 +1,11 @@
+{
+  "runtime_revision": "03c8680c3024bf460ca15d6adeb6e74096409334",
+  "features": "perf-counters",
+  "repeats": 2,
+  "held_out": false,
+  "timing": false,
+  "counter_binary_sha256": "c9828d3f4b3a1f60ef941a4db5cb102a2c7f7b05e0d61f63e3307d3805c560c9",
+  "release_agents_binary_sha256": "d8b1548e5a3ee377899ce16ffe2ea24a0d6f6277c41a74ffe36fc3b3a08d21a0",
+  "patch_sha256": "d2d6020d60fea3be5a43cb86bb177d94ea74184af1bda03c0a1a7f49f58238c2",
+  "baseline": "d19d3aa6, original full-map baseline reproduced in the initial S3a run"
+}

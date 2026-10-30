@@ -2,10 +2,10 @@
 
 - Status: approved by the lead 2026-10-29 with amendments in [T077](../T077-core-rebuild.md) (S3a may land before S1/S2; S3e prices growing the wide tier).
 - Implementation: S3a operation entries and native slice transport present on its owner branch; S3b–e remain planned. See [S3a results](../diagnostics/T077-s3a-results.md).
-- Verified at: S3a `27d503a6`, 2026-10-30 UTC; full check, 257 NG fixtures, 51 optimized native tests, twenty development counter runs, and all 42,672 configured Rust cases pass with zero gaps/not-run (aggregation recovered). Historical inventories remain revision-bound.
+- Verified at: S3a review repair `03c8680c`, 2026-10-30; full check/257 NG fixtures, depth parity against base and twenty deterministic development runs pass; fresh complete exact scan pending.
 - Evidence: [counts/reproduction](../diagnostics/T077-s3-counts.md), [Op map](T077-s3-op-map.md), [construction inventory](T077-s3-activation-inventory.md), [native/executor inventory](T077-s3-native-executors.md).
-- Unresolved: lead formal S3a aggregate acceptance/integration and T074 contracts before S3b; no performance acceptance measured here.
-- Next action: lead runs formal S3a acceptance and reviews T074 before S3b.
+- Unresolved: fresh S3a complete exact scan/burndown, lead formal aggregate acceptance/integration and T074 contracts before S3b.
+- Next action: finish review-repair exact verification, then lead formal S3a acceptance and T074 review.
 
 ## Recommendation and authority at every landing
 

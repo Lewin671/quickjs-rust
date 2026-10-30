@@ -115,8 +115,11 @@ argument slice while Context drives callbacks to a boundary token. Callback fram
 cannot reuse/mutate that block; no RefCell borrow of Executor remains held. A
 native retaining an argument clones it. Host slices work identically. No borrowed
 argument range/pointer escapes the invocation. Restore typed current-context
-fields and the detached block on return/throw. Synchronous native→JS→native may
-nest Rust boundaries under a checked native-depth limit; pure JS recursion cannot.
+fields and the detached block on return/throw. S3d owns the resource policy: one runtime-wide stack-pointer anchor and a
+host-configured budget, with the CLI running the engine on an explicitly sized
+thread. Once JS calls use the explicit activation stack, count JS depth by frames
+without Rust recursion. Synchronous native→JS→native boundaries remain checked
+against that runtime-wide budget. S3a adds no native-only or realm-local limit.
 
 ## Abrupt completion and suspension
 
