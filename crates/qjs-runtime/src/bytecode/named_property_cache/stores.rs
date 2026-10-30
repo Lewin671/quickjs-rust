@@ -53,9 +53,14 @@ impl NamedPropertyCache {
         value: &Value,
         new: &Value,
     ) -> Option<OwnDataPropertyWrite> {
-        value.with_named_target(|t| self.write_target(t, new))?
+        value.with_named_target(|t| self.write_target(t, new, true))?
     }
-    fn write_target(&self, target: NamedTarget<'_>, value: &Value) -> Option<OwnDataPropertyWrite> {
+    fn write_target(
+        &self,
+        target: NamedTarget<'_>,
+        value: &Value,
+        allow_add: bool,
+    ) -> Option<OwnDataPropertyWrite> {
         let state = self.0.borrow();
         if let NamedTarget::Object(object) = target {
             let mut appended = None;
@@ -77,6 +82,9 @@ impl NamedPropertyCache {
                     return store
                         .overwrite_guarded_data(e.slot as usize, value.clone())
                         .then_some(OwnDataPropertyWrite::Written);
+                }
+                if !allow_add {
+                    return None;
                 }
                 let add = state.add.as_ref()?;
                 if object.named_kind() != Some(0)
@@ -114,13 +122,14 @@ impl NamedPropertyCache {
         _name: &str,
         value: &Value,
     ) -> Option<OwnDataPropertyWrite> {
-        self.write_target(NamedTarget::Object(object), value)
+        self.write_target(NamedTarget::Object(object), value, true)
     }
     pub(in crate::bytecode) fn write_hot(
         &self,
         object: &ObjectRef,
         value: &Value,
     ) -> Option<OwnDataPropertyWrite> {
-        self.write_target(NamedTarget::Object(object), value)
+        // Typed-loop hoisting requires writes to preserve property structure.
+        self.write_target(NamedTarget::Object(object), value, false)
     }
 }

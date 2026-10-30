@@ -419,19 +419,23 @@ fn append_recipe_reuses_prefix_and_retires_on_prototype_and_integrity_changes() 
     cache.record_data_slot(&first, &key, write.cache_slot.unwrap(), Some(before), true);
     assert!(cache.0.borrow().add.is_some());
     let next = make();
+    assert!(
+        cache.write_hot(&next, &Value::Null).is_none(),
+        "loop writes must not add"
+    );
     assert!(matches!(
-        cache.write_hot(&next, &Value::Null),
+        cache.write(&next, "x", &Value::Null),
         Some(OwnDataPropertyWrite::Written)
     ));
     assert_eq!(next.own_property("x").unwrap().value, Value::Null);
     assert_eq!(next.layout_revision(), first.layout_revision());
     let sealed = make();
     sealed.prevent_extensions();
-    assert!(cache.write_hot(&sealed, &Value::Null).is_none());
+    assert!(cache.write(&sealed, "x", &Value::Null).is_none());
     parent.define_property("x".into(), Property::data(Value::Null, true, false, true));
-    assert!(cache.write_hot(&make(), &Value::Null).is_none());
+    assert!(cache.write(&make(), "x", &Value::Null).is_none());
     next.define_property("x".into(), Property::data(Value::Null, true, false, true));
-    assert!(cache.write_hot(&next, &Value::Null).is_none());
+    assert!(cache.write(&next, "x", &Value::Null).is_none());
 }
 
 #[test]
@@ -449,13 +453,13 @@ fn append_recipe_counts_indices_and_keeps_values_live_without_pinning_receiver()
     assert!(weak.upgrade().is_none());
     let next = ObjectRef::new(HashMap::new(), &domain);
     assert!(matches!(
-        cache.write_hot(&next, &Value::Number(2.0)),
+        cache.write(&next, "2", &Value::Number(2.0)),
         Some(OwnDataPropertyWrite::Written)
     ));
     assert!(next.has_own_index_property());
     assert_eq!(next.own_property_names(), vec!["2"]);
     assert!(matches!(
-        cache.write_hot(&next, &Value::Null),
+        cache.write(&next, "2", &Value::Null),
         Some(OwnDataPropertyWrite::Written)
     ));
     assert_eq!(next.own_property("2").unwrap().value, Value::Null);
