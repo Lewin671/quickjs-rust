@@ -319,6 +319,7 @@ mod tests {
 
     #[test]
     fn this_property_plan_classifies_plain_reads_and_numeric_expressions() {
+        let domain = crate::property::atom::AtomDomain::new();
         let script = qjs_parser::parse_script(
             "var receiver = { value: 7, read: function() { return this.value; } };",
         )
@@ -337,8 +338,10 @@ mod tests {
             .as_ref()
             .expect("plain receiver read should be admitted");
         assert!(matches!(plan, ThisPropertyLeafPlan::Read(_)));
-        let receiver =
-            crate::ObjectRef::new(HashMap::from([("value".to_owned(), Value::Number(7.0))]));
+        let receiver = crate::ObjectRef::new(
+            HashMap::from([("value".to_owned(), Value::Number(7.0))]),
+            &domain,
+        );
         assert_eq!(
             plan.eval(&Value::Object(receiver), &[]),
             Some(Value::Number(7.0))
@@ -362,8 +365,10 @@ mod tests {
             .as_ref()
             .expect("numeric receiver expression should be admitted");
         assert!(matches!(plan, ThisPropertyLeafPlan::Numeric(_)));
-        let receiver =
-            crate::ObjectRef::new(HashMap::from([("value".to_owned(), Value::Number(7.0))]));
+        let receiver = crate::ObjectRef::new(
+            HashMap::from([("value".to_owned(), Value::Number(7.0))]),
+            &domain,
+        );
         assert_eq!(
             plan.eval(&Value::Object(receiver), &[]),
             Some(Value::Number(8.0))
@@ -372,6 +377,7 @@ mod tests {
 
     #[test]
     fn this_property_numeric_plan_accepts_receiver_and_argument_field_dot_product() {
+        let domain = crate::property::atom::AtomDomain::new();
         let script = qjs_parser::parse_script(
             "var dot = function(other) { return this.x * other.x + this.y * other.y + this.z * other.z; };",
         )
@@ -393,16 +399,22 @@ mod tests {
             matches!(plan, ThisPropertyLeafPlan::Numeric(_)),
             "{plan:#?}"
         );
-        let receiver = crate::ObjectRef::new(HashMap::from([
-            ("x".to_owned(), Value::Number(1.0)),
-            ("y".to_owned(), Value::Number(2.0)),
-            ("z".to_owned(), Value::Number(3.0)),
-        ]));
-        let argument = crate::ObjectRef::new(HashMap::from([
-            ("x".to_owned(), Value::Number(4.0)),
-            ("y".to_owned(), Value::Number(5.0)),
-            ("z".to_owned(), Value::Number(6.0)),
-        ]));
+        let receiver = crate::ObjectRef::new(
+            HashMap::from([
+                ("x".to_owned(), Value::Number(1.0)),
+                ("y".to_owned(), Value::Number(2.0)),
+                ("z".to_owned(), Value::Number(3.0)),
+            ]),
+            &domain,
+        );
+        let argument = crate::ObjectRef::new(
+            HashMap::from([
+                ("x".to_owned(), Value::Number(4.0)),
+                ("y".to_owned(), Value::Number(5.0)),
+                ("z".to_owned(), Value::Number(6.0)),
+            ]),
+            &domain,
+        );
         assert_eq!(
             plan.eval(&Value::Object(receiver), &[Value::Object(argument)]),
             Some(Value::Number(32.0))
@@ -411,6 +423,7 @@ mod tests {
 
     #[test]
     fn this_property_numeric_plan_uses_an_argument_as_a_numeric_operand() {
+        let domain = crate::property::atom::AtomDomain::new();
         let script = qjs_parser::parse_script(
             "var receiver = { step: 2, advance: function (value) { return value + this.step; } };",
         )
@@ -429,8 +442,10 @@ mod tests {
             .as_ref()
             .expect("an argument used as a numeric operand should be admitted");
         assert!(matches!(plan, ThisPropertyLeafPlan::Numeric(_)));
-        let receiver =
-            crate::ObjectRef::new(HashMap::from([("step".to_owned(), Value::Number(2.0))]));
+        let receiver = crate::ObjectRef::new(
+            HashMap::from([("step".to_owned(), Value::Number(2.0))]),
+            &domain,
+        );
         assert_eq!(
             plan.eval(&Value::Object(receiver.clone()), &[Value::Number(5.0)]),
             Some(Value::Number(7.0))
@@ -448,6 +463,7 @@ mod tests {
 
     #[test]
     fn this_property_numeric_plan_uses_the_last_duplicate_parameter_position() {
+        let domain = crate::property::atom::AtomDomain::new();
         let script = qjs_parser::parse_script(
             "var multiply = function(other, other) { return this.x * other.x; };",
         )
@@ -465,11 +481,18 @@ mod tests {
             .this_property_leaf_plan
             .as_ref()
             .expect("duplicate-parameter property expression should be admitted");
-        let receiver = crate::ObjectRef::new(HashMap::from([("x".to_owned(), Value::Number(2.0))]));
-        let first_argument =
-            crate::ObjectRef::new(HashMap::from([("x".to_owned(), Value::Number(3.0))]));
-        let last_argument =
-            crate::ObjectRef::new(HashMap::from([("x".to_owned(), Value::Number(4.0))]));
+        let receiver = crate::ObjectRef::new(
+            HashMap::from([("x".to_owned(), Value::Number(2.0))]),
+            &domain,
+        );
+        let first_argument = crate::ObjectRef::new(
+            HashMap::from([("x".to_owned(), Value::Number(3.0))]),
+            &domain,
+        );
+        let last_argument = crate::ObjectRef::new(
+            HashMap::from([("x".to_owned(), Value::Number(4.0))]),
+            &domain,
+        );
         assert_eq!(
             plan.eval(
                 &Value::Object(receiver),

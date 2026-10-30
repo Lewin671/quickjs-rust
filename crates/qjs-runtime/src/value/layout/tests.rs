@@ -230,8 +230,8 @@ fn append_hit_has_one_probe_zero_interns_and_zero_field_copies() {
 #[test]
 fn symbols_follow_strings_and_duplicate_identity_keeps_first_order() {
     let owner = owner();
-    let first = crate::ObjectRef::new(HashMap::new());
-    let second = crate::ObjectRef::new(HashMap::new());
+    let first = crate::ObjectRef::new(HashMap::new(), owner.domain());
+    let second = crate::ObjectRef::new(HashMap::new(), owner.domain());
     let a = owner.domain().intern_symbol(&first).unwrap();
     let b = owner.domain().intern_symbol(&second).unwrap();
     let text = owner.domain().intern("text").unwrap();

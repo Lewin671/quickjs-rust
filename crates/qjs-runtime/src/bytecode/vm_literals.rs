@@ -140,10 +140,8 @@ impl Vm<'_> {
 
     pub(super) fn new_object_literal(&mut self) {
         let prototype = self.cached_object_prototype();
-        self.stack.push(Value::Object(ObjectRef::with_prototype(
-            HashMap::new(),
-            prototype,
-        )));
+        let object = ObjectRef::with_prototype(HashMap::new(), prototype, self.env.realm().atoms());
+        self.stack.push(Value::Object(object));
     }
 
     pub(super) fn new_object_data_literal(
@@ -158,7 +156,12 @@ impl Vm<'_> {
                 _ => None,
             });
             let prototype = self.cached_object_prototype();
-            let object = ObjectRef::with_literal_pair(shape, [first, second], prototype);
+            let object = ObjectRef::with_literal_pair(
+                shape,
+                [first, second],
+                prototype,
+                self.env.realm().atoms(),
+            );
             for function in home_functions.into_iter().flatten() {
                 function.set_home_object(Value::Object(object.clone()));
             }
@@ -179,7 +182,8 @@ impl Vm<'_> {
             })
             .collect::<Vec<_>>();
         let prototype = self.cached_object_prototype();
-        let object = ObjectRef::with_literal_properties(shape, values, prototype);
+        let object =
+            ObjectRef::with_literal_properties(shape, values, prototype, self.env.realm().atoms());
         for function in home_functions {
             function.set_home_object(Value::Object(object.clone()));
         }

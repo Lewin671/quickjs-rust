@@ -15,7 +15,8 @@ pub(crate) fn install_shared_array_buffer(
     global_this: &Value,
     object_prototype: ObjectRef,
 ) {
-    let prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
+    let prototype =
+        ObjectRef::with_prototype(HashMap::new(), Some(object_prototype), env.realm().atoms());
     prototype.set_to_string_tag("SharedArrayBuffer");
     symbol::define_well_known_to_string_tag(env, &prototype, "SharedArrayBuffer");
     let function = Function::new_native(
@@ -23,6 +24,7 @@ pub(crate) fn install_shared_array_buffer(
         1,
         NativeFunction::SharedArrayBuffer,
         true,
+        env.realm().atoms(),
     );
     prototype.define_non_enumerable("constructor".to_owned(), Value::Function(function.clone()));
     for (name, native) in [
@@ -47,6 +49,7 @@ pub(crate) fn install_shared_array_buffer(
                     0,
                     native,
                     false,
+                    env.realm().atoms(),
                 ))),
                 None,
                 false,
@@ -61,6 +64,7 @@ pub(crate) fn install_shared_array_buffer(
             1,
             NativeFunction::SharedArrayBufferPrototypeGrow,
             false,
+            env.realm().atoms(),
         )),
     );
     prototype.define_non_enumerable(
@@ -70,6 +74,7 @@ pub(crate) fn install_shared_array_buffer(
             2,
             NativeFunction::SharedArrayBufferPrototypeSlice,
             false,
+            env.realm().atoms(),
         )),
     );
     function.properties.borrow_mut().insert(
@@ -111,6 +116,7 @@ pub(crate) fn native_shared_array_buffer(
     let object = ObjectRef::with_prototype_slot(
         HashMap::new(),
         crate::native_construct_prototype_slot(function, env)?,
+        env.realm().atoms(),
     );
     ensure_array_buffer_allocation_length(length)?;
     if let Some(max) = max_byte_length {
@@ -293,7 +299,7 @@ pub(crate) fn from_backing(
 ) -> ObjectRef {
     let constructor = env.get("SharedArrayBuffer").unwrap_or(Value::Undefined);
     let prototype = crate::constructor_prototype(&constructor, env);
-    let object = ObjectRef::with_prototype_slot(HashMap::new(), prototype);
+    let object = ObjectRef::with_prototype_slot(HashMap::new(), prototype, env.realm().atoms());
     object.set_shared_backing(backing);
     object.install_shared_array_buffer_state(max);
     object.set_to_string_tag("SharedArrayBuffer");

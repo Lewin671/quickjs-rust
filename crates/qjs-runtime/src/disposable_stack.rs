@@ -26,7 +26,8 @@ pub(crate) fn install_disposable_stack(
 ) {
     install_async_disposable_stack(env, global_this, object_prototype.clone());
 
-    let prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
+    let prototype =
+        ObjectRef::with_prototype(HashMap::new(), Some(object_prototype), env.realm().atoms());
     prototype.set_to_string_tag("DisposableStack");
     symbol::define_well_known_to_string_tag(env, &prototype, "DisposableStack");
 
@@ -35,6 +36,7 @@ pub(crate) fn install_disposable_stack(
         0,
         NativeFunction::DisposableStack,
         true,
+        env.realm().atoms(),
     );
     prototype.define_non_enumerable("constructor".to_owned(), Value::Function(function.clone()));
     prototype.define_property(
@@ -45,6 +47,7 @@ pub(crate) fn install_disposable_stack(
                 0,
                 NativeFunction::DisposableStackPrototypeDisposed,
                 false,
+                env.realm().atoms(),
             ))),
             None,
             false,
@@ -69,6 +72,7 @@ pub(crate) fn install_disposable_stack(
         0,
         NativeFunction::DisposableStackPrototypeDispose,
         false,
+        env.realm().atoms(),
     );
     let dispose_value = Value::Function(dispose);
     prototype.define_non_enumerable("dispose".to_owned(), dispose_value.clone());
@@ -105,7 +109,8 @@ fn install_async_disposable_stack(
     global_this: &Value,
     object_prototype: ObjectRef,
 ) {
-    let prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
+    let prototype =
+        ObjectRef::with_prototype(HashMap::new(), Some(object_prototype), env.realm().atoms());
     prototype.set_to_string_tag("AsyncDisposableStack");
     symbol::define_well_known_to_string_tag(env, &prototype, "AsyncDisposableStack");
 
@@ -114,6 +119,7 @@ fn install_async_disposable_stack(
         0,
         NativeFunction::AsyncDisposableStack,
         true,
+        env.realm().atoms(),
     );
     prototype.define_non_enumerable("constructor".to_owned(), Value::Function(function.clone()));
     prototype.define_property(
@@ -124,6 +130,7 @@ fn install_async_disposable_stack(
                 0,
                 NativeFunction::AsyncDisposableStackPrototypeDisposed,
                 false,
+                env.realm().atoms(),
             ))),
             None,
             false,
@@ -147,6 +154,7 @@ fn install_async_disposable_stack(
         0,
         NativeFunction::AsyncDisposableStackPrototypeDisposeAsync,
         false,
+        env.realm().atoms(),
     );
     let dispose_async_value = Value::Function(dispose_async);
     prototype.define_non_enumerable("disposeAsync".to_owned(), dispose_async_value.clone());
@@ -194,6 +202,7 @@ pub(crate) fn native_async_disposable_stack(
     let object = ObjectRef::with_prototype_slot(
         HashMap::new(),
         crate::native_construct_prototype_slot(function, env)?,
+        env.realm().atoms(),
     );
     object.set_to_string_tag("AsyncDisposableStack");
     object.define_property(
@@ -221,6 +230,7 @@ pub(crate) fn native_disposable_stack(
     let object = ObjectRef::with_prototype_slot(
         HashMap::new(),
         crate::native_construct_prototype_slot(function, env)?,
+        env.realm().atoms(),
     );
     object.set_to_string_tag("DisposableStack");
     object.define_property(
@@ -342,7 +352,7 @@ pub(crate) fn native_async_disposable_stack_prototype_move(
     let prototype = env
         .get("AsyncDisposableStack")
         .and_then(|constructor| crate::constructor_prototype_slot(&constructor, env));
-    let new_stack = ObjectRef::with_prototype_slot(HashMap::new(), prototype);
+    let new_stack = ObjectRef::with_prototype_slot(HashMap::new(), prototype, env.realm().atoms());
     new_stack.set_to_string_tag("AsyncDisposableStack");
     new_stack.define_property(
         ASYNC_DISPOSABLE_STACK_DISPOSED.to_owned(),
@@ -521,7 +531,7 @@ pub(crate) fn native_disposable_stack_prototype_move(
     let prototype = env
         .get("DisposableStack")
         .and_then(|constructor| crate::constructor_prototype_slot(&constructor, env));
-    let new_stack = ObjectRef::with_prototype_slot(HashMap::new(), prototype);
+    let new_stack = ObjectRef::with_prototype_slot(HashMap::new(), prototype, env.realm().atoms());
     new_stack.set_to_string_tag("DisposableStack");
     new_stack.define_property(
         DISPOSABLE_STACK_DISPOSED.to_owned(),
@@ -611,7 +621,13 @@ fn define_prototype_method(
 ) {
     prototype.define_non_enumerable(
         name.to_owned(),
-        Value::Function(Function::new_native(Some(name), length, native, false)),
+        Value::Function(Function::new_native(
+            Some(name),
+            length,
+            native,
+            false,
+            prototype.domain(),
+        )),
     );
 }
 
@@ -672,12 +688,20 @@ fn push_resource(
     method: Value,
 ) -> Result<(), RuntimeError> {
     let resources = disposable_stack_resources(object)?;
-    resources.set(resources.len(), resource_record(kind, value, method));
+    resources.set(
+        resources.len(),
+        resource_record(kind, value, method, object.domain()),
+    );
     Ok(())
 }
 
-fn resource_record(kind: DisposableResourceKind, value: Value, method: Value) -> Value {
-    let record = ObjectRef::with_prototype(HashMap::new(), None);
+fn resource_record(
+    kind: DisposableResourceKind,
+    value: Value,
+    method: Value,
+    domain: &crate::property::atom::AtomDomain,
+) -> Value {
+    let record = ObjectRef::with_prototype(HashMap::new(), None, domain);
     record.define_property(
         RESOURCE_KIND.to_owned(),
         Property::non_enumerable(Value::String(kind.as_str().to_owned().into())),

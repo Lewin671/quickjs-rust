@@ -198,7 +198,7 @@ fn array_from_async_start(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let capability = crate::promise::new_pending_promise(env);
-    let state = ObjectRef::new(HashMap::new());
+    let state = ObjectRef::new(HashMap::new(), env.realm().atoms());
     state.define_non_enumerable(
         ARRAY_FROM_ASYNC_CAPABILITY.to_owned(),
         Value::Object(capability.clone()),
@@ -624,7 +624,7 @@ fn array_from_async_reject_value(state: &ObjectRef, reason: Value, env: &mut Cal
 }
 
 fn array_from_async_reaction(native: NativeFunction, state: &ObjectRef) -> Value {
-    let mut function = Function::new_native(None, 1, native, false);
+    let mut function = Function::new_native(None, 1, native, false, state.domain());
     function.insert_native_context(
         ARRAY_FROM_ASYNC_STATE.to_owned(),
         Value::Object(state.clone()),

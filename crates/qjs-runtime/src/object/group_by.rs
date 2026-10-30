@@ -19,7 +19,7 @@ pub(crate) fn native_object_group_by(
         });
     }
 
-    let result = ObjectRef::with_prototype(HashMap::new(), None);
+    let result = ObjectRef::with_prototype(HashMap::new(), None, env.realm().atoms());
     for (index, value) in iterable_values_with_env(items, "Object.groupBy", env)?
         .into_iter()
         .enumerate()

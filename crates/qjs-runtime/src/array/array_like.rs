@@ -253,7 +253,8 @@ pub(super) fn array_like_receiver(value: Value, env: &CallEnv) -> Value {
                     Value::String(character.to_string().into()),
                 );
             }
-            let object = ObjectRef::with_prototype(properties, string_prototype(env));
+            let object =
+                ObjectRef::with_prototype(properties, string_prototype(env), env.realm().atoms());
             Value::Object(object)
         }
         _ => value,

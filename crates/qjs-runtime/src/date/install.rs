@@ -4,9 +4,16 @@ use std::collections::HashMap;
 use crate::{Function, NativeFunction, ObjectRef, Property, Value, symbol};
 
 pub(crate) fn install_date(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
-    let date_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
+    let date_prototype =
+        ObjectRef::with_prototype(HashMap::new(), Some(object_prototype), env.realm().atoms());
 
-    let date_function = Function::new_native(Some("Date"), 7, NativeFunction::Date, true);
+    let date_function = Function::new_native(
+        Some("Date"),
+        7,
+        NativeFunction::Date,
+        true,
+        env.realm().atoms(),
+    );
     date_prototype.define_non_enumerable(
         "constructor".to_owned(),
         Value::Function(date_function.clone()),
@@ -266,6 +273,7 @@ pub(crate) fn install_date(env: &mut CallEnv, global_this: &Value, object_protot
                     1,
                     NativeFunction::DatePrototypeToPrimitive,
                     false,
+                    env.realm().atoms(),
                 )),
                 false,
                 false,
@@ -290,6 +298,7 @@ pub(crate) fn install_date(env: &mut CallEnv, global_this: &Value, object_protot
         0,
         NativeFunction::DatePrototypeToUtcString,
         false,
+        env.realm().atoms(),
     ));
     date_prototype.define_non_enumerable("toUTCString".to_owned(), to_utc_string.clone());
     date_prototype.define_non_enumerable("toGMTString".to_owned(), to_utc_string);
@@ -323,6 +332,7 @@ fn define_date_function(function: &Function, key: &str, length: usize, native: N
             length,
             native,
             false,
+            function.property_domain(),
         ))),
     );
 }
@@ -335,6 +345,12 @@ fn define_date_prototype_function(
 ) {
     prototype.define_non_enumerable(
         key.to_owned(),
-        Value::Function(Function::new_native(Some(key), length, native, false)),
+        Value::Function(Function::new_native(
+            Some(key),
+            length,
+            native,
+            false,
+            prototype.domain(),
+        )),
     );
 }

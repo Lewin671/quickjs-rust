@@ -42,12 +42,14 @@ pub(crate) fn install_async_function(
     let async_function_prototype = ObjectRef::with_prototype_slot(
         HashMap::new(),
         function_intrinsic_prototype_slot(env).or(Some(crate::Prototype::Object(object_prototype))),
+        env.realm().atoms(),
     );
     let async_function = Function::new_native(
         Some("AsyncFunction"),
         1,
         NativeFunction::AsyncFunction,
         true,
+        env.realm().atoms(),
     );
     let _ = async_function.set_internal_prototype_slot(function_constructor_as_prototype_slot(env));
     async_function.properties.borrow_mut().insert(
@@ -93,7 +95,7 @@ pub(crate) fn call_async_function(
         .bytecode
         .clone()
         .expect("async function has a bytecode body");
-    let context = ObjectRef::new(HashMap::new());
+    let context = ObjectRef::new(HashMap::new(), env.realm().atoms());
     *context.generator_state().borrow_mut() =
         Some(GeneratorState::SuspendedStart(Box::new(GeneratorStart {
             bytecode,
@@ -186,7 +188,7 @@ fn await_reaction(
     context: &ObjectRef,
     result_promise: &ObjectRef,
 ) -> Value {
-    let mut function = Function::new_native(None, 1, native, false);
+    let mut function = Function::new_native(None, 1, native, false, context.domain());
     function.insert_native_context(ASYNC_CONTEXT.to_owned(), Value::Object(context.clone()));
     function.insert_native_context(
         ASYNC_RESULT_PROMISE.to_owned(),

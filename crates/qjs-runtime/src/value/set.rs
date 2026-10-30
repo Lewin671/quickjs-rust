@@ -20,12 +20,18 @@ struct SetData {
 }
 
 impl SetRef {
-    pub(crate) fn new(prototype: Option<ObjectRef>) -> Self {
-        Self::with_prototype_slot(prototype.map(Prototype::Object))
+    pub(crate) fn new(
+        prototype: Option<ObjectRef>,
+        domain: &crate::property::atom::AtomDomain,
+    ) -> Self {
+        Self::with_prototype_slot(prototype.map(Prototype::Object), domain)
     }
 
-    pub(crate) fn with_prototype_slot(prototype: Option<Prototype>) -> Self {
-        let object = ObjectRef::with_prototype_slot(HashMap::new(), prototype);
+    pub(crate) fn with_prototype_slot(
+        prototype: Option<Prototype>,
+        domain: &crate::property::atom::AtomDomain,
+    ) -> Self {
+        let object = ObjectRef::with_prototype_slot(HashMap::new(), prototype, domain);
         object.set_to_string_tag("Set");
         Self(Rc::new(SetData {
             entries: RefCell::new(Vec::new()),

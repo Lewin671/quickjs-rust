@@ -49,7 +49,8 @@ pub(crate) fn native_object_from_entries(
         });
     }
 
-    let result = ObjectRef::with_prototype(HashMap::new(), object_prototype(env));
+    let result =
+        ObjectRef::with_prototype(HashMap::new(), object_prototype(env), env.realm().atoms());
 
     loop {
         // IteratorStep

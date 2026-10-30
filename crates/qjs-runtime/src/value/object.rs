@@ -361,6 +361,7 @@ enum SymbolBrand {
 }
 
 struct ObjectData {
+    domain: crate::property::atom::AtomDomain,
     properties: RefCell<PropertyStorage>,
     /// Invalidates monomorphic named-read caches whenever an own string
     /// property's descriptor or value changes.
@@ -1004,20 +1005,25 @@ impl ObjectRef {
         }
     }
 
-    pub(crate) fn new(properties: HashMap<String, Value>) -> Self {
-        Self::with_prototype(properties, None)
+    pub(crate) fn new(
+        properties: HashMap<String, Value>,
+        domain: &crate::property::atom::AtomDomain,
+    ) -> Self {
+        Self::with_prototype(properties, None, domain)
     }
 
     pub(crate) fn with_prototype(
         properties: HashMap<String, Value>,
         prototype: Option<ObjectRef>,
+        domain: &crate::property::atom::AtomDomain,
     ) -> Self {
-        Self::with_prototype_slot(properties, prototype.map(Prototype::Object))
+        Self::with_prototype_slot(properties, prototype.map(Prototype::Object), domain)
     }
 
     pub(crate) fn with_prototype_slot(
         properties: HashMap<String, Value>,
         prototype: Option<Prototype>,
+        domain: &crate::property::atom::AtomDomain,
     ) -> Self {
         let properties: crate::value::name_hash::NameMap<Rc<str>, Property> = properties
             .into_iter()
@@ -1030,6 +1036,7 @@ impl ObjectRef {
             .filter(|key| is_array_index_key(key))
             .count();
         Self(Rc::new(ObjectData {
+            domain: domain.clone(),
             properties: RefCell::new(PropertyStorage::dynamic(properties, property_order)),
             property_revision: Cell::new(0),
             layout_revision: Cell::new(0),
@@ -1055,6 +1062,7 @@ impl ObjectRef {
         shape: Rc<ObjectLiteralShape>,
         values: Vec<Value>,
         prototype: Option<ObjectRef>,
+        domain: &crate::property::atom::AtomDomain,
     ) -> Self {
         debug_assert_eq!(shape.input_slots.len(), values.len());
         let mut properties = vec![None; shape.keys.len()];
@@ -1078,6 +1086,7 @@ impl ObjectRef {
             PropertyStorage::Shaped { shape, properties }
         };
         Self(Rc::new(ObjectData {
+            domain: domain.clone(),
             properties: RefCell::new(properties),
             property_revision: Cell::new(0),
             layout_revision: Cell::new(0),
@@ -1102,11 +1111,13 @@ impl ObjectRef {
         shape: Rc<ObjectLiteralShape>,
         values: [Value; 2],
         prototype: Option<ObjectRef>,
+        domain: &crate::property::atom::AtomDomain,
     ) -> Self {
         debug_assert_eq!(shape.input_len(), 2);
         debug_assert_eq!(shape.unique_len(), 2);
         let index_property_count = shape.index_property_count;
         Self(Rc::new(ObjectData {
+            domain: domain.clone(),
             properties: RefCell::new(PropertyStorage::ShapedPair { shape, values }),
             property_revision: Cell::new(0),
             layout_revision: Cell::new(0),
@@ -1176,6 +1187,10 @@ impl ObjectRef {
             .borrow_mut()
             .as_mut()
             .map(f)
+    }
+
+    pub(crate) fn domain(&self) -> &crate::property::atom::AtomDomain {
+        &self.0.domain
     }
 
     pub(crate) fn ptr_eq(&self, other: &Self) -> bool {

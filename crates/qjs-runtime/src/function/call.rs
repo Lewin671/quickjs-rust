@@ -486,7 +486,8 @@ pub(crate) fn try_construct_direct_leaf_function(
         .expect("direct leaf predicate requires bytecode");
     crate::diagnostics::count!(ordinary_call_attempts);
     crate::diagnostics::count!(direct_leaf_frames);
-    let receiver = ObjectRef::with_prototype_slot(HashMap::new(), Some(prototype));
+    let receiver =
+        ObjectRef::with_prototype_slot(HashMap::new(), Some(prototype), env.realm().atoms());
     // A base class initializes its instance fields before the body runs.
     if let Some(elements) = class_fields
         && let Err(error) = initialize_direct_instance_fields(
@@ -694,7 +695,8 @@ fn class_constructor_call_error(function: &Function) -> RuntimeError {
         ..
     }) = function.own_property(CROSS_REALM_TYPE_ERROR_PROTOTYPE)
     {
-        let error = ObjectRef::with_prototype(HashMap::new(), Some(prototype));
+        let error =
+            ObjectRef::with_prototype(HashMap::new(), Some(prototype.clone()), prototype.domain());
         return RuntimeError {
             thrown: Some(Box::new(Value::Object(error))),
             message,
@@ -994,7 +996,11 @@ pub(crate) fn construct_function(
         Value::Undefined
     } else {
         let prototype = construct_prototype_slot(&target, &new_target, env)?;
-        Value::Object(ObjectRef::with_prototype_slot(HashMap::new(), prototype))
+        Value::Object(ObjectRef::with_prototype_slot(
+            HashMap::new(),
+            prototype,
+            env.realm().atoms(),
+        ))
     };
 
     let result = call_function(target, this_value.clone(), argument_values, env, true);
@@ -1673,13 +1679,14 @@ mod tests {
 
     #[test]
     fn declined_long_constant_segment_is_scanned_once() {
+        let domain = crate::property::atom::AtomDomain::new();
         let count = 512;
         let fields = (0..count).map(|i| format!("p{i}={i};")).collect::<String>();
         let Value::Function(class) = eval(&format!("(class {{ {fields} }})")).unwrap() else {
             panic!("expected class constructor");
         };
         let elements = class.instance_elements();
-        let receiver = ObjectRef::new(std::collections::HashMap::new());
+        let receiver = ObjectRef::new(std::collections::HashMap::new(), &domain);
         // An unrelated non-configurable descriptor declines before the batch
         // consumes any field. All sequential field definitions still succeed.
         receiver.define_property(

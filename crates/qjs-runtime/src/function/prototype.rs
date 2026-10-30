@@ -609,7 +609,13 @@ pub(crate) fn native_function_prototype_bind(
     };
 
     let target = this_value.clone();
-    let bound = Function::new_bound(this_value, bound_this, bound_arguments, 0);
+    let bound = Function::new_bound(
+        this_value,
+        bound_this,
+        bound_arguments,
+        0,
+        env.realm().atoms(),
+    );
     bound.define_property(
         "length".to_owned(),
         Property::data(Value::Number(bound_length), false, false, true),
@@ -705,7 +711,11 @@ pub(crate) fn native_realm_throw_type_error(
 ) -> Result<Value, RuntimeError> {
     let message = "TypeError: restricted function property access".to_owned();
     if let Some(Value::Object(prototype)) = argument_values.first() {
-        let error = crate::ObjectRef::with_prototype(HashMap::new(), Some(prototype.clone()));
+        let error = crate::ObjectRef::with_prototype(
+            HashMap::new(),
+            Some(prototype.clone()),
+            prototype.domain(),
+        );
         return Err(RuntimeError {
             thrown: Some(Box::new(Value::Object(error))),
             message,

@@ -14,10 +14,17 @@ pub(crate) fn install_weak_set(
     global_this: &Value,
     object_prototype: ObjectRef,
 ) {
-    let weak_set_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
+    let weak_set_prototype =
+        ObjectRef::with_prototype(HashMap::new(), Some(object_prototype), env.realm().atoms());
     weak_set_prototype.set_to_string_tag("WeakSet");
     symbol::define_well_known_to_string_tag(env, &weak_set_prototype, "WeakSet");
-    let weak_set_function = Function::new_native(Some("WeakSet"), 0, NativeFunction::WeakSet, true);
+    let weak_set_function = Function::new_native(
+        Some("WeakSet"),
+        0,
+        NativeFunction::WeakSet,
+        true,
+        env.realm().atoms(),
+    );
     weak_set_prototype.define_non_enumerable(
         "constructor".to_owned(),
         Value::Function(weak_set_function.clone()),
@@ -68,6 +75,7 @@ pub(crate) fn native_weak_set(
     let object = ObjectRef::with_prototype_slot(
         HashMap::new(),
         crate::native_construct_prototype_slot(function, env)?,
+        env.realm().atoms(),
     );
     object.set_to_string_tag("WeakSet");
     object.define_non_enumerable(WEAK_SET_BRAND.to_owned(), Value::Boolean(true));
@@ -77,7 +85,7 @@ pub(crate) fn native_weak_set(
 
     object.define_non_enumerable(
         WEAK_SET_ENTRIES.to_owned(),
-        Value::Set(crate::SetRef::new(None)),
+        Value::Set(crate::SetRef::new(None, env.realm().atoms())),
     );
     let weak_set = Value::Object(object);
 
@@ -214,6 +222,12 @@ fn define_weak_set_prototype_function(
 ) {
     prototype.define_non_enumerable(
         key.to_owned(),
-        Value::Function(Function::new_native(Some(key), length, native, false)),
+        Value::Function(Function::new_native(
+            Some(key),
+            length,
+            native,
+            false,
+            prototype.domain(),
+        )),
     );
 }

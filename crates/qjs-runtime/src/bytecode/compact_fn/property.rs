@@ -481,9 +481,15 @@ pub(super) fn object_data_literal(
             Rc::clone(shape),
             [first.clone(), second.clone()],
             prototype,
+            env.realm().atoms(),
         )
     } else {
-        crate::ObjectRef::with_literal_properties(Rc::clone(shape), values, prototype)
+        crate::ObjectRef::with_literal_properties(
+            Rc::clone(shape),
+            values,
+            prototype,
+            env.realm().atoms(),
+        )
     };
     for function in home_functions {
         function.set_home_object(Value::Object(object.clone()));

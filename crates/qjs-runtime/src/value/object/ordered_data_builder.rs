@@ -12,12 +12,14 @@ use super::{ObjectData, ObjectRef, PropertyStorage, Prototype, SymbolBrand, is_a
 /// with the number of unique keys rather than the number of source members.
 pub(crate) struct OrderedDataPropertyBuilder {
     properties: PropertyStorage,
+    domain: crate::property::atom::AtomDomain,
     index_property_count: usize,
 }
 
 impl OrderedDataPropertyBuilder {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(domain: &crate::property::atom::AtomDomain) -> Self {
         Self {
+            domain: domain.clone(),
             properties: PropertyStorage::Small {
                 entries: Vec::new(),
             },
@@ -26,8 +28,12 @@ impl OrderedDataPropertyBuilder {
     }
 
     /// A builder whose storage has room for `capacity` properties.
-    pub(crate) fn with_capacity(capacity: usize) -> Self {
+    pub(crate) fn with_capacity(
+        capacity: usize,
+        domain: &crate::property::atom::AtomDomain,
+    ) -> Self {
         Self {
+            domain: domain.clone(),
             properties: PropertyStorage::Small {
                 entries: Vec::with_capacity(capacity),
             },
@@ -62,6 +68,7 @@ impl OrderedDataPropertyBuilder {
 
     pub(crate) fn finish(self, prototype: Option<ObjectRef>) -> ObjectRef {
         ObjectRef(Rc::new(ObjectData {
+            domain: self.domain,
             properties: RefCell::new(self.properties),
             property_revision: Cell::new(0),
             layout_revision: Cell::new(0),
@@ -89,7 +96,8 @@ mod tests {
 
     #[test]
     fn duplicate_heavy_builder_stays_small_and_bounded_by_unique_keys() {
-        let mut builder = OrderedDataPropertyBuilder::new();
+        let domain = crate::property::atom::AtomDomain::new();
+        let mut builder = OrderedDataPropertyBuilder::new(&domain);
         for value in 0..256 {
             builder.insert(
                 Rc::from(format!("field{}", value % 8)),
@@ -121,7 +129,8 @@ mod tests {
 
     #[test]
     fn duplicate_heavy_dynamic_builder_retains_only_unique_properties() {
-        let mut builder = OrderedDataPropertyBuilder::new();
+        let domain = crate::property::atom::AtomDomain::new();
+        let mut builder = OrderedDataPropertyBuilder::new(&domain);
         let unique_count = PropertyStorage::SMALL_LIMIT + 2;
         let value_count = unique_count * 30;
         for value in 0..value_count {
@@ -158,11 +167,12 @@ mod tests {
 
     #[test]
     fn duplicate_heavy_numeric_keys_release_replaced_values_during_build() {
-        let mut builder = OrderedDataPropertyBuilder::new();
+        let domain = crate::property::atom::AtomDomain::new();
+        let mut builder = OrderedDataPropertyBuilder::new(&domain);
         let mut previous = None;
 
         for _ in 0..256 {
-            let value = ObjectRef::new(HashMap::new());
+            let value = ObjectRef::new(HashMap::new(), &domain);
             let current = value.downgrade();
             builder.insert(Rc::from("123"), Value::Object(value));
             if let Some(replaced) = previous.replace(current) {

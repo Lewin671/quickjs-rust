@@ -541,6 +541,7 @@ fn inline_constructor(
     let receiver = crate::ObjectRef::with_prototype_slot(
         std::collections::HashMap::new(),
         Some(crate::Prototype::Object(prototype)),
+        env.realm().atoms(),
     );
     Some((inline, receiver, class))
 }

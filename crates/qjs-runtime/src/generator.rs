@@ -38,7 +38,8 @@ pub(crate) fn install_generator(
     // only if the iterator intrinsic is somehow unavailable.
     let generator_parent =
         crate::iterator::iterator_prototype(env).unwrap_or(object_prototype.clone());
-    let generator_prototype = ObjectRef::with_prototype(HashMap::new(), Some(generator_parent));
+    let generator_prototype =
+        ObjectRef::with_prototype(HashMap::new(), Some(generator_parent), env.realm().atoms());
 
     for (name, native) in [
         ("next", NativeFunction::GeneratorPrototypeNext),
@@ -47,7 +48,13 @@ pub(crate) fn install_generator(
     ] {
         generator_prototype.define_non_enumerable(
             name.to_owned(),
-            Value::Function(Function::new_native(Some(name), 1, native, false)),
+            Value::Function(Function::new_native(
+                Some(name),
+                1,
+                native,
+                false,
+                env.realm().atoms(),
+            )),
         );
     }
 
@@ -60,6 +67,7 @@ pub(crate) fn install_generator(
                 0,
                 NativeFunction::IteratorPrototypeIterator,
                 false,
+                env.realm().atoms(),
             ))),
         );
     }
@@ -73,12 +81,14 @@ pub(crate) fn install_generator(
     let generator_function_prototype = ObjectRef::with_prototype_slot(
         HashMap::new(),
         function_intrinsic_prototype_slot(env).or(Some(crate::Prototype::Object(object_prototype))),
+        env.realm().atoms(),
     );
     let generator_function = Function::new_native(
         Some("GeneratorFunction"),
         1,
         NativeFunction::GeneratorFunction,
         true,
+        env.realm().atoms(),
     );
     let _ =
         generator_function.set_internal_prototype_slot(function_constructor_as_prototype_slot(env));
@@ -168,7 +178,11 @@ pub(crate) fn wire_generator_function_intrinsics(function: &Function, env: &Call
         )));
     }
     if let Some(generator_prototype) = generator_prototype_intrinsic(env) {
-        let prototype = ObjectRef::with_prototype(HashMap::new(), Some(generator_prototype));
+        let prototype = ObjectRef::with_prototype(
+            HashMap::new(),
+            Some(generator_prototype),
+            env.realm().atoms(),
+        );
         function.define_property(
             "prototype".to_owned(),
             Property::data(Value::Object(prototype), false, true, false),
@@ -189,7 +203,7 @@ pub(crate) fn make_generator_object(
 ) -> Result<Value, RuntimeError> {
     let state = crate::bytecode::start_suspended_at_body(start, env)?;
     let prototype = generator_object_prototype(function, env);
-    let generator = ObjectRef::with_prototype(HashMap::new(), prototype);
+    let generator = ObjectRef::with_prototype(HashMap::new(), prototype, env.realm().atoms());
     *generator.generator_state().borrow_mut() = Some(state);
     Ok(Value::Object(generator))
 }
@@ -242,23 +256,28 @@ pub(crate) fn call_generator_native(
 
     let outcome = resume_generator(generator, resume, env)?;
     let result = match outcome {
-        GeneratorOutcome::Yield(value) => iterator_result(value, false, env),
+        GeneratorOutcome::Yield(value) => iterator_result(value, false, env, env.realm().atoms()),
         // `yield*` hands back the inner iterator's result object unchanged
         // rather than rebuilding it.
         GeneratorOutcome::YieldDelegate(value) => value,
         // A plain generator body emits no `Op::Await`, so an await suspension
         // never reaches here; treat the awaited value as a plain yield rather
         // than panicking on a malformed body.
-        GeneratorOutcome::Await(value) => iterator_result(value, false, env),
+        GeneratorOutcome::Await(value) => iterator_result(value, false, env, env.realm().atoms()),
         GeneratorOutcome::Return(value) | GeneratorOutcome::ReturnAlreadyAwaited(value) => {
-            iterator_result(value, true, env)
+            iterator_result(value, true, env, env.realm().atoms())
         }
     };
     Ok(Some(result))
 }
 
-fn iterator_result(value: Value, done: bool, env: &CallEnv) -> Value {
-    let object = ObjectRef::with_prototype(HashMap::new(), object_prototype(env));
+fn iterator_result(
+    value: Value,
+    done: bool,
+    env: &CallEnv,
+    domain: &crate::property::atom::AtomDomain,
+) -> Value {
+    let object = ObjectRef::with_prototype(HashMap::new(), object_prototype(env), domain);
     object.define_property("value".to_owned(), Property::enumerable(value));
     object.define_property(
         "done".to_owned(),

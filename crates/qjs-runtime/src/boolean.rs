@@ -9,8 +9,15 @@ use crate::{
 pub(crate) const BOOLEAN_DATA_PROPERTY: &str = "\0BooleanData";
 
 pub(super) fn install_boolean(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
-    let boolean_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
-    let boolean_function = Function::new_native(Some("Boolean"), 1, NativeFunction::Boolean, true);
+    let boolean_prototype =
+        ObjectRef::with_prototype(HashMap::new(), Some(object_prototype), env.realm().atoms());
+    let boolean_function = Function::new_native(
+        Some("Boolean"),
+        1,
+        NativeFunction::Boolean,
+        true,
+        env.realm().atoms(),
+    );
     boolean_prototype
         .define_non_enumerable(BOOLEAN_DATA_PROPERTY.to_owned(), Value::Boolean(false));
     boolean_prototype.define_non_enumerable(
@@ -24,6 +31,7 @@ pub(super) fn install_boolean(env: &mut CallEnv, global_this: &Value, object_pro
             0,
             NativeFunction::BooleanPrototypeToString,
             false,
+            env.realm().atoms(),
         )),
     );
     boolean_prototype.define_non_enumerable(
@@ -33,6 +41,7 @@ pub(super) fn install_boolean(env: &mut CallEnv, global_this: &Value, object_pro
             0,
             NativeFunction::BooleanPrototypeValueOf,
             false,
+            env.realm().atoms(),
         )),
     );
     boolean_function.properties.borrow_mut().insert(
@@ -59,7 +68,11 @@ pub(super) fn native_boolean(
 
     let object = match this_value {
         Value::Object(object) => object,
-        _ => ObjectRef::with_prototype(HashMap::new(), function_prototype(function)),
+        _ => ObjectRef::with_prototype(
+            HashMap::new(),
+            function_prototype(function),
+            function.property_domain(),
+        ),
     };
     object.define_non_enumerable(BOOLEAN_DATA_PROPERTY.to_owned(), Value::Boolean(value));
     Ok(Value::Object(object))

@@ -17,10 +17,17 @@ const SET_ITERATOR_KIND_VALUE: &str = "value";
 const SET_ITERATOR_KIND_KEY_VALUE: &str = "key+value";
 
 pub(crate) fn install_set(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
-    let set_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
+    let set_prototype =
+        ObjectRef::with_prototype(HashMap::new(), Some(object_prototype), env.realm().atoms());
     set_prototype.set_to_string_tag("Set");
     symbol::define_well_known_to_string_tag(env, &set_prototype, "Set");
-    let set_function = Function::new_native(Some("Set"), 0, NativeFunction::Set, true);
+    let set_function = Function::new_native(
+        Some("Set"),
+        0,
+        NativeFunction::Set,
+        true,
+        env.realm().atoms(),
+    );
     set_prototype.define_non_enumerable(
         "constructor".to_owned(),
         Value::Function(set_function.clone()),
@@ -33,6 +40,7 @@ pub(crate) fn install_set(env: &mut CallEnv, global_this: &Value, object_prototy
                 0,
                 NativeFunction::SetPrototypeSize,
                 false,
+                env.realm().atoms(),
             ))),
             None,
             false,
@@ -100,6 +108,7 @@ pub(crate) fn install_set(env: &mut CallEnv, global_this: &Value, object_prototy
         0,
         NativeFunction::SetPrototypeValues,
         false,
+        env.realm().atoms(),
     ));
     set_prototype.define_non_enumerable("keys".to_owned(), values_function.clone());
     define_set_prototype_function(
@@ -141,7 +150,10 @@ pub(crate) fn native_set(
             message: "TypeError: Constructor Set requires 'new'".to_owned(),
         });
     }
-    let set = SetRef::with_prototype_slot(crate::native_construct_prototype_slot(function, env)?);
+    let set = SetRef::with_prototype_slot(
+        crate::native_construct_prototype_slot(function, env)?,
+        env.realm().atoms(),
+    );
     let set_value = Value::Set(set);
     if let Some(iterable) = argument_values.first().cloned()
         && !matches!(iterable, Value::Undefined | Value::Null)
@@ -404,7 +416,7 @@ pub(crate) fn native_set_iterator_next(this_value: Value) -> Result<Value, Runti
         });
     };
     if iterator_done(&iterator) {
-        return Ok(iterator_result(Value::Undefined, true));
+        return Ok(iterator_result(Value::Undefined, true, iterator.domain()));
     }
 
     let set = match iterator_slot(&iterator, SET_ITERATOR)? {
@@ -425,7 +437,7 @@ pub(crate) fn native_set_iterator_next(this_value: Value) -> Result<Value, Runti
                 SET_ITERATOR_NEXT_INDEX.to_owned(),
                 Value::Number(position as f64),
             );
-            return Ok(iterator_result(Value::Undefined, true));
+            return Ok(iterator_result(Value::Undefined, true, iterator.domain()));
         }
         let entry = set.value_at(position);
         position += 1;
@@ -448,7 +460,7 @@ pub(crate) fn native_set_iterator_next(this_value: Value) -> Result<Value, Runti
             });
         }
     };
-    Ok(iterator_result(item, false))
+    Ok(iterator_result(item, false, iterator.domain()))
 }
 
 fn this_set(this_value: Value) -> Result<SetRef, RuntimeError> {
@@ -462,7 +474,7 @@ fn this_set(this_value: Value) -> Result<SetRef, RuntimeError> {
 }
 
 fn new_composition_result_set(env: &CallEnv) -> SetRef {
-    SetRef::new(set_prototype(env))
+    SetRef::new(set_prototype(env), env.realm().atoms())
 }
 
 fn set_prototype(env: &CallEnv) -> Option<ObjectRef> {
@@ -492,7 +504,7 @@ fn set_iterator(this_value: Value, env: &CallEnv, kind: &str) -> Result<Value, R
     this_set(this_value.clone())?;
     let prototype =
         crate::iterator::builtin_iterator_prototype(env, crate::iterator::BuiltinIteratorKind::Set);
-    let iterator = ObjectRef::with_prototype(HashMap::new(), prototype);
+    let iterator = ObjectRef::with_prototype(HashMap::new(), prototype, env.realm().atoms());
     iterator.define_non_enumerable(SET_ITERATOR.to_owned(), this_value);
     iterator.define_non_enumerable(SET_ITERATOR_NEXT_INDEX.to_owned(), Value::Number(0.0));
     iterator.define_non_enumerable(SET_ITERATOR_DONE.to_owned(), Value::Boolean(false));
@@ -542,11 +554,11 @@ fn iterator_kind(iterator: &ObjectRef) -> Result<String, RuntimeError> {
     }
 }
 
-fn iterator_result(value: Value, done: bool) -> Value {
+fn iterator_result(value: Value, done: bool, domain: &crate::property::atom::AtomDomain) -> Value {
     let mut properties = HashMap::new();
     properties.insert("value".to_owned(), value);
     properties.insert("done".to_owned(), Value::Boolean(done));
-    Value::Object(ObjectRef::new(properties))
+    Value::Object(ObjectRef::new(properties, domain))
 }
 
 fn define_set_prototype_function(
@@ -557,6 +569,12 @@ fn define_set_prototype_function(
 ) {
     prototype.define_non_enumerable(
         key.to_owned(),
-        Value::Function(Function::new_native(Some(key), length, native, false)),
+        Value::Function(Function::new_native(
+            Some(key),
+            length,
+            native,
+            false,
+            prototype.domain(),
+        )),
     );
 }

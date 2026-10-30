@@ -6,12 +6,22 @@ pub(crate) fn install_function(
     global_this: &Value,
     object_prototype: ObjectRef,
 ) {
-    let function_prototype =
-        Function::new_native(Some(""), 0, NativeFunction::FunctionPrototype, false);
+    let function_prototype = Function::new_native(
+        Some(""),
+        0,
+        NativeFunction::FunctionPrototype,
+        false,
+        env.realm().atoms(),
+    );
     let _ =
         function_prototype.set_internal_prototype_slot(Some(Prototype::Object(object_prototype)));
-    let function_constructor =
-        Function::new_native(Some("Function"), 1, NativeFunction::Function, true);
+    let function_constructor = Function::new_native(
+        Some("Function"),
+        1,
+        NativeFunction::Function,
+        true,
+        env.realm().atoms(),
+    );
     function_prototype.define_property(
         "length".to_owned(),
         Property::data(Value::Number(0.0), false, false, true),
@@ -33,6 +43,7 @@ pub(crate) fn install_function(
             2,
             NativeFunction::FunctionPrototypeApply,
             false,
+            env.realm().atoms(),
         ))),
     );
     function_prototype.define_property(
@@ -42,6 +53,7 @@ pub(crate) fn install_function(
             1,
             NativeFunction::FunctionPrototypeCall,
             false,
+            env.realm().atoms(),
         ))),
     );
     function_prototype.define_property(
@@ -51,6 +63,7 @@ pub(crate) fn install_function(
             1,
             NativeFunction::FunctionPrototypeBind,
             false,
+            env.realm().atoms(),
         ))),
     );
     function_prototype.define_property(
@@ -60,6 +73,7 @@ pub(crate) fn install_function(
             0,
             NativeFunction::FunctionPrototypeToString,
             false,
+            env.realm().atoms(),
         ))),
     );
     // %ThrowTypeError% is a single shared intrinsic: the same function object
@@ -71,8 +85,13 @@ pub(crate) fn install_function(
     // (0) and `name` are non-configurable; the object itself is frozen and
     // non-extensible. `freeze` makes the eagerly-materialized `length`/`name`
     // data properties non-writable and non-configurable.
-    let throw_type_error_function =
-        Function::new_native(Some(""), 0, NativeFunction::ThrowTypeError, false);
+    let throw_type_error_function = Function::new_native(
+        Some(""),
+        0,
+        NativeFunction::ThrowTypeError,
+        false,
+        env.realm().atoms(),
+    );
     throw_type_error_function.freeze();
     let throw_type_error = Value::Function(throw_type_error_function);
     env.insert_realm(

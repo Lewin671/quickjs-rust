@@ -81,7 +81,7 @@ pub(crate) struct RealmState {
     /// The property-name atom domain. A realm derived from another (a
     /// dynamic-function scope) shares its parent's domain because the two
     /// exchange objects; an independent root owns a fresh one.
-    atoms: AtomDomain,
+    property_owner: crate::value::layout::PropertyOwner,
 }
 
 impl RealmState {
@@ -114,7 +114,7 @@ impl RealmState {
             dynamic_function_realm_global: RefCell::new(dynamic_function_realm_global),
             direct_eval_cache: RefCell::new(DirectEvalCache::default()),
             regexp_programs: RefCell::default(),
-            atoms,
+            property_owner: crate::value::layout::PropertyOwner::new(atoms.clone()),
         };
         if let Some(prototype) = object_prototype {
             let _ = realm.object_prototype.set(prototype);
@@ -136,7 +136,7 @@ impl RealmState {
     /// The property-name atom domain this realm's code links against.
     #[inline]
     pub(crate) fn atoms(&self) -> &AtomDomain {
-        &self.atoms
+        self.property_owner.domain()
     }
 
     pub(crate) fn initialize_object_prototype(&self, prototype: ObjectRef) {

@@ -455,7 +455,7 @@ impl Vm<'_> {
                         message: "SyntaxError: 'import.meta' is only valid in a module".to_owned(),
                     });
                 };
-                let import_meta = host.borrow_mut().import_meta();
+                let import_meta = host.borrow_mut().import_meta(self.env.realm().atoms());
                 self.current.stack.push(Value::Object(import_meta));
             }
             // The dispatch loop routes exactly the variants above; its own match

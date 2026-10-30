@@ -131,8 +131,11 @@ the interpreter resolves it to an atom of the frame realm's `AtomDomain`
 authority is the target in [core rebuild objects](design/core-rebuild-objects.md).
 The key domain supports string and symbol-identity leases in one non-reused
 `KeyId` namespace with weak content/ID indices. `value/layout/` contains the
-isolated shape/dictionary foundation; production object stores still use the
-representation below.
+isolated layout foundation; production stores use the representation below.
+
+**Construction domains.** Constructors/builders receive a domain, including null prototypes.
+Realm roots own PropertyOwner; natives retain their domain in native state.
+ObjectData's staging domain field moves into Layout at the NamedStore cutover.
 
 **Per-site caches.** `bytecode/named_property_cache.rs` caches named property
 reads and writes per instruction site, keyed by receiver layout.

@@ -81,7 +81,11 @@ pub(super) fn native_iterator_concat(
     argument_values: &[Value],
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let helper = ObjectRef::with_prototype(HashMap::new(), super::iterator_helper_prototype(env));
+    let helper = ObjectRef::with_prototype(
+        HashMap::new(),
+        super::iterator_helper_prototype(env),
+        env.realm().atoms(),
+    );
     helper.define_non_enumerable(
         HELPER_KIND.to_owned(),
         Value::String(HelperKind::Concat.tag().to_owned().into()),
@@ -201,7 +205,11 @@ pub(super) fn native_lazy_helper(
         }
     };
 
-    let helper = ObjectRef::with_prototype(HashMap::new(), super::iterator_helper_prototype(env));
+    let helper = ObjectRef::with_prototype(
+        HashMap::new(),
+        super::iterator_helper_prototype(env),
+        env.realm().atoms(),
+    );
     helper.define_non_enumerable(
         HELPER_KIND.to_owned(),
         Value::String(kind.tag().to_owned().into()),
@@ -288,8 +296,13 @@ fn set_done(helper: &ObjectRef) {
     helper.define_non_enumerable(HELPER_DONE.to_owned(), Value::Boolean(true));
 }
 
-fn iterator_result(value: Value, done: bool, env: &CallEnv) -> Value {
-    let object = ObjectRef::with_prototype(HashMap::new(), object_prototype(env));
+fn iterator_result(
+    value: Value,
+    done: bool,
+    env: &CallEnv,
+    domain: &crate::property::atom::AtomDomain,
+) -> Value {
+    let object = ObjectRef::with_prototype(HashMap::new(), object_prototype(env), domain);
     object.define_property("value".to_owned(), Property::enumerable(value));
     object.define_property(
         "done".to_owned(),
@@ -310,7 +323,12 @@ pub(super) fn native_helper_next(
         return Err(not_a_helper());
     };
     if helper_done(&helper) {
-        return Ok(iterator_result(Value::Undefined, true, env));
+        return Ok(iterator_result(
+            Value::Undefined,
+            true,
+            env,
+            env.realm().atoms(),
+        ));
     }
     if helper_executing(&helper) {
         return Err(RuntimeError {
@@ -336,10 +354,15 @@ pub(super) fn native_helper_next(
     set_executing(&helper, false);
 
     match advanced {
-        Ok(Some(value)) => Ok(iterator_result(value, false, env)),
+        Ok(Some(value)) => Ok(iterator_result(value, false, env, env.realm().atoms())),
         Ok(None) => {
             set_done(&helper);
-            Ok(iterator_result(Value::Undefined, true, env))
+            Ok(iterator_result(
+                Value::Undefined,
+                true,
+                env,
+                env.realm().atoms(),
+            ))
         }
         Err(error) => {
             set_done(&helper);
@@ -682,7 +705,7 @@ fn get_iterator_flattenable(value: Value, env: &mut CallEnv) -> Result<Value, Ru
         });
     };
     let next = property_value(iterator.clone(), "next", env)?;
-    let record = ObjectRef::new(HashMap::new());
+    let record = ObjectRef::new(HashMap::new(), env.realm().atoms());
     record.define_non_enumerable(HELPER_UNDERLYING.to_owned(), iterator);
     record.define_non_enumerable(HELPER_NEXT.to_owned(), next);
     Ok(Value::Object(record))
@@ -720,7 +743,12 @@ pub(super) fn native_helper_return(
         }
         closed?;
     }
-    Ok(iterator_result(Value::Undefined, true, env))
+    Ok(iterator_result(
+        Value::Undefined,
+        true,
+        env,
+        env.realm().atoms(),
+    ))
 }
 
 fn close_helper_iterators(

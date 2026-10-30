@@ -13,7 +13,7 @@ use super::operand_stack::OperandStack;
 use super::vm::{ColdFrame, FrameState, Slot, Vm};
 use crate::{
     GLOBAL_THIS_BINDING, ObjectRef, RuntimeError, Value,
-    function::{CallEnv, DynamicBindings, Realm, Upvalue, new_realm},
+    function::{CallEnv, DynamicBindings, Realm, Upvalue},
     initialize_builtins,
 };
 use std::collections::{HashMap, HashSet};
@@ -22,7 +22,8 @@ use std::rc::Rc;
 impl<'a> Vm<'a> {
     pub(super) fn new(bytecode: &'a Bytecode) -> Result<Self, RuntimeError> {
         let mut globals = HashMap::new();
-        let global_this = Value::Object(ObjectRef::new(HashMap::new()));
+        let atoms = crate::property::atom::AtomDomain::new();
+        let global_this = Value::Object(ObjectRef::new(HashMap::new(), &atoms));
         globals.insert("this".to_owned(), global_this.clone());
         globals.insert(GLOBAL_THIS_BINDING.to_owned(), global_this.clone());
         globals.insert("undefined".to_owned(), Value::Undefined);
@@ -30,7 +31,7 @@ impl<'a> Vm<'a> {
         // runs against a `CallEnv` over it and writes intrinsics straight to the
         // shared cell (`insert_realm`), so no install-vs-runtime signature split
         // is needed.
-        let realm: Realm = new_realm(globals);
+        let realm: Realm = crate::function::new_realm_sharing_atoms(globals, atoms);
         let mut env = CallEnv::new(Rc::clone(&realm));
         initialize_builtins(&mut env, &global_this);
         Self::initialize_script_global_bindings(bytecode, &realm)?;
@@ -521,6 +522,8 @@ mod tests {
             sloppy_global_fallback: false,
         }
     }
+
+    use crate::function::new_realm;
 
     fn empty_env() -> CallEnv {
         CallEnv::new(new_realm(HashMap::new()))

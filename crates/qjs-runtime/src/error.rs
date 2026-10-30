@@ -18,8 +18,15 @@ const NATIVE_ERRORS: &[(&str, NativeFunction)] = &[
 ];
 
 pub(crate) fn install_error(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
-    let error_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
-    let error_function = Function::new_native(Some("Error"), 1, NativeFunction::Error, true);
+    let error_prototype =
+        ObjectRef::with_prototype(HashMap::new(), Some(object_prototype), env.realm().atoms());
+    let error_function = Function::new_native(
+        Some("Error"),
+        1,
+        NativeFunction::Error,
+        true,
+        env.realm().atoms(),
+    );
     error_prototype.define_non_enumerable(
         "constructor".to_owned(),
         Value::Function(error_function.clone()),
@@ -37,10 +44,16 @@ pub(crate) fn install_error(env: &mut CallEnv, global_this: &Value, object_proto
             0,
             NativeFunction::ErrorPrototypeToString,
             false,
+            env.realm().atoms(),
         )),
     );
-    let is_error_function =
-        Function::new_native(Some("isError"), 1, NativeFunction::ErrorIsError, false);
+    let is_error_function = Function::new_native(
+        Some("isError"),
+        1,
+        NativeFunction::ErrorIsError,
+        false,
+        env.realm().atoms(),
+    );
     define_function_name(&is_error_function, "isError");
     error_function.properties.borrow_mut().insert(
         "isError".to_owned(),
@@ -107,7 +120,11 @@ pub(crate) fn native_error(
 ) -> Result<Value, RuntimeError> {
     let object = match (is_construct, this_value) {
         (true, Value::Object(object)) => object,
-        _ => ObjectRef::with_prototype(HashMap::new(), function_prototype(function)),
+        _ => ObjectRef::with_prototype(
+            HashMap::new(),
+            function_prototype(function),
+            env.realm().atoms(),
+        ),
     };
     ensure_default_error_prototype(&object, function);
     define_error_data(&object);
@@ -137,7 +154,11 @@ pub(crate) fn native_aggregate_error(
 ) -> Result<Value, RuntimeError> {
     let object = match (is_construct, this_value) {
         (true, Value::Object(object)) => object,
-        _ => ObjectRef::with_prototype(HashMap::new(), function_prototype(function)),
+        _ => ObjectRef::with_prototype(
+            HashMap::new(),
+            function_prototype(function),
+            env.realm().atoms(),
+        ),
     };
     ensure_default_error_prototype(&object, function);
     define_error_data(&object);
@@ -172,7 +193,11 @@ pub(crate) fn native_suppressed_error(
 ) -> Result<Value, RuntimeError> {
     let object = match (is_construct, this_value) {
         (true, Value::Object(object)) => object,
-        _ => ObjectRef::with_prototype(HashMap::new(), function_prototype(function)),
+        _ => ObjectRef::with_prototype(
+            HashMap::new(),
+            function_prototype(function),
+            env.realm().atoms(),
+        ),
     };
     ensure_default_error_prototype(&object, function);
     define_error_data(&object);
@@ -430,13 +455,17 @@ fn install_native_error(
     name: &str,
     native: NativeFunction,
 ) {
-    let prototype = ObjectRef::with_prototype(HashMap::new(), Some(error_prototype.clone()));
+    let prototype = ObjectRef::with_prototype(
+        HashMap::new(),
+        Some(error_prototype.clone()),
+        env.realm().atoms(),
+    );
     let length = match name {
         "AggregateError" => 2,
         "SuppressedError" => 3,
         _ => 1,
     };
-    let function = Function::new_native(Some(name), length, native, true);
+    let function = Function::new_native(Some(name), length, native, true, env.realm().atoms());
     // Native error constructors have the creating realm's `%Error%` as their
     // real [[Prototype]]; global rebinding must not replace that fixed identity.
     function

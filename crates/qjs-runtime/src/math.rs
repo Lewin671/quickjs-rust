@@ -11,7 +11,8 @@ use crate::{
 };
 
 pub(super) fn install_math(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
-    let math_object = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
+    let math_object =
+        ObjectRef::with_prototype(HashMap::new(), Some(object_prototype), env.realm().atoms());
     math_object.set_to_string_tag("Math");
     symbol::define_well_known_to_string_tag(env, &math_object, "Math");
     define_math_constant(&math_object, "E", std::f64::consts::E);
@@ -81,7 +82,13 @@ fn define_math_constant(object: &ObjectRef, key: &str, value: f64) {
 fn define_math_function(object: &ObjectRef, key: &str, length: usize, native: NativeFunction) {
     object.define_non_enumerable(
         key.to_owned(),
-        Value::Function(Function::new_native(Some(key), length, native, false)),
+        Value::Function(Function::new_native(
+            Some(key),
+            length,
+            native,
+            false,
+            object.domain(),
+        )),
     );
 }
 

@@ -35,7 +35,8 @@ fn array_index_keys_accept_only_canonical_decimal_spellings() {
 
 #[test]
 fn cloned_object_is_a_pointer_sized_shared_handle() {
-    let object = ObjectRef::new(HashMap::new());
+    let domain = crate::property::atom::AtomDomain::new();
+    let object = ObjectRef::new(HashMap::new(), &domain);
     let cloned = object.clone();
 
     assert!(Rc::ptr_eq(&object.0, &cloned.0));
@@ -48,10 +49,14 @@ fn cloned_object_is_a_pointer_sized_shared_handle() {
 
 #[test]
 fn ordinary_object_keeps_cold_state_unallocated() {
-    let object = ObjectRef::new(HashMap::from([
-        ("a".to_owned(), Value::Number(1.0)),
-        ("b".to_owned(), Value::Number(2.0)),
-    ]));
+    let domain = crate::property::atom::AtomDomain::new();
+    let object = ObjectRef::new(
+        HashMap::from([
+            ("a".to_owned(), Value::Number(1.0)),
+            ("b".to_owned(), Value::Number(2.0)),
+        ]),
+        &domain,
+    );
 
     assert_eq!(object.get("a"), Some(Value::Number(1.0)));
     assert!(object.own_property_symbols().is_empty());
@@ -60,12 +65,13 @@ fn ordinary_object_keeps_cold_state_unallocated() {
     // Boxing the cold `Dynamic` property-storage payload (HashMap + Vec)
     // keeps this at 104 bytes instead of the 136 it cost when that
     // payload sized the whole `PropertyStorage` enum for every object.
-    assert!(mem::size_of::<ObjectData>() <= 112);
+    assert!(mem::size_of::<ObjectData>() <= 120); // S1 constructor migration staging; domain moves into Layout at cutover.
 }
 
 #[test]
 fn ordinary_small_object_promotes_only_after_the_compact_limit() {
-    let object = ObjectRef::new(HashMap::new());
+    let domain = crate::property::atom::AtomDomain::new();
+    let object = ObjectRef::new(HashMap::new(), &domain);
 
     for index in 0..PropertyStorage::SMALL_LIMIT {
         object.set(format!("field{index}"), Value::Number(index as f64));
@@ -96,7 +102,8 @@ fn ordinary_small_object_promotes_only_after_the_compact_limit() {
 
 #[test]
 fn ordinary_object_retains_shared_static_property_key() {
-    let object = ObjectRef::new(HashMap::new());
+    let domain = crate::property::atom::AtomDomain::new();
+    let object = ObjectRef::new(HashMap::new(), &domain);
     let key: Rc<str> = Rc::from("field");
 
     object.set_shared_key(Rc::clone(&key), Value::Number(1.0));
@@ -111,7 +118,8 @@ fn ordinary_object_retains_shared_static_property_key() {
 
 #[test]
 fn small_object_removal_preserves_property_order() {
-    let object = ObjectRef::new(HashMap::new());
+    let domain = crate::property::atom::AtomDomain::new();
+    let object = ObjectRef::new(HashMap::new(), &domain);
     object.set("first".to_owned(), Value::Number(1.0));
     object.set("second".to_owned(), Value::Number(2.0));
     object.set("third".to_owned(), Value::Number(3.0));
@@ -128,7 +136,8 @@ fn small_object_removal_preserves_property_order() {
 
 #[test]
 fn small_object_enumerates_indices_before_strings() {
-    let object = ObjectRef::new(HashMap::new());
+    let domain = crate::property::atom::AtomDomain::new();
+    let object = ObjectRef::new(HashMap::new(), &domain);
     object.set("10".to_owned(), Value::Number(10.0));
     object.set("label".to_owned(), Value::Number(0.0));
     object.set("2".to_owned(), Value::Number(2.0));
@@ -142,7 +151,11 @@ fn small_object_enumerates_indices_before_strings() {
 
 #[test]
 fn existing_own_data_write_updates_or_rejects_without_slow_path() {
-    let object = ObjectRef::new(HashMap::from([("writable".to_owned(), Value::Number(1.0))]));
+    let domain = crate::property::atom::AtomDomain::new();
+    let object = ObjectRef::new(
+        HashMap::from([("writable".to_owned(), Value::Number(1.0))]),
+        &domain,
+    );
     object.define_property(
         "readonly".to_owned(),
         Property::data(Value::Number(2.0), true, false, true),
@@ -166,9 +179,14 @@ fn existing_own_data_write_updates_or_rejects_without_slow_path() {
 
 #[test]
 fn literal_pair_keeps_inline_values_until_descriptor_mutation() {
+    let domain = crate::property::atom::AtomDomain::new();
     let shape = ObjectLiteralShape::new(vec![Rc::from("a"), Rc::from("b")]);
-    let object =
-        ObjectRef::with_literal_pair(shape, [Value::Number(1.0), Value::Number(2.0)], None);
+    let object = ObjectRef::with_literal_pair(
+        shape,
+        [Value::Number(1.0), Value::Number(2.0)],
+        None,
+        &domain,
+    );
 
     assert!(matches!(
         &*object.0.properties.borrow(),
@@ -200,7 +218,11 @@ fn literal_pair_keeps_inline_values_until_descriptor_mutation() {
 
 #[test]
 fn module_namespace_own_data_write_stays_on_slow_path() {
-    let object = ObjectRef::new(HashMap::from([("exported".to_owned(), Value::Number(1.0))]));
+    let domain = crate::property::atom::AtomDomain::new();
+    let object = ObjectRef::new(
+        HashMap::from([("exported".to_owned(), Value::Number(1.0))]),
+        &domain,
+    );
     object.mark_module_namespace_exotic();
 
     assert!(matches!(
@@ -215,9 +237,14 @@ fn module_namespace_own_data_write_stays_on_slow_path() {
 /// what invalidates it.
 #[test]
 fn literal_slot_survives_value_writes_and_misses_on_accessors() {
+    let domain = crate::property::atom::AtomDomain::new();
     let shape = ObjectLiteralShape::new(vec![Rc::from("a"), Rc::from("b")]);
-    let object =
-        ObjectRef::with_literal_pair(shape, [Value::Number(1.0), Value::Number(2.0)], None);
+    let object = ObjectRef::with_literal_pair(
+        shape,
+        [Value::Number(1.0), Value::Number(2.0)],
+        None,
+        &domain,
+    );
     let (cached_shape, slot) = object.literal_data_slot("b").expect("literal slot");
     assert_eq!(slot, 1);
     assert!(matches!(
@@ -240,7 +267,8 @@ fn literal_slot_survives_value_writes_and_misses_on_accessors() {
 
 #[test]
 fn dynamic_storage_keeps_order_values_and_slots_across_a_removal() {
-    let object = ObjectRef::with_prototype(HashMap::new(), None);
+    let domain = crate::property::atom::AtomDomain::new();
+    let object = ObjectRef::with_prototype(HashMap::new(), None, &domain);
     let count = PropertyStorage::SMALL_LIMIT + 4;
     for index in 0..count {
         object.set(format!("k{index}"), Value::Number(index as f64));
@@ -267,12 +295,13 @@ fn dynamic_storage_keeps_order_values_and_slots_across_a_removal() {
 
 #[test]
 fn all_property_storage_forms_share_surrogate_pair_key_bytes() {
+    let domain = crate::property::atom::AtomDomain::new();
     use crate::string::{push_js_str, string_from_code_unit};
     let literal = "😀";
     let mut built = string_from_code_unit(0xD83D);
     push_js_str(&mut built, &string_from_code_unit(0xDE00));
-    let small = ObjectRef::new(HashMap::new());
-    let dynamic = ObjectRef::new(HashMap::new());
+    let small = ObjectRef::new(HashMap::new(), &domain);
+    let dynamic = ObjectRef::new(HashMap::new(), &domain);
     for index in 0..13 {
         dynamic.set(format!("p{index}"), Value::Undefined);
     }
@@ -280,11 +309,13 @@ fn all_property_storage_forms_share_surrogate_pair_key_bytes() {
         ObjectLiteralShape::new(vec![Rc::from(literal)]),
         vec![Value::Number(0.0)],
         None,
+        &domain,
     );
     let pair = ObjectRef::with_literal_pair(
         ObjectLiteralShape::new(vec![Rc::from(literal), Rc::from("other")]),
         [Value::Number(0.0), Value::Undefined],
         None,
+        &domain,
     );
     assert!(matches!(
         &*small.0.properties.borrow(),

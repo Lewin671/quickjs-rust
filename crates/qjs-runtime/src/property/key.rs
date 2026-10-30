@@ -110,7 +110,8 @@ mod tests {
 
     #[test]
     fn ordinary_objects_still_require_observable_coercion() {
-        let object = ObjectRef::new(HashMap::new());
+        let domain = crate::property::atom::AtomDomain::new();
+        let object = ObjectRef::new(HashMap::new(), &domain);
         let Err(Value::Object(returned)) =
             try_to_property_key_without_coercion(Value::Object(object.clone()))
         else {

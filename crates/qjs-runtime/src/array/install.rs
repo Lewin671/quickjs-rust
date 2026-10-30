@@ -4,11 +4,18 @@ use crate::CallEnv;
 use crate::{Function, NativeFunction, ObjectRef, Property, Value, symbol};
 
 pub(crate) fn install_array(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
-    let array_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
+    let array_prototype =
+        ObjectRef::with_prototype(HashMap::new(), Some(object_prototype), env.realm().atoms());
     array_prototype.mark_array_prototype_exotic();
     env.realm()
         .initialize_array_prototype(array_prototype.clone());
-    let array_function = Function::new_native(Some("Array"), 1, NativeFunction::Array, true);
+    let array_function = Function::new_native(
+        Some("Array"),
+        1,
+        NativeFunction::Array,
+        true,
+        env.realm().atoms(),
+    );
     array_prototype.define_property(
         "length".to_owned(),
         Property::data(Value::Number(0.0), false, true, false),
@@ -280,7 +287,13 @@ fn define_array_prototype_function(
 ) {
     prototype.define_non_enumerable(
         key.to_owned(),
-        Value::Function(Function::new_native(Some(key), length, native, false)),
+        Value::Function(Function::new_native(
+            Some(key),
+            length,
+            native,
+            false,
+            prototype.domain(),
+        )),
     );
 }
 
@@ -292,6 +305,7 @@ fn define_array_function(function: &Function, key: &str, length: usize, native: 
             length,
             native,
             false,
+            function.property_domain(),
         ))),
     );
 }
@@ -301,7 +315,7 @@ fn define_array_unscopables(env: &CallEnv, prototype: &ObjectRef) {
         return;
     };
 
-    let unscopables = ObjectRef::new(HashMap::new());
+    let unscopables = ObjectRef::new(HashMap::new(), env.realm().atoms());
     for key in [
         "copyWithin",
         "entries",

@@ -168,7 +168,11 @@ impl Vm<'_> {
             let _ = constructor_function.set_internal_prototype_slot(Some(parent_slot));
         }
 
-        let prototype = ObjectRef::with_prototype_slot(HashMap::new(), prototype_parent);
+        let prototype = ObjectRef::with_prototype_slot(
+            HashMap::new(),
+            prototype_parent,
+            self.env.realm().atoms(),
+        );
         constructor_function.install_class_prototype(prototype.clone());
 
         // The constructor's home object is its prototype; static `super.x`

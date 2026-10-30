@@ -54,9 +54,16 @@ pub(crate) fn install_data_view(
     global_this: &Value,
     object_prototype: ObjectRef,
 ) {
-    let prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
+    let prototype =
+        ObjectRef::with_prototype(HashMap::new(), Some(object_prototype), env.realm().atoms());
 
-    let constructor = Function::new_native(Some("DataView"), 1, NativeFunction::DataView, true);
+    let constructor = Function::new_native(
+        Some("DataView"),
+        1,
+        NativeFunction::DataView,
+        true,
+        env.realm().atoms(),
+    );
     prototype.define_non_enumerable(
         "constructor".to_owned(),
         Value::Function(constructor.clone()),
@@ -76,6 +83,7 @@ pub(crate) fn install_data_view(
                     0,
                     native,
                     false,
+                    env.realm().atoms(),
                 ))),
                 None,
                 false,
@@ -128,7 +136,13 @@ pub(crate) fn install_data_view(
     ] {
         prototype.define_non_enumerable(
             name.to_owned(),
-            Value::Function(Function::new_native(Some(name), length, native, false)),
+            Value::Function(Function::new_native(
+                Some(name),
+                length,
+                native,
+                false,
+                env.realm().atoms(),
+            )),
         );
     }
 
@@ -220,6 +234,7 @@ pub(crate) fn native_data_view(
         _ => ObjectRef::with_prototype_slot(
             HashMap::new(),
             crate::native_construct_prototype_slot(function, env)?,
+            env.realm().atoms(),
         ),
     };
 

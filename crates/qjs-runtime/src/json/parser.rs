@@ -22,6 +22,7 @@ pub(crate) fn native_json_parse(
         let root = Value::Object(crate::ObjectRef::with_prototype(
             std::collections::HashMap::new(),
             object_prototype(env),
+            env.realm().atoms(),
         ));
         if let Value::Object(ref obj) = root {
             obj.define_property(String::new(), crate::Property::enumerable(value));
@@ -188,7 +189,8 @@ fn empty_node(value: Value) -> JsonNode {
 }
 
 fn reviver_context(node: &JsonNode, env: &CallEnv) -> Value {
-    let context = ObjectRef::with_prototype(HashMap::new(), object_prototype(env));
+    let context =
+        ObjectRef::with_prototype(HashMap::new(), object_prototype(env), env.realm().atoms());
     if let Some(source) = &node.source {
         context.define_property(
             "source".to_owned(),
@@ -417,7 +419,7 @@ impl<'a> JsonParser<'a> {
 
     fn object<const PRESERVE_METADATA: bool>(&mut self) -> Result<JsonNode, RuntimeError> {
         self.expect_byte(b'{')?;
-        let mut properties = OrderedDataPropertyBuilder::new();
+        let mut properties = OrderedDataPropertyBuilder::new(self.env.realm().atoms());
         let mut children = PRESERVE_METADATA.then(Vec::new);
         self.skip_whitespace();
         if self.consume_byte(b'}') {

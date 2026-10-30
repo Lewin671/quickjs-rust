@@ -20,6 +20,7 @@ pub(crate) fn native_promise_with_resolvers(
             ("reject".to_owned(), capability.reject),
         ]),
         object_prototype(function),
+        env.realm().atoms(),
     );
     Ok(Value::Object(result))
 }

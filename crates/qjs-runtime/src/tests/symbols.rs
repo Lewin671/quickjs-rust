@@ -4,10 +4,11 @@ use crate::{ObjectRef, Value, eval};
 
 #[test]
 fn symbol_brand_is_independent_of_string_properties() {
-    let fake = ObjectRef::new(HashMap::from([(
-        "\0SymbolData".to_owned(),
-        Value::Boolean(true),
-    )]));
+    let domain = crate::property::atom::AtomDomain::new();
+    let fake = ObjectRef::new(
+        HashMap::from([("\0SymbolData".to_owned(), Value::Boolean(true))]),
+        &domain,
+    );
     assert!(!crate::symbol::is_symbol_object(&fake));
     assert!(!crate::symbol::is_symbol_primitive(&fake));
 

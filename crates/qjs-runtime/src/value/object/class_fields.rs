@@ -64,18 +64,19 @@ mod tests {
 
     #[test]
     fn declines_without_mutation_for_storage_or_descriptor_boundaries() {
+        let domain = crate::property::atom::AtomDomain::new();
         let a: Rc<str> = "a".into();
         let b: Rc<str> = "b".into();
         let value = Value::Number(2.0);
         let fields = [(&a, &value), (&b, &value)];
-        let object = ObjectRef::new(HashMap::new());
+        let object = ObjectRef::new(HashMap::new(), &domain);
         let mut fixed = Property::enumerable(Value::Number(1.0));
         fixed.configurable = false;
         object.define_property("b".into(), fixed);
         assert!(!object.install_constant_class_fields(fields.into_iter()));
         assert!(!object.has_own_property("a"));
         assert_eq!(object.get("b"), Some(Value::Number(1.0)));
-        let large = ObjectRef::new(HashMap::new());
+        let large = ObjectRef::new(HashMap::new(), &domain);
         for i in 0..13 {
             large.set(format!("p{i}"), Value::Undefined);
         }
@@ -85,7 +86,8 @@ mod tests {
 
     #[test]
     fn duplicates_keep_slots_and_invalidate_cached_layouts() {
-        let object = ObjectRef::new(HashMap::new());
+        let domain = crate::property::atom::AtomDomain::new();
+        let object = ObjectRef::new(HashMap::new(), &domain);
         let key: Rc<str> = "0".into();
         let first = Value::Number(1.0);
         let last = Value::Number(2.0);

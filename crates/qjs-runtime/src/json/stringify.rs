@@ -31,6 +31,7 @@ pub(crate) fn native_json_stringify(
     let wrapper = ObjectRef::with_prototype(
         HashMap::from([("".to_owned(), value)]),
         crate::object_prototype(env),
+        env.realm().atoms(),
     );
     let mut state = ctx;
     let mut output = String::new();

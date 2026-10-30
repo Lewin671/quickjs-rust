@@ -42,6 +42,7 @@ pub(crate) fn native_object_get_own_property_descriptor(
     Ok(Value::Object(property_descriptor_object(
         property,
         object_prototype(env),
+        env.realm().atoms(),
     )))
 }
 
@@ -58,7 +59,7 @@ pub(crate) fn native_object_get_own_property_descriptors(
         });
     }
     let prototype = object_prototype(env);
-    let result = ObjectRef::with_prototype(HashMap::new(), prototype.clone());
+    let result = ObjectRef::with_prototype(HashMap::new(), prototype.clone(), env.realm().atoms());
     // Per spec: ownKeys = ? O.[[OwnPropertyKeys]](); then for each key in that
     // order, ? O.[[GetOwnProperty]](key). Both run a Proxy's traps. This covers
     // every own key (enumerable or not), unlike for-in enumeration.
@@ -81,7 +82,11 @@ pub(crate) fn native_object_get_own_property_descriptors(
         else {
             continue;
         };
-        let descriptor = Value::Object(property_descriptor_object(property, prototype.clone()));
+        let descriptor = Value::Object(property_descriptor_object(
+            property,
+            prototype.clone(),
+            env.realm().atoms(),
+        ));
         match key {
             PropertyKey::String(name) => {
                 result.define_property(name, Property::enumerable(descriptor));

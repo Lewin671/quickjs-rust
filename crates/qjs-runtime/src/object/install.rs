@@ -4,11 +4,17 @@ use std::collections::HashMap;
 use crate::{Function, NativeFunction, ObjectRef, Property, Value};
 
 pub(crate) fn install_object(env: &mut CallEnv, global_this: &Value) -> ObjectRef {
-    let object_prototype = ObjectRef::new(HashMap::new());
+    let object_prototype = ObjectRef::new(HashMap::new(), env.realm().atoms());
     object_prototype.mark_immutable_prototype_exotic();
     env.realm()
         .initialize_object_prototype(object_prototype.clone());
-    let object_function = Function::new_native(Some("Object"), 1, NativeFunction::Object, true);
+    let object_function = Function::new_native(
+        Some("Object"),
+        1,
+        NativeFunction::Object,
+        true,
+        env.realm().atoms(),
+    );
     object_prototype.define_non_enumerable(
         "constructor".to_owned(),
         Value::Function(object_function.clone()),
@@ -81,12 +87,14 @@ pub(crate) fn install_object(env: &mut CallEnv, global_this: &Value) -> ObjectRe
                 0,
                 NativeFunction::ObjectPrototypeGetProto,
                 false,
+                env.realm().atoms(),
             ))),
             Some(Value::Function(Function::new_native(
                 Some("set __proto__"),
                 1,
                 NativeFunction::ObjectPrototypeSetProto,
                 false,
+                env.realm().atoms(),
             ))),
             false,
             true,
@@ -210,7 +218,7 @@ fn define_object_prototype_function(
     length: usize,
     native: NativeFunction,
 ) -> Function {
-    let function = Function::new_native(Some(key), length, native, false);
+    let function = Function::new_native(Some(key), length, native, false, prototype.domain());
     prototype.define_non_enumerable(key.to_owned(), Value::Function(function.clone()));
     function
 }
@@ -223,6 +231,7 @@ fn define_object_function(function: &Function, key: &str, length: usize, native:
             length,
             native,
             false,
+            function.property_domain(),
         ))),
     );
 }

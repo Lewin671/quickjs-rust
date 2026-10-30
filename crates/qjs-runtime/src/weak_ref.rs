@@ -9,10 +9,17 @@ pub(crate) fn install_weak_ref(
     global_this: &Value,
     object_prototype: ObjectRef,
 ) {
-    let prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
+    let prototype =
+        ObjectRef::with_prototype(HashMap::new(), Some(object_prototype), env.realm().atoms());
     prototype.set_to_string_tag("WeakRef");
     symbol::define_well_known_to_string_tag(env, &prototype, "WeakRef");
-    let function = Function::new_native(Some("WeakRef"), 1, NativeFunction::WeakRef, true);
+    let function = Function::new_native(
+        Some("WeakRef"),
+        1,
+        NativeFunction::WeakRef,
+        true,
+        env.realm().atoms(),
+    );
     prototype.define_non_enumerable("constructor".to_owned(), Value::Function(function.clone()));
     prototype.define_non_enumerable(
         "deref".to_owned(),
@@ -21,6 +28,7 @@ pub(crate) fn install_weak_ref(
             0,
             NativeFunction::WeakRefPrototypeDeref,
             false,
+            env.realm().atoms(),
         )),
     );
     function.properties.borrow_mut().insert(
@@ -59,6 +67,7 @@ pub(crate) fn native_weak_ref(
     let object = ObjectRef::with_prototype_slot(
         HashMap::new(),
         crate::native_construct_prototype_slot(function, env)?,
+        env.realm().atoms(),
     );
     object.set_to_string_tag("WeakRef");
     object.define_property(WEAK_REF_TARGET.to_owned(), Property::non_enumerable(target));

@@ -143,8 +143,8 @@ fn exhaustion_fails_instead_of_wrapping() {
 #[test]
 fn symbols_share_the_namespace_but_only_alias_by_identity() {
     let domain = AtomDomain::new();
-    let first = crate::ObjectRef::new(std::collections::HashMap::new());
-    let second = crate::ObjectRef::new(std::collections::HashMap::new());
+    let first = crate::ObjectRef::new(std::collections::HashMap::new(), &domain);
+    let second = crate::ObjectRef::new(std::collections::HashMap::new(), &domain);
     let text = domain.intern("same description").unwrap();
     let a = domain.intern_symbol(&first).unwrap();
     let again = domain.intern_symbol(&first).unwrap();
@@ -167,7 +167,7 @@ fn symbols_share_the_namespace_but_only_alias_by_identity() {
 fn symbol_and_directory_churn_is_swept_with_text_indices() {
     let domain = AtomDomain::new();
     for _ in 0..1000 {
-        let symbol = crate::ObjectRef::new(std::collections::HashMap::new());
+        let symbol = crate::ObjectRef::new(std::collections::HashMap::new(), &domain);
         let lease = domain.intern_symbol(&symbol).unwrap();
         assert!(domain.lease(lease.id()).is_some());
     }
@@ -180,9 +180,19 @@ fn symbol_and_directory_churn_is_swept_with_text_indices() {
 #[test]
 fn symbols_and_strings_exhaust_the_same_counter_without_wrapping() {
     let domain = AtomDomain::starting_at(NonZeroU32::new(u32::MAX).unwrap());
-    let symbol = crate::ObjectRef::new(std::collections::HashMap::new());
+    let symbol = crate::ObjectRef::new(std::collections::HashMap::new(), &domain);
     let last = domain.intern_symbol(&symbol).unwrap();
     assert_eq!(last.id().get(), u32::MAX);
     assert_eq!(domain.intern("overflow"), Err(AtomDomainExhausted));
     assert_eq!(domain.intern_symbol(&symbol), Ok(last));
+}
+
+#[test]
+fn read_only_lookup_remains_available_after_id_exhaustion() {
+    let domain = AtomDomain::starting_at(NonZeroU32::new(u32::MAX).unwrap());
+    let last = domain.intern("last").unwrap();
+    assert_eq!(domain.intern("overflow"), Err(AtomDomainExhausted));
+    assert_eq!(domain.find("last"), Some(last));
+    assert_eq!(domain.find("absent"), None);
+    assert_eq!(domain.created_count(), 1);
 }

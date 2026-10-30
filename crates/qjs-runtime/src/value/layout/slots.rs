@@ -66,6 +66,35 @@ impl NamedStore {
         self.verify();
         Some(true)
     }
+    pub(crate) fn data_value_mut(&mut self, slot: usize) -> Option<&mut Value> {
+        let attrs = self.layout.entries.get(slot)?.attrs;
+        (!attrs.has(Attributes::ACCESSOR) && attrs.has(Attributes::WRITABLE))
+            .then(|| &mut self.values[slot])
+    }
+    pub(crate) fn get_text(&self, key: &str) -> Option<Property> {
+        self.get(&self.domain().find(key)?).expect("same domain")
+    }
+    pub(crate) fn value_text(&self, key: &str) -> Option<Value> {
+        let key = self.domain().find(key)?;
+        self.position(&key)
+            .expect("same domain")
+            .map(|slot| self.values[slot].clone())
+    }
+    pub(crate) fn descriptors(&self) -> impl Iterator<Item = Property> + '_ {
+        (0..self.len()).map(|slot| self.descriptor(slot))
+    }
+    pub(crate) fn defer_children(&mut self, pending: &mut Vec<Value>) {
+        for value in &mut self.values {
+            crate::value::teardown::defer_if_last(value, pending);
+        }
+        if let Some(slots) = &mut self.accessors {
+            for pair in slots.values_mut() {
+                for value in [&mut pair.get, &mut pair.set].into_iter().flatten() {
+                    crate::value::teardown::defer_if_last(value, pending);
+                }
+            }
+        }
+    }
     pub(crate) fn slot_key(&self, slot: usize) -> Option<&KeyLease> {
         self.layout.keys.get(slot)
     }

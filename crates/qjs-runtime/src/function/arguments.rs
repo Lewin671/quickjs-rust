@@ -16,7 +16,8 @@ pub(super) fn arguments_object(
     argument_values: &[Value],
     env: &CallEnv,
 ) -> Value {
-    let object = ObjectRef::with_prototype(HashMap::new(), object_prototype(env));
+    let object =
+        ObjectRef::with_prototype(HashMap::new(), object_prototype(env), env.realm().atoms());
     object.define_property(
         "length".to_owned(),
         Property::data(
@@ -31,7 +32,10 @@ pub(super) fn arguments_object(
             let parameter = env
                 .frame_binding_cell(parameter_name)
                 .unwrap_or_else(|| Upvalue::new(value.clone()));
-            object.define_property(index.to_string(), mapped_argument_property(parameter));
+            object.define_property(
+                index.to_string(),
+                mapped_argument_property(parameter, env.realm().atoms()),
+            );
         } else {
             object.define_property(index.to_string(), Property::enumerable(value));
         }
@@ -86,32 +90,37 @@ fn mapped_argument_parameter(function: &Function, index: usize) -> Option<&str> 
     }
 }
 
-fn mapped_argument_property(parameter: Upvalue) -> Property {
+fn mapped_argument_property(
+    parameter: Upvalue,
+    domain: &crate::property::atom::AtomDomain,
+) -> Property {
     Property::accessor(
-        Some(mapped_argument_getter(parameter.clone())),
-        Some(mapped_argument_setter(parameter)),
+        Some(mapped_argument_getter(parameter.clone(), domain)),
+        Some(mapped_argument_setter(parameter, domain)),
         true,
         true,
     )
 }
 
-fn mapped_argument_getter(parameter: Upvalue) -> Value {
+fn mapped_argument_getter(parameter: Upvalue, domain: &crate::property::atom::AtomDomain) -> Value {
     let mut getter = Function::new_native(
         Some("[[MappedArgumentGet]]"),
         0,
         NativeFunction::MappedArgumentGet,
         false,
+        domain,
     );
     getter.push_upvalue(parameter);
     Value::Function(getter)
 }
 
-fn mapped_argument_setter(parameter: Upvalue) -> Value {
+fn mapped_argument_setter(parameter: Upvalue, domain: &crate::property::atom::AtomDomain) -> Value {
     let mut setter = Function::new_native(
         Some("[[MappedArgumentSet]]"),
         1,
         NativeFunction::MappedArgumentSet,
         false,
+        domain,
     );
     setter.push_upvalue(parameter);
     Value::Function(setter)
@@ -128,6 +137,7 @@ fn define_restricted_callee(object: &ObjectRef, function: &Function, env: &CallE
                     0,
                     NativeFunction::ThrowTypeError,
                     false,
+                    env.realm().atoms(),
                 ))
             })
     });
@@ -163,12 +173,14 @@ fn cross_realm_throw_type_error(function: &Function) -> Option<Value> {
         0,
         NativeFunction::RealmThrowTypeError,
         false,
+        function.property_domain(),
     ));
     let throw_type_error = Function::new_bound(
         target,
         Value::Undefined,
         vec![Value::Object(prototype.clone())],
         0,
+        function.property_domain(),
     );
     if let Some(property) = function.own_property(CROSS_REALM_FUNCTION_PROTOTYPE) {
         if let Some(function_prototype) = cross_realm_function_prototype(&property.value) {
@@ -216,6 +228,7 @@ fn define_arguments_iterator(object: &ObjectRef, function: &Function, env: &Call
                 0,
                 NativeFunction::ArrayPrototypeValues,
                 false,
+                env.realm().atoms(),
             ))
         });
     object.define_symbol_property(iterator, Property::non_enumerable(values));

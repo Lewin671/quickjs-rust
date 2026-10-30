@@ -11,7 +11,8 @@ pub(crate) fn install_finalization_registry(
     global_this: &Value,
     object_prototype: ObjectRef,
 ) {
-    let prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
+    let prototype =
+        ObjectRef::with_prototype(HashMap::new(), Some(object_prototype), env.realm().atoms());
     prototype.set_to_string_tag("FinalizationRegistry");
     symbol::define_well_known_to_string_tag(env, &prototype, "FinalizationRegistry");
     let function = Function::new_native(
@@ -19,6 +20,7 @@ pub(crate) fn install_finalization_registry(
         1,
         NativeFunction::FinalizationRegistry,
         true,
+        env.realm().atoms(),
     );
     prototype.define_non_enumerable("constructor".to_owned(), Value::Function(function.clone()));
     define_finalization_registry_prototype_function(
@@ -67,6 +69,7 @@ pub(crate) fn native_finalization_registry(
     let object = ObjectRef::with_prototype_slot(
         HashMap::new(),
         crate::native_construct_prototype_slot(function, env)?,
+        env.realm().atoms(),
     );
     object.set_to_string_tag("FinalizationRegistry");
     object.define_property(
@@ -231,6 +234,12 @@ fn define_finalization_registry_prototype_function(
 ) {
     prototype.define_non_enumerable(
         key.to_owned(),
-        Value::Function(Function::new_native(Some(key), length, native, false)),
+        Value::Function(Function::new_native(
+            Some(key),
+            length,
+            native,
+            false,
+            prototype.domain(),
+        )),
     );
 }

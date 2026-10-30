@@ -15,6 +15,7 @@ pub(crate) fn install_regexp_prototype_split(env: &CallEnv, prototype: &ObjectRe
                 2,
                 NativeFunction::RegExpPrototypeSplit,
                 false,
+                env.realm().atoms(),
             ))),
         );
     }

@@ -25,7 +25,7 @@ pub(crate) fn native_json_raw_json(
         _ => {}
     }
 
-    let object = ObjectRef::with_prototype(HashMap::new(), None);
+    let object = ObjectRef::with_prototype(HashMap::new(), None, env.realm().atoms());
     object.set(RAW_JSON_PROPERTY.to_owned(), Value::String(text.into()));
     object.mark_raw_json();
     object.freeze();

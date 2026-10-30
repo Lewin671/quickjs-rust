@@ -23,7 +23,7 @@ pub(crate) fn native_promise_all_settled(
     let iterable = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let handler = AllSettledHandler {
         values: ArrayRef::new(Vec::new()),
-        remaining: perform::new_remaining(1),
+        remaining: perform::new_remaining(1, env.realm().atoms()),
     };
     perform::run_combinator(this_value, iterable, "Promise.allSettled", handler, env)
 }
@@ -46,7 +46,7 @@ impl ElementHandler for AllSettledHandler {
         // A single alreadyCalled record is shared by the resolve and reject
         // element functions for this index, so only the first observed
         // settlement is recorded.
-        let already_called = ObjectRef::new(HashMap::new());
+        let already_called = ObjectRef::new(HashMap::new(), _env.realm().atoms());
         let on_fulfilled = element_function(
             NativeFunction::PromiseAllSettledResolveElement,
             index,
@@ -107,7 +107,7 @@ fn element_function(
     already_called: &ObjectRef,
     capability: &PromiseCapability,
 ) -> Function {
-    let mut function = Function::new_native(None, 1, native, false);
+    let mut function = Function::new_native(None, 1, native, false, remaining.domain());
     function.insert_native_context(PROMISE_ALL_INDEX.to_owned(), Value::Number(index as f64));
     function.insert_native_context(PROMISE_ALL_VALUES.to_owned(), Value::Array(values.clone()));
     function.insert_native_context(
@@ -185,7 +185,11 @@ fn settle_element(
 /// the spec property order, `%Object.prototype%`, and default data attributes
 /// (writable, enumerable, configurable).
 fn settled_result_object(state: &str, value: Value, env: &CallEnv) -> Value {
-    let object = ObjectRef::with_prototype(HashMap::new(), crate::object_prototype(env));
+    let object = ObjectRef::with_prototype(
+        HashMap::new(),
+        crate::object_prototype(env),
+        env.realm().atoms(),
+    );
     object.define_property(
         "status".to_owned(),
         Property::data(Value::String(state.to_owned().into()), true, true, true),

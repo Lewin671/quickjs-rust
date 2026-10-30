@@ -235,6 +235,30 @@ impl AtomDomain {
         Ok(KeyLease(entry))
     }
 
+    /// Looks up a live lease without allocating a new ID. Read-only property
+    /// probes must remain possible after namespace exhaustion.
+    pub(crate) fn find(&self, text: &str) -> Option<KeyLease> {
+        let canonical = canonical_property_text(text);
+        self.0
+            .table
+            .borrow()
+            .entries
+            .get(canonical.as_ref())
+            .and_then(Weak::upgrade)
+            .map(KeyLease)
+    }
+
+    #[allow(dead_code)] // Used by the impending ordinary-symbol storage cutover.
+    pub(crate) fn find_symbol(&self, symbol: &ObjectRef) -> Option<KeyLease> {
+        self.0
+            .table
+            .borrow()
+            .symbols
+            .get(&symbol.address())
+            .and_then(Weak::upgrade)
+            .map(KeyLease)
+    }
+
     /// Symbols are interned by identity, never by description. A live lease
     /// pins its symbol, so its address cannot be reused while indexed.
     #[allow(dead_code)] // S1 foundation; ordinary symbol cutover follows.

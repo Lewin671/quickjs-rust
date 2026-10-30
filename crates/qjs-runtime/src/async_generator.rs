@@ -83,8 +83,11 @@ pub(crate) fn install_async_generator(
     _global_this: &Value,
     object_prototype: ObjectRef,
 ) {
-    let async_iterator_prototype =
-        ObjectRef::with_prototype(HashMap::new(), Some(object_prototype.clone()));
+    let async_iterator_prototype = ObjectRef::with_prototype(
+        HashMap::new(),
+        Some(object_prototype.clone()),
+        env.realm().atoms(),
+    );
     if let Some(async_iterator) = symbol::async_iterator_symbol(env) {
         async_iterator_prototype.define_symbol_property(
             async_iterator,
@@ -93,6 +96,7 @@ pub(crate) fn install_async_generator(
                 0,
                 NativeFunction::AsyncGeneratorPrototypeAsyncIterator,
                 false,
+                env.realm().atoms(),
             ))),
         );
     }
@@ -104,12 +108,16 @@ pub(crate) fn install_async_generator(
                 0,
                 NativeFunction::AsyncIteratorPrototypeAsyncDispose,
                 false,
+                env.realm().atoms(),
             ))),
         );
     }
 
-    let async_generator_prototype =
-        ObjectRef::with_prototype(HashMap::new(), Some(async_iterator_prototype.clone()));
+    let async_generator_prototype = ObjectRef::with_prototype(
+        HashMap::new(),
+        Some(async_iterator_prototype.clone()),
+        env.realm().atoms(),
+    );
     for (name, native) in [
         ("next", NativeFunction::AsyncGeneratorPrototypeNext),
         ("return", NativeFunction::AsyncGeneratorPrototypeReturn),
@@ -117,7 +125,13 @@ pub(crate) fn install_async_generator(
     ] {
         async_generator_prototype.define_non_enumerable(
             name.to_owned(),
-            Value::Function(Function::new_native(Some(name), 1, native, false)),
+            Value::Function(Function::new_native(
+                Some(name),
+                1,
+                native,
+                false,
+                env.realm().atoms(),
+            )),
         );
     }
     if let Some(async_iterator) = symbol::async_iterator_symbol(env) {
@@ -128,6 +142,7 @@ pub(crate) fn install_async_generator(
                 0,
                 NativeFunction::AsyncGeneratorPrototypeAsyncIterator,
                 false,
+                env.realm().atoms(),
             ))),
         );
     }
@@ -137,12 +152,14 @@ pub(crate) fn install_async_generator(
     let async_generator_function_prototype = ObjectRef::with_prototype_slot(
         HashMap::new(),
         function_intrinsic_prototype_slot(env).or(Some(crate::Prototype::Object(object_prototype))),
+        env.realm().atoms(),
     );
     let async_generator_function = Function::new_native(
         Some("AsyncGeneratorFunction"),
         1,
         NativeFunction::AsyncGeneratorFunction,
         true,
+        env.realm().atoms(),
     );
     let _ = async_generator_function
         .set_internal_prototype_slot(function_constructor_as_prototype_slot(env));
@@ -232,7 +249,7 @@ pub(crate) fn make_async_generator_object(
 ) -> Result<Value, RuntimeError> {
     let state = crate::bytecode::start_suspended_at_body(start, env)?;
     let prototype = async_generator_object_prototype(function, env);
-    let generator = ObjectRef::with_prototype(HashMap::new(), prototype);
+    let generator = ObjectRef::with_prototype(HashMap::new(), prototype, env.realm().atoms());
     *generator.generator_state().borrow_mut() = Some(state);
     *generator.async_generator_state().borrow_mut() = Some(AsyncGeneratorInternal {
         queue: Vec::new(),
@@ -484,7 +501,7 @@ fn dequeue_front(generator: &ObjectRef) -> Option<AsyncGeneratorRequest> {
 
 /// Settles a capability with an iterator result `{ value, done }`.
 fn settle_resolve(capability: &ObjectRef, value: Value, done: bool, env: &mut CallEnv) {
-    let result = iterator_result(value, done, env);
+    let result = iterator_result(value, done, env, env.realm().atoms());
     promise::resolve_promise_capability(capability, result, env);
 }
 
@@ -532,7 +549,7 @@ fn schedule_return_await(generator: &ObjectRef, value: Value, env: &mut CallEnv)
 
 /// Builds a reaction native carrying the async generator object.
 fn reaction(native: NativeFunction, generator: &ObjectRef) -> Value {
-    let mut function = Function::new_native(None, 1, native, false);
+    let mut function = Function::new_native(None, 1, native, false, generator.domain());
     function.insert_native_context(ASYNC_GEN.to_owned(), Value::Object(generator.clone()));
     Value::Function(function)
 }
@@ -684,7 +701,11 @@ pub(crate) fn wire_async_generator_function_intrinsics(function: &Function, env:
         let _ = function.set_internal_prototype_slot(Some(crate::Prototype::Object(prototype)));
     }
     if let Some(async_generator_prototype) = async_generator_prototype(env) {
-        let prototype = ObjectRef::with_prototype(HashMap::new(), Some(async_generator_prototype));
+        let prototype = ObjectRef::with_prototype(
+            HashMap::new(),
+            Some(async_generator_prototype),
+            env.realm().atoms(),
+        );
         function.define_property(
             "prototype".to_owned(),
             Property::data(Value::Object(prototype), false, true, false),
@@ -692,8 +713,13 @@ pub(crate) fn wire_async_generator_function_intrinsics(function: &Function, env:
     }
 }
 
-fn iterator_result(value: Value, done: bool, env: &CallEnv) -> Value {
-    let object = ObjectRef::with_prototype(HashMap::new(), object_prototype(env));
+fn iterator_result(
+    value: Value,
+    done: bool,
+    env: &CallEnv,
+    domain: &crate::property::atom::AtomDomain,
+) -> Value {
+    let object = ObjectRef::with_prototype(HashMap::new(), object_prototype(env), domain);
     object.define_property("value".to_owned(), Property::enumerable(value));
     object.define_property(
         "done".to_owned(),
@@ -766,13 +792,14 @@ pub(crate) fn create_async_from_sync_iterator(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let next = property_value(sync_iterator.clone(), "next", env)?;
-    let wrapper = ObjectRef::with_prototype(HashMap::new(), object_prototype(env));
+    let wrapper =
+        ObjectRef::with_prototype(HashMap::new(), object_prototype(env), env.realm().atoms());
     for (name, native) in [
         ("next", NativeFunction::AsyncFromSyncIteratorNext),
         ("return", NativeFunction::AsyncFromSyncIteratorReturn),
         ("throw", NativeFunction::AsyncFromSyncIteratorThrow),
     ] {
-        let mut method = Function::new_native(Some(name), 1, native, false);
+        let mut method = Function::new_native(Some(name), 1, native, false, env.realm().atoms());
         method.insert_native_context(SYNC_ITERATOR.to_owned(), sync_iterator.clone());
         if matches!(native, NativeFunction::AsyncFromSyncIteratorNext) {
             method.insert_native_context(SYNC_ITERATOR_NEXT.to_owned(), next.clone());
@@ -869,7 +896,7 @@ fn async_from_sync_method(
         && matches!(method, Value::Undefined | Value::Null)
     {
         // No `return`: resolve with `{ value: argument, done: true }`.
-        let result = iterator_result(argument, true, env);
+        let result = iterator_result(argument, true, env, env.realm().atoms());
         promise::resolve_promise_capability(&capability, result, env);
         return Value::Object(capability);
     }
@@ -994,7 +1021,7 @@ fn value_await_reaction(
     done: bool,
     close_sync: Option<&Value>,
 ) -> Value {
-    let mut function = Function::new_native(None, 1, native, false);
+    let mut function = Function::new_native(None, 1, native, false, capability.domain());
     function.insert_native_context(WRAP_PROMISE.to_owned(), Value::Object(capability.clone()));
     function.insert_native_context(WRAP_DONE.to_owned(), Value::Boolean(done));
     if let Some(sync_iterator) = close_sync {
@@ -1030,7 +1057,7 @@ fn async_from_sync_value_fulfilled(function: &Function, value: Value, env: &mut 
     };
     let capability = capability.clone();
     let done = *done;
-    let result = iterator_result(value, done, env);
+    let result = iterator_result(value, done, env, env.realm().atoms());
     promise::resolve_promise_capability(&capability, result, env);
 }
 
