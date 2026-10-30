@@ -12,7 +12,7 @@ pub(super) fn boolean(
         info.callee,
         info.this_value.clone(),
         argument_values,
-        info.new_target.is_some(),
+        info.is_construct,
     )
 }
 
@@ -221,7 +221,7 @@ pub(super) fn big_int(
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
-    bigint::native_bigint(argument_values, info.new_target.is_some(), env)
+    bigint::native_bigint(argument_values, info.is_construct, env)
 }
 
 pub(super) fn big_int_as_int_n(
@@ -285,7 +285,7 @@ pub(super) fn proxy(
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
-    crate::proxy::native_proxy(argument_values, info.new_target.is_some())
+    crate::proxy::native_proxy(argument_values, info.is_construct)
 }
 
 pub(super) fn proxy_revocable(
@@ -325,7 +325,7 @@ pub(super) fn symbol(
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
-    symbol::native_symbol(info.callee, argument_values, info.new_target.is_some(), env)
+    symbol::native_symbol(info.callee, argument_values, info.is_construct, env)
 }
 
 pub(super) fn symbol_for(
@@ -385,7 +385,7 @@ pub(super) fn function(
         info.callee,
         info.this_value.clone(),
         argument_values,
-        info.new_target.is_some(),
+        info.is_construct,
         env,
     )
 }

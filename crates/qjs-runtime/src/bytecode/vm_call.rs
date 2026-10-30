@@ -64,9 +64,6 @@ impl Vm<'_> {
     }
 
     pub(super) fn call(&mut self, argc: usize) -> Result<(), RuntimeError> {
-        if self.stack_native_callee(argc) {
-            return self.call_native_stack(argc, false, false, false);
-        }
         let direct_leaf = argc <= 1
             && self
                 .stack
@@ -90,23 +87,10 @@ impl Vm<'_> {
         if fixed_multi_argument_direct_leaf {
             return self.call_fixed_multi_argument_direct_leaf(argc);
         }
-        let arguments = self.pop_arguments(argc)?;
-        let callee = self.pop()?;
-        self.call_callee(callee, Value::Undefined, arguments)
+        self.call_stack_arguments(argc, false, false, false)
     }
 
-    pub(super) fn stack_native_callee(&self, argc: usize) -> bool {
-        self.stack
-            .len()
-            .checked_sub(argc + 1)
-            .and_then(|index| self.stack.get(index))
-            .is_some_and(|callee| {
-                matches!(callee, Value::Function(function)
-                if function.native_entry.is_some() && function.bound.is_none())
-            })
-    }
-
-    fn call_native_stack(
+    fn call_stack_arguments(
         &mut self,
         argc: usize,
         resolved: bool,
@@ -121,9 +105,9 @@ impl Vm<'_> {
             .ok_or_else(stack_underflow)?;
         let mut block = self.stack.take();
         let callee_index = base + usize::from(resolved);
-        let callee = block[callee_index].clone();
+        let callee = std::mem::replace(&mut block[callee_index], Value::Undefined);
         let this_value = if resolved {
-            block[base].clone()
+            std::mem::replace(&mut block[base], Value::Undefined)
         } else {
             Value::Undefined
         };
@@ -168,12 +152,7 @@ impl Vm<'_> {
         argc: usize,
         is_strict: bool,
     ) -> Result<(), RuntimeError> {
-        if self.stack_native_callee(argc) {
-            return self.call_native_stack(argc, false, true, is_strict);
-        }
-        let arguments = self.pop_arguments(argc)?;
-        let callee = self.pop()?;
-        self.call_callee_with_direct_eval(callee, Value::Undefined, arguments, is_strict)
+        self.call_stack_arguments(argc, false, true, is_strict)
     }
 
     /// Rebuilds only the caller bindings a proven reusable direct-eval
@@ -540,9 +519,6 @@ impl Vm<'_> {
     /// Calls a pre-resolved callee whose receiver and callee are already on the
     /// stack as `[receiver, callee, args...]`.
     pub(super) fn call_resolved(&mut self, argc: usize) -> Result<(), RuntimeError> {
-        if self.stack_native_callee(argc) {
-            return self.call_native_stack(argc, true, false, false);
-        }
         let direct_leaf = argc <= 1
             && self
                 .stack
@@ -567,10 +543,7 @@ impl Vm<'_> {
         if fixed_multi_argument_direct_leaf {
             return self.call_resolved_fixed_multi_argument_direct_leaf(argc);
         }
-        let arguments = self.pop_arguments(argc)?;
-        let callee = self.pop()?;
-        let this_value = self.pop()?;
-        self.call_callee(callee, this_value, arguments)
+        self.call_stack_arguments(argc, true, false, false)
     }
 
     /// Executes a compiler-marked unary-Math call without materializing the

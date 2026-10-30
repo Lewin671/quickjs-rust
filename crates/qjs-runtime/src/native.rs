@@ -41,37 +41,32 @@ pub(crate) type NativeEntry =
 
 /// Immutable call metadata. CallEnv supplies the active caller context;
 /// callee retains captures and cross-realm intrinsic metadata.
-/// Only [[Construct]] supplies
-/// new.target, even when an ordinary call happens inside a constructor.
+/// Call versus construct is recorded without looking up new.target. Semantic
+/// constructor helpers read its actual value from CallEnv only when needed.
 #[derive(Clone, Copy)]
 pub(crate) struct CallInfo<'a> {
     pub(crate) callee: &'a Function,
     pub(crate) this_value: &'a Value,
-    pub(crate) new_target: Option<&'a Value>,
+    pub(crate) is_construct: bool,
 }
 
 pub(crate) fn bind(native: NativeFunction) -> NativeEntry {
     entry::bind(native)
 }
 
+#[inline(always)]
 pub(crate) fn call_native_function(
+    entry: NativeEntry,
     function: &Function,
-    this_value: Value,
+    this_value: &Value,
     argument_values: &[Value],
     is_construct: bool,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let new_target = is_construct.then(|| {
-        env.get(crate::NEW_TARGET_BINDING)
-            .unwrap_or_else(|| Value::Function(function.clone()))
-    });
     let info = CallInfo {
         callee: function,
-        this_value: &this_value,
-        new_target: new_target.as_ref(),
+        this_value,
+        is_construct,
     };
-    let entry = function
-        .native_entry
-        .expect("native installation binds an entry");
     entry(env, info, argument_values)
 }

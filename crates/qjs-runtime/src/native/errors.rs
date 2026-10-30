@@ -12,7 +12,7 @@ pub(super) fn error(
         info.callee,
         info.this_value.clone(),
         argument_values,
-        info.new_target.is_some(),
+        info.is_construct,
         env,
     )
 }
@@ -26,7 +26,7 @@ pub(super) fn aggregate_error(
         info.callee,
         info.this_value.clone(),
         argument_values,
-        info.new_target.is_some(),
+        info.is_construct,
         env,
     )
 }
@@ -40,7 +40,7 @@ pub(super) fn suppressed_error(
         info.callee,
         info.this_value.clone(),
         argument_values,
-        info.new_target.is_some(),
+        info.is_construct,
         env,
     )
 }
@@ -70,7 +70,7 @@ pub(super) fn eval_error(
         info.callee,
         info.this_value.clone(),
         argument_values,
-        info.new_target.is_some(),
+        info.is_construct,
         env,
     )
 }
@@ -84,7 +84,7 @@ pub(super) fn range_error(
         info.callee,
         info.this_value.clone(),
         argument_values,
-        info.new_target.is_some(),
+        info.is_construct,
         env,
     )
 }
@@ -98,7 +98,7 @@ pub(super) fn reference_error(
         info.callee,
         info.this_value.clone(),
         argument_values,
-        info.new_target.is_some(),
+        info.is_construct,
         env,
     )
 }
@@ -112,7 +112,7 @@ pub(super) fn syntax_error(
         info.callee,
         info.this_value.clone(),
         argument_values,
-        info.new_target.is_some(),
+        info.is_construct,
         env,
     )
 }
@@ -126,7 +126,7 @@ pub(super) fn type_error(
         info.callee,
         info.this_value.clone(),
         argument_values,
-        info.new_target.is_some(),
+        info.is_construct,
         env,
     )
 }
@@ -140,7 +140,7 @@ pub(super) fn uri_error(
         info.callee,
         info.this_value.clone(),
         argument_values,
-        info.new_target.is_some(),
+        info.is_construct,
         env,
     )
 }

@@ -8,7 +8,7 @@ pub(super) fn weak_map(
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
-    weak_map::native_weak_map(info.callee, argument_values, info.new_target.is_some(), env)
+    weak_map::native_weak_map(info.callee, argument_values, info.is_construct, env)
 }
 
 pub(super) fn weak_map_prototype_delete(

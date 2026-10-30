@@ -62,6 +62,10 @@ authority at that landing. `CallInfo` and borrowed arguments are already final i
 shape; S3b mechanically changes that parameter to Context and ports capabilities.
 This small explicit signature migration costs less than forcing the full builtin
 Context port into S3a. It is not a Context adapter or a second env authority.
+Lead review correction: CallInfo holds borrowed callee/receiver plus construct
+mode; actual new.target/realm are lazy service queries. Generic VM argument-owner
+borrowing also covers JS fallback calls to avoid a new native-kind admission load.
+S3a adds no depth/stack limit; runtime-wide resource policy is S3d-owned.
 Borrow immutable argument slices from an owned/detached operand/register block;
 callbacks cannot recycle it. Test retained args, callbacks, throw and cross-realm
 construct/new.target. Probe removal is measurable even if wall payoff fails.

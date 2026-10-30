@@ -8,7 +8,7 @@ pub(super) fn async_disposable_stack(
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
-    disposable_stack::native_async_disposable_stack(info.callee, info.new_target.is_some(), env)
+    disposable_stack::native_async_disposable_stack(info.callee, info.is_construct, env)
 }
 
 pub(super) fn async_disposable_stack_prototype_adopt(
@@ -77,7 +77,7 @@ pub(super) fn disposable_stack(
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
-    disposable_stack::native_disposable_stack(info.callee, info.new_target.is_some(), env)
+    disposable_stack::native_disposable_stack(info.callee, info.is_construct, env)
 }
 
 pub(super) fn disposable_stack_prototype_adopt(

@@ -8,7 +8,7 @@ pub(super) fn set(
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
-    set::native_set(info.callee, argument_values, info.new_target.is_some(), env)
+    set::native_set(info.callee, argument_values, info.is_construct, env)
 }
 
 pub(super) fn set_prototype_add(

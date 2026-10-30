@@ -12,7 +12,7 @@ pub(super) fn number(
         info.callee,
         info.this_value.clone(),
         argument_values,
-        info.new_target.is_some(),
+        info.is_construct,
         env,
     )
 }

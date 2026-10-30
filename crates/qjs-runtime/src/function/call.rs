@@ -64,19 +64,19 @@ pub(crate) fn call_function(
     env: &mut CallEnv,
     is_construct: bool,
 ) -> Result<Value, RuntimeError> {
-    call_with_arguments(callee, this_value, &argument_values, env, is_construct)
+    call_with_arguments(&callee, this_value, &argument_values, env, is_construct)
 }
 
 /// Common host/callback/native entry. Only semantic forwarding lists (bound
 /// arguments and Proxy trap arrays) need ownership; ordinary calls borrow.
 fn call_with_arguments(
-    callee: Value,
+    callee: &Value,
     this_value: Value,
     argument_values: &[Value],
     env: &mut CallEnv,
     is_construct: bool,
 ) -> Result<Value, RuntimeError> {
-    if let Value::Proxy(proxy) = &callee {
+    if let Value::Proxy(proxy) = callee {
         if is_construct {
             return crate::proxy::proxy_construct(
                 proxy.clone(),
@@ -87,7 +87,7 @@ fn call_with_arguments(
         }
         return crate::proxy::proxy_apply(proxy.clone(), this_value, argument_values.to_vec(), env);
     }
-    let Value::Function(function) = &callee else {
+    let Value::Function(function) = callee else {
         return Err(RuntimeError {
             thrown: None,
             message: "value is not callable".to_owned(),
@@ -108,13 +108,7 @@ fn call_with_arguments(
                 .cloned()
                 .unwrap_or(Value::Undefined);
             let call_arguments = &combined_arguments[usize::from(!combined_arguments.is_empty())..];
-            return call_with_arguments(
-                bound.this_value.clone(),
-                call_this,
-                call_arguments,
-                env,
-                false,
-            );
+            return call_with_arguments(&bound.this_value, call_this, call_arguments, env, false);
         }
         let mut bound_arguments = bound.arguments.clone();
         bound_arguments.extend_from_slice(argument_values);
@@ -124,7 +118,7 @@ fn call_with_arguments(
             bound.this_value.clone()
         };
         return call_with_arguments(
-            bound.target.clone(),
+            &bound.target,
             bound_this,
             &bound_arguments,
             env,
@@ -134,9 +128,16 @@ fn call_with_arguments(
     if function.is_class_constructor && !is_construct {
         return Err(class_constructor_call_error(function));
     }
-    if function.native_entry.is_some() {
+    if let Some(entry) = function.native_entry {
         crate::diagnostics::count!(native_calls);
-        return call_native_function(function, this_value, argument_values, is_construct, env);
+        return call_native_function(
+            entry,
+            function,
+            &this_value,
+            argument_values,
+            is_construct,
+            env,
+        );
     }
     if let Some(bytecode) = &function.bytecode {
         crate::diagnostics::count!(ordinary_call_attempts);
@@ -144,7 +145,7 @@ fn call_with_arguments(
             let function_env = function_env(
                 function,
                 bytecode,
-                &callee,
+                callee,
                 this_value,
                 argument_values,
                 env,
@@ -165,7 +166,7 @@ fn call_with_arguments(
             let function_env = function_env(
                 function,
                 bytecode,
-                &callee,
+                callee,
                 this_value,
                 argument_values,
                 env,
@@ -196,7 +197,7 @@ fn call_with_arguments(
             let function_env = function_env(
                 function,
                 bytecode,
-                &callee,
+                callee,
                 this_value,
                 argument_values,
                 env,
@@ -220,7 +221,7 @@ fn call_with_arguments(
         // body they decline builds its slot-seeded frame. The general path
         // below built a compatibility frame for every such call, which was
         // most of a small callback's cost.
-        if !is_construct && is_direct_leaf_function(&callee) {
+        if !is_construct && is_direct_leaf_function(callee) {
             return call_direct_leaf_function(
                 callee.clone(),
                 this_value,
@@ -235,7 +236,7 @@ fn call_with_arguments(
         let prepared = prepare_bytecode_call(
             function,
             bytecode,
-            &callee,
+            callee,
             this_value,
             argument_values,
             env,
@@ -254,7 +255,20 @@ pub(crate) fn call_function_slice(
     argument_values: &[Value],
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    call_with_arguments(callee.clone(), this_value, argument_values, env, false)
+    // Preserve the base callback route: admitted JS bodies never enter the
+    // general dispatcher's large generator/async/prepared-frame stack frame.
+    if is_direct_leaf_function(callee) {
+        return call_direct_leaf_function(
+            callee.clone(),
+            this_value,
+            argument_values,
+            env,
+            env.module_host(),
+            #[cfg(feature = "agents")]
+            env.agent_context(),
+        );
+    }
+    call_with_arguments(callee, this_value, argument_values, env, false)
 }
 
 /// Builds everything an ordinary synchronous call needs, without running it.
@@ -1002,7 +1016,7 @@ pub(crate) fn construct_function_slice(
             Value::Object(ObjectRef::with_prototype_slot(HashMap::new(), prototype))
         };
 
-        let result = call_with_arguments(target, this_value.clone(), argument_values, env, true);
+        let result = call_with_arguments(&target, this_value.clone(), argument_values, env, true);
 
         let result = result?;
 

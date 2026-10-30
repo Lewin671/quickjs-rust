@@ -11,7 +11,7 @@ pub(super) fn finalization_registry(
     finalization_registry::native_finalization_registry(
         info.callee,
         argument_values,
-        info.new_target.is_some(),
+        info.is_construct,
         env,
     )
 }

@@ -8,7 +8,7 @@ pub(super) fn weak_ref(
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
-    weak_ref::native_weak_ref(info.callee, argument_values, info.new_target.is_some(), env)
+    weak_ref::native_weak_ref(info.callee, argument_values, info.is_construct, env)
 }
 
 pub(super) fn weak_ref_prototype_deref(

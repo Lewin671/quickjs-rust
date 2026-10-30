@@ -8,7 +8,7 @@ pub(super) fn array(
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
-    array::native_array(info.callee, argument_values, info.new_target.is_some(), env)
+    array::native_array(info.callee, argument_values, info.is_construct, env)
 }
 
 pub(super) fn array_from(

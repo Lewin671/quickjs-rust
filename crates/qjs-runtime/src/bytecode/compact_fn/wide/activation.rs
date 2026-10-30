@@ -1701,13 +1701,18 @@ fn call_from_activation(
     // A plain native takes its arguments where they are; only a bytecode
     // callee can also read a slice; only semantic forwarding builds a list.
     if let Value::Function(function) = &callee
-        && function.native_entry.is_some()
+        && let Some(entry) = function.native_entry
         && function.bound.is_none()
         && !function.is_class_constructor
     {
         crate::diagnostics::count!(native_calls);
         return crate::native::call_native_function(
-            function, this_value, arguments, false, &mut env,
+            entry,
+            function,
+            &this_value,
+            arguments,
+            false,
+            &mut env,
         );
     }
     crate::function::call_function_slice(&callee, this_value, arguments, &mut env)

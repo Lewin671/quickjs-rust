@@ -352,7 +352,7 @@ pub(crate) fn iterator(
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
-    native_iterator_constructor(info.new_target.is_some(), env)
+    native_iterator_constructor(info.is_construct, env)
 }
 
 pub(crate) fn iterator_from(

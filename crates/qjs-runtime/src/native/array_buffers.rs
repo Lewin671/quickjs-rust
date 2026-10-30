@@ -12,7 +12,7 @@ pub(super) fn array_buffer(
         info.callee,
         info.this_value.clone(),
         argument_values,
-        info.new_target.is_some(),
+        info.is_construct,
         env,
     )
 }
@@ -138,12 +138,7 @@ pub(super) fn shared_array_buffer(
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
-    array_buffer::native_shared_array_buffer(
-        info.callee,
-        argument_values,
-        info.new_target.is_some(),
-        env,
-    )
+    array_buffer::native_shared_array_buffer(info.callee, argument_values, info.is_construct, env)
 }
 
 pub(super) fn shared_array_buffer_prototype_byte_length(

@@ -104,8 +104,8 @@ S3a installs operation-specific entries with the existing `CallEnv` service
 parameter and borrowed `CallInfo`/arguments. S3b changes that service parameter
 to Context; it does not add an adapter or another environment authority.
 The final ABI is `NativeEntry = fn(&mut Context, CallInfo<'_>, &[Value]) -> Result<Value>`
-directly on native functions; CallInfo borrows callee/this/new.target and identifies
-the active realm and caller context. Port family implementations to Context
+directly on native functions; CallInfo borrows callee/this and records construct mode; Context supplies
+the active realm, caller context and actual new.target lazily. Port family implementations to Context
 capabilities, deleting `&mut CallEnv`; S3a has already removed family probing.
 All return/throw values own references. Ordinary natives allocate no CallEnv.
 

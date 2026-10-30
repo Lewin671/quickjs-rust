@@ -13,7 +13,7 @@ pub(super) fn typed_array(
         NativeFunction::TypedArray,
         info.this_value.clone(),
         argument_values,
-        info.new_target.is_some(),
+        info.is_construct,
         env,
     )
 }
@@ -28,7 +28,7 @@ pub(super) fn uint8_array(
         NativeFunction::Uint8Array,
         info.this_value.clone(),
         argument_values,
-        info.new_target.is_some(),
+        info.is_construct,
         env,
     )
 }
@@ -43,7 +43,7 @@ pub(super) fn int8_array(
         NativeFunction::Int8Array,
         info.this_value.clone(),
         argument_values,
-        info.new_target.is_some(),
+        info.is_construct,
         env,
     )
 }
@@ -58,7 +58,7 @@ pub(super) fn uint8_clamped_array(
         NativeFunction::Uint8ClampedArray,
         info.this_value.clone(),
         argument_values,
-        info.new_target.is_some(),
+        info.is_construct,
         env,
     )
 }
@@ -73,7 +73,7 @@ pub(super) fn uint16_array(
         NativeFunction::Uint16Array,
         info.this_value.clone(),
         argument_values,
-        info.new_target.is_some(),
+        info.is_construct,
         env,
     )
 }
@@ -88,7 +88,7 @@ pub(super) fn int16_array(
         NativeFunction::Int16Array,
         info.this_value.clone(),
         argument_values,
-        info.new_target.is_some(),
+        info.is_construct,
         env,
     )
 }
@@ -103,7 +103,7 @@ pub(super) fn uint32_array(
         NativeFunction::Uint32Array,
         info.this_value.clone(),
         argument_values,
-        info.new_target.is_some(),
+        info.is_construct,
         env,
     )
 }
@@ -118,7 +118,7 @@ pub(super) fn int32_array(
         NativeFunction::Int32Array,
         info.this_value.clone(),
         argument_values,
-        info.new_target.is_some(),
+        info.is_construct,
         env,
     )
 }
@@ -133,7 +133,7 @@ pub(super) fn float32_array(
         NativeFunction::Float32Array,
         info.this_value.clone(),
         argument_values,
-        info.new_target.is_some(),
+        info.is_construct,
         env,
     )
 }
@@ -148,7 +148,7 @@ pub(super) fn float64_array(
         NativeFunction::Float64Array,
         info.this_value.clone(),
         argument_values,
-        info.new_target.is_some(),
+        info.is_construct,
         env,
     )
 }
@@ -163,7 +163,7 @@ pub(super) fn big_int64_array(
         NativeFunction::BigInt64Array,
         info.this_value.clone(),
         argument_values,
-        info.new_target.is_some(),
+        info.is_construct,
         env,
     )
 }
@@ -178,7 +178,7 @@ pub(super) fn big_uint64_array(
         NativeFunction::BigUint64Array,
         info.this_value.clone(),
         argument_values,
-        info.new_target.is_some(),
+        info.is_construct,
         env,
     )
 }

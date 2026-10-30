@@ -1298,26 +1298,21 @@ impl<'a> Vm<'a> {
     }
 
     fn construct(&mut self, argc: usize) -> Result<(), RuntimeError> {
-        if self.stack_native_callee(argc) {
-            let base = self
-                .stack
-                .len()
-                .checked_sub(argc + 1)
-                .ok_or_else(stack_underflow)?;
-            let mut block = self.stack.take();
-            let callee = block[base].clone();
-            let result = self.invoke_construct_callee(callee, &block[base + 1..]);
-            block.truncate(base);
-            // Restore the owner without recycling the empty take() placeholder.
-            *self.stack = block;
-            if let Some(value) = self.handle_call_result(result)? {
-                self.stack.push(value);
-            }
-            return Ok(());
+        let base = self
+            .stack
+            .len()
+            .checked_sub(argc + 1)
+            .ok_or_else(stack_underflow)?;
+        let mut block = self.stack.take();
+        let callee = std::mem::replace(&mut block[base], Value::Undefined);
+        let result = self.invoke_construct_callee(callee, &block[base + 1..]);
+        block.truncate(base);
+        // Restore the owner without recycling the empty take() placeholder.
+        *self.stack = block;
+        if let Some(value) = self.handle_call_result(result)? {
+            self.stack.push(value);
         }
-        let arguments = self.pop_arguments(argc)?;
-        let callee = self.pop()?;
-        self.construct_callee(callee, arguments)
+        Ok(())
     }
 
     fn construct_spread(&mut self) -> Result<(), RuntimeError> {

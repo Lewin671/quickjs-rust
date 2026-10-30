@@ -8,7 +8,7 @@ pub(super) fn weak_set(
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
-    weak_set::native_weak_set(info.callee, argument_values, info.new_target.is_some(), env)
+    weak_set::native_weak_set(info.callee, argument_values, info.is_construct, env)
 }
 
 pub(super) fn weak_set_prototype_add(

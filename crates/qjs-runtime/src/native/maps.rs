@@ -8,7 +8,7 @@ pub(super) fn map(
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
-    map::native_map(info.callee, argument_values, info.new_target.is_some(), env)
+    map::native_map(info.callee, argument_values, info.is_construct, env)
 }
 
 pub(super) fn map_group_by(
