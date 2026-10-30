@@ -187,11 +187,10 @@ impl NamedPropertyCache {
             return Some(value);
         }
         receiver.with_named_target(|t| count_event(t, Event::Hash));
-        let key = env
-            .realm()
-            .atoms()
-            .find(name)
-            .unwrap_or_else(|| env.realm().atoms().intern(name));
+        let key = env.realm().atoms().find(name).unwrap_or_else(|| {
+            receiver.with_named_target(|t| count_event(t, Event::Hash));
+            env.realm().atoms().intern(name)
+        });
         self.read_value(receiver, &key, Some(env))
     }
     pub(super) fn read_object(&self, receiver: &ObjectRef, name: &str) -> Option<Value> {

@@ -37,8 +37,8 @@ impl Value {
             Self::Object(o) => read(NamedTarget::Object(o)),
             Self::Array(a) => read(NamedTarget::Array(a)),
             Self::Function(f) => read(NamedTarget::Function(f)),
-            Self::Map(m) => read(NamedTarget::Map(&m.object())),
-            Self::Set(s) => read(NamedTarget::Set(&s.object())),
+            Self::Map(m) => read(NamedTarget::Map(m.object_ref())),
+            Self::Set(s) => read(NamedTarget::Set(s.object_ref())),
             _ => return None,
         })
     }

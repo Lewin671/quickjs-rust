@@ -50,6 +50,11 @@ impl MapRef {
         Rc::as_ptr(&self.0) as usize
     }
 
+    /// Borrow the ordinary named-property carrier without cloning its handle.
+    pub(crate) fn object_ref(&self) -> &ObjectRef {
+        &self.0.object
+    }
+
     pub(crate) fn object(&self) -> ObjectRef {
         self.0.object.clone()
     }
