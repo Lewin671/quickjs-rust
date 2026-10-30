@@ -467,11 +467,17 @@ impl NamedPropertyCache {
     pub(super) fn read_outcome(&self, value: &Value, name: &str) -> Option<ReadOutcome> {
         value.with_named_target(|t| self.read_target(t, name, None))?
     }
+    /// Keep a prototype own-data hit independent of the miss handler frame.
+    #[inline(always)]
     pub(super) fn read_object(&self, object: &ObjectRef, name: &str) -> Option<Value> {
-        self.get(object).or_else(|| {
-            self.read_target(NamedTarget::Object(object), name, None)
-                .and_then(ReadOutcome::value)
-        })
+        self.get(object)
+            .or_else(|| self.read_object_slow(object, name))
+    }
+    #[cold]
+    #[inline(never)]
+    fn read_object_slow(&self, object: &ObjectRef, name: &str) -> Option<Value> {
+        self.read_target(NamedTarget::Object(object), name, None)
+            .and_then(ReadOutcome::value)
     }
     fn resolve_read(
         &self,

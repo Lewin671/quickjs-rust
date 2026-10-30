@@ -95,7 +95,8 @@ def wrap_rc(s, prefix):
         b=a+len('Rc::new(');depth=1
         while depth:
             depth+=(s[b]=='(')-(s[b]==')');b+=1
-        s=s[:b]+'.into()'+s[b:];cursor=b+7
+        if s[b:b+7] != '.into()': s=s[:b]+'.into()'+s[b:]
+        cursor=b+7
     return s
 
 candidate=(src/'value/layout').exists()
@@ -144,14 +145,15 @@ if candidate:
         s=p.read_text()
         # Borrowed Rc parameters retain the standard type and coerce through
         # Deref; owned references are tracked at every clone/drop boundary.
-        s=re.sub(r'(?<!&)Rc<((?:crate::value::layout::)?Layout)>', lambda m:C+'::SchemaRc<'+m[1]+'>',s)
+        s=re.sub(r'(?<!&)Rc<((?:\w+::)*Layout)>', lambda m:C+'::SchemaRc<'+m[1]+'>',s)
         p.write_text(s)
     edit('value/layout/mod.rs',lambda s:wrap_rc(s,'root: Rc::new(Layout {'))
     edit('value/layout/edit.rs',lambda s:s.replace(') -> Rc<Self> {',') -> '+C+'::SchemaRc<Self> {').replace('Some(self.clone())','Some('+C+'::SchemaRc::clone_raw(self))').replace('Some(self.root.as_ref().unwrap_or(self).clone())','Some(self.root.as_ref().map_or_else(|| '+C+'::SchemaRc::clone_raw(self), Clone::clone))').replace('let next = Rc::new(Self {','let next: '+C+'::SchemaRc<Layout> = Rc::new(Self {').replace('let next = Rc::new(next);','let next: '+C+'::SchemaRc<Layout> = Rc::new(next).into();').replace('self.layout = Rc::new(layout);','self.layout = Rc::new(layout).into();'))
     # End of the explicit append allocation.
-    edit('value/layout/edit.rs',lambda s:s.replace('            flavor: self.flavor,\n        });','            flavor: self.flavor,\n        }).into();'))
+    edit('value/layout/edit.rs',lambda s:wrap_rc(s,'let next: '+C+'::SchemaRc<Layout> = Rc::new(Self {'))
     edit('value/layout/host.rs',lambda s:s.replace('Rc::new(layout.copied(true))','Rc::new(layout.copied(true)).into()'))
-    edit('value/layout/prototype.rs',lambda s:s.replace('layout.root.as_ref().unwrap_or(layout)','layout.root.as_ref().map_or(layout, |r| &**r)').replace('let root = Rc::new(Layout {','let root: '+C+'::SchemaRc<Layout> = Rc::new(Layout {').replace('            flavor,\n        });','            flavor,\n        }).into();').replace('self.layout = Rc::new(layout);','self.layout = Rc::new(layout).into();').replace('self.layout = Rc::new(next);','self.layout = Rc::new(next).into();').replace('.and_then(Weak::upgrade)', '.and_then(Weak::upgrade).map('+C+'::SchemaRc::from_weak)'))
+    edit('value/layout/prototype.rs',lambda s:s.replace('layout.root.as_ref().unwrap_or(layout)','layout.root.as_ref().map_or(layout, |r| &**r)').replace('let root = Rc::new(Layout {','let root: '+C+'::SchemaRc<Layout> = Rc::new(Layout {').replace('self.layout = Rc::new(layout);','self.layout = Rc::new(layout).into();').replace('self.layout = Rc::new(next);','self.layout = Rc::new(next).into();').replace('.and_then(Weak::upgrade)', '.and_then(Weak::upgrade).map('+C+'::SchemaRc::from_weak)'))
+    edit('value/layout/prototype.rs',lambda s:wrap_rc(s,'let root: '+C+'::SchemaRc<Layout> = Rc::new(Layout {'))
     edit('value/layout/transitions.rs',lambda s:s.replace('.and_then(Weak::upgrade)', '.and_then(Weak::upgrade).map('+C+'::SchemaRc::from_weak)').replace('child.upgrade())','child.upgrade().map('+C+'::SchemaRc::from_weak))').replace('retained.nodes.push_back(child.clone())','retained.nodes.push_back('+C+'::SchemaRc::clone_raw(child))'))
     inline = (src/'value/layout/value_slots.rs').exists()
     if inline:
