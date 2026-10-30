@@ -83,6 +83,7 @@ impl Function {
         self.named.borrow().chain_dependency()
     }
 
+    #[inline(always)]
     pub(crate) fn with_named<R>(&self, read: impl FnOnce(Option<&NamedStore>) -> R) -> R {
         let named = self.named.borrow();
         read(named.store())

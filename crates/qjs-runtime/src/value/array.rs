@@ -1169,6 +1169,7 @@ fn same_prototype_slot(left: Option<&Prototype>, right: Option<&Prototype>) -> b
 }
 
 impl ArrayRef {
+    #[inline(always)]
     pub(crate) fn with_named<R>(
         &self,
         read: impl FnOnce(Option<&super::layout::NamedStore>) -> R,

@@ -25,7 +25,8 @@ enum Entries {
     #[default]
     Empty,
     Mono(Entry),
-    Poly(Box<[Option<Entry>; 4]>),
+    Poly(Box<[Entry; 4]>),
+    SharedOwnPoly(Box<[Entry; 4]>),
     Mega,
 }
 #[derive(Debug)]
@@ -108,6 +109,17 @@ impl Default for NamedPropertyCache {
     }
 }
 impl Entry {
+    fn empty() -> Self {
+        Self {
+            version: LayoutVersion::empty(),
+            slot: 0,
+            flags: DATA | OWN,
+            chain: None,
+        }
+    }
+    fn shared_own(&self) -> bool {
+        self.flags & (7 | OWN) == DATA | OWN && self.chain.is_none() && self.version.is_shared()
+    }
     fn probe(&self) -> Probe {
         match self.flags & 7 {
             DATA => Probe::Data {
@@ -165,8 +177,17 @@ impl Entries {
     fn find(&self, target: NamedTarget<'_>) -> Option<&Entry> {
         match self {
             Self::Mono(e) => e.matches(target).then_some(e),
-            Self::Poly(entries) => entries.iter().flatten().find(|e| e.matches(target)),
+            Self::Poly(entries) | Self::SharedOwnPoly(entries) => {
+                entries.iter().find(|e| e.matches(target))
+            }
             _ => None,
+        }
+    }
+    fn poly(ways: Box<[Entry; 4]>) -> Self {
+        if ways.iter().all(Entry::shared_own) {
+            Self::SharedOwnPoly(ways)
+        } else {
+            Self::Poly(ways)
         }
     }
     fn record(&mut self, entry: Entry) {
@@ -177,24 +198,25 @@ impl Entries {
                 let Self::Mono(old) = std::mem::take(self) else {
                     unreachable!()
                 };
-                *self = Self::Poly(Box::new([Some(old), Some(entry), None, None]));
+                *self = Self::poly(Box::new([old, entry, Entry::empty(), Entry::empty()]));
             }
-            Self::Poly(entries) => {
-                if let Some(slot) = entries.iter_mut().find(|e| {
-                    e.as_ref()
-                        .is_some_and(|e| e.same_guard(&entry) || e.stale())
-                }) {
-                    *slot = Some(entry)
-                } else if let Some(slot) = entries.iter_mut().find(|e| e.is_none()) {
-                    *slot = Some(entry)
+            Self::Poly(_) | Self::SharedOwnPoly(_) => {
+                let (Self::Poly(mut ways) | Self::SharedOwnPoly(mut ways)) = std::mem::take(self)
+                else {
+                    unreachable!()
+                };
+                if let Some(slot) = ways.iter_mut().find(|e| e.same_guard(&entry) || e.stale()) {
+                    *slot = entry;
+                    *self = Self::poly(ways);
                 } else {
-                    *self = Self::Mega
+                    *self = Self::Mega;
                 }
             }
             Self::Mega => {}
         }
     }
 }
+
 impl NamedPropertyCache {
     pub(super) fn for_local(slot: usize) -> Self {
         let cache = Self::default();
@@ -283,6 +305,34 @@ impl NamedPropertyCache {
             count_event(target, Event::Hit);
             return Some(value);
         }
+        if let Entries::SharedOwnPoly(entries) = &state.entries {
+            let value = target
+                .with_store(|store| {
+                    // Independent pointer comparisons expose parallel loads and
+                    // avoid a serial branch chain at a polymorphic own-data site.
+                    let mask = u32::from(store.matches_shared_identity(&entries[0].version))
+                        | (u32::from(store.matches_shared_identity(&entries[1].version)) << 1)
+                        | (u32::from(store.matches_shared_identity(&entries[2].version)) << 2)
+                        | (u32::from(store.matches_shared_identity(&entries[3].version)) << 3);
+                    if mask == 0 {
+                        return None;
+                    }
+                    let entry = &entries[mask.trailing_zeros() as usize];
+                    #[cfg(debug_assertions)]
+                    self.verify_entry(&state, entry, target);
+                    store.load_guarded_data(entry.slot as usize)
+                })
+                .flatten();
+            count_event(
+                target,
+                if value.is_some() {
+                    Event::Hit
+                } else {
+                    Event::Miss
+                },
+            );
+            return value;
+        }
         if let Entries::Poly(entries) = &state.entries {
             // Compare all own guards and load while the authority is borrowed
             // once. No Weak traffic, repeated RefCell borrow or ID probe.
@@ -290,7 +340,6 @@ impl NamedPropertyCache {
                 .with_store(|store| {
                     entries
                         .iter()
-                        .flatten()
                         .find(|entry| {
                             entry.flags & (7 | OWN) == DATA | OWN
                                 && store.matches_version(&entry.version)

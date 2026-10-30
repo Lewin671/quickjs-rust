@@ -243,6 +243,7 @@ impl<'a> NamedTarget<'a> {
             _ => None,
         }
     }
+    #[inline(always)]
     pub(crate) fn load_data(self, slot: u32) -> Option<Value> {
         self.with_store(|s| s.load_guarded_data(slot as usize))?
     }

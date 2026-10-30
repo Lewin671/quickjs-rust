@@ -82,3 +82,11 @@ holder, retaining the same validity generation/slot proof. Force only the small
 authority-borrow wrappers inline and split dense-array's empty-cold check from
 its descriptor-index formatting body. Prototype identity comparisons use raw
 borrowed identities, never temporary Weak handles. No cache budget/semantics change.
+
+The third triage (`20261030T143935Z-t077-s2-r1-borrowed-triage`) gives development
+0.994917 geomean, prototype 1.0066, heterogeneous wall 1.0861 despite instructions
+0.8734. Shared-own poly guards now compare all four allocation identities to a
+bitmask under one authority borrow; admission proves immutable own-data layouts.
+Mixed/dictionary/inherited entries retain complete guards and the same four-way
+budget. Empty ways use dead weak tokens, never real identities. Tests prove
+shared-to-dictionary transition and zero hash/ID probes on shared poly hits.

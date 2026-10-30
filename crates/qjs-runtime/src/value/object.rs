@@ -144,6 +144,7 @@ impl Prototype {
             Self::Set(s) => (6, s.address()),
         }
     }
+    #[inline(always)]
     pub(crate) fn load_guarded_data(&self, slot: u32) -> Option<Value> {
         use super::named::NamedTarget;
         match self {

@@ -305,3 +305,55 @@ fn verifier_rejects_a_data_hit_when_pure_lookup_is_exotic() {
     drop(state);
     cache.get(&object);
 }
+
+#[test]
+fn shared_poly_promotes_to_versioned_guards_when_a_dictionary_arrives() {
+    let domain = AtomDomain::new();
+    let _owner = crate::value::layout::PropertyOwner::new(domain.clone());
+    let a = object(&domain, "x", 1.0);
+    let b = object(&domain, "x", 2.0);
+    b.set("y".into(), Value::Null);
+    let cache = NamedPropertyCache::default();
+    cache.read_object(&a, "x");
+    cache.read_object(&b, "x");
+    assert!(matches!(
+        cache.0.borrow().entries,
+        Entries::SharedOwnPoly(_)
+    ));
+    let dict = object(&domain, "x", 3.0);
+    for i in 0..130 {
+        dict.set(format!("p{i}"), Value::Null);
+    }
+    cache.read_object(&dict, "x");
+    assert!(matches!(cache.0.borrow().entries, Entries::Poly(_)));
+    dict.define_property("x".into(), Property::accessor(None, None, true, true));
+    assert!(cache.get(&dict).is_none());
+    assert_eq!(cache.get(&a), Some(Value::Number(1.0)));
+    assert_eq!(cache.get(&b), Some(Value::Number(2.0)));
+}
+
+#[cfg(feature = "perf-counters")]
+#[test]
+fn shared_poly_hits_use_no_text_id_or_descriptor_probe() {
+    let domain = AtomDomain::new();
+    let _owner = crate::value::layout::PropertyOwner::new(domain.clone());
+    let a = object(&domain, "x", 1.0);
+    let b = object(&domain, "x", 2.0);
+    b.set("y".into(), Value::Null);
+    let cache = NamedPropertyCache::default();
+    cache.read_object(&a, "x");
+    cache.read_object(&b, "x");
+    #[cfg(debug_assertions)]
+    if let Entries::SharedOwnPoly(ways) = &mut cache.0.borrow_mut().entries {
+        for way in ways.iter_mut() {
+            way.flags &= !VERIFY;
+        }
+    }
+    crate::diagnostics::reset_counters();
+    assert_eq!(cache.get(&a), Some(Value::Number(1.0)));
+    assert_eq!(cache.get(&b), Some(Value::Number(2.0)));
+    let c = crate::diagnostics::counters().unwrap();
+    assert_eq!(c.ic_object_hits, 2);
+    assert_eq!(c.property_text_probes, 0);
+    assert_eq!(c.property_id_probes, 0);
+}

@@ -22,6 +22,18 @@ impl LayoutVersion {
     pub(super) fn matches_layout(&self, layout: &Rc<Layout>, epoch: u64) -> bool {
         self.layout.as_ptr() == Rc::as_ptr(layout) && (self.epoch == 0 || self.epoch == epoch)
     }
+    pub(crate) fn empty() -> Self {
+        Self {
+            layout: Weak::new(),
+            epoch: 0,
+        }
+    }
+    pub(crate) fn is_shared(&self) -> bool {
+        self.epoch == 0
+    }
+    pub(super) fn matches_identity(&self, layout: &Rc<Layout>) -> bool {
+        self.layout.as_ptr() == Rc::as_ptr(layout)
+    }
     pub(crate) fn is_alive(&self) -> bool {
         self.layout.strong_count() > 0
     }
@@ -36,6 +48,11 @@ impl NamedStore {
                 0
             },
         }
+    }
+    /// The caller established an immutable shared-layout guard at admission.
+    #[inline(always)]
+    pub(crate) fn matches_shared_identity(&self, expected: &LayoutVersion) -> bool {
+        expected.matches_identity(&self.layout)
     }
     #[inline(always)]
     pub(crate) fn matches_version(&self, expected: &LayoutVersion) -> bool {
