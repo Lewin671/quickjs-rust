@@ -1,6 +1,6 @@
 # T077 S3: landable execution rebuild proposal
 
-- Status: proposed for lead review; no implementation authorization inferred.
+- Status: approved by the lead 2026-10-29 with amendments in [T077](../T077-core-rebuild.md) (S3a may land before S1/S2; S3e prices growing the wide tier).
 - Implementation: none; documents and retained non-timing instrumentation patch only.
 - Verified at: source `dd0905b2cb0236c38619089a27e8342b575dda61`, 2026-10-29; diagnostic build and twenty checksum-checked development runs; document gates recorded in the diagnostics.
 - Evidence: [counts/reproduction](../diagnostics/T077-s3-counts.md), [Op map](T077-s3-op-map.md), [construction inventory](T077-s3-activation-inventory.md), [native/executor inventory](T077-s3-native-executors.md).

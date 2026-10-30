@@ -1,11 +1,11 @@
 # T077: In-place core rebuild
 
-- Status: active; S1 implementation pending; S3 inventory/split proposed for lead review (2026-10-29).
+- Status: active; S1 implementation in progress; S3 split approved, S3a implementation in progress (2026-10-29).
 - Implementation: none; documentation only. S3 counters use a retained diagnostic patch; runtime/parser/tools remain byte-identical to `dd0905b2`.
 - Verified at: S3 source audit at `dd0905b2cb0236c38619089a27e8342b575dda61`, 2026-10-29; twenty deterministic checksum-checked diagnostic runs; context, diff and staged fast gates pass on this documentation tree; no runtime candidate.
 - Evidence: [target](../docs/design/core-rebuild.md), [S1 brief](proposals/T077-s1-property-authority.md), [S3 plan/inventories](proposals/T077-s3-plan.md), [S3 counts](diagnostics/T077-s3-counts.md).
 - Unresolved: pending fresh baseline; S3 split/payers and T074 scope contracts need lead review; compact-pointer portability qualification and final campaign-target progress remain unmeasured.
-- Next action: S1 owner implements its brief; lead reviews the S3 split and T074 decisions, freezes S3a at the accepted integration base, and records the pending baseline. Do not queue another baseline or revive closed unit gates.
+- Next action: S1 and S3a owners implement on their branches; lead reviews T074 decisions before S3b and records the pending baseline. Do not queue another baseline or revive closed unit gates.
 
 ## Authority and scope
 
@@ -98,15 +98,17 @@ plus aggregate improvement is progress, not proof of that campaign target.
 ## S3 — Universal bytecode, frames, calls and native ABI
 
 - Contract: [execution](../docs/design/core-rebuild-execution.md); [five-stage proposal and complete inventories](proposals/T077-s3-plan.md). The split is proposed, not approved or implemented.
-- Proposed landings: S3a direct native entries/slices; S3b typed Context and T074
+- Landings: S3a direct native entries/slices; S3b typed Context and T074
   binding authority; S3c owning activations/suspension; S3d explicit JS stack and
   callee argument writes; S3e universal register Code and executor deletion.
 - Every landing takes the common full/NG/complete exact zero-gap gates above;
-  no partial-language backend or old-path fallback. Proposed payers/endpoints
-  need lead approval; the approved S4-versus-S2 payer obligation remains.
-- Preconditions: accepted S2, T074 contract approval before S3b, frozen per-stage
-  APIs/deletions/test maps. Disjoint S3a preparation may parallel S1/S2; do not
-  edit S1-owned paths or assume authority to land ahead of S2.
+  no partial-language backend or old-path fallback. Payers/endpoints as in the
+  plan (approved); the S4-versus-S2 payer obligation remains.
+- Lead decision 2026-10-29: split approved. S3a may land ahead of S1/S2 on its
+  disjoint paths (whichever lands second rebases). S3b–e need accepted S2, T074
+  approval before S3b and frozen per-stage APIs/deletions/test maps. The S3e brief
+  must price growing the existing wide register tier (62.5% of routed entries,
+  most executed ops) into universal Code against a fresh lowering.
 - Exit remains: universal Code; no CallEnv/nested JS Vm/ordinary argument Vec,
   stack/leaf/compact/numeric-plan/wide/caller-env/virtual executable streams or
   cached admissions. Typed/mutation loops consume common frames/Code exit maps
