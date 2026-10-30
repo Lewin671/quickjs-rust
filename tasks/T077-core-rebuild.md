@@ -1,10 +1,10 @@
 # T077: In-place core rebuild
 
-- Status: active; S1 review repairs in progress on `agent/t077-s1-property-authority/codex`, repair base `b2daec46`; layout increment `4f38ccdf`; lead formal performance acceptance pending.
+- Status: active; S1 review repairs in progress on `agent/t077-s1-property-authority/codex`, repair base `b2daec46`; layout `4f38ccdf`, host order `46327127`; lead formal performance acceptance pending.
 - Implementation: live weak transitions, shared prefix descriptor arrays, byte-budgeted retention, cached attribute/integrity edits, last-key rollback and atom/index repairs are present; explicit ordered host construction is being verified.
 - Verified at: `4f38ccdf`, 2026-10-30: fast gate passed (2,421 default tests, no focused Test262 path matched); combined run before the last two test additions passed 2,463/2,463; native/x86 compilation passed; final gates pending. Previous `06044f96` correctness standing remains revision-bound in its receipt.
 - Evidence: [review repair receipt](archive/T077-s1-review-fixes.md), [repair architecture](proposals/T077-s1-review-fixes.md), [previous receipt](archive/T077-s1-verification.md), [decided key lifetime](proposals/T077-s1-fallibility.md).
-- Unresolved: final repair verification/counters/RSS and exact scan; RegExp ArrayRef ordering crosses the S2 storage boundary; lead formal whole-portfolio acceptance remains pending.
+- Unresolved: final repair verification/exact scan after a high-capacity ID-hash boundary correction; diagnostics at `46327127` are recorded; RegExp ArrayRef ordering crosses the S2 storage boundary; lead formal whole-portfolio acceptance remains pending.
 - Next action: finish focused verification and host ordering, run fast/full/NG/exact gates, record complete burndown and repair revision. This owner never pushes or merges.
 
 ## Authority and scope

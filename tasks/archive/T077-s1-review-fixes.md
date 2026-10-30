@@ -118,3 +118,12 @@ Run each original file with `/usr/bin/time -l <counter-binary> <script>`.
 For live RSS, append `;print("RSS_READY");var end=Date.now()+1500;while(Date.now()<end){};out.length;`
 (use `0;` instead of `out.length;` for suffix127), sample upon the marker, then
 let the process finish. These extra holding-loop counters are excluded.
+
+## ID namespace capacity boundary
+
+Self-review found that high-bit indexing must cap its shift at the 32-bit key
+width when a 64-bit host grows a bucket array beyond 2^32. The correction leaves
+all diagnostic scenario capacities unchanged. A focused unit test exercises
+capacity 2^33 without allocating that table. The initial exact scan was stopped
+during queue preparation and has no burndown; the corrected engine gets a new
+complete scan. Final verification and refreshed binary identity follow below.

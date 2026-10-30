@@ -45,7 +45,7 @@ impl IdIndex {
         self.buckets.capacity() * size_of::<Bucket>()
     }
     fn bucket(key: KeyId, capacity: usize) -> usize {
-        (key.get().wrapping_mul(0x9e37_79b1) >> (32 - capacity.trailing_zeros())) as usize
+        (key.get().wrapping_mul(0x9e37_79b1) >> (32 - capacity.trailing_zeros().min(32))) as usize
     }
     pub(super) fn probe(&self, key: KeyId) -> IdProbe {
         crate::diagnostics::count!(property_id_probes);
@@ -156,6 +156,15 @@ impl IdIndex {
 mod tests {
     use super::*;
     use crate::property::atom::AtomDomain;
+
+    #[cfg(target_pointer_width = "64")]
+    #[test]
+    fn capacities_beyond_the_id_namespace_do_not_overflow_the_hash_shift() {
+        let domain = AtomDomain::new();
+        let key = domain.intern("x");
+        // Exercise the hash without allocating a multi-gigabyte bucket array.
+        assert!(IdIndex::bucket(key.id(), 1usize << 33) < 1usize << 33);
+    }
 
     #[test]
     fn strided_ids_disperse_across_high_product_bits() {
