@@ -22,6 +22,10 @@ Live shapes and their weak lookup edges may exceed the keep-alive bound.
 Code-owned append plans may retain string-only transition metadata, as literal links do;
 they never retain receivers, symbol handles or prototype values. Store-add guards
 the old layout and the transitive prototype generation before publishing a prefix.
+Constructor cold metadata links an empty root by domain/prototype identity.
+Receiver allocation reserves its observed append width (at most 16), without
+publishing future fields. Root width hints are nonsemantic metadata; keys,
+attributes and slot order remain immutable on shared layouts.
 Class definitions retain per-field prefix plans and publish only after each
 initializer. Observer-free primitive segments share one borrow/reservation.
 JSON parses retain the preceding string-key sequence per object depth: direct

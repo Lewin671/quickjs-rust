@@ -302,6 +302,7 @@ pub struct FunctionAuxiliaryState {
 }
 
 struct FunctionColdState {
+    receiver_layout: Option<Rc<crate::value::layout::Layout>>,
     home_object: Option<Value>,
     /// An arrow's retained derived activation: binding authority and field owner.
     lexical_derived_this: Option<(Upvalue, Function)>,
@@ -424,6 +425,7 @@ impl FunctionColdState {
     fn new(home_object: Option<Value>, super_constructor: Option<Value>) -> Self {
         Self {
             home_object,
+            receiver_layout: None,
             lexical_derived_this: None,
             super_constructor,
             instance_elements: Rc::new(Vec::new()),
@@ -1413,4 +1415,5 @@ fn prototype_chain_contains_function_inner(
 #[cfg(test)]
 mod tests;
 
+mod construction;
 mod named;

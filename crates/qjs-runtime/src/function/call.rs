@@ -485,8 +485,7 @@ pub(crate) fn try_construct_direct_leaf_function(
         .expect("direct leaf predicate requires bytecode");
     crate::diagnostics::count!(ordinary_call_attempts);
     crate::diagnostics::count!(direct_leaf_frames);
-    let receiver =
-        ObjectRef::with_prototype_slot(HashMap::new(), Some(prototype), env.realm().atoms());
+    let receiver = function.new_instance_receiver(Some(prototype), env.realm().atoms());
     // A base class initializes its instance fields before the body runs.
     if let Some(elements) = class_fields
         && let Err(error) = initialize_direct_instance_fields(
@@ -1012,11 +1011,12 @@ pub(crate) fn construct_function_slice(
             Value::Undefined
         } else {
             let prototype = construct_prototype_slot(&target, &new_target, env)?;
-            Value::Object(ObjectRef::with_prototype_slot(
-                HashMap::new(),
-                prototype,
-                env.realm().atoms(),
-            ))
+            Value::Object(match &new_target {
+                Value::Function(function) => {
+                    function.new_instance_receiver(prototype, env.realm().atoms())
+                }
+                _ => ObjectRef::with_prototype_slot(HashMap::new(), prototype, env.realm().atoms()),
+            })
         };
 
         let result = call_with_arguments(&target, this_value.clone(), argument_values, env, true);

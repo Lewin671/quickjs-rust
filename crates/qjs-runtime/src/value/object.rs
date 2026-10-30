@@ -19,6 +19,7 @@ use super::{Property, Value};
 
 mod array_buffer_methods;
 mod class_fields;
+mod construction;
 mod key_order;
 mod literal;
 mod named_properties;

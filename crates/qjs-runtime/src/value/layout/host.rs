@@ -4,6 +4,30 @@ use super::*;
 use crate::value::{OwnDataPropertyRead, OwnDataPropertyWrite};
 
 impl NamedStore {
+    /// Construction caches retain only an empty layout; the new store owns its edge.
+    pub(crate) fn empty_cached(
+        cache: &mut Option<Rc<Layout>>,
+        domain: &AtomDomain,
+        prototype: Option<crate::Prototype>,
+    ) -> Self {
+        let mut store = if let Some(layout) = cache.as_ref().filter(|layout| {
+            layout.domain.ptr_eq(domain) && layout.matches_prototype(prototype.as_ref(), 0)
+        }) {
+            Self {
+                layout: layout.clone(),
+                values: ValueSlots::Empty,
+                accessors: None,
+                epoch: 0,
+                prototype: Self::retain_prototype(layout, prototype),
+            }
+        } else {
+            let store = Self::empty_with_prototype(domain, prototype, 0);
+            *cache = Some(store.layout.clone());
+            store
+        };
+        store.reserve(usize::from(store.layout.capacity_hint.get()));
+        store
+    }
     pub(crate) fn empty(domain: &AtomDomain) -> Self {
         PropertyOwner::new(domain.clone()).empty_store()
     }

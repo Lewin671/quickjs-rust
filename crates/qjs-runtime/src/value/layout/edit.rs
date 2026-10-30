@@ -22,6 +22,7 @@ impl Layout {
             parent_state: self.parent_state.clone(),
             mode: self.mode.clone(),
             flavor: self.flavor,
+            capacity_hint: std::cell::Cell::new(0),
         }
     }
 
@@ -70,6 +71,9 @@ impl Layout {
             };
             data.append(key, attrs, proof);
         }
+        let root = Self::root_shape(self);
+        root.capacity_hint
+            .set(root.capacity_hint.get().max((self.len + 1).min(16) as u8));
         self.budget.add(size_of::<Self>());
         let next = Rc::new(Self {
             budget: self.budget.clone(),
@@ -89,6 +93,7 @@ impl Layout {
             parent_state: self.parent_state.clone(),
             mode: None,
             flavor: self.flavor,
+            capacity_hint: std::cell::Cell::new(0),
         });
         crate::diagnostics::count!(property_shape_nodes_created);
         self.cache(label, &next);

@@ -373,7 +373,7 @@ impl AtomDomain {
         WeakAtomDomain(Rc::downgrade(&self.0))
     }
 
-    #[cfg(test)]
+    /// Allocation identity guards metadata linked into this key domain.
     pub(crate) fn ptr_eq(&self, other: &Self) -> bool {
         Rc::ptr_eq(&self.0, &other.0)
     }

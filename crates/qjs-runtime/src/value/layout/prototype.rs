@@ -134,7 +134,7 @@ impl Drop for PrototypeState {
 }
 
 impl Layout {
-    fn root_shape(layout: &Rc<Self>) -> &Rc<Self> {
+    pub(super) fn root_shape(layout: &Rc<Self>) -> &Rc<Self> {
         layout.root.as_ref().unwrap_or(layout)
     }
     pub(crate) fn matches_prototype(&self, prototype: Option<&Prototype>, flavor: u16) -> bool {
@@ -174,6 +174,7 @@ impl PropertyOwner {
             parent_state: parent_state.as_ref().map(Rc::downgrade).unwrap_or_default(),
             mode: None,
             flavor,
+            capacity_hint: std::cell::Cell::new(0),
         });
         let mut roots = self.0.roots.borrow_mut();
         if roots.len() >= 64 && roots.len().is_power_of_two() {
