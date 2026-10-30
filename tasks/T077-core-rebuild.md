@@ -1,10 +1,10 @@
 # T077: In-place core rebuild
 
-- Status: active; A/B/C/D/E committed through `26fee930`. First round-1 iMac triage misses payoff; general hot-path repair is in progress.
-- Implementation: prototype-layout/cell redesign, pure outcome ICs, explicit creation intrinsics, lazy stores and E fixes are present. Repair separates data-hit ABI, fuses poly/ID probes and memoizes live computed string-key leases.
-- Verified at: `26fee930` full gate, NG 266/266 default/off/verify, verify runtime 2,436, IC-off semantic 2,419; iMac agents/counters 2,481 tests pass. 300 seeded on/off/verify replays agree. New repair runtime 2,437 and clippy pass; final-source gates remain pending.
+- Status: active; A/B/C/D/E committed through `26fee930`. Two iMac triages miss full payoff; first-prototype borrowed loads and remaining small-ABI routes are under verification.
+- Implementation: prototype-layout/cell redesign, pure outcome ICs, explicit creation intrinsics, lazy stores and E fixes are present. Repair separates data-hit ABI, fuses poly/ID probes, memoizes computed string-key leases and borrows first holders through owning edges.
+- Verified at: `26fee930` full gate, NG 266/266 default/off/verify, verify runtime 2,436, IC-off semantic 2,419; iMac agents/counters 2,481 tests pass. 300 seeded on/off/verify replays agree. First repair `dbe43671` full gate passes; current first-holder repair runtime 2,437 and clippy pass. Final-source gates remain pending.
 - Evidence: [correction plan](proposals/T077-s2-prototype-layout.md), [round-1 counters](archive/T077-s2-round1-counters.md), [previous S2](archive/T077-s2-verification.md). Jobs `20261030T135556Z-t077-s2-r1-triage` / `20261030T140601Z-t077-s2-r1-property-profiles` bind the first measurement/diagnosis.
-- Unresolved: payoff (initial ratios heterogeneous 1.3525, prototype 1.2908, churn 1.3564, dynamic 1.3165 versus dd0905b2); final repair counters/triage and full/exact gates. Old-artifact exact scans continue on their pinned binary.
+- Unresolved: payoff: second triage dynamic/churn 0.7819/0.9425 and matter-js 0.9831, but prototype 1.3505 and heterogeneous 1.0630 versus dd0905b2; final repair counters/triage and gates. Earlier cached exact scan retains its pinned binary; obsolete IC-off metadata run stopped.
 - Next action: verify/commit the general repair, measure on iMac, then freeze final source and complete F. Temporary iMac refs are authorized transport; never push origin or merge main.
 
 ## Authority and scope

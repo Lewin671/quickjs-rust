@@ -48,6 +48,7 @@ const OWN: u32 = 1 << 3;
 const WRITABLE: u32 = 1 << 4;
 const WRITE_FORBIDDEN: u32 = 1 << 5;
 const VERIFY: u32 = 1 << 6;
+const FIRST_HOLDER: u32 = 1 << 7;
 #[cfg(target_pointer_width = "64")]
 const _: () = assert!(std::mem::size_of::<Entry>() == 32);
 #[derive(Debug)]
@@ -68,6 +69,7 @@ struct Resolution {
     probe: Probe,
     holder: Option<WeakTarget>,
     inherited: bool,
+    first_holder: bool,
 }
 impl Resolution {
     fn identity(&self) -> Option<(u8, usize)> {
@@ -135,6 +137,7 @@ impl Entry {
             probe: self.probe(),
             holder: self.chain.as_ref().and_then(|c| c.holder.clone()),
             inherited: self.chain.is_some(),
+            first_holder: self.flags & FIRST_HOLDER != 0,
         }
     }
     fn fetch(&self, target: NamedTarget<'_>) -> Option<ReadOutcome> {
@@ -242,6 +245,7 @@ impl NamedPropertyCache {
         assert!(
             generic.as_ref().is_some_and(|g| g.probe == expected.probe
                 && g.inherited == expected.inherited
+                && g.first_holder == expected.first_holder
                 && g.identity() == expected.identity()),
             "IC complete outcome differs from pure generic lookup: {name}"
         );
@@ -268,6 +272,16 @@ impl NamedPropertyCache {
                 },
             );
             return value;
+        }
+        if let Entries::Mono(entry) = &state.entries
+            && entry.flags & (7 | FIRST_HOLDER) == DATA | FIRST_HOLDER
+            && entry.chain.as_ref().is_some_and(|c| c.validity.is_valid())
+            && let Some(value) = target.first_prototype_data(&entry.version, entry.slot)
+        {
+            #[cfg(debug_assertions)]
+            self.verify_entry(&state, entry, target);
+            count_event(target, Event::Hit);
+            return Some(value);
         }
         if let Entries::Poly(entries) = &state.entries {
             // Compare all own guards and load while the authority is borrowed
@@ -343,19 +357,26 @@ impl NamedPropertyCache {
         _env: Option<&CallEnv>,
     ) -> Option<Value> {
         value.with_named_target(|t| {
-            self.read_target(t, key.as_str(), Some(key))
-                .and_then(ReadOutcome::value)
+            self.data_value(t).or_else(|| {
+                self.read_target(t, key.as_str(), Some(key))
+                    .and_then(ReadOutcome::value)
+            })
         })?
     }
     pub(super) fn read_string(&self, value: &Value, name: &str, _env: &CallEnv) -> Option<Value> {
-        value.with_named_target(|t| self.read_target(t, name, None).and_then(ReadOutcome::value))?
+        value.with_named_target(|t| {
+            self.data_value(t)
+                .or_else(|| self.read_target(t, name, None).and_then(ReadOutcome::value))
+        })?
     }
     pub(super) fn read_outcome(&self, value: &Value, name: &str) -> Option<ReadOutcome> {
         value.with_named_target(|t| self.read_target(t, name, None))?
     }
     pub(super) fn read_object(&self, object: &ObjectRef, name: &str) -> Option<Value> {
-        self.read_target(NamedTarget::Object(object), name, None)
-            .and_then(ReadOutcome::value)
+        self.get(object).or_else(|| {
+            self.read_target(NamedTarget::Object(object), name, None)
+                .and_then(ReadOutcome::value)
+        })
     }
     fn read_target(
         &self,
@@ -388,6 +409,9 @@ impl NamedPropertyCache {
             return;
         };
         let mut flags = if resolution.inherited { 0 } else { OWN };
+        if resolution.first_holder {
+            flags |= FIRST_HOLDER;
+        }
         let slot = match resolution.probe {
             Probe::Data { slot, writable } => {
                 flags |= DATA | if writable { WRITABLE } else { 0 };
@@ -510,6 +534,7 @@ fn resolve(target: NamedTarget<'_>, name: &str, key: Option<&KeyLease>) -> Optio
             probe,
             holder: None,
             inherited: false,
+            first_holder: false,
         });
     }
     let Some(mut proto) = target.prototype() else {
@@ -517,9 +542,10 @@ fn resolve(target: NamedTarget<'_>, name: &str, key: Option<&KeyLease>) -> Optio
             probe: Probe::Missing,
             holder: None,
             inherited: false,
+            first_holder: false,
         });
     };
-    for _ in 0..64 {
+    for depth in 0..64 {
         let value = proto.to_value();
         let (probe, holder, next) = value.with_named_target(|t| {
             count_event(t, Event::Probe);
@@ -533,6 +559,7 @@ fn resolve(target: NamedTarget<'_>, name: &str, key: Option<&KeyLease>) -> Optio
                 probe,
                 holder: Some(holder),
                 inherited: true,
+                first_holder: depth == 0,
             });
         }
         let Some(next) = next else {
@@ -540,6 +567,7 @@ fn resolve(target: NamedTarget<'_>, name: &str, key: Option<&KeyLease>) -> Optio
                 probe: Probe::Missing,
                 holder: None,
                 inherited: true,
+                first_holder: false,
             });
         };
         proto = next;

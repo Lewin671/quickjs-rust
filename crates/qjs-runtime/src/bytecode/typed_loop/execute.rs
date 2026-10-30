@@ -358,6 +358,12 @@ fn execute<F: LoopFrame>(
                 name,
                 cache,
             } => {
+                if let Some(value) =
+                    shape_caches[cache as usize].get_value(&boxed[object as usize], None)
+                {
+                    boxed[dst as usize] = value;
+                    continue;
+                }
                 let Some(value) = get_named(
                     &boxed[object as usize],
                     &program.names[name as usize],

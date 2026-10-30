@@ -62,6 +62,15 @@ impl NamedStorage {
             Self::Sentinel => false,
         }
     }
+    pub(crate) fn first_prototype_data(&self, version: &LayoutVersion, slot: u32) -> Option<Value> {
+        match self {
+            Self::Empty { prototype, .. } if self.matches(version) => {
+                prototype.as_deref()?.load_guarded_data(slot)
+            }
+            Self::Full(s) => s.first_prototype_data(version, slot),
+            _ => None,
+        }
+    }
     pub(crate) fn prototype(&self) -> Option<Prototype> {
         match self {
             Self::Empty { prototype, .. } => prototype.as_deref().cloned(),

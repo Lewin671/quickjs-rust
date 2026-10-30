@@ -69,6 +69,13 @@ impl Function {
     pub(crate) fn named_version(&self) -> Option<crate::value::layout::LayoutVersion> {
         self.named.borrow().version()
     }
+    pub(crate) fn first_prototype_data(
+        &self,
+        v: &crate::value::layout::LayoutVersion,
+        slot: u32,
+    ) -> Option<Value> {
+        self.named.borrow().first_prototype_data(v, slot)
+    }
     pub(crate) fn named_matches(&self, v: &crate::value::layout::LayoutVersion) -> bool {
         self.named.borrow().matches(v)
     }

@@ -71,3 +71,14 @@ keys, mutations/COW clear the memo, and foreign domains replace it. The memo
 pins a lease, never a domain/receiver. This adds 8 logical header bytes without
 changing Value/JsString handle sizes; measure the whole development set again.
 All semantic hooks and generic fallbacks remain the same NamedStore authority.
+
+The first repair pays back dynamic/churn (0.7819/0.9425) and matter-js (0.9831),
+but prototype calls remain 1.3505. Profile job
+`20261030T143230Z-t077-s2-r1-payoff-profiles` still shows the untyped typed-loop
+read entering the descriptor handler and an out-of-line generic with_named
+closure in own poly hits. Route all read consumers through the small ABI;
+borrow the actual first-prototype edge under the receiver guard to load a direct
+holder, retaining the same validity generation/slot proof. Force only the small
+authority-borrow wrappers inline and split dense-array's empty-cold check from
+its descriptor-index formatting body. Prototype identity comparisons use raw
+borrowed identities, never temporary Weak handles. No cache budget/semantics change.

@@ -210,6 +210,17 @@ impl<'a> NamedTarget<'a> {
                 .flatten()
         })?
     }
+    #[inline]
+    pub(crate) fn first_prototype_data(self, v: &LayoutVersion, slot: u32) -> Option<Value> {
+        if let Some(o) = self.object() {
+            return o.with_named(|s| s.first_prototype_data(v, slot));
+        }
+        match self {
+            Self::Array(a) => a.first_prototype_data(v, slot),
+            Self::Function(f) => f.first_prototype_data(v, slot),
+            _ => None,
+        }
+    }
     pub(crate) fn write_matched_data(
         self,
         v: &LayoutVersion,

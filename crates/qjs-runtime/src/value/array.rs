@@ -141,7 +141,13 @@ impl ArrayData {
             .is_none_or(|_cold| self.named_store().is_empty())
     }
 
+    #[inline(always)]
     fn has_property_at_index(&self, index: usize) -> bool {
+        self.cold.get().is_some() && self.named_property_at_index(index)
+    }
+
+    #[inline(never)]
+    fn named_property_at_index(&self, index: usize) -> bool {
         self.cold_if_present().is_some_and(|_cold| {
             let properties = self.named_store();
             if properties.is_empty() {
@@ -1180,6 +1186,13 @@ impl ArrayRef {
     }
     pub(crate) fn named_version(&self) -> super::layout::LayoutVersion {
         self.0.named.borrow().version().expect("array layout")
+    }
+    pub(crate) fn first_prototype_data(
+        &self,
+        v: &super::layout::LayoutVersion,
+        slot: u32,
+    ) -> Option<Value> {
+        self.0.named.borrow().first_prototype_data(v, slot)
     }
     pub(crate) fn named_matches(&self, v: &super::layout::LayoutVersion) -> bool {
         self.0.named.borrow().matches(v)

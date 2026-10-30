@@ -134,6 +134,27 @@ impl Prototype {
         Self::Array(ArrayPrototypeRef(array))
     }
 
+    pub(crate) fn identity(&self) -> (u8, usize) {
+        match self {
+            Self::Object(o) => (1, o.address()),
+            Self::Array(a) => (2, a.array_ref().address()),
+            Self::Function(f) => (3, f.address()),
+            Self::Proxy(p) => (4, p.address()),
+            Self::Map(m) => (5, m.address()),
+            Self::Set(s) => (6, s.address()),
+        }
+    }
+    pub(crate) fn load_guarded_data(&self, slot: u32) -> Option<Value> {
+        use super::named::NamedTarget;
+        match self {
+            Self::Object(o) => NamedTarget::Object(o).load_data(slot),
+            Self::Array(a) => NamedTarget::Array(a.array_ref()).load_data(slot),
+            Self::Function(f) => NamedTarget::Function(f).load_data(slot),
+            Self::Map(m) => NamedTarget::Map(m).load_data(slot),
+            Self::Set(s) => NamedTarget::Set(s).load_data(slot),
+            Self::Proxy(_) => None,
+        }
+    }
     pub(crate) fn into_value(self) -> Value {
         match self {
             Self::Object(v) => Value::Object(v),

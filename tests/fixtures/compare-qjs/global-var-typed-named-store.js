@@ -5,7 +5,10 @@
   write(globalThis, 3);
   var first = __typedStore;
   write(globalThis, 5);
-  var result = [first, __typedStore, globalThis.__typedStore].join('|');
+  var second = __typedStore;
+  function dynamic(o, n, key) { for (var i = 0; i < n; i++) o[key] = i; }
+  dynamic(globalThis, 7, '__typedStore');
+  var result = [first, second, __typedStore, globalThis.__typedStore].join('|');
   delete globalThis.__typedStore;
   return result;
 })()

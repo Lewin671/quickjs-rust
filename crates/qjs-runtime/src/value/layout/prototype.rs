@@ -140,7 +140,7 @@ impl Layout {
     pub(crate) fn matches_prototype(&self, prototype: Option<&Prototype>, flavor: u16) -> bool {
         self.flavor == flavor
             && self.prototype.as_ref().map(WeakPrototype::identity)
-                == prototype.map(|p| WeakPrototype::new(p).identity())
+                == prototype.map(Prototype::identity)
     }
 }
 impl PropertyOwner {
@@ -148,11 +148,7 @@ impl PropertyOwner {
         if prototype.is_none() && flavor == 0 {
             return self.0.root.clone();
         }
-        let identity = prototype.map(WeakPrototype::new);
-        let (kind, address) = identity
-            .as_ref()
-            .map(WeakPrototype::identity)
-            .unwrap_or((0, 0));
+        let (kind, address) = prototype.map(Prototype::identity).unwrap_or((0, 0));
         let key = (kind, address, flavor);
         if let Some(layout) = self.0.roots.borrow().get(&key).and_then(Weak::upgrade) {
             return layout;
@@ -173,7 +169,7 @@ impl PropertyOwner {
             next_order: 0,
             transitions: RefCell::default(),
             root: None,
-            prototype: identity,
+            prototype: prototype.map(WeakPrototype::new),
             prototype_value: RefCell::new(Weak::new()),
             parent_state: parent_state.as_ref().map(Rc::downgrade).unwrap_or_default(),
             mode: None,
@@ -218,6 +214,12 @@ impl NamedStore {
         let value = Rc::new(prototype);
         *root.prototype_value.borrow_mut() = Rc::downgrade(&value);
         Some(value)
+    }
+    pub(crate) fn first_prototype_data(&self, version: &LayoutVersion, slot: u32) -> Option<Value> {
+        if !self.matches_version(version) {
+            return None;
+        }
+        self.prototype.as_deref()?.load_guarded_data(slot)
     }
     pub(crate) fn prototype(&self) -> Option<Prototype> {
         self.prototype.as_deref().cloned()

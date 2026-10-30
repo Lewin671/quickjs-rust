@@ -110,12 +110,14 @@ impl ObjectRef {
     pub(crate) fn layout_matches(&self, version: &crate::value::layout::LayoutVersion) -> bool {
         self.0.properties.borrow().matches_version(version)
     }
+    #[inline(always)]
     pub(crate) fn with_named<R>(
         &self,
         read: impl FnOnce(&super::super::layout::NamedStore) -> R,
     ) -> R {
         read(&self.0.properties.borrow())
     }
+    #[inline(always)]
     pub(crate) fn with_named_mut<R>(
         &self,
         write: impl FnOnce(&mut super::super::layout::NamedStore) -> R,
