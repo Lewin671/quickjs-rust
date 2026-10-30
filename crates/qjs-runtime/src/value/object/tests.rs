@@ -245,8 +245,8 @@ fn dictionary_keeps_order_values_and_slots_across_a_removal() {
         .collect();
     assert_eq!(object.own_property_names(), expected);
     assert!(matches!(
-        object.any_storage_data_slot_write(2, &Value::Number(-1.0)),
-        Some(OwnDataPropertyWrite::Written)
+        object.with_named_mut(|store| store.replace_data(2, Value::Number(-1.0))),
+        Some(true)
     ));
     assert_eq!(object.get(&last), Some(Value::Number(-1.0)));
 }

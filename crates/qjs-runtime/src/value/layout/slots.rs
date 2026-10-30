@@ -89,6 +89,7 @@ impl NamedStore {
         (!entry.attrs.has(Attributes::ACCESSOR)).then(|| self.values[slot].clone())
     }
     /// None means accessor/missing; Some(false) is nonwritable own data.
+    #[cfg(test)]
     pub(crate) fn replace_data(&mut self, slot: usize, value: Value) -> Option<bool> {
         let attrs = self.layout.entry_at(slot)?.attrs;
         if attrs.has(Attributes::ACCESSOR) {

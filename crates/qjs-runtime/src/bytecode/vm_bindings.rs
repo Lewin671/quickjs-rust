@@ -648,16 +648,12 @@ impl Vm<'_> {
         value: Value,
     ) -> bool {
         if let Some((slot, layout)) = target.property_slot.as_ref()
-            && target.global_this.layout_matches(layout)
+            && target.global_this.with_named_mut(|store| {
+                // Admission proved an own writable data slot. Guard and publish
+                // under one borrow; no descriptor reprobe or callback intervenes.
+                store.matches_version(layout) && store.overwrite_guarded_data(*slot, value.clone())
+            })
         {
-            if !matches!(
-                target
-                    .global_this
-                    .any_storage_data_slot_write(*slot, &value),
-                Some(OwnDataPropertyWrite::Written)
-            ) {
-                return false;
-            }
             debug_assert!(self.env.is_realm_binding_cell(&target.name, &target.cell));
             target.cell.set(value.clone());
             self.locals[target.slot] = Some(value);

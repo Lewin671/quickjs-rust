@@ -1,6 +1,7 @@
 //! Pure own-slot probes and live data-slot access. Shared guards own a layout
 //! or key lease, so recycling a numeric KeyId cannot validate a stale slot.
-use super::{ObjectRef, OwnDataPropertyRead, OwnDataPropertyWrite};
+use super::{ObjectRef, OwnDataPropertyRead};
+#[cfg(test)]
 use crate::Value;
 #[cfg(test)]
 use crate::value::layout::Layout;
@@ -49,36 +50,6 @@ impl ObjectRef {
     }
     pub(crate) fn any_storage_data_slot(&self, key: &str) -> Option<usize> {
         self.own_data_slot(key)
-    }
-    pub(crate) fn own_data_slot_write(
-        &self,
-        slot: usize,
-        value: &Value,
-    ) -> Option<OwnDataPropertyWrite> {
-        if self.0.flag(super::flags::MODULE_NAMESPACE)
-            || self.is_array_prototype_exotic()
-            || self.is_typed_array_exotic()
-            || self.is_symbol_primitive()
-        {
-            return None;
-        }
-        let result = self
-            .0
-            .properties
-            .borrow_mut()
-            .replace_data(slot, value.clone())?;
-        Some(if result {
-            OwnDataPropertyWrite::Written
-        } else {
-            OwnDataPropertyWrite::ReadOnly
-        })
-    }
-    pub(crate) fn any_storage_data_slot_write(
-        &self,
-        slot: usize,
-        value: &Value,
-    ) -> Option<OwnDataPropertyWrite> {
-        self.own_data_slot_write(slot, value)
     }
     #[cfg(test)]
     pub(crate) fn layout_data_slot(&self, key: &str) -> Option<(Rc<Layout>, usize)> {
