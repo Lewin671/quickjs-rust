@@ -1,11 +1,11 @@
 # T077: In-place core rebuild
 
 - Status: active; S3a accepted and integrated (lead 2026-10-30); S1+S2 land together, S2 repair round in progress.
-- Implementation: S3a direct native entries/borrowed slices on main; S1/S2 on owner branches (`agent/t077-s1-property-authority/codex`, `agent/t077-s2-named-stores/codex`).
-- Verified at: S3a runtime `03c8680c` (branch tip `3872d617`): full check, 257 NG fixtures, 42,672/42,672 exact; formal/held-out/RSS receipts in [S3a acceptance](diagnostics/T077-s3a-acceptance.md).
-- Evidence: [target](../docs/design/core-rebuild.md), [baseline](diagnostics/T077-baseline.md), [S1 brief](proposals/T077-s1-property-authority.md), [S3 plan](proposals/T077-s3-plan.md), [S3 counts](diagnostics/T077-s3-counts.md), [S3a results](diagnostics/T077-s3a-results.md).
+- Implementation: S3a direct native entries/borrowed slices on main; S1/S2 on owner branches (`agent/t077-s1-property-authority/codex`, `agent/t077-s2-named-stores/codex`); S3b frozen design only, no runtime implementation.
+- Verified at: S3a runtime `03c8680c` (branch tip `3872d617`): full check, 257 NG fixtures, 42,672/42,672 exact; formal/held-out/RSS in [S3a acceptance](diagnostics/T077-s3a-acceptance.md). S3b design audit base `71294a20`: context/staged documentation gates pass.
+- Evidence: [target](../docs/design/core-rebuild.md), [baseline](diagnostics/T077-baseline.md), [S1 brief](proposals/T077-s1-property-authority.md), [S3 plan](proposals/T077-s3-plan.md), [S3 counts](diagnostics/T077-s3-counts.md), [S3b frozen brief](proposals/T077-s3b-brief.md).
 - Unresolved: S1+S2 payoff (S2 v1 regressed every aggregate; repair round adds prototype-in-layout and validity cells); pre-existing deep Rust-stack exhaustion is S3d-owned.
-- Next action: S2 owner finishes repair round 1; lead measures S1+S2 and integrates; then S3b (T074 approved) after S2. Do not queue another baseline or revive closed unit gates.
+- Next action: lead measures/integrates S1+S2, pins accepted base/API/measurement endpoints and adopts the frozen S3b cuts; implement S3b only then (six T074 decisions approved). Do not queue another baseline or revive closed unit gates.
 
 ## Authority and scope
 
@@ -97,7 +97,7 @@ plus aggregate improvement is progress, not proof of that campaign target.
 
 ## S3 — Universal bytecode, frames, calls and native ABI
 
-- Contract: [execution](../docs/design/core-rebuild-execution.md); [five-stage proposal and complete inventories](proposals/T077-s3-plan.md). The split is proposed, not approved or implemented.
+- Contract: [execution](../docs/design/core-rebuild-execution.md); [approved five-stage plan](proposals/T077-s3-plan.md); [frozen S3b implementation brief](proposals/T077-s3b-brief.md) with typed Context, complete ports, binding structures, B1–B6 commits and verification matrix. S3a is integrated; S3b remains design only.
 - Landings: S3a direct native entries/slices; S3b typed Context and T074
   binding authority; S3c owning activations/suspension; S3d explicit JS stack and
   callee argument writes; S3e universal register Code and executor deletion.
