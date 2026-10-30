@@ -48,6 +48,25 @@ even where its internal key becomes an ID.
 Review those signatures and size assertions before separate owners begin ports.
 This is source/API review, not a request to reauthorize the rebuild.
 
+## S1 source API freeze (implementation owner, base `dd0905b2`)
+
+`KeyId` is the unified nonzero u32; `KeyLease` owns `KeyRecord`. `Atom` and
+`AtomId` name the same lease/ID types for prelinked string operands.
+`AtomDomain::{intern,intern_symbol,lease}` share one weak ID directory.
+`PropertyOwner::new(AtomDomain)` explicitly owns the domain's shape root and
+bounded retention cache outside the domain. A weak domain attachment makes
+owner creation idempotent while an owner is live. Realms/host creation share that
+owner; `empty_store()` starts from its root. Layouts keep the domain strongly
+and the cache owner weakly, so escaping stores remain usable without a cycle.
+`NamedStore::lookup(&mut self, &KeyLease)` returns an exclusive borrowed
+`Lookup`; consuming `define`/`remove` uses its single ID probe. Foreign leases
+return `ForeignKey` before an ID probe. `get`, `data_slot`, `load_data`,
+`replace_data`, `keys`, `layout` and `epoch` are the remaining scoped APIs.
+No descriptor or mutable layout internals escape to semantic consumers.
+The foundation asserts KeyId 4, KeyLease 8, ShapeEntry 16, NamedStore 48 and
+RefCell<NamedStore> 56 bytes on the current 64-bit target. Other-target size
+verification and the ordinary hot payload remain stage-close requirements.
+
 ## Implementation sequence within S1
 
 1. Add key-ID/lease tests and layout transition/dictionary implementation. Unit

@@ -78,6 +78,15 @@ declare_counters! {
     /// Property-name atoms created by an interning domain. Steady-state
     /// named access must add none: linked code reuses its atoms.
     property_atoms_created,
+    /// Calls to string or symbol interning, including existing-key hits.
+    property_key_interns,
+    /// ID lookup probes performed by the named-store authority.
+    property_id_probes,
+    /// Shape transition hits and misses; hits copy no fields.
+    property_transition_hits,
+    property_transition_misses,
+    property_shape_field_copies,
+    property_shape_nodes_created,
     /// Bodies whose named operands were linked to an atom domain. One per
     /// body and domain; a count that grows with executed operations means
     /// linking is not cached.

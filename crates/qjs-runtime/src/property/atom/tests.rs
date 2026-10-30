@@ -139,3 +139,50 @@ fn exhaustion_fails_instead_of_wrapping() {
     // Existing atoms are still found after exhaustion.
     assert_eq!(domain.intern("a").expect("intern"), penultimate);
 }
+
+#[test]
+fn symbols_share_the_namespace_but_only_alias_by_identity() {
+    let domain = AtomDomain::new();
+    let first = crate::ObjectRef::new(std::collections::HashMap::new());
+    let second = crate::ObjectRef::new(std::collections::HashMap::new());
+    let text = domain.intern("same description").unwrap();
+    let a = domain.intern_symbol(&first).unwrap();
+    let again = domain.intern_symbol(&first).unwrap();
+    let b = domain.intern_symbol(&second).unwrap();
+    assert_eq!(a, again);
+    assert_ne!(a, b);
+    assert_ne!(a.id(), text.id());
+    assert_ne!(b.id(), text.id());
+    assert!(a.symbol().unwrap().ptr_eq(&first));
+    assert_eq!(a.string_text(), None);
+    assert_eq!(a.array_index(), None);
+    assert_eq!(domain.lease(a.id()), Some(a.clone()));
+    let id = a.id();
+    drop(a);
+    drop(again);
+    assert!(domain.lease(id).is_none());
+}
+
+#[test]
+fn symbol_and_directory_churn_is_swept_with_text_indices() {
+    let domain = AtomDomain::new();
+    for _ in 0..1000 {
+        let symbol = crate::ObjectRef::new(std::collections::HashMap::new());
+        let lease = domain.intern_symbol(&symbol).unwrap();
+        assert!(domain.lease(lease.id()).is_some());
+    }
+    assert_eq!(domain.live_count(), 0);
+    assert!(domain.table_len() <= super::MIN_SWEEP_LEN);
+    let table = domain.0.table.borrow();
+    assert!(table.symbols.len() <= super::MIN_SWEEP_LEN);
+}
+
+#[test]
+fn symbols_and_strings_exhaust_the_same_counter_without_wrapping() {
+    let domain = AtomDomain::starting_at(NonZeroU32::new(u32::MAX).unwrap());
+    let symbol = crate::ObjectRef::new(std::collections::HashMap::new());
+    let last = domain.intern_symbol(&symbol).unwrap();
+    assert_eq!(last.id().get(), u32::MAX);
+    assert_eq!(domain.intern("overflow"), Err(AtomDomainExhausted));
+    assert_eq!(domain.intern_symbol(&symbol), Ok(last));
+}

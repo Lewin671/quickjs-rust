@@ -1,43 +1,22 @@
-//! Property-name atoms: an owned interning domain for string property keys.
+//! Runtime property-key identity and weak interning.
 //!
-//! An [`AtomDomain`] maps the exact UTF-16 code units of a string property key
-//! to one shared [`Atom`]. Realms that exchange objects share a domain; an
-//! independent runtime root owns its own. Symbols and private names are
-//! object identities and never enter a domain, so a string can never alias
-//! one of them.
-//!
-//! Invariants that keep atom identity sound:
-//!
-//! - **Exact keys.** The runtime stores strings as UTF-8 with lone surrogates
-//!   escaped to sentinel scalars. String builders produce canonical text;
-//!   this untyped `&str` boundary also defensively canonicalizes code units
-//!   ([`canonical_property_text`]), so two keys share an atom
-//!   exactly when their code units are equal. Nothing else is folded: `"01"`
-//!   and `"1"` are distinct atoms, and only the canonical decimal form of an
-//!   index carries [`Atom::array_index`].
-//! - **One live atom per key.** Within one domain, two live atoms for the same
-//!   code units are the same entry, so `Atom` equality is pointer identity.
-//!   Atoms from different domains are never equal; code that holds atoms
-//!   records the domain it linked against (see `bytecode/linked_code.rs`), so
-//!   it never interprets a foreign domain's ids.
-//! - **Ids are never reused.** Ids come from a per-domain monotonic counter.
-//!   An atom that every owner dropped is reclaimed; interning its text again
-//!   allocates a fresh id. Exhaustion is an error ([`AtomDomainExhausted`]),
-//!   never a wrap.
-//! - **Bounded retention.** The domain holds only weak references. Dead table
-//!   entries are swept whenever the table doubles past its live size, so key
-//!   churn costs memory proportional to the live atoms only.
+//! Strings use exact canonical UTF-16 equality; symbols use object identity in
+//! the same monotonic, non-reused ID namespace. Layouts and linked code own
+//! leases. Content indices and the ID directory are weak and swept together;
+//! they do not keep historical keys or symbols alive. A lease records its
+//! domain weakly; layouts separately retain the owning domain.
 
 use std::borrow::Cow;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fmt;
 use std::num::NonZeroU32;
 use std::rc::{Rc, Weak};
 
-use crate::RuntimeError;
 use crate::string::{string_code_units, string_from_code_units_canonical};
 use crate::value::array_index_property_key;
 use crate::value::name_hash::NameMap;
+use crate::{ObjectRef, RuntimeError};
 
 /// Smallest table size that triggers a sweep of dead entries.
 const MIN_SWEEP_LEN: usize = 64;
@@ -47,9 +26,12 @@ const NO_ARRAY_INDEX: u32 = u32::MAX;
 
 /// An atom's id within its domain. Ids start at 1 and are never reused.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub(crate) struct AtomId(NonZeroU32);
+pub(crate) struct KeyId(NonZeroU32);
 
-impl AtomId {
+/// String operands use the same namespace as all other property keys.
+pub(crate) type AtomId = KeyId;
+
+impl KeyId {
     pub(crate) fn get(self) -> u32 {
         self.0.get()
     }
@@ -71,10 +53,10 @@ impl AtomDomainExhausted {
     }
 }
 
-struct AtomEntry {
+pub(crate) struct KeyRecord {
     id: AtomId,
-    /// Canonical text: the table key for this entry while it is live.
-    text: Rc<str>,
+    /// String units or a strong symbol identity, owned only by live leases.
+    kind: KeyKind,
     /// The canonical array index this key denotes, or [`NO_ARRAY_INDEX`].
     array_index: u32,
     /// The owning domain. Weak, so atoms never keep a dead domain's table
@@ -82,33 +64,59 @@ struct AtomEntry {
     domain: Weak<DomainState>,
 }
 
+enum KeyKind {
+    String(Rc<str>),
+    #[allow(dead_code)] // S1 foundation; ordinary symbol cutover follows.
+    Symbol(ObjectRef),
+}
+
 /// An owned reference to one interned property key.
 ///
 /// Cloning bumps a reference count. Equality is entry identity, which within
 /// one domain is equality of code units.
 #[derive(Clone)]
-pub(crate) struct Atom(Rc<AtomEntry>);
+pub(crate) struct KeyLease(Rc<KeyRecord>);
 
-impl Atom {
-    #[allow(dead_code)] // Keyed on by the layout authority (T056 M1.2); tested here.
+/// Named bytecode operands are string key leases.
+pub(crate) type Atom = KeyLease;
+
+impl KeyLease {
+    #[allow(dead_code)] // S1 layout foundation; ordinary cutover follows.
     pub(crate) fn id(&self) -> AtomId {
         self.0.id
     }
 
     /// The canonical stored text of this key.
     pub(crate) fn text(&self) -> &Rc<str> {
-        &self.0.text
+        match &self.0.kind {
+            KeyKind::String(text) => text,
+            KeyKind::Symbol(_) => panic!("symbol lease used as a named string operand"),
+        }
     }
 
     pub(crate) fn as_str(&self) -> &str {
-        &self.0.text
+        self.text()
     }
 
     /// The array index this key denotes when it is the canonical decimal form
     /// of an integer below 2^32 - 1. `"01"` and `"4294967295"` are not.
-    #[allow(dead_code)] // Classified by the layout authority (T056 M1.2); tested here.
+    #[allow(dead_code)] // S1 layout foundation; ordinary cutover follows.
     pub(crate) fn array_index(&self) -> Option<u32> {
         (self.0.array_index != NO_ARRAY_INDEX).then_some(self.0.array_index)
+    }
+
+    pub(crate) fn string_text(&self) -> Option<&str> {
+        match &self.0.kind {
+            KeyKind::String(text) => Some(text),
+            KeyKind::Symbol(_) => None,
+        }
+    }
+
+    pub(crate) fn symbol(&self) -> Option<&ObjectRef> {
+        match &self.0.kind {
+            KeyKind::Symbol(symbol) => Some(symbol),
+            KeyKind::String(_) => None,
+        }
     }
 
     /// Whether `domain` interned this atom.
@@ -117,26 +125,28 @@ impl Atom {
     }
 }
 
-impl PartialEq for Atom {
+impl PartialEq for KeyLease {
     fn eq(&self, other: &Self) -> bool {
         Rc::ptr_eq(&self.0, &other.0)
     }
 }
 
-impl Eq for Atom {}
+impl Eq for KeyLease {}
 
-impl fmt::Debug for Atom {
+impl fmt::Debug for KeyLease {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_tuple("Atom")
             .field(&self.0.id.get())
-            .field(&crate::string::string_to_utf8_lossy(&self.0.text))
+            .field(&self.string_text())
             .finish()
     }
 }
 
 struct AtomTable {
-    entries: NameMap<Rc<str>, Weak<AtomEntry>>,
+    entries: NameMap<Rc<str>, Weak<KeyRecord>>,
+    symbols: HashMap<usize, Weak<KeyRecord>>,
+    directory: HashMap<KeyId, Weak<KeyRecord>>,
     /// The next id to hand out; `None` once `u32::MAX` has been issued.
     next_id: Option<NonZeroU32>,
     sweep_at: usize,
@@ -147,20 +157,24 @@ impl AtomTable {
     fn allocate_id(&mut self) -> Result<AtomId, AtomDomainExhausted> {
         let id = self.next_id.ok_or(AtomDomainExhausted)?;
         self.next_id = id.checked_add(1);
-        Ok(AtomId(id))
+        Ok(KeyId(id))
     }
 
     fn sweep_if_due(&mut self) {
-        if self.entries.len() < self.sweep_at {
+        if self.directory.len() < self.sweep_at {
             return;
         }
         self.entries.retain(|_, entry| entry.strong_count() > 0);
-        self.sweep_at = (self.entries.len() * 2).max(MIN_SWEEP_LEN);
+        self.symbols.retain(|_, entry| entry.strong_count() > 0);
+        self.directory.retain(|_, entry| entry.strong_count() > 0);
+        self.sweep_at = (self.directory.len() * 2).max(MIN_SWEEP_LEN);
     }
 }
 
 struct DomainState {
     table: RefCell<AtomTable>,
+    // Only an attachment, never a strong root: layout owners retain the domain.
+    shape_owner: RefCell<Weak<crate::value::layout::OwnerState>>,
 }
 
 /// An owned atom interning domain. Cloning shares the domain.
@@ -174,8 +188,11 @@ impl AtomDomain {
 
     fn starting_at(first_id: NonZeroU32) -> Self {
         Self(Rc::new(DomainState {
+            shape_owner: RefCell::new(Weak::new()),
             table: RefCell::new(AtomTable {
                 entries: NameMap::default(),
+                symbols: HashMap::new(),
+                directory: HashMap::new(),
                 next_id: Some(first_id),
                 sweep_at: MIN_SWEEP_LEN,
                 created: 0,
@@ -186,6 +203,7 @@ impl AtomDomain {
     /// Interns the key `text` (stored runtime form), returning the domain's
     /// live atom for its code units or a new one.
     pub(crate) fn intern(&self, text: &str) -> Result<Atom, AtomDomainExhausted> {
+        crate::diagnostics::count!(property_key_interns);
         let canonical = canonical_property_text(text);
         let mut table = self.0.table.borrow_mut();
         if let Some(entry) = table
@@ -193,16 +211,16 @@ impl AtomDomain {
             .get(canonical.as_ref())
             .and_then(Weak::upgrade)
         {
-            return Ok(Atom(entry));
+            return Ok(KeyLease(entry));
         }
         let id = table.allocate_id()?;
         let text: Rc<str> = Rc::from(canonical.as_ref());
         let array_index = array_index_property_key(&text)
             .and_then(|index| u32::try_from(index).ok())
             .unwrap_or(NO_ARRAY_INDEX);
-        let entry = Rc::new(AtomEntry {
+        let entry = Rc::new(KeyRecord {
             id,
-            text: Rc::clone(&text),
+            kind: KeyKind::String(Rc::clone(&text)),
             array_index,
             domain: Rc::downgrade(&self.0),
         });
@@ -211,9 +229,56 @@ impl AtomDomain {
         table.entries.remove(text.as_ref());
         table.sweep_if_due();
         table.entries.insert(text, Rc::downgrade(&entry));
+        table.directory.insert(id, Rc::downgrade(&entry));
         table.created += 1;
         crate::diagnostics::count!(property_atoms_created);
-        Ok(Atom(entry))
+        Ok(KeyLease(entry))
+    }
+
+    /// Symbols are interned by identity, never by description. A live lease
+    /// pins its symbol, so its address cannot be reused while indexed.
+    #[allow(dead_code)] // S1 foundation; ordinary symbol cutover follows.
+    pub(crate) fn intern_symbol(
+        &self,
+        symbol: &ObjectRef,
+    ) -> Result<KeyLease, AtomDomainExhausted> {
+        crate::diagnostics::count!(property_key_interns);
+        let mut table = self.0.table.borrow_mut();
+        if let Some(entry) = table.symbols.get(&symbol.address()).and_then(Weak::upgrade) {
+            return Ok(KeyLease(entry));
+        }
+        let id = table.allocate_id()?;
+        let entry = Rc::new(KeyRecord {
+            id,
+            kind: KeyKind::Symbol(symbol.clone()),
+            array_index: NO_ARRAY_INDEX,
+            domain: Rc::downgrade(&self.0),
+        });
+        table.sweep_if_due();
+        table
+            .symbols
+            .insert(symbol.address(), Rc::downgrade(&entry));
+        table.directory.insert(id, Rc::downgrade(&entry));
+        table.created += 1;
+        crate::diagnostics::count!(property_atoms_created);
+        Ok(KeyLease(entry))
+    }
+
+    /// A borrowed numeric ID alone never keeps its record alive.
+    #[allow(dead_code)] // ID-directory API; callers own a lease while borrowing its ID.
+    pub(crate) fn lease(&self, id: KeyId) -> Option<KeyLease> {
+        self.0
+            .table
+            .borrow()
+            .directory
+            .get(&id)
+            .and_then(Weak::upgrade)
+            .map(KeyLease)
+    }
+
+    #[allow(dead_code)] // S1 foundation; runtime owners are installed at cutover.
+    pub(crate) fn shape_owner(&self) -> &RefCell<Weak<crate::value::layout::OwnerState>> {
+        &self.0.shape_owner
     }
 
     /// A non-owning handle that identifies this domain while it lives.
@@ -237,7 +302,7 @@ impl AtomDomain {
         self.0
             .table
             .borrow()
-            .entries
+            .directory
             .values()
             .filter(|entry| entry.strong_count() > 0)
             .count()
@@ -246,7 +311,7 @@ impl AtomDomain {
     /// Table entries, live or awaiting a sweep.
     #[cfg(test)]
     pub(crate) fn table_len(&self) -> usize {
-        self.0.table.borrow().entries.len()
+        self.0.table.borrow().directory.len()
     }
 }
 

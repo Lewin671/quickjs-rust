@@ -1,11 +1,11 @@
 # T077: In-place core rebuild
 
-- Status: active; target/stages designed under lead and user authorization of 2026-10-29; implementation next.
-- Implementation: none; documentation only. Runtime/parser/tools remain byte-identical to `6663738f`.
-- Verified at: source audit at `6663738f000135120f0217f6307859d5e13e750b`, 2026-10-29; context, diff and staged fast gates pass on this design tree; no runtime candidate.
-- Evidence: [target](../docs/design/core-rebuild.md), [S1 brief](proposals/T077-s1-property-authority.md), historical T065/T068/T075/T076 records linked from the target.
-- Unresolved: pending fresh baseline; S3 requires T074 eval decisions; compact-pointer portability qualification and final campaign-target progress remain unmeasured.
-- Next action: S1 owner implements the linked brief; in parallel the S3 inventory owner splits S3 into landable sub-stages (lead amendment 2026-10-29); lead records the pending baseline. Do not queue another baseline or revive closed unit gates.
+- Status: active; S1 implementation in progress on `agent/t077-s1-property-authority/codex`, base `dd0905b2`.
+- Implementation: key-ID/lease and isolated layout foundation present; ordinary objects still use their original storage pending the single cutover. All S1 paths assigned to one owner, no parallel edits.
+- Verified at: foundation milestone working tree, 2026-10-29; default fast gate: clippy clean, 2,396 runtime tests pass (before final epoch discriminator); focused atom tests 12/12 and perf-counters layout tests 13/13 pass. No S1 acceptance claim.
+- Evidence: [target](../docs/design/core-rebuild.md), [S1 brief](proposals/T077-s1-property-authority.md); foundation tests in `value/layout/tests.rs` and `property/atom/tests.rs`.
+- Unresolved: ordinary storage/constructor/cache cutover, final semantic/exact gates and deletion audit; baseline receipt remains lead-owned; S3 requires T074 decisions.
+- Next action: replace ordinary string and symbol storage together, migrate explicit owners at every construction site, and delete replaced stores. Run feature/full/NG/exact gates after cutover. Never push or merge this owner branch.
 
 ## Authority and scope
 
@@ -73,6 +73,8 @@ plus aggregate improvement is progress, not proof of that campaign target.
   linked code and family constructor ports. No two owners edit shared headers.
 - Risk/fallback: layout growth, atom retention, compiler layout drift; bound caches,
   measure full portfolio; revert this stage if authority/neutrality cannot hold.
+
+Foundation inventory, sizes and verification: [milestone evidence](archive/T077-s1-foundation.md).
 
 ## S2 — All named stores and shape ICs
 
