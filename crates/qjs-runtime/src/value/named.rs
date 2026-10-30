@@ -59,6 +59,7 @@ pub(crate) enum Probe {
     Exotic,
 }
 impl Value {
+    #[inline(always)]
     pub(crate) fn with_named_target<R>(&self, f: impl FnOnce(NamedTarget<'_>) -> R) -> Option<R> {
         Some(match self {
             Self::Object(o) => f(NamedTarget::Object(o)),

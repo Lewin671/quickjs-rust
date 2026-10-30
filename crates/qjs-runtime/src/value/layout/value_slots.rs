@@ -47,7 +47,28 @@ impl ValueSlots {
         }
         *self = Self::Heap(values);
     }
+    pub(super) fn extend(&mut self, mut values: impl ExactSizeIterator<Item = Value>) {
+        self.reserve(values.len());
+        if let Self::Heap(slots) = self {
+            slots.extend(values);
+            return;
+        }
+        if matches!(self, Self::Empty) && values.len() == 2 {
+            *self = Self::Two([
+                values.next().expect("first slot"),
+                values.next().expect("second slot"),
+            ]);
+            return;
+        }
+        for value in values {
+            self.push(value);
+        }
+    }
     pub(super) fn push(&mut self, value: Value) {
+        if let Self::Heap(values) = self {
+            values.push(value);
+            return;
+        }
         *self = match std::mem::replace(self, Self::Empty) {
             Self::Empty => Self::One(value),
             Self::One(first) => Self::Two([first, value]),
@@ -57,10 +78,7 @@ impl ValueSlots {
                 values.push(value);
                 Self::Heap(values)
             }
-            Self::Heap(mut values) => {
-                values.push(value);
-                Self::Heap(values)
-            }
+            Self::Heap(_) => unreachable!("heap append handled above"),
         };
     }
     pub(super) fn pop(&mut self) -> Option<Value> {

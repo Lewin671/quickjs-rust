@@ -10,12 +10,12 @@ use crate::{Property, Value};
 
 use super::ObjectRef;
 
-use crate::value::layout::{AppendRecipe, NamedStore};
+use crate::value::layout::{FieldPlans, NamedStore};
 use std::cell::RefCell;
-type Plan = RefCell<Option<AppendRecipe>>;
+type Plan = RefCell<FieldPlans>;
 
 fn define_field(store: &mut NamedStore, key: &str, value: &Value, plan: &Plan) -> bool {
-    if let Some(recipe) = plan.borrow().as_ref()
+    if let Some(recipe) = plan.borrow().single.as_ref()
         && recipe.apply(store, value.clone())
     {
         return recipe.is_index();
@@ -30,7 +30,7 @@ fn define_field(store: &mut NamedStore, key: &str, value: &Value, plan: &Plan) -
     let added = lookup.descriptor().is_none();
     lookup.define(Property::enumerable(value.clone()));
     if added && store.domain().ic_policy().enabled {
-        *plan.borrow_mut() = store.append_recipe(before, slot);
+        plan.borrow_mut().single = store.append_recipe(before, slot);
     }
     added && lease.array_index().is_some()
 }
@@ -48,7 +48,7 @@ impl ObjectRef {
         }
         let mut store = self.0.properties.borrow_mut();
         // A recipe guard also proves absence; only the cold path probes by key.
-        if let Some(recipe) = plan.borrow().as_ref()
+        if let Some(recipe) = plan.borrow().single.as_ref()
             && recipe.apply(&mut store, value.clone())
         {
             self.note_cached_append(recipe.is_index());
@@ -61,22 +61,45 @@ impl ObjectRef {
         true
     }
     /// Only observer-free primitive segments may share a borrow/reservation.
-    /// All definitions still publish their prefixes in source order.
+    /// Values are filled in source order before the final segment is published.
     pub(crate) fn install_constant_class_fields<'a>(
         &self,
         fields: impl ExactSizeIterator<Item = (&'a Rc<str>, &'a Value, &'a Plan)> + Clone,
     ) -> bool {
-        if !ordinary(self) || fields.clone().any(|(key, _, _)| special(key)) {
+        if !ordinary(self) {
             return false;
         }
+        let Some((_, _, first)) = fields.clone().next() else {
+            return true;
+        };
         let mut store = self.0.properties.borrow_mut();
-        if store.descriptors().any(|p| !p.configurable) {
+        if let Some(segment) = first.borrow().segment.as_ref()
+            && let Some(indices) = segment.apply(
+                &mut store,
+                fields.clone().map(|(_, value, _)| value.clone()),
+            )
+        {
+            self.0
+                .index_property_count
+                .set(self.0.index_property_count.get() + indices as u32);
+            return true;
+        }
+        if fields.clone().any(|(key, _, _)| special(key))
+            || store.descriptors().any(|p| !p.configurable)
+        {
             return false;
         }
-        store.reserve(fields.len());
+        let width = fields.len();
+        let start = store.len();
+        let before = store.version();
+        store.reserve(width);
         for (key, value, plan) in fields {
             self.note_cached_append(define_field(&mut store, key, value, plan));
         }
+        if store.domain().ic_policy().enabled {
+            first.borrow_mut().segment = store.append_batch_recipe(before, start, width);
+        }
+
         true
     }
 }
@@ -122,5 +145,38 @@ mod tests {
         assert_eq!(object.get("0"), Some(last));
         assert_eq!(object.0.index_property_count.get(), 1);
         assert_ne!(object.layout_revision(), layout);
+    }
+}
+
+#[cfg(test)]
+mod segment_tests {
+    use super::*;
+    use std::collections::HashMap;
+    #[test]
+    fn hot_segment_publishes_ordered_live_values_and_counts_numeric_keys() {
+        let domain = crate::property::atom::AtomDomain::new();
+        let _owner = crate::value::layout::PropertyOwner::new(domain.clone());
+        let keys: [Rc<str>; 3] = ["a".into(), "b".into(), "0".into()];
+        let plans: [Plan; 3] = std::array::from_fn(|_| RefCell::default());
+        let values = [Value::Number(1.0), Value::Number(2.0), Value::Number(3.0)];
+        let first = ObjectRef::new(HashMap::new(), &domain);
+        let fields = || {
+            keys.iter()
+                .zip(values.iter())
+                .zip(plans.iter())
+                .map(|((k, v), p)| (k, v, p))
+        };
+        assert!(first.install_constant_class_fields(fields()));
+        assert!(plans[0].borrow().segment.is_some());
+        let second = ObjectRef::new(HashMap::new(), &domain);
+        assert!(second.install_constant_class_fields(fields()));
+        assert_eq!(second.layout_revision(), first.layout_revision());
+        assert_eq!(second.own_property_names(), vec!["0", "a", "b"]);
+        assert_eq!(second.0.index_property_count.get(), 1);
+        assert_eq!(second.get("a"), Some(Value::Number(1.0)));
+        assert_eq!(second.get("0"), Some(Value::Number(3.0)));
+        second.freeze();
+        assert!(!second.install_constant_class_fields(fields()));
+        assert_eq!(second.get("0"), Some(Value::Number(3.0)));
     }
 }

@@ -29,7 +29,7 @@ pub(crate) struct InstanceFieldInitializer {
     /// The property key the field installs (computed keys are resolved at class
     /// definition time).
     key: InstanceFieldKey,
-    pub(crate) definition_plan: Rc<RefCell<Option<crate::value::layout::AppendRecipe>>>,
+    pub(crate) definition_plan: Rc<RefCell<crate::value::layout::FieldPlans>>,
     /// The initializer thunk: a function evaluated with `this` = the instance.
     /// `None` for a field with no initializer (which installs `undefined`).
     pub(crate) initializer: Option<Function>,

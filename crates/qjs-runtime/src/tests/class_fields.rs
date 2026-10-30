@@ -477,3 +477,13 @@ fn warmed_field_prefixes_stay_observable_and_do_not_call_inherited_setters() {
         Ok(Value::Boolean(true))
     );
 }
+
+#[test]
+fn warmed_constant_segments_keep_partial_definition_before_a_fixed_field_error() {
+    assert_eq!(
+        eval(
+            "let target={};function Base(){return target;}class C extends Base {a=1;b=2;c=3;}new C();target={};Object.defineProperty(target,'b',{value:0});let threw=false;try{new C();}catch(e){threw=e instanceof TypeError;}threw && target.a===1 && target.b===0 && !Object.prototype.hasOwnProperty.call(target,'c');"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}

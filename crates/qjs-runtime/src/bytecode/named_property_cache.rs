@@ -309,6 +309,10 @@ impl NamedPropertyCache {
             count_event(target, Event::Hit);
             return Some(value);
         }
+        self.data_value_multiple(&state, target)
+    }
+    #[inline(never)]
+    fn data_value_multiple(&self, state: &State, target: NamedTarget<'_>) -> Option<Value> {
         if let Entries::SharedOwnPoly(entries) = &state.entries {
             let value = target
                 .with_store(|store| {
@@ -323,7 +327,7 @@ impl NamedPropertyCache {
                     }
                     let entry = &entries[mask.trailing_zeros() as usize];
                     #[cfg(debug_assertions)]
-                    self.verify_entry(&state, entry, target);
+                    self.verify_entry(state, entry, target);
                     store.load_guarded_data(entry.slot as usize)
                 })
                 .flatten();
@@ -350,7 +354,7 @@ impl NamedPropertyCache {
                         })
                         .and_then(|entry| {
                             #[cfg(debug_assertions)]
-                            self.verify_entry(&state, entry, target);
+                            self.verify_entry(state, entry, target);
                             store.load_guarded_data(entry.slot as usize)
                         })
                 })
@@ -360,7 +364,7 @@ impl NamedPropertyCache {
                 return own;
             }
         }
-        self.data_value_slow(&state, target)
+        self.data_value_slow(state, target)
     }
     #[inline(never)]
     fn data_value_slow(&self, state: &State, target: NamedTarget<'_>) -> Option<Value> {

@@ -27,7 +27,9 @@ Receiver allocation reserves its observed append width (at most 16), without
 publishing future fields. Root width hints are nonsemantic metadata; keys,
 attributes and slot order remain immutable on shared layouts.
 Class definitions retain per-field prefix plans and publish only after each
-initializer. Observer-free primitive segments share one borrow/reservation.
+initializer. Observer-free primitive segments fill slots in order, then publish
+one final layout under their exclusive borrow; no future field precedes an
+effectful initializer. Segment and single-field plans share one metadata cell.
 JSON parses retain the preceding string-key sequence per object depth: direct
 key comparisons fill owning slots; the first mismatch resumes generic insertion
 from its completed prefix. Reviver source records retain the metadata path.

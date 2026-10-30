@@ -775,7 +775,7 @@ pub(crate) fn initialize_instance_fields(
 type ConstantPublicField<'a> = (
     &'a Rc<str>,
     &'a Value,
-    &'a std::cell::RefCell<Option<crate::value::layout::AppendRecipe>>,
+    &'a std::cell::RefCell<crate::value::layout::FieldPlans>,
 );
 fn constant_public_field(element: &InstanceElementInitializer) -> Option<ConstantPublicField<'_>> {
     let InstanceElementInitializer::PublicField(field) = element else {

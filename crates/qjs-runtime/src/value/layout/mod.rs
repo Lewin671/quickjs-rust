@@ -14,7 +14,8 @@ use crate::property::atom::{AtomDomain, KeyId, KeyLease};
 use crate::{Property, Value};
 
 mod append_recipe;
-pub(crate) use append_recipe::AppendRecipe;
+pub(crate) use append_recipe::{AppendRecipe, FieldPlans};
+mod append_batch;
 mod edit;
 mod host;
 mod index;

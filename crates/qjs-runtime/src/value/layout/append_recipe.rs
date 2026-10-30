@@ -2,6 +2,12 @@
 //! Each hit publishes one prefix under the receiver's exclusive store borrow.
 use super::*;
 
+#[derive(Default)]
+pub(crate) struct FieldPlans {
+    pub(crate) single: Option<AppendRecipe>,
+    pub(crate) segment: Option<super::append_batch::AppendBatchRecipe>,
+}
+
 pub(crate) struct AppendRecipe {
     before: LayoutVersion,
     after: Rc<Layout>,
