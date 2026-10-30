@@ -1,11 +1,11 @@
 # T077: In-place core rebuild
 
 - Status: active; S3a accepted on main, S2 round-2 main merge implemented and verified on the owner branch.
-- Implementation: round-1 S2 remains present; merging main `dcee3c56` (S3a runtime `71294a20`) and preserving explicit realm creation in direct native entries. No construction/array-size repair yet.
+- Implementation: round-1 S2 remains present; merging main `dcee3c56` (S3a runtime `71294a20`) and preserving explicit realm creation in direct native entries. Construction before-state measured; [repair plan](proposals/T077-s2-round2-construction.md) frozen, no repair code yet.
 - Verified at: prior S2 `e1d8a6a3` gates/exact remain historical; merged working tree fast gate passes (2,448 runtime, 117 selected Test262), focused native 8/function 13 and NG 266 pass. FunctionData is 320 bytes with S3a entry/alignment. No new performance standing.
-- Evidence: [round-1 receipt](archive/T077-s2-round1-verification.md), [S3a acceptance](diagnostics/T077-s3a-acceptance.md), [S3b brief](proposals/T077-s3b-brief.md).
-- Unresolved: merge verification, per-object construction breakdown versus dcee3c56, construction payoff, array header/RSS, final gates and diagnostics.
-- Next action: commit the authorized main-to-owner merge, measure construction before changes, then repair construction and arrays. Never push origin or merge into main; held-out remains lead-owned.
+- Evidence: [round-1 receipt](archive/T077-s2-round1-verification.md), [construction before-state](diagnostics/T077-s2-r2-before.md), [S3a acceptance](diagnostics/T077-s3a-acceptance.md), [S3b brief](proposals/T077-s3b-brief.md).
+- Unresolved: merge verification, construction payoff versus dcee3c56, array header/RSS, final gates and diagnostics.
+- Next action: commit the authorized main-to-owner merge, implement evidence-selected construction repairs, recollect counts/triage, then repair array header/RSS. Never push origin or merge into main; held-out remains lead-owned.
 
 ## Authority and scope
 
