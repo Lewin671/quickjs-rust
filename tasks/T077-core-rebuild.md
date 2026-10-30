@@ -1,11 +1,11 @@
 # T077: In-place core rebuild
 
-- Status: active; S2 runtime implementation present on `agent/t077-s2-named-stores/codex`, base `b2daec46`; correctness scans and formal acceptance remain open.
-- Implementation: NamedStore for all materialized families; weak 32-byte mono/four-way ICs; registered prototype, enumeration and creation dependencies; all consumers ported; full named IC-off mode; no exact-value caches or value epochs.
-- Verified at: `fc64629a` fast gate (2,418 runtime; 65 curated), debug IC tests 2,418 and ten development checksums/counters pass. Prior complete full/feature/NG/x86 gates pass; final full gate and cached/IC-off exact scans running on the frozen final artifact.
-- Evidence: [verification ledger](proposals/T077-s2-verification.md), [first counters](archive/T077-s2-counters.md), [final replay](archive/T077-s2-creation-counters.md), [boundary](proposals/T077-s2-named-stores.md).
-- Unresolved: complete exact scans/burndowns; iMac runner pushes temporary refs, so no-push clarification and timing remain pending. No stage acceptance or speedup claim.
-- Next action: complete scans and final gates, freeze receipts; lead resolves benchmark transfer and measures all four aggregates. Never push or merge.
+- Status: active; S2 implementation and correctness complete on `agent/t077-s2-named-stores/codex`, base `b2daec46`; performance acceptance blocked on benchmark-transfer authorization and lead measurement.
+- Implementation: all materialized named families use NamedStore; weak 32-byte mono/four-way ICs and registered prototype/enumeration/creation dependencies; full named IC-off mode; exact-value caches and legacy value epochs deleted.
+- Verified at: engine `fc64629a`, 2026-10-30 UTC: full gate (2,418 runtime; 5,170 curated), combined features 2,459, debug IC tests, NG 259 in both modes, x86 size/cache proofs; cached and IC-off exact scans each 42,672/42,672 configured passes, zero gaps. Both burndowns recorded.
+- Evidence: [final verification](archive/T077-s2-verification.md), [first counters](archive/T077-s2-counters.md), [final replay](archive/T077-s2-creation-counters.md), [boundary](proposals/T077-s2-named-stores.md).
+- Unresolved: runner submits temporary refs via git push, forbidden by the user; no clarification received, timing job submitted or speedup claimed. S1/formal four-aggregate acceptance and linker-order revalidation remain lead-owned.
+- Next action: lead authorizes/performs benchmark transfer, measures quick triage against `dd0905b2` and all four formal aggregates, then decides S2 acceptance. This owner never pushes or merges.
 
 ## Authority and scope
 
