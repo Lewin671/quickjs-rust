@@ -42,13 +42,8 @@ pub(crate) fn install_regexp(env: &mut CallEnv, global_this: &Value, object_prot
         ObjectRef::with_prototype(HashMap::new(), Some(object_prototype), env.realm().atoms());
     regexp_prototype.set_to_string_tag("RegExp");
 
-    let regexp_function = Function::new_native(
-        Some("RegExp"),
-        2,
-        NativeFunction::RegExp,
-        true,
-        env.realm().atoms(),
-    );
+    let regexp_function =
+        Function::new_native(Some("RegExp"), 2, NativeFunction::RegExp, true, env.realm());
     regexp_function.define_property(
         "escape".to_owned(),
         Property::non_enumerable(Value::Function(Function::new_native(
@@ -56,7 +51,7 @@ pub(crate) fn install_regexp(env: &mut CallEnv, global_this: &Value, object_prot
             1,
             NativeFunction::RegExpEscape,
             false,
-            env.realm().atoms(),
+            env.realm(),
         ))),
     );
     regexp_prototype.define_non_enumerable(
@@ -74,7 +69,7 @@ pub(crate) fn install_regexp(env: &mut CallEnv, global_this: &Value, object_prot
             0,
             NativeFunction::RegExpPrototypeToString,
             false,
-            env.realm().atoms(),
+            env.realm(),
         )),
     );
     regexp_prototype.define_non_enumerable(
@@ -84,7 +79,7 @@ pub(crate) fn install_regexp(env: &mut CallEnv, global_this: &Value, object_prot
             2,
             NativeFunction::RegExpPrototypeCompile,
             false,
-            env.realm().atoms(),
+            env.realm(),
         )),
     );
     regexp_prototype.define_non_enumerable(
@@ -94,7 +89,7 @@ pub(crate) fn install_regexp(env: &mut CallEnv, global_this: &Value, object_prot
             1,
             NativeFunction::RegExpPrototypeExec,
             false,
-            env.realm().atoms(),
+            env.realm(),
         )),
     );
     regexp_prototype.define_non_enumerable(
@@ -104,7 +99,7 @@ pub(crate) fn install_regexp(env: &mut CallEnv, global_this: &Value, object_prot
             1,
             NativeFunction::RegExpPrototypeTest,
             false,
-            env.realm().atoms(),
+            env.realm(),
         )),
     );
     if let Some(symbol) = symbol::search_symbol(env) {
@@ -115,7 +110,7 @@ pub(crate) fn install_regexp(env: &mut CallEnv, global_this: &Value, object_prot
                 1,
                 NativeFunction::RegExpPrototypeSearch,
                 false,
-                env.realm().atoms(),
+                env.realm(),
             ))),
         );
     }
@@ -124,60 +119,70 @@ pub(crate) fn install_regexp(env: &mut CallEnv, global_this: &Value, object_prot
     symbol_replace::install_regexp_prototype_replace(env, &regexp_prototype);
     symbol_split::install_regexp_prototype_split(env, &regexp_prototype);
     define_regexp_accessor(
+        env.realm(),
         global_this,
         &regexp_prototype,
         "source",
         NativeFunction::RegExpPrototypeSource,
     );
     define_regexp_accessor(
+        env.realm(),
         global_this,
         &regexp_prototype,
         "flags",
         NativeFunction::RegExpPrototypeFlags,
     );
     define_regexp_accessor(
+        env.realm(),
         global_this,
         &regexp_prototype,
         "global",
         NativeFunction::RegExpPrototypeGlobal,
     );
     define_regexp_accessor(
+        env.realm(),
         global_this,
         &regexp_prototype,
         "dotAll",
         NativeFunction::RegExpPrototypeDotAll,
     );
     define_regexp_accessor(
+        env.realm(),
         global_this,
         &regexp_prototype,
         "ignoreCase",
         NativeFunction::RegExpPrototypeIgnoreCase,
     );
     define_regexp_accessor(
+        env.realm(),
         global_this,
         &regexp_prototype,
         "multiline",
         NativeFunction::RegExpPrototypeMultiline,
     );
     define_regexp_accessor(
+        env.realm(),
         global_this,
         &regexp_prototype,
         "sticky",
         NativeFunction::RegExpPrototypeSticky,
     );
     define_regexp_accessor(
+        env.realm(),
         global_this,
         &regexp_prototype,
         "unicode",
         NativeFunction::RegExpPrototypeUnicode,
     );
     define_regexp_accessor(
+        env.realm(),
         global_this,
         &regexp_prototype,
         "hasIndices",
         NativeFunction::RegExpPrototypeHasIndices,
     );
     define_regexp_accessor(
+        env.realm(),
         global_this,
         &regexp_prototype,
         "unicodeSets",
@@ -197,18 +202,13 @@ pub(crate) fn install_regexp(env: &mut CallEnv, global_this: &Value, object_prot
 }
 
 fn define_regexp_accessor(
+    realm: &crate::function::Realm,
     global_this: &Value,
     prototype: &ObjectRef,
     name: &str,
     native: NativeFunction,
 ) {
-    let mut getter = Function::new_native(
-        Some(&format!("get {name}")),
-        0,
-        native,
-        false,
-        &prototype.domain(),
-    );
+    let mut getter = Function::new_native(Some(&format!("get {name}")), 0, native, false, realm);
     getter.insert_native_context(
         REGEXP_PROTOTYPE_BINDING.to_owned(),
         Value::Object(prototype.clone()),
@@ -451,6 +451,7 @@ pub(crate) fn native_regexp_prototype_exec(
     }
     let group_names = matcher::regexp_group_names(&source);
     Ok(regexp_match_array(
+        env.realm(),
         &input,
         match_result,
         unicode,
@@ -852,7 +853,7 @@ pub(crate) fn native_regexp_global_match(
     if matches.is_empty() {
         Ok(Value::Null)
     } else {
-        Ok(Value::Array(ArrayRef::new(env.realm().atoms(), matches)))
+        Ok(Value::Array(ArrayRef::new(env.realm(), matches)))
     }
 }
 
@@ -974,6 +975,7 @@ fn regexp_set_last_index_object(
 }
 
 fn regexp_match_array(
+    realm: &crate::function::Realm,
     input: &JsString,
     match_result: matcher::RegexpMatch,
     unicode: bool,
@@ -991,7 +993,7 @@ fn regexp_match_array(
             .map(|(start, end)| Value::String(input_slice(input, start, end, unicode).into()))
             .unwrap_or(Value::Undefined)
     }));
-    let result = ArrayRef::new(domain, values);
+    let result = ArrayRef::new(realm, values);
     let index = if unicode {
         code_unit_index_for_char_index(input, match_result.start)
     } else {
@@ -1007,6 +1009,7 @@ fn regexp_match_array(
         result.set_property(
             "indices".to_owned(),
             regexp_indices_array(
+                realm,
                 input,
                 (match_result.start, match_result.end),
                 &captures,
@@ -1023,6 +1026,7 @@ fn regexp_match_array(
 /// `[startCodeUnit, endCodeUnit]` pairs (or `undefined` for unmatched groups),
 /// with a `groups` property mirroring the named captures.
 fn regexp_indices_array(
+    realm: &crate::function::Realm,
     input: &str,
     whole: (usize, usize),
     captures: &[Option<(usize, usize)>],
@@ -1031,13 +1035,13 @@ fn regexp_indices_array(
     domain: &crate::property::atom::AtomDomain,
 ) -> Value {
     let mut entries = Vec::with_capacity(1 + captures.len());
-    entries.push(index_pair_value(input, Some(whole), unicode, domain));
+    entries.push(index_pair_value(realm, input, Some(whole), unicode, domain));
     entries.extend(
         captures
             .iter()
-            .map(|capture| index_pair_value(input, *capture, unicode, domain)),
+            .map(|capture| index_pair_value(realm, input, *capture, unicode, domain)),
     );
-    let indices = ArrayRef::new(domain, entries);
+    let indices = ArrayRef::new(realm, entries);
 
     let groups = if group_names.is_empty() {
         Value::Undefined
@@ -1046,6 +1050,7 @@ fn regexp_indices_array(
         for (capture_index, name) in group_names.iter().enumerate() {
             let Some(name) = name else { continue };
             let value = index_pair_value(
+                realm,
                 input,
                 captures.get(capture_index).copied().flatten(),
                 unicode,
@@ -1062,10 +1067,11 @@ fn regexp_indices_array(
 /// Convert a char-index range into a `[start, end]` array of code-unit
 /// positions, or `undefined` when the range is absent.
 fn index_pair_value(
+    realm: &crate::function::Realm,
     input: &str,
     range: Option<(usize, usize)>,
     unicode: bool,
-    domain: &crate::property::atom::AtomDomain,
+    _domain: &crate::property::atom::AtomDomain,
 ) -> Value {
     let Some((start, end)) = range else {
         return Value::Undefined;
@@ -1078,7 +1084,7 @@ fn index_pair_value(
         }
     };
     Value::Array(ArrayRef::new(
-        domain,
+        realm,
         vec![Value::Number(to_units(start)), Value::Number(to_units(end))],
     ))
 }

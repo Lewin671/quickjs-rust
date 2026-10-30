@@ -625,10 +625,10 @@ impl Vm<'_> {
         // `replace_existing_realm_with_cell`); they keep the named path.
         let property_slot = (name != "globalThis"
             && name != "__quickjsRustDynamicFunctionRealm"
-            && std::env::var_os("QJS_DISABLE_IC").is_none())
-        .then(|| global_this.any_storage_data_slot(name))
-        .flatten()
-        .map(|slot| (slot, global_this.layout_revision()));
+            && self.env.realm().atoms().ic_policy().enabled)
+            .then(|| global_this.any_storage_data_slot(name))
+            .flatten()
+            .map(|slot| (slot, global_this.layout_revision()));
         Some(TypedLoopSloppyGlobalWrite {
             slot,
             name: name.to_owned(),

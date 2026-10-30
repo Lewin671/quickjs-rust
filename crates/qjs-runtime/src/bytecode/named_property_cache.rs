@@ -1,25 +1,22 @@
-//! Per-site shape ICs. Entries contain weak structural guards and live slots,
-//! never a receiver or property value. Inherited proofs subscribe every chain
-//! node and explicitly guard the current receiver's first prototype edge.
+//! Per-site mono/four-way/mega caches over complete pure lookup outcomes.
+//! Layout identity implies [[Prototype]]; inherited hits use one prototype
+//! generation plus a live holder slot. No IC subscriptions or cached Values.
 use crate::property::atom::KeyLease;
-use crate::value::layout::{LayoutVersion, StructuralDependency};
-use crate::value::named::{NamedTarget, WeakEdge, WeakTarget};
-use crate::value::{OwnDataPropertyRead, OwnDataPropertyWrite};
-use crate::{CallEnv, ObjectRef, Prototype, Value};
+use crate::value::{
+    OwnDataPropertyWrite,
+    layout::{LayoutVersion, StructuralDependency},
+    named::{NamedTarget, Probe, Virtual, WeakTarget},
+};
+use crate::{CallEnv, ObjectRef, Property, Value};
 use std::{cell::RefCell, rc::Rc};
-
 #[cfg(test)]
 mod tests;
-
 #[derive(Clone, Debug)]
 pub(super) struct NamedPropertyCache(Rc<RefCell<State>>);
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct State {
     entries: Entries,
     local_slot: Option<usize>,
-    enabled: bool,
-    #[cfg(debug_assertions)]
-    verify: bool,
     #[cfg(debug_assertions)]
     name: Option<String>,
 }
@@ -35,70 +32,137 @@ enum Entries {
 struct Entry {
     version: LayoutVersion,
     slot: u32,
-    kind: u8,
+    flags: u32,
     chain: Option<Box<Chain>>,
 }
 #[derive(Debug)]
 struct Chain {
-    first: WeakEdge,
-    holder: WeakTarget,
-    holder_version: LayoutVersion,
-    holder_kind: u8,
+    holder: Option<WeakTarget>,
     validity: StructuralDependency,
 }
+const DATA: u32 = 0;
+const ACCESSOR: u32 = 1;
+const MISSING: u32 = 2;
+const VIRTUAL: u32 = 3;
+const OWN: u32 = 1 << 3;
+const WRITABLE: u32 = 1 << 4;
+const WRITE_FORBIDDEN: u32 = 1 << 5;
+const VERIFY: u32 = 1 << 6;
 #[cfg(target_pointer_width = "64")]
 const _: () = assert!(std::mem::size_of::<Entry>() == 32);
-
+#[derive(Debug)]
+pub(super) enum ReadOutcome {
+    Value(Value),
+    Accessor(Property),
+}
+impl ReadOutcome {
+    fn value(self) -> Option<Value> {
+        match self {
+            Self::Value(v) => Some(v),
+            _ => None,
+        }
+    }
+}
+#[derive(Clone)]
+struct Resolution {
+    probe: Probe,
+    holder: Option<WeakTarget>,
+    inherited: bool,
+}
+impl Resolution {
+    fn identity(&self) -> Option<(u8, usize)> {
+        if self.inherited {
+            self.holder.as_ref().map(WeakTarget::identity)
+        } else {
+            None
+        }
+    }
+    fn fetch(&self, target: NamedTarget<'_>) -> Option<ReadOutcome> {
+        if self.probe == Probe::Missing {
+            return Some(ReadOutcome::Value(Value::Undefined));
+        }
+        if self.inherited {
+            self.holder
+                .as_ref()?
+                .upgrade()?
+                .with_named_target(|t| fetch_probe(t, self.probe))?
+        } else {
+            fetch_probe(target, self.probe)
+        }
+    }
+}
+fn fetch_probe(target: NamedTarget<'_>, probe: Probe) -> Option<ReadOutcome> {
+    Some(match probe {
+        Probe::Data { slot, .. } => ReadOutcome::Value(target.load_data(slot)?),
+        Probe::Accessor { slot } => ReadOutcome::Accessor(target.load_accessor(slot)?),
+        Probe::Virtual(hook) => ReadOutcome::Value(target.virtual_value(hook)?),
+        Probe::Missing => ReadOutcome::Value(Value::Undefined),
+        Probe::Exotic => return None,
+    })
+}
 impl Default for NamedPropertyCache {
     fn default() -> Self {
-        Self(Rc::new(RefCell::new(State {
-            entries: Entries::Empty,
-            local_slot: None,
-            enabled: std::env::var_os("QJS_DISABLE_IC").is_none(),
-            #[cfg(debug_assertions)]
-            verify: std::env::var_os("QJS_VERIFY_IC").is_some(),
-            #[cfg(debug_assertions)]
-            name: None,
-        })))
+        Self(Rc::new(RefCell::new(State::default())))
     }
 }
 impl Entry {
-    #[inline(always)]
-    fn read(&self, target: NamedTarget<'_>, env: Option<&CallEnv>) -> Option<Value> {
-        if let Some(chain) = &self.chain {
-            if target.kind()? != self.kind
-                || !target.matches_version(&self.version)
-                || !chain.validity.is_valid()
-                || !chain.first.matches(&target.prototype(env)?)
-            {
-                return None;
-            }
-            chain.holder.upgrade()?.with_named_target(|holder| {
-                holder.load(chain.holder_kind, &chain.holder_version, self.slot)
-            })?
-        } else {
-            target.load(self.kind, &self.version, self.slot)
+    fn probe(&self) -> Probe {
+        match self.flags & 7 {
+            DATA => Probe::Data {
+                slot: self.slot,
+                writable: self.flags & WRITABLE != 0,
+            },
+            ACCESSOR => Probe::Accessor { slot: self.slot },
+            MISSING => Probe::Missing,
+            VIRTUAL => Probe::Virtual(match self.slot {
+                0 => Virtual::ArrayLength,
+                1 => Virtual::FunctionName,
+                2 => Virtual::FunctionLength,
+                3 => Virtual::FunctionPrototype,
+                4 => Virtual::FunctionCaller,
+                _ => Virtual::FunctionArguments,
+            }),
+            _ => unreachable!(),
         }
     }
-    fn same_guard(&self, other: &Self) -> bool {
-        if self.kind != other.kind || self.version != other.version {
-            return false;
+    fn matches(&self, target: NamedTarget<'_>) -> bool {
+        target.matches_version(&self.version)
+            && self.chain.as_ref().is_none_or(|c| c.validity.is_valid())
+    }
+    #[cfg(debug_assertions)]
+    fn resolution(&self) -> Resolution {
+        Resolution {
+            probe: self.probe(),
+            holder: self.chain.as_ref().and_then(|c| c.holder.clone()),
+            inherited: self.chain.is_some(),
         }
-        match (&self.chain, &other.chain) {
-            (None, None) => true,
-            (Some(a), Some(b)) => a.first.same(&b.first),
-            _ => false,
+    }
+    fn fetch(&self, target: NamedTarget<'_>) -> Option<ReadOutcome> {
+        if self.probe() == Probe::Missing {
+            return Some(ReadOutcome::Value(Value::Undefined));
         }
+        if let Some(chain) = &self.chain {
+            chain
+                .holder
+                .as_ref()?
+                .upgrade()?
+                .with_named_target(|t| fetch_probe(t, self.probe()))?
+        } else {
+            fetch_probe(target, self.probe())
+        }
+    }
+    fn same_guard(&self, e: &Self) -> bool {
+        self.version == e.version
     }
     fn stale(&self) -> bool {
-        self.chain.as_ref().is_some_and(|c| !c.validity.is_valid())
+        !self.version.is_alive() || self.chain.as_ref().is_some_and(|c| !c.validity.is_valid())
     }
 }
 impl Entries {
-    fn each(&self, mut f: impl FnMut(&Entry) -> Option<Value>) -> Option<Value> {
+    fn find(&self, target: NamedTarget<'_>) -> Option<&Entry> {
         match self {
-            Self::Mono(e) => f(e),
-            Self::Poly(entries) => entries.iter().flatten().find_map(f),
+            Self::Mono(e) => e.matches(target).then_some(e),
+            Self::Poly(entries) => entries.iter().flatten().find(|e| e.matches(target)),
             _ => None,
         }
     }
@@ -117,11 +181,11 @@ impl Entries {
                     e.as_ref()
                         .is_some_and(|e| e.same_guard(&entry) || e.stale())
                 }) {
-                    *slot = Some(entry);
+                    *slot = Some(entry)
                 } else if let Some(slot) = entries.iter_mut().find(|e| e.is_none()) {
-                    *slot = Some(entry);
+                    *slot = Some(entry)
                 } else {
-                    *self = Self::Mega;
+                    *self = Self::Mega
                 }
             }
             Self::Mega => {}
@@ -137,262 +201,269 @@ impl NamedPropertyCache {
     pub(super) fn local_slot(&self) -> Option<usize> {
         self.0.borrow().local_slot
     }
-    #[inline(always)]
-    fn get_target(&self, target: NamedTarget<'_>, env: Option<&CallEnv>) -> Option<Value> {
+    fn cached(&self, target: NamedTarget<'_>, accessor: bool) -> Option<ReadOutcome> {
         let state = self.0.borrow();
-        if !state.enabled {
+        // The monomorphic own-data path has one authority borrow: token compare
+        // and a slot load, without Weak creation or descriptor/index access.
+        if !accessor
+            && let Entries::Mono(entry) = &state.entries
+            && entry.flags & 7 == DATA
+            && entry.flags & OWN != 0
+        {
+            let Some(value) = target.load_matched_data(&entry.version, entry.slot) else {
+                count_event(target, Event::Miss);
+                return None;
+            };
+            #[cfg(debug_assertions)]
+            self.verify_entry(&state, entry, target);
+            count_event(target, Event::Hit);
+            return Some(ReadOutcome::Value(value));
+        }
+        let Some(entry) = state.entries.find(target) else {
+            count_event(target, Event::Miss);
+            return None;
+        };
+        #[cfg(debug_assertions)]
+        self.verify_entry(&state, entry, target);
+        if (entry.flags & 7 == ACCESSOR) != accessor {
             return None;
         }
-        let answer = state.entries.each(|entry| entry.read(target, env));
-        count_event(
-            target,
-            if answer.is_some() {
-                Event::Hit
-            } else {
-                Event::Miss
-            },
-        );
-        let value = answer?;
-        #[cfg(debug_assertions)]
-        if state.verify {
-            let key = target
-                .with_store(|s| {
-                    s.domain()
-                        .find(state.name.as_deref().expect("verified name"))
-                })
-                .flatten()
-                .expect("cached key disappeared during verification");
-            let generic = resolve(target, &key, env, false)
-                .expect("cached outcome became accessor or exotic")
-                .0;
-            assert!(
-                value.same_value(&generic),
-                "IC result differs from uncached data lookup"
-            );
+        count_event(target, Event::Hit);
+        entry.fetch(target)
+    }
+    #[cfg(debug_assertions)]
+    fn verify_entry(&self, state: &State, entry: &Entry, target: NamedTarget<'_>) {
+        if entry.flags & VERIFY == 0 {
+            return;
         }
-        Some(value)
+        let name = state.name.as_deref().expect("verified site name");
+        let expected = entry.resolution();
+        let generic = resolve(target, name, None);
+        assert!(
+            generic.as_ref().is_some_and(|g| g.probe == expected.probe
+                && g.inherited == expected.inherited
+                && g.identity() == expected.identity()),
+            "IC complete outcome differs from pure generic lookup: {name}"
+        );
     }
     #[inline(always)]
-    pub(super) fn get_value(&self, receiver: &Value, env: Option<&CallEnv>) -> Option<Value> {
-        receiver.with_named_target(|target| self.get_target(target, env))?
+    pub(super) fn get_value(&self, value: &Value, _env: Option<&CallEnv>) -> Option<Value> {
+        value.with_named_target(|t| self.cached(t, false).and_then(ReadOutcome::value))?
     }
-    pub(super) fn get(&self, receiver: &ObjectRef) -> Option<Value> {
-        self.get_target(NamedTarget::Object(receiver), None)
+    pub(super) fn get(&self, object: &ObjectRef) -> Option<Value> {
+        self.cached(NamedTarget::Object(object), false)
+            .and_then(ReadOutcome::value)
+    }
+    pub(super) fn accessor(&self, value: &Value) -> Option<Property> {
+        value.with_named_target(|t| match self.cached(t, true) {
+            Some(ReadOutcome::Accessor(p)) => Some(p),
+            _ => None,
+        })?
     }
     pub(super) fn read_value(
         &self,
-        receiver: &Value,
+        value: &Value,
         key: &KeyLease,
-        env: Option<&CallEnv>,
+        _env: Option<&CallEnv>,
     ) -> Option<Value> {
-        receiver.with_named_target(|target| self.read_target(target, key, env))?
+        value.with_named_target(|t| {
+            self.read_target(t, key.as_str(), Some(key))
+                .and_then(ReadOutcome::value)
+        })?
     }
-    pub(super) fn read_string(&self, receiver: &Value, name: &str, env: &CallEnv) -> Option<Value> {
-        if let Some(value) = self.get_value(receiver, Some(env)) {
-            return Some(value);
-        }
-        receiver.with_named_target(|t| count_event(t, Event::Hash));
-        let key = env.realm().atoms().find(name)?;
-        self.read_value(receiver, &key, Some(env))
+    pub(super) fn read_string(&self, value: &Value, name: &str, _env: &CallEnv) -> Option<Value> {
+        value.with_named_target(|t| self.read_target(t, name, None).and_then(ReadOutcome::value))?
     }
-    pub(super) fn read_object(&self, receiver: &ObjectRef, name: &str) -> Option<Value> {
-        if let Some(value) = self.get(receiver) {
-            return Some(value);
-        }
-        count_event(NamedTarget::Object(receiver), Event::Hash);
-        let key = receiver.domain().find(name)?;
-        self.read_target(NamedTarget::Object(receiver), &key, None)
+    pub(super) fn read_outcome(&self, value: &Value, name: &str) -> Option<ReadOutcome> {
+        value.with_named_target(|t| self.read_target(t, name, None))?
+    }
+    pub(super) fn read_object(&self, object: &ObjectRef, name: &str) -> Option<Value> {
+        self.read_target(NamedTarget::Object(object), name, None)
+            .and_then(ReadOutcome::value)
     }
     fn read_target(
         &self,
         target: NamedTarget<'_>,
-        key: &KeyLease,
-        env: Option<&CallEnv>,
-    ) -> Option<Value> {
-        if let Some(value) = self.get_target(target, env) {
+        name: &str,
+        key: Option<&KeyLease>,
+    ) -> Option<ReadOutcome> {
+        if let Some(value) = self.cached(target, false) {
             return Some(value);
         }
-        let enabled = {
-            let s = self.0.borrow();
-            s.enabled && !matches!(s.entries, Entries::Mega)
-        };
-        let (value, entry) = resolve(target, key, env, enabled)?;
-        if let Some(entry) = entry {
-            self.record(entry, key.as_str());
+        if let Some(value) = self.cached(target, true) {
+            return Some(value);
         }
-        Some(value)
+        let resolution = resolve(target, name, key)?;
+        self.record_resolution(target, name, &resolution);
+        resolution.fetch(target)
     }
-    fn record(&self, entry: Entry, name: &str) {
+    fn record_resolution(&self, target: NamedTarget<'_>, name: &str, resolution: &Resolution) {
+        let policy = target.policy();
+        if !policy.enabled {
+            return;
+        }
+        let Some(version) = target.version() else {
+            return;
+        };
+        let mut flags = if resolution.inherited { 0 } else { OWN };
+        let slot = match resolution.probe {
+            Probe::Data { slot, writable } => {
+                flags |= DATA | if writable { WRITABLE } else { 0 };
+                slot
+            }
+            Probe::Accessor { slot } => {
+                flags |= ACCESSOR;
+                slot
+            }
+            Probe::Missing => {
+                flags |= MISSING;
+                0
+            }
+            Probe::Virtual(h) => {
+                flags |= VIRTUAL;
+                match h {
+                    Virtual::ArrayLength => 0,
+                    Virtual::FunctionName => 1,
+                    Virtual::FunctionLength => 2,
+                    Virtual::FunctionPrototype => 3,
+                    Virtual::FunctionCaller => 4,
+                    Virtual::FunctionArguments => 5,
+                }
+            }
+            Probe::Exotic => return,
+        };
+        if name == "globalThis" || name == "__quickjsRustDynamicFunctionRealm" {
+            flags |= WRITE_FORBIDDEN
+        }
+        if policy.verify {
+            flags |= VERIFY
+        }
+        let chain = if resolution.inherited {
+            let Some(validity) = target.chain_dependency() else {
+                return;
+            };
+            Some(Box::new(Chain {
+                holder: resolution.holder.clone(),
+                validity,
+            }))
+        } else {
+            None
+        };
         let mut state = self.0.borrow_mut();
-        if !state.enabled {
-            return;
-        }
         #[cfg(debug_assertions)]
-        if state.verify {
-            state.name = Some(name.to_owned());
+        if policy.verify {
+            state.name = Some(name.to_owned())
         }
-        #[cfg(not(debug_assertions))]
-        let _ = name;
-        state.entries.record(entry);
+        state.entries.record(Entry {
+            version,
+            slot,
+            flags,
+            chain,
+        });
     }
-    pub(super) fn update(&self, receiver: &ObjectRef, key: &str, _value: &Value) {
-        let Some(key) = receiver.domain().find(key) else {
-            return;
-        };
-        if let Some((_, Some(entry))) = resolve(NamedTarget::Object(receiver), &key, None, true) {
-            self.record(entry, key.as_str());
-        }
-    }
-    pub(super) fn record_data_slot(&self, receiver: &ObjectRef, key: &KeyLease, slot: usize) {
-        let target = NamedTarget::Object(receiver);
-        if let (Some(kind), Some(version)) = (target.kind(), target.version()) {
-            self.record(
-                Entry {
-                    version,
-                    slot: slot as u32,
-                    kind,
-                    chain: None,
-                },
-                key.as_str(),
-            );
+    pub(super) fn update(&self, object: &ObjectRef, name: &str, _value: &Value) {
+        let target = NamedTarget::Object(object);
+        if let Some(r) = resolve(target, name, None) {
+            self.record_resolution(target, name, &r)
         }
     }
-    pub(super) fn write_value(
-        &self,
-        receiver: &Value,
-        value: &Value,
-    ) -> Option<OwnDataPropertyWrite> {
-        receiver.with_named_target(|target| self.write_target(target, value))?
+    pub(super) fn record_data_slot(&self, object: &ObjectRef, key: &KeyLease, _slot: usize) {
+        self.update(object, key.as_str(), &Value::Undefined)
+    }
+    pub(super) fn write_value(&self, value: &Value, new: &Value) -> Option<OwnDataPropertyWrite> {
+        value.with_named_target(|t| self.write_target(t, new))?
     }
     fn write_target(&self, target: NamedTarget<'_>, value: &Value) -> Option<OwnDataPropertyWrite> {
         let state = self.0.borrow();
-        if !state.enabled {
+        if let Entries::Mono(e) = &state.entries
+            && e.flags & 7 == DATA
+            && e.flags & OWN != 0
+            && e.flags & WRITE_FORBIDDEN == 0
+            && e.flags & WRITABLE != 0
+        {
+            return target.write_matched_data(&e.version, e.slot, value);
+        }
+        let entry = state.entries.find(target)?;
+        if entry.flags & 7 != DATA || entry.flags & OWN == 0 || entry.flags & WRITE_FORBIDDEN != 0 {
             return None;
         }
-        let write = |e: &Entry| {
-            if e.chain.is_none() {
-                target.write(e.kind, &e.version, e.slot, value)
-            } else {
-                None
-            }
-        };
-        match &state.entries {
-            Entries::Mono(e) => write(e),
-            Entries::Poly(entries) => entries.iter().flatten().find_map(write),
-            _ => None,
+        if entry.flags & WRITABLE == 0 {
+            return Some(OwnDataPropertyWrite::ReadOnly);
         }
+        target.write_matched_data(&entry.version, entry.slot, value)
     }
     pub(super) fn write(
         &self,
-        receiver: &ObjectRef,
-        _key: &str,
+        object: &ObjectRef,
+        _name: &str,
         value: &Value,
     ) -> Option<OwnDataPropertyWrite> {
-        self.write_target(NamedTarget::Object(receiver), value)
+        self.write_target(NamedTarget::Object(object), value)
     }
     pub(super) fn write_hot(
         &self,
-        receiver: &ObjectRef,
+        object: &ObjectRef,
         value: &Value,
     ) -> Option<OwnDataPropertyWrite> {
-        self.write_target(NamedTarget::Object(receiver), value)
+        self.write_target(NamedTarget::Object(object), value)
     }
     #[cfg(test)]
     pub(super) fn clear(&self) {
         self.0.borrow_mut().entries = Entries::Empty;
     }
 }
-
-/// Pure data lookup, releasing the store before advancing the prototype chain.
-/// No getter, coercion or Proxy trap can be replayed by debug verification.
-fn resolve(
-    target: NamedTarget<'_>,
-    key: &KeyLease,
-    env: Option<&CallEnv>,
-    cache: bool,
-) -> Option<(Value, Option<Entry>)> {
+/// One pure chain walk on a miss. No cell construction/registration, getters,
+/// coercion, lazy installation, storage allocation or interning is permitted.
+fn resolve(target: NamedTarget<'_>, name: &str, key: Option<&KeyLease>) -> Option<Resolution> {
     count_event(target, Event::Probe);
-    let (read, slot) = target.read(key);
-    match read {
-        OwnDataPropertyRead::Data(value) => {
-            let entry = if cache {
-                slot.and_then(|(version, slot)| {
-                    Some(Entry {
-                        version,
-                        slot,
-                        kind: target.kind()?,
-                        chain: None,
-                    })
-                })
-            } else {
-                None
-            };
-            return Some((value, entry));
-        }
-        OwnDataPropertyRead::NeedsSlowPath => return None,
-        OwnDataPropertyRead::Missing => {}
+    if key.is_none() {
+        count_event(target, Event::Hash)
     }
-    let version = target.version()?;
-    let kind = target.kind()?;
-    let Some(first_proto) = target.prototype(env) else {
-        return Some((Value::Undefined, None));
+    let probe = target.probe(name, key);
+    if probe == Probe::Exotic {
+        return None;
+    }
+    if probe != Probe::Missing {
+        return Some(Resolution {
+            probe,
+            holder: Some(target.downgrade()),
+            inherited: false,
+        });
+    }
+    let Some(mut proto) = target.prototype() else {
+        return Some(Resolution {
+            probe: Probe::Missing,
+            holder: None,
+            inherited: false,
+        });
     };
-    let first = WeakEdge::new(&first_proto)?;
-    let mut current_proto = first_proto;
-    let validity = StructuralDependency::new();
-    for _ in 0..16 {
-        let current = current_proto.to_value();
-        let (read, slot, holder, holder_kind, next, subscribed) =
-            current.with_named_target(|t| {
-                count_event(t, Event::Probe);
-                let (read, slot) = t.read(key);
-                (
-                    read,
-                    slot,
-                    t.downgrade(),
-                    t.kind(),
-                    t.prototype(env),
-                    !cache || t.subscribe(&validity),
-                )
-            })?;
-        if !subscribed {
+    for _ in 0..64 {
+        let value = proto.to_value();
+        let (probe, holder, next) = value.with_named_target(|t| {
+            count_event(t, Event::Probe);
+            (t.probe(name, key), t.downgrade(), t.prototype())
+        })?;
+        if probe == Probe::Exotic {
             return None;
         }
-        match read {
-            OwnDataPropertyRead::Data(value) => {
-                let entry = if cache {
-                    slot.map(|(holder_version, slot)| Entry {
-                        version,
-                        slot,
-                        kind,
-                        chain: Some(Box::new(Chain {
-                            first,
-                            holder,
-                            holder_version,
-                            holder_kind: holder_kind.expect("admitted holder"),
-                            validity,
-                        })),
-                    })
-                } else {
-                    None
-                };
-                return Some((value, entry));
-            }
-            OwnDataPropertyRead::NeedsSlowPath => return None,
-            OwnDataPropertyRead::Missing => {}
+        if probe != Probe::Missing {
+            return Some(Resolution {
+                probe,
+                holder: Some(holder),
+                inherited: true,
+            });
         }
-        let next = match &current_proto {
-            Prototype::Array(a) => a.effective_prototype_slot(),
-            _ => next,
-        };
         let Some(next) = next else {
-            return Some((Value::Undefined, None));
+            return Some(Resolution {
+                probe: Probe::Missing,
+                holder: None,
+                inherited: true,
+            });
         };
-        current_proto = next;
+        proto = next;
     }
     None
 }
-
 #[derive(Clone, Copy)]
 enum Event {
     Hit,

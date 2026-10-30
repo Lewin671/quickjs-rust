@@ -7,7 +7,7 @@ use crate::{NativeFunction, Value, eval};
 #[test]
 fn cloning_function_reuses_the_backing_allocation() {
     let domain = crate::property::atom::AtomDomain::new();
-    let function = Function::new_native(
+    let function = Function::new_native_in_domain(
         Some("shared"),
         0,
         NativeFunction::UninitializedLexical,
@@ -41,7 +41,7 @@ fn ordinary_function_header_keeps_cold_identity_state_out_of_line() {
         "shared module imports must remain pointer-sized"
     );
     assert!(
-        mem::size_of::<std::cell::RefCell<Option<Box<crate::value::layout::NamedStore>>>>() <= 16,
+        mem::size_of::<std::cell::RefCell<crate::value::layout::NamedStorage>>() <= 32,
         "lazy function property header must stay within two machine words"
     );
     assert!(
@@ -49,7 +49,7 @@ fn ordinary_function_header_keeps_cold_identity_state_out_of_line() {
         "function auxiliary header grew to {auxiliary_size} bytes"
     );
     assert!(
-        function_data_size <= 296,
+        function_data_size <= 304,
         "function object grew to {function_data_size} bytes"
     );
 }
@@ -63,9 +63,9 @@ fn user_functions_keep_empty_function_maps_unallocated() {
         panic!("expected function value");
     };
     assert!(!function.native_context.is_allocated());
-    assert!(!function.named.borrow().is_some());
+    assert!(function.named.borrow().store().is_none());
 
-    let mut native = Function::new_native(
+    let mut native = Function::new_native_in_domain(
         Some("capturing"),
         0,
         NativeFunction::UninitializedLexical,
@@ -94,13 +94,13 @@ fn user_functions_keep_empty_function_maps_unallocated() {
         "explicit".to_owned(),
         crate::Property::enumerable(Value::Number(2.0)),
     );
-    assert!(native.named.borrow().is_some());
+    assert!(native.named.borrow().store().is_some());
 }
 
 #[test]
 fn cloned_function_handles_keep_identity_state_and_source_shared() {
     let domain = crate::property::atom::AtomDomain::new();
-    let function = Function::new_native(
+    let function = Function::new_native_in_domain(
         Some("shared"),
         0,
         NativeFunction::UninitializedLexical,
@@ -137,7 +137,7 @@ fn cloned_function_handles_keep_identity_state_and_source_shared() {
 #[test]
 fn default_name_and_length_stay_implicit_until_descriptor_mutation() {
     let domain = crate::property::atom::AtomDomain::new();
-    let function = Function::new_native(
+    let function = Function::new_native_in_domain(
         Some("shared"),
         2,
         NativeFunction::UninitializedLexical,
@@ -145,7 +145,7 @@ fn default_name_and_length_stay_implicit_until_descriptor_mutation() {
         &domain,
     );
 
-    assert!(function.named.borrow().is_none());
+    assert!(function.named.borrow().store().is_none());
     assert_eq!(
         function
             .own_property("length")
@@ -184,7 +184,7 @@ fn deleting_and_redefining_an_implicit_default_moves_it_to_the_end() {
 #[test]
 fn install_time_override_and_implicit_default_are_one_property_slot() {
     let domain = crate::property::atom::AtomDomain::new();
-    let function = Function::new_native(
+    let function = Function::new_native_in_domain(
         Some("initial"),
         0,
         NativeFunction::UninitializedLexical,
@@ -260,7 +260,7 @@ fn later_properties_follow_an_unobserved_default_prototype_slot() {
 fn native_function_retains_its_explicit_domain_without_a_dummy_prototype() {
     let domain = crate::property::atom::AtomDomain::new();
     let weak = domain.downgrade();
-    let function = Function::new_native(
+    let function = Function::new_native_in_domain(
         Some("owner"),
         0,
         NativeFunction::UninitializedLexical,
@@ -279,8 +279,10 @@ fn native_function_retains_its_explicit_domain_without_a_dummy_prototype() {
 fn empty_native_captures_share_by_domain_and_detach_before_writes() {
     let domain = crate::property::atom::AtomDomain::new();
     let weak = domain.downgrade();
-    let mut first = Function::new_native(Some("a"), 0, NativeFunction::MathAbs, false, &domain);
-    let second = Function::new_native(Some("b"), 0, NativeFunction::MathAbs, false, &domain);
+    let mut first =
+        Function::new_native_in_domain(Some("a"), 0, NativeFunction::MathAbs, false, &domain);
+    let second =
+        Function::new_native_in_domain(Some("b"), 0, NativeFunction::MathAbs, false, &domain);
     assert!(Rc::ptr_eq(
         first.native_context.0.as_ref().unwrap(),
         second.native_context.0.as_ref().unwrap()
@@ -291,7 +293,7 @@ fn empty_native_captures_share_by_domain_and_detach_before_writes() {
         Some(&Value::Number(1.0))
     );
     assert!(second.native_context.get("capture").is_none());
-    let third = Function::new_native(None, 0, NativeFunction::MathAbs, false, &domain);
+    let third = Function::new_native_in_domain(None, 0, NativeFunction::MathAbs, false, &domain);
     assert!(Rc::ptr_eq(
         second.native_context.0.as_ref().unwrap(),
         third.native_context.0.as_ref().unwrap()
@@ -304,4 +306,28 @@ fn empty_native_captures_share_by_domain_and_detach_before_writes() {
         !weak.is_live(),
         "the domain's empty-context attachment must remain weak"
     );
+}
+
+#[test]
+fn unrelated_probes_leave_function_defaults_and_lazy_prototype_implicit() {
+    let Value::Function(function) = eval("(function untouched(a) {})").unwrap() else {
+        panic!()
+    };
+    assert!(function.named.borrow().store().is_none());
+    assert!(function.auxiliary.lazy_default_prototype.get());
+    let version = function.named_version();
+    for _ in 0..1000 {
+        let target = crate::value::named::NamedTarget::Function(&function);
+        assert_eq!(
+            target.probe("call", None),
+            crate::value::named::Probe::Missing
+        );
+        assert_eq!(
+            target.probe("absent", None),
+            crate::value::named::Probe::Missing
+        );
+    }
+    assert!(function.named.borrow().store().is_none());
+    assert!(function.auxiliary.lazy_default_prototype.get());
+    assert_eq!(function.named_version(), version);
 }

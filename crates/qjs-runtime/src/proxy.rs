@@ -13,6 +13,22 @@ pub struct ProxyRef {
     inner: Rc<ProxyData>,
 }
 
+#[derive(Clone)]
+pub(crate) struct ProxyWeakRef(std::rc::Weak<ProxyData>);
+impl ProxyWeakRef {
+    pub(crate) fn upgrade(&self) -> Option<ProxyRef> {
+        self.0.upgrade().map(|inner| ProxyRef { inner })
+    }
+    pub(crate) fn address(&self) -> usize {
+        self.0.as_ptr() as usize
+    }
+}
+impl std::fmt::Debug for ProxyWeakRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("ProxyWeakRef(..)")
+    }
+}
+
 struct ProxyData {
     state: RefCell<Option<ProxyState>>,
     private_state: RefCell<PrivateState>,
@@ -48,6 +64,9 @@ impl ProxyRef {
         }
     }
 
+    pub(crate) fn downgrade(&self) -> ProxyWeakRef {
+        ProxyWeakRef(Rc::downgrade(&self.inner))
+    }
     pub(crate) fn ptr_eq(&self, other: &Self) -> bool {
         Rc::ptr_eq(&self.inner, &other.inner)
     }
@@ -97,13 +116,8 @@ impl ProxyRef {
 }
 
 pub(crate) fn install_proxy(env: &mut CallEnv, global_this: &Value, _object_prototype: ObjectRef) {
-    let proxy_function = Function::new_native(
-        Some("Proxy"),
-        2,
-        NativeFunction::Proxy,
-        true,
-        env.realm().atoms(),
-    );
+    let proxy_function =
+        Function::new_native(Some("Proxy"), 2, NativeFunction::Proxy, true, env.realm());
     // `Proxy` is constructable but exposes no own `prototype`; the generic
     // native builder adds a (now non-configurable) one, so remove it directly.
     proxy_function.remove_own_property_unchecked("prototype");
@@ -114,7 +128,7 @@ pub(crate) fn install_proxy(env: &mut CallEnv, global_this: &Value, _object_prot
             2,
             NativeFunction::ProxyRevocable,
             false,
-            env.realm().atoms(),
+            env.realm(),
         ))),
     );
     let proxy_value = Value::Function(proxy_function);
@@ -146,6 +160,7 @@ pub(crate) fn native_proxy(
 }
 
 pub(crate) fn native_proxy_revocable(
+    realm: &crate::function::Realm,
     argument_values: &[Value],
     domain: &crate::property::atom::AtomDomain,
 ) -> Result<Value, RuntimeError> {
@@ -161,7 +176,7 @@ pub(crate) fn native_proxy_revocable(
     let proxy = ProxyRef::new(target, handler);
     // The revocation function is anonymous: its `name` is the empty string
     // (ECMA-262 28.2.2.1, CreateBuiltinFunction with name "").
-    let revoke = Function::new_native(Some(""), 0, NativeFunction::ProxyRevoke, false, domain);
+    let revoke = Function::new_native(Some(""), 0, NativeFunction::ProxyRevoke, false, realm);
     revoke.define_property(
         "[[RevocableProxy]]".to_owned(),
         Property::non_enumerable(Value::Proxy(proxy.clone())),
@@ -848,7 +863,7 @@ pub(crate) fn proxy_apply(
     let Some(trap) = proxy_trap(handler.clone(), "apply", env)? else {
         return crate::call_function(target, this_value, arguments, env, false);
     };
-    let arguments_array = Value::Array(crate::ArrayRef::new(env.realm().atoms(), arguments));
+    let arguments_array = Value::Array(crate::ArrayRef::new(env.realm(), arguments));
     crate::call_function(
         trap,
         handler,
@@ -872,7 +887,7 @@ pub(crate) fn proxy_construct(
     let Some(trap) = proxy_trap(handler.clone(), "construct", env)? else {
         return crate::construct_function(target, new_target, arguments, env);
     };
-    let arguments_array = Value::Array(crate::ArrayRef::new(env.realm().atoms(), arguments));
+    let arguments_array = Value::Array(crate::ArrayRef::new(env.realm(), arguments));
     let result = crate::call_function(
         trap,
         handler,

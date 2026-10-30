@@ -38,7 +38,9 @@ pub(super) fn call_core_native(
         NativeFunction::Test262BuildString => {
             global::native_test262_build_string(argument_values, env)
         }
-        NativeFunction::Test262ToNumbers => global::native_test262_to_numbers(argument_values),
+        NativeFunction::Test262ToNumbers => {
+            global::native_test262_to_numbers(env.realm(), argument_values)
+        }
         NativeFunction::Test262CompareArray => {
             global::native_test262_compare_array(argument_values, env)
         }
@@ -46,7 +48,7 @@ pub(super) fn call_core_native(
             global::native_test262_assert_iterator_result(argument_values, env)
         }
         NativeFunction::Test262AssertPackedArray => {
-            global::native_test262_assert_packed_array(argument_values)
+            global::native_test262_assert_packed_array(argument_values, env)
         }
         NativeFunction::Test262AssertNullProtoMutableObject => {
             global::native_test262_assert_null_proto_mutable_object(argument_values)
@@ -92,7 +94,7 @@ pub(super) fn call_core_native(
         NativeFunction::EvalScript => global::native_eval_script(argument_values, env),
         NativeFunction::Proxy => crate::proxy::native_proxy(argument_values, is_construct),
         NativeFunction::ProxyRevocable => {
-            crate::proxy::native_proxy_revocable(argument_values, env.realm().atoms())
+            crate::proxy::native_proxy_revocable(env.realm(), argument_values, env.realm().atoms())
         }
         NativeFunction::ProxyRevoke => crate::proxy::native_proxy_revoke(function),
         NativeFunction::Escape => global::native_global_escape(argument_values, env),

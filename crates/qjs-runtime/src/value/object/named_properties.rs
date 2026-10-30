@@ -307,7 +307,7 @@ impl ObjectRef {
             }
             None => {
                 if !chain_proven {
-                    let mut current = self.prototype_slot();
+                    let mut current = lookup.prototype();
                     loop {
                         match current {
                             None => break,

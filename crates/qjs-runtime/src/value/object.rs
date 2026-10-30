@@ -89,72 +89,40 @@ pub(crate) enum Prototype {
     Array(ArrayPrototypeRef),
     Function(Function),
     Proxy(ProxyRef),
+    Map(super::MapRef),
+    Set(super::SetRef),
 }
 
-/// Live view of an array used as a [[Prototype]]. The fallback captures the
-/// array's realm-intrinsic prototype at the point the slot is installed; an
-/// explicit later `Object.setPrototypeOf(array, ...)` override still wins.
-/// Boxing the pair keeps `Prototype` pointer-sized per variant.
+/// A live array prototype identity; no contextual wrapper allocation.
 #[derive(Clone)]
-pub(crate) struct ArrayPrototypeRef(Rc<ArrayPrototypeData>);
-
-#[derive(Clone)]
-pub(crate) struct ArrayPrototypeWeakRef(Weak<ArrayPrototypeData>);
-impl fmt::Debug for ArrayPrototypeWeakRef {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("ArrayPrototypeWeakRef(..)")
-    }
-}
-impl ArrayPrototypeWeakRef {
-    pub(crate) fn same(&self, other: &Self) -> bool {
-        self.0.ptr_eq(&other.0)
-    }
-
-    pub(crate) fn ptr_eq(&self, value: &ArrayPrototypeRef) -> bool {
-        self.0.as_ptr() == Rc::as_ptr(&value.0)
-    }
-}
-
-struct ArrayPrototypeData {
-    array: ArrayRef,
-    default_prototype: Option<ObjectRef>,
-}
+pub(crate) struct ArrayPrototypeRef(ArrayRef);
 
 impl ArrayPrototypeRef {
-    pub(crate) fn downgrade(&self) -> ArrayPrototypeWeakRef {
-        ArrayPrototypeWeakRef(Rc::downgrade(&self.0))
-    }
-    fn new(array: ArrayRef, default_prototype: Option<ObjectRef>) -> Self {
-        Self(Rc::new(ArrayPrototypeData {
-            array,
-            default_prototype,
-        }))
+    pub(crate) fn array_ref(&self) -> &ArrayRef {
+        &self.0
     }
 
     pub(crate) fn array(&self) -> ArrayRef {
-        self.0.array.clone()
+        self.0.clone()
     }
 
     pub(crate) fn effective_prototype_slot(&self) -> Option<Prototype> {
-        self.0
-            .array
-            .prototype_slot_override()
-            .unwrap_or_else(|| self.0.default_prototype.clone().map(Prototype::Object))
+        self.0.prototype_slot()
     }
 
     fn ptr_eq(&self, other: &Self) -> bool {
-        self.0.array.ptr_eq(&other.0.array)
+        self.0.ptr_eq(&other.0)
     }
 
     pub(crate) fn property(&self, key: &str) -> Option<Property> {
-        crate::array_own_property_descriptor(&self.0.array, key).or_else(|| {
+        crate::array_own_property_descriptor(&self.0, key).or_else(|| {
             self.effective_prototype_slot()
                 .and_then(|prototype| prototype.property(key))
         })
     }
 
     pub(crate) fn symbol_property(&self, symbol: &ObjectRef) -> Option<Property> {
-        self.0.array.own_symbol_property(symbol).or_else(|| {
+        self.0.own_symbol_property(symbol).or_else(|| {
             self.effective_prototype_slot()
                 .and_then(|prototype| prototype.symbol_property(symbol))
         })
@@ -162,8 +130,8 @@ impl ArrayPrototypeRef {
 }
 
 impl Prototype {
-    pub(crate) fn array(array: ArrayRef, default_prototype: Option<ObjectRef>) -> Self {
-        Self::Array(ArrayPrototypeRef::new(array, default_prototype))
+    pub(crate) fn array(array: ArrayRef) -> Self {
+        Self::Array(ArrayPrototypeRef(array))
     }
 
     pub(crate) fn ptr_eq(&self, other: &Self) -> bool {
@@ -172,6 +140,8 @@ impl Prototype {
             (Self::Array(left), Self::Array(right)) => left.ptr_eq(right),
             (Self::Function(left), Self::Function(right)) => left.ptr_eq(right),
             (Self::Proxy(left), Self::Proxy(right)) => left.ptr_eq(right),
+            (Self::Map(left), Self::Map(right)) => left.ptr_eq(right),
+            (Self::Set(left), Self::Set(right)) => left.ptr_eq(right),
             _ => false,
         }
     }
@@ -187,6 +157,16 @@ impl Prototype {
                 Ok(target) => crate::property::own_or_inherited_descriptor(target, key),
                 Err(_) => None,
             },
+
+            Self::Map(_carrier) => {
+                let object = &_carrier.object();
+                object.property(key)
+            }
+
+            Self::Set(_carrier) => {
+                let object = &_carrier.object();
+                object.property(key)
+            }
         }
     }
 
@@ -203,6 +183,16 @@ impl Prototype {
                 Ok(target) => crate::property::own_or_inherited_symbol_descriptor(target, symbol),
                 Err(_) => None,
             },
+
+            Self::Map(_carrier) => {
+                let object = &_carrier.object();
+                object.symbol_property(symbol)
+            }
+
+            Self::Set(_carrier) => {
+                let object = &_carrier.object();
+                object.symbol_property(symbol)
+            }
         }
     }
 
@@ -214,6 +204,16 @@ impl Prototype {
             // default; stop the search here.
             Self::Function(_) => None,
             Self::Proxy(_) => None,
+
+            Self::Map(_carrier) => {
+                let object = &_carrier.object();
+                object.to_string_tag()
+            }
+
+            Self::Set(_carrier) => {
+                let object = &_carrier.object();
+                object.to_string_tag()
+            }
         }
     }
 
@@ -277,6 +277,36 @@ impl Prototype {
                     })
             }
             Self::Proxy(_) => false,
+
+            Self::Map(_carrier) => {
+                let object = &_carrier.object();
+
+                if object.ptr_eq(target) {
+                    return true;
+                }
+                if seen_objects.iter().any(|seen| seen.ptr_eq(object)) {
+                    return false;
+                }
+                seen_objects.push(object.clone());
+                object.prototype_slot().is_some_and(|prototype| {
+                    prototype.would_cycle_inner(target, seen_objects, seen_arrays, seen_functions)
+                })
+            }
+
+            Self::Set(_carrier) => {
+                let object = &_carrier.object();
+
+                if object.ptr_eq(target) {
+                    return true;
+                }
+                if seen_objects.iter().any(|seen| seen.ptr_eq(object)) {
+                    return false;
+                }
+                seen_objects.push(object.clone());
+                object.prototype_slot().is_some_and(|prototype| {
+                    prototype.would_cycle_inner(target, seen_objects, seen_arrays, seen_functions)
+                })
+            }
         }
     }
 
@@ -341,6 +371,40 @@ impl Prototype {
                     })
             }
             Self::Proxy(_) => false,
+
+            Self::Map(_carrier) => {
+                let object = &_carrier.object();
+
+                if seen_objects.iter().any(|seen| seen.ptr_eq(object)) {
+                    return false;
+                }
+                seen_objects.push(object.clone());
+                object.prototype_slot().is_some_and(|prototype| {
+                    prototype.would_cycle_array_inner(
+                        target,
+                        seen_objects,
+                        seen_arrays,
+                        seen_functions,
+                    )
+                })
+            }
+
+            Self::Set(_carrier) => {
+                let object = &_carrier.object();
+
+                if seen_objects.iter().any(|seen| seen.ptr_eq(object)) {
+                    return false;
+                }
+                seen_objects.push(object.clone());
+                object.prototype_slot().is_some_and(|prototype| {
+                    prototype.would_cycle_array_inner(
+                        target,
+                        seen_objects,
+                        seen_arrays,
+                        seen_functions,
+                    )
+                })
+            }
         }
     }
 
@@ -351,6 +415,8 @@ impl Prototype {
             Self::Array(array) => Value::Array(array.array()),
             Self::Function(function) => Value::Function(function.clone()),
             Self::Proxy(proxy) => Value::Proxy(proxy.clone()),
+            Self::Map(map) => Value::Map(map.clone()),
+            Self::Set(set) => Value::Set(set.clone()),
         }
     }
 }
@@ -393,13 +459,12 @@ struct ObjectData {
     /// keeps the `array[i] = x` fast path from scanning a prototype's keys on
     /// every write.
     index_property_count: Cell<u32>,
-    prototype: RefCell<Option<Prototype>>,
     flags: Cell<u16>,
     cold: OnceCell<Box<ObjectColdData>>,
 }
 
 #[cfg(target_pointer_width = "64")]
-const _: () = assert!(std::mem::size_of::<ObjectData>() == 96);
+const _: () = assert!(std::mem::size_of::<ObjectData>() == 80);
 
 #[derive(Default)]
 struct ObjectColdData {
@@ -511,7 +576,7 @@ impl fmt::Debug for ObjectRef {
             .debug_struct("ObjectRef")
             .field("properties", &self.properties().borrow().len())
             .field("symbol_count", &symbol_property_count)
-            .field("has_prototype", &self.0.prototype.borrow().is_some())
+            .field("has_prototype", &self.prototype_slot().is_some())
             .field("to_string_tag", &to_string_tag)
             .field("raw_json", &self.0.flag(flags::RAW_JSON))
             .field(
@@ -528,16 +593,17 @@ impl fmt::Debug for ObjectRef {
 
 impl ObjectRef {
     fn from_named(
-        properties: NamedStore,
+        mut properties: NamedStore,
         prototype: Option<Prototype>,
         index_property_count: usize,
     ) -> Self {
+        properties.set_prototype(prototype);
         Self(Rc::new(ObjectData {
             properties: RefCell::new(properties),
             index_property_count: Cell::new(
                 u32::try_from(index_property_count).expect("index count bounded by key namespace"),
             ),
-            prototype: RefCell::new(prototype),
+
             flags: Cell::new(flags::EXTENSIBLE),
             cold: OnceCell::new(),
         }))
@@ -563,6 +629,7 @@ impl ObjectRef {
     /// Enables the String virtual-index exotic hook without creating named keys.
     pub(crate) fn defer_string_indices(&self) {
         self.0.set_flag(flags::STRING_INDICES, true);
+        self.refresh_named_flavor();
     }
 
     /// A String wrapper's [[StringData]], read without defining its index
@@ -628,7 +695,8 @@ impl ObjectRef {
         prototype: Option<Prototype>,
         domain: &crate::property::atom::AtomDomain,
     ) -> Self {
-        let mut builder = OrderedDataPropertyBuilder::with_capacity(properties.len(), domain);
+        let mut builder =
+            OrderedDataPropertyBuilder::with_prototype(properties.len(), domain, prototype.clone());
         for (key, value) in properties {
             builder.insert(Rc::from(key), value);
         }
@@ -658,7 +726,8 @@ impl ObjectRef {
                 message: "invalid host property order".to_owned(),
             });
         }
-        let mut builder = OrderedDataPropertyBuilder::with_capacity(order.len(), domain);
+        let mut builder =
+            OrderedDataPropertyBuilder::with_prototype(order.len(), domain, prototype.clone());
         for key in order {
             let value = properties.remove(&key).expect("validated host order");
             builder.insert(Rc::from(key), value);
@@ -687,7 +756,10 @@ impl ObjectRef {
             }
         }
         values.truncate(shape.unique_len());
-        let store = NamedStore::from_data_layout(shape.linked_layout(domain), values);
+        let store = NamedStore::from_data_layout(
+            shape.linked_layout(domain, prototype.clone().map(Prototype::Object)),
+            values,
+        );
         Self::from_named(
             store,
             prototype.map(Prototype::Object),
@@ -758,6 +830,10 @@ impl ObjectRef {
             .map(f)
     }
 
+    fn refresh_named_flavor(&self) {
+        let flavor = self.named_kind().map(u16::from).unwrap_or(9);
+        self.0.properties.borrow_mut().set_flavor(flavor);
+    }
     pub(crate) fn domain(&self) -> crate::property::atom::AtomDomain {
         self.0.properties.borrow().domain().clone()
     }
@@ -789,6 +865,7 @@ impl ObjectRef {
 
     pub(crate) fn mark_array_prototype_exotic(&self) {
         self.0.set_flag(flags::ARRAY_PROTOTYPE, true);
+        self.refresh_named_flavor();
     }
 
     pub(crate) fn is_array_prototype_exotic(&self) -> bool {
@@ -797,10 +874,12 @@ impl ObjectRef {
 
     pub(crate) fn mark_symbol_primitive(&self) {
         self.0.set_symbol_brand(SymbolBrand::Primitive);
+        self.refresh_named_flavor();
     }
 
     pub(crate) fn mark_symbol_boxed(&self) {
         self.0.set_symbol_brand(SymbolBrand::Boxed);
+        self.refresh_named_flavor();
     }
 
     pub(crate) fn is_symbol_object(&self) -> bool {
@@ -817,6 +896,7 @@ impl ObjectRef {
 
     pub(crate) fn mark_module_namespace_exotic(&self) {
         self.0.set_flag(flags::MODULE_NAMESPACE, true);
+        self.refresh_named_flavor();
     }
 
     pub(crate) fn is_module_namespace_exotic(&self) -> bool {
@@ -838,17 +918,12 @@ impl ObjectRef {
     pub(crate) fn get(&self, key: &str) -> Option<Value> {
         self.own_property(key)
             .map(|p| p.value)
-            .or_else(|| self.0.prototype.borrow().as_ref().and_then(|p| p.get(key)))
+            .or_else(|| self.prototype_slot().as_ref().and_then(|p| p.get(key)))
     }
 
     pub(crate) fn property(&self, key: &str) -> Option<Property> {
-        self.own_property(key).or_else(|| {
-            self.0
-                .prototype
-                .borrow()
-                .as_ref()
-                .and_then(|p| p.property(key))
-        })
+        self.own_property(key)
+            .or_else(|| self.prototype_slot().as_ref().and_then(|p| p.property(key)))
     }
 
     /// Whether any own property key parses as an array index. Used to gate the
@@ -888,9 +963,7 @@ impl ObjectRef {
 
     pub(crate) fn symbol_property(&self, symbol: &ObjectRef) -> Option<Property> {
         self.own_symbol_property(symbol).or_else(|| {
-            self.0
-                .prototype
-                .borrow()
+            self.prototype_slot()
                 .as_ref()
                 .and_then(|proto| proto.symbol_property(symbol))
         })
@@ -899,7 +972,7 @@ impl ObjectRef {
     /// The raw [[Prototype]] slot, distinguishing object and function
     /// prototypes.
     pub(crate) fn prototype_slot(&self) -> Option<Prototype> {
-        self.0.prototype.borrow().clone()
+        self.0.properties.borrow().prototype()
     }
 
     /// This object's [[Prototype]] when it is an ordinary object.
@@ -907,30 +980,14 @@ impl ObjectRef {
     /// Separate from `prototype_slot` because a property-read cache only ever
     /// wants the ordinary case and should not clone a slot it will discard.
     pub(crate) fn ordinary_prototype(&self) -> Option<ObjectRef> {
-        match &*self.0.prototype.borrow() {
+        match self.prototype_slot().as_ref() {
             Some(Prototype::Object(prototype)) => Some(prototype.clone()),
             _ => None,
         }
     }
 
-    /// Whether this object's [[Prototype]] is exactly `candidate`.
-    ///
-    /// One pointer comparison behind a `RefCell` borrow, with no clone: this
-    /// is the per-read guard of the prototype property cache, so it runs on
-    /// every method call.
-    /// Whether this object's [[Prototype]] is the object `candidate` weakly
-    /// refers to, by identity and without upgrading the weak reference: an
-    /// allocation a live `Weak` names cannot be reused, so a pointer match
-    /// means the prototype slot itself holds that object alive.
-    pub(crate) fn prototype_is_weak(&self, candidate: &ObjectWeakRef) -> bool {
-        match &*self.0.prototype.borrow() {
-            Some(Prototype::Object(prototype)) => candidate.ptr_eq(prototype),
-            _ => false,
-        }
-    }
-
     pub(crate) fn set_prototype_slot(&self, prototype: Option<Prototype>) -> Result<(), ()> {
-        if same_prototype_slot(self.0.prototype.borrow().as_ref(), prototype.as_ref()) {
+        if same_prototype_slot(self.prototype_slot().as_ref(), prototype.as_ref()) {
             return Ok(());
         }
         if self.0.flag(flags::IMMUTABLE_PROTOTYPE) {
@@ -945,8 +1002,7 @@ impl ObjectRef {
         {
             return Err(());
         }
-        self.0.properties.borrow().invalidate_dependencies();
-        *self.0.prototype.borrow_mut() = prototype;
+        self.0.properties.borrow_mut().set_prototype(prototype);
         Ok(())
     }
 
@@ -1030,9 +1086,7 @@ impl ObjectRef {
             .cold_if_present()
             .and_then(|cold| cold.to_string_tag.borrow().clone())
             .or_else(|| {
-                self.0
-                    .prototype
-                    .borrow()
+                self.prototype_slot()
                     .as_ref()
                     .and_then(Prototype::to_string_tag)
             })
@@ -1044,12 +1098,8 @@ impl ObjectRef {
 }
 
 impl ObjectWeakRef {
-    pub(crate) fn same(&self, other: &Self) -> bool {
-        self.0.ptr_eq(&other.0)
-    }
-
-    pub(crate) fn ptr_eq(&self, object: &ObjectRef) -> bool {
-        self.0.as_ptr() == Rc::as_ptr(&object.0)
+    pub(crate) fn address(&self) -> usize {
+        self.0.as_ptr() as usize
     }
 
     pub(crate) fn upgrade(&self) -> Option<ObjectRef> {

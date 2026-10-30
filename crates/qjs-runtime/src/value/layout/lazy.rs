@@ -1,0 +1,95 @@
+//! Empty named authorities own only their canonical layout and explicit
+//! prototype. Value storage is allocated on mutation, never on a read probe.
+use super::*;
+use crate::Prototype;
+
+pub(crate) enum NamedStorage {
+    Sentinel,
+    Empty {
+        layout: Rc<Layout>,
+        prototype: Option<Rc<Prototype>>,
+    },
+    Full(Box<NamedStore>),
+}
+impl NamedStorage {
+    pub(crate) fn new(domain: &AtomDomain, prototype: Option<Prototype>, flavor: u16) -> Self {
+        let store = NamedStore::empty_with_prototype(domain, prototype, flavor);
+        Self::Empty {
+            layout: store.layout,
+            prototype: store.prototype,
+        }
+    }
+    pub(crate) fn store(&self) -> Option<&NamedStore> {
+        match self {
+            Self::Full(s) => Some(s),
+            _ => None,
+        }
+    }
+    pub(crate) fn store_mut(&mut self) -> &mut NamedStore {
+        if let Self::Empty { layout, prototype } = self {
+            let store = NamedStore {
+                layout: layout.clone(),
+                prototype: prototype.clone(),
+                values: Vec::new(),
+                accessors: None,
+                epoch: 0,
+            };
+            *self = Self::Full(Box::new(store));
+        }
+        match self {
+            Self::Full(s) => s,
+            _ => panic!("TDZ sentinel has no public object storage"),
+        }
+    }
+    pub(crate) fn domain(&self) -> &AtomDomain {
+        match self {
+            Self::Empty { layout, .. } => &layout.domain,
+            Self::Full(s) => s.domain(),
+            Self::Sentinel => panic!("TDZ sentinel domain"),
+        }
+    }
+    pub(crate) fn version(&self) -> Option<LayoutVersion> {
+        match self {
+            Self::Empty { layout, .. } => Some(LayoutVersion::shared(layout)),
+            Self::Full(s) => Some(s.version()),
+            Self::Sentinel => None,
+        }
+    }
+    pub(crate) fn matches(&self, v: &LayoutVersion) -> bool {
+        match self {
+            Self::Empty { layout, .. } => v.matches_layout(layout, 0),
+            Self::Full(s) => s.matches_version(v),
+            Self::Sentinel => false,
+        }
+    }
+    pub(crate) fn prototype(&self) -> Option<Prototype> {
+        match self {
+            Self::Empty { prototype, .. } => prototype.as_deref().cloned(),
+            Self::Full(s) => s.prototype(),
+            Self::Sentinel => None,
+        }
+    }
+    pub(crate) fn chain_dependency(&self) -> Option<StructuralDependency> {
+        match self {
+            Self::Empty { layout, .. } => layout.parent_state.upgrade()?.token(),
+            Self::Full(s) => s.chain_dependency(),
+            Self::Sentinel => None,
+        }
+    }
+    pub(crate) fn set_prototype(&mut self, p: Option<Prototype>, flavor: u16) {
+        match self {
+            Self::Empty { layout, prototype } => {
+                let owner = PropertyOwner::new(layout.domain.clone());
+                let next = owner.root_for(p.as_ref(), flavor);
+                *prototype = NamedStore::retain_prototype(&next, p);
+                *layout = next;
+            }
+            Self::Full(s) => s.rebase(p, flavor),
+            Self::Sentinel => {}
+        }
+    }
+    pub(crate) fn set_flavor(&mut self, flavor: u16) {
+        let p = self.prototype();
+        self.set_prototype(p, flavor)
+    }
+}

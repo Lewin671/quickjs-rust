@@ -386,7 +386,7 @@ impl<'a> JsonParser<'a> {
         self.skip_whitespace();
         if self.consume_byte(b']') {
             return Ok(JsonNode {
-                value: Value::Array(ArrayRef::new(self.env.realm().atoms(), Vec::new())),
+                value: Value::Array(ArrayRef::new(self.env.realm(), Vec::new())),
                 source: None,
                 children: children
                     .map(JsonNodeChildren::Array)
@@ -409,7 +409,7 @@ impl<'a> JsonParser<'a> {
             self.expect_byte(b',')?;
         }
         Ok(JsonNode {
-            value: Value::Array(ArrayRef::new(self.env.realm().atoms(), values)),
+            value: Value::Array(ArrayRef::new(self.env.realm(), values)),
             source: None,
             children: children
                 .map(JsonNodeChildren::Array)
@@ -419,7 +419,11 @@ impl<'a> JsonParser<'a> {
 
     fn object<const PRESERVE_METADATA: bool>(&mut self) -> Result<JsonNode, RuntimeError> {
         self.expect_byte(b'{')?;
-        let mut properties = OrderedDataPropertyBuilder::new(self.env.realm().atoms());
+        let mut properties = OrderedDataPropertyBuilder::with_prototype(
+            0,
+            self.env.realm().atoms(),
+            object_prototype(self.env).map(crate::Prototype::Object),
+        );
         let mut children = PRESERVE_METADATA.then(Vec::new);
         self.skip_whitespace();
         if self.consume_byte(b'}') {

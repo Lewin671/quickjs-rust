@@ -20,13 +20,8 @@ const NATIVE_ERRORS: &[(&str, NativeFunction)] = &[
 pub(crate) fn install_error(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
     let error_prototype =
         ObjectRef::with_prototype(HashMap::new(), Some(object_prototype), env.realm().atoms());
-    let error_function = Function::new_native(
-        Some("Error"),
-        1,
-        NativeFunction::Error,
-        true,
-        env.realm().atoms(),
-    );
+    let error_function =
+        Function::new_native(Some("Error"), 1, NativeFunction::Error, true, env.realm());
     error_prototype.define_non_enumerable(
         "constructor".to_owned(),
         Value::Function(error_function.clone()),
@@ -44,7 +39,7 @@ pub(crate) fn install_error(env: &mut CallEnv, global_this: &Value, object_proto
             0,
             NativeFunction::ErrorPrototypeToString,
             false,
-            env.realm().atoms(),
+            env.realm(),
         )),
     );
     let is_error_function = Function::new_native(
@@ -52,7 +47,7 @@ pub(crate) fn install_error(env: &mut CallEnv, global_this: &Value, object_proto
         1,
         NativeFunction::ErrorIsError,
         false,
-        env.realm().atoms(),
+        env.realm(),
     );
     define_function_name(&is_error_function, "isError");
     error_function.define_property(
@@ -463,7 +458,7 @@ fn install_native_error(
         "SuppressedError" => 3,
         _ => 1,
     };
-    let function = Function::new_native(Some(name), length, native, true, env.realm().atoms());
+    let function = Function::new_native(Some(name), length, native, true, env.realm());
     // Native error constructors have the creating realm's `%Error%` as their
     // real [[Prototype]]; global rebinding must not replace that fixed identity.
     function

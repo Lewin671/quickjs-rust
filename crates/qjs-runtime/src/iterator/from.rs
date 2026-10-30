@@ -144,7 +144,7 @@ pub(super) fn build_wrap_prototype(env: &CallEnv, iterator_prototype: &ObjectRef
             0,
             NativeFunction::WrapForValidIteratorPrototypeNext,
             false,
-            env.realm().atoms(),
+            env.realm(),
         )),
     );
     prototype.define_non_enumerable(
@@ -154,7 +154,7 @@ pub(super) fn build_wrap_prototype(env: &CallEnv, iterator_prototype: &ObjectRef
             0,
             NativeFunction::WrapForValidIteratorPrototypeReturn,
             false,
-            env.realm().atoms(),
+            env.realm(),
         )),
     );
     prototype

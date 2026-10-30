@@ -18,7 +18,7 @@ pub(crate) fn install_weak_ref(
         1,
         NativeFunction::WeakRef,
         true,
-        env.realm().atoms(),
+        env.realm(),
     );
     prototype.define_non_enumerable("constructor".to_owned(), Value::Function(function.clone()));
     prototype.define_non_enumerable(
@@ -28,7 +28,7 @@ pub(crate) fn install_weak_ref(
             0,
             NativeFunction::WeakRefPrototypeDeref,
             false,
-            env.realm().atoms(),
+            env.realm(),
         )),
     );
     function.define_property(

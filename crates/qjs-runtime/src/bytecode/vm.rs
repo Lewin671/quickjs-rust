@@ -1009,6 +1009,12 @@ impl<'a> Vm<'a> {
         }
         let value = if let Some(value) = self.try_cached_get_named(&object, name, cache) {
             value
+        } else if let Some(property) = cache.accessor(&object) {
+            let mut env = self.callee_env();
+            let value =
+                crate::property::property_descriptor_value(Some(property), object, &mut env)?;
+            self.apply_env(env);
+            value
         } else if let Some(result) = self.try_direct_leaf_getter(&object, key) {
             result?
         } else {

@@ -7,7 +7,7 @@ use std::{collections::HashMap, rc::Rc};
 use crate::{
     Function, ObjectRef, Property, PropertyKey, RuntimeError, Value, array_as_prototype_slot,
     function::{CompiledUserFunction, InstanceFieldInitializer, Upvalue},
-    function_prototype, object, property_value,
+    object, property_value,
     symbol::symbol_function_name_description,
     to_property_key_value,
 };
@@ -848,10 +848,7 @@ struct ClassHeritageParent {
 }
 
 fn function_prototype_value(env: &CallEnv) -> Option<Value> {
-    let Some(Value::Function(function_constructor)) = env.get("Function") else {
-        return None;
-    };
-    function_prototype(&function_constructor).map(Value::Object)
+    env.realm().function_prototype().map(|p| p.to_value())
 }
 
 impl ClassHeritage {

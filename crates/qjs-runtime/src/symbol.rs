@@ -32,13 +32,8 @@ pub(crate) fn install_symbol(env: &mut CallEnv, global_this: &Value, object_prot
         ObjectRef::with_prototype(HashMap::new(), Some(object_prototype), env.realm().atoms());
     symbol_prototype.set_to_string_tag("Symbol");
 
-    let symbol_function = Function::new_native(
-        Some("Symbol"),
-        0,
-        NativeFunction::Symbol,
-        true,
-        env.realm().atoms(),
-    );
+    let symbol_function =
+        Function::new_native(Some("Symbol"), 0, NativeFunction::Symbol, true, env.realm());
     install_well_known_symbols(&symbol_function, &symbol_prototype);
     if let Some(symbols) = WELL_KNOWN_SYMBOL_NAMES
         .iter()
@@ -60,7 +55,7 @@ pub(crate) fn install_symbol(env: &mut CallEnv, global_this: &Value, object_prot
                     1,
                     NativeFunction::SymbolPrototypeToPrimitive,
                     false,
-                    env.realm().atoms(),
+                    env.realm(),
                 )),
                 false,
                 false,
@@ -75,7 +70,7 @@ pub(crate) fn install_symbol(env: &mut CallEnv, global_this: &Value, object_prot
             1,
             NativeFunction::SymbolFor,
             false,
-            env.realm().atoms(),
+            env.realm(),
         ))),
     );
     symbol_function.define_property(
@@ -85,7 +80,7 @@ pub(crate) fn install_symbol(env: &mut CallEnv, global_this: &Value, object_prot
             1,
             NativeFunction::SymbolKeyFor,
             false,
-            env.realm().atoms(),
+            env.realm(),
         ))),
     );
     symbol_prototype.define_non_enumerable(
@@ -99,7 +94,7 @@ pub(crate) fn install_symbol(env: &mut CallEnv, global_this: &Value, object_prot
             0,
             NativeFunction::SymbolPrototypeToString,
             false,
-            env.realm().atoms(),
+            env.realm(),
         )),
     );
     symbol_prototype.define_non_enumerable(
@@ -109,7 +104,7 @@ pub(crate) fn install_symbol(env: &mut CallEnv, global_this: &Value, object_prot
             0,
             NativeFunction::SymbolPrototypeValueOf,
             false,
-            env.realm().atoms(),
+            env.realm(),
         )),
     );
     symbol_prototype.define_property(
@@ -120,7 +115,7 @@ pub(crate) fn install_symbol(env: &mut CallEnv, global_this: &Value, object_prot
                 0,
                 NativeFunction::SymbolPrototypeDescription,
                 false,
-                env.realm().atoms(),
+                env.realm(),
             ))),
             None,
             false,
@@ -369,7 +364,7 @@ fn install_function_has_instance(env: &CallEnv, symbol_function: &Function) {
             1,
             NativeFunction::FunctionPrototypeHasInstance,
             false,
-            env.realm().atoms(),
+            env.realm(),
         )),
         false,
         false,
@@ -384,6 +379,16 @@ fn install_function_has_instance(env: &CallEnv, symbol_function: &Function) {
             prototype.define_symbol_property(symbol, property);
         }
         crate::Prototype::Proxy(_) => {}
+
+        crate::Prototype::Map(_carrier) => {
+            let prototype = _carrier.object();
+            prototype.define_symbol_property(symbol, property)
+        }
+
+        crate::Prototype::Set(_carrier) => {
+            let prototype = _carrier.object();
+            prototype.define_symbol_property(symbol, property)
+        }
     }
 }
 
@@ -413,7 +418,7 @@ pub(crate) fn define_species_accessor(env: &CallEnv, function: &Function) {
                 0,
                 NativeFunction::SpeciesGetter,
                 false,
-                env.realm().atoms(),
+                env.realm(),
             ))),
             None,
             false,

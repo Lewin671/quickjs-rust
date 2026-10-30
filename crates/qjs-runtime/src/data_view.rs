@@ -62,7 +62,7 @@ pub(crate) fn install_data_view(
         1,
         NativeFunction::DataView,
         true,
-        env.realm().atoms(),
+        env.realm(),
     );
     prototype.define_non_enumerable(
         "constructor".to_owned(),
@@ -83,7 +83,7 @@ pub(crate) fn install_data_view(
                     0,
                     native,
                     false,
-                    env.realm().atoms(),
+                    env.realm(),
                 ))),
                 None,
                 false,
@@ -141,7 +141,7 @@ pub(crate) fn install_data_view(
                 length,
                 native,
                 false,
-                env.realm().atoms(),
+                env.realm(),
             )),
         );
     }

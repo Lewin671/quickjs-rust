@@ -38,12 +38,12 @@ validity; slot reuse never occurs under an unchanged dictionary version.
 Value writes touch no shape/version. Existing property_revision consumers must
 be migrated individually: cached values cannot borrow slot-cache validity.
 
-S1 structural tokens pair weak allocation identity and epoch; epoch rollover
-publishes a fresh identity. A private dictionary with weak observers uses safe
-Rc::make_mut dissociation, moving rather than copying fields when uniquely owned.
-S2 deletes the legacy value revision after retiring its last exact-value
-consumer; the ordinary hot payload remains 96 bytes. Debug structural edits reconstruct all layout
-invariants; data-only writes check the affected slot and unchanged cardinalities.
-
+Shared structural tokens use weak allocation identity only; dictionary tokens
+also compare a nonzero version. Rollover publishes a fresh dictionary allocation.
+Private dictionaries with weak observers use safe Rc::make_mut dissociation,
+moving rather than copying fields when uniquely owned. S2 retires the legacy
+exact-value revision and moves prototype ownership into NamedStore; the ordinary
+hot payload is 80 bytes. Debug structural edits reconstruct layout invariants;
+data-only writes check the affected slot and unchanged cardinalities.
 
 The semantic receiver and IC contract is [objects](core-rebuild-objects.md).

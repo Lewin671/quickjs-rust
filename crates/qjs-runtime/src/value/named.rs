@@ -1,23 +1,25 @@
-//! Borrowed receiver facade for shape ICs. Exotic keys are admitted only by
-//! their semantic hooks; all admitted reads/writes use NamedStore live slots.
+//! Pure named lookup outcomes shared by every IC consumer. Probing never
+//! installs lazy properties, allocates payloads, interns keys, or runs JS.
 use super::layout::{LayoutVersion, NamedStore, StructuralDependency};
-use super::{ArrayWeakRef, ObjectWeakRef, OwnDataPropertyRead, OwnDataPropertyWrite};
-use crate::property::atom::KeyLease;
-use crate::{ArrayRef, CallEnv, Function, ObjectRef, Prototype, Value};
+use super::{ArrayWeakRef, ObjectWeakRef, OwnDataPropertyWrite};
+use crate::property::atom::{IcPolicy, KeyLease};
+use crate::{ArrayRef, Function, ObjectRef, Property, Prototype, Value};
 
 #[derive(Clone, Copy)]
 pub(crate) enum NamedTarget<'a> {
     Object(&'a ObjectRef),
-    Map(&'a ObjectRef),
-    Set(&'a ObjectRef),
     Array(&'a ArrayRef),
     Function(&'a Function),
+    Map(&'a super::MapRef),
+    Set(&'a super::SetRef),
 }
 #[derive(Clone, Debug)]
 pub(crate) enum WeakTarget {
     Object(ObjectWeakRef),
     Array(ArrayWeakRef),
     Function(crate::function::FunctionWeakRef),
+    Map(super::map::MapWeakRef),
+    Set(super::set::SetWeakRef),
 }
 impl WeakTarget {
     pub(crate) fn upgrade(&self) -> Option<Value> {
@@ -25,106 +27,127 @@ impl WeakTarget {
             Self::Object(w) => w.upgrade().map(Value::Object),
             Self::Array(w) => w.upgrade().map(Value::Array),
             Self::Function(w) => w.upgrade().map(Value::Function),
+            Self::Map(w) => w.upgrade().map(Value::Map),
+            Self::Set(w) => w.upgrade().map(Value::Set),
+        }
+    }
+    pub(crate) fn identity(&self) -> (u8, usize) {
+        match self {
+            Self::Object(w) => (0, w.address()),
+            Self::Array(w) => (4, w.address()),
+            Self::Function(w) => (5, w.address()),
+            Self::Map(w) => (7, w.address()),
+            Self::Set(w) => (8, w.address()),
         }
     }
 }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Virtual {
+    ArrayLength,
+    FunctionName,
+    FunctionLength,
+    FunctionPrototype,
+    FunctionCaller,
+    FunctionArguments,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Probe {
+    Data { slot: u32, writable: bool },
+    Accessor { slot: u32 },
+    Virtual(Virtual),
+    Missing,
+    Exotic,
+}
 impl Value {
-    pub(crate) fn with_named_target<R>(
-        &self,
-        read: impl FnOnce(NamedTarget<'_>) -> R,
-    ) -> Option<R> {
+    pub(crate) fn with_named_target<R>(&self, f: impl FnOnce(NamedTarget<'_>) -> R) -> Option<R> {
         Some(match self {
-            Self::Object(o) => read(NamedTarget::Object(o)),
-            Self::Array(a) => read(NamedTarget::Array(a)),
-            Self::Function(f) => read(NamedTarget::Function(f)),
-            Self::Map(m) => read(NamedTarget::Map(m.object_ref())),
-            Self::Set(s) => read(NamedTarget::Set(s.object_ref())),
+            Self::Object(o) => f(NamedTarget::Object(o)),
+            Self::Array(a) => f(NamedTarget::Array(a)),
+            Self::Function(fun) => f(NamedTarget::Function(fun)),
+            Self::Map(m) => f(NamedTarget::Map(m)),
+            Self::Set(s) => f(NamedTarget::Set(s)),
             _ => return None,
         })
     }
 }
-impl NamedTarget<'_> {
-    /// Receiver kinds prevent hooks with different semantics sharing a proof.
+impl<'a> NamedTarget<'a> {
+    fn object(self) -> Option<&'a ObjectRef> {
+        match self {
+            Self::Object(o) => Some(o),
+            Self::Map(m) => Some(m.object_ref()),
+            Self::Set(s) => Some(s.object_ref()),
+            _ => None,
+        }
+    }
     pub(crate) fn kind(self) -> Option<u8> {
         Some(match self {
             Self::Object(o) => return o.named_kind(),
+            Self::Array(_) => 4,
+            Self::Function(_) => 5,
             Self::Map(_) => 7,
             Self::Set(_) => 8,
-            Self::Array(_) => 4,
-            Self::Function(f) => f.named_kind(),
         })
     }
-    pub(crate) fn with_store<R>(self, read: impl FnOnce(&NamedStore) -> R) -> Option<R> {
+    pub(crate) fn with_store<R>(self, f: impl FnOnce(&NamedStore) -> R) -> Option<R> {
+        if let Some(o) = self.object() {
+            return Some(o.with_named(f));
+        }
         match self {
-            Self::Object(o) | Self::Map(o) | Self::Set(o) => Some(o.with_named(read)),
-            Self::Array(a) => Some(a.with_named(read)),
-            Self::Function(f) => f.with_named(|s| s.map(read)),
+            Self::Array(a) => a.with_named(|s| s.map(f)),
+            Self::Function(fun) => fun.with_named(|s| s.map(f)),
+            _ => unreachable!(),
+        }
+    }
+    pub(crate) fn policy(self) -> IcPolicy {
+        if let Some(o) = self.object() {
+            return o.with_named(|s| s.domain().ic_policy());
+        }
+        match self {
+            Self::Array(a) => a.named_policy(),
+            Self::Function(f) => f.property_domain().ic_policy(),
+            _ => unreachable!(),
         }
     }
     pub(crate) fn version(self) -> Option<LayoutVersion> {
-        self.with_store(NamedStore::version)
-    }
-    pub(crate) fn matches_version(self, version: &LayoutVersion) -> bool {
-        self.with_store(|s| s.matches_version(version))
-            .unwrap_or(false)
-    }
-    #[inline(always)]
-    pub(crate) fn load(self, kind: u8, version: &LayoutVersion, slot: u32) -> Option<Value> {
-        if self.kind()? != kind {
-            return None;
-        }
-        self.with_store(|s| {
-            s.matches_version(version)
-                .then(|| s.load_data(slot as usize))
-                .flatten()
-        })?
-    }
-    pub(crate) fn write(
-        self,
-        kind: u8,
-        version: &LayoutVersion,
-        slot: u32,
-        value: &Value,
-    ) -> Option<OwnDataPropertyWrite> {
-        if self.kind()? != kind {
-            return None;
-        }
-        // Array length/index, typed numeric indices, String virtual indices,
-        // namespaces and primitive symbols are never admitted by read().
-        let replace = |s: &mut NamedStore| {
-            if s.slot_name_is(slot as usize, "globalThis") {
-                return None;
-            }
-            if !s.matches_version(version) {
-                return None;
-            }
-            s.replace_data(slot as usize, value.clone()).map(|written| {
-                if written {
-                    OwnDataPropertyWrite::Written
-                } else {
-                    OwnDataPropertyWrite::ReadOnly
-                }
-            })
-        };
         match self {
-            Self::Object(o) | Self::Map(o) | Self::Set(o) => o.with_named_mut(replace),
-            Self::Array(a) => a.with_named_mut(replace),
-            Self::Function(f) => f.with_named_mut(|s| {
-                if s.slot_name_is(slot as usize, "__quickjsRustDynamicFunctionRealm") {
-                    return None;
-                }
-                replace(s)
-            }),
+            Self::Array(a) => Some(a.named_version()),
+            Self::Function(f) => f.named_version(),
+            _ => self.with_store(NamedStore::version),
         }
     }
-    pub(crate) fn read(
-        self,
-        key: &KeyLease,
-    ) -> (OwnDataPropertyRead, Option<(LayoutVersion, u32)>) {
-        let name = key.as_str();
-        let slow = || (OwnDataPropertyRead::NeedsSlowPath, None);
+    pub(crate) fn matches_version(self, v: &LayoutVersion) -> bool {
+        match self {
+            Self::Array(a) => a.named_matches(v),
+            Self::Function(f) => f.named_matches(v),
+            _ => self.with_store(|s| s.matches_version(v)).unwrap_or(false),
+        }
+    }
+    pub(crate) fn chain_dependency(self) -> Option<StructuralDependency> {
+        match self {
+            Self::Array(a) => a.chain_dependency(),
+            Self::Function(f) => f.chain_dependency(),
+            _ => self.with_store(NamedStore::chain_dependency).flatten(),
+        }
+    }
+    pub(crate) fn prototype(self) -> Option<Prototype> {
+        match self {
+            Self::Array(a) => a.prototype_slot(),
+            Self::Function(f) => f.effective_internal_prototype(),
+            _ => self.object().and_then(ObjectRef::prototype_slot),
+        }
+    }
+    pub(crate) fn downgrade(self) -> WeakTarget {
+        match self {
+            Self::Object(o) => WeakTarget::Object(o.downgrade()),
+            Self::Array(a) => WeakTarget::Array(a.downgrade()),
+            Self::Function(f) => WeakTarget::Function(f.downgrade()),
+            Self::Map(m) => WeakTarget::Map(m.downgrade()),
+            Self::Set(s) => WeakTarget::Set(s.downgrade()),
+        }
+    }
+    pub(crate) fn probe(self, name: &str, key: Option<&KeyLease>) -> Probe {
         if self.kind().is_none() {
-            return slow();
+            return Probe::Exotic;
         }
         match self {
             Self::Object(o)
@@ -134,93 +157,90 @@ impl NamedTarget<'_> {
                         && (name == "length"
                             || crate::array_index_property_key(name).is_some())) =>
             {
-                return slow();
+                return Probe::Exotic;
             }
-            Self::Array(_)
-                if name == "length" || crate::array_index_property_key(name).is_some() =>
-            {
-                return slow();
+            Self::Array(_) if name == "length" => return Probe::Virtual(Virtual::ArrayLength),
+            Self::Array(_) if crate::array_index_property_key(name).is_some() => {
+                return Probe::Exotic;
             }
             Self::Function(f) => {
-                if name == "caller" || name == "arguments" {
-                    return slow();
-                }
-                if let Some(read) = f.implicit_named_read(name) {
-                    return (read, None);
+                if let Some(hook) = f.virtual_named_probe(name) {
+                    return Probe::Virtual(hook);
                 }
             }
             _ => {}
         }
-        self.with_store(|s| {
-            let normalized;
-            let key = if key.belongs_to(s.domain()) {
-                key
-            } else {
-                let Some(k) = s.domain().find(name) else {
-                    return (OwnDataPropertyRead::Missing, None);
+        let probe = self
+            .with_store(|s| {
+                let normalized;
+                let key = match key {
+                    Some(k) if k.belongs_to(s.domain()) => k,
+                    _ => {
+                        let Some(k) = s.domain().find(name) else {
+                            return Probe::Missing;
+                        };
+                        normalized = k;
+                        &normalized
+                    }
                 };
-                normalized = k;
-                &normalized
-            };
-            let (read, slot) = s.read_data_slot(key);
-            (read, slot.map(|slot| (s.version(), slot as u32)))
-        })
-        .unwrap_or((OwnDataPropertyRead::Missing, None))
+                s.probe_slot(key)
+            })
+            .unwrap_or(Probe::Missing);
+        if probe == Probe::Missing {
+            if let Self::Function(f) = self {
+                if f.has_compat_caller() {
+                    if name == "caller" {
+                        return Probe::Virtual(Virtual::FunctionCaller);
+                    }
+                    if name == "arguments" {
+                        return Probe::Virtual(Virtual::FunctionArguments);
+                    }
+                }
+            }
+        }
+        probe
     }
-    pub(crate) fn prototype(self, env: Option<&CallEnv>) -> Option<Prototype> {
+    /// Called only after shape or prototype-cell validation proves this kind.
+    pub(crate) fn load_matched_data(self, v: &LayoutVersion, slot: u32) -> Option<Value> {
+        self.with_store(|s| {
+            s.matches_version(v)
+                .then(|| s.load_guarded_data(slot as usize))
+                .flatten()
+        })?
+    }
+    pub(crate) fn write_matched_data(
+        self,
+        v: &LayoutVersion,
+        slot: u32,
+        value: &Value,
+    ) -> Option<OwnDataPropertyWrite> {
+        let write = |s: &mut NamedStore| {
+            if s.matches_version(v) && s.overwrite_guarded_data(slot as usize, value.clone()) {
+                Some(OwnDataPropertyWrite::Written)
+            } else {
+                None
+            }
+        };
+        if let Some(o) = self.object() {
+            return o.with_named_mut(write);
+        }
         match self {
-            Self::Object(o) | Self::Map(o) | Self::Set(o) => o.prototype_slot(),
-            Self::Array(a) => a
-                .prototype_slot_override()
-                .unwrap_or_else(|| env.and_then(crate::array_prototype).map(Prototype::Object)),
-            Self::Function(f) => match env {
-                Some(env) => crate::value_prototype_slot(Value::Function(f.clone()), env),
-                None => f.effective_internal_prototype(),
-            },
+            Self::Array(a) => a.with_named_mut(write),
+            Self::Function(f) => f.with_named_mut(write),
+            _ => None,
         }
     }
-    pub(crate) fn downgrade(self) -> WeakTarget {
-        match self {
-            Self::Object(o) | Self::Map(o) | Self::Set(o) => WeakTarget::Object(o.downgrade()),
-            Self::Array(a) => WeakTarget::Array(a.downgrade()),
-            Self::Function(f) => WeakTarget::Function(f.downgrade()),
-        }
+    pub(crate) fn load_data(self, slot: u32) -> Option<Value> {
+        self.with_store(|s| s.load_guarded_data(slot as usize))?
     }
-    pub(crate) fn subscribe(self, dependency: &StructuralDependency) -> bool {
-        self.with_store(|s| s.subscribe(dependency)).is_some()
+    pub(crate) fn load_accessor(self, slot: u32) -> Option<Property> {
+        self.with_store(|s| s.accessor_at(slot as usize))?
     }
-}
-
-#[derive(Clone, Debug)]
-pub(crate) enum WeakEdge {
-    Object(ObjectWeakRef),
-    Array(super::object::ArrayPrototypeWeakRef),
-    Function(crate::function::FunctionWeakRef),
-}
-impl WeakEdge {
-    pub(crate) fn new(p: &Prototype) -> Option<Self> {
-        Some(match p {
-            Prototype::Object(o) => Self::Object(o.downgrade()),
-            Prototype::Array(a) => Self::Array(a.downgrade()),
-            Prototype::Function(f) => Self::Function(f.downgrade()),
-            Prototype::Proxy(_) => return None,
-        })
-    }
-    pub(crate) fn matches(&self, p: &Prototype) -> bool {
-        match (self, p) {
-            (Self::Object(w), Prototype::Object(o)) => w.ptr_eq(o),
-            (Self::Array(w), Prototype::Array(a)) => w.ptr_eq(a),
-            (Self::Function(w), Prototype::Function(f)) => w.ptr_eq(f),
-            _ => false,
-        }
-    }
-    pub(crate) fn same(&self, other: &Self) -> bool {
-        // Weak handles keep allocation identities from being reused.
-        match (self, other) {
-            (Self::Object(a), Self::Object(b)) => a.same(b),
-            (Self::Array(a), Self::Array(b)) => a.same(b),
-            (Self::Function(a), Self::Function(b)) => a.same(b),
-            _ => false,
+    pub(crate) fn virtual_value(self, hook: Virtual) -> Option<Value> {
+        match (self, hook) {
+            (Self::Array(a), Virtual::ArrayLength) => Some(Value::Number(a.len() as f64)),
+            (Self::Function(f), _) => f.virtual_named_value(hook),
+            _ => None,
         }
     }
 }

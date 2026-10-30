@@ -21,6 +21,18 @@ impl OrderedDataPropertyBuilder {
         b.properties.reserve(capacity);
         b
     }
+    pub(crate) fn with_prototype(
+        capacity: usize,
+        domain: &AtomDomain,
+        prototype: Option<Prototype>,
+    ) -> Self {
+        let mut properties = NamedStore::empty_with_prototype(domain, prototype, 0);
+        properties.reserve(capacity);
+        Self {
+            properties,
+            index_property_count: 0,
+        }
+    }
     pub(crate) fn insert_property(&mut self, key: Rc<str>, property: Property) {
         if self.properties.insert_text(&key, property) && super::is_array_index_key(&key) {
             self.index_property_count += 1;

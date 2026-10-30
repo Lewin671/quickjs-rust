@@ -45,8 +45,11 @@ pub(crate) fn new_promise_capability(
 
     if is_native_promise_constructor(c, env) {
         let promise = new_pending_promise(env);
-        let (resolve, reject) =
-            resolving_function_pair(Value::Object(promise.clone()), env.realm().atoms());
+        let (resolve, reject) = resolving_function_pair(
+            env.realm(),
+            Value::Object(promise.clone()),
+            env.realm().atoms(),
+        );
         return Ok(PromiseCapability {
             promise: Value::Object(promise),
             resolve,
@@ -62,7 +65,7 @@ pub(crate) fn new_promise_capability(
         2,
         NativeFunction::PromiseGetCapabilitiesExecutor,
         false,
-        env.realm().atoms(),
+        env.realm(),
     );
     executor.insert_native_context(CAPABILITY_RECORD.to_owned(), Value::Object(record.clone()));
 

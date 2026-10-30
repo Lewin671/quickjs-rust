@@ -23,48 +23,211 @@ pub(super) fn install_math(env: &mut CallEnv, global_this: &Value, object_protot
     define_math_constant(&math_object, "PI", std::f64::consts::PI);
     define_math_constant(&math_object, "SQRT1_2", std::f64::consts::FRAC_1_SQRT_2);
     define_math_constant(&math_object, "SQRT2", std::f64::consts::SQRT_2);
-    define_math_function(&math_object, "abs", 1, NativeFunction::MathAbs);
-    define_math_function(&math_object, "acos", 1, NativeFunction::MathAcos);
-    define_math_function(&math_object, "acosh", 1, NativeFunction::MathAcosh);
-    define_math_function(&math_object, "asin", 1, NativeFunction::MathAsin);
-    define_math_function(&math_object, "asinh", 1, NativeFunction::MathAsinh);
-    define_math_function(&math_object, "atan", 1, NativeFunction::MathAtan);
-    define_math_function(&math_object, "atan2", 2, NativeFunction::MathAtan2);
-    define_math_function(&math_object, "atanh", 1, NativeFunction::MathAtanh);
-    define_math_function(&math_object, "cbrt", 1, NativeFunction::MathCbrt);
-    define_math_function(&math_object, "ceil", 1, NativeFunction::MathCeil);
-    define_math_function(&math_object, "clz32", 1, NativeFunction::MathClz32);
-    define_math_function(&math_object, "cos", 1, NativeFunction::MathCos);
-    define_math_function(&math_object, "cosh", 1, NativeFunction::MathCosh);
-    define_math_function(&math_object, "exp", 1, NativeFunction::MathExp);
-    define_math_function(&math_object, "expm1", 1, NativeFunction::MathExpm1);
-    define_math_function(&math_object, "f16round", 1, NativeFunction::MathF16round);
-    define_math_function(&math_object, "floor", 1, NativeFunction::MathFloor);
-    define_math_function(&math_object, "fround", 1, NativeFunction::MathFround);
-    define_math_function(&math_object, "hypot", 2, NativeFunction::MathHypot);
-    define_math_function(&math_object, "imul", 2, NativeFunction::MathImul);
-    define_math_function(&math_object, "log", 1, NativeFunction::MathLog);
-    define_math_function(&math_object, "log1p", 1, NativeFunction::MathLog1p);
-    define_math_function(&math_object, "log10", 1, NativeFunction::MathLog10);
-    define_math_function(&math_object, "log2", 1, NativeFunction::MathLog2);
-    define_math_function(&math_object, "max", 2, NativeFunction::MathMax);
-    define_math_function(&math_object, "min", 2, NativeFunction::MathMin);
-    define_math_function(&math_object, "pow", 2, NativeFunction::MathPow);
-    define_math_function(&math_object, "random", 0, NativeFunction::MathRandom);
-    define_math_function(&math_object, "round", 1, NativeFunction::MathRound);
-    define_math_function(&math_object, "sign", 1, NativeFunction::MathSign);
-    define_math_function(&math_object, "sin", 1, NativeFunction::MathSin);
-    define_math_function(&math_object, "sinh", 1, NativeFunction::MathSinh);
-    define_math_function(&math_object, "sqrt", 1, NativeFunction::MathSqrt);
+    define_math_function(env.realm(), &math_object, "abs", 1, NativeFunction::MathAbs);
     define_math_function(
+        env.realm(),
+        &math_object,
+        "acos",
+        1,
+        NativeFunction::MathAcos,
+    );
+    define_math_function(
+        env.realm(),
+        &math_object,
+        "acosh",
+        1,
+        NativeFunction::MathAcosh,
+    );
+    define_math_function(
+        env.realm(),
+        &math_object,
+        "asin",
+        1,
+        NativeFunction::MathAsin,
+    );
+    define_math_function(
+        env.realm(),
+        &math_object,
+        "asinh",
+        1,
+        NativeFunction::MathAsinh,
+    );
+    define_math_function(
+        env.realm(),
+        &math_object,
+        "atan",
+        1,
+        NativeFunction::MathAtan,
+    );
+    define_math_function(
+        env.realm(),
+        &math_object,
+        "atan2",
+        2,
+        NativeFunction::MathAtan2,
+    );
+    define_math_function(
+        env.realm(),
+        &math_object,
+        "atanh",
+        1,
+        NativeFunction::MathAtanh,
+    );
+    define_math_function(
+        env.realm(),
+        &math_object,
+        "cbrt",
+        1,
+        NativeFunction::MathCbrt,
+    );
+    define_math_function(
+        env.realm(),
+        &math_object,
+        "ceil",
+        1,
+        NativeFunction::MathCeil,
+    );
+    define_math_function(
+        env.realm(),
+        &math_object,
+        "clz32",
+        1,
+        NativeFunction::MathClz32,
+    );
+    define_math_function(env.realm(), &math_object, "cos", 1, NativeFunction::MathCos);
+    define_math_function(
+        env.realm(),
+        &math_object,
+        "cosh",
+        1,
+        NativeFunction::MathCosh,
+    );
+    define_math_function(env.realm(), &math_object, "exp", 1, NativeFunction::MathExp);
+    define_math_function(
+        env.realm(),
+        &math_object,
+        "expm1",
+        1,
+        NativeFunction::MathExpm1,
+    );
+    define_math_function(
+        env.realm(),
+        &math_object,
+        "f16round",
+        1,
+        NativeFunction::MathF16round,
+    );
+    define_math_function(
+        env.realm(),
+        &math_object,
+        "floor",
+        1,
+        NativeFunction::MathFloor,
+    );
+    define_math_function(
+        env.realm(),
+        &math_object,
+        "fround",
+        1,
+        NativeFunction::MathFround,
+    );
+    define_math_function(
+        env.realm(),
+        &math_object,
+        "hypot",
+        2,
+        NativeFunction::MathHypot,
+    );
+    define_math_function(
+        env.realm(),
+        &math_object,
+        "imul",
+        2,
+        NativeFunction::MathImul,
+    );
+    define_math_function(env.realm(), &math_object, "log", 1, NativeFunction::MathLog);
+    define_math_function(
+        env.realm(),
+        &math_object,
+        "log1p",
+        1,
+        NativeFunction::MathLog1p,
+    );
+    define_math_function(
+        env.realm(),
+        &math_object,
+        "log10",
+        1,
+        NativeFunction::MathLog10,
+    );
+    define_math_function(
+        env.realm(),
+        &math_object,
+        "log2",
+        1,
+        NativeFunction::MathLog2,
+    );
+    define_math_function(env.realm(), &math_object, "max", 2, NativeFunction::MathMax);
+    define_math_function(env.realm(), &math_object, "min", 2, NativeFunction::MathMin);
+    define_math_function(env.realm(), &math_object, "pow", 2, NativeFunction::MathPow);
+    define_math_function(
+        env.realm(),
+        &math_object,
+        "random",
+        0,
+        NativeFunction::MathRandom,
+    );
+    define_math_function(
+        env.realm(),
+        &math_object,
+        "round",
+        1,
+        NativeFunction::MathRound,
+    );
+    define_math_function(
+        env.realm(),
+        &math_object,
+        "sign",
+        1,
+        NativeFunction::MathSign,
+    );
+    define_math_function(env.realm(), &math_object, "sin", 1, NativeFunction::MathSin);
+    define_math_function(
+        env.realm(),
+        &math_object,
+        "sinh",
+        1,
+        NativeFunction::MathSinh,
+    );
+    define_math_function(
+        env.realm(),
+        &math_object,
+        "sqrt",
+        1,
+        NativeFunction::MathSqrt,
+    );
+    define_math_function(
+        env.realm(),
         &math_object,
         "sumPrecise",
         1,
         NativeFunction::MathSumPrecise,
     );
-    define_math_function(&math_object, "tan", 1, NativeFunction::MathTan);
-    define_math_function(&math_object, "tanh", 1, NativeFunction::MathTanh);
-    define_math_function(&math_object, "trunc", 1, NativeFunction::MathTrunc);
+    define_math_function(env.realm(), &math_object, "tan", 1, NativeFunction::MathTan);
+    define_math_function(
+        env.realm(),
+        &math_object,
+        "tanh",
+        1,
+        NativeFunction::MathTanh,
+    );
+    define_math_function(
+        env.realm(),
+        &math_object,
+        "trunc",
+        1,
+        NativeFunction::MathTrunc,
+    );
     let math_value = Value::Object(math_object);
     env.insert_realm("Math".to_owned(), math_value.clone());
     if let Value::Object(global_object) = global_this {
@@ -79,7 +242,13 @@ fn define_math_constant(object: &ObjectRef, key: &str, value: f64) {
     );
 }
 
-fn define_math_function(object: &ObjectRef, key: &str, length: usize, native: NativeFunction) {
+fn define_math_function(
+    realm: &crate::function::Realm,
+    object: &ObjectRef,
+    key: &str,
+    length: usize,
+    native: NativeFunction,
+) {
     object.define_non_enumerable(
         key.to_owned(),
         Value::Function(Function::new_native(
@@ -87,7 +256,7 @@ fn define_math_function(object: &ObjectRef, key: &str, length: usize, native: Na
             length,
             native,
             false,
-            &object.domain(),
+            realm,
         )),
     );
 }

@@ -358,11 +358,11 @@ fn writable_dense_sparse_source_replays_prototype_getter_once() {
 
 #[test]
 fn distinct_dense_writable_lease_releases_prefix_on_real_borrow_conflict() {
-    let first = ArrayRef::new(
+    let first = ArrayRef::new_in_domain(
         &crate::property::atom::AtomDomain::new(),
         vec![Value::Number(1.0)],
     );
-    let second = ArrayRef::new(
+    let second = ArrayRef::new_in_domain(
         &crate::property::atom::AtomDomain::new(),
         vec![Value::Number(2.0)],
     );

@@ -159,10 +159,10 @@ pub(crate) fn native_array_iterator_next(
     let value = match iterator_kind(&iterator)?.as_str() {
         ITERATOR_KIND_KEY => key,
         ITERATOR_KIND_VALUE => property_value(target, &index.to_string(), env)?,
-        ITERATOR_KIND_KEY_VALUE => Value::Array(ArrayRef::new(
-            &env.realm().atoms().clone(),
-            vec![key, property_value(target, &index.to_string(), env)?],
-        )),
+        ITERATOR_KIND_KEY_VALUE => {
+            let value = property_value(target, &index.to_string(), env)?;
+            Value::Array(ArrayRef::new(env.realm(), vec![key, value]))
+        }
         _ => {
             return Err(RuntimeError {
                 thrown: None,

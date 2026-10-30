@@ -42,6 +42,41 @@ impl NamedStore {
             .position(key)?
             .filter(|&position| !self.layout.entry(position).attrs.has(Attributes::ACCESSOR)))
     }
+    /// Caller proved descriptor kind with a live shape/dictionary guard.
+    pub(crate) fn probe_slot(&self, key: &KeyLease) -> crate::value::named::Probe {
+        use crate::value::named::Probe;
+        let Some(position) = self.position(key).expect("own domain") else {
+            return Probe::Missing;
+        };
+        let entry = self.layout.entry(position);
+        if entry.attrs.has(Attributes::ACCESSOR) {
+            Probe::Accessor { slot: entry.slot }
+        } else {
+            Probe::Data {
+                slot: entry.slot,
+                writable: entry.attrs.has(Attributes::WRITABLE),
+            }
+        }
+    }
+    pub(crate) fn overwrite_guarded_data(&mut self, slot: usize, value: Value) -> bool {
+        let Some(target) = self.values.get_mut(slot) else {
+            return false;
+        };
+        *target = value;
+        self.verify_slot(slot);
+        true
+    }
+    pub(crate) fn load_guarded_data(&self, slot: usize) -> Option<Value> {
+        self.values.get(slot).cloned()
+    }
+    pub(crate) fn accessor_at(&self, slot: usize) -> Option<Property> {
+        let entry = self.layout.entry_at(slot)?;
+        entry
+            .attrs
+            .has(Attributes::ACCESSOR)
+            .then(|| self.descriptor(slot))
+    }
+    #[cfg(test)]
     pub(crate) fn load_data(&self, slot: usize) -> Option<Value> {
         let entry = self.layout.entry_at(slot)?;
         (!entry.attrs.has(Attributes::ACCESSOR)).then(|| self.values[slot].clone())
@@ -77,6 +112,12 @@ impl NamedStore {
         (0..self.len()).map(|slot| self.descriptor(slot))
     }
     pub(crate) fn defer_children(&mut self, pending: &mut Vec<Value>) {
+        if let Some(prototype) = self.prototype.take() {
+            if let Some(prototype) = Rc::into_inner(prototype) {
+                let mut value = prototype.to_value();
+                crate::value::teardown::defer_if_last(&mut value, pending);
+            }
+        }
         for value in &mut self.values {
             crate::value::teardown::defer_if_last(value, pending);
         }
@@ -87,12 +128,6 @@ impl NamedStore {
                 }
             }
         }
-    }
-    pub(crate) fn slot_name_is(&self, slot: usize, name: &str) -> bool {
-        self.layout
-            .keys()
-            .get(slot)
-            .is_some_and(|key| key.symbol().is_none() && key.as_str() == name)
     }
     #[cfg(test)]
     pub(crate) fn slot_matches(&self, slot: usize, key: &KeyLease) -> bool {

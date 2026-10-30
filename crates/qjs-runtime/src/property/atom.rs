@@ -173,7 +173,15 @@ impl AtomTable {
     }
 }
 
+/// Immutable runtime-group debug configuration. No per-site or per-loop getenv.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct IcPolicy {
+    pub(crate) enabled: bool,
+    pub(crate) verify: bool,
+}
+
 struct DomainState {
+    ic_policy: IcPolicy,
     table: RefCell<AtomTable>,
     free_ids: RefCell<Vec<KeyId>>,
     // Only an attachment, never a strong root: layout owners retain the domain.
@@ -197,6 +205,10 @@ impl AtomDomain {
 
     fn with_limit(limit: u32) -> Self {
         Self(Rc::new(DomainState {
+            ic_policy: IcPolicy {
+                enabled: std::env::var_os("QJS_DISABLE_IC").is_none(),
+                verify: cfg!(debug_assertions) && std::env::var_os("QJS_VERIFY_IC").is_some(),
+            },
             free_ids: RefCell::new(Vec::new()),
             shape_owner: RefCell::new(Weak::new()),
             empty_native_context: RefCell::new(Weak::new()),
@@ -330,6 +342,9 @@ impl AtomDomain {
             .map(KeyLease)
     }
 
+    pub(crate) fn ic_policy(&self) -> IcPolicy {
+        self.0.ic_policy
+    }
     pub(crate) fn empty_native_context(
         &self,
     ) -> &RefCell<Weak<crate::function::NativeContextData>> {

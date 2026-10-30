@@ -36,7 +36,7 @@ pub(crate) fn install_disposable_stack(
         0,
         NativeFunction::DisposableStack,
         true,
-        env.realm().atoms(),
+        env.realm(),
     );
     prototype.define_non_enumerable("constructor".to_owned(), Value::Function(function.clone()));
     prototype.define_property(
@@ -47,7 +47,7 @@ pub(crate) fn install_disposable_stack(
                 0,
                 NativeFunction::DisposableStackPrototypeDisposed,
                 false,
-                env.realm().atoms(),
+                env.realm(),
             ))),
             None,
             false,
@@ -56,12 +56,14 @@ pub(crate) fn install_disposable_stack(
     );
 
     define_prototype_method(
+        env.realm(),
         &prototype,
         "adopt",
         2,
         NativeFunction::DisposableStackPrototypeAdopt,
     );
     define_prototype_method(
+        env.realm(),
         &prototype,
         "defer",
         1,
@@ -72,7 +74,7 @@ pub(crate) fn install_disposable_stack(
         0,
         NativeFunction::DisposableStackPrototypeDispose,
         false,
-        env.realm().atoms(),
+        env.realm(),
     );
     let dispose_value = Value::Function(dispose);
     prototype.define_non_enumerable("dispose".to_owned(), dispose_value.clone());
@@ -80,12 +82,14 @@ pub(crate) fn install_disposable_stack(
         prototype.define_symbol_property(dispose_symbol, Property::non_enumerable(dispose_value));
     }
     define_prototype_method(
+        env.realm(),
         &prototype,
         "move",
         0,
         NativeFunction::DisposableStackPrototypeMove,
     );
     define_prototype_method(
+        env.realm(),
         &prototype,
         "use",
         1,
@@ -119,7 +123,7 @@ fn install_async_disposable_stack(
         0,
         NativeFunction::AsyncDisposableStack,
         true,
-        env.realm().atoms(),
+        env.realm(),
     );
     prototype.define_non_enumerable("constructor".to_owned(), Value::Function(function.clone()));
     prototype.define_property(
@@ -130,7 +134,7 @@ fn install_async_disposable_stack(
                 0,
                 NativeFunction::AsyncDisposableStackPrototypeDisposed,
                 false,
-                env.realm().atoms(),
+                env.realm(),
             ))),
             None,
             false,
@@ -138,12 +142,14 @@ fn install_async_disposable_stack(
         ),
     );
     define_prototype_method(
+        env.realm(),
         &prototype,
         "adopt",
         2,
         NativeFunction::AsyncDisposableStackPrototypeAdopt,
     );
     define_prototype_method(
+        env.realm(),
         &prototype,
         "defer",
         1,
@@ -154,7 +160,7 @@ fn install_async_disposable_stack(
         0,
         NativeFunction::AsyncDisposableStackPrototypeDisposeAsync,
         false,
-        env.realm().atoms(),
+        env.realm(),
     );
     let dispose_async_value = Value::Function(dispose_async);
     prototype.define_non_enumerable("disposeAsync".to_owned(), dispose_async_value.clone());
@@ -165,12 +171,14 @@ fn install_async_disposable_stack(
         );
     }
     define_prototype_method(
+        env.realm(),
         &prototype,
         "move",
         0,
         NativeFunction::AsyncDisposableStackPrototypeMove,
     );
     define_prototype_method(
+        env.realm(),
         &prototype,
         "use",
         1,
@@ -211,7 +219,7 @@ pub(crate) fn native_async_disposable_stack(
     );
     object.define_property(
         DISPOSABLE_STACK_RESOURCES.to_owned(),
-        Property::non_enumerable(Value::Array(ArrayRef::new(env.realm().atoms(), Vec::new()))),
+        Property::non_enumerable(Value::Array(ArrayRef::new(env.realm(), Vec::new()))),
     );
     Ok(Value::Object(object))
 }
@@ -239,7 +247,7 @@ pub(crate) fn native_disposable_stack(
     );
     object.define_property(
         DISPOSABLE_STACK_RESOURCES.to_owned(),
-        Property::non_enumerable(Value::Array(ArrayRef::new(env.realm().atoms(), Vec::new()))),
+        Property::non_enumerable(Value::Array(ArrayRef::new(env.realm(), Vec::new()))),
     );
     Ok(Value::Object(object))
 }
@@ -360,10 +368,7 @@ pub(crate) fn native_async_disposable_stack_prototype_move(
     );
     new_stack.define_property(
         DISPOSABLE_STACK_RESOURCES.to_owned(),
-        Property::non_enumerable(Value::Array(ArrayRef::new(
-            env.realm().atoms(),
-            moved_resources,
-        ))),
+        Property::non_enumerable(Value::Array(ArrayRef::new(env.realm(), moved_resources))),
     );
     Ok(Value::Object(new_stack))
 }
@@ -542,10 +547,7 @@ pub(crate) fn native_disposable_stack_prototype_move(
     );
     new_stack.define_property(
         DISPOSABLE_STACK_RESOURCES.to_owned(),
-        Property::non_enumerable(Value::Array(ArrayRef::new(
-            env.realm().atoms(),
-            moved_resources,
-        ))),
+        Property::non_enumerable(Value::Array(ArrayRef::new(env.realm(), moved_resources))),
     );
     Ok(Value::Object(new_stack))
 }
@@ -620,6 +622,7 @@ fn async_disposable_stack_object(value: &Value) -> Result<ObjectRef, RuntimeErro
 }
 
 fn define_prototype_method(
+    realm: &crate::function::Realm,
     prototype: &ObjectRef,
     name: &str,
     length: usize,
@@ -632,7 +635,7 @@ fn define_prototype_method(
             length,
             native,
             false,
-            &prototype.domain(),
+            realm,
         )),
     );
 }

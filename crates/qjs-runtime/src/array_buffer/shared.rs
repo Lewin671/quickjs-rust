@@ -24,7 +24,7 @@ pub(crate) fn install_shared_array_buffer(
         1,
         NativeFunction::SharedArrayBuffer,
         true,
-        env.realm().atoms(),
+        env.realm(),
     );
     prototype.define_non_enumerable("constructor".to_owned(), Value::Function(function.clone()));
     for (name, native) in [
@@ -49,7 +49,7 @@ pub(crate) fn install_shared_array_buffer(
                     0,
                     native,
                     false,
-                    env.realm().atoms(),
+                    env.realm(),
                 ))),
                 None,
                 false,
@@ -64,7 +64,7 @@ pub(crate) fn install_shared_array_buffer(
             1,
             NativeFunction::SharedArrayBufferPrototypeGrow,
             false,
-            env.realm().atoms(),
+            env.realm(),
         )),
     );
     prototype.define_non_enumerable(
@@ -74,7 +74,7 @@ pub(crate) fn install_shared_array_buffer(
             2,
             NativeFunction::SharedArrayBufferPrototypeSlice,
             false,
-            env.realm().atoms(),
+            env.realm(),
         )),
     );
     function.define_property(

@@ -35,7 +35,7 @@ impl Vm<'_> {
                 .iter()
                 .all(|element| matches!(element, ArrayElementKind::Expr))
         {
-            self.push_array_literal(ArrayRef::new(self.env.realm().atoms(), element_values));
+            self.push_array_literal(ArrayRef::new(self.env.realm(), element_values));
             return Ok(());
         }
 
@@ -67,11 +67,7 @@ impl Vm<'_> {
                 }
             }
         }
-        self.push_array_literal(ArrayRef::new_sparse(
-            self.env.realm().atoms(),
-            values,
-            holes,
-        ));
+        self.push_array_literal(ArrayRef::new_sparse(self.env.realm(), values, holes));
         Ok(())
     }
 
@@ -124,8 +120,8 @@ impl Vm<'_> {
             .cloned()
             .map(|s| Value::String(s.into()))
             .collect::<Vec<_>>();
-        let cooked_array = ArrayRef::new(self.env.realm().atoms(), cooked_values);
-        let raw_array = ArrayRef::new(self.env.realm().atoms(), raw_values);
+        let cooked_array = ArrayRef::new(self.env.realm(), cooked_values);
+        let raw_array = ArrayRef::new(self.env.realm(), raw_values);
         self.apply_array_literal_prototype_override(&cooked_array);
         self.apply_array_literal_prototype_override(&raw_array);
         raw_array.freeze();

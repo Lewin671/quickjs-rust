@@ -21,13 +21,7 @@ pub(crate) fn install_set(env: &mut CallEnv, global_this: &Value, object_prototy
         ObjectRef::with_prototype(HashMap::new(), Some(object_prototype), env.realm().atoms());
     set_prototype.set_to_string_tag("Set");
     symbol::define_well_known_to_string_tag(env, &set_prototype, "Set");
-    let set_function = Function::new_native(
-        Some("Set"),
-        0,
-        NativeFunction::Set,
-        true,
-        env.realm().atoms(),
-    );
+    let set_function = Function::new_native(Some("Set"), 0, NativeFunction::Set, true, env.realm());
     set_prototype.define_non_enumerable(
         "constructor".to_owned(),
         Value::Function(set_function.clone()),
@@ -40,64 +34,85 @@ pub(crate) fn install_set(env: &mut CallEnv, global_this: &Value, object_prototy
                 0,
                 NativeFunction::SetPrototypeSize,
                 false,
-                env.realm().atoms(),
+                env.realm(),
             ))),
             None,
             false,
             true,
         ),
     );
-    define_set_prototype_function(&set_prototype, "add", 1, NativeFunction::SetPrototypeAdd);
     define_set_prototype_function(
+        env.realm(),
+        &set_prototype,
+        "add",
+        1,
+        NativeFunction::SetPrototypeAdd,
+    );
+    define_set_prototype_function(
+        env.realm(),
         &set_prototype,
         "clear",
         0,
         NativeFunction::SetPrototypeClear,
     );
     define_set_prototype_function(
+        env.realm(),
         &set_prototype,
         "delete",
         1,
         NativeFunction::SetPrototypeDelete,
     );
     define_set_prototype_function(
+        env.realm(),
         &set_prototype,
         "difference",
         1,
         NativeFunction::SetPrototypeDifference,
     );
     define_set_prototype_function(
+        env.realm(),
         &set_prototype,
         "entries",
         0,
         NativeFunction::SetPrototypeEntries,
     );
     define_set_prototype_function(
+        env.realm(),
         &set_prototype,
         "forEach",
         1,
         NativeFunction::SetPrototypeForEach,
     );
-    define_set_prototype_function(&set_prototype, "has", 1, NativeFunction::SetPrototypeHas);
     define_set_prototype_function(
+        env.realm(),
+        &set_prototype,
+        "has",
+        1,
+        NativeFunction::SetPrototypeHas,
+    );
+    define_set_prototype_function(
+        env.realm(),
         &set_prototype,
         "intersection",
         1,
         NativeFunction::SetPrototypeIntersection,
     );
     define_set_prototype_function(
+        env.realm(),
         &set_prototype,
         "isDisjointFrom",
         1,
         NativeFunction::SetPrototypeIsDisjointFrom,
     );
     define_set_prototype_function(
+        env.realm(),
         &set_prototype,
         "isSubsetOf",
         1,
         NativeFunction::SetPrototypeIsSubsetOf,
     );
     define_set_prototype_function(
+        env.realm(),
         &set_prototype,
         "isSupersetOf",
         1,
@@ -108,16 +123,18 @@ pub(crate) fn install_set(env: &mut CallEnv, global_this: &Value, object_prototy
         0,
         NativeFunction::SetPrototypeValues,
         false,
-        env.realm().atoms(),
+        env.realm(),
     ));
     set_prototype.define_non_enumerable("keys".to_owned(), values_function.clone());
     define_set_prototype_function(
+        env.realm(),
         &set_prototype,
         "symmetricDifference",
         1,
         NativeFunction::SetPrototypeSymmetricDifference,
     );
     define_set_prototype_function(
+        env.realm(),
         &set_prototype,
         "union",
         1,
@@ -408,7 +425,10 @@ pub(crate) fn native_set_prototype_values(
     set_iterator(this_value, env, SET_ITERATOR_KIND_VALUE)
 }
 
-pub(crate) fn native_set_iterator_next(this_value: Value) -> Result<Value, RuntimeError> {
+pub(crate) fn native_set_iterator_next(
+    realm: &crate::function::Realm,
+    this_value: Value,
+) -> Result<Value, RuntimeError> {
     let Value::Object(iterator) = this_value else {
         return Err(RuntimeError {
             thrown: None,
@@ -452,10 +472,9 @@ pub(crate) fn native_set_iterator_next(this_value: Value) -> Result<Value, Runti
 
     let item = match iterator_kind(&iterator)?.as_str() {
         SET_ITERATOR_KIND_VALUE => value,
-        SET_ITERATOR_KIND_KEY_VALUE => Value::Array(ArrayRef::new(
-            &iterator.domain(),
-            vec![value.clone(), value],
-        )),
+        SET_ITERATOR_KIND_KEY_VALUE => {
+            Value::Array(ArrayRef::new(realm, vec![value.clone(), value]))
+        }
         _ => {
             return Err(RuntimeError {
                 thrown: None,
@@ -566,6 +585,7 @@ fn iterator_result(value: Value, done: bool, domain: &crate::property::atom::Ato
 }
 
 fn define_set_prototype_function(
+    realm: &crate::function::Realm,
     prototype: &ObjectRef,
     key: &str,
     length: usize,
@@ -578,7 +598,7 @@ fn define_set_prototype_function(
             length,
             native,
             false,
-            &prototype.domain(),
+            realm,
         )),
     );
 }

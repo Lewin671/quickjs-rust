@@ -64,7 +64,11 @@ fn inherited_guards_first_edge_and_all_chain_nodes_but_preserves_value_writes() 
     let middle = ObjectRef::with_prototype(HashMap::new(), Some(holder.clone()), &domain);
     let receiver = ObjectRef::with_prototype(HashMap::new(), Some(middle.clone()), &domain);
     let other = ObjectRef::with_prototype(HashMap::new(), Some(holder.clone()), &domain);
-    assert_eq!(receiver.layout_revision(), other.layout_revision());
+    assert_ne!(
+        receiver.layout_revision(),
+        other.layout_revision(),
+        "prototype identity belongs to the layout"
+    );
     let cache = NamedPropertyCache::default();
     assert_eq!(cache.read_object(&receiver, "x"), Some(Value::Number(1.0)));
     assert!(
@@ -111,7 +115,7 @@ fn dictionary_reconfiguration_and_epoch_rollover_retire_slots_before_reuse() {
 #[test]
 fn array_and_function_own_named_slots_use_the_same_cache_and_lazy_hooks() {
     let domain = AtomDomain::new();
-    let array = crate::ArrayRef::new(&domain, vec![]);
+    let array = crate::ArrayRef::new_in_domain(&domain, vec![]);
     array.set_property("x".into(), Value::Number(1.0));
     let value = Value::Array(array.clone());
     let cache = NamedPropertyCache::default();
@@ -126,7 +130,7 @@ fn array_and_function_own_named_slots_use_the_same_cache_and_lazy_hooks() {
         cache.write_value(&value, &Value::Number(3.0)),
         Some(OwnDataPropertyWrite::Written)
     ));
-    let f = Function::new_native(Some("f"), 1, NativeFunction::MathAbs, false, &domain);
+    let f = Function::new_native_in_domain(Some("f"), 1, NativeFunction::MathAbs, false, &domain);
     let fvalue = Value::Function(f.clone());
     let names = NamedPropertyCache::default();
     assert_eq!(
@@ -167,7 +171,9 @@ fn own_hit_has_no_id_probe_text_hash_or_descriptor_path() {
     // Verification intentionally resolves the key and semantic result again.
     #[cfg(debug_assertions)]
     {
-        cache.0.borrow_mut().verify = false;
+        if let Entries::Mono(e) = &mut cache.0.borrow_mut().entries {
+            e.flags &= !VERIFY;
+        }
     }
     crate::diagnostics::reset_counters();
     assert_eq!(cache.get(&o), Some(Value::Number(1.0)));
@@ -209,7 +215,93 @@ fn absent_text_reads_never_create_key_records() {
     let object = ObjectRef::new(HashMap::new(), &domain);
     let cache = NamedPropertyCache::default();
     for _ in 0..10_000 {
-        assert!(cache.read_object(&object, "neverInstalled").is_none());
+        assert_eq!(
+            cache.read_object(&object, "neverInstalled"),
+            Some(Value::Undefined)
+        );
     }
     assert!(domain.find("neverInstalled").is_none());
+}
+
+#[test]
+fn ordinary_root_churn_preserves_uncapped_shared_prototype_generation() {
+    let domain = AtomDomain::new();
+    let holder = object(&domain, "m", 7.0);
+    let middle = ObjectRef::with_prototype(HashMap::new(), Some(holder.clone()), &domain);
+    let receiver = ObjectRef::with_prototype(HashMap::new(), Some(middle.clone()), &domain);
+    let sites: Vec<_> = (0..600).map(|_| NamedPropertyCache::default()).collect();
+    for site in &sites {
+        assert_eq!(site.read_object(&receiver, "m"), Some(Value::Number(7.0)));
+    }
+    for i in 0..1000 {
+        let ordinary = ObjectRef::with_prototype(HashMap::new(), Some(middle.clone()), &domain);
+        ordinary.set("v".into(), Value::Number(i as f64));
+    }
+    for site in &sites {
+        assert_eq!(site.get(&receiver), Some(Value::Number(7.0)));
+    }
+    holder.set("m".into(), Value::Number(8.0));
+    assert_eq!(sites[0].get(&receiver), Some(Value::Number(8.0)));
+    holder.set("new".into(), Value::Null);
+    assert!(sites.iter().all(|s| s.get(&receiver).is_none()));
+}
+
+#[test]
+fn absent_and_accessor_entries_cache_pure_outcomes_and_invalidate_on_shadowing() {
+    let domain = AtomDomain::new();
+    let holder = ObjectRef::new(HashMap::new(), &domain);
+    let receiver = ObjectRef::with_prototype(HashMap::new(), Some(holder.clone()), &domain);
+    let cache = NamedPropertyCache::default();
+    cache.read_object(&receiver, "absent");
+    assert_eq!(cache.get(&receiver), Some(Value::Undefined));
+    holder.define_property("absent".into(), Property::accessor(None, None, true, true));
+    assert!(cache.get(&receiver).is_none());
+    let value = Value::Object(receiver.clone());
+    assert!(matches!(
+        cache.read_outcome(&value, "absent"),
+        Some(ReadOutcome::Accessor(_))
+    ));
+    assert!(cache.accessor(&value).is_some());
+    receiver.set("absent".into(), Value::Number(3.0));
+    assert!(cache.accessor(&value).is_none());
+    assert_eq!(
+        cache.read_object(&receiver, "absent"),
+        Some(Value::Number(3.0))
+    );
+}
+
+#[test]
+fn dead_dictionary_guards_do_not_make_a_site_megamorphic() {
+    let domain = AtomDomain::new();
+    let cache = NamedPropertyCache::default();
+    for _ in 0..20 {
+        let object = object(&domain, "x", 1.0);
+        for i in 0..130 {
+            object.set(format!("p{i}"), Value::Null);
+        }
+        cache.read_object(&object, "x");
+        assert!(matches!(cache.0.borrow().entries, Entries::Mono(_)));
+    }
+}
+
+#[cfg(debug_assertions)]
+#[test]
+#[should_panic(expected = "IC complete outcome differs")]
+fn verifier_rejects_a_data_hit_when_pure_lookup_is_exotic() {
+    let domain = AtomDomain::new();
+    let object = object(&domain, "x", 1.0);
+    let cache = NamedPropertyCache::default();
+    cache.read_object(&object, "x");
+    // Simulate an invalid admission: the slot still loads, but the semantic
+    // receiver has become a namespace exotic. Verification must fail loudly.
+    object.mark_module_namespace_exotic();
+    let mut state = cache.0.borrow_mut();
+    let Entries::Mono(entry) = &mut state.entries else {
+        panic!()
+    };
+    entry.version = object.with_named(|s| s.version());
+    entry.flags |= VERIFY;
+    state.name = Some("x".into());
+    drop(state);
+    cache.get(&object);
 }

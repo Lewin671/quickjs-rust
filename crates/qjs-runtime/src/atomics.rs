@@ -45,7 +45,7 @@ pub(crate) fn install_atomics(env: &mut CallEnv, global_this: &Value, object_pro
                 length,
                 native,
                 false,
-                env.realm().atoms(),
+                env.realm(),
             )),
         );
     }

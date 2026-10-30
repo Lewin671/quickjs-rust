@@ -109,6 +109,16 @@ fn prototype_has_property(
             crate::proxy::proxy_has(proxy, &PropertyKey::String(key.to_owned()), &mut proxy_env)
         }
         None => Ok(false),
+
+        Some(crate::Prototype::Map(_carrier)) => {
+            let object = _carrier.object();
+            object_has_property(&object, env, key)
+        }
+
+        Some(crate::Prototype::Set(_carrier)) => {
+            let object = _carrier.object();
+            object_has_property(&object, env, key)
+        }
     }
 }
 
@@ -169,6 +179,16 @@ fn prototype_descriptor_without_traps(prototype: crate::Prototype, key: &str) ->
             .target_result()
             .ok()
             .and_then(|target| own_or_inherited_descriptor(target, key)),
+
+        crate::Prototype::Map(_carrier) => {
+            let object = _carrier.object();
+            object.property(key)
+        }
+
+        crate::Prototype::Set(_carrier) => {
+            let object = _carrier.object();
+            object.property(key)
+        }
     }
 }
 
@@ -212,6 +232,16 @@ fn prototype_symbol_descriptor_without_traps(
             .target_result()
             .ok()
             .and_then(|target| own_or_inherited_symbol_descriptor(target, symbol)),
+
+        crate::Prototype::Map(_carrier) => {
+            let object = _carrier.object();
+            object.symbol_property(symbol)
+        }
+
+        crate::Prototype::Set(_carrier) => {
+            let object = _carrier.object();
+            object.symbol_property(symbol)
+        }
     }
 }
 
@@ -297,6 +327,16 @@ fn prototype_has_symbol_property(
             crate::proxy::proxy_has(proxy, &PropertyKey::Symbol(symbol.clone()), &mut proxy_env)
         }
         None => Ok(false),
+
+        Some(crate::Prototype::Map(_carrier)) => {
+            let object = _carrier.object();
+            object_has_symbol_property(&object, env, symbol)
+        }
+
+        Some(crate::Prototype::Set(_carrier)) => {
+            let object = _carrier.object();
+            object_has_symbol_property(&object, env, symbol)
+        }
     }
 }
 
@@ -551,7 +591,7 @@ fn ordinary_object_symbol_value(
     }
 }
 
-fn property_descriptor_value(
+pub(crate) fn property_descriptor_value(
     property: Option<Property>,
     receiver: Value,
     env: &mut CallEnv,

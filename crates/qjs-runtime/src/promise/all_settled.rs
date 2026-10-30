@@ -22,7 +22,7 @@ pub(crate) fn native_promise_all_settled(
 ) -> Result<Value, RuntimeError> {
     let iterable = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let handler = AllSettledHandler {
-        values: ArrayRef::new(env.realm().atoms(), Vec::new()),
+        values: ArrayRef::new(env.realm(), Vec::new()),
         remaining: perform::new_remaining(1, env.realm().atoms()),
     };
     perform::run_combinator(this_value, iterable, "Promise.allSettled", handler, env)
@@ -48,6 +48,7 @@ impl ElementHandler for AllSettledHandler {
         // settlement is recorded.
         let already_called = ObjectRef::new(HashMap::new(), _env.realm().atoms());
         let on_fulfilled = element_function(
+            _env.realm(),
             NativeFunction::PromiseAllSettledResolveElement,
             index,
             &self.values,
@@ -56,6 +57,7 @@ impl ElementHandler for AllSettledHandler {
             capability,
         );
         let on_rejected = element_function(
+            _env.realm(),
             NativeFunction::PromiseAllSettledRejectElement,
             index,
             &self.values,
@@ -100,6 +102,7 @@ pub(crate) fn native_promise_all_settled_reject_element(
 }
 
 fn element_function(
+    realm: &crate::function::Realm,
     native: NativeFunction,
     index: usize,
     values: &ArrayRef,
@@ -107,7 +110,7 @@ fn element_function(
     already_called: &ObjectRef,
     capability: &PromiseCapability,
 ) -> Function {
-    let mut function = Function::new_native(None, 1, native, false, &remaining.domain());
+    let mut function = Function::new_native(None, 1, native, false, realm);
     function.insert_native_context(PROMISE_ALL_INDEX.to_owned(), Value::Number(index as f64));
     function.insert_native_context(PROMISE_ALL_VALUES.to_owned(), Value::Array(values.clone()));
     function.insert_native_context(

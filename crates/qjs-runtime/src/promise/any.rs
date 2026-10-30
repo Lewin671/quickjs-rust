@@ -25,7 +25,7 @@ pub(crate) fn native_promise_any(
         .get(PROMISE_AGGREGATE_ERROR)
         .cloned();
     let handler = AnyHandler {
-        errors: ArrayRef::new(env.realm().atoms(), Vec::new()),
+        errors: ArrayRef::new(env.realm(), Vec::new()),
         remaining: perform::new_remaining(1, env.realm().atoms()),
         aggregate_error,
     };
@@ -54,7 +54,7 @@ impl ElementHandler for AnyHandler {
             1,
             NativeFunction::PromiseAnyRejectElement,
             false,
-            _env.realm().atoms(),
+            _env.realm(),
         );
         on_rejected
             .insert_native_context(PROMISE_ALL_INDEX.to_owned(), Value::Number(index as f64));

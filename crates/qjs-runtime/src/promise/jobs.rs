@@ -336,8 +336,11 @@ fn run_promise_thenable_job(job: &ObjectRef, env: &mut CallEnv) -> Result<(), Ru
         .own_property(PROMISE_THEN)
         .map_or(Value::Undefined, |property| property.value);
     // resolve/reject share one alreadyResolved guard (CreateResolvingFunctions).
-    let (resolve, reject) =
-        resolving_function_pair(Value::Object(capability.clone()), env.realm().atoms());
+    let (resolve, reject) = resolving_function_pair(
+        env.realm(),
+        Value::Object(capability.clone()),
+        env.realm().atoms(),
+    );
     if let Err(error) = call_function(then, thenable, vec![resolve, reject.clone()], env, false) {
         // A throw from `then` rejects through the reject function so its
         // alreadyResolved guard suppresses the rejection if the thenable already
@@ -366,7 +369,7 @@ fn promise_jobs(env: &mut CallEnv) -> ArrayRef {
     {
         Some(Value::Array(jobs)) => jobs,
         _ => {
-            let jobs = ArrayRef::new(env.realm().atoms(), Vec::new());
+            let jobs = ArrayRef::new(env.realm(), Vec::new());
             global_this.define_non_enumerable(PROMISE_JOBS.to_owned(), Value::Array(jobs.clone()));
             jobs
         }

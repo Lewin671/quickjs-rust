@@ -1,11 +1,8 @@
 //! Array storage: `ArrayRef`.
 //!
-//! Indexed elements live in a dense `Vec<Value>`, and `length` is stored
-//! separately and may exceed it. Holes, other own properties, symbol
-//! properties and a prototype override live in `ArrayColdData`, allocated on
-//! first need, so a plain packed array is one allocation plus its elements.
-//! A fast path may treat `elements[i]` as the value of index `i` only after
-//! checking that `i` is not a hole.
+//! Indexed elements live in a dense Vec with separate logical length. Holes
+//! stay cold; the lazy named authority stores the explicit prototype/layout
+//! without allocating value slots on probes. Dense reads must exclude holes.
 
 use std::{
     cell::{Cell, OnceCell, Ref, RefCell, RefMut},
@@ -29,6 +26,10 @@ pub struct ArrayRef(Rc<ArrayData>);
 pub(crate) struct ArrayWeakRef(std::rc::Weak<ArrayData>);
 
 impl ArrayWeakRef {
+    pub(crate) fn address(&self) -> usize {
+        self.0.as_ptr() as usize
+    }
+
     pub(crate) fn upgrade(&self) -> Option<ArrayRef> {
         self.0.upgrade().map(ArrayRef)
     }
@@ -47,7 +48,7 @@ impl ArrayRef {
 }
 
 struct ArrayData {
-    domain: crate::property::atom::AtomDomain,
+    named: RefCell<super::layout::NamedStorage>,
     elements: RefCell<Vec<Value>>,
     length: Cell<usize>,
     length_writable: Cell<bool>,
@@ -91,27 +92,34 @@ impl Drop for ArrayData {
 
 struct ArrayColdData {
     holes: RefCell<BTreeSet<usize>>,
-    properties: RefCell<super::layout::NamedStore>,
-    prototype: RefCell<Option<Option<Prototype>>>,
 }
 
 impl ArrayColdData {
-    fn new(domain: &crate::property::atom::AtomDomain) -> Self {
+    fn new() -> Self {
         Self {
             holes: RefCell::default(),
-            properties: RefCell::new(super::layout::NamedStore::empty(domain)),
-            prototype: RefCell::default(),
         }
     }
 }
 
 impl ArrayData {
     fn cold(&self) -> &ArrayColdData {
+        self.named.borrow_mut().store_mut();
         self.cold
-            .get_or_init(|| Box::new(ArrayColdData::new(&self.domain)))
+            .get_or_init(|| Box::new(ArrayColdData::new()))
             .as_ref()
     }
-
+    fn named_store(&self) -> Ref<'_, super::layout::NamedStore> {
+        Ref::map(self.named.borrow(), |s| {
+            s.store().expect("cold array has a materialized authority")
+        })
+    }
+    fn named_store_mut(&self) -> RefMut<'_, super::layout::NamedStore> {
+        if self.cold.get().is_none() {
+            self.cold();
+        }
+        RefMut::map(self.named.borrow_mut(), |s| s.store_mut())
+    }
     fn cold_if_present(&self) -> Option<&ArrayColdData> {
         self.cold.get().map(Box::as_ref)
     }
@@ -128,12 +136,12 @@ impl ArrayData {
 
     fn properties_are_empty(&self) -> bool {
         self.cold_if_present()
-            .is_none_or(|cold| cold.properties.borrow().is_empty())
+            .is_none_or(|_cold| self.named_store().is_empty())
     }
 
     fn has_property_at_index(&self, index: usize) -> bool {
-        self.cold_if_present().is_some_and(|cold| {
-            let properties = cold.properties.borrow();
+        self.cold_if_present().is_some_and(|_cold| {
+            let properties = self.named_store();
             if properties.is_empty() {
                 return false;
             }
@@ -159,22 +167,50 @@ impl ArrayData {
         })
     }
 
-    fn uses_default_prototype(&self) -> bool {
-        self.cold_if_present()
-            .is_none_or(|cold| cold.prototype.borrow().is_none())
-    }
-
     fn prototype_override(&self) -> Option<Option<Prototype>> {
-        self.cold_if_present()
-            .and_then(|cold| cold.prototype.borrow().clone())
+        Some(self.named.borrow().prototype())
     }
 }
 
 impl ArrayRef {
-    pub(crate) fn new(domain: &crate::property::atom::AtomDomain, elements: Vec<Value>) -> Self {
+    pub(crate) fn new(realm: &crate::function::Realm, elements: Vec<Value>) -> Self {
+        let array = Self::new_in_domain(realm.atoms(), elements);
+        array
+            .0
+            .named
+            .borrow_mut()
+            .set_prototype(realm.array_prototype().map(Prototype::Object), 4);
+        array
+    }
+    pub(crate) fn new_with_length(realm: &crate::function::Realm, length: usize) -> Self {
+        let array = Self::new_with_length_in_domain(realm.atoms(), length);
+        array
+            .0
+            .named
+            .borrow_mut()
+            .set_prototype(realm.array_prototype().map(Prototype::Object), 4);
+        array
+    }
+    pub(crate) fn new_sparse(
+        realm: &crate::function::Realm,
+        elements: Vec<Value>,
+        holes: Vec<usize>,
+    ) -> Self {
+        let array = Self::new_sparse_in_domain(realm.atoms(), elements, holes);
+        array
+            .0
+            .named
+            .borrow_mut()
+            .set_prototype(realm.array_prototype().map(Prototype::Object), 4);
+        array
+    }
+    pub(crate) fn new_in_domain(
+        domain: &crate::property::atom::AtomDomain,
+        elements: Vec<Value>,
+    ) -> Self {
         let length = elements.len();
         Self(Rc::new(ArrayData {
-            domain: domain.clone(),
+            named: RefCell::new(super::layout::NamedStorage::new(domain, None, 4)),
             elements: RefCell::new(elements),
             length: Cell::new(length),
             length_writable: Cell::new(true),
@@ -185,12 +221,12 @@ impl ArrayRef {
         }))
     }
 
-    pub(crate) fn new_with_length(
+    pub(crate) fn new_with_length_in_domain(
         domain: &crate::property::atom::AtomDomain,
         length: usize,
     ) -> Self {
         Self(Rc::new(ArrayData {
-            domain: domain.clone(),
+            named: RefCell::new(super::layout::NamedStorage::new(domain, None, 4)),
             elements: RefCell::new(Vec::new()),
             length: Cell::new(length),
             length_writable: Cell::new(true),
@@ -201,13 +237,13 @@ impl ArrayRef {
         }))
     }
 
-    pub(crate) fn new_sparse(
+    pub(crate) fn new_sparse_in_domain(
         domain: &crate::property::atom::AtomDomain,
         elements: Vec<Value>,
         holes: Vec<usize>,
     ) -> Self {
         if holes.is_empty() {
-            return Self::new(domain, elements);
+            return Self::new_in_domain(domain, elements);
         }
         let length = elements.len();
         let holes: BTreeSet<_> = holes.into_iter().collect();
@@ -218,7 +254,7 @@ impl ArrayRef {
             (elements, holes)
         };
         let data = ArrayData {
-            domain: domain.clone(),
+            named: RefCell::new(super::layout::NamedStorage::new(domain, None, 4)),
             elements: RefCell::new(elements),
             length: Cell::new(length),
             length_writable: Cell::new(true),
@@ -228,10 +264,10 @@ impl ArrayRef {
             cold: OnceCell::new(),
         };
         if !holes.is_empty() {
+            data.named.borrow_mut().store_mut();
             data.cold
                 .set(Box::new(ArrayColdData {
                     holes: RefCell::new(holes),
-                    ..ArrayColdData::new(domain)
                 }))
                 .unwrap_or_else(|_| unreachable!("fresh array cold state is empty"));
         }
@@ -268,10 +304,10 @@ impl ArrayRef {
         let mut indices: Vec<_> = (0..dense_len)
             .filter(|index| !self.0.has_hole(*index))
             .collect();
-        if let Some(cold) = self.0.cold_if_present() {
+        if let Some(_cold) = self.0.cold_if_present() {
             indices.extend(
-                cold.properties
-                    .borrow()
+                self.0
+                    .named_store()
                     .text_keys()
                     .into_iter()
                     .filter_map(|key| array_index_property_key(&key))
@@ -284,9 +320,7 @@ impl ArrayRef {
     }
 
     pub(crate) fn property(&self, key: &str) -> Option<Property> {
-        self.0
-            .cold_if_present()
-            .and_then(|cold| cold.properties.borrow().get_text(key))
+        self.with_named(|s| s.and_then(|s| s.get_text(key)))
     }
 
     pub(crate) fn symbol_property(&self, symbol: &ObjectRef) -> Option<Property> {
@@ -303,7 +337,7 @@ impl ArrayRef {
         self.0.length.set(index);
         if let Some(cold) = self.0.cold_if_present() {
             cold.holes.borrow_mut().remove(&index);
-            cold.properties.borrow_mut().remove_text(&index.to_string());
+            self.0.named_store_mut().remove_text(&index.to_string());
         }
         if index + 1 == elements.len() {
             elements.pop()
@@ -326,19 +360,6 @@ impl ArrayRef {
         }
     }
 
-    /// Whether `index` can be written straight into dense storage with the same
-    /// observable result as the generic property-set path, assuming the array
-    /// uses the default Array.prototype and that prototype owns no indexed
-    /// property (both verified by the caller). Requires the index to stay in
-    /// dense range, the array to be mutable and extensible enough to take the
-    /// write, and to have no own special descriptor at the index (which could be
-    /// an accessor or a non-writable data property).
-    /// Whether this array has no [[Prototype]] override and therefore resolves
-    /// to the realm's default Array.prototype.
-    pub(crate) fn uses_default_prototype(&self) -> bool {
-        self.0.uses_default_prototype()
-    }
-
     /// Overwrites every element of a fully dense array with `values`, as
     /// Set at each index would, when each index is a writable own data
     /// element that no descriptor or setter intercepts: no holes, no own
@@ -347,10 +368,7 @@ impl ArrayRef {
     pub(crate) fn replace_dense_elements(&self, values: &[Value]) -> bool {
         let plain_cold = self.0.cold_if_present().is_none_or(|cold| {
             cold.holes.try_borrow().is_ok_and(|holes| holes.is_empty())
-                && cold
-                    .properties
-                    .try_borrow()
-                    .is_ok_and(|properties| properties.is_empty())
+                && self.0.named_store().is_empty()
         });
         if !plain_cold || self.0.frozen.get() {
             return false;
@@ -375,10 +393,7 @@ impl ArrayRef {
     pub(crate) fn define_plain_elements(&self, start: usize, values: &[Value]) -> bool {
         let plain_cold = self.0.cold_if_present().is_none_or(|cold| {
             cold.holes.try_borrow().is_ok_and(|holes| holes.is_empty())
-                && cold
-                    .properties
-                    .try_borrow()
-                    .is_ok_and(|properties| properties.is_empty())
+                && self.0.named_store().is_empty()
         });
         if !plain_cold
             || !self.0.extensible.get()
@@ -431,7 +446,7 @@ impl ArrayRef {
 
     pub(crate) fn with_dense_argument_elements<R>(
         &self,
-        env: &CallEnv,
+        _env: &CallEnv,
         read: impl FnOnce(&[Value]) -> R,
     ) -> Option<R> {
         let elements = self.0.elements.borrow();
@@ -440,17 +455,6 @@ impl ArrayRef {
         }
         if !self.0.properties_are_empty() {
             return None;
-        }
-        match self.0.prototype_override() {
-            Some(Some(_)) => return None,
-            Some(None) => {}
-            None => {
-                if crate::array_prototype(env)
-                    .is_some_and(|prototype| prototype.has_own_index_property())
-                {
-                    return None;
-                }
-            }
         }
         Some(read(&elements))
     }
@@ -496,18 +500,6 @@ impl ArrayRef {
                 None => {
                     if crate::array_prototype(env)
                         .is_none_or(|prototype| prototype.chain_intercepts_index_write())
-                    {
-                        return None;
-                    }
-                }
-            }
-        } else {
-            match self.0.prototype_override() {
-                Some(Some(_)) => return None,
-                Some(None) => {}
-                None => {
-                    if crate::array_prototype(env)
-                        .is_some_and(|prototype| prototype.has_own_index_property())
                     {
                         return None;
                     }
@@ -585,10 +577,7 @@ impl ArrayRef {
         if self.0.frozen.get()
             || self.0.cold_if_present().is_some_and(|cold| {
                 !cold.holes.try_borrow().is_ok_and(|holes| holes.is_empty())
-                    || !cold
-                        .properties
-                        .try_borrow()
-                        .is_ok_and(|properties| properties.is_empty())
+                    || !self.0.named_store().is_empty()
             })
         {
             return None;
@@ -616,10 +605,7 @@ impl ArrayRef {
                 || array.0.frozen.get()
                 || array.0.cold_if_present().is_some_and(|cold| {
                     !cold.holes.try_borrow().is_ok_and(|holes| holes.is_empty())
-                        || !cold
-                            .properties
-                            .try_borrow()
-                            .is_ok_and(|properties| properties.is_empty())
+                        || !array.0.named_store().is_empty()
                 })
             {
                 return None;
@@ -671,10 +657,7 @@ impl ArrayRef {
         }
         if writer.0.cold_if_present().is_some_and(|cold| {
             !cold.holes.try_borrow().is_ok_and(|holes| holes.is_empty())
-                || !cold
-                    .properties
-                    .try_borrow()
-                    .is_ok_and(|properties| properties.is_empty())
+                || !writer.0.named_store().is_empty()
         }) {
             return None;
         }
@@ -684,10 +667,7 @@ impl ArrayRef {
             }
             if array.0.cold_if_present().is_some_and(|cold| {
                 !cold.holes.try_borrow().is_ok_and(|holes| holes.is_empty())
-                    || !cold
-                        .properties
-                        .try_borrow()
-                        .is_ok_and(|properties| properties.is_empty())
+                    || !array.0.named_store().is_empty()
             }) {
                 return None;
             }
@@ -727,10 +707,7 @@ impl ArrayRef {
     ) -> Option<R> {
         if self.0.cold_if_present().is_some_and(|cold| {
             !cold.holes.try_borrow().is_ok_and(|holes| holes.is_empty())
-                || !cold
-                    .properties
-                    .try_borrow()
-                    .is_ok_and(|properties| properties.is_empty())
+                || !self.0.named_store().is_empty()
         }) {
             return None;
         }
@@ -753,10 +730,7 @@ impl ArrayRef {
         for array in arrays {
             if array.0.cold_if_present().is_some_and(|cold| {
                 !cold.holes.try_borrow().is_ok_and(|holes| holes.is_empty())
-                    || !cold
-                        .properties
-                        .try_borrow()
-                        .is_ok_and(|properties| properties.is_empty())
+                    || !array.0.named_store().is_empty()
             }) {
                 return None;
             }
@@ -790,8 +764,8 @@ impl ArrayRef {
         if !self.0.extensible.get() && !self.has_index(index) {
             return false;
         }
-        self.0.cold_if_present().is_none_or(|cold| {
-            let properties = cold.properties.borrow();
+        self.0.cold_if_present().is_none_or(|_cold| {
+            let properties = self.0.named_store();
             properties.is_empty() || !properties.contains_text(&index.to_string())
         })
     }
@@ -811,8 +785,8 @@ impl ArrayRef {
         {
             return false;
         }
-        self.0.cold_if_present().is_none_or(|cold| {
-            let properties = cold.properties.borrow();
+        self.0.cold_if_present().is_none_or(|_cold| {
+            let properties = self.0.named_store();
             properties.is_empty() || !properties.contains_text(&index.to_string())
         })
     }
@@ -833,9 +807,7 @@ impl ArrayRef {
             if index >= MAX_DENSE_STORAGE_LENGTH {
                 drop(elements);
                 self.0
-                    .cold()
-                    .properties
-                    .borrow_mut()
+                    .named_store_mut()
                     .insert_text(&index.to_string(), Property::enumerable(value));
                 return;
             }
@@ -856,8 +828,8 @@ impl ArrayRef {
 
     pub(crate) fn delete_index(&self, index: usize) -> bool {
         let key = index.to_string();
-        if let Some(cold) = self.0.cold_if_present() {
-            let mut properties = cold.properties.borrow_mut();
+        if let Some(_cold) = self.0.cold_if_present() {
+            let mut properties = self.0.named_store_mut();
             if properties
                 .get_text(&key)
                 .is_some_and(|property| !property.configurable)
@@ -888,9 +860,9 @@ impl ArrayRef {
             }
         }
 
-        let mut sparse_indices: Vec<_> = self.0.cold_if_present().map_or_else(Vec::new, |cold| {
-            cold.properties
-                .borrow()
+        let mut sparse_indices: Vec<_> = self.0.cold_if_present().map_or_else(Vec::new, |_cold| {
+            self.0
+                .named_store()
                 .text_keys()
                 .into_iter()
                 .filter_map(|key| array_index_property_key(&key))
@@ -907,7 +879,7 @@ impl ArrayRef {
     }
 
     pub(crate) fn set_property(&self, key: String, value: Value) {
-        let mut properties = self.0.cold().properties.borrow_mut();
+        let mut properties = self.0.named_store_mut();
         match properties.write_existing_data(&key, &value, |_| true) {
             super::OwnDataPropertyWrite::Written | super::OwnDataPropertyWrite::ReadOnly => return,
             super::OwnDataPropertyWrite::NeedsSlowPath => {}
@@ -932,11 +904,7 @@ impl ArrayRef {
                 }
                 if index >= MAX_DENSE_STORAGE_LENGTH {
                     drop(elements);
-                    self.0
-                        .cold()
-                        .properties
-                        .borrow_mut()
-                        .insert_text(&key, property);
+                    self.0.named_store_mut().insert_text(&key, property);
                     return;
                 }
                 let old_len = elements.len();
@@ -946,15 +914,11 @@ impl ArrayRef {
                 self.0.cold().holes.borrow_mut().insert(index);
             }
         }
-        self.0
-            .cold()
-            .properties
-            .borrow_mut()
-            .insert_text(&key, property);
+        self.0.named_store_mut().insert_text(&key, property);
     }
 
     pub(crate) fn define_symbol_property(&self, symbol: ObjectRef, property: Property) {
-        let mut store = self.0.cold().properties.borrow_mut();
+        let mut store = self.0.named_store_mut();
         let key = store.domain().intern_symbol(&symbol);
         store.define(&key, property).expect("own domain");
     }
@@ -963,10 +927,10 @@ impl ArrayRef {
         if key == "length" {
             return false;
         }
-        let Some(cold) = self.0.cold_if_present() else {
+        let Some(_cold) = self.0.cold_if_present() else {
             return true;
         };
-        let mut properties = cold.properties.borrow_mut();
+        let mut properties = self.0.named_store_mut();
         if properties
             .get_text(key)
             .is_some_and(|property| !property.configurable)
@@ -978,9 +942,9 @@ impl ArrayRef {
     }
 
     pub(crate) fn property_keys(&self) -> Vec<String> {
-        self.0.cold_if_present().map_or_else(Vec::new, |cold| {
-            cold.properties
-                .borrow()
+        self.0.cold_if_present().map_or_else(Vec::new, |_cold| {
+            self.0
+                .named_store()
                 .key_enumerability()
                 .into_iter()
                 .filter(|(key, enumerable)| key.symbol().is_none() && *enumerable)
@@ -992,7 +956,7 @@ impl ArrayRef {
     pub(crate) fn property_names(&self) -> Vec<String> {
         self.0
             .cold_if_present()
-            .map_or_else(Vec::new, |cold| cold.properties.borrow().text_keys())
+            .map_or_else(Vec::new, |_cold| self.0.named_store().text_keys())
     }
 
     pub(crate) fn set_len(&self, length: usize) {
@@ -1017,9 +981,9 @@ impl ArrayRef {
         }
         if length < old_len {
             let mut sparse_indices: Vec<_> =
-                self.0.cold_if_present().map_or_else(Vec::new, |cold| {
-                    cold.properties
-                        .borrow()
+                self.0.cold_if_present().map_or_else(Vec::new, |_cold| {
+                    self.0
+                        .named_store()
                         .text_keys()
                         .into_iter()
                         .filter_map(|key| array_index_property_key(&key))
@@ -1027,7 +991,7 @@ impl ArrayRef {
                         .collect()
                 });
             sparse_indices.sort_unstable_by(|left, right| right.cmp(left));
-            let mut properties = self.0.cold().properties.borrow_mut();
+            let mut properties = self.0.named_store_mut();
             for index in sparse_indices {
                 let key = index.to_string();
                 if properties
@@ -1064,8 +1028,8 @@ impl ArrayRef {
 
     pub(crate) fn seal(&self) {
         self.prevent_extensions();
-        if let Some(cold) = self.0.cold_if_present() {
-            cold.properties.borrow_mut().transform_descriptors(false);
+        if let Some(_cold) = self.0.cold_if_present() {
+            self.0.named_store_mut().transform_descriptors(false);
         }
         self.0.sealed.set(true);
     }
@@ -1076,8 +1040,8 @@ impl ArrayRef {
 
     pub(crate) fn freeze(&self) {
         self.seal();
-        if let Some(cold) = self.0.cold_if_present() {
-            cold.properties.borrow_mut().transform_descriptors(true);
+        if let Some(_cold) = self.0.cold_if_present() {
+            self.0.named_store_mut().transform_descriptors(true);
         }
         self.0.frozen.set(true);
         self.0.length_writable.set(false);
@@ -1100,16 +1064,17 @@ impl ArrayRef {
     }
 
     pub(crate) fn own_symbol_property(&self, symbol: &ObjectRef) -> Option<Property> {
-        let store = self.0.cold_if_present()?.properties.borrow();
+        let named = self.0.named.borrow();
+        let store = named.store()?;
         let key = store.domain().find_symbol(symbol)?;
         store.get(&key).expect("own domain")
     }
 
     pub(crate) fn delete_own_symbol_property(&self, symbol: &ObjectRef) -> bool {
-        let Some(cold) = self.0.cold_if_present() else {
+        let Some(_cold) = self.0.cold_if_present() else {
             return true;
         };
-        let mut store = cold.properties.borrow_mut();
+        let mut store = self.0.named_store_mut();
         let Some(key) = store.domain().find_symbol(symbol) else {
             return true;
         };
@@ -1125,9 +1090,9 @@ impl ArrayRef {
     }
 
     pub(crate) fn own_property_symbols(&self) -> Vec<ObjectRef> {
-        self.0.cold_if_present().map_or_else(Vec::new, |cold| {
-            cold.properties
-                .borrow()
+        self.0.cold_if_present().map_or_else(Vec::new, |_cold| {
+            self.0
+                .named_store()
                 .keys()
                 .into_iter()
                 .filter_map(|key| key.symbol().cloned())
@@ -1151,8 +1116,7 @@ impl ArrayRef {
         {
             return Err(());
         }
-        self.with_named(|s| s.invalidate_dependencies());
-        *self.0.cold().prototype.borrow_mut() = Some(prototype);
+        self.0.named.borrow_mut().set_prototype(prototype, 4);
         Ok(())
     }
 }
@@ -1197,14 +1161,32 @@ fn same_prototype_slot(left: Option<&Prototype>, right: Option<&Prototype>) -> b
 }
 
 impl ArrayRef {
-    pub(crate) fn with_named<R>(&self, read: impl FnOnce(&super::layout::NamedStore) -> R) -> R {
-        read(&self.0.cold().properties.borrow())
+    pub(crate) fn with_named<R>(
+        &self,
+        read: impl FnOnce(Option<&super::layout::NamedStore>) -> R,
+    ) -> R {
+        read(self.0.named.borrow().store())
     }
     pub(crate) fn with_named_mut<R>(
         &self,
         write: impl FnOnce(&mut super::layout::NamedStore) -> R,
     ) -> R {
-        write(&mut self.0.cold().properties.borrow_mut())
+        write(&mut self.0.named_store_mut())
+    }
+    pub(crate) fn named_policy(&self) -> crate::property::atom::IcPolicy {
+        self.0.named.borrow().domain().ic_policy()
+    }
+    pub(crate) fn named_version(&self) -> super::layout::LayoutVersion {
+        self.0.named.borrow().version().expect("array layout")
+    }
+    pub(crate) fn named_matches(&self, v: &super::layout::LayoutVersion) -> bool {
+        self.0.named.borrow().matches(v)
+    }
+    pub(crate) fn chain_dependency(&self) -> Option<super::layout::StructuralDependency> {
+        self.0.named.borrow().chain_dependency()
+    }
+    pub(crate) fn prototype_slot(&self) -> Option<Prototype> {
+        self.0.named.borrow().prototype()
     }
 }
 
@@ -1222,8 +1204,8 @@ mod tests {
             mem::size_of::<ArrayData>(),
             mem::size_of::<super::ArrayColdData>()
         );
-        assert_eq!(mem::size_of::<ArrayData>(), 64);
-        let array = ArrayRef::new(&crate::property::atom::AtomDomain::new(), Vec::new());
+        assert_eq!(mem::size_of::<ArrayData>(), 88);
+        let array = ArrayRef::new_in_domain(&crate::property::atom::AtomDomain::new(), Vec::new());
         let cloned = array.clone();
 
         assert!(Rc::ptr_eq(&array.0, &cloned.0));
@@ -1233,11 +1215,11 @@ mod tests {
 
     #[test]
     fn distinct_dense_write_leases_fail_closed_for_aliases_and_borrow_conflicts() {
-        let first = ArrayRef::new(
+        let first = ArrayRef::new_in_domain(
             &crate::property::atom::AtomDomain::new(),
             vec![Value::Number(1.0)],
         );
-        let second = ArrayRef::new(
+        let second = ArrayRef::new_in_domain(
             &crate::property::atom::AtomDomain::new(),
             vec![Value::Number(2.0)],
         );
@@ -1280,11 +1262,11 @@ mod tests {
 
     #[test]
     fn dense_read_leases_allow_aliases_and_fail_closed_on_mutable_borrows() {
-        let first = ArrayRef::new(
+        let first = ArrayRef::new_in_domain(
             &crate::property::atom::AtomDomain::new(),
             vec![Value::Number(1.0)],
         );
-        let second = ArrayRef::new(
+        let second = ArrayRef::new_in_domain(
             &crate::property::atom::AtomDomain::new(),
             vec![Value::Number(2.0)],
         );
@@ -1311,14 +1293,30 @@ mod tests {
     }
 
     #[test]
+    fn named_probes_leave_packed_arrays_without_cold_or_value_storage() {
+        let array =
+            ArrayRef::new_in_domain(&crate::property::atom::AtomDomain::new(), vec![Value::Null]);
+        for _ in 0..1000 {
+            assert!(array.with_named(|s| s.is_none()));
+            let target = crate::value::named::NamedTarget::Array(&array);
+            assert_eq!(
+                target.probe("indexOf", None),
+                crate::value::named::Probe::Missing
+            );
+        }
+        assert!(array.0.cold.get().is_none());
+        assert!(array.0.named.borrow().store().is_none());
+    }
+
+    #[test]
     fn dense_array_keeps_cold_state_out_of_line() {
         let array_data_size = mem::size_of::<ArrayData>();
         assert!(
-            array_data_size <= 64,
+            array_data_size <= 88,
             "dense array header grew to {array_data_size} bytes"
         );
 
-        let array = ArrayRef::new(
+        let array = ArrayRef::new_in_domain(
             &crate::property::atom::AtomDomain::new(),
             vec![Value::Number(1.0), Value::Number(2.0), Value::Number(3.0)],
         );
@@ -1329,7 +1327,7 @@ mod tests {
             "dense reads must not allocate cold array state"
         );
 
-        let no_hole_literal = ArrayRef::new_sparse(
+        let no_hole_literal = ArrayRef::new_sparse_in_domain(
             &crate::property::atom::AtomDomain::new(),
             vec![Value::Number(4.0)],
             Vec::new(),
@@ -1347,7 +1345,7 @@ mod tests {
 
     #[test]
     fn direct_dense_index_read_only_checks_the_target_element() {
-        let array = ArrayRef::new(
+        let array = ArrayRef::new_in_domain(
             &crate::property::atom::AtomDomain::new(),
             vec![
                 Value::Number(11.0),
@@ -1373,7 +1371,7 @@ mod tests {
 
     #[test]
     fn dense_writable_lease_allows_existing_elements_on_sealed_arrays() {
-        let array = ArrayRef::new(
+        let array = ArrayRef::new_in_domain(
             &crate::property::atom::AtomDomain::new(),
             vec![Value::Number(1.0), Value::Number(2.0)],
         );
@@ -1392,21 +1390,21 @@ mod tests {
 
     #[test]
     fn dense_writable_lease_rejects_frozen_sparse_and_special_elements() {
-        let frozen = ArrayRef::new(
+        let frozen = ArrayRef::new_in_domain(
             &crate::property::atom::AtomDomain::new(),
             vec![Value::Number(1.0)],
         );
         frozen.freeze();
         assert!(frozen.with_dense_writable_elements(|_| ()).is_none());
 
-        let sparse = ArrayRef::new(
+        let sparse = ArrayRef::new_in_domain(
             &crate::property::atom::AtomDomain::new(),
             vec![Value::Number(1.0), Value::Number(2.0)],
         );
         assert!(sparse.delete_index(1));
         assert!(sparse.with_dense_writable_elements(|_| ()).is_none());
 
-        let described = ArrayRef::new(
+        let described = ArrayRef::new_in_domain(
             &crate::property::atom::AtomDomain::new(),
             vec![Value::Number(1.0)],
         );
@@ -1419,7 +1417,7 @@ mod tests {
 
     #[test]
     fn dense_writable_lease_fails_closed_on_borrow_conflict() {
-        let array = ArrayRef::new(
+        let array = ArrayRef::new_in_domain(
             &crate::property::atom::AtomDomain::new(),
             vec![Value::Number(1.0)],
         );
@@ -1436,7 +1434,8 @@ mod tests {
 
     #[test]
     fn dense_index_store_allows_holes_below_a_non_writable_length_only() {
-        let array = ArrayRef::new_with_length(&crate::property::atom::AtomDomain::new(), 2);
+        let array =
+            ArrayRef::new_with_length_in_domain(&crate::property::atom::AtomDomain::new(), 2);
         array.set_length_writable(false);
 
         assert!(array.dense_index_store_eligible(0));
@@ -1452,9 +1451,10 @@ mod tests {
 
     #[test]
     fn hole_tail_append_lease_materializes_only_below_the_existing_length() {
-        let writer = ArrayRef::new_with_length(&crate::property::atom::AtomDomain::new(), 3);
+        let writer =
+            ArrayRef::new_with_length_in_domain(&crate::property::atom::AtomDomain::new(), 3);
         writer.set_length_writable(false);
-        let source = ArrayRef::new(
+        let source = ArrayRef::new_in_domain(
             &crate::property::atom::AtomDomain::new(),
             vec![Value::Number(2.0), Value::Number(3.0), Value::Number(5.0)],
         );
@@ -1489,7 +1489,7 @@ mod tests {
 
     #[test]
     fn hole_tail_append_lease_rejects_integrity_shape_and_descriptor_hazards() {
-        let readable = ArrayRef::new(
+        let readable = ArrayRef::new_in_domain(
             &crate::property::atom::AtomDomain::new(),
             vec![Value::Number(1.0)],
         );
@@ -1505,19 +1505,21 @@ mod tests {
         };
 
         let non_extensible =
-            ArrayRef::new_with_length(&crate::property::atom::AtomDomain::new(), 1);
+            ArrayRef::new_with_length_in_domain(&crate::property::atom::AtomDomain::new(), 1);
         non_extensible.prevent_extensions();
         assert_eq!(invoke(non_extensible, 0), (None, false));
 
-        let sealed = ArrayRef::new_with_length(&crate::property::atom::AtomDomain::new(), 1);
+        let sealed =
+            ArrayRef::new_with_length_in_domain(&crate::property::atom::AtomDomain::new(), 1);
         sealed.seal();
         assert_eq!(invoke(sealed, 0), (None, false));
 
-        let frozen = ArrayRef::new_with_length(&crate::property::atom::AtomDomain::new(), 1);
+        let frozen =
+            ArrayRef::new_with_length_in_domain(&crate::property::atom::AtomDomain::new(), 1);
         frozen.freeze();
         assert_eq!(invoke(frozen, 0), (None, false));
 
-        let sparse_prefix = ArrayRef::new_sparse(
+        let sparse_prefix = ArrayRef::new_sparse_in_domain(
             &crate::property::atom::AtomDomain::new(),
             vec![Value::Number(1.0), Value::Undefined],
             vec![1],
@@ -1525,18 +1527,20 @@ mod tests {
         sparse_prefix.set_len(3);
         assert_eq!(invoke(sparse_prefix, 2), (None, false));
 
-        let described = ArrayRef::new_with_length(&crate::property::atom::AtomDomain::new(), 1);
+        let described =
+            ArrayRef::new_with_length_in_domain(&crate::property::atom::AtomDomain::new(), 1);
         described.define_property(
             "0".to_owned(),
             Property::data(Value::Number(7.0), true, true, true),
         );
         assert_eq!(invoke(described, 1), (None, false));
 
-        let wrong_start = ArrayRef::new_with_length(&crate::property::atom::AtomDomain::new(), 2);
+        let wrong_start =
+            ArrayRef::new_with_length_in_domain(&crate::property::atom::AtomDomain::new(), 2);
         wrong_start.set(0, Value::Number(1.0));
         assert_eq!(invoke(wrong_start, 0), (None, false));
 
-        let oversized = ArrayRef::new_with_length(
+        let oversized = ArrayRef::new_with_length_in_domain(
             &crate::property::atom::AtomDomain::new(),
             MAX_DENSE_STORAGE_LENGTH + 1,
         );
@@ -1545,7 +1549,8 @@ mod tests {
 
     #[test]
     fn hole_tail_append_lease_rejects_aliases_and_borrow_conflicts() {
-        let writer = ArrayRef::new_with_length(&crate::property::atom::AtomDomain::new(), 2);
+        let writer =
+            ArrayRef::new_with_length_in_domain(&crate::property::atom::AtomDomain::new(), 2);
         assert!(
             ArrayRef::with_dense_hole_tail_append_and_readable_elements(
                 &[writer.clone(), writer.clone()],
@@ -1556,7 +1561,7 @@ mod tests {
             .is_none()
         );
 
-        let readable = ArrayRef::new(
+        let readable = ArrayRef::new_in_domain(
             &crate::property::atom::AtomDomain::new(),
             vec![Value::Number(1.0)],
         );

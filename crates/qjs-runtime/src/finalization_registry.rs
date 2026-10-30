@@ -20,16 +20,18 @@ pub(crate) fn install_finalization_registry(
         1,
         NativeFunction::FinalizationRegistry,
         true,
-        env.realm().atoms(),
+        env.realm(),
     );
     prototype.define_non_enumerable("constructor".to_owned(), Value::Function(function.clone()));
     define_finalization_registry_prototype_function(
+        env.realm(),
         &prototype,
         "register",
         2,
         NativeFunction::FinalizationRegistryPrototypeRegister,
     );
     define_finalization_registry_prototype_function(
+        env.realm(),
         &prototype,
         "unregister",
         1,
@@ -74,7 +76,7 @@ pub(crate) fn native_finalization_registry(
     object.set_to_string_tag("FinalizationRegistry");
     object.define_property(
         FINALIZATION_REGISTRY_CELLS.to_owned(),
-        Property::non_enumerable(Value::Array(ArrayRef::new(&object.domain(), Vec::new()))),
+        Property::non_enumerable(Value::Array(ArrayRef::new(env.realm(), Vec::new()))),
     );
     Ok(Value::Object(object))
 }
@@ -111,7 +113,7 @@ pub(crate) fn native_finalization_registry_prototype_register(
         });
     }
 
-    finalization_registry_register(object, target, holdings, unregister_token)?;
+    finalization_registry_register(env.realm(), object, target, holdings, unregister_token)?;
     Ok(Value::Undefined)
 }
 
@@ -162,6 +164,7 @@ fn finalization_registry_cells(object: &ObjectRef) -> Result<ArrayRef, RuntimeEr
 }
 
 fn finalization_registry_register(
+    realm: &crate::function::Realm,
     object: ObjectRef,
     target: Value,
     holdings: Value,
@@ -170,7 +173,7 @@ fn finalization_registry_register(
     let cells = finalization_registry_cells(&object)?;
     let mut values = cells.to_vec();
     values.push(Value::Array(ArrayRef::new(
-        &object.domain(),
+        realm,
         vec![target, holdings, unregister_token],
     )));
     cells.replace_with(values);
@@ -226,6 +229,7 @@ fn incompatible_receiver() -> RuntimeError {
 }
 
 fn define_finalization_registry_prototype_function(
+    realm: &crate::function::Realm,
     prototype: &ObjectRef,
     key: &str,
     length: usize,
@@ -238,7 +242,7 @@ fn define_finalization_registry_prototype_function(
             length,
             native,
             false,
-            &prototype.domain(),
+            realm,
         )),
     );
 }

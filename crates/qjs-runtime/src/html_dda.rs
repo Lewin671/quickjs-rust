@@ -4,13 +4,16 @@ use crate::{Function, NativeFunction, Value};
 /// function's kind, so no property of any object can forge it, and the check
 /// every truthiness and `typeof` test runs is a tag comparison rather than a
 /// property lookup.
-pub(crate) fn new_is_html_dda_function(domain: &crate::property::atom::AtomDomain) -> Function {
+pub(crate) fn new_is_html_dda_function(
+    realm: &crate::function::Realm,
+    _domain: &crate::property::atom::AtomDomain,
+) -> Function {
     Function::new_native(
         Some("[[IsHTMLDDA]]"),
         0,
         NativeFunction::IsHtmlDda,
         false,
-        domain,
+        realm,
     )
 }
 

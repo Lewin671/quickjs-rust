@@ -23,43 +23,49 @@ pub(crate) fn install_weak_map(
         0,
         NativeFunction::WeakMap,
         true,
-        env.realm().atoms(),
+        env.realm(),
     );
     weak_map_prototype.define_non_enumerable(
         "constructor".to_owned(),
         Value::Function(weak_map_function.clone()),
     );
     define_weak_map_prototype_function(
+        env.realm(),
         &weak_map_prototype,
         "delete",
         1,
         NativeFunction::WeakMapPrototypeDelete,
     );
     define_weak_map_prototype_function(
+        env.realm(),
         &weak_map_prototype,
         "get",
         1,
         NativeFunction::WeakMapPrototypeGet,
     );
     define_weak_map_prototype_function(
+        env.realm(),
         &weak_map_prototype,
         "getOrInsert",
         2,
         NativeFunction::WeakMapPrototypeGetOrInsert,
     );
     define_weak_map_prototype_function(
+        env.realm(),
         &weak_map_prototype,
         "getOrInsertComputed",
         2,
         NativeFunction::WeakMapPrototypeGetOrInsertComputed,
     );
     define_weak_map_prototype_function(
+        env.realm(),
         &weak_map_prototype,
         "has",
         1,
         NativeFunction::WeakMapPrototypeHas,
     );
     define_weak_map_prototype_function(
+        env.realm(),
         &weak_map_prototype,
         "set",
         2,
@@ -340,6 +346,7 @@ fn incompatible_receiver() -> RuntimeError {
 }
 
 fn define_weak_map_prototype_function(
+    realm: &crate::function::Realm,
     prototype: &ObjectRef,
     key: &str,
     length: usize,
@@ -352,7 +359,7 @@ fn define_weak_map_prototype_function(
             length,
             native,
             false,
-            &prototype.domain(),
+            realm,
         )),
     );
 }

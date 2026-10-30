@@ -120,13 +120,10 @@ pub struct Function(Rc<FunctionData>);
 pub(crate) struct FunctionWeakRef(std::rc::Weak<FunctionData>);
 
 impl FunctionWeakRef {
-    pub(crate) fn same(&self, other: &Self) -> bool {
-        self.0.ptr_eq(&other.0)
+    pub(crate) fn address(&self) -> usize {
+        self.0.as_ptr() as usize
     }
 
-    pub(crate) fn ptr_eq(&self, value: &Function) -> bool {
-        self.0.as_ptr() == Rc::as_ptr(&value.0)
-    }
     pub(crate) fn upgrade(&self) -> Option<Function> {
         self.0.upgrade().map(Function)
     }
@@ -171,8 +168,8 @@ pub struct FunctionData {
     /// keep this empty: lexical captures live in indexed [`Upvalue`] cells and
     /// globals live in the shared `realm` cell below.
     pub(crate) native_context: NativeContext,
-    /// The creation realm of a user bytecode function. Native functions keep
-    /// `None` and receive their active realm through `CallEnv`.
+    /// Stable creation realm for bytecode and native functions; intrinsic
+    /// prototypes never resolve through mutable global constructor bindings.
     pub(crate) realm: Option<Realm>,
     /// Whether this function was created while the host's temporary dynamic
     /// realm marker was active. The marker object remains live realm state;
@@ -256,7 +253,7 @@ pub struct FunctionData {
     pub(crate) auxiliary: FunctionAuxiliaryState,
     pub(crate) bound: Option<Box<BoundFunction>>,
     /// Function object properties.
-    named: RefCell<Option<Box<crate::value::layout::NamedStore>>>,
+    named: RefCell<crate::value::layout::NamedStorage>,
 }
 
 /// Identity-bearing mutable state that is cold for ordinary calls. Keeping
@@ -293,7 +290,6 @@ struct FunctionColdState {
     instance_elements: Rc<Vec<InstanceElementInitializer>>,
     /// Explicit [[Prototype]] override. `None` means "use the default
     /// %Function.prototype% intrinsic"; `Some(None)` means it is null.
-    internal_prototype: Option<Option<Prototype>>,
     private_state: crate::private::PrivateState,
 }
 
@@ -379,8 +375,8 @@ impl FunctionAuxiliaryState {
         let cold = (home_object.is_some() || super_constructor.is_some())
             .then(|| Box::new(FunctionColdState::new(home_object, super_constructor)));
         Self {
-            implicit_length_property: Cell::new(false),
-            implicit_name_property: Cell::new(false),
+            implicit_length_property: Cell::new(true),
+            implicit_name_property: Cell::new(true),
             extensible: Cell::new(true),
             sealed: Cell::new(false),
             frozen: Cell::new(false),
@@ -408,7 +404,6 @@ impl FunctionColdState {
             lexical_derived_this: None,
             super_constructor,
             instance_elements: Rc::new(Vec::new()),
-            internal_prototype: None,
             private_state: crate::private::PrivateState::default(),
         }
     }
@@ -646,8 +641,9 @@ impl Function {
             is_field_initializer: false,
             auxiliary,
             bound: None,
-            named: RefCell::new(None),
+            named: RefCell::new(crate::value::layout::NamedStorage::Sentinel),
         }));
+        function.initialize_named();
         function.define_length_property();
         function.define_name_property();
         if constructable {
@@ -747,8 +743,9 @@ impl Function {
             is_field_initializer,
             auxiliary,
             bound: None,
-            named: RefCell::new(None),
+            named: RefCell::new(crate::value::layout::NamedStorage::Sentinel),
         }));
+        function.initialize_named();
         function.define_length_property();
         function.define_name_property();
         // Class constructors receive their `prototype` wiring from the class
@@ -781,6 +778,29 @@ impl Function {
         length: usize,
         native: NativeFunction,
         constructable: bool,
+        realm: &Realm,
+    ) -> Self {
+        Self::new(
+            name.map(str::to_owned),
+            vec![String::new(); length],
+            HashMap::new(),
+            Some(native),
+            constructable,
+            Some(realm.atoms()),
+            Some(realm.clone()),
+        )
+    }
+    pub(crate) fn creation_realm(&self) -> &Realm {
+        self.realm
+            .as_ref()
+            .expect("native creation requires its realm")
+    }
+    #[cfg(test)]
+    pub(crate) fn new_native_in_domain(
+        name: Option<&str>,
+        length: usize,
+        native: NativeFunction,
+        constructable: bool,
         domain: &crate::property::atom::AtomDomain,
     ) -> Self {
         Self::new(
@@ -790,6 +810,7 @@ impl Function {
             Some(native),
             constructable,
             Some(domain),
+            None,
         )
     }
 
@@ -801,6 +822,7 @@ impl Function {
             HashMap::new(),
             Some(NativeFunction::UninitializedLexical),
             false,
+            None,
             None,
         )
     }
@@ -907,8 +929,9 @@ impl Function {
                 this_value,
                 arguments,
             })),
-            named: RefCell::new(None),
+            named: RefCell::new(crate::value::layout::NamedStorage::Sentinel),
         }));
+        function.initialize_named();
         function.define_length_property();
         function.define_name_property();
         function
@@ -921,6 +944,7 @@ impl Function {
         native: Option<NativeFunction>,
         constructable: bool,
         domain: Option<&crate::property::atom::AtomDomain>,
+        creation_realm: Option<Realm>,
     ) -> Self {
         let prototype = constructable.then(|| {
             ObjectRef::new(
@@ -937,7 +961,7 @@ impl Function {
             name,
             params: Rc::new(FunctionParams::positional(params)),
             native_context: NativeContext::from_map(env, domain),
-            realm: None,
+            realm: creation_realm,
             has_dynamic_function_realm: false,
             has_dynamic_function_realm_override: Cell::new(false),
             direct_leaf_call_eligible: Cell::new(None),
@@ -968,8 +992,9 @@ impl Function {
             is_field_initializer: false,
             auxiliary,
             bound: None,
-            named: RefCell::new(None),
+            named: RefCell::new(crate::value::layout::NamedStorage::Sentinel),
         }));
+        function.initialize_named();
         function.define_length_property();
         function.define_name_property();
         if let Some(prototype) = prototype {
@@ -1022,6 +1047,16 @@ impl Function {
                     crate::property::own_or_inherited_symbol_descriptor(target, symbol)
                 }),
                 None => None,
+
+                Some(Prototype::Map(_carrier)) => {
+                    let prototype = _carrier.object();
+                    prototype.symbol_property(symbol)
+                }
+
+                Some(Prototype::Set(_carrier)) => {
+                    let prototype = _carrier.object();
+                    prototype.symbol_property(symbol)
+                }
             }
         })
     }
@@ -1032,18 +1067,10 @@ impl Function {
     /// intrinsic cannot be resolved (for example a native function with no
     /// captured globals).
     pub(crate) fn effective_internal_prototype(&self) -> Option<Prototype> {
-        let env = self.creation_env();
-        self.effective_internal_prototype_with_env(&env)
+        self.named.borrow().prototype()
     }
-
-    fn effective_internal_prototype_with_env(&self, env: &CallEnv) -> Option<Prototype> {
-        match self
-            .auxiliary
-            .with_cold(|cold| cold.and_then(|cold| cold.internal_prototype.clone()))
-        {
-            Some(slot) => slot,
-            None => crate::function_intrinsic_prototype_slot(env),
-        }
+    fn effective_internal_prototype_with_env(&self, _env: &CallEnv) -> Option<Prototype> {
+        self.effective_internal_prototype()
     }
 
     /// Walks this function's own properties, then its [[Prototype]] chain, for a
@@ -1077,6 +1104,16 @@ impl Function {
                     .ok()
                     .and_then(|target| crate::property::own_or_inherited_descriptor(target, key)),
                 None => None,
+
+                Some(Prototype::Map(_carrier)) => {
+                    let prototype = _carrier.object();
+                    prototype.property(key)
+                }
+
+                Some(Prototype::Set(_carrier)) => {
+                    let prototype = _carrier.object();
+                    prototype.property(key)
+                }
             })
     }
 
@@ -1090,6 +1127,16 @@ impl Function {
                     crate::property::own_or_inherited_symbol_descriptor(target, symbol)
                 }),
                 None => None,
+
+                Some(Prototype::Map(_carrier)) => {
+                    let prototype = _carrier.object();
+                    prototype.symbol_property(symbol)
+                }
+
+                Some(Prototype::Set(_carrier)) => {
+                    let prototype = _carrier.object();
+                    prototype.symbol_property(symbol)
+                }
             })
     }
 
@@ -1146,8 +1193,7 @@ impl Function {
 
     /// The raw [[Prototype]] override slot, preserving a function prototype.
     pub(crate) fn internal_prototype_slot(&self) -> Option<Option<Prototype>> {
-        self.auxiliary
-            .with_cold(|cold| cold.and_then(|cold| cold.internal_prototype.clone()))
+        Some(self.effective_internal_prototype())
     }
 
     /// The function's original source text, when retained.
@@ -1159,10 +1205,7 @@ impl Function {
         &self,
         prototype: Option<Prototype>,
     ) -> Result<(), ()> {
-        if self.auxiliary.with_cold(|cold| {
-            cold.and_then(|cold| cold.internal_prototype.as_ref())
-                .is_some_and(|current| same_prototype_slot(current, &prototype))
-        }) {
+        if same_prototype_slot(&self.effective_internal_prototype(), &prototype) {
             return Ok(());
         }
         if !self.auxiliary.extensible.get() {
@@ -1174,13 +1217,9 @@ impl Function {
         {
             return Err(());
         }
-        self.with_named(|s| {
-            if let Some(s) = s {
-                s.invalidate_dependencies();
-            }
-        });
-        self.auxiliary
-            .with_cold_mut(|cold| cold.internal_prototype = Some(prototype));
+        self.named
+            .borrow_mut()
+            .set_prototype(prototype, self.named_shape_flavor());
         Ok(())
     }
 
@@ -1311,6 +1350,40 @@ fn prototype_chain_contains_function_inner(
             )
         }),
         Prototype::Proxy(_) => false,
+
+        Prototype::Map(_carrier) => {
+            let object = &_carrier.object();
+
+            if seen_objects.iter().any(|seen| seen.ptr_eq(object)) {
+                return false;
+            }
+            seen_objects.push(object.clone());
+            object.prototype_slot().is_some_and(|prototype| {
+                prototype_chain_contains_function_inner(
+                    &prototype,
+                    target,
+                    seen_functions,
+                    seen_objects,
+                )
+            })
+        }
+
+        Prototype::Set(_carrier) => {
+            let object = &_carrier.object();
+
+            if seen_objects.iter().any(|seen| seen.ptr_eq(object)) {
+                return false;
+            }
+            seen_objects.push(object.clone());
+            object.prototype_slot().is_some_and(|prototype| {
+                prototype_chain_contains_function_inner(
+                    &prototype,
+                    target,
+                    seen_functions,
+                    seen_objects,
+                )
+            })
+        }
     }
 }
 

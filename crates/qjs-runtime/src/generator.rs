@@ -53,7 +53,7 @@ pub(crate) fn install_generator(
                 1,
                 native,
                 false,
-                env.realm().atoms(),
+                env.realm(),
             )),
         );
     }
@@ -67,7 +67,7 @@ pub(crate) fn install_generator(
                 0,
                 NativeFunction::IteratorPrototypeIterator,
                 false,
-                env.realm().atoms(),
+                env.realm(),
             ))),
         );
     }
@@ -88,7 +88,7 @@ pub(crate) fn install_generator(
         1,
         NativeFunction::GeneratorFunction,
         true,
-        env.realm().atoms(),
+        env.realm(),
     );
     let _ =
         generator_function.set_internal_prototype_slot(function_constructor_as_prototype_slot(env));

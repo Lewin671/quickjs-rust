@@ -580,6 +580,7 @@ fn advance_zip_state(
         return Ok(None);
     }
     Ok(Some(zip_result(
+        env.realm(),
         state.result_kind,
         &state.keys,
         values,
@@ -626,13 +627,14 @@ fn zip_padding_value(state: &ZipState, index: usize) -> Value {
 }
 
 fn zip_result(
+    realm: &crate::function::Realm,
     result_kind: ZipResultKind,
     keys: &[PropertyKey],
     values: Vec<Value>,
     domain: &crate::property::atom::AtomDomain,
 ) -> Value {
     if result_kind == ZipResultKind::Array {
-        return Value::Array(ArrayRef::new(domain, values));
+        return Value::Array(ArrayRef::new(realm, values));
     }
 
     let result = ObjectRef::with_prototype(HashMap::new(), None, domain);

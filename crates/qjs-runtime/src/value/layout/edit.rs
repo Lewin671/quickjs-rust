@@ -16,7 +16,12 @@ impl Layout {
             edits: self.edits,
             next_order: self.next_order,
             transitions: RefCell::new(transitions::Transitions::default()),
-            subscribers: RefCell::new(Vec::new()),
+            root: self.root.clone(),
+            prototype: self.prototype.clone(),
+            prototype_value: RefCell::new(Weak::new()),
+            parent_state: self.parent_state.clone(),
+            mode: self.mode.clone(),
+            flavor: self.flavor,
         }
     }
 
@@ -35,7 +40,12 @@ impl Layout {
             .expect("property order space exhausted");
         order
     }
-    fn append(self: &Rc<Self>, key: &KeyLease, attrs: Attributes, proof: IdProbe) -> Rc<Self> {
+    pub(super) fn append(
+        self: &Rc<Self>,
+        key: &KeyLease,
+        attrs: Attributes,
+        proof: IdProbe,
+    ) -> Rc<Self> {
         let label = Transition::Append {
             key: key.id(),
             attrs,
@@ -73,7 +83,12 @@ impl Layout {
             edits: self.edits,
             next_order: self.len as u32 + 1,
             transitions: RefCell::new(transitions::Transitions::default()),
-            subscribers: RefCell::new(Vec::new()),
+            root: Some(self.root.as_ref().unwrap_or(self).clone()),
+            prototype: self.prototype.clone(),
+            prototype_value: RefCell::new(Weak::new()),
+            parent_state: self.parent_state.clone(),
+            mode: None,
+            flavor: self.flavor,
         });
         crate::diagnostics::count!(property_shape_nodes_created);
         self.cache(label, &next);
@@ -107,6 +122,10 @@ impl Layout {
 }
 
 impl Lookup<'_> {
+    pub(crate) fn prototype(&self) -> Option<crate::Prototype> {
+        self.store.prototype()
+    }
+
     pub(crate) fn data_slot(&self) -> Option<usize> {
         self.position
             .filter(|&p| !self.store.layout.entry(p).attrs.has(Attributes::ACCESSOR))
@@ -121,7 +140,8 @@ impl Lookup<'_> {
             Some(position) => {
                 if self.store.layout.entry(position).attrs != attrs {
                     if self.store.layout.dictionary {
-                        self.store.edit_layout().private_data().entries[position].attrs = attrs;
+                        self.store.edit_layout(false).private_data().entries[position].attrs =
+                            attrs;
                     } else {
                         self.store.invalidate_dependencies();
                         self.store.layout = self.store.layout.reconfigure(position, attrs);
@@ -142,7 +162,7 @@ impl Lookup<'_> {
                     let key = self.key.clone();
                     let same_index =
                         self.store.layout.data.borrow().entries.len() == self.store.len();
-                    let layout = self.store.edit_layout();
+                    let layout = self.store.edit_layout(true);
                     layout.dictionary = true;
                     let order = layout.allocate_order();
                     {
@@ -198,7 +218,7 @@ impl Lookup<'_> {
             return Some(old);
         }
         let same_index = self.store.layout.data.borrow().entries.len() == self.store.len();
-        let layout = self.store.edit_layout();
+        let layout = self.store.edit_layout(false);
         let before_bytes = layout.private_data().bytes();
         let last = layout.len - 1;
         let proof = if same_index {
@@ -273,24 +293,31 @@ impl NamedStore {
         layout.len -= 1;
     }
     pub(super) fn bump_epoch(&mut self) {
-        if let Some(next) = self.epoch.checked_add(1) {
-            self.epoch = next;
-        } else {
-            // A fresh identity prevents an old dictionary token from becoming
-            // valid again. Epochs are always paired with layout identity.
-            self.layout = Rc::new(self.layout.copied(true));
+        if !self.layout.dictionary {
             self.epoch = 0;
+            return;
         }
+        self.epoch = match self.epoch.checked_add(1) {
+            Some(next) if next != 0 => next,
+            _ => {
+                self.layout = Rc::new(self.layout.copied(true));
+                1
+            }
+        };
     }
-    fn edit_layout(&mut self) -> &mut Layout {
+    fn edit_layout(&mut self, force_dictionary: bool) -> &mut Layout {
         self.invalidate_dependencies();
         self.bump_epoch();
         let edits = self.layout.edits.saturating_add(1);
         let dictionary = self.layout.dictionary
+            || force_dictionary
             || self.len() > DICTIONARY_WIDTH
             || u64::from(edits) >= DICTIONARY_EDITS;
         if !self.layout.dictionary {
             self.layout = Rc::new(self.layout.copied(dictionary));
+        }
+        if dictionary && self.epoch == 0 {
+            self.epoch = 1;
         }
         let layout = Rc::make_mut(&mut self.layout);
         layout.edits = edits;
@@ -304,6 +331,26 @@ impl NamedStore {
 
 impl Drop for Layout {
     fn drop(&mut self) {
+        if self.root.is_none()
+            && let Some(owner) = self.owner.upgrade()
+            && let Ok(mut roots) = owner.roots.try_borrow_mut()
+        {
+            let (kind, address) = self
+                .prototype
+                .as_ref()
+                .map(WeakPrototype::identity)
+                .unwrap_or((0, 0));
+            let key = (kind, address, self.flavor);
+            if roots
+                .get(&key)
+                .is_some_and(|w| std::ptr::eq(w.as_ptr(), self))
+            {
+                roots.remove(&key);
+            }
+            if roots.len().saturating_mul(4) < roots.capacity() {
+                roots.shrink_to_fit();
+            }
+        }
         if let (Some(parent), Some(label)) = (&self.parent, self.incoming)
             && let Ok(mut edges) = parent.transitions.try_borrow_mut()
         {

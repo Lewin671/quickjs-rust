@@ -22,7 +22,7 @@ pub(crate) fn install_regexp_prototype_match_all(env: &CallEnv, prototype: &Obje
                 1,
                 NativeFunction::RegExpPrototypeMatchAll,
                 false,
-                env.realm().atoms(),
+                env.realm(),
             ))),
         );
     }

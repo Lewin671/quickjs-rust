@@ -50,7 +50,9 @@ pub(super) fn call_set_native(
             set::native_set_prototype_union(this_value, argument_values, env)?
         }
         NativeFunction::SetPrototypeValues => set::native_set_prototype_values(this_value, env)?,
-        NativeFunction::SetIteratorPrototypeNext => set::native_set_iterator_next(this_value)?,
+        NativeFunction::SetIteratorPrototypeNext => {
+            set::native_set_iterator_next(env.realm(), this_value)?
+        }
         _ => return Ok(None),
     };
 

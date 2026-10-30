@@ -35,8 +35,14 @@ pub(super) fn get_prop_named(
     cache: &NamedPropertyCache,
     env: &CallEnv,
 ) -> Result<Value, RuntimeError> {
-    if let Some(value) = cache.read_string(object, key, env) {
-        return Ok(value);
+    if let Some(outcome) = cache.read_outcome(object, key) {
+        return match outcome {
+            crate::bytecode::named_property_cache::ReadOutcome::Value(v) => Ok(v),
+            crate::bytecode::named_property_cache::ReadOutcome::Accessor(p) => {
+                let mut call_env = env.empty_frame();
+                crate::property::property_descriptor_value(Some(p), object.clone(), &mut call_env)
+            }
+        };
     }
     if let Some(value) = prototype_receiver_named_value(object, key, cache, env) {
         return Ok(value);
@@ -278,6 +284,48 @@ pub(in crate::bytecode) fn try_create_ordinary_own_data_property(
                 }
                 return true;
             }
+
+            Some(crate::Prototype::Map(_carrier)) => {
+                let prototype = _carrier.object();
+
+                if crate::symbol::is_symbol_primitive(&prototype)
+                    || crate::typed_array::is_typed_array_object(&prototype)
+                    || prototype.is_module_namespace_exotic()
+                {
+                    return false;
+                }
+                if let Some(property) = prototype.own_property(&key) {
+                    if property.is_accessor() || !property.writable {
+                        return false;
+                    }
+                    if !object.create_absent_own_data_property(key.clone(), value.clone()) {
+                        object.set_shared_key(key, value.clone());
+                    }
+                    return true;
+                }
+                current = prototype.prototype_slot();
+            }
+
+            Some(crate::Prototype::Set(_carrier)) => {
+                let prototype = _carrier.object();
+
+                if crate::symbol::is_symbol_primitive(&prototype)
+                    || crate::typed_array::is_typed_array_object(&prototype)
+                    || prototype.is_module_namespace_exotic()
+                {
+                    return false;
+                }
+                if let Some(property) = prototype.own_property(&key) {
+                    if property.is_accessor() || !property.writable {
+                        return false;
+                    }
+                    if !object.create_absent_own_data_property(key.clone(), value.clone()) {
+                        object.set_shared_key(key, value.clone());
+                    }
+                    return true;
+                }
+                current = prototype.prototype_slot();
+            }
         }
     }
 }
@@ -388,7 +436,7 @@ pub(in crate::bytecode) fn array_access_is_plain(array: &crate::ArrayRef, env: &
     let Some(array_prototype) = crate::property::array_prototype(env) else {
         return false;
     };
-    (array.uses_default_prototype() || array.uses_prototype_object(&array_prototype))
+    (array.uses_prototype_object(&array_prototype))
         && !crate::bytecode::vm_props::prototype_chain_has_index_hazard(Some(
             crate::Prototype::Object(array_prototype),
         ))

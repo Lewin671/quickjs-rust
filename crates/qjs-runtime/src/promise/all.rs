@@ -19,7 +19,7 @@ pub(crate) fn native_promise_all(
 ) -> Result<Value, RuntimeError> {
     let iterable = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let handler = AllHandler {
-        values: ArrayRef::new(env.realm().atoms(), Vec::new()),
+        values: ArrayRef::new(env.realm(), Vec::new()),
         remaining: perform::new_remaining(1, env.realm().atoms()),
     };
     perform::run_combinator(this_value, iterable, "Promise.all", handler, env)
@@ -47,7 +47,7 @@ impl ElementHandler for AllHandler {
             1,
             NativeFunction::PromiseAllResolveElement,
             false,
-            _env.realm().atoms(),
+            _env.realm(),
         );
         on_fulfilled.insert_native_context(
             PROMISE_ALL_CAPABILITY_RESOLVE.to_owned(),

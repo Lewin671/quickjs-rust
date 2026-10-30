@@ -1,25 +1,13 @@
-//! Per-site for-in key lists guarded by receiver structure and weak prototype
-//! dependencies. Value-only writes preserve the list; every structural edit
-//! on its prototype chain invalidates the shared dependency before publication.
+//! for-in key lists guarded by receiver layout and the first prototype's
+//! transitive validity cell. Values never participate in this proof.
 use crate::value::layout::{LayoutVersion, StructuralDependency};
-use crate::value::named::WeakEdge;
 use crate::{ArrayRef, ObjectRef, Prototype, Value};
 use std::{cell::RefCell, fmt, rc::Rc};
-
-#[derive(Clone)]
-pub(super) struct EnumerateKeysCache(Rc<RefCell<Option<Entry>>>, bool);
-impl Default for EnumerateKeysCache {
-    fn default() -> Self {
-        Self(
-            Rc::new(RefCell::new(None)),
-            std::env::var_os("QJS_DISABLE_IC").is_none(),
-        )
-    }
-}
+#[derive(Clone, Default)]
+pub(super) struct EnumerateKeysCache(Rc<RefCell<Option<Entry>>>);
 struct Entry {
     receiver: LayoutVersion,
-    first: Option<WeakEdge>,
-    validity: StructuralDependency,
+    validity: Option<StructuralDependency>,
     keys: ArrayRef,
 }
 impl fmt::Debug for EnumerateKeysCache {
@@ -29,67 +17,53 @@ impl fmt::Debug for EnumerateKeysCache {
 }
 impl EnumerateKeysCache {
     pub(super) fn get(&self, target: &Value) -> Option<ArrayRef> {
-        if !self.1 {
-            return None;
-        }
-        let Value::Object(object) = target else {
+        let Value::Object(o) = target else {
             return None;
         };
-        if !cacheable(object) {
+        if !cacheable(o) {
             return None;
         }
         let state = self.0.borrow();
         let entry = state.as_ref()?;
-        if !entry.validity.is_valid() || !object.with_named(|s| s.matches_version(&entry.receiver))
-        {
-            return None;
-        }
-        match (&entry.first, object.prototype_slot()) {
-            (None, None) => Some(entry.keys.clone()),
-            (Some(edge), Some(prototype)) if edge.matches(&prototype) => Some(entry.keys.clone()),
-            _ => None,
-        }
+        (o.layout_matches(&entry.receiver)
+            && entry
+                .validity
+                .as_ref()
+                .is_none_or(StructuralDependency::is_valid))
+        .then(|| entry.keys.clone())
     }
     pub(super) fn record(&self, target: &Value, keys: ArrayRef) {
-        if !self.1 {
-            return;
-        }
-        *self.0.borrow_mut() = capture(target, keys);
+        *self.0.borrow_mut() = capture(target, keys)
     }
 }
 fn capture(target: &Value, keys: ArrayRef) -> Option<Entry> {
-    let Value::Object(object) = target else {
+    let Value::Object(o) = target else {
         return None;
     };
-    if !cacheable(object) {
+    if !cacheable(o) || !o.with_named(|s| s.domain().ic_policy().enabled) {
         return None;
     }
-    let first = object.prototype_slot();
-    let edge = match &first {
-        Some(p) => Some(WeakEdge::new(p)?),
-        None => None,
+    let mut current = o.prototype_slot();
+    let validity = if current.is_some() {
+        Some(o.with_named(|s| s.chain_dependency())?)
+    } else {
+        None
     };
-    let validity = StructuralDependency::new();
-    let mut current = first;
-    for _ in 0..16 {
+    for _ in 0..64 {
         match current {
             None => {
                 return Some(Entry {
-                    receiver: object.layout_revision(),
-                    first: edge,
+                    receiver: o.layout_revision(),
                     validity,
                     keys,
                 });
             }
-            Some(Prototype::Object(ref node)) if cacheable(node) => {
-                node.with_named(|s| s.subscribe(&validity));
-                current = node.prototype_slot();
-            }
+            Some(Prototype::Object(ref node)) if cacheable(node) => current = node.prototype_slot(),
             _ => return None,
         }
     }
     None
 }
-fn cacheable(object: &ObjectRef) -> bool {
-    object.named_kind() == Some(0)
+fn cacheable(o: &ObjectRef) -> bool {
+    o.named_kind() == Some(0)
 }

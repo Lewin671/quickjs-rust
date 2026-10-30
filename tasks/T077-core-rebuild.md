@@ -1,12 +1,11 @@
 # T077: In-place core rebuild
 
-- Status: active; round-1 A merged at `885e0e31`; queued fixes B present on `agent/t077-s2-named-stores/codex`.
-- Implementation: S1 review repairs and RegExp ordering regression integrated; named read helpers use find-only probes, empty native contexts share per domain with COW, and object guard comparisons avoid temporary Weak handles. Prototype redesign C-F remains next.
-- Verified at: A full gate (2,426 runtime; 5,170 curated) and NG 261/261 pass; B working tree runtime tests 2,428/2,428 pass. No new exact or timing standing claimed.
-- Evidence: [S1 repairs](archive/T077-s1-review-fixes.md), [previous S2](archive/T077-s2-verification.md); final round-1 receipt will replace current standing.
-- Unresolved: prototype-layout/cell redesign, remaining memory/verifier issues, E correctness fixes, full final gates/counters/iMac triage.
-- Next action: commit verified B, then implement the lead's C architecture before D-F. Temporary iMac refs are authorized measurement transport; never push origin or merge main.
-
+- Status: active; round-1 A/B committed at `885e0e31` / `c2d65271`; C/D architecture implemented on the S2 owner branch.
+- Implementation: prototype-sensitive immutable layouts, private prototype validity generations, explicit realm creation, pure missing/accessor IC outcomes and lazy array/function authority replace the initial subscriptions and implicit prototypes.
+- Verified at: C/D working tree fast gate passes (2,434 runtime, 117 selected Test262); agents/perf-counters 2,477/2,477 and clippy pass. Cache proofs cover root churn, 600 sites, stale guards and verifier failure. Final stage gates remain pending.
+- Evidence: [correction plan](proposals/T077-s2-prototype-layout.md), [S1 repairs](archive/T077-s1-review-fixes.md), [previous S2](archive/T077-s2-verification.md). Round-1 receipt will record final source/counters/jobs.
+- Unresolved: E generic correctness/iterative teardown, final full/NG/IC-off/verify/exact gates, counters and iMac triage against `dd0905b2`.
+- Next action: commit verified C/D, apply E, then F. Temporary iMac refs are authorized measurement transport; never push origin or merge main.
 ## Authority and scope
 
 The lead supersedes the 2026-10-23 no-rewrite decision on 2026-10-29 after the
@@ -80,7 +79,7 @@ Foundation inventory, sizes and verification: [milestone evidence](archive/T077-
 
 The [lead decision](proposals/T077-s1-fallibility.md) replaces monotonic keys
 with lease-safe recycling and allocation-error abort. [Object invariants](../docs/design/core-rebuild-objects.md)
-record paired identity/epoch guards, cold legacy value revisions and incremental
+record prototype-sensitive identities, dictionary versions and incremental
 data-write checks. [Cutover evidence](archive/T077-s1-cutover.md) records reasons;
 no error ABI, fallback store or correctness waiver was introduced.
 Array.prototype needs array length/index [[DefineOwnProperty]] before NamedStore: the previous raw length/index setter and cache writes could
@@ -108,7 +107,8 @@ this receiver. No second index store or array snapshot.
   then repair with uncached shape lookup in the same core, never old storage.
 ### S2 design corrections
 
-Keep array NamedStore cold with an explicit hot realm domain; register bounded weak dependency cells on shared layouts (conservative broadcasts), preserving hot sizes; guard array prototype contextual wrappers, whose captured realm fallback is part of the edge. Reasons and invariants: [object contract](../docs/design/core-rebuild-objects.md#s2-semantic-ports-and-verification).
+The [round-1 correction](proposals/T077-s2-prototype-layout.md) replaces shared-layout subscriptions and implicit prototypes: layouts include prototype identity, shared shapes have no epochs, and private prototype states own uncapped weak user graphs with cascading validity generations. Arrays/functions retain explicit realm intrinsics and lazy storage; missing/accessor outcomes cache pure proofs. [Object contract](../docs/design/core-rebuild-objects.md#inline-caches) owns implemented invariants.
+
 ## S3 — Universal bytecode, frames, calls and native ABI
 
 - Scope: bytecode compiler/IR/VM, function call/context/install, native and builtin

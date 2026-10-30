@@ -20,13 +20,7 @@ pub(crate) fn install_map(env: &mut CallEnv, global_this: &Value, object_prototy
         ObjectRef::with_prototype(HashMap::new(), Some(object_prototype), env.realm().atoms());
     map_prototype.set_to_string_tag("Map");
     symbol::define_well_known_to_string_tag(env, &map_prototype, "Map");
-    let map_function = Function::new_native(
-        Some("Map"),
-        0,
-        NativeFunction::Map,
-        true,
-        env.realm().atoms(),
-    );
+    let map_function = Function::new_native(Some("Map"), 0, NativeFunction::Map, true, env.realm());
     define_map_function(&map_function, "groupBy", 2, NativeFunction::MapGroupBy);
     map_prototype.define_non_enumerable(
         "constructor".to_owned(),
@@ -40,7 +34,7 @@ pub(crate) fn install_map(env: &mut CallEnv, global_this: &Value, object_prototy
                 0,
                 NativeFunction::MapPrototypeSize,
                 false,
-                env.realm().atoms(),
+                env.realm(),
             ))),
             None,
             false,
@@ -48,46 +42,77 @@ pub(crate) fn install_map(env: &mut CallEnv, global_this: &Value, object_prototy
         ),
     );
     define_map_prototype_function(
+        env.realm(),
         &map_prototype,
         "clear",
         0,
         NativeFunction::MapPrototypeClear,
     );
     define_map_prototype_function(
+        env.realm(),
         &map_prototype,
         "delete",
         1,
         NativeFunction::MapPrototypeDelete,
     );
     define_map_prototype_function(
+        env.realm(),
         &map_prototype,
         "entries",
         0,
         NativeFunction::MapPrototypeEntries,
     );
     define_map_prototype_function(
+        env.realm(),
         &map_prototype,
         "forEach",
         1,
         NativeFunction::MapPrototypeForEach,
     );
-    define_map_prototype_function(&map_prototype, "get", 1, NativeFunction::MapPrototypeGet);
     define_map_prototype_function(
+        env.realm(),
+        &map_prototype,
+        "get",
+        1,
+        NativeFunction::MapPrototypeGet,
+    );
+    define_map_prototype_function(
+        env.realm(),
         &map_prototype,
         "getOrInsert",
         2,
         NativeFunction::MapPrototypeGetOrInsert,
     );
     define_map_prototype_function(
+        env.realm(),
         &map_prototype,
         "getOrInsertComputed",
         2,
         NativeFunction::MapPrototypeGetOrInsertComputed,
     );
-    define_map_prototype_function(&map_prototype, "has", 1, NativeFunction::MapPrototypeHas);
-    define_map_prototype_function(&map_prototype, "keys", 0, NativeFunction::MapPrototypeKeys);
-    define_map_prototype_function(&map_prototype, "set", 2, NativeFunction::MapPrototypeSet);
     define_map_prototype_function(
+        env.realm(),
+        &map_prototype,
+        "has",
+        1,
+        NativeFunction::MapPrototypeHas,
+    );
+    define_map_prototype_function(
+        env.realm(),
+        &map_prototype,
+        "keys",
+        0,
+        NativeFunction::MapPrototypeKeys,
+    );
+    define_map_prototype_function(
+        env.realm(),
+        &map_prototype,
+        "set",
+        2,
+        NativeFunction::MapPrototypeSet,
+    );
+    define_map_prototype_function(
+        env.realm(),
         &map_prototype,
         "values",
         0,
@@ -167,7 +192,7 @@ pub(crate) fn native_map_group_by(
             &[value.clone(), Value::Number(index as f64)],
             env,
         )?;
-        append_map_group(&map, key, value);
+        append_map_group(env.realm(), &map, key, value);
     }
 
     Ok(Value::Map(map))
@@ -349,7 +374,10 @@ pub(crate) fn native_map_prototype_values(
     map_iterator(this_value, env, MAP_ITERATOR_KIND_VALUE)
 }
 
-pub(crate) fn native_map_iterator_next(this_value: Value) -> Result<Value, RuntimeError> {
+pub(crate) fn native_map_iterator_next(
+    realm: &crate::function::Realm,
+    this_value: Value,
+) -> Result<Value, RuntimeError> {
     let Value::Object(iterator) = this_value else {
         return Err(RuntimeError {
             thrown: None,
@@ -396,9 +424,7 @@ pub(crate) fn native_map_iterator_next(this_value: Value) -> Result<Value, Runti
     let item = match iterator_kind(&iterator)?.as_str() {
         MAP_ITERATOR_KIND_KEY => key,
         MAP_ITERATOR_KIND_VALUE => value,
-        MAP_ITERATOR_KIND_KEY_VALUE => {
-            Value::Array(ArrayRef::new(&iterator.domain(), vec![key, value]))
-        }
+        MAP_ITERATOR_KIND_KEY_VALUE => Value::Array(ArrayRef::new(realm, vec![key, value])),
         _ => {
             return Err(RuntimeError {
                 thrown: None,
@@ -489,13 +515,10 @@ fn canonical_map_key_value(key: Value) -> Value {
     }
 }
 
-fn append_map_group(map: &MapRef, key: Value, value: Value) {
+fn append_map_group(realm: &crate::function::Realm, map: &MapRef, key: Value, value: Value) {
     match map.get(&key) {
         Some(Value::Array(group)) => group.set(group.len(), value),
-        _ => map.set(
-            key,
-            Value::Array(ArrayRef::new(&map.object().domain(), vec![value])),
-        ),
+        _ => map.set(key, Value::Array(ArrayRef::new(realm, vec![value]))),
     }
 }
 
@@ -514,12 +537,13 @@ fn define_map_function(function: &Function, key: &str, length: usize, native: Na
             length,
             native,
             false,
-            function.property_domain(),
+            function.creation_realm(),
         ))),
     );
 }
 
 fn define_map_prototype_function(
+    realm: &crate::function::Realm,
     prototype: &ObjectRef,
     key: &str,
     length: usize,
@@ -532,7 +556,7 @@ fn define_map_prototype_function(
             length,
             native,
             false,
-            &prototype.domain(),
+            realm,
         )),
     );
 }

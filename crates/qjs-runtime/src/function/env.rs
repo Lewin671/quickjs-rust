@@ -56,6 +56,8 @@ pub(crate) struct RealmState {
     /// by literals, classes, or abstract operations that name an intrinsic.
     object_prototype: OnceCell<ObjectRef>,
     array_prototype: OnceCell<ObjectRef>,
+    function_prototype: OnceCell<crate::Prototype>,
+    function_constructor: OnceCell<Function>,
     /// Stable `%String.prototype%` identity used by primitive String reads.
     /// The mutable global `String` binding is not the intrinsic authority.
     string_prototype: OnceCell<ObjectRef>,
@@ -106,6 +108,8 @@ impl RealmState {
             bindings: DynamicBindings::from_values(bindings),
             object_prototype: OnceCell::new(),
             array_prototype: OnceCell::new(),
+            function_prototype: OnceCell::new(),
+            function_constructor: OnceCell::new(),
             string_prototype: OnceCell::new(),
             number_prototype: OnceCell::new(),
             well_known_symbols: OnceCell::new(),
@@ -153,6 +157,24 @@ impl RealmState {
         );
     }
 
+    pub(crate) fn initialize_function_prototype(&self, prototype: crate::Prototype) {
+        assert!(
+            self.function_prototype.set(prototype).is_ok(),
+            "Function.prototype initialized twice"
+        );
+    }
+    pub(crate) fn function_prototype(&self) -> Option<crate::Prototype> {
+        self.function_prototype.get().cloned()
+    }
+    pub(crate) fn initialize_function_constructor(&self, constructor: Function) {
+        assert!(
+            self.function_constructor.set(constructor).is_ok(),
+            "Function constructor initialized twice"
+        );
+    }
+    pub(crate) fn function_constructor(&self) -> Option<Function> {
+        self.function_constructor.get().cloned()
+    }
     pub(crate) fn initialize_number_prototype(&self, prototype: ObjectRef) {
         assert!(
             self.number_prototype.set(prototype).is_ok(),

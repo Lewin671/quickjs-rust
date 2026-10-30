@@ -32,18 +32,18 @@ keys or report an explicit domain error, never reinterpret IDs.
 once, then interns; named bytecode operands use prelinked leases. Host `&str`
 entry points convert once; internal slot access never formats or hashes text.
 
-## Physical layout (S1 assertions; S2 cache budgets remain proposed)
+## Physical layout (S2 assertions)
 
 | Type | Fields / size |
 | --- | --- |
 | `ShapeEntry` | `key:u32, slot:u32, order:u32, attrs:u16, reserved:u16` = 16 bytes |
-| `NamedStore` | `layout:Rc<Layout>` 8, `values:Vec<Value>` 24, `accessors:Option<Box<AccessorSlots>>` 8, `epoch:u64` 8 = 48 bytes; `RefCell` wrapper 56 |
-| Ordinary hot payload | `named:RefCell<NamedStore>` 56, `prototype:RefCell<Option<Prototype>>` 24, cold pointer 8, index count 4, packed flags/edit count/padding 4 = 96 bytes, excluding RC header |
+| `NamedStore` | `layout:Rc<Layout>` 8, `values:Vec<Value>` 24, `accessors:Option<Box<AccessorSlots>>` 8, `epoch:u64` 8, strong prototype owner 8 = 56 bytes; `RefCell` wrapper 64 |
+| Ordinary hot payload | `named:RefCell<NamedStore>` 64, cold pointer 8, index count 4, packed flags/edit count/padding 4 = 80 bytes, excluding RC header |
 | `Slot` | One owning `Value`: initially 16 bytes, S5 target 8; TDZ/hole state separate from ordinary data |
 | `Layout` | Immutable shape or unique dictionary; ID/domain, owned entries/key leases and one key-ID lookup index; transition cache is cold |
 | `Dictionary` | Private identity + `u64` structural version; key-ID index, attributes/order and slot allocation are its sole authority |
 
-S1 compile-time assertions verify these sizes on aarch64/x86_64 macOS; a layout
+Compile-time assertions verify these sizes on aarch64/x86_64 macOS; a layout
 estimate alone is no ABI proof. Values remain in a keyless vector, with no pair
 of inline Values enlarging the ordinary header.
 Slot storage may pool capacity, never keys. Accessor slots hold `undefined` in
@@ -89,22 +89,23 @@ The implemented entry is 32 bytes: weak layout/version 16, slot 4, kind and padd
 8; four-way storage is allocated only when a second guard is admitted. A fifth
 independent guard makes the site permanently megamorphic.
 
-Inherited entries additionally have a cold chain record: weak first-prototype
-and holder identities, weak dependencies and a validity cell (outside the 32-byte
-own-entry budget). Every hit guards the **current receiver's first prototype**
-as well as its own layout; equal shapes alone do not imply equal prototypes.
-Each prototype node registers weak validity-cell subscriptions on its current
-layout. Structural/prototype mutation invalidates them before publication;
-value writes do not. Shared-layout broadcasts conservatively retire proofs for
-other holders with that layout. Registration removes dead/invalid cells; a
-256-subscription bound invalidates and clears the list rather than growing it.
-This avoids adding a dependency field to every object or named store. Array
-prototype edges guard the weak contextual wrapper identity, including its
-captured realm fallback, rather than just the array payload identity. Hit checks the live
-token and reads the holder's current slot. Receiver prototype edits miss the
-explicit edge guard; value overwrites preserve validity. Proxy/unmodeled exotic
-chains remain uncached. Overflowed versions allocate new identities, never wrap.
-Enumerate-keys caches use the same structural dependencies, never value epochs.
+Layouts include prototype identity and semantic hook flavor. Shared guards compare
+weak allocation identity only; dictionary guards additionally compare versions.
+A receiver owns its explicit prototype edge; layouts retain weak identities so
+retained shapes cannot pin JavaScript values or realms. Roots and transition
+trees are canonical per prototype/flavor. Prototype mutation re-roots the layout.
+
+Objects used as prototypes enter private dictionary mode with one validity state.
+Its weak user graph links prototype-mode children, never IC sites. Structural
+mutation replaces its validity generation and cascades iteratively; value writes
+and ordinary object transitions invalidate nothing. There is no subscriber cap.
+Inherited entries hold the first prototype's generation and weak holder/slot;
+the receiver layout already implies its first prototype. Missing and accessor
+outcomes use the same proof. Accessors execute once after all borrows end.
+Array prototype identity is the live array payload, with no contextual wrapper.
+Proxy/unmodeled exotic chains remain uncached. Expired layouts/generations are
+stale entries and can be replaced without consuming another polymorphic way.
+Enumeration and creation proofs use the same shared generations and layout roots.
 
 S2 deletes `NamedPropertyCacheEntry`'s exact-value/receiver variants and repeated
 Small/Dynamic/literal probe paths. In debug mode compare every IC result with
@@ -116,18 +117,21 @@ rate independent of the operations/programs measured.
 
 ## S2 semantic ports and verification
 
-Array named stores remain in cold state; their hot header retains the explicit
-realm domain so packed arrays need no empty-store allocation. Function defaults
-remain implicit until a named probe/mutation needs storage; their original slots
-are reserved in NamedStore before later keys. A reserved lazy prototype is never
-read as a data answer: its hook publishes the live object, and IC receiver kinds
-distinguish pending and materialized prototypes.
+Arrays/functions embed a 32-byte lazy authority: canonical empty layout plus
+explicit prototype, materializing the same NamedStore only on mutation. Packed
+array headers are 88 bytes; functions are 304 bytes, excluding RC headers. Named
+probes allocate no array cold data and never install unrelated function defaults.
+Original lazy property order is reserved before later keys. Function virtual
+state is part of layout flavor; hooks publish into the authority when observed.
+Every production constructor receives the realm/prototype explicitly. Realm
+intrinsics are stable creation inputs even when bindings are overwritten; an
+AtomDomain can serve several realms and is never an intrinsic identity.
 
 `value/named.rs` is the borrowed receiver facade for all cache consumers.
 Interpreter, compact/wide, typed loops and leaf readers share one shape IC;
 Proxy, namespace live exports and unmodeled exotic keys use their semantic hooks.
 `QJS_DISABLE_IC=1` disables named/enumeration IC admission and hits.
-`QJS_VERIFY_IC=1` in debug builds compares hits with pure uncached data lookup,
+`QJS_VERIFY_IC=1` in debug builds compares hits with complete pure uncached outcomes,
 without replaying accessors, key coercion or Proxy traps. These modes are captured
-at cache creation (global-slot proofs at region admission). Creation-miss proofs share the structural subscriptions and first-edge guard; IC-off disables these and global-object slot memos. Perf counters partition IC hits/misses, generic own probes and
+once per AtomDomain/runtime group. Creation-miss proofs share prototype generations and prototype-sensitive roots; IC-off disables these and global-object slot memos. Perf counters partition IC hits/misses, generic own probes and
 text-index linking queries by receiver family; they compile out of production timing builds.

@@ -45,7 +45,7 @@ pub(crate) fn install_array_buffer(
         1,
         NativeFunction::ArrayBuffer,
         true,
-        env.realm().atoms(),
+        env.realm(),
     );
     array_buffer_prototype.define_non_enumerable(
         "constructor".to_owned(),
@@ -59,7 +59,7 @@ pub(crate) fn install_array_buffer(
                 0,
                 NativeFunction::ArrayBufferPrototypeByteLength,
                 false,
-                env.realm().atoms(),
+                env.realm(),
             ))),
             None,
             false,
@@ -83,7 +83,7 @@ pub(crate) fn install_array_buffer(
                     0,
                     native,
                     false,
-                    env.realm().atoms(),
+                    env.realm(),
                 ))),
                 None,
                 false,
@@ -98,7 +98,7 @@ pub(crate) fn install_array_buffer(
             1,
             NativeFunction::ArrayBufferPrototypeResize,
             false,
-            env.realm().atoms(),
+            env.realm(),
         )),
     );
     array_buffer_prototype.define_non_enumerable(
@@ -108,7 +108,7 @@ pub(crate) fn install_array_buffer(
             2,
             NativeFunction::ArrayBufferPrototypeSlice,
             false,
-            env.realm().atoms(),
+            env.realm(),
         )),
     );
     array_buffer_prototype.define_non_enumerable(
@@ -118,7 +118,7 @@ pub(crate) fn install_array_buffer(
             2,
             NativeFunction::ArrayBufferPrototypeSliceToImmutable,
             false,
-            env.realm().atoms(),
+            env.realm(),
         )),
     );
     array_buffer_prototype.define_non_enumerable(
@@ -128,7 +128,7 @@ pub(crate) fn install_array_buffer(
             0,
             NativeFunction::ArrayBufferPrototypeTransfer,
             false,
-            env.realm().atoms(),
+            env.realm(),
         )),
     );
     array_buffer_prototype.define_non_enumerable(
@@ -138,7 +138,7 @@ pub(crate) fn install_array_buffer(
             0,
             NativeFunction::ArrayBufferPrototypeTransferToFixedLength,
             false,
-            env.realm().atoms(),
+            env.realm(),
         )),
     );
     array_buffer_prototype.define_non_enumerable(
@@ -148,7 +148,7 @@ pub(crate) fn install_array_buffer(
             0,
             NativeFunction::ArrayBufferPrototypeTransferToImmutable,
             false,
-            env.realm().atoms(),
+            env.realm(),
         )),
     );
     array_buffer_function.define_property(
@@ -162,7 +162,7 @@ pub(crate) fn install_array_buffer(
             1,
             NativeFunction::ArrayBufferIsView,
             false,
-            env.realm().atoms(),
+            env.realm(),
         ))),
     );
     symbol::define_species_accessor(env, &array_buffer_function);

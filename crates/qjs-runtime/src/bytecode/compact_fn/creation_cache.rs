@@ -1,23 +1,13 @@
-//! A named store site's negative prototype proof. Creation still uses the
-//! shared own-property algorithm; this memo only skips a previously established
-//! prototype miss. Weak structural subscriptions guard the whole chain, and the
-//! current receiver's first edge is checked explicitly on every hit.
-use crate::value::{ObjectWeakRef, layout::StructuralDependency};
+//! A creation miss proof uses prototype-root identity and one transitive
+//! prototype validity generation. No per-site subscriptions or chain hit walk.
+use crate::value::layout::{LayoutVersion, StructuralDependency};
 use crate::{ObjectRef, Prototype};
 use std::cell::RefCell;
-
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub(in crate::bytecode) struct CreationCache {
     proof: RefCell<Option<CreationProof>>,
-    enabled: bool,
-}
-impl Default for CreationCache {
-    fn default() -> Self {
-        Self {
-            proof: RefCell::new(None),
-            enabled: std::env::var_os("QJS_DISABLE_IC").is_none(),
-        }
-    }
+    #[cfg(test)]
+    disabled: bool,
 }
 impl Clone for CreationCache {
     fn clone(&self) -> Self {
@@ -26,95 +16,89 @@ impl Clone for CreationCache {
 }
 #[derive(Debug)]
 struct CreationProof {
-    first: Option<ObjectWeakRef>,
-    validity: StructuralDependency,
+    root: LayoutVersion,
+    validity: Option<StructuralDependency>,
 }
 impl CreationCache {
-    pub(in crate::bytecode) fn permits(&self, object: &ObjectRef) -> bool {
-        if !self.enabled || !ordinary(object) || !object.is_extensible() {
+    pub(in crate::bytecode) fn permits(&self, o: &ObjectRef) -> bool {
+        #[cfg(test)]
+        if self.disabled {
             return false;
         }
-        let proof = self.proof.borrow();
-        let Some(proof) = proof.as_ref() else {
+        if !ordinary(o) || !o.is_extensible() {
             return false;
-        };
-        proof.validity.is_valid()
-            && match &proof.first {
-                Some(first) => object.prototype_is_weak(first),
-                None => object.prototype_slot().is_none(),
-            }
+        }
+        self.proof.borrow().as_ref().is_some_and(|p| {
+            o.with_named(|s| s.root_matches(&p.root))
+                && p.validity
+                    .as_ref()
+                    .is_none_or(StructuralDependency::is_valid)
+        })
     }
-    pub(in crate::bytecode) fn record(&self, object: &ObjectRef, key: &str) {
-        if !self.enabled {
+    pub(in crate::bytecode) fn record(&self, o: &ObjectRef, name: &str) {
+        #[cfg(test)]
+        if self.disabled {
             return;
         }
-        let mut current = object.prototype_slot();
-        let first = match &current {
-            Some(Prototype::Object(o)) => Some(o.downgrade()),
-            None => None,
-            _ => return,
+        if !o.with_named(|s| s.domain().ic_policy().enabled) {
+            return;
+        }
+        let mut current = o.prototype_slot();
+        let validity = if current.is_some() {
+            match o.with_named(|s| s.chain_dependency()) {
+                Some(v) => Some(v),
+                None => return,
+            }
+        } else {
+            None
         };
-        let validity = StructuralDependency::new();
-        for _ in 0..16 {
+        for _ in 0..64 {
             match current {
                 None => {
-                    *self.proof.borrow_mut() = Some(CreationProof { first, validity });
+                    *self.proof.borrow_mut() = Some(CreationProof {
+                        root: o.with_named(|s| s.root_version()),
+                        validity,
+                    });
                     return;
                 }
                 Some(Prototype::Object(ref node))
-                    if ordinary(node) && node.own_property(key).is_none() =>
+                    if ordinary(node) && node.own_property(name).is_none() =>
                 {
-                    node.with_named(|store| store.subscribe(&validity));
-                    current = node.prototype_slot();
+                    current = node.prototype_slot()
                 }
                 _ => return,
             }
         }
     }
 }
-fn ordinary(object: &ObjectRef) -> bool {
-    !crate::symbol::is_symbol_primitive(object)
-        && !crate::typed_array::is_typed_array_object(object)
-        && !object.is_module_namespace_exotic()
-        && !object.is_array_prototype_exotic()
+fn ordinary(o: &ObjectRef) -> bool {
+    o.named_kind() == Some(0)
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::collections::HashMap;
     #[test]
-    fn creation_proof_observes_all_structural_edges_and_ignores_value_writes() {
+    fn creation_proof_ignores_ordinary_transitions_and_checks_prototype_mutation() {
         let domain = crate::property::atom::AtomDomain::new();
         let _owner = crate::value::layout::PropertyOwner::new(domain.clone());
-        let holder = ObjectRef::new(HashMap::new(), &domain);
-        holder.set("other".into(), crate::Value::Null);
-        let middle = ObjectRef::with_prototype(HashMap::new(), Some(holder.clone()), &domain);
-        let receiver = ObjectRef::with_prototype(HashMap::new(), Some(middle.clone()), &domain);
-        let cache = CreationCache {
-            enabled: true,
+        let parent = ObjectRef::new(HashMap::new(), &domain);
+        let receiver = ObjectRef::with_prototype(HashMap::new(), Some(parent.clone()), &domain);
+        let cache = CreationCache::default();
+        cache.record(&receiver, "x");
+        assert!(cache.permits(&receiver));
+        for _ in 0..1000 {
+            let other = ObjectRef::with_prototype(HashMap::new(), Some(parent.clone()), &domain);
+            other.set("x".into(), crate::Value::Null);
+            assert!(cache.permits(&receiver));
+        }
+        parent.set("x".into(), crate::Value::Null);
+        assert!(!cache.permits(&receiver));
+        let off = CreationCache {
+            disabled: true,
             ..CreationCache::default()
         };
-        cache.record(&receiver, "x");
-        assert!(cache.permits(&receiver));
-        holder.set("other".into(), crate::Value::Boolean(true));
-        assert!(cache.permits(&receiver));
-        holder.set("x".into(), crate::Value::Null);
-        assert!(!cache.permits(&receiver));
-        holder.delete_own_property("x");
-        cache.record(&receiver, "x");
-        assert!(cache.permits(&receiver));
-        middle.set_prototype(None).unwrap();
-        assert!(!cache.permits(&receiver));
-        cache.record(&receiver, "x");
-        assert!(cache.permits(&receiver));
-        receiver.set_prototype(Some(holder)).unwrap();
-        assert!(!cache.permits(&receiver));
-        let disabled = CreationCache {
-            enabled: false,
-            ..CreationCache::default()
-        };
-        disabled.record(&receiver, "x");
-        assert!(!disabled.permits(&receiver));
+        off.record(&receiver, "z");
+        assert!(!off.permits(&receiver));
     }
 }

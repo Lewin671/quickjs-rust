@@ -144,7 +144,7 @@ pub(crate) fn install_iterator(
                 length,
                 native,
                 false,
-                env.realm().atoms(),
+                env.realm(),
             )),
         );
     }
@@ -158,7 +158,7 @@ pub(crate) fn install_iterator(
                 0,
                 NativeFunction::IteratorPrototypeIterator,
                 false,
-                env.realm().atoms(),
+                env.realm(),
             ))),
         );
     }
@@ -170,7 +170,7 @@ pub(crate) fn install_iterator(
                 0,
                 NativeFunction::IteratorPrototypeDispose,
                 false,
-                env.realm().atoms(),
+                env.realm(),
             ))),
         );
     }
@@ -188,14 +188,14 @@ pub(crate) fn install_iterator(
                     0,
                     NativeFunction::IteratorPrototypeToStringTagGet,
                     false,
-                    env.realm().atoms(),
+                    env.realm(),
                 ))),
                 Some(Value::Function(Function::new_native(
                     Some("set [Symbol.toStringTag]"),
                     1,
                     NativeFunction::IteratorPrototypeToStringTagSet,
                     false,
-                    env.realm().atoms(),
+                    env.realm(),
                 ))),
                 false,
                 true,
@@ -210,14 +210,14 @@ pub(crate) fn install_iterator(
                 0,
                 NativeFunction::IteratorPrototypeConstructorGet,
                 false,
-                env.realm().atoms(),
+                env.realm(),
             ))),
             Some(Value::Function(Function::new_native(
                 Some("set constructor"),
                 1,
                 NativeFunction::IteratorPrototypeConstructorSet,
                 false,
-                env.realm().atoms(),
+                env.realm(),
             ))),
             false,
             true,
@@ -238,7 +238,7 @@ pub(crate) fn install_iterator(
             0,
             NativeFunction::IteratorHelperPrototypeNext,
             false,
-            env.realm().atoms(),
+            env.realm(),
         )),
     );
     helper_prototype.define_non_enumerable(
@@ -248,7 +248,7 @@ pub(crate) fn install_iterator(
             0,
             NativeFunction::IteratorHelperPrototypeReturn,
             false,
-            env.realm().atoms(),
+            env.realm(),
         )),
     );
     if let Some(tag_symbol) = symbol::to_string_tag_symbol(env) {
@@ -269,7 +269,7 @@ pub(crate) fn install_iterator(
         0,
         NativeFunction::Iterator,
         true,
-        env.realm().atoms(),
+        env.realm(),
     );
     iterator_function.define_property(
         "prototype".to_owned(),
@@ -286,7 +286,7 @@ pub(crate) fn install_iterator(
             1,
             NativeFunction::IteratorFrom,
             false,
-            env.realm().atoms(),
+            env.realm(),
         ))),
     );
     iterator_function.define_property(
@@ -296,7 +296,7 @@ pub(crate) fn install_iterator(
             0,
             NativeFunction::IteratorConcat,
             false,
-            env.realm().atoms(),
+            env.realm(),
         ))),
     );
     iterator_function.define_property(
@@ -306,7 +306,7 @@ pub(crate) fn install_iterator(
             1,
             NativeFunction::IteratorZip,
             false,
-            env.realm().atoms(),
+            env.realm(),
         ))),
     );
     iterator_function.define_property(
@@ -316,7 +316,7 @@ pub(crate) fn install_iterator(
             1,
             NativeFunction::IteratorZipKeyed,
             false,
-            env.realm().atoms(),
+            env.realm(),
         ))),
     );
 
@@ -343,7 +343,7 @@ pub(crate) fn install_iterator(
                 0,
                 kind.next_native(),
                 false,
-                env.realm().atoms(),
+                env.realm(),
             )),
         );
         if let Some(tag_symbol) = symbol::to_string_tag_symbol(env) {

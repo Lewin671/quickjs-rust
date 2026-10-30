@@ -156,6 +156,40 @@ pub(crate) fn set_property(
                                 unreachable!("special prototype routed through OrdinarySet")
                             }
                             None => None,
+
+                            Some(crate::Prototype::Map(_carrier)) => {
+                                let prototype = _carrier.object();
+
+                                match ordinary_chain_property(&prototype, &key) {
+                                    Ok(property) => property,
+                                    Err(ProxyInChain) => {
+                                        return crate::reflect::ordinary_set(
+                                            Value::Array(elements.clone()),
+                                            &PropertyKey::String(key),
+                                            value,
+                                            receiver,
+                                            env,
+                                        );
+                                    }
+                                }
+                            }
+
+                            Some(crate::Prototype::Set(_carrier)) => {
+                                let prototype = _carrier.object();
+
+                                match ordinary_chain_property(&prototype, &key) {
+                                    Ok(property) => property,
+                                    Err(ProxyInChain) => {
+                                        return crate::reflect::ordinary_set(
+                                            Value::Array(elements.clone()),
+                                            &PropertyKey::String(key),
+                                            value,
+                                            receiver,
+                                            env,
+                                        );
+                                    }
+                                }
+                            }
                         }
                     }
                 };

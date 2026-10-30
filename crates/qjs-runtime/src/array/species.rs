@@ -64,7 +64,7 @@ pub(super) fn species_is_intrinsic_array(array: &ArrayRef, env: &CallEnv) -> boo
     let Some(prototype) = env.realm().array_prototype() else {
         return false;
     };
-    if !(array.uses_default_prototype() || array.uses_prototype_object(&prototype)) {
+    if !(array.uses_prototype_object(&prototype)) {
         return false;
     }
     let crate::value::OwnDataPropertyRead::Data(Value::Function(constructor)) =
@@ -96,10 +96,7 @@ fn default_array_species_create(length: usize, env: &CallEnv) -> Result<Value, R
             message: "RangeError: invalid array length".to_owned(),
         });
     }
-    Ok(Value::Array(ArrayRef::new_with_length(
-        env.realm().atoms(),
-        length,
-    )))
+    Ok(Value::Array(ArrayRef::new_with_length(env.realm(), length)))
 }
 
 pub(super) fn validate_array_species_constructor(

@@ -9,13 +9,8 @@ pub(crate) fn install_array(env: &mut CallEnv, global_this: &Value, object_proto
     array_prototype.mark_array_prototype_exotic();
     env.realm()
         .initialize_array_prototype(array_prototype.clone());
-    let array_function = Function::new_native(
-        Some("Array"),
-        1,
-        NativeFunction::Array,
-        true,
-        env.realm().atoms(),
-    );
+    let array_function =
+        Function::new_native(Some("Array"), 1, NativeFunction::Array, true, env.realm());
     array_prototype.define_property(
         "length".to_owned(),
         Property::data(Value::Number(0.0), false, true, false),
@@ -24,218 +19,260 @@ pub(crate) fn install_array(env: &mut CallEnv, global_this: &Value, object_proto
         "constructor".to_owned(),
         Value::Function(array_function.clone()),
     );
-    define_array_prototype_function(&array_prototype, "at", 1, NativeFunction::ArrayPrototypeAt);
     define_array_prototype_function(
+        env.realm(),
+        &array_prototype,
+        "at",
+        1,
+        NativeFunction::ArrayPrototypeAt,
+    );
+    define_array_prototype_function(
+        env.realm(),
         &array_prototype,
         "concat",
         1,
         NativeFunction::ArrayPrototypeConcat,
     );
     define_array_prototype_function(
+        env.realm(),
         &array_prototype,
         "copyWithin",
         2,
         NativeFunction::ArrayPrototypeCopyWithin,
     );
     define_array_prototype_function(
+        env.realm(),
         &array_prototype,
         "entries",
         0,
         NativeFunction::ArrayPrototypeEntries,
     );
     define_array_prototype_function(
+        env.realm(),
         &array_prototype,
         "every",
         1,
         NativeFunction::ArrayPrototypeEvery,
     );
     define_array_prototype_function(
+        env.realm(),
         &array_prototype,
         "fill",
         1,
         NativeFunction::ArrayPrototypeFill,
     );
     define_array_prototype_function(
+        env.realm(),
         &array_prototype,
         "flat",
         0,
         NativeFunction::ArrayPrototypeFlat,
     );
     define_array_prototype_function(
+        env.realm(),
         &array_prototype,
         "flatMap",
         1,
         NativeFunction::ArrayPrototypeFlatMap,
     );
     define_array_prototype_function(
+        env.realm(),
         &array_prototype,
         "filter",
         1,
         NativeFunction::ArrayPrototypeFilter,
     );
     define_array_prototype_function(
+        env.realm(),
         &array_prototype,
         "find",
         1,
         NativeFunction::ArrayPrototypeFind,
     );
     define_array_prototype_function(
+        env.realm(),
         &array_prototype,
         "findIndex",
         1,
         NativeFunction::ArrayPrototypeFindIndex,
     );
     define_array_prototype_function(
+        env.realm(),
         &array_prototype,
         "findLast",
         1,
         NativeFunction::ArrayPrototypeFindLast,
     );
     define_array_prototype_function(
+        env.realm(),
         &array_prototype,
         "findLastIndex",
         1,
         NativeFunction::ArrayPrototypeFindLastIndex,
     );
     define_array_prototype_function(
+        env.realm(),
         &array_prototype,
         "forEach",
         1,
         NativeFunction::ArrayPrototypeForEach,
     );
     define_array_prototype_function(
+        env.realm(),
         &array_prototype,
         "includes",
         1,
         NativeFunction::ArrayPrototypeIncludes,
     );
     define_array_prototype_function(
+        env.realm(),
         &array_prototype,
         "join",
         1,
         NativeFunction::ArrayPrototypeJoin,
     );
     define_array_prototype_function(
+        env.realm(),
         &array_prototype,
         "indexOf",
         1,
         NativeFunction::ArrayPrototypeIndexOf,
     );
     define_array_prototype_function(
+        env.realm(),
         &array_prototype,
         "keys",
         0,
         NativeFunction::ArrayPrototypeKeys,
     );
     define_array_prototype_function(
+        env.realm(),
         &array_prototype,
         "lastIndexOf",
         1,
         NativeFunction::ArrayPrototypeLastIndexOf,
     );
     define_array_prototype_function(
+        env.realm(),
         &array_prototype,
         "map",
         1,
         NativeFunction::ArrayPrototypeMap,
     );
     define_array_prototype_function(
+        env.realm(),
         &array_prototype,
         "pop",
         0,
         NativeFunction::ArrayPrototypePop,
     );
     define_array_prototype_function(
+        env.realm(),
         &array_prototype,
         "push",
         1,
         NativeFunction::ArrayPrototypePush,
     );
     define_array_prototype_function(
+        env.realm(),
         &array_prototype,
         "reduce",
         1,
         NativeFunction::ArrayPrototypeReduce,
     );
     define_array_prototype_function(
+        env.realm(),
         &array_prototype,
         "reduceRight",
         1,
         NativeFunction::ArrayPrototypeReduceRight,
     );
     define_array_prototype_function(
+        env.realm(),
         &array_prototype,
         "reverse",
         0,
         NativeFunction::ArrayPrototypeReverse,
     );
     define_array_prototype_function(
+        env.realm(),
         &array_prototype,
         "shift",
         0,
         NativeFunction::ArrayPrototypeShift,
     );
     define_array_prototype_function(
+        env.realm(),
         &array_prototype,
         "slice",
         2,
         NativeFunction::ArrayPrototypeSlice,
     );
     define_array_prototype_function(
+        env.realm(),
         &array_prototype,
         "some",
         1,
         NativeFunction::ArrayPrototypeSome,
     );
     define_array_prototype_function(
+        env.realm(),
         &array_prototype,
         "sort",
         1,
         NativeFunction::ArrayPrototypeSort,
     );
     define_array_prototype_function(
+        env.realm(),
         &array_prototype,
         "splice",
         2,
         NativeFunction::ArrayPrototypeSplice,
     );
     define_array_prototype_function(
+        env.realm(),
         &array_prototype,
         "toString",
         0,
         NativeFunction::ArrayPrototypeToString,
     );
     define_array_prototype_function(
+        env.realm(),
         &array_prototype,
         "toLocaleString",
         0,
         NativeFunction::ArrayPrototypeToLocaleString,
     );
     define_array_prototype_function(
+        env.realm(),
         &array_prototype,
         "toReversed",
         0,
         NativeFunction::ArrayPrototypeToReversed,
     );
     define_array_prototype_function(
+        env.realm(),
         &array_prototype,
         "toSpliced",
         2,
         NativeFunction::ArrayPrototypeToSpliced,
     );
     define_array_prototype_function(
+        env.realm(),
         &array_prototype,
         "toSorted",
         1,
         NativeFunction::ArrayPrototypeToSorted,
     );
     define_array_prototype_function(
+        env.realm(),
         &array_prototype,
         "unshift",
         1,
         NativeFunction::ArrayPrototypeUnshift,
     );
     define_array_prototype_function(
+        env.realm(),
         &array_prototype,
         "values",
         0,
@@ -251,6 +288,7 @@ pub(crate) fn install_array(env: &mut CallEnv, global_this: &Value, object_proto
         );
     }
     define_array_prototype_function(
+        env.realm(),
         &array_prototype,
         "with",
         2,
@@ -280,6 +318,7 @@ pub(crate) fn install_array(env: &mut CallEnv, global_this: &Value, object_proto
 }
 
 fn define_array_prototype_function(
+    realm: &crate::function::Realm,
     prototype: &ObjectRef,
     key: &str,
     length: usize,
@@ -292,7 +331,7 @@ fn define_array_prototype_function(
             length,
             native,
             false,
-            &prototype.domain(),
+            realm,
         )),
     );
 }
@@ -305,7 +344,7 @@ fn define_array_function(function: &Function, key: &str, length: usize, native: 
             length,
             native,
             false,
-            function.property_domain(),
+            function.creation_realm(),
         ))),
     );
 }

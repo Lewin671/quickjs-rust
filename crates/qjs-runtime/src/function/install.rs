@@ -6,22 +6,19 @@ pub(crate) fn install_function(
     global_this: &Value,
     object_prototype: ObjectRef,
 ) {
-    let function_prototype = Function::new_native(
-        Some(""),
-        0,
-        NativeFunction::FunctionPrototype,
-        false,
-        env.realm().atoms(),
-    );
-    let _ =
-        function_prototype.set_internal_prototype_slot(Some(Prototype::Object(object_prototype)));
+    let Some(Prototype::Function(function_prototype)) = env.realm().function_prototype() else {
+        panic!("bootstrap Function.prototype")
+    };
+    let _ = object_prototype;
     let function_constructor = Function::new_native(
         Some("Function"),
         1,
         NativeFunction::Function,
         true,
-        env.realm().atoms(),
+        env.realm(),
     );
+    env.realm()
+        .initialize_function_constructor(function_constructor.clone());
     function_prototype.define_property(
         "length".to_owned(),
         Property::data(Value::Number(0.0), false, false, true),
@@ -43,7 +40,7 @@ pub(crate) fn install_function(
             2,
             NativeFunction::FunctionPrototypeApply,
             false,
-            env.realm().atoms(),
+            env.realm(),
         ))),
     );
     function_prototype.define_property(
@@ -53,7 +50,7 @@ pub(crate) fn install_function(
             1,
             NativeFunction::FunctionPrototypeCall,
             false,
-            env.realm().atoms(),
+            env.realm(),
         ))),
     );
     function_prototype.define_property(
@@ -63,7 +60,7 @@ pub(crate) fn install_function(
             1,
             NativeFunction::FunctionPrototypeBind,
             false,
-            env.realm().atoms(),
+            env.realm(),
         ))),
     );
     function_prototype.define_property(
@@ -73,7 +70,7 @@ pub(crate) fn install_function(
             0,
             NativeFunction::FunctionPrototypeToString,
             false,
-            env.realm().atoms(),
+            env.realm(),
         ))),
     );
     // %ThrowTypeError% is a single shared intrinsic: the same function object
@@ -90,7 +87,7 @@ pub(crate) fn install_function(
         0,
         NativeFunction::ThrowTypeError,
         false,
-        env.realm().atoms(),
+        env.realm(),
     );
     throw_type_error_function.freeze();
     let throw_type_error = Value::Function(throw_type_error_function);

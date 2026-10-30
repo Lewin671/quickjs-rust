@@ -4,20 +4,92 @@ use super::*;
 use crate::value::layout::NamedStore;
 
 impl Function {
+    pub(crate) fn has_compat_caller(&self) -> bool {
+        !self.is_strict
+            && self.constructable
+            && self.bound.is_none()
+            && !self.is_generator
+            && !self.is_async
+    }
+    pub(crate) fn virtual_named_probe(&self, key: &str) -> Option<crate::value::named::Virtual> {
+        use crate::value::named::Virtual;
+        if key == "length" && self.auxiliary.implicit_length_property.get() {
+            Some(Virtual::FunctionLength)
+        } else if key == "name" && self.auxiliary.implicit_name_property.get() {
+            Some(Virtual::FunctionName)
+        } else if key == "prototype" && self.auxiliary.lazy_default_prototype.get() {
+            Some(Virtual::FunctionPrototype)
+        } else {
+            None
+        }
+    }
+    pub(crate) fn virtual_named_value(&self, hook: crate::value::named::Virtual) -> Option<Value> {
+        use crate::value::named::Virtual;
+        Some(match hook {
+            Virtual::FunctionLength => Value::Number(self.params.length() as f64),
+            Virtual::FunctionName => Value::String(self.name.clone().unwrap_or_default().into()),
+            Virtual::FunctionPrototype => {
+                self.ensure_default_prototype();
+                self.own_property("prototype")?.value
+            }
+            Virtual::FunctionCaller => Value::Undefined,
+            Virtual::FunctionArguments => Value::Null,
+            _ => return None,
+        })
+    }
+    pub(crate) fn named_shape_flavor(&self) -> u16 {
+        0x100
+            | u16::from(self.auxiliary.implicit_name_property.get())
+            | (u16::from(self.auxiliary.implicit_length_property.get()) << 1)
+            | (u16::from(self.auxiliary.lazy_default_prototype.get()) << 2)
+            | (u16::from(
+                !self.is_strict
+                    && self.constructable
+                    && self.bound.is_none()
+                    && !self.is_generator
+                    && !self.is_async,
+            ) << 3)
+    }
+    pub(super) fn initialize_named(&self) {
+        if self.realm.is_none() && self.native_context.0.is_none() {
+            return;
+        }
+        let prototype = self.realm.as_ref().and_then(|r| r.function_prototype());
+        *self.named.borrow_mut() = crate::value::layout::NamedStorage::new(
+            self.property_domain(),
+            prototype,
+            self.named_shape_flavor(),
+        );
+    }
+    fn refresh_named_flavor(&self) {
+        self.named
+            .borrow_mut()
+            .set_flavor(self.named_shape_flavor());
+    }
+    pub(crate) fn named_version(&self) -> Option<crate::value::layout::LayoutVersion> {
+        self.named.borrow().version()
+    }
+    pub(crate) fn named_matches(&self, v: &crate::value::layout::LayoutVersion) -> bool {
+        self.named.borrow().matches(v)
+    }
+    pub(crate) fn chain_dependency(&self) -> Option<crate::value::layout::StructuralDependency> {
+        self.named.borrow().chain_dependency()
+    }
+
     pub(crate) fn with_named<R>(&self, read: impl FnOnce(Option<&NamedStore>) -> R) -> R {
         let named = self.named.borrow();
-        read(named.as_deref())
+        read(named.store())
     }
 
     pub(crate) fn with_named_mut<R>(&self, edit: impl FnOnce(&mut NamedStore) -> R) -> R {
-        let mut named = self.named.borrow_mut();
-        edit(named.get_or_insert_with(|| Box::new(NamedStore::empty(self.property_domain()))))
+        edit(self.named.borrow_mut().store_mut())
     }
 
     fn materialize_default_data_properties(&self) {
         let length = self.auxiliary.implicit_length_property.replace(false);
         let name = self.auxiliary.implicit_name_property.replace(false);
         let prototype = self.auxiliary.lazy_default_prototype.get();
+        self.refresh_named_flavor();
         if !length && !name && !prototype {
             return;
         }
@@ -41,6 +113,7 @@ impl Function {
 
     pub(super) fn mark_lazy_default_prototype(&self) {
         self.auxiliary.lazy_default_prototype.set(true);
+        self.refresh_named_flavor();
     }
 
     fn ensure_default_prototype(&self) {
@@ -49,6 +122,7 @@ impl Function {
         }
         self.materialize_default_data_properties();
         self.auxiliary.lazy_default_prototype.set(false);
+        self.refresh_named_flavor();
         let prototype = ObjectRef::with_prototype(
             HashMap::new(),
             object_prototype(&self.creation_env()),
@@ -232,32 +306,4 @@ impl Function {
     }
 }
 
-impl Function {
-    pub(crate) fn implicit_named_read(
-        &self,
-        key: &str,
-    ) -> Option<crate::value::OwnDataPropertyRead> {
-        use crate::value::OwnDataPropertyRead;
-        if key == "length" && self.auxiliary.implicit_length_property.get() {
-            return Some(OwnDataPropertyRead::Data(Value::Number(
-                self.params.length() as f64,
-            )));
-        }
-        if key == "name" && self.auxiliary.implicit_name_property.get() {
-            return Some(OwnDataPropertyRead::Data(Value::String(
-                self.name.clone().unwrap_or_default().into(),
-            )));
-        }
-        if key == "prototype" {
-            self.ensure_default_prototype();
-        }
-        None
-    }
-    pub(crate) fn named_kind(&self) -> u8 {
-        if self.auxiliary.lazy_default_prototype.get() {
-            5
-        } else {
-            6
-        }
-    }
-}
+impl Function {}

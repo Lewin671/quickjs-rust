@@ -16,7 +16,7 @@ pub(super) fn install_boolean(env: &mut CallEnv, global_this: &Value, object_pro
         1,
         NativeFunction::Boolean,
         true,
-        env.realm().atoms(),
+        env.realm(),
     );
     boolean_prototype
         .define_non_enumerable(BOOLEAN_DATA_PROPERTY.to_owned(), Value::Boolean(false));
@@ -31,7 +31,7 @@ pub(super) fn install_boolean(env: &mut CallEnv, global_this: &Value, object_pro
             0,
             NativeFunction::BooleanPrototypeToString,
             false,
-            env.realm().atoms(),
+            env.realm(),
         )),
     );
     boolean_prototype.define_non_enumerable(
@@ -41,7 +41,7 @@ pub(super) fn install_boolean(env: &mut CallEnv, global_this: &Value, object_pro
             0,
             NativeFunction::BooleanPrototypeValueOf,
             false,
-            env.realm().atoms(),
+            env.realm(),
         )),
     );
     boolean_function.define_property(

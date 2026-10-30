@@ -14,31 +14,29 @@ pub(crate) const BIGINT_DATA_PROPERTY: &str = "\0BigIntData";
 pub(crate) fn install_bigint(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
     let bigint_prototype =
         ObjectRef::with_prototype(HashMap::new(), Some(object_prototype), env.realm().atoms());
-    let bigint_function = Function::new_native(
-        Some("BigInt"),
-        1,
-        NativeFunction::BigInt,
-        true,
-        env.realm().atoms(),
-    );
+    let bigint_function =
+        Function::new_native(Some("BigInt"), 1, NativeFunction::BigInt, true, env.realm());
     bigint_prototype.set_to_string_tag("BigInt");
     bigint_prototype.define_non_enumerable(
         "constructor".to_owned(),
         Value::Function(bigint_function.clone()),
     );
     define_prototype_native(
+        env.realm(),
         &bigint_prototype,
         "toLocaleString",
         0,
         NativeFunction::BigIntPrototypeToLocaleString,
     );
     define_prototype_native(
+        env.realm(),
         &bigint_prototype,
         "toString",
         0,
         NativeFunction::BigIntPrototypeToString,
     );
     define_prototype_native(
+        env.realm(),
         &bigint_prototype,
         "valueOf",
         0,
@@ -70,6 +68,7 @@ pub(crate) fn install_bigint_well_known_symbols(env: &CallEnv) {
 }
 
 fn define_prototype_native(
+    realm: &crate::function::Realm,
     prototype: &ObjectRef,
     key: &str,
     length: usize,
@@ -82,7 +81,7 @@ fn define_prototype_native(
             length,
             native,
             false,
-            &prototype.domain(),
+            realm,
         )),
     );
 }
@@ -95,7 +94,7 @@ fn define_static_native(function: &Function, key: &str, length: usize, native: N
             length,
             native,
             false,
-            function.property_domain(),
+            function.creation_realm(),
         ))),
     );
 }

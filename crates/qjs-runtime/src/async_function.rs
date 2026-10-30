@@ -49,7 +49,7 @@ pub(crate) fn install_async_function(
         1,
         NativeFunction::AsyncFunction,
         true,
-        env.realm().atoms(),
+        env.realm(),
     );
     let _ = async_function.set_internal_prototype_slot(function_constructor_as_prototype_slot(env));
     async_function.define_property(
@@ -169,11 +169,13 @@ fn schedule_await(
     env: &mut CallEnv,
 ) {
     let on_fulfilled = await_reaction(
+        env.realm(),
         NativeFunction::AsyncFunctionAwaitFulfilled,
         context,
         result_promise,
     );
     let on_rejected = await_reaction(
+        env.realm(),
         NativeFunction::AsyncFunctionAwaitRejected,
         context,
         result_promise,
@@ -184,11 +186,12 @@ fn schedule_await(
 /// Builds an await-resume reaction native carrying the async context and result
 /// promise in its environment.
 fn await_reaction(
+    realm: &crate::function::Realm,
     native: NativeFunction,
     context: &ObjectRef,
     result_promise: &ObjectRef,
 ) -> Value {
-    let mut function = Function::new_native(None, 1, native, false, &context.domain());
+    let mut function = Function::new_native(None, 1, native, false, realm);
     function.insert_native_context(ASYNC_CONTEXT.to_owned(), Value::Object(context.clone()));
     function.insert_native_context(
         ASYNC_RESULT_PROMISE.to_owned(),

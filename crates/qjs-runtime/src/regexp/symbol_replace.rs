@@ -17,7 +17,7 @@ pub(crate) fn install_regexp_prototype_replace(env: &CallEnv, prototype: &Object
                 2,
                 NativeFunction::RegExpPrototypeReplace,
                 false,
-                env.realm().atoms(),
+                env.realm(),
             ))),
         );
     }

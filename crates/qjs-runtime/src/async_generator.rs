@@ -96,7 +96,7 @@ pub(crate) fn install_async_generator(
                 0,
                 NativeFunction::AsyncGeneratorPrototypeAsyncIterator,
                 false,
-                env.realm().atoms(),
+                env.realm(),
             ))),
         );
     }
@@ -108,7 +108,7 @@ pub(crate) fn install_async_generator(
                 0,
                 NativeFunction::AsyncIteratorPrototypeAsyncDispose,
                 false,
-                env.realm().atoms(),
+                env.realm(),
             ))),
         );
     }
@@ -130,7 +130,7 @@ pub(crate) fn install_async_generator(
                 1,
                 native,
                 false,
-                env.realm().atoms(),
+                env.realm(),
             )),
         );
     }
@@ -142,7 +142,7 @@ pub(crate) fn install_async_generator(
                 0,
                 NativeFunction::AsyncGeneratorPrototypeAsyncIterator,
                 false,
-                env.realm().atoms(),
+                env.realm(),
             ))),
         );
     }
@@ -159,7 +159,7 @@ pub(crate) fn install_async_generator(
         1,
         NativeFunction::AsyncGeneratorFunction,
         true,
-        env.realm().atoms(),
+        env.realm(),
     );
     let _ = async_generator_function
         .set_internal_prototype_slot(function_constructor_as_prototype_slot(env));
@@ -509,8 +509,16 @@ fn settle_resolve(capability: &ObjectRef, value: Value, done: bool, env: &mut Ca
 /// the body resumes with the value; on rejection it resumes with a throw. The
 /// front request stays in flight.
 fn schedule_internal_await(generator: &ObjectRef, awaited: Value, env: &mut CallEnv) {
-    let on_fulfilled = reaction(NativeFunction::AsyncGeneratorAwaitFulfilled, generator);
-    let on_rejected = reaction(NativeFunction::AsyncGeneratorAwaitRejected, generator);
+    let on_fulfilled = reaction(
+        env.realm(),
+        NativeFunction::AsyncGeneratorAwaitFulfilled,
+        generator,
+    );
+    let on_rejected = reaction(
+        env.realm(),
+        NativeFunction::AsyncGeneratorAwaitRejected,
+        generator,
+    );
     promise::perform_await(awaited, on_fulfilled, on_rejected, env);
 }
 
@@ -518,8 +526,16 @@ fn schedule_internal_await(generator: &ObjectRef, awaited: Value, env: &mut Call
 /// front request resolves with `{ value, done: false }` and draining continues;
 /// on rejection the body resumes with a throw at the yield site.
 fn schedule_yield_await(generator: &ObjectRef, value: Value, env: &mut CallEnv) {
-    let on_fulfilled = reaction(NativeFunction::AsyncGeneratorYieldFulfilled, generator);
-    let on_rejected = reaction(NativeFunction::AsyncGeneratorYieldRejected, generator);
+    let on_fulfilled = reaction(
+        env.realm(),
+        NativeFunction::AsyncGeneratorYieldFulfilled,
+        generator,
+    );
+    let on_rejected = reaction(
+        env.realm(),
+        NativeFunction::AsyncGeneratorYieldRejected,
+        generator,
+    );
     promise::perform_await(value, on_fulfilled, on_rejected, env);
 }
 
@@ -528,10 +544,12 @@ fn schedule_yield_await(generator: &ObjectRef, value: Value, env: &mut CallEnv) 
 /// site so the generator body can catch it.
 fn schedule_return_resume_await(generator: &ObjectRef, value: Value, env: &mut CallEnv) {
     let on_fulfilled = reaction(
+        env.realm(),
         NativeFunction::AsyncGeneratorReturnResumeFulfilled,
         generator,
     );
     let on_rejected = reaction(
+        env.realm(),
         NativeFunction::AsyncGeneratorReturnResumeRejected,
         generator,
     );
@@ -542,14 +560,26 @@ fn schedule_return_resume_await(generator: &ObjectRef, value: Value, env: &mut C
 /// The front request remains queued until the fulfillment/rejection reaction
 /// settles it, preserving request order while `return(value)` awaits `value`.
 fn schedule_return_await(generator: &ObjectRef, value: Value, env: &mut CallEnv) {
-    let on_fulfilled = reaction(NativeFunction::AsyncGeneratorReturnFulfilled, generator);
-    let on_rejected = reaction(NativeFunction::AsyncGeneratorReturnRejected, generator);
+    let on_fulfilled = reaction(
+        env.realm(),
+        NativeFunction::AsyncGeneratorReturnFulfilled,
+        generator,
+    );
+    let on_rejected = reaction(
+        env.realm(),
+        NativeFunction::AsyncGeneratorReturnRejected,
+        generator,
+    );
     promise::perform_await(value, on_fulfilled, on_rejected, env);
 }
 
 /// Builds a reaction native carrying the async generator object.
-fn reaction(native: NativeFunction, generator: &ObjectRef) -> Value {
-    let mut function = Function::new_native(None, 1, native, false, &generator.domain());
+fn reaction(
+    realm: &crate::function::Realm,
+    native: NativeFunction,
+    generator: &ObjectRef,
+) -> Value {
+    let mut function = Function::new_native(None, 1, native, false, realm);
     function.insert_native_context(ASYNC_GEN.to_owned(), Value::Object(generator.clone()));
     Value::Function(function)
 }
@@ -799,7 +829,7 @@ pub(crate) fn create_async_from_sync_iterator(
         ("return", NativeFunction::AsyncFromSyncIteratorReturn),
         ("throw", NativeFunction::AsyncFromSyncIteratorThrow),
     ] {
-        let mut method = Function::new_native(Some(name), 1, native, false, env.realm().atoms());
+        let mut method = Function::new_native(Some(name), 1, native, false, env.realm());
         method.insert_native_context(SYNC_ITERATOR.to_owned(), sync_iterator.clone());
         if matches!(native, NativeFunction::AsyncFromSyncIteratorNext) {
             method.insert_native_context(SYNC_ITERATOR_NEXT.to_owned(), next.clone());
@@ -997,12 +1027,14 @@ fn async_from_sync_method(
     // Await the value, then resolve the wrapper promise with `{ value, done }`.
     // The rejection reaction closes the sync iterator first when closeOnRejection.
     let on_fulfilled = value_await_reaction(
+        env.realm(),
         NativeFunction::AsyncFromSyncIteratorValueFulfilled,
         &capability,
         done,
         None,
     );
     let on_rejected = value_await_reaction(
+        env.realm(),
         NativeFunction::AsyncFromSyncIteratorValueRejected,
         &capability,
         done,
@@ -1016,12 +1048,13 @@ fn async_from_sync_method(
 /// and the recorded `done` flag. `close_sync` (the rejection reaction only)
 /// carries the sync iterator to close when the awaited value rejects.
 fn value_await_reaction(
+    realm: &crate::function::Realm,
     native: NativeFunction,
     capability: &ObjectRef,
     done: bool,
     close_sync: Option<&Value>,
 ) -> Value {
-    let mut function = Function::new_native(None, 1, native, false, &capability.domain());
+    let mut function = Function::new_native(None, 1, native, false, realm);
     function.insert_native_context(WRAP_PROMISE.to_owned(), Value::Object(capability.clone()));
     function.insert_native_context(WRAP_DONE.to_owned(), Value::Boolean(done));
     if let Some(sync_iterator) = close_sync {

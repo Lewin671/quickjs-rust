@@ -920,7 +920,8 @@ mod tests {
 
     #[test]
     fn default_array_index_definitions_use_dense_storage() {
-        let array = ArrayRef::new_with_length(&crate::property::atom::AtomDomain::new(), 2);
+        let array =
+            ArrayRef::new_with_length_in_domain(&crate::property::atom::AtomDomain::new(), 2);
         let mut env = CallEnv::new(new_realm(HashMap::new()));
 
         for (index, value) in [3.0, 5.0].into_iter().enumerate() {

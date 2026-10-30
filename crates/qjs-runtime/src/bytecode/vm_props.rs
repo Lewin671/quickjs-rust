@@ -186,9 +186,6 @@ impl Vm<'_> {
     /// the implicit literal-array slot or the explicit slot installed by the
     /// intrinsic `new Array(...)` constructor.
     pub(super) fn array_uses_realm_prototype(&mut self, array: &crate::ArrayRef) -> bool {
-        if array.uses_default_prototype() {
-            return true;
-        }
         if self.array_prototype_cache.is_none() {
             self.array_prototype_cache = array_prototype(&self.env);
         }
@@ -356,6 +353,26 @@ impl Vm<'_> {
                         | crate::Prototype::Proxy(_),
                     ) => None,
                     None => Some(Value::Undefined),
+
+                    Some(crate::Prototype::Map(_carrier)) => {
+                        let prototype = _carrier.object();
+
+                        match ordinary_chain_data_value(&prototype, key) {
+                            Err(ProxyInChain) | Ok(DirectPropertyRead::NeedsSlowPath) => None,
+                            Ok(DirectPropertyRead::Data(value)) => Some(value),
+                            Ok(DirectPropertyRead::Missing) => Some(Value::Undefined),
+                        }
+                    }
+
+                    Some(crate::Prototype::Set(_carrier)) => {
+                        let prototype = _carrier.object();
+
+                        match ordinary_chain_data_value(&prototype, key) {
+                            Err(ProxyInChain) | Ok(DirectPropertyRead::NeedsSlowPath) => None,
+                            Ok(DirectPropertyRead::Data(value)) => Some(value),
+                            Ok(DirectPropertyRead::Missing) => Some(Value::Undefined),
+                        }
+                    }
                 }
             }
             Value::Function(function) => {
@@ -518,6 +535,48 @@ impl Vm<'_> {
                     }
                     return true;
                 }
+
+                Some(crate::Prototype::Map(_carrier)) => {
+                    let prototype = _carrier.object();
+
+                    if symbol::is_symbol_primitive(&prototype)
+                        || crate::typed_array::is_typed_array_object(&prototype)
+                        || prototype.is_module_namespace_exotic()
+                    {
+                        return false;
+                    }
+                    if let Some(property) = prototype.own_property(&key) {
+                        if property.is_accessor() || !property.writable {
+                            return false;
+                        }
+                        if !object.create_absent_own_data_property(key.clone(), value.clone()) {
+                            object.set_shared_key(key, value.clone());
+                        }
+                        return true;
+                    }
+                    current = prototype.prototype_slot();
+                }
+
+                Some(crate::Prototype::Set(_carrier)) => {
+                    let prototype = _carrier.object();
+
+                    if symbol::is_symbol_primitive(&prototype)
+                        || crate::typed_array::is_typed_array_object(&prototype)
+                        || prototype.is_module_namespace_exotic()
+                    {
+                        return false;
+                    }
+                    if let Some(property) = prototype.own_property(&key) {
+                        if property.is_accessor() || !property.writable {
+                            return false;
+                        }
+                        if !object.create_absent_own_data_property(key.clone(), value.clone()) {
+                            object.set_shared_key(key, value.clone());
+                        }
+                        return true;
+                    }
+                    current = prototype.prototype_slot();
+                }
             }
         }
     }
@@ -553,6 +612,24 @@ impl Vm<'_> {
                         | crate::Prototype::Proxy(_),
                     ) => None,
                     None => Some(Value::Undefined),
+
+                    Some(crate::Prototype::Map(_carrier)) => {
+                        let prototype = _carrier.object();
+
+                        match ordinary_chain_symbol_property(&prototype, symbol) {
+                            Err(ProxyInChain) => None,
+                            Ok(property) => data_property_value(property),
+                        }
+                    }
+
+                    Some(crate::Prototype::Set(_carrier)) => {
+                        let prototype = _carrier.object();
+
+                        match ordinary_chain_symbol_property(&prototype, symbol) {
+                            Err(ProxyInChain) => None,
+                            Ok(property) => data_property_value(property),
+                        }
+                    }
                 }
             }
             // Function symbol lookup and the primitive wrappers go through the
@@ -907,6 +984,16 @@ pub(super) fn ordinary_chain_data_value(
             }
             Some(crate::Prototype::Proxy(_)) => return Err(ProxyInChain),
             None => return Ok(DirectPropertyRead::Missing),
+
+            Some(crate::Prototype::Map(_carrier)) => {
+                let next = _carrier.object();
+                current = next
+            }
+
+            Some(crate::Prototype::Set(_carrier)) => {
+                let next = _carrier.object();
+                current = next
+            }
         }
     }
 }
@@ -1012,6 +1099,48 @@ fn prototype_chain_property(
             }
             Some(crate::Prototype::Proxy(_)) => return Err(ProxyInChain),
             None => return Ok(None),
+
+            Some(crate::Prototype::Map(_carrier)) => {
+                let object = _carrier.object();
+
+                // Namespace descriptors are virtual: their value is live and
+                // their reported writable attribute differs from the backing
+                // descriptor. Keep them on the observable path.
+                if object.is_module_namespace_exotic() {
+                    return Err(ProxyInChain);
+                }
+                if crate::typed_array::is_typed_array_object(&object)
+                    && let Some(property) =
+                        crate::typed_array::typed_array_own_property_descriptor(&object, key)
+                {
+                    return Ok(Some(property));
+                }
+                if let Some(property) = object.own_property(key) {
+                    return Ok(Some(property));
+                }
+                current = object.prototype_slot();
+            }
+
+            Some(crate::Prototype::Set(_carrier)) => {
+                let object = _carrier.object();
+
+                // Namespace descriptors are virtual: their value is live and
+                // their reported writable attribute differs from the backing
+                // descriptor. Keep them on the observable path.
+                if object.is_module_namespace_exotic() {
+                    return Err(ProxyInChain);
+                }
+                if crate::typed_array::is_typed_array_object(&object)
+                    && let Some(property) =
+                        crate::typed_array::typed_array_own_property_descriptor(&object, key)
+                {
+                    return Ok(Some(property));
+                }
+                if let Some(property) = object.own_property(key) {
+                    return Ok(Some(property));
+                }
+                current = object.prototype_slot();
+            }
         }
     }
 }
@@ -1031,6 +1160,16 @@ pub(super) fn prototype_chain_has_proxy(slot: Option<crate::Prototype>) -> bool 
                 current = function.effective_internal_prototype();
             }
             None => return false,
+
+            Some(crate::Prototype::Map(_carrier)) => {
+                let object = _carrier.object();
+                current = object.prototype_slot()
+            }
+
+            Some(crate::Prototype::Set(_carrier)) => {
+                let object = _carrier.object();
+                current = object.prototype_slot()
+            }
         }
     }
 }
@@ -1053,6 +1192,24 @@ pub(super) fn prototype_chain_needs_recursive_set(slot: Option<crate::Prototype>
                 current = function.effective_internal_prototype();
             }
             None => return false,
+
+            Some(crate::Prototype::Map(_carrier)) => {
+                let object = _carrier.object();
+
+                if object.is_module_namespace_exotic() {
+                    return true;
+                }
+                current = object.prototype_slot();
+            }
+
+            Some(crate::Prototype::Set(_carrier)) => {
+                let object = _carrier.object();
+
+                if object.is_module_namespace_exotic() {
+                    return true;
+                }
+                current = object.prototype_slot();
+            }
         }
     }
 }
@@ -1076,6 +1233,30 @@ pub(super) fn prototype_chain_has_index_hazard(slot: Option<crate::Prototype>) -
             Some(crate::Prototype::Array(_)) => return true,
             Some(crate::Prototype::Function(_) | crate::Prototype::Proxy(_)) => return true,
             None => return false,
+
+            Some(crate::Prototype::Map(_carrier)) => {
+                let object = _carrier.object();
+
+                if object.is_module_namespace_exotic()
+                    || object.has_own_index_property()
+                    || crate::typed_array::is_typed_array_object(&object)
+                {
+                    return true;
+                }
+                current = object.prototype_slot();
+            }
+
+            Some(crate::Prototype::Set(_carrier)) => {
+                let object = _carrier.object();
+
+                if object.is_module_namespace_exotic()
+                    || object.has_own_index_property()
+                    || crate::typed_array::is_typed_array_object(&object)
+                {
+                    return true;
+                }
+                current = object.prototype_slot();
+            }
         }
     }
 }
@@ -1101,6 +1282,24 @@ pub(super) fn prototype_chain_has_typed_array(slot: Option<crate::Prototype>) ->
                 current = function.effective_internal_prototype();
             }
             Some(crate::Prototype::Proxy(_)) | None => return false,
+
+            Some(crate::Prototype::Map(_carrier)) => {
+                let object = _carrier.object();
+
+                if crate::typed_array::is_typed_array_object(&object) {
+                    return true;
+                }
+                current = object.prototype_slot();
+            }
+
+            Some(crate::Prototype::Set(_carrier)) => {
+                let object = _carrier.object();
+
+                if crate::typed_array::is_typed_array_object(&object) {
+                    return true;
+                }
+                current = object.prototype_slot();
+            }
         }
     }
 }
@@ -1139,6 +1338,36 @@ pub(super) fn ordinary_chain_symbol_property(
             }
             Some(crate::Prototype::Proxy(_)) => return Err(ProxyInChain),
             None => return Ok(None),
+
+            Some(crate::Prototype::Map(_carrier)) => {
+                let object = _carrier.object();
+
+                // Module namespace [[Set]] rejects every property key, even an
+                // absent Symbol. Descriptor flattening would lose that exotic
+                // behavior and incorrectly create a property on the receiver.
+                if object.is_module_namespace_exotic() {
+                    return Err(ProxyInChain);
+                }
+                if let Some(property) = object.own_symbol_property(symbol) {
+                    return Ok(Some(property));
+                }
+                current = object.prototype_slot();
+            }
+
+            Some(crate::Prototype::Set(_carrier)) => {
+                let object = _carrier.object();
+
+                // Module namespace [[Set]] rejects every property key, even an
+                // absent Symbol. Descriptor flattening would lose that exotic
+                // behavior and incorrectly create a property on the receiver.
+                if object.is_module_namespace_exotic() {
+                    return Err(ProxyInChain);
+                }
+                if let Some(property) = object.own_symbol_property(symbol) {
+                    return Ok(Some(property));
+                }
+                current = object.prototype_slot();
+            }
         }
     }
 }

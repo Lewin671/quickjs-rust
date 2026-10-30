@@ -12,6 +12,22 @@ pub struct SetRef(Rc<SetData>);
 /// deleted value becomes a hole rather than shifting every later index. The
 /// index answers `has`/`add`/`delete` in constant time — the vector alone made
 /// every operation a scan, so filling a set was quadratic.
+#[derive(Clone)]
+pub(crate) struct SetWeakRef(std::rc::Weak<SetData>);
+impl SetWeakRef {
+    pub(crate) fn upgrade(&self) -> Option<SetRef> {
+        self.0.upgrade().map(SetRef)
+    }
+    pub(crate) fn address(&self) -> usize {
+        self.0.as_ptr() as usize
+    }
+}
+impl std::fmt::Debug for SetWeakRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("SetWeakRef(..)")
+    }
+}
+
 struct SetData {
     entries: RefCell<Vec<Option<Value>>>,
     index: RefCell<HashMap<CollectionKey, usize>>,
@@ -41,6 +57,9 @@ impl SetRef {
         }))
     }
 
+    pub(crate) fn downgrade(&self) -> SetWeakRef {
+        SetWeakRef(Rc::downgrade(&self.0))
+    }
     pub(crate) fn ptr_eq(&self, other: &Self) -> bool {
         Rc::ptr_eq(&self.0, &other.0)
     }

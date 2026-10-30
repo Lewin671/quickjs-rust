@@ -140,7 +140,7 @@ fn to_array(this_value: Value, env: &mut CallEnv) -> Result<Value, RuntimeError>
     while let Some(result) = iterator_step(&iterator, &next, env)? {
         items.push(iterator_value(result, env)?);
     }
-    Ok(Value::Array(ArrayRef::new(env.realm().atoms(), items)))
+    Ok(Value::Array(ArrayRef::new(env.realm(), items)))
 }
 
 fn for_each(

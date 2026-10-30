@@ -93,6 +93,10 @@ pub(super) struct Retention {
 impl Layout {
     pub(super) fn cache(&self, label: Transition, child: &Rc<Self>) {
         self.transitions.borrow_mut().insert(label, child);
+        child.retain();
+    }
+    pub(super) fn retain(self: &Rc<Self>) {
+        let child = self;
         if let Some(owner) = self.owner.upgrade() {
             let mut retained = owner.retained.borrow_mut();
             while child.budget.bytes() > MAX_CACHED_BYTES {

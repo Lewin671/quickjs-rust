@@ -1206,9 +1206,7 @@ fn get_named(
         // with its own prototype or with own named properties keeps the
         // interpreter's resolution.
         let prototype = intrinsics.array_prototype(env)?;
-        if !(elements.uses_default_prototype() || elements.uses_prototype_object(prototype))
-            || !elements.has_no_own_named_properties()
-        {
+        if !(elements.uses_prototype_object(prototype)) || !elements.has_no_own_named_properties() {
             return None;
         }
         return prototype_method(prototype, name, shapes);
@@ -1653,7 +1651,7 @@ mod tests {
 
     #[test]
     fn an_array_answers_length_from_its_element_count() {
-        let array = Value::Array(ArrayRef::new(
+        let array = Value::Array(ArrayRef::new_in_domain(
             &crate::property::atom::AtomDomain::new(),
             vec![Value::Number(1.0), Value::Number(2.0), Value::Number(3.0)],
         ));
@@ -1662,7 +1660,7 @@ mod tests {
 
     #[test]
     fn an_array_declines_every_name_except_length() {
-        let array = Value::Array(ArrayRef::new(
+        let array = Value::Array(ArrayRef::new_in_domain(
             &crate::property::atom::AtomDomain::new(),
             vec![Value::Number(1.0)],
         ));

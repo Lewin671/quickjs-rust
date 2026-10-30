@@ -19,8 +19,12 @@ mod index;
 mod storage;
 mod transitions;
 use index::{IdIndex, IdProbe};
+mod lazy;
+mod prototype;
 mod slots;
 mod version;
+pub(crate) use lazy::NamedStorage;
+pub(crate) use prototype::{PrototypeState, WeakPrototype};
 pub(crate) use version::{LayoutVersion, StructuralDependency};
 #[cfg(test)]
 mod sharing_tests;
@@ -32,8 +36,8 @@ const _: () = {
     assert!(std::mem::size_of::<KeyId>() == 4);
     assert!(std::mem::size_of::<KeyLease>() == 8);
     assert!(std::mem::size_of::<ShapeEntry>() == 16);
-    assert!(std::mem::size_of::<NamedStore>() == 48);
-    assert!(std::mem::size_of::<RefCell<NamedStore>>() == 56);
+    assert!(std::mem::size_of::<NamedStore>() == 56);
+    assert!(std::mem::size_of::<RefCell<NamedStore>>() == 64);
     assert!(std::mem::size_of::<Value>() == 16);
 };
 
@@ -94,11 +98,17 @@ pub(crate) struct Layout {
     edits: u8,
     next_order: u32,
     transitions: RefCell<transitions::Transitions>,
-    subscribers: RefCell<Vec<Weak<std::cell::Cell<bool>>>>,
+    root: Option<Rc<Layout>>,
+    prototype: Option<WeakPrototype>,
+    prototype_value: RefCell<Weak<crate::Prototype>>,
+    parent_state: Weak<PrototypeState>,
+    mode: Option<Rc<PrototypeState>>,
+    flavor: u16,
 }
 
 pub(crate) struct OwnerState {
     root: Rc<Layout>,
+    roots: RefCell<crate::value::name_hash::NameMap<(u8, usize, u16), Weak<Layout>>>,
     retained: RefCell<transitions::Retention>,
 }
 
@@ -140,8 +150,14 @@ impl PropertyOwner {
                 edits: 0,
                 next_order: 0,
                 transitions: RefCell::new(transitions::Transitions::default()),
-                subscribers: RefCell::new(Vec::new()),
+                root: None,
+                prototype: None,
+                prototype_value: RefCell::new(Weak::new()),
+                parent_state: Weak::new(),
+                mode: None,
+                flavor: 0,
             }),
+            roots: RefCell::default(),
             retained: RefCell::new(transitions::Retention::default()),
         });
         *attachment.shape_owner().borrow_mut() = Rc::downgrade(&owner);
@@ -157,6 +173,7 @@ impl PropertyOwner {
             values: Vec::new(),
             accessors: None,
             epoch: 0,
+            prototype: None,
         }
     }
     #[cfg(test)]
@@ -172,6 +189,7 @@ pub(crate) struct NamedStore {
     values: Vec<Value>,
     accessors: Option<Box<AccessorSlots>>,
     epoch: u64,
+    prototype: Option<Rc<crate::Prototype>>,
 }
 
 /// A lookup borrows the store exclusively. Its miss proof therefore cannot

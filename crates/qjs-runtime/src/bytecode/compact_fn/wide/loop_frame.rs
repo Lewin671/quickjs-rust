@@ -166,7 +166,7 @@ impl LoopFrame for WideLoopFrame<'_> {
         let Some((prototype, hazard)) = resolved else {
             return false;
         };
-        !*hazard && (array.uses_default_prototype() || array.uses_prototype_object(prototype))
+        !*hazard && (array.uses_prototype_object(prototype))
     }
 
     fn try_create_ordinary_own_data_property(

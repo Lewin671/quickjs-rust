@@ -23,25 +23,28 @@ pub(crate) fn install_weak_set(
         0,
         NativeFunction::WeakSet,
         true,
-        env.realm().atoms(),
+        env.realm(),
     );
     weak_set_prototype.define_non_enumerable(
         "constructor".to_owned(),
         Value::Function(weak_set_function.clone()),
     );
     define_weak_set_prototype_function(
+        env.realm(),
         &weak_set_prototype,
         "add",
         1,
         NativeFunction::WeakSetPrototypeAdd,
     );
     define_weak_set_prototype_function(
+        env.realm(),
         &weak_set_prototype,
         "delete",
         1,
         NativeFunction::WeakSetPrototypeDelete,
     );
     define_weak_set_prototype_function(
+        env.realm(),
         &weak_set_prototype,
         "has",
         1,
@@ -215,6 +218,7 @@ fn incompatible_receiver() -> RuntimeError {
 }
 
 fn define_weak_set_prototype_function(
+    realm: &crate::function::Realm,
     prototype: &ObjectRef,
     key: &str,
     length: usize,
@@ -227,7 +231,7 @@ fn define_weak_set_prototype_function(
             length,
             native,
             false,
-            &prototype.domain(),
+            realm,
         )),
     );
 }

@@ -6,7 +6,7 @@ use crate::value::{
     layout::{Layout, NamedStore},
     name_hash::NameMap,
 };
-use crate::{Property, Value};
+use crate::{Property, Prototype, Value};
 use std::{cell::RefCell, rc::Rc};
 
 #[derive(Debug)]
@@ -66,12 +66,18 @@ impl ObjectLiteralShape {
             .iter()
             .rposition(|input_slot| *input_slot == slot)
     }
-    pub(super) fn linked_layout(&self, domain: &AtomDomain) -> Rc<Layout> {
+    pub(super) fn linked_layout(
+        &self,
+        domain: &AtomDomain,
+        prototype: Option<Prototype>,
+    ) -> Rc<Layout> {
         let mut links = self.links.borrow_mut();
-        if let Some(link) = links.iter().find(|link| link.domain.is(domain)) {
+        if let Some(link) = links.iter().find(|link| {
+            link.domain.is(domain) && link.layout.matches_prototype(prototype.as_ref(), 0)
+        }) {
             return link.layout.clone();
         }
-        let mut store = NamedStore::empty(domain);
+        let mut store = NamedStore::empty_with_prototype(domain, prototype, 0);
         for key in self.keys.iter() {
             store
                 .define(&domain.intern(key), Property::enumerable(Value::Undefined))

@@ -62,7 +62,7 @@ fn ordinary_object_keeps_cold_state_unallocated() {
     assert!(object.own_property_symbols().is_empty());
     assert!(object.to_string_tag().is_none());
     assert!(object.0.cold.get().is_none());
-    assert_eq!(mem::size_of::<ObjectData>(), 96);
+    assert_eq!(mem::size_of::<ObjectData>(), 80);
 }
 
 #[test]
@@ -365,7 +365,7 @@ fn nonextensible_receiver_still_calls_an_inherited_setter() {
 }
 
 #[test]
-fn constructor_class_json_literal_and_null_prototype_share_one_layout() {
+fn construction_routes_share_a_layout_only_after_prototypes_match() {
     let Value::Array(values) = crate::eval("function C() { this.a = 1; this.b = 2; } class K { a = 3; b = 4; } const n = Object.create(null); n.a = 5; n.b = 6; [new C(), new K(), JSON.parse('{\"a\":7,\"b\":8}'), {a:9,b:10}, n];").unwrap() else { panic!("expected objects"); };
     let mut layouts = Vec::new();
     for index in 0..values.len() {
@@ -375,8 +375,24 @@ fn constructor_class_json_literal_and_null_prototype_share_one_layout() {
         assert_eq!(object.own_property_names(), ["a", "b"]);
         layouts.push(object.layout_data_slot("a").unwrap().0);
     }
-    for layout in &layouts[1..] {
-        assert!(Rc::ptr_eq(&layouts[0], layout));
+    assert!(Rc::ptr_eq(&layouts[2], &layouts[3]));
+    assert!(!Rc::ptr_eq(&layouts[0], &layouts[2]));
+    assert!(!Rc::ptr_eq(&layouts[1], &layouts[2]));
+    assert!(!Rc::ptr_eq(&layouts[4], &layouts[2]));
+    let Value::Object(reference) = values.get(2).unwrap() else {
+        unreachable!()
+    };
+    for index in 0..values.len() {
+        let Value::Object(object) = values.get(index).unwrap() else {
+            unreachable!()
+        };
+        object
+            .set_prototype_slot(reference.prototype_slot())
+            .unwrap();
+        assert!(Rc::ptr_eq(
+            &reference.layout_data_slot("a").unwrap().0,
+            &object.layout_data_slot("a").unwrap().0
+        ));
     }
 }
 

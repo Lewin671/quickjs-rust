@@ -12,8 +12,8 @@ fn physical_budgets() {
     assert_eq!(std::mem::size_of::<KeyId>(), 4);
     assert_eq!(std::mem::size_of::<KeyLease>(), 8);
     assert_eq!(std::mem::size_of::<ShapeEntry>(), 16);
-    assert_eq!(std::mem::size_of::<NamedStore>(), 48);
-    assert_eq!(std::mem::size_of::<RefCell<NamedStore>>(), 56);
+    assert_eq!(std::mem::size_of::<NamedStore>(), 56);
+    assert_eq!(std::mem::size_of::<RefCell<NamedStore>>(), 64);
 }
 
 #[test]
@@ -117,9 +117,9 @@ fn dictionary_churn_has_no_tombstones_and_invalidates_slots() {
     store.define(&a, data(1.0)).unwrap();
     store.define(&b, data(2.0)).unwrap();
     for _ in 0..1000 {
-        let epoch = store.epoch();
+        let token = store.version();
         store.remove(&a).unwrap().unwrap();
-        assert!(store.epoch() > epoch);
+        assert!(!store.matches_version(&token));
         store.define(&a, data(1.0)).unwrap();
         store.remove(&b).unwrap().unwrap();
         store.define(&b, data(2.0)).unwrap();
@@ -271,11 +271,12 @@ fn exhausted_epoch_publishes_a_new_identity_before_restarting_version() {
     let key = owner.domain().intern("x");
     let mut store = owner.empty_store();
     store.define(&key, data(1.0)).unwrap();
+    store.prototype_mode();
     let old = store.layout().clone();
     store.epoch = u64::MAX;
     store.remove(&key).unwrap().unwrap();
     assert!(!Rc::ptr_eq(&old, store.layout()));
-    assert_eq!(store.epoch(), 0);
+    assert_eq!(store.epoch(), 1);
     assert!(store.layout.dictionary);
 }
 

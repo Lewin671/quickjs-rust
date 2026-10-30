@@ -135,7 +135,7 @@ pub(crate) fn install_typed_arrays(
         0,
         NativeFunction::TypedArray,
         true,
-        env.realm().atoms(),
+        env.realm(),
     );
     typed_array_intrinsic.define_property(
         "prototype".to_owned(),
@@ -211,7 +211,7 @@ fn install_typed_array_static_methods(intrinsic: &Function) {
                 length,
                 native,
                 false,
-                intrinsic.property_domain(),
+                intrinsic.creation_realm(),
             ))),
         );
     }
@@ -234,7 +234,7 @@ fn install_typed_array_prototype_accessors(env: &CallEnv, prototype: &ObjectRef)
                     0,
                     native,
                     false,
-                    env.realm().atoms(),
+                    env.realm(),
                 ))),
                 None,
                 false,
@@ -253,7 +253,7 @@ fn install_typed_array_prototype_accessors(env: &CallEnv, prototype: &ObjectRef)
                     0,
                     NativeFunction::TypedArrayPrototypeToStringTag,
                     false,
-                    env.realm().atoms(),
+                    env.realm(),
                 ))),
                 None,
                 false,
@@ -323,7 +323,7 @@ fn install_typed_array_prototype_methods(env: &CallEnv, prototype: &ObjectRef) {
         ("toSorted", 1, NativeFunction::TypedArrayPrototypeToSorted),
         ("with", 2, NativeFunction::TypedArrayPrototypeWith),
     ] {
-        define_prototype_method(prototype, name, length, native);
+        define_prototype_method(env.realm(), prototype, name, length, native);
     }
     // %TypedArray.prototype%[Symbol.iterator] is the same function object as
     // `values`.
@@ -331,6 +331,7 @@ fn install_typed_array_prototype_methods(env: &CallEnv, prototype: &ObjectRef) {
 }
 
 fn define_prototype_method(
+    realm: &crate::function::Realm,
     prototype: &ObjectRef,
     name: &str,
     length: usize,
@@ -343,7 +344,7 @@ fn define_prototype_method(
             length,
             native,
             false,
-            &prototype.domain(),
+            realm,
         )),
     );
 }
@@ -364,10 +365,10 @@ fn install_typed_array_constructor(
     );
     let bytes = bytes_per_element(native) as f64;
     if native == NativeFunction::Uint8Array {
-        install_uint8_array_prototype_methods(&prototype);
+        install_uint8_array_prototype_methods(env.realm(), &prototype);
     }
 
-    let constructor = Function::new_native(Some(name), 3, native, true, env.realm().atoms());
+    let constructor = Function::new_native(Some(name), 3, native, true, env.realm());
     if native == NativeFunction::Uint8Array {
         install_uint8_array_static_methods(&constructor);
     }
@@ -398,26 +399,30 @@ fn install_typed_array_constructor(
     }
 }
 
-fn install_uint8_array_prototype_methods(prototype: &ObjectRef) {
+fn install_uint8_array_prototype_methods(realm: &crate::function::Realm, prototype: &ObjectRef) {
     define_prototype_method(
+        realm,
         prototype,
         "toBase64",
         0,
         NativeFunction::Uint8ArrayPrototypeToBase64,
     );
     define_prototype_method(
+        realm,
         prototype,
         "setFromBase64",
         1,
         NativeFunction::Uint8ArrayPrototypeSetFromBase64,
     );
     define_prototype_method(
+        realm,
         prototype,
         "toHex",
         0,
         NativeFunction::Uint8ArrayPrototypeToHex,
     );
     define_prototype_method(
+        realm,
         prototype,
         "setFromHex",
         1,
@@ -433,7 +438,7 @@ fn install_uint8_array_static_methods(constructor: &Function) {
             1,
             NativeFunction::Uint8ArrayFromBase64,
             false,
-            constructor.property_domain(),
+            constructor.creation_realm(),
         ))),
     );
     constructor.define_property(
@@ -443,7 +448,7 @@ fn install_uint8_array_static_methods(constructor: &Function) {
             1,
             NativeFunction::Uint8ArrayFromHex,
             false,
-            constructor.property_domain(),
+            constructor.creation_realm(),
         ))),
     );
 }

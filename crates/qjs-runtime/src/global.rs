@@ -263,7 +263,7 @@ fn define_global_function(
         length,
         native,
         false,
-        env.realm().atoms(),
+        env.realm(),
     ));
     env.insert_realm(key.to_owned(), value.clone());
     if let Value::Object(global_object) = global_this {
@@ -274,6 +274,7 @@ fn define_global_function(
 fn define_is_html_dda(env: &mut CallEnv, global_this: &Value) {
     let key = "__quickjsRustIsHTMLDDA";
     let value = Value::Function(crate::html_dda::new_is_html_dda_function(
+        env.realm(),
         env.realm().atoms(),
     ));
     env.insert_realm(key.to_owned(), value.clone());
@@ -430,7 +431,10 @@ pub(crate) fn native_test262_verify_property(
     Ok(Value::Boolean(true))
 }
 
-pub(crate) fn native_test262_to_numbers(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+pub(crate) fn native_test262_to_numbers(
+    realm: &crate::function::Realm,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
     use num_traits::ToPrimitive;
 
     let Some(Value::Object(object)) = argument_values.first() else {
@@ -447,7 +451,7 @@ pub(crate) fn native_test262_to_numbers(argument_values: &[Value]) -> Result<Val
             value => value,
         })
         .collect();
-    Ok(Value::Array(ArrayRef::new(&object.domain(), values)))
+    Ok(Value::Array(ArrayRef::new(realm, values)))
 }
 
 pub(crate) fn native_test262_compare_array(
@@ -516,13 +520,17 @@ pub(crate) fn native_test262_assert_iterator_result(
 
 pub(crate) fn native_test262_assert_packed_array(
     argument_values: &[Value],
+    env: &CallEnv,
 ) -> Result<Value, RuntimeError> {
     let Some(Value::Array(array)) = argument_values.first() else {
         return Ok(Value::Boolean(false));
     };
     if !array.is_extensible()
         || !array.is_length_writable()
-        || !array.uses_default_prototype()
+        || !env
+            .realm()
+            .array_prototype()
+            .is_some_and(|p| array.uses_prototype_object(&p))
         || !array.property_names().is_empty()
         || !array.own_property_symbols().is_empty()
     {
