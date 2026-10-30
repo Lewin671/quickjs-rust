@@ -453,10 +453,11 @@ impl ArrayRef {
     /// explicitly, while array literals normally use the implicit default
     /// slot; both representations have ordinary array prototype semantics.
     pub(crate) fn uses_prototype_object(&self, prototype: &ObjectRef) -> bool {
-        matches!(
-            self.0.prototype_override(),
-            Some(Some(Prototype::Object(actual))) if actual.ptr_eq(prototype)
-        )
+        if let Some(cold) = self.0.cold.get() {
+            cold.named.borrow().prototype_is_object(prototype)
+        } else {
+            self.0.with_seed(|seed| seed.prototype_is_object(prototype))
+        }
     }
 
     /// Reads every element `0..length` directly out of dense storage as an

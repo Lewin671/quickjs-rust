@@ -223,6 +223,11 @@ impl NamedStore {
         }
         self.prototype.as_deref()?.load_guarded_data(slot)
     }
+    /// Pure identity check without acquiring a prototype owner.
+    #[inline(always)]
+    pub(crate) fn prototype_is_object(&self, expected: &crate::ObjectRef) -> bool {
+        matches!(self.prototype.as_deref(), Some(Prototype::Object(actual)) if actual.ptr_eq(expected))
+    }
     pub(crate) fn prototype(&self) -> Option<Prototype> {
         self.prototype.as_deref().cloned()
     }

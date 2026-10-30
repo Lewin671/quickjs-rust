@@ -84,6 +84,15 @@ impl NamedStorage {
             _ => None,
         }
     }
+    pub(crate) fn prototype_is_object(&self, expected: &crate::ObjectRef) -> bool {
+        match self {
+            Self::Empty { prototype, .. } => {
+                matches!(prototype.as_deref(), Some(Prototype::Object(actual)) if actual.ptr_eq(expected))
+            }
+            Self::Full(store) => store.prototype_is_object(expected),
+            Self::Sentinel => false,
+        }
+    }
     pub(crate) fn prototype(&self) -> Option<Prototype> {
         match self {
             Self::Empty { prototype, .. } => prototype.as_deref().cloned(),

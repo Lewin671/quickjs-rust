@@ -66,8 +66,14 @@ impl NamedStore {
         self.verify_slot(slot);
         true
     }
+    #[inline(always)]
     pub(crate) fn load_guarded_data(&self, slot: usize) -> Option<Value> {
-        self.values.get(slot).cloned()
+        let value = self.values.get(slot)?;
+        Some(match value {
+            Value::Number(number) => Value::Number(*number),
+            Value::Function(function) => Value::Function(function.clone()),
+            _ => value.clone(),
+        })
     }
     #[inline(always)]
     pub(crate) fn load_guarded_number(&self, slot: usize) -> Option<f64> {
