@@ -1,11 +1,11 @@
 # T077: In-place core rebuild
 
-- Status: active; S2 round-1 engine frozen at `e1d8a6a3`; required diagnostic point estimates are below dd0905b2. Formal acceptance remains pending.
-- Implementation: prototype-layout/cell redesign, all E fixes and general hot-path/construction/name-linking repairs are present. No new dependency, unsafe code or alternate named authority.
-- Verified at: `e1d8a6a3` full gate (2,439 runtime; 5,170 curated), 266 verify NG fixtures, agents/counter verify tests; final exact/off scans are pending. Earlier `26fee930` complete exact has 42,672 passes/zero gaps and a recorded burndown.
-- Evidence: [source](archive/T077-s2-round1-source.md), [correction plan](proposals/T077-s2-prototype-layout.md), [initial round-1 counters](archive/T077-s2-round1-counters.md). Latest job `20261030T155647Z-t077-s2-r1-static-triage`: development 0.998020; heterogeneous/prototype/churn/dynamic 0.6571/0.9954/0.8926/0.7956.
-- Unresolved: exact/off completion and final receipts; triage remains automatic "likely loss" because broader controls regress, and some intervals cross 1.0. No formal four-aggregate acceptance claimed.
-- Next action: finish final-source exact/off, counter/fuzz/x86 receipts, record burndowns and hand off for lead formal assessment. Temporary iMac refs are authorized transport; never push origin or merge main.
+- Status: active; S2 round-1 owner work complete on this branch; engine frozen at `e1d8a6a3`. Lead formal acceptance remains pending.
+- Implementation: all A-E feedback and general payoff repairs are present; one named authority, prototype-sensitive layouts/cells, pure IC outcomes and explicit realm creation. No new dependency, unsafe code or environment snapshot.
+- Verified at: `e1d8a6a3` full gate (2,439 runtime; 5,170 curated), 2,486 verify tests on arm64 and 2,486 x86 feature tests; NG 266/266 default/off/verify; final cached/off exact 42,672 passes each, zero gaps/lost passes/new exclusions. Both burndowns recorded (off uses identical-source docs descendant `3cba3b6c`).
+- Evidence: [round-1 receipt](archive/T077-s2-round1-verification.md), [source pins](archive/T077-s2-round1-source.md), [final counters](archive/T077-s2-round1-final-counters.md), [all iMac cohorts/RSS](archive/T077-s2-round1-measurements.md). Final diagnostic development 0.998020; heterogeneous/prototype/churn/dynamic 0.6571/0.9954/0.8926/0.7956 versus dd0905b2.
+- Unresolved: automatic triage verdict remains "likely loss" because broader controls regress; some intervals cross 1.0 and array RSS is higher. No formal four-aggregate or resource acceptance is claimed.
+- Next action: lead formal S1+S2 aggregate/held-out and resource assessment; diagnose remaining control/construction costs if it fails. Never push origin or merge main from this owner branch.
 
 ## Authority and scope
 

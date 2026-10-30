@@ -31,7 +31,8 @@ keys or report an explicit domain error, never reinterpret IDs.
 `to_key(&mut Context, Value) -> Result<KeyLease>` performs observable ToPrimitive
 once, then interns; named bytecode operands use prelinked leases. Host `&str`
 entry points convert once; internal slot access never formats or hashes text.
-Computed JsString keys memoize one domain-checked live lease in existing metadata;
+Compact/typed static-name misses use domain-checked weak lease links; dead keys
+remain recyclable. Computed JsString keys memoize one live lease in metadata;
 reads never intern, and mutation/COW clears the memo. No receiver/domain is pinned.
 
 ## Physical layout (S2 assertions)
@@ -89,7 +90,9 @@ generic lookup. Own-data guard: domain + kind + shape ID (dictionary ID/version)
 address. Entries hold weak layout tokens, not a strong receiver or cached Value.
 The implemented entry is 32 bytes: weak layout/version 16, slot 4, kind and padding 4, optional cold chain pointer
 8; four-way storage is allocated only when a second guard is admitted. A fifth
-independent guard makes the site permanently megamorphic.
+independent live guard makes the site permanently megamorphic. Shared-own poly
+hits compare four identities in parallel; numeric consumers load a live f64
+with a value-kind check, without constructing an owning Value.
 
 Layouts include prototype identity and semantic hook flavor. Shared guards compare
 weak allocation identity only; dictionary guards additionally compare versions.
