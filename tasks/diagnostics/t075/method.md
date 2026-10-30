@@ -1,7 +1,7 @@
 # T075 collection and source-map audit
 
 Measured engine source: `59eb72e511cca013cf59d6736922c9c666cb883f`, 2026-10-23 UTC
-(2026-10-24 CST). Interpretation: [T075](../../T075-executor-anatomy.md).
+(2026-10-24 CST). Interpretation: [T075](../../archive/T075-executor-anatomy.md).
 No runtime, dependency, benchmark, compiler-policy or held-out change.
 
 ## Images and address collection

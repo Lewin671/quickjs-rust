@@ -6,7 +6,9 @@ in the module headers it names and in two invariant notes,
 [design/generator-suspension.md](design/generator-suspension.md)
 (suspension). How to verify a change is in [harness.md](harness.md).
 
-The staged String/RegExp target is in
+The proposed replacement architecture is [core rebuild](design/core-rebuild.md);
+[T077](../tasks/T077-core-rebuild.md) owns its staged migration. Nothing below
+claims that target is implemented. The existing String/RegExp invariants are in
 [string-code-units](design/string-code-units.md); [T057](../tasks/T057-string-code-units.md)
 records what is implemented and verified.
 
@@ -125,8 +127,8 @@ and immutable (`bytecode/vm_string_append.rs`).
 **Named operands.** A named property opcode indexes its body's name pool;
 the interpreter resolves it to an atom of the frame realm's `AtomDomain`
 (`property/atom.rs`), linking each body once per domain
-(`bytecode/linked_code.rs`). Stores still key by text; the atom-keyed layout
-authority is the staged target in [design/interpreter-core-v2.md](design/interpreter-core-v2.md).
+(`bytecode/linked_code.rs`). Stores still key by text; the atom-keyed shape/slot
+authority is the target in [core rebuild objects](design/core-rebuild-objects.md).
 
 **Per-site caches.** `bytecode/named_property_cache.rs` caches named property
 reads and writes per instruction site, keyed by receiver layout.

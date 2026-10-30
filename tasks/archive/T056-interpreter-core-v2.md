@@ -1,11 +1,11 @@
 # T056: Interpreter core v2
 
-- Status: active; remaining M2/M3 superseded by [T065](T065-interpreter-core-v3.md) pending lead review; M1 stages A/B remain blocked on object-layout → typed-code coupling with no accepted remedy. T064 stage K and its successor plan are closed before timing by the lead decision of 2026-10-22.
+- Status: closed-superseded; lead decision 2026-10-29 moves the remaining core work to [T077](../T077-core-rebuild.md). Old M1/K failures and reserves remain historical, not retry authority.
 - Implementation: M1 stage 1 is on main; stage-A `5dd3a810` is unpromoted. K1 `671e9943` and Repair 1 `773c42f7` remain on `agent/t064-k1/codex`; this closure imports no runtime changes. M2 draft remains historical input to T065; no M2/M3 implementation is authorized here.
-- Verified at: [K1/repair receipts](archive/T064-k1-record.md) bind full/fast correctness, 256 NG fixtures, 5,170 subset and both-role A/A/H+8/C+8 passes to their candidate sources; both exact-image instruction pre-gates block the same 46/86 cases. Historical M1/profile receipts remain bound to their original revisions.
-- Evidence: [T064 final decision](archive/T064-kernel-isolation.md#lead-decision-2026-10-22), [successor closure/ledger](archive/T064-kernel-layout-authority-closure.md), [M2 design inputs](archive/T056-m2-design-inputs.md), [frame activation design](../docs/design/frame-activation.md).
-- Unresolved: M1's coupling remedy and separate unpack/startup attribution remain open; T065's replacement architecture and acceptance proposal await review; old M2/M3 route is not the next implementation action.
-- Next action: review T065 before any further M2/M3 plan or runtime work. Preserve `0a9af81b` and exactly one shared A+B remaining failure for any future M1 continuation; no automatic port of `5dd3a810` or further K repair/screen.
+- Verified at: [K1/repair receipts](T064-k1-record.md) bind full/fast correctness, 256 NG fixtures, 5,170 subset and both-role A/A/H+8/C+8 passes to their candidate sources; both exact-image instruction pre-gates block the same 46/86 cases. Historical M1/profile receipts remain bound to their original revisions.
+- Evidence: [T064 final decision](T064-kernel-isolation.md#lead-decision-2026-10-22), [successor closure/ledger](T064-kernel-layout-authority-closure.md), [M2 design inputs](T056-m2-design-inputs.md), [frame activation design](../../docs/design/frame-activation.md).
+- Unresolved: no work remains in this plan; coupling/entry/value risks are carried into T077 without reopening old budgets.
+- Next action: none here; follow T077. Preserve old candidate branches and evidence; no automatic port or retry.
 
 ## Goal and scope
 
@@ -16,10 +16,10 @@ identity throughout. The target lives in the linked design; stage order and acce
 This design does not approve an implementation, reopen an exhausted leaf
 budget, establish a fresh performance priority, or claim a measured speedup.
 
-Earlier owners and boundaries: [task history](archive/T056-task-history.md). Structural runtime work is
+Earlier owners and boundaries: [task history](T056-task-history.md). Structural runtime work is
 serialized because APIs and ownership span execution, properties and values.
 
-Design-time source checks and report limits: [design inputs](archive/T056-design-inputs.md).
+Design-time source checks and report limits: [design inputs](T056-design-inputs.md).
 
 ## Prior attempts
 
@@ -28,15 +28,15 @@ architecture. Read their full records before freezing a new unit.
 
 | Record | Constraint carried into v2 / difference |
 | --- | --- |
-| [T021](archive/T021-single-vm-frame-stack.md) and [log](archive/T021-single-vm-frame-stack-log.md) | July 31 moved-frame route: recursive 1.3848x, prototype calls 1.2769x; boxing worse. A contiguous-buffer/hot-header prototype failed recursive 1.180476x and hash-map 1.150426x; compact windowed registers lost at 1.2678x. V2 initializes persistent slots fieldwise, binds zero-based per-frame buffers, verifies emitted copies/borrows before routing, and removes general activation/name assembly beyond the direct-leaf cohort. |
-| [T024](archive/T024-general-register-core.md) | Dispatch-preamble change delivered external 0.9906x, sentinels 0.9989x; scalar whole-body replacement lost to existing typed loops. V2 retains bytecode dispatch/scalar tiers and targets ownership, names/layouts and boxed transport together. |
-| [T027](archive/T027-frame-verified-direct-local-opcodes.md) | Hash-map 0.9841x missed 0.97 target despite direct-local mechanism success. V2 preserves authoritative slot/cell access, adds no direct-local opcode recognizer. |
-| [T019](archive/T019-object-layout-rewrite.md) | Cold Dynamic payload/accessors landed; pair boxing and lazy weak sidecars lost. V2 retains useful payload layouts, does not add pair allocations or lazy weak state, and separates metadata authority from payload packing. |
-| [T023](archive/T023-realm-object-arena.md) | Intrusive counts plus constructor arena lost (hash-map 1.016x, A* 1.088x). V2's common header is a dependency of one-word ownership across all heap kinds, not an allocator win or arena rebranding; count overhead has its own migration gate. No block allocator/collector is proposed here. |
-| [T030](archive/T030-packed-typed-loop-scalars.md) | Private scalar 8-byte packing lost 1.01702x. V2 changes public boxed transport, retains scalar tiers, and requires identical tier coverage and end-to-end wins rather than size alone. |
-| [T041](archive/T041-own-data-cache-hot-answers.md) | OwnSlot hot answers failed their sole screen. V2 does not revive weak-object hot answers; layout lookup becomes the ordinary path for every store. |
-| [T049](archive/T049-property-access-path-study.md) | Duplicate-probe removal missed target/controls; same-receiver proofs had low reach. V2 changes name/layout authority rather than deleting one probe. |
-| [T053](archive/T053-ordinary-own-slot-hot-read-fat-lto.md) | Hash-map 0.917431x did not excuse six failing controls; layout shifts were not isolated causality. V2 requires complete controls, exact-binary attribution and layout audit at each stage. |
+| [T021](T021-single-vm-frame-stack.md) and [log](T021-single-vm-frame-stack-log.md) | July 31 moved-frame route: recursive 1.3848x, prototype calls 1.2769x; boxing worse. A contiguous-buffer/hot-header prototype failed recursive 1.180476x and hash-map 1.150426x; compact windowed registers lost at 1.2678x. V2 initializes persistent slots fieldwise, binds zero-based per-frame buffers, verifies emitted copies/borrows before routing, and removes general activation/name assembly beyond the direct-leaf cohort. |
+| [T024](T024-general-register-core.md) | Dispatch-preamble change delivered external 0.9906x, sentinels 0.9989x; scalar whole-body replacement lost to existing typed loops. V2 retains bytecode dispatch/scalar tiers and targets ownership, names/layouts and boxed transport together. |
+| [T027](T027-frame-verified-direct-local-opcodes.md) | Hash-map 0.9841x missed 0.97 target despite direct-local mechanism success. V2 preserves authoritative slot/cell access, adds no direct-local opcode recognizer. |
+| [T019](T019-object-layout-rewrite.md) | Cold Dynamic payload/accessors landed; pair boxing and lazy weak sidecars lost. V2 retains useful payload layouts, does not add pair allocations or lazy weak state, and separates metadata authority from payload packing. |
+| [T023](T023-realm-object-arena.md) | Intrusive counts plus constructor arena lost (hash-map 1.016x, A* 1.088x). V2's common header is a dependency of one-word ownership across all heap kinds, not an allocator win or arena rebranding; count overhead has its own migration gate. No block allocator/collector is proposed here. |
+| [T030](T030-packed-typed-loop-scalars.md) | Private scalar 8-byte packing lost 1.01702x. V2 changes public boxed transport, retains scalar tiers, and requires identical tier coverage and end-to-end wins rather than size alone. |
+| [T041](T041-own-data-cache-hot-answers.md) | OwnSlot hot answers failed their sole screen. V2 does not revive weak-object hot answers; layout lookup becomes the ordinary path for every store. |
+| [T049](T049-property-access-path-study.md) | Duplicate-probe removal missed target/controls; same-receiver proofs had low reach. V2 changes name/layout authority rather than deleting one probe. |
+| [T053](T053-ordinary-own-slot-hot-read-fat-lto.md) | Hash-map 0.917431x did not excuse six failing controls; layout shifts were not isolated causality. V2 requires complete controls, exact-binary attribution and layout audit at each stage. |
 
 ## Ordered migration
 
@@ -49,7 +49,7 @@ fixed base; numbered substeps are independently correct stage boundaries.
 | M1.1 — value access facade + atom linking | Named operands link once, with no per-dispatch atom interning; facade leaves size/ownership unchanged. | Per-op re-interning, stale foreign atoms or facade conversion temporaries. |
 | M1.2 — layout authority for all stores and mutations | Ordinary own hits take one atom-to-slot lookup across all four stores; no descriptor cloning for data reads. | A storage family bypasses invalidation, or churn memory grows without bound. |
 | M1.3 — route ordinary Get/Set, retire old probes | Fewer probes/comparisons on interpreter paths and independent external property workloads; final M1 payoff. | Coverage shifts only on a tier/literal path, or final payoff fails. |
-| M2.1 — names off the callee-ordinary entry: indexed entry + typed context (migration) | For [callee-ordinary entries](../docs/design/frame-activation.md#cohorts-two-predicates-and-the-replacement-rule) replaces `function_env`/`FrameBindings` inserts, `initial_slots` name import, `apply_env` write-back, `current_env` export, realm refresh scans, the direct-leaf CallEnv, argument vectors, per-call name lookups of static facts and runtime received-cell arithmetic; natives get the [typed caller-varying fields](../docs/design/frame-activation.md#native-environment-m21-until-natives-take-a-capability-in-m25) instead of a per-call `empty_frame`; `Vm` holds ActivationContext plus a borrowed services env (wide constructor API change). Other entries keep the whole legacy route. Reach bound ~3.0 of 28.7 sampled s; development lodash/transform and diff/compare. | A typed field mirrored by a legacy name entry, an ordinary-cohort counter above 0, a cloned env per nested Vm, a wrong referrer/private/with/new.target in a native callback, changed prologue/TDZ/alias ordering, or a borrowed argument range surviving a switch. |
+| M2.1 — names off the callee-ordinary entry: indexed entry + typed context (migration) | For [callee-ordinary entries](../../docs/design/frame-activation.md#cohorts-two-predicates-and-the-replacement-rule) replaces `function_env`/`FrameBindings` inserts, `initial_slots` name import, `apply_env` write-back, `current_env` export, realm refresh scans, the direct-leaf CallEnv, argument vectors, per-call name lookups of static facts and runtime received-cell arithmetic; natives get the [typed caller-varying fields](../../docs/design/frame-activation.md#native-environment-m21-until-natives-take-a-capability-in-m25) instead of a per-call `empty_frame`; `Vm` holds ActivationContext plus a borrowed services env (wide constructor API change). Other entries keep the whole legacy route. Reach bound ~3.0 of 28.7 sampled s; development lodash/transform and diff/compare. | A typed field mirrored by a legacy name entry, an ordinary-cohort counter above 0, a cloned env per nested Vm, a wrong referrer/private/with/new.target in a native callback, changed prologue/TDZ/alias ordering, or a borrowed argument range surviving a switch. |
 | M2.2 — lexical scope leases + lazy dynamic consumers (migration) | Migrates the remaining inventory rows (eval, with/deopt, eval-capable closures, coercion filtering, results, realm fallback including `CallEnv::get`/`DynamicBindings` name reads), then deletes legacy `CallEnv` name storage. Mostly retirement; small development-lane reach. | Any consumer needs caller value copies, escaping eval sees invocation scope, a realm mutation needs a blanket refresh, a lease retains a caller frame, or a legacy name layer survives. |
 | M2.3 — one driver for generic-to-generic calls (migration) | Frame store and same-Vm driver land together for this population (a store with unchanged routing has no reach and moves frames, T021); replaces nested Vms for generic JS-to-JS calls and in-memory transitions on admitted call/return. Generator/async frames do not lease yet. Reach bound: nested-Vm plumbing 1.85 s; development immutable/persistent and graphlib/paths, suite cdjs as cross-check. | Emitted aggregate store/reload or per-op re-resolution on the admitted path (release-binary audit), a pointer-based view kept across a re-entrant call, per-call frame boxing, unwind/cleanup mismatch, or retained memory above the frozen ceiling. |
 | M2.4 — compact windows join the store (migration) | Replaces the compact thread-local register pool and frame stack, `call_from_activation` CallEnv/nested Vm for compact-to-non-compact calls, whole-window clears and exit window copies; declined backedges stop exiting; exits continue in place only where the register layout maps onto generic slots, else one counted conversion. Reach bound: compact driver 1.58 s plus part of the 15.4 s under `call_from_activation`; development lodash/transform and immutable/persistent. | An unexpected tier admission change, an unmapped exit without its counted conversion, or any M2.3 stop. |
@@ -62,9 +62,9 @@ fixed base; numbered substeps are independently correct stage boundaries.
 Every implementation stage requires focused tests, `check.sh`, NG fixtures and the
 **full configured Test262 set**, with no exclusions added to make a stage pass.
 Run the exact complete comparison and record its burndown per the
-[conformance runbook](../docs/conformance/README.md); curated subsets alone are insufficient.
+[conformance runbook](../../docs/conformance/README.md); curated subsets alone are insufficient.
 Freeze queue/profile-bound plans before runtime edits under the
-[performance workflow](../docs/performance-workflow.md). Intermediate migrations use
+[performance workflow](../../docs/performance-workflow.md). Intermediate migrations use
 `decide --mode stage` against one cumulative regression budget, not leaf speed gates;
 the final stage must pass ordinary screen/promotion payoff and all portfolio controls.
 Unit 0 sets numeric budgets, target improvements, memory ceilings and attempt limits
@@ -77,8 +77,8 @@ portfolios and held-out applications selected by operations, and serialize timin
 
 M2.1–M2.4 use the **stage budget**, cumulatively against M2's fixed base, even
 when an individual stage removes real work; only M2.5 claims the final payoff.
-Order rationale, cohorts, native env, driver contract and M1 interface: [frame activation](../docs/design/frame-activation.md)
-(inputs: [M2 design inputs](archive/T056-m2-design-inputs.md)). The 2026-10-22 lead decision moves effort to M2 planning while M1 A/B remain blocked.
+Order rationale, cohorts, native env, driver contract and M1 interface: [frame activation](../../docs/design/frame-activation.md)
+(inputs: [M2 design inputs](T056-m2-design-inputs.md)). The 2026-10-22 lead decision moves effort to M2 planning while M1 A/B remain blocked.
 The named cases are proposed development/suite targets and diagnostics, not a
 frozen plan or speed forecast. Refresh their exact-binary reach on the proposed M2 base; bind
 numeric stage cap, final per-case payoff, memory ceilings, K=6 and attempt limits
@@ -105,21 +105,21 @@ ordinary-path wins survive when accelerators decline, rather than a tier switch.
 ## Unit 0 and M1 stage 1
 
 Unit 0's summary (order M1, M2, M3; durable counters as plain `cfg(feature = "perf-counters")` code) and
-M1 stage 1 (on main; v4 `pass`) are in the [task history](archive/T056-task-history.md); records stay linked above.
+M1 stage 1 (on main; v4 `pass`) are in the [task history](T056-task-history.md); records stay linked above.
 
 ## M1 stage 2 (layout authority): first shape closed
 
 Sole screen `20261018T055933Z-t056-m1s2-screen1` of `873c9bc5` under the frozen plan (`current_stage` 2)
-rejected; the [rejection record](archive/T056-m1-stage2-evidence.md) owns the gates and verdict. It rejected
+rejected; the [rejection record](T056-m1-stage2-evidence.md) owns the gates and verdict. It rejected
 stage 2 (v4: 42/86 cases; external, development, sentinel and portfolio lanes above ceiling on
 all six layouts; not DISTURBED); the plan's single stage-2 attempt is spent and its JSON stays
 frozen. Under T022 the `abort` closes this implementation shape (value republication, weak
 intermediate shapes, private domains, double-hashed probes), not the layout-authority family.
-The [diagnosis](archive/T056-m1-stage2-diagnosis.md) reproduces the screen's instruction ratios
+The [diagnosis](T056-m1-stage2-diagnosis.md) reproduces the screen's instruction ratios
 and its ablations remove most of the excess. The replacement is
-[property layouts](../docs/design/property-layouts.md), which assumes T063's invariant that
+[property layouts](../../docs/design/property-layouts.md), which assumes T063's invariant that
 stored strings keep valid surrogate pairs as scalars, so typed keys need no canonicalization scan.
-Its replacement's historical contract is below; that continuation was closed-superseded by K→A→B, now [closed at K](archive/T064-kernel-layout-authority-closure.md). Work-count obligations remain applicable to any future M1 continuation.
+Its replacement's historical contract is below; that continuation was closed-superseded by K→A→B, now [closed at K](T064-kernel-layout-authority-closure.md). Work-count obligations remain applicable to any future M1 continuation.
 
 **Historical closed-superseded contract (not the successor).**
 
@@ -172,7 +172,7 @@ replaces or cancels a timed attempt already started.
 ## M2 leaf placement and work-count obligations
 
 Leaf reach of 1–2% has not survived layout noise and complete controls (T041, T049, T027 0.984; T053's 0.917 did not
-excuse six failing controls), so diagnosed candidates ([inputs](archive/T056-m2-design-inputs.md)) ride structural stages:
+excuse six failing controls), so diagnosed candidates ([inputs](T056-m2-design-inputs.md)) ride structural stages:
 
 | Candidate | Reach | Home |
 | --- | ---: | --- |
@@ -198,7 +198,7 @@ compact-to-non-compact calls and both cohort predicates' fixtures.
 
 ## Verification of design-only changes
 
-The checklist and earlier records are in the [task history](archive/T056-task-history.md).
+The checklist and earlier records are in the [task history](T056-task-history.md).
 M2 re-plan verification on the documentation change over `290e3f51`:
 `./scripts/check-context.py` and
 `PYTHONDONTWRITEBYTECODE=1 ./scripts/check-touched.sh --staged --explain` passed.

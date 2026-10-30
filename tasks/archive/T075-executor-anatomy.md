@@ -1,11 +1,11 @@
 # T075: Executor instruction-address anatomy
 
-- Status: active; requested diagnosis complete; four ranked incremental proposals await selection.
+- Status: closed-superseded; diagnosis retained, four incremental proposals superseded by [T077](../T077-core-rebuild.md), lead 2026-10-29.
 - Implementation: diagnostic collectors, source maps and evidence present; no runtime change.
 - Verified at: engine source `59eb72e511cca013cf59d6736922c9c666cb883f`, 2026-10-23 UTC; 90 successful iMac profiles, seven normalized function matches, retained-count audit; final repository checks below.
-- Evidence: [measurements](diagnostics/t075/measurements.md), [method and jobs](diagnostics/t075/method.md), [ranked proposals](diagnostics/t075/proposals.md), [retained data audit](diagnostics/t075/verify.py).
+- Evidence: [measurements](../diagnostics/t075/measurements.md), [method and jobs](../diagnostics/t075/method.md), [ranked proposals](../diagnostics/t075/proposals.md), [retained data audit](../diagnostics/t075/verify.py).
 - Unresolved: precise hardware stall mechanism; line-zero semantic attribution; no causal savings, new wall/instruction standing or performance acceptance.
-- Next action: select proposal 1's measured primitive-publication slice, obtain a fresh formal opportunity queue, then freeze/validate a finite-budget unit before runtime code. Reconcile overlapping T045 work before proposal 2.
+- Next action: none here; T077 uses the measured anatomy without importing or retrying the incremental candidates.
 
 ## Result
 
@@ -42,7 +42,7 @@ samples (wide 6.3425%). The hottest wide PCs are stack loads in
 `mem::replace<Value>` → `execute::store` at Move/Dup publication
 (`0x100100e8e`, 0.7670%), clear-window publication (`0x100103c46`, 0.6912%),
 and a source-line-zero store (`0x100100db5`, 0.6168%). Numeric result store
-`0x10010353d` is 0.4798%. The [measurement report](diagnostics/t075/measurements.md)
+`0x10010353d` is 0.4798%. The [measurement report](../diagnostics/t075/measurements.md)
 retains top PCs, inline source lines, all program distributions and NG comparison.
 
 ## Method and mapping confidence
@@ -73,7 +73,7 @@ historical context, not new results.
 
 ## Ranked next units
 
-See [proposals](diagnostics/t075/proposals.md) for files, scope, proof
+See [proposals](../diagnostics/t075/proposals.md) for files, scope, proof
 obligations, measured subpopulations and historical failures. None is approved.
 
 1. **Destination-aware primitive register publication** — transport 7.9273%
@@ -117,7 +117,7 @@ QJS_CHECK_SKIP_TEST262=1 ./scripts/check.sh
 ```
 
 Retained-data verification passes. Fast/full final results and cleanup are
-recorded in [verification](diagnostics/t075/verification.md). The curated
+recorded in [verification](../diagnostics/t075/verification.md). The curated
 Test262 run is explicitly skipped for this diagnostic/doc-only change;
 no runtime/parser/lexer source changes, so no focused semantic slice applies.
 There is no new conformance or performance standing. No build output is committed.

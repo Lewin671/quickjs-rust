@@ -9,7 +9,7 @@
   Legacy retained decisions remain verified only at their recorded revisions.
 - Evidence: [T055](archive/T055-layout-noise-control.md) owns B calibration and hashes;
   [T037](T037-integration-batch-1.md) owns historical unstable-base decisions.
-- Unresolved: ruleset check unconfigured; tooling does not yet encode the [overall-first rule](#overall-first-acceptance-user-rule-2026-10-22) (plans state it in prose); [T065 core-migration amendment](proposals/T065-core-migration-acceptance.md) is a proposal for lead review, not active policy.
+- Unresolved: ruleset check unconfigured; tooling does not yet encode the [overall-first rule](#overall-first-acceptance-user-rule-2026-10-22) (plans state it in prose); [T065 amendment](proposals/T065-core-migration-acceptance.md) is superseded; T077 uses its authorized milestone contract.
 - Next action: freeze fresh schema-3 queue/unit plans against the qualified policy for their collection schedule (new workers-4 plans bind v6; v5 screens and panels are 2.55x faster than serial, T060); preserve the independent promotion gates below.
 
 Commands and their interpretation are in
@@ -143,6 +143,8 @@ New plans state this rule when frozen, naming which gates are overall and
 which are local, so it is never applied after seeing results. Local
 regressions are recorded and reported, not hidden. RSS defaults: per-case
 median ratio ≤1.10, development geomean ≤1.05, at least 15 alternating pairs.
+
+For [T077](T077-core-rebuild.md#stage-acceptance-overrides-ordinary-unit-gates-for-t077-only) only, the lead/user decision of 2026-10-29 replaces per-unit 5% payoff, attempt budgets and instruction pre-gates with its milestone contract. Other units keep the rules below.
 
 ## Why staged migrations exist
 

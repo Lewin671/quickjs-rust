@@ -1,18 +1,18 @@
 # T068: Post-T066 exact-binary development profiles
 
-- Status: active; requested profiling/attribution complete; incremental proposals await lead selection.
+- Status: closed-superseded; diagnosis retained, incremental proposal queue replaced by [T077](../T077-core-rebuild.md), lead 2026-10-29.
 - Implementation: none; documentation only, no runtime or tooling change.
 - Verified at: measured `f49be95c798475f9ed9bb55b9138f6ca3c081413`, 2026-10-23 UTC; collection and independent content audit passed; documentation checks below.
-- Evidence: this report and [method, per-program tables and receipt manifest](archive/T068-profile-evidence.md).
+- Evidence: this report and [method, per-program tables and receipt manifest](T068-profile-evidence.md).
 - Unresolved: inlined work and pre-attachment startup are not independently priced; no per-category instruction counter or NG-equivalent causal cost exists.
-- Next action: select one proposal below, obtain the current formal opportunity queue, then freeze/validate its finite-budget plan before runtime edits. No rewrite is authorized.
+- Next action: none here; use these revision-bound profiles as T077 inputs, not a live incremental queue.
 
 ## Result and scope
 
 Fresh all-ten development whole-process retired-instruction geomean is **2.1199081× NG**.
 The largest visible incremental families are calls/environments, property paths and Value ownership.
 Execution/loop owns 44.21% of sampled self time, but includes inlined operations; it is not a dispatch price.
-The [T065 lead decision](T065-interpreter-core-v3.md#lead-decision-2026-10-23) remains unchanged.
+The then-current [T065 lead decision](T065-interpreter-core-v3.md#lead-decision-2026-10-23) governed this study; the 2026-10-29 T077 decision now supersedes its proposal queue.
 The brief's ~2.75× wall standing is historical T066 evidence, not a new wall result from this study.
 
 Owner: this worktree, branch `agent/t068-post-t066-profile/codex`, base `f49be95c`.
@@ -119,7 +119,7 @@ Visible parse/startup and teardown entries are observations, not bounds on their
 Likewise, 99% inclusive calls/loops and NG eval ancestry include executed bodies, not removable entry work.
 No exact division of the remaining instruction gap is identified by time sampling.
 
-The [top 25 Rust and NG symbols](archive/T068-profile-evidence.md#top-25-rust-symbols), with self/inclusive shares and categories, are retained with the per-program evidence.
+The [top 25 Rust and NG symbols](T068-profile-evidence.md#top-25-rust-symbols), with self/inclusive shares and categories, are retained with the per-program evidence.
 
 ## Ranked incremental proposals
 
@@ -139,17 +139,17 @@ Runtime paths below are relative to `crates/qjs-runtime/src/` unless qualified w
    positional slots directly and materialize observable call context only when required. Preserve shared upvalue
    cells, dynamic eval/with routes and callback restoration; no name-keyed per-call snapshot. Likely files:
    `function/call.rs`, `function/call_frame.rs`, `bytecode/vm_call_env.rs`, `bytecode/vm_frame_init.rs`,
-   `bytecode/compact_fn/wide/activation.rs`. [T056 M2](archive/T056-m2-plan-inputs.md) already scoped entry metadata;
-   [T065's call prototype](archive/T065-ablation-r1.md) priced a narrower cohort at 0.961, not this whole family.
+   `bytecode/compact_fn/wide/activation.rs`. [T056 M2](T056-m2-plan-inputs.md) already scoped entry metadata;
+   [T065's call prototype](T065-ablation-r1.md) priced a narrower cohort at 0.961, not this whole family.
    T021's shared-frame rewrite was rejected; do not repeat it under this unit. Lodash has 25.88% visible
    calls+environment share, immutable 22.28%, graphlib 18.44%; big.js only 1.87%.
 2. **Property proof.** Return a short-lived typed proof of receiver identity/layout/storage and a live slot,
    consumed once by a named get/set; keep guard invalidation and exotic fallback, and never hold a RefCell borrow
    across user code. Likely `bytecode/named_property_cache.rs`, `bytecode/compact_fn/property.rs`, `bytecode/vm_props.rs`,
    `value/object.rs`/`value/object/dynamic_storage.rs`. The cache+handler-only cap is **8.94%**;
-   14.19% also deletes storage/construction that this leaf may not affect. [T049](archive/T049-property-access-path-study.md)
-   removed a duplicate probe but missed its target and regressed controls; [T041](archive/T041-own-data-cache-hot-answers.md)
-   had a non-improving pair; [T053](archive/T053-ordinary-own-slot-hot-read-fat-lto.md) gained 8.3% on its target but
+   14.19% also deletes storage/construction that this leaf may not affect. [T049](T049-property-access-path-study.md)
+   removed a duplicate probe but missed its target and regressed controls; [T041](T041-own-data-cache-hot-answers.md)
+   had a non-improving pair; [T053](T053-ordinary-own-slot-hot-read-fat-lto.md) gained 8.3% on its target but
    failed six controls. T065's unsound lookup memo improved only diff and kept cache guards. New reach must be
    proved in validation/live-slot work, not assumed from text lookup. Full atom-store replacement stays deferred.
 3. **Value transport.** Use liveness/consumption facts to move a dead source operand into its destination or call
@@ -158,21 +158,21 @@ Runtime paths below are relative to `crates/qjs-runtime/src/` unless qualified w
    `bytecode/vm_call.rs`, `value.rs`. Clone + Value drop + `store_owned` alone occupy 11.03% weighted self time;
    all ownership transport is 11.91%. T065's count-free oracle gave 0.913 wall / 0.945 instructions on seven
    programs, but leaked and changed allocation behavior: it is no implementation price. T056 M1.2 failed on
-   ownership/object-layout regressions ([diagnosis](archive/T056-m1-stage2-diagnosis.md)); this proposal changes
+   ownership/object-layout regressions ([diagnosis](T056-m1-stage2-diagnosis.md)); this proposal changes
    transfer decisions, not Value width, heap ownership or the binding architecture.
 4. **Allocator.** Simplify owner-local fast paths and amortize repeated pool access where Rust's allocation
    contract permits; preserve remote-free publication, page live counts, alignment, bounded retention and System
    fallback. Likely `crates/qjs-cli/src/allocator.rs` and its tests only. Allocate/release LocalKey closures
-   contribute 3.23% self; allocator-owned TLS lookup another 0.73%. [T066](archive/T066-size-class-allocator.md)
-   already landed the large allocator change; its [evidence](archive/T066-allocator-evidence.md) records repeated
+   contribute 3.23% self; allocator-owned TLS lookup another 0.73%. [T066](T066-size-class-allocator.md)
+   already landed the large allocator change; its [evidence](T066-allocator-evidence.md) records repeated
    resource/sentinel failures and the eventual lead exception. No automatic exception transfers. A new unit
    must use the qualified x86 resource manifest (T067), not reopen the old allocator attempt.
 5. **RegExp.** Predecode atom ends, group continuations, quantifiers and simple-atom descriptors once per
    compiled pattern; consume that metadata in the existing bounded scans and prepared-input view, preserving
    backtrack/capture order. Likely `regexp/matcher/first.rs`, `regexp/matcher/fast_scan.rs`, `regexp/matcher.rs`.
    RegExp self shares are papaparse 27.38%, js-yaml 8.87%,
-   moment 3.87%, diff 1.82%; the lane-wide cap is only 4.64%. [T058](archive/T058-regexp-lazy-quantifiers.md)
-   already removed the lazy-quantifier catastrophe; [T025](archive/T025-allocation-free-regexp-backtracking.md)
+   moment 3.87%, diff 1.82%; the lane-wide cap is only 4.64%. [T058](T058-regexp-lazy-quantifiers.md)
+   already removed the lazy-quantifier catastrophe; [T025](T025-allocation-free-regexp-backtracking.md)
    stopped when controls regressed. Single-code-point scanning already exists; price repeated metadata decoding
    (`atom_end` alone 0.75% weighted self), not the fixed T058 shape or T025 replay.
 

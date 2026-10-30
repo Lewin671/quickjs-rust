@@ -1,6 +1,6 @@
 # T076 unit and bundle measurements
 
-Contract and frozen selection: [T076](../../T076-executor-bundle.md),
+Contract and frozen selection: [T076](../../archive/T076-executor-bundle.md),
 [plan](../../performance-units/executor-bundle.json). Plan freeze `c0652810`
 precedes every runtime change. [Preparation](preparation.md) owns baseline,
 A/A qualification, profile/queue provenance and failed preliminary analysis.

@@ -1,11 +1,11 @@
 # T076: Executor bundle
 
-- Status: active; requested bundle execution complete; all three units miss the frozen instruction filter; lead review pending.
+- Status: closed-rejected; lead review 2026-10-29: all three units missed their frozen gates; closed, candidates preserved on their branches, no retry.
 - Implementation: reverted; this branch's runtime exactly matches `19125d48`. Each tested candidate is preserved on its named side branch.
 - Verified at: U1 `e5dcaef0`, U2 `12aa95b8`, U3 `08bb19a7`, 2026-10-23 UTC; all full/focused/65-case fast gates and 257 NG fixtures pass. Restore commit `eb6afe9e` has the exact `19125d48` runtime and passes full/5,170 curated plus 65-case fast gates; instruction misses, cleanup and hashes are retained.
-- Evidence: [completion and job ledger](diagnostics/t076/completion.md), [unit measurements](diagnostics/t076/measurements.md), [frozen plan](performance-units/executor-bundle.json), [validation](diagnostics/t076/plan-validation.json), [preparation](diagnostics/t076/preparation.md).
+- Evidence: [completion and job ledger](../diagnostics/t076/completion.md), [unit measurements](../diagnostics/t076/measurements.md), [frozen plan](../performance-units/executor-bundle.json), [validation](../diagnostics/t076/plan-validation.json), [preparation](../diagnostics/t076/preparation.md).
 - Unresolved: audio-beat-detection instruction variability is not causally diagnosed; no combined timing, formal/held-out/RSS/resource or new exact Test262 standing. No required candidate-acceptance step remains after the empty-survivor stop.
-- Next action: lead reviews the evidence and preserved candidates; any retry needs a newly authorized unit/measurement contract, not a wall-driven repair or reuse of these failed gates.
+- Next action: none; no retry. [T077](../T077-core-rebuild.md) is the separately authorized structural successor, not reuse of these budgets or candidates.
 
 ## Scope and architecture
 

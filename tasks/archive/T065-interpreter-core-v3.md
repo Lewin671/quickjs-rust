@@ -1,23 +1,34 @@
 # T065: Interpreter core v3
 
-- Status: active; rewrite **not approved** — lead decision 2026-10-23 after the pre-M0 ablation (see Lead decision below): continue incrementally.
+- Status: closed-superseded; lead/user authorization of 2026-10-29 replaces the no-rewrite decision with [T077](../T077-core-rebuild.md).
 - Implementation: none; documentation only. Existing runtime remains unchanged;
   no new crate, dependency, unsafe block, schema kind or performance plan exists.
 - Verified at: design tree over 0ab98e3920629da1d7d6efae46f24f0b43bfa018,
   2026-10-22; context and staged fast-gate results recorded below. Instruction
   evidence uses exact M=9eba7a1d binaries, not an implemented v3 candidate.
-- Evidence: [gap anatomy and instruction record](archive/T065-gap-anatomy.md),
-  [target architecture](../docs/design/interpreter-core-v3.md),
-  [migration](../docs/design/interpreter-core-v3-migration.md),
-  [acceptance proposal](proposals/T065-core-migration-acceptance.md),
-  [independent review and lead outcome](archive/T065-design-review.md).
-- Unresolved: target level (the proposed 0.80×M leaves ~2.46× NG), shared-window frames (T021), collector choice, effort (review: 45–70 one-owner weeks);
-  per-mechanism wall attribution is unmeasured.
-- Next action: none for the rewrite. Incremental units are chosen from a fresh post-T066 profile (lead decision below).
+- Evidence: [gap anatomy and instruction record](T065-gap-anatomy.md),
+  [target architecture](../../docs/design/interpreter-core-v3.md),
+  [migration](../../docs/design/interpreter-core-v3-migration.md),
+  [acceptance proposal](../proposals/T065-core-migration-acceptance.md),
+  [independent review and lead outcome](T065-design-review.md).
+- Unresolved: prior design questions are superseded by T077; no v3 implementation is authorized from this historical proposal.
+- Next action: none here; implement the T077 staged replacement.
+
+## Superseding lead decision (2026-10-29)
+
+The user now authorizes large-scale refactoring, ordered correct, fast, then
+advanced/reasonable/clear architecture. The lead replaces the 2026-10-23
+incremental-only decision: [T077](../T077-core-rebuild.md) owns an in-place
+staged replacement on main, RC ownership plus a separate cycle collector,
+unified atoms/shapes/slots, one general execution core and aggregate-first
+milestone acceptance. No dual backend, tracing-GC port or old M0 budget survives.
+The [new target](../../docs/design/core-rebuild.md) supersedes v3 and its migration.
+Prior measurements/failed attempts below remain revision-bound history, not a
+current refusal or a fresh performance result. This closure changes documents only.
 
 ## Lead decision (2026-10-23)
 
-Rounds 1–3 ([record](archive/T065-ablation-r1.md)) priced each candidate mechanism on real libraries separately:
+Rounds 1–3 ([record](T065-ablation-r1.md)) priced each candidate mechanism on real libraries separately:
 allocator ~10% (landed incrementally as T066), call-entry prototype 0.961, count-free ownership oracle 0.913 wall /
 0.945 instructions, lookup-free named-property oracle only diff 0.947, 3× smaller `Op` 0.998 / 0.993. No priced
 mechanism carries a large share of the 2.38× instruction gap, and the ones that pay can land one at a time under the
@@ -149,7 +160,7 @@ controls and canonical agents/fat16/abort recipe. Check queue status first;
 never direct SSH, cancel another job, or overlap timing. Batch all four targets
 per variant. Preserve failed/unclear/budget-missed jobs; report per-program
 candidate/main ratios, instruction ranges and wall exploratory intervals,
-request/result hashes and stage costs in [rounds 1–2](archive/T065-ablation-r1.md).
+request/result hashes and stage costs in [rounds 1–2](T065-ablation-r1.md).
 Disk must remain at least 8 GiB locally and on the runner. Remove created
 scratch worktrees and their target/debug outputs; retain branches. Stop after
 round 2 for lead review. No production conformance or performance claim.

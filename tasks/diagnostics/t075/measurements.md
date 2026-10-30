@@ -1,7 +1,7 @@
 # T075 measurements at 59eb72e5
 
 Method and identity: [collection/source audit](method.md). Decisions and limits:
-[T075](../../T075-executor-anatomy.md). All percentages below use equally
+[T075](../../archive/T075-executor-anatomy.md). All percentages below use equally
 weighted development programs and sampled main-thread **self** counts.
 They are not percentages of retired instructions or removable wall time.
 

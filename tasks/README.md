@@ -7,14 +7,10 @@ update the resume block in the commit that lands it. When a task closes, move it
 ## Active
 | Task | Status | What it is |
 | --- | --- | --- |
-| [T076](T076-executor-bundle.md) executor bundle | active | Three candidates correctly tested then dropped by frozen instruction gates; runtime restored, evidence complete for lead review. |
-| [T075](T075-executor-anatomy.md) executor anatomy | active | Diagnosis complete: exact-PC/source attribution opens the post-T069 loop bucket; four incremental proposals await selection. |
+| [T077](T077-core-rebuild.md) core rebuild | active | Authorized in-place replacement; target/stages and S1 brief ready; baseline pending. |
 | [T073](T073-local-read-bimodal.md) local-read bimodality | active | Diagnosis complete: candidate text-layout CPU tails; T017 adopts case-health containment only. |
 | [T074](T074-direct-eval-scope-model.md) direct eval scope model | design needed | Architecture review before code; tracks eval visibility, declarations, mutability, context and suspension constraints. |
-| [T068](T068-post-t066-profile.md) post-T066 profiles | active | All ten development programs profiled on exact f49be95c/NG; owner attribution complete, ranked incremental proposals await selection. |
 | [T057](T057-string-code-units.md) string code units | active | Stage 1 and UTF-16 correctness extraction integrated; stage 2 abandoned (0 attempts); linear-search follow-up awaits screening. |
-| [T065](T065-interpreter-core-v3.md) interpreter core v3 | active | Ablation complete; rewrite not approved (lead, 2026-10-23); incremental units come from a fresh post-T066 profile. |
-| [T056](T056-interpreter-core-v2.md) interpreter core v2 | active | Remaining M2/M3 superseded by T065 pending review; M1 A/B blocked after T064 K abort; old failure/reserve unchanged. |
 | [T018](T018-broad-performance.md) broad performance | active | The performance campaign contract and its targets against QuickJS-NG. Start performance work here, then follow [the workflow](../docs/performance-workflow.md). |
 | [T040](T040-imac-general-performance.md) x86_64 general optimization | active | Fresh current-main comparison and exact-binary profiles, followed by independent general runtime units. |
 | [T045](T045-typed-loop-boxed-demand-provenance.md) boxed demand provenance | active | Ordinary identity-flow joins lose boxed demand; exact profiles and seed diagnosis precede a compiler-only unit. |
@@ -30,7 +26,7 @@ The last recorded full scan passes every configured case (see
 [conformance records](../docs/conformance/README.md)); [T043 history](archive/T043-derived-constructor-eval-context.md) records
 two remaining baseline programs outside that standing. Take broader conformance work from `./scripts/find-qjsng-gaps.sh`.
 
-Performance entries record scope and outcomes, not priority. Priority comes from a freshly generated opportunity queue. Reopening a closed proposal needs a new profile and a newly frozen plan; a rejected implementation does not ban its whole mechanism family (T022 states the rule).
+Performance entries record scope and outcomes, not priority. T077 follows its authorized rebuild stages; other units use a freshly generated opportunity queue. Reopening a closed proposal needs a new profile and a newly frozen plan; a rejected implementation does not ban its whole mechanism family (T022 states the rule).
 
 ## Closed
 
@@ -38,6 +34,11 @@ Each file is under `archive/` with a resume block; outcomes record what happened
 
 | Task | Outcome |
 | --- | --- |
+| [T076 executor bundle](archive/T076-executor-bundle.md) | Lead review: all three units missed frozen gates; closed, candidates preserved on their branches, no retry. |
+| [T075 executor anatomy](archive/T075-executor-anatomy.md) | Diagnosis retained; incremental proposal queue superseded by T077. |
+| [T068 post-T066 profiles](archive/T068-post-t066-profile.md) | Revision-bound attribution retained; incremental proposal queue superseded by T077. |
+| [T065 interpreter core v3](archive/T065-interpreter-core-v3.md) | Lead/user 2026-10-29 supersedes no-rewrite decision with T077; v3 target/migration retired. |
+| [T056 interpreter core v2](archive/T056-interpreter-core-v2.md) | Remaining work superseded by T077; failed attempts/evidence preserved without retries. |
 | [T072 live property proof](archive/T072-live-property-proof.md) | Closed without promotion under the lead decision: both unchanged-candidate screens incomplete on collection failures; triage 0.949774 and exact zero gaps remain, full performance standing unavailable. |
 | [T071 lexical context](archive/T071-lexical-context-gaps.md) | Parked by the lead, not integrated: deferred class-key fixes pass correctness but cost ordinary code up to +3% instructions after three repair rounds; [review](archive/T071-lexical-context-review.md); folded into T074 design. Branch `agent/t071-lexical-context-gaps/codex` retained. |
 | [T070 ownership transfer](archive/T070-value-transport.md) | Closed without promotion: attempt 1 declined; broader triage 0.975245 misses <=0.97; one screen unused; implementation retained on owner branch. |

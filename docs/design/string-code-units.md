@@ -36,9 +36,11 @@ performance result or freeze a performance plan.
 - Parser/lexer source spans remain UTF-8 byte offsets. Host UTF-8 conversion
   is an explicit boundary; it must preserve the sentinel round trip.
 
-## Migration stages
+## Historical T057 decomposition
 
-Each stage needs fresh queue/profile-bound evidence, a validated committed
+The remaining structural storage target is now [T077 S7](../../tasks/T077-core-rebuild.md#s7--primary-latin-1utf-16-strings);
+its primary-unit design supersedes the lazy-view route below. For separate
+T057 semantic/local work, each unit still needs fresh evidence and a validated committed
 plan before runtime edits, focused correctness/work-count tests and the
 [performance workflow](../performance-workflow.md). Stages can have separate
 plans; the six rows do not themselves freeze a single six-stage budget.
@@ -52,12 +54,13 @@ plans; the six rows do not themselves freeze a single six-stage budget.
 | 5. Primary 8/16-bit storage | Explicit cross-crate API migration to Latin-1/UTF-16 primary data; retire UTF-8-dependent Deref/Borrow contracts. | Latin-1 0..255; host round trips; scalar/pair equality and hash; COW; key enumeration, proxies and descriptors; byte source spans. |
 | 6. Optional concat structure | Independently justified bounded-depth ropes for real alias/prepend costs, with iterative flatten/drop and cursors. | Old aliases unchanged; deep drop; one flatten; pairs across nodes; bounded tiny-slice retention; unique append control. |
 
-Stages 1–4 stay local to String/RegExp. Stage 5 must be sequenced with
-[T056](../../tasks/T056-interpreter-core-v2.md) M1: atoms must use code-unit
-keys, and the atom/string equality/hash authority must change together.
+Stages 1–4 stay local to String/RegExp. Primary storage now follows T077 S1–S6: atoms already use code-unit keys,
+and the atom/string equality/hash backing must change together in S7.
 No stage changes GC, frame ownership, property storage or the value word.
 
-## Views and memory policy
+## Historical hybrid-view policy
+
+This describes the superseded T057 hybrid proposal, not T077's primary storage.
 
 Retain flat UTF-8 backing during the hybrid migration. ASCII APIs borrow
 bytes after cached classification. Non-ASCII indexing lazily builds one

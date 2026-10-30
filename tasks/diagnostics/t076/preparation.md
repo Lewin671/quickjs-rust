@@ -1,7 +1,7 @@
 # T076 preparation evidence
 
 Base `19125d48c626869d776df9a501c44f3a00566e32`; no runtime edits.
-Selection and staged architecture are owned by [T076](../../T076-executor-bundle.md).
+Selection and staged architecture are owned by [T076](../../archive/T076-executor-bundle.md).
 
 ## Baseline instructions and profiles
 
