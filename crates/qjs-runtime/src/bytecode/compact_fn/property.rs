@@ -233,104 +233,6 @@ fn is_global_object(env: &CallEnv, object: &Value) -> bool {
 
 /// Creates a missing ordinary own string data property without cloning the
 /// call environment when the complete [[Set]] result is already known.
-/// Mirrors `Vm::try_create_ordinary_own_data_property`.
-pub(in crate::bytecode) fn try_create_ordinary_own_data_property(
-    object: &crate::ObjectRef,
-    key: Rc<str>,
-    value: &Value,
-) -> bool {
-    if crate::symbol::is_symbol_primitive(object)
-        || crate::typed_array::is_typed_array_object(object)
-        || object.is_module_namespace_exotic()
-        || object.is_array_prototype_exotic()
-        || !object.is_extensible()
-        || !matches!(
-            object.own_data_property_read(&key),
-            OwnDataPropertyRead::Missing
-        )
-    {
-        return false;
-    }
-    let mut current = object.prototype_slot();
-    loop {
-        match current {
-            Some(crate::Prototype::Object(prototype)) => {
-                if crate::symbol::is_symbol_primitive(&prototype)
-                    || crate::typed_array::is_typed_array_object(&prototype)
-                    || prototype.is_module_namespace_exotic()
-                {
-                    return false;
-                }
-                if let Some(property) = prototype.own_property(&key) {
-                    if property.is_accessor() || !property.writable {
-                        return false;
-                    }
-                    if !object.create_absent_own_data_property(key.clone(), value.clone()) {
-                        object.set_shared_key(key, value.clone());
-                    }
-                    return true;
-                }
-                current = prototype.prototype_slot();
-            }
-            Some(
-                crate::Prototype::Array(_)
-                | crate::Prototype::Function(_)
-                | crate::Prototype::Proxy(_),
-            ) => {
-                return false;
-            }
-            None => {
-                if !object.create_absent_own_data_property(key.clone(), value.clone()) {
-                    object.set_shared_key(key, value.clone());
-                }
-                return true;
-            }
-
-            Some(crate::Prototype::Map(_carrier)) => {
-                let prototype = _carrier.object();
-
-                if crate::symbol::is_symbol_primitive(&prototype)
-                    || crate::typed_array::is_typed_array_object(&prototype)
-                    || prototype.is_module_namespace_exotic()
-                {
-                    return false;
-                }
-                if let Some(property) = prototype.own_property(&key) {
-                    if property.is_accessor() || !property.writable {
-                        return false;
-                    }
-                    if !object.create_absent_own_data_property(key.clone(), value.clone()) {
-                        object.set_shared_key(key, value.clone());
-                    }
-                    return true;
-                }
-                current = prototype.prototype_slot();
-            }
-
-            Some(crate::Prototype::Set(_carrier)) => {
-                let prototype = _carrier.object();
-
-                if crate::symbol::is_symbol_primitive(&prototype)
-                    || crate::typed_array::is_typed_array_object(&prototype)
-                    || prototype.is_module_namespace_exotic()
-                {
-                    return false;
-                }
-                if let Some(property) = prototype.own_property(&key) {
-                    if property.is_accessor() || !property.writable {
-                        return false;
-                    }
-                    if !object.create_absent_own_data_property(key.clone(), value.clone()) {
-                        object.set_shared_key(key, value.clone());
-                    }
-                    return true;
-                }
-                current = prototype.prototype_slot();
-            }
-        }
-    }
-}
-
 /// `registers[obj][registers[key]] = registers[value]` when the store is
 /// plain, leaving the value in `obj`'s register as `Op::SetProp` leaves it on
 /// the stack: a dense index of an array whose prototype chain is the realm's
@@ -375,15 +277,16 @@ pub(super) fn try_plain_set_prop(
         }
         Value::Object(object_ref) => match key {
             Value::String(name) if !is_global_object(env, object) => {
-                match object_ref.write_existing_own_data_property(name.as_str(), value) {
-                    OwnDataPropertyWrite::Written => true,
-                    OwnDataPropertyWrite::ReadOnly => false,
-                    OwnDataPropertyWrite::NeedsSlowPath => try_create_ordinary_own_data_property(
-                        object_ref,
-                        Rc::from(name.as_str()),
-                        value,
-                    ),
-                }
+                let domain = env.realm().atoms();
+                let lease = name
+                    .property_key_lease(domain)
+                    .unwrap_or_else(|| domain.intern(name.as_str()));
+                matches!(
+                    object_ref
+                        .write_or_create_computed_data_key(&lease, value)
+                        .result,
+                    OwnDataPropertyWrite::Written
+                )
             }
             _ => false,
         },

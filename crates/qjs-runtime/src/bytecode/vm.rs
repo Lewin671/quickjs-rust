@@ -1258,7 +1258,12 @@ impl<'a> Vm<'a> {
         if !updates_global_binding
             && let (Value::Object(object), PropertyKey::String(key)) = (&object, &key)
         {
-            match object.write_existing_own_data_property(key, &value) {
+            let domain = self.env.realm().atoms();
+            let lease = domain.find(key).unwrap_or_else(|| domain.intern(key));
+            match object
+                .write_or_create_computed_data_key(&lease, &value)
+                .result
+            {
                 OwnDataPropertyWrite::Written => {
                     self.stack.push(value);
                     return Ok(());
@@ -1273,16 +1278,7 @@ impl<'a> Vm<'a> {
                     self.stack.push(value);
                     return Ok(());
                 }
-                OwnDataPropertyWrite::NeedsSlowPath => {
-                    if self.try_create_ordinary_own_data_property(
-                        object,
-                        Rc::from(key.as_str()),
-                        &value,
-                    ) {
-                        self.stack.push(value);
-                        return Ok(());
-                    }
-                }
+                OwnDataPropertyWrite::NeedsSlowPath => {}
             }
         }
         let mut env = self.callee_env();

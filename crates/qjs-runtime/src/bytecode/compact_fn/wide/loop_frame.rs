@@ -9,8 +9,6 @@
 //! own bindings, received cells are read through their cells, and anything
 //! else declines.
 
-use std::rc::Rc;
-
 use crate::bytecode::ir::Bytecode;
 use crate::bytecode::typed_loop::LoopFrame;
 use crate::bytecode::vm_bindings::TypedLoopSloppyGlobalWrite;
@@ -167,17 +165,6 @@ impl LoopFrame for WideLoopFrame<'_> {
             return false;
         };
         !*hazard && (array.uses_prototype_object(prototype))
-    }
-
-    fn try_create_ordinary_own_data_property(
-        &self,
-        object: &ObjectRef,
-        key: Rc<str>,
-        value: &Value,
-    ) -> bool {
-        crate::bytecode::compact_fn::property::try_create_ordinary_own_data_property(
-            object, key, value,
-        )
     }
 
     // Admitted bodies write no sloppy globals, so a program that would is

@@ -493,21 +493,16 @@ fn execute<F: LoopFrame>(
                         if vm.loop_env().is_realm_global_object(object) {
                             deopt_here!(op);
                         }
-                        match object.write_existing_own_data_property_string(name, value) {
-                            crate::value::OwnDataPropertyWrite::Written => true,
-                            // The property does not exist yet. A dictionary
-                            // loop creates each key exactly once, so refusing
-                            // here would deoptimize on the first iteration and
-                            // never re-enter -- the whole loop would be lost to
-                            // its own first write. The creation path re-checks
-                            // extensibility, exotics, and the prototype chain
-                            // itself, so anything it will not do still declines.
-                            _ => vm.try_create_ordinary_own_data_property(
-                                object,
-                                Rc::from(name.as_str()),
-                                value,
-                            ),
-                        }
+                        let domain = vm.loop_env().realm().atoms();
+                        let lease = name
+                            .property_key_lease(domain)
+                            .unwrap_or_else(|| domain.intern(name.as_str()));
+                        matches!(
+                            object
+                                .write_or_create_computed_data_key(&lease, value)
+                                .result,
+                            crate::value::OwnDataPropertyWrite::Written
+                        )
                     }
                     // A boxed key is not automatically a string, exactly as
                     // for `computed_read`: `s[r][c] = v` writes through an

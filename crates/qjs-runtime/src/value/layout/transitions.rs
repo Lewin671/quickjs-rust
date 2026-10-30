@@ -23,6 +23,18 @@ impl Transitions {
                 .and_then(|(_, child)| child.upgrade()),
         }
     }
+    pub(super) fn prefer_dictionary(&self, label: Transition) -> bool {
+        self.large.as_ref().is_some_and(|map| {
+            map.get(&label)
+                .is_none_or(|child| child.strong_count() == 0)
+                && map
+                    .values()
+                    .filter(|child| child.strong_count() > 0)
+                    .take(9)
+                    .count()
+                    > 8
+        })
+    }
     pub(super) fn is_empty(&self) -> bool {
         self.small.is_empty() && self.large.as_ref().is_none_or(NameMap::is_empty)
     }

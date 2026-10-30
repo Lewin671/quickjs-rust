@@ -20,6 +20,7 @@ use super::{Property, Value};
 mod array_buffer_methods;
 mod class_fields;
 mod construction;
+mod data_write;
 mod key_order;
 mod literal;
 mod named_properties;

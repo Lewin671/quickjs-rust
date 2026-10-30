@@ -58,13 +58,6 @@ impl ObjectRef {
             self.capture_realm_intrinsic_identity();
         }
     }
-    pub(crate) fn create_absent_own_data_property(&self, key: Rc<str>, value: Value) -> bool {
-        if self.0.flag(super::flags::ARRAY_PROTOTYPE) || !self.is_extensible() {
-            return false;
-        }
-        self.define_property(key.to_string(), Property::enumerable(value));
-        true
-    }
     pub(crate) fn define_property(&self, key: String, property: Property) {
         let realm_identity = key == "globalThis"
             && !property.is_accessor()
@@ -178,31 +171,6 @@ impl ObjectRef {
     ) -> OwnDataPropertyWrite {
         self.write_existing_own_data_property_if(key, value, |_| true)
     }
-    pub(crate) fn write_existing_own_data_property_string(
-        &self,
-        key: &crate::JsString,
-        value: &Value,
-    ) -> OwnDataPropertyWrite {
-        if self.is_module_namespace_exotic()
-            || self.is_array_prototype_exotic()
-            || self.is_typed_array_exotic()
-        {
-            return OwnDataPropertyWrite::NeedsSlowPath;
-        }
-        if self.0.flag(super::flags::STRING_INDICES)
-            && self.virtual_index_property(key.as_str()).is_some()
-        {
-            return OwnDataPropertyWrite::ReadOnly;
-        }
-        if key.as_str() == "globalThis" || key.as_str() == "__quickjsRustDynamicFunctionRealm" {
-            return self.write_existing_own_data_property(key.as_str(), value);
-        }
-        let mut store = self.0.properties.borrow_mut();
-        let Some(key) = key.property_key_lease(store.domain()) else {
-            return OwnDataPropertyWrite::NeedsSlowPath;
-        };
-        store.write_existing_key(&key, value, |_| true)
-    }
     pub(crate) fn write_existing_own_data_property_if(
         &self,
         key: &str,
@@ -270,133 +238,5 @@ impl ObjectRef {
             .iter()
             .filter_map(|key| key.symbol().cloned())
             .collect()
-    }
-}
-
-/// Outcome and cache metadata from the same exclusive lookup. No miss proof
-/// survives this operation or crosses an observable callback.
-pub(crate) struct OrdinaryDataWrite {
-    pub(crate) result: OwnDataPropertyWrite,
-    pub(crate) cache_slot: Option<usize>,
-    pub(crate) created: bool,
-}
-impl ObjectRef {
-    pub(crate) fn write_or_create_data_key(
-        &self,
-        key: &KeyLease,
-        value: &Value,
-        chain_proven: bool,
-    ) -> OrdinaryDataWrite {
-        let decline = || OrdinaryDataWrite {
-            result: OwnDataPropertyWrite::NeedsSlowPath,
-            cache_slot: None,
-            created: false,
-        };
-        if self.is_symbol_primitive()
-            || self.is_typed_array_exotic()
-            || self.is_module_namespace_exotic()
-            || self.is_array_prototype_exotic()
-        {
-            return decline();
-        }
-        if self.0.flag(super::flags::STRING_INDICES)
-            && self.virtual_index_property(key.as_str()).is_some()
-        {
-            return OrdinaryDataWrite {
-                result: OwnDataPropertyWrite::ReadOnly,
-                ..decline()
-            };
-        }
-        let mut store = self.0.properties.borrow_mut();
-        let normalized;
-        let key = if key.belongs_to(store.domain()) {
-            key
-        } else {
-            normalized = store
-                .domain()
-                .find(key.as_str())
-                .unwrap_or_else(|| store.domain().intern(key.as_str()));
-            &normalized
-        };
-        let append_slot = store.len();
-        let lookup = store.lookup(key).expect("normalized receiver key");
-        let (property, created) = match lookup.descriptor() {
-            Some(mut property) => {
-                if property.is_accessor() {
-                    return decline();
-                }
-                if !property.writable {
-                    return OrdinaryDataWrite {
-                        result: OwnDataPropertyWrite::ReadOnly,
-                        ..decline()
-                    };
-                }
-                property.value = value.clone();
-                (property, false)
-            }
-            None => {
-                if !chain_proven {
-                    let mut current = lookup.prototype();
-                    loop {
-                        match current {
-                            None => break,
-                            Some(Prototype::Object(parent)) => {
-                                if parent.is_symbol_primitive()
-                                    || parent.is_typed_array_exotic()
-                                    || parent.is_module_namespace_exotic()
-                                    || parent.is_array_prototype_exotic()
-                                {
-                                    return decline();
-                                }
-                                if let Some(p) = parent.own_property(key.as_str()) {
-                                    if p.is_accessor() || !p.writable {
-                                        return decline();
-                                    }
-                                    break;
-                                }
-                                current = parent.prototype_slot();
-                            }
-                            Some(_) => return decline(),
-                        }
-                    }
-                }
-                if !self.is_extensible() {
-                    return OrdinaryDataWrite {
-                        result: OwnDataPropertyWrite::ReadOnly,
-                        ..decline()
-                    };
-                }
-                (Property::enumerable(value.clone()), true)
-            }
-        };
-        let slot = lookup.data_slot().unwrap_or(append_slot);
-        lookup.define(property);
-        if created && key.array_index().is_some() {
-            self.0
-                .index_property_count
-                .set(self.0.index_property_count.get() + 1);
-        }
-        drop(store);
-
-        if key.as_str() == "globalThis"
-            && matches!(value, Value::Object(global) if self.ptr_eq(global))
-        {
-            self.capture_realm_intrinsic_identity();
-        }
-        OrdinaryDataWrite {
-            result: OwnDataPropertyWrite::Written,
-            cache_slot: Some(slot),
-            created,
-        }
-    }
-}
-
-impl ObjectRef {
-    pub(crate) fn note_cached_append(&self, index: bool) {
-        if index {
-            self.0
-                .index_property_count
-                .set(self.0.index_property_count.get() + 1);
-        }
     }
 }

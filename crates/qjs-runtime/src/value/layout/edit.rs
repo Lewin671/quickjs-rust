@@ -131,15 +131,38 @@ impl Lookup<'_> {
         self.store.prototype()
     }
 
-    pub(crate) fn data_slot(&self) -> Option<usize> {
-        self.position
-            .filter(|&p| !self.store.layout.entry(p).attrs.has(Attributes::ACCESSOR))
-    }
     pub(crate) fn descriptor(&self) -> Option<Property> {
         self.position
             .map(|position| self.store.descriptor(position))
     }
+    /// A present ordinary data property needs no descriptor reconstruction.
+    pub(crate) fn write_existing(
+        self,
+        value: &Value,
+    ) -> Result<(crate::value::OwnDataPropertyWrite, usize), Self> {
+        use crate::value::OwnDataPropertyWrite;
+        let Some(position) = self.position else {
+            return Err(self);
+        };
+        let attrs = self.store.layout.entry(position).attrs;
+        let result = if attrs.has(Attributes::ACCESSOR) {
+            OwnDataPropertyWrite::NeedsSlowPath
+        } else if !attrs.has(Attributes::WRITABLE) {
+            OwnDataPropertyWrite::ReadOnly
+        } else {
+            self.store.values[position] = value.clone();
+            self.store.verify_slot(position);
+            OwnDataPropertyWrite::Written
+        };
+        Ok((result, position))
+    }
     pub(crate) fn define(self, property: Property) {
+        self.define_impl(property, false);
+    }
+    pub(crate) fn define_dynamic(self, property: Property) {
+        self.define_impl(property, true);
+    }
+    fn define_impl(self, property: Property, dynamic: bool) {
         let attrs = Attributes::of(&property);
         match self.position {
             Some(position) => {
@@ -161,8 +184,15 @@ impl Lookup<'_> {
                 return;
             }
             None => {
-                let dictionary =
-                    self.store.layout.dictionary || self.store.len() >= DICTIONARY_WIDTH;
+                let dictionary = self.store.layout.dictionary
+                    || self.store.len() >= DICTIONARY_WIDTH
+                    || (dynamic
+                        && self.store.layout.transitions.borrow().prefer_dictionary(
+                            Transition::Append {
+                                key: self.key.id(),
+                                attrs,
+                            },
+                        ));
                 if dictionary {
                     let key = self.key.clone();
                     let same_index =
