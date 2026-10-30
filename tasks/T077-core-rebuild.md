@@ -1,11 +1,11 @@
 # T077: In-place core rebuild
 
-- Status: active; S1 review repairs in progress on `agent/t077-s1-property-authority/codex`, repair base `b2daec46`; layout `4f38ccdf`, host order `46327127`; lead formal performance acceptance pending.
-- Implementation: live weak transitions, shared prefix descriptor arrays, byte-budgeted retention, cached attribute/integrity edits, last-key rollback and atom/index repairs are present; explicit ordered host construction is being verified.
-- Verified at: `4f38ccdf`, 2026-10-30: fast gate passed (2,421 default tests, no focused Test262 path matched); combined run before the last two test additions passed 2,463/2,463; native/x86 compilation passed; final gates pending. Previous `06044f96` correctness standing remains revision-bound in its receipt.
-- Evidence: [review repair receipt](archive/T077-s1-review-fixes.md), [repair architecture](proposals/T077-s1-review-fixes.md), [previous receipt](archive/T077-s1-verification.md), [decided key lifetime](proposals/T077-s1-fallibility.md).
-- Unresolved: final repair verification/exact scan after a high-capacity ID-hash boundary correction; diagnostics at `46327127` are recorded; RegExp ArrayRef ordering crosses the S2 storage boundary; lead formal whole-portfolio acceptance remains pending.
-- Next action: finish focused verification and host ordering, run fast/full/NG/exact gates, record complete burndown and repair revision. This owner never pushes or merges.
+- Status: active; S1 review repair implementation and correctness gates complete within owner scope on `agent/t077-s1-property-authority/codex`, repair base `b2daec46`; lead formal performance acceptance pending.
+- Implementation: live weak transitions, shared prefix descriptor arrays, byte-budgeted retention, cached attribute/integrity edits, last-key rollback, atom/index repairs and explicit ordered host construction are present. S2-owned paths are untouched.
+- Verified at: `0ab176a5`, 2026-10-30: fast gate 2,422 default tests; combined agents/perf-counters 2,466/2,466; NG 259/259; full check including 753 tool tests, 35 script tests and 5,170 curated cases; native/x86 compilation and size assertions pass. Complete corrected release/agents exact scan: 42,672/42,672 configured passes, zero failures/timeouts/not-run/gaps; burndown recorded. Final comments/receipts do not change executable Rust code.
+- Evidence: [review repair receipt](archive/T077-s1-review-fixes.md), [repair architecture](proposals/T077-s1-review-fixes.md), [previous receipt](archive/T077-s1-verification.md), [decided key lifetime](proposals/T077-s1-fallibility.md). The review receipt binds counter/RSS reproduction, exact binary and report hashes to their revisions.
+- Unresolved: lead formal whole-portfolio acceptance; measured O(width) prefix-fork/index cost. Pre-existing RegExp ArrayRef key sorting remains S2 work under this owner's path boundary; no scope extension was authorized.
+- Next action: lead reviews/integrates the repaired branch under the stage contract; S2 adapts the private bulk-integrity/slot-match APIs and preserves array insertion order, adding the RegExp ordering fixture. This owner never pushes or merges.
 
 ## Authority and scope
 

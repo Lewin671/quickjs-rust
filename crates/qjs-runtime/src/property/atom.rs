@@ -2,9 +2,9 @@
 //!
 //! Strings use exact canonical UTF-16 equality; symbols use object identity in
 //! one ID namespace. IDs are recycled only after their last lease is gone. Layouts and linked code own
-//! leases. Content indices and the ID directory are weak and swept together;
-//! they do not keep historical keys or symbols alive. A lease records its
-//! domain weakly; layouts separately retain the owning domain.
+//! leases. Content indices are weak and swept together; the ID directory is
+//! test-only. Neither pins historical keys. A lease records its domain weakly;
+//! layouts separately retain the owning domain.
 
 use std::borrow::Cow;
 use std::cell::RefCell;

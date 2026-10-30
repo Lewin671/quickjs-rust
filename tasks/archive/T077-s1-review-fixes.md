@@ -127,3 +127,117 @@ all diagnostic scenario capacities unchanged. A focused unit test exercises
 capacity 2^33 without allocating that table. The initial exact scan was stopped
 during queue preparation and has no burndown; the corrected engine gets a new
 complete scan. Final verification and refreshed binary identity follow below.
+
+## Corrected-source diagnostic refresh
+
+At `0ab176a5`, all seven fresh counter runs exactly match the corresponding
+`46327127` counter columns above (including the documented suffix branch/index
+cost). The following RSS samples and peaks are fresh runs of the corrected
+source; the previous table remains the immutable prior-revision measurement.
+Counter binary SHA-256:
+`d8e34e439676905799953a14336ad28896f087386aecad2fa2cf63c6fca9f98e`.
+
+| Scenario | Corrected live RSS MiB | Corrected peak RSS MiB |
+| --- | ---: | ---: |
+| ctors16 | 65.39 | 65.39 |
+| ctors20 | 80.34 | 80.33 |
+| json20 | 42.42 | 41.64 |
+| distinct100 | 14.73 | 14.34 |
+| suffix127 | 4.77 | 5.73 |
+| freeze40 | 16.78 | 16.77 |
+| delete | 7.41 | 7.33 |
+
+The pre-existing RegExp match-array key-order issue is deferred under the
+owner's path boundary to S2's ArrayRef named-store migration. The RegExp caller
+already sets index/input/groups/indices in spec order; ArrayRef enumeration
+sorts them. Verified example: `Object.keys(/a/d.exec("a")).join(",")` yields
+`0,groups,index,indices,input`; NG yields `0,index,input,groups,indices`.
+No exclusion or expected failure was added. No S2-owned source was edited.
+
+## Final-source local gates
+
+Executable Rust code frozen at `0ab176a5`; the following working-tree changes
+are module-comment clarifications and receipts only. On 2026-10-30:
+
+- `TEST262_DIR=/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/third_party/test262 ./scripts/check.sh`: pass, including 2,422 default runtime tests, default/agents/perf-counters clippy and feature checks, 753 benchmark-tool tests, 35 script tests, hook isolation, plans/context/size and 5,170/5,170 curated Test262 cases.
+- `cargo test -p qjs-runtime --features agents,perf-counters --lib --quiet`: 2,466/2,466 pass.
+- `QJS_CLI_BIN="$PWD/target/debug/qjs" ./scripts/compare-qjs.sh`: 259/259 fixtures pass, including the new host ordering fixture.
+- `cargo check -p qjs-runtime --target x86_64-apple-darwin --features agents,perf-counters`: pass. Native and x86 assertions keep KeyId 4 B, KeyLease 8 B, ShapeEntry 16 B, NamedStore 48 B, wrapper 56 B, ObjectData 96 B and Value 16 B. No x86 execution or timing claim.
+- Branch scope validation from `b2daec46` passes. Forbidden S2 files are unchanged; no new dependency, unsafe code, push or merge.
+
+Final exact scan (pending completion at this receipt update):
+
+```sh
+QJS_CLI_BIN="$PWD/target/s1-final-scan-qjs" QJS_AGENTS=1 QJS_CLI_PROFILE=release \
+  TEST262_CASE_TIMEOUT_SECONDS=20 TEST262_TIMEOUT_RETRIES=1 TEST262_BASELINE_JOBS=4 \
+  TEST262_DIR=/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/third_party/test262 \
+  ./scripts/find-qjsng-gaps.sh --exact --all --out-dir target/s1-exact-corrected
+```
+
+Rust release/agents CLI SHA-256:
+`23923fac9ca4748205e61514b295b1aa6b4f9ecfc2b8115bbeec41f03bd9d32d`.
+The scan reuses this copied binary, so later default-feature builds cannot
+replace it. Compiler: Rust 1.95.0; native aarch64 macOS. Pinned Test262
+`4249661388e5d3f92a85186213da140a6481490f`; NG
+`f7830186043e4488f2998759d60a514faf07cbc9`. NG runner/CLI/config SHA-256 are
+unchanged from the previous S1 receipt and were rechecked for this scan.
+
+## S2 integration API notes
+
+Two private NamedStore interfaces changed with the representation:
+`transform_descriptors(frozen: bool)` selects bulk seal/freeze; its ObjectRef
+callers pass false/true. The former borrowed `slot_key` API is replaced by
+`slot_matches(slot, &KeyLease)`, since a shared append buffer cannot expose an
+unguarded reference across reallocation. Both ObjectRef slot consumers are
+ported. S2 array/function consumers based on the previous interface must use
+these operations when integrating; no S2-owned source was changed here.
+
+## Complete exact result and handoff
+
+The corrected exact driver exited zero. Verified inventory: **53,572 unique
+paths**, **10,900 unchanged NG-configured exclusions** (10,621 feature/exclude
+records and 279 fixtures), **42,672 configured/eligible/executed Rust cases**.
+Rust passes **42,672/42,672**, with zero failures, timeouts, skipped configured
+cases or not-run configured cases. NG passes 42,602 and fails the same 70 cases;
+zero NG timeouts. Both-pass is 42,602; Rust passes every NG nonpass. All
+NG-pass/Rust-fail, timeout and not-run buckets and actionable gaps are zero.
+No configured pass is lost relative to the previous S1 receipt. This is complete
+configured coverage, not a claim about the 10,900 excluded files.
+
+The unique path inventory and every configured Rust outcome were independently
+checked from cases.jsonl before recording; the copied scan binary hash was
+rechecked unchanged. Summary and case-result hashes are identical to the prior
+S1 scan, establishing identical configured outcome buckets:
+
+- summary.json: `cffdf394963ec66c41d006192593e9975e6b082a55483748550b7a9fb866e80f`.
+- cases.jsonl: `2263183d8df546cb37338205c107cc4614a7ddee069a711be6181c0e27c2f61a`.
+
+Burndown appended, never replacing a historical record:
+
+```sh
+./scripts/test262-burndown.sh --report target/s1-exact-corrected \
+  --commit 0ab176a59ed007ce8ba3d5c227f837fd4c6dd00c \
+  --source local-exact-release-agents
+```
+
+The [ledger](../../docs/conformance/burndown.jsonl) binds these counts to the
+scanned executable source. The abandoned preparation-only scan has no entry.
+Final receipt, task/index, ledger and module-comment changes alter no executable
+Rust code after `0ab176a5`. The final commit hook reruns the staged fast gate.
+
+Repair commits:
+
+- `4f38ccdf`: live transition edges, shared prefix descriptors, byte accounting,
+  cached attributes/integrity, last-delete rollback and atom/index repair.
+- `46327127`: ordered host construction and all nonempty direct caller ports.
+- `d302d43e`: revision-bound diagnostic counters/RSS and reproduction inputs.
+- `0ab176a5`: ID-index capacity boundary and focused no-allocation test.
+
+Remaining work: S2 must preserve RegExp match-array named-key insertion order
+and adapt the two private NamedStore interfaces above; the lead owns formal
+whole-portfolio performance acceptance. Prefix forks retain the documented
+O(width) copying/index rebuilding cost. Existing JS value RC cycles remain S6
+work; shape source links form an acyclic graph, not a new value owner.
+Disk checks remained above the 8 GiB stop threshold (lowest observed sample
+about 19 GiB; 21–22 GiB near scan completion). No push, merge, excluded-case
+change or S2-owned source edit occurred.

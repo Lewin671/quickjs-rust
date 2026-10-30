@@ -1,9 +1,9 @@
 //! Key-ID index with consumable vacant-bucket proofs.
 //!
-//! A lookup searches once. Cloning an immutable layout preserves bucket
-//! positions, so an insertion into its copy consumes the same proof without
-//! searching again. Each insertion reserves space for the following one;
-//! rebuilds are cold structural work and explicitly counted separately.
+//! A lookup yields a bucket proof. Full index copies preserve that proof;
+//! prefix forks rebuild and consume a new proof as cold structural work.
+//! Each insertion reserves space for the next one; index rebuilds are counted
+//! separately from operation probes. Shared-tail admission lives in storage.
 
 use crate::property::atom::KeyId;
 
