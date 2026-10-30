@@ -9,7 +9,7 @@
 
 use std::{
     cell::{Cell, OnceCell, Ref, RefCell, RefMut},
-    collections::{BTreeSet, HashMap},
+    collections::BTreeSet,
     fmt,
     rc::Rc,
 };
@@ -47,6 +47,7 @@ impl ArrayRef {
 }
 
 struct ArrayData {
+    domain: crate::property::atom::AtomDomain,
     elements: RefCell<Vec<Value>>,
     length: Cell<usize>,
     length_writable: Cell<bool>,
@@ -88,17 +89,27 @@ impl Drop for ArrayData {
     }
 }
 
-#[derive(Default)]
 struct ArrayColdData {
     holes: RefCell<BTreeSet<usize>>,
-    properties: RefCell<HashMap<String, Property>>,
-    symbol_properties: RefCell<Vec<(ObjectRef, Property)>>,
+    properties: RefCell<super::layout::NamedStore>,
     prototype: RefCell<Option<Option<Prototype>>>,
+}
+
+impl ArrayColdData {
+    fn new(domain: &crate::property::atom::AtomDomain) -> Self {
+        Self {
+            holes: RefCell::default(),
+            properties: RefCell::new(super::layout::NamedStore::empty(domain)),
+            prototype: RefCell::default(),
+        }
+    }
 }
 
 impl ArrayData {
     fn cold(&self) -> &ArrayColdData {
-        self.cold.get_or_init(Box::default).as_ref()
+        self.cold
+            .get_or_init(|| Box::new(ArrayColdData::new(&self.domain)))
+            .as_ref()
     }
 
     fn cold_if_present(&self) -> Option<&ArrayColdData> {
@@ -144,7 +155,7 @@ impl ArrayData {
             }
             let key = std::str::from_utf8(&digits[cursor..])
                 .expect("decimal array indices are valid UTF-8");
-            properties.contains_key(key)
+            properties.contains_text(key)
         })
     }
 
@@ -160,9 +171,10 @@ impl ArrayData {
 }
 
 impl ArrayRef {
-    pub(crate) fn new(elements: Vec<Value>) -> Self {
+    pub(crate) fn new(domain: &crate::property::atom::AtomDomain, elements: Vec<Value>) -> Self {
         let length = elements.len();
         Self(Rc::new(ArrayData {
+            domain: domain.clone(),
             elements: RefCell::new(elements),
             length: Cell::new(length),
             length_writable: Cell::new(true),
@@ -173,8 +185,12 @@ impl ArrayRef {
         }))
     }
 
-    pub(crate) fn new_with_length(length: usize) -> Self {
+    pub(crate) fn new_with_length(
+        domain: &crate::property::atom::AtomDomain,
+        length: usize,
+    ) -> Self {
         Self(Rc::new(ArrayData {
+            domain: domain.clone(),
             elements: RefCell::new(Vec::new()),
             length: Cell::new(length),
             length_writable: Cell::new(true),
@@ -185,9 +201,13 @@ impl ArrayRef {
         }))
     }
 
-    pub(crate) fn new_sparse(elements: Vec<Value>, holes: Vec<usize>) -> Self {
+    pub(crate) fn new_sparse(
+        domain: &crate::property::atom::AtomDomain,
+        elements: Vec<Value>,
+        holes: Vec<usize>,
+    ) -> Self {
         if holes.is_empty() {
-            return Self::new(elements);
+            return Self::new(domain, elements);
         }
         let length = elements.len();
         let holes: BTreeSet<_> = holes.into_iter().collect();
@@ -198,6 +218,7 @@ impl ArrayRef {
             (elements, holes)
         };
         let data = ArrayData {
+            domain: domain.clone(),
             elements: RefCell::new(elements),
             length: Cell::new(length),
             length_writable: Cell::new(true),
@@ -210,7 +231,7 @@ impl ArrayRef {
             data.cold
                 .set(Box::new(ArrayColdData {
                     holes: RefCell::new(holes),
-                    ..ArrayColdData::default()
+                    ..ArrayColdData::new(domain)
                 }))
                 .unwrap_or_else(|_| unreachable!("fresh array cold state is empty"));
         }
@@ -251,8 +272,9 @@ impl ArrayRef {
             indices.extend(
                 cold.properties
                     .borrow()
-                    .keys()
-                    .filter_map(|key| array_index_property_key(key))
+                    .text_keys()
+                    .into_iter()
+                    .filter_map(|key| array_index_property_key(&key))
                     .filter(|index| *index < len),
             );
         }
@@ -264,7 +286,7 @@ impl ArrayRef {
     pub(crate) fn property(&self, key: &str) -> Option<Property> {
         self.0
             .cold_if_present()
-            .and_then(|cold| cold.properties.borrow().get(key).cloned())
+            .and_then(|cold| cold.properties.borrow().get_text(key))
     }
 
     pub(crate) fn symbol_property(&self, symbol: &ObjectRef) -> Option<Property> {
@@ -281,7 +303,7 @@ impl ArrayRef {
         self.0.length.set(index);
         if let Some(cold) = self.0.cold_if_present() {
             cold.holes.borrow_mut().remove(&index);
-            cold.properties.borrow_mut().remove(&index.to_string());
+            cold.properties.borrow_mut().remove_text(&index.to_string());
         }
         if index + 1 == elements.len() {
             elements.pop()
@@ -355,10 +377,6 @@ impl ArrayRef {
             cold.holes.try_borrow().is_ok_and(|holes| holes.is_empty())
                 && cold
                     .properties
-                    .try_borrow()
-                    .is_ok_and(|properties| properties.is_empty())
-                && cold
-                    .symbol_properties
                     .try_borrow()
                     .is_ok_and(|properties| properties.is_empty())
         });
@@ -774,7 +792,7 @@ impl ArrayRef {
         }
         self.0.cold_if_present().is_none_or(|cold| {
             let properties = cold.properties.borrow();
-            properties.is_empty() || !properties.contains_key(&index.to_string())
+            properties.is_empty() || !properties.contains_text(&index.to_string())
         })
     }
 
@@ -795,7 +813,7 @@ impl ArrayRef {
         }
         self.0.cold_if_present().is_none_or(|cold| {
             let properties = cold.properties.borrow();
-            properties.is_empty() || !properties.contains_key(&index.to_string())
+            properties.is_empty() || !properties.contains_text(&index.to_string())
         })
     }
 
@@ -818,7 +836,7 @@ impl ArrayRef {
                     .cold()
                     .properties
                     .borrow_mut()
-                    .insert(index.to_string(), Property::enumerable(value));
+                    .insert_text(&index.to_string(), Property::enumerable(value));
                 return;
             }
             let old_len = elements.len();
@@ -841,12 +859,12 @@ impl ArrayRef {
         if let Some(cold) = self.0.cold_if_present() {
             let mut properties = cold.properties.borrow_mut();
             if properties
-                .get(&key)
+                .get_text(&key)
                 .is_some_and(|property| !property.configurable)
             {
                 return false;
             }
-            properties.remove(&key);
+            properties.remove_text(&key);
         }
         // A present dense element on a sealed/frozen array is non-configurable
         // (its descriptor is synthesized from these flags), so its deletion is
@@ -873,8 +891,9 @@ impl ArrayRef {
         let mut sparse_indices: Vec<_> = self.0.cold_if_present().map_or_else(Vec::new, |cold| {
             cold.properties
                 .borrow()
-                .keys()
-                .filter_map(|key| array_index_property_key(key))
+                .text_keys()
+                .into_iter()
+                .filter_map(|key| array_index_property_key(&key))
                 .filter(|index| *index >= length && *index <= MAX_ARRAY_INDEX)
                 .collect()
         });
@@ -889,16 +908,13 @@ impl ArrayRef {
 
     pub(crate) fn set_property(&self, key: String, value: Value) {
         let mut properties = self.0.cold().properties.borrow_mut();
-        if let Some(property) = properties.get_mut(&key) {
-            if property.writable {
-                property.value = value;
-            }
-            return;
+        match properties.write_existing_data(&key, &value, |_| true) {
+            super::OwnDataPropertyWrite::Written | super::OwnDataPropertyWrite::ReadOnly => return,
+            super::OwnDataPropertyWrite::NeedsSlowPath => {}
         }
-        if !self.0.extensible.get() {
-            return;
+        if properties.get_text(&key).is_none() && self.0.extensible.get() {
+            properties.insert_text(&key, Property::enumerable(value));
         }
-        properties.insert(key, Property::enumerable(value));
     }
 
     pub(crate) fn define_property(&self, key: String, property: Property) {
@@ -916,7 +932,11 @@ impl ArrayRef {
                 }
                 if index >= MAX_DENSE_STORAGE_LENGTH {
                     drop(elements);
-                    self.0.cold().properties.borrow_mut().insert(key, property);
+                    self.0
+                        .cold()
+                        .properties
+                        .borrow_mut()
+                        .insert_text(&key, property);
                     return;
                 }
                 let old_len = elements.len();
@@ -926,19 +946,17 @@ impl ArrayRef {
                 self.0.cold().holes.borrow_mut().insert(index);
             }
         }
-        self.0.cold().properties.borrow_mut().insert(key, property);
+        self.0
+            .cold()
+            .properties
+            .borrow_mut()
+            .insert_text(&key, property);
     }
 
     pub(crate) fn define_symbol_property(&self, symbol: ObjectRef, property: Property) {
-        let mut properties = self.0.cold().symbol_properties.borrow_mut();
-        if let Some((_, existing)) = properties
-            .iter_mut()
-            .find(|(existing_symbol, _)| existing_symbol.ptr_eq(&symbol))
-        {
-            *existing = property;
-            return;
-        }
-        properties.push((symbol, property));
+        let mut store = self.0.cold().properties.borrow_mut();
+        let key = store.domain().intern_symbol(&symbol);
+        store.define(&key, property).expect("own domain");
     }
 
     pub(crate) fn delete_property(&self, key: &str) -> bool {
@@ -950,34 +968,31 @@ impl ArrayRef {
         };
         let mut properties = cold.properties.borrow_mut();
         if properties
-            .get(key)
+            .get_text(key)
             .is_some_and(|property| !property.configurable)
         {
             return false;
         }
-        properties.remove(key);
+        properties.remove_text(key);
         true
     }
 
     pub(crate) fn property_keys(&self) -> Vec<String> {
-        let mut keys: Vec<_> = self.0.cold_if_present().map_or_else(Vec::new, |cold| {
+        self.0.cold_if_present().map_or_else(Vec::new, |cold| {
             cold.properties
                 .borrow()
-                .iter()
-                .filter(|(_, property)| property.enumerable)
-                .map(|(key, _)| key.clone())
+                .key_enumerability()
+                .into_iter()
+                .filter(|(key, enumerable)| key.symbol().is_none() && *enumerable)
+                .map(|(key, _)| key.as_str().to_owned())
                 .collect()
-        });
-        keys.sort();
-        keys
+        })
     }
 
     pub(crate) fn property_names(&self) -> Vec<String> {
-        let mut names: Vec<_> = self.0.cold_if_present().map_or_else(Vec::new, |cold| {
-            cold.properties.borrow().keys().cloned().collect()
-        });
-        names.sort();
-        names
+        self.0
+            .cold_if_present()
+            .map_or_else(Vec::new, |cold| cold.properties.borrow().text_keys())
     }
 
     pub(crate) fn set_len(&self, length: usize) {
@@ -1005,8 +1020,9 @@ impl ArrayRef {
                 self.0.cold_if_present().map_or_else(Vec::new, |cold| {
                     cold.properties
                         .borrow()
-                        .keys()
-                        .filter_map(|key| array_index_property_key(key))
+                        .text_keys()
+                        .into_iter()
+                        .filter_map(|key| array_index_property_key(&key))
                         .filter(|index| *index >= length && *index <= MAX_ARRAY_INDEX)
                         .collect()
                 });
@@ -1015,13 +1031,13 @@ impl ArrayRef {
             for index in sparse_indices {
                 let key = index.to_string();
                 if properties
-                    .get(&key)
+                    .get_text(&key)
                     .is_some_and(|property| !property.configurable)
                 {
                     self.0.length.set(index + 1);
                     return;
                 }
-                properties.remove(&key);
+                properties.remove_text(&key);
             }
         }
     }
@@ -1031,12 +1047,7 @@ impl ArrayRef {
     }
 
     pub(crate) fn has_own_symbol_property(&self, symbol: &ObjectRef) -> bool {
-        self.0.cold_if_present().is_some_and(|cold| {
-            cold.symbol_properties
-                .borrow()
-                .iter()
-                .any(|(existing_symbol, _)| existing_symbol.ptr_eq(symbol))
-        })
+        self.own_symbol_property(symbol).is_some()
     }
 
     pub(crate) fn is_length_writable(&self) -> bool {
@@ -1054,14 +1065,9 @@ impl ArrayRef {
     pub(crate) fn seal(&self) {
         self.prevent_extensions();
         if let Some(cold) = self.0.cold_if_present() {
-            for (_, property) in cold.symbol_properties.borrow_mut().iter_mut() {
-                property.make_non_configurable();
-            }
-            // Named (non-index) own properties live in the `properties` map and
-            // must also become non-configurable when the array is sealed.
-            for (_, property) in cold.properties.borrow_mut().iter_mut() {
-                property.make_non_configurable();
-            }
+            cold.properties
+                .borrow_mut()
+                .transform_descriptors(Property::make_non_configurable);
         }
         self.0.sealed.set(true);
     }
@@ -1073,12 +1079,9 @@ impl ArrayRef {
     pub(crate) fn freeze(&self) {
         self.seal();
         if let Some(cold) = self.0.cold_if_present() {
-            for (_, property) in cold.symbol_properties.borrow_mut().iter_mut() {
-                property.freeze_data();
-            }
-            for (_, property) in cold.properties.borrow_mut().iter_mut() {
-                property.freeze_data();
-            }
+            cold.properties
+                .borrow_mut()
+                .transform_descriptors(Property::freeze_data);
         }
         self.0.frozen.set(true);
         self.0.length_writable.set(false);
@@ -1101,39 +1104,37 @@ impl ArrayRef {
     }
 
     pub(crate) fn own_symbol_property(&self, symbol: &ObjectRef) -> Option<Property> {
-        self.0.cold_if_present().and_then(|cold| {
-            cold.symbol_properties
-                .borrow()
-                .iter()
-                .find(|(existing_symbol, _)| existing_symbol.ptr_eq(symbol))
-                .map(|(_, property)| property.clone())
-        })
+        let store = self.0.cold_if_present()?.properties.borrow();
+        let key = store.domain().find_symbol(symbol)?;
+        store.get(&key).expect("own domain")
     }
 
     pub(crate) fn delete_own_symbol_property(&self, symbol: &ObjectRef) -> bool {
         let Some(cold) = self.0.cold_if_present() else {
             return true;
         };
-        let mut properties = cold.symbol_properties.borrow_mut();
-        let Some(index) = properties
-            .iter()
-            .position(|(existing_symbol, _)| existing_symbol.ptr_eq(symbol))
-        else {
+        let mut store = cold.properties.borrow_mut();
+        let Some(key) = store.domain().find_symbol(symbol) else {
             return true;
         };
-        if !properties[index].1.configurable {
+        if store
+            .get(&key)
+            .expect("own domain")
+            .is_some_and(|p| !p.configurable)
+        {
             return false;
         }
-        properties.remove(index);
+        store.remove(&key).expect("own domain");
         true
     }
 
     pub(crate) fn own_property_symbols(&self) -> Vec<ObjectRef> {
         self.0.cold_if_present().map_or_else(Vec::new, |cold| {
-            cold.symbol_properties
+            cold.properties
                 .borrow()
-                .iter()
-                .map(|(symbol, _)| symbol.clone())
+                .keys()
+                .into_iter()
+                .filter_map(|key| key.symbol().cloned())
                 .collect()
         })
     }
@@ -1207,7 +1208,7 @@ mod tests {
 
     #[test]
     fn cloned_array_is_a_pointer_sized_shared_handle() {
-        let array = ArrayRef::new(Vec::new());
+        let array = ArrayRef::new(&crate::property::atom::AtomDomain::new(), Vec::new());
         let cloned = array.clone();
 
         assert!(Rc::ptr_eq(&array.0, &cloned.0));
@@ -1217,8 +1218,14 @@ mod tests {
 
     #[test]
     fn distinct_dense_write_leases_fail_closed_for_aliases_and_borrow_conflicts() {
-        let first = ArrayRef::new(vec![Value::Number(1.0)]);
-        let second = ArrayRef::new(vec![Value::Number(2.0)]);
+        let first = ArrayRef::new(
+            &crate::property::atom::AtomDomain::new(),
+            vec![Value::Number(1.0)],
+        );
+        let second = ArrayRef::new(
+            &crate::property::atom::AtomDomain::new(),
+            vec![Value::Number(2.0)],
+        );
 
         let mut invoked = false;
         assert!(
@@ -1258,8 +1265,14 @@ mod tests {
 
     #[test]
     fn dense_read_leases_allow_aliases_and_fail_closed_on_mutable_borrows() {
-        let first = ArrayRef::new(vec![Value::Number(1.0)]);
-        let second = ArrayRef::new(vec![Value::Number(2.0)]);
+        let first = ArrayRef::new(
+            &crate::property::atom::AtomDomain::new(),
+            vec![Value::Number(1.0)],
+        );
+        let second = ArrayRef::new(
+            &crate::property::atom::AtomDomain::new(),
+            vec![Value::Number(2.0)],
+        );
 
         assert_eq!(
             ArrayRef::with_dense_readable_element_sets(
@@ -1290,11 +1303,10 @@ mod tests {
             "dense array header grew to {array_data_size} bytes"
         );
 
-        let array = ArrayRef::new(vec![
-            Value::Number(1.0),
-            Value::Number(2.0),
-            Value::Number(3.0),
-        ]);
+        let array = ArrayRef::new(
+            &crate::property::atom::AtomDomain::new(),
+            vec![Value::Number(1.0), Value::Number(2.0), Value::Number(3.0)],
+        );
         assert!(array.0.cold.get().is_none());
         assert_eq!(array.get(2), Some(Value::Number(3.0)));
         assert!(
@@ -1302,7 +1314,11 @@ mod tests {
             "dense reads must not allocate cold array state"
         );
 
-        let no_hole_literal = ArrayRef::new_sparse(vec![Value::Number(4.0)], Vec::new());
+        let no_hole_literal = ArrayRef::new_sparse(
+            &crate::property::atom::AtomDomain::new(),
+            vec![Value::Number(4.0)],
+            Vec::new(),
+        );
         assert_eq!(no_hole_literal.get(0), Some(Value::Number(4.0)));
         assert!(
             no_hole_literal.0.cold.get().is_none(),
@@ -1316,11 +1332,14 @@ mod tests {
 
     #[test]
     fn direct_dense_index_read_only_checks_the_target_element() {
-        let array = ArrayRef::new(vec![
-            Value::Number(11.0),
-            Value::Number(13.0),
-            Value::Number(17.0),
-        ]);
+        let array = ArrayRef::new(
+            &crate::property::atom::AtomDomain::new(),
+            vec![
+                Value::Number(11.0),
+                Value::Number(13.0),
+                Value::Number(17.0),
+            ],
+        );
 
         assert!(array.delete_index(1));
         array.define_property(
@@ -1339,7 +1358,10 @@ mod tests {
 
     #[test]
     fn dense_writable_lease_allows_existing_elements_on_sealed_arrays() {
-        let array = ArrayRef::new(vec![Value::Number(1.0), Value::Number(2.0)]);
+        let array = ArrayRef::new(
+            &crate::property::atom::AtomDomain::new(),
+            vec![Value::Number(1.0), Value::Number(2.0)],
+        );
         array.seal();
         array.set_length_writable(false);
 
@@ -1355,15 +1377,24 @@ mod tests {
 
     #[test]
     fn dense_writable_lease_rejects_frozen_sparse_and_special_elements() {
-        let frozen = ArrayRef::new(vec![Value::Number(1.0)]);
+        let frozen = ArrayRef::new(
+            &crate::property::atom::AtomDomain::new(),
+            vec![Value::Number(1.0)],
+        );
         frozen.freeze();
         assert!(frozen.with_dense_writable_elements(|_| ()).is_none());
 
-        let sparse = ArrayRef::new(vec![Value::Number(1.0), Value::Number(2.0)]);
+        let sparse = ArrayRef::new(
+            &crate::property::atom::AtomDomain::new(),
+            vec![Value::Number(1.0), Value::Number(2.0)],
+        );
         assert!(sparse.delete_index(1));
         assert!(sparse.with_dense_writable_elements(|_| ()).is_none());
 
-        let described = ArrayRef::new(vec![Value::Number(1.0)]);
+        let described = ArrayRef::new(
+            &crate::property::atom::AtomDomain::new(),
+            vec![Value::Number(1.0)],
+        );
         described.define_property(
             "0".to_owned(),
             Property::data(Value::Number(1.0), false, true, false),
@@ -1373,7 +1404,10 @@ mod tests {
 
     #[test]
     fn dense_writable_lease_fails_closed_on_borrow_conflict() {
-        let array = ArrayRef::new(vec![Value::Number(1.0)]);
+        let array = ArrayRef::new(
+            &crate::property::atom::AtomDomain::new(),
+            vec![Value::Number(1.0)],
+        );
         let outstanding_read = array.0.elements.borrow();
         assert!(array.with_dense_writable_elements(|_| ()).is_none());
         drop(outstanding_read);
@@ -1387,7 +1421,7 @@ mod tests {
 
     #[test]
     fn dense_index_store_allows_holes_below_a_non_writable_length_only() {
-        let array = ArrayRef::new_with_length(2);
+        let array = ArrayRef::new_with_length(&crate::property::atom::AtomDomain::new(), 2);
         array.set_length_writable(false);
 
         assert!(array.dense_index_store_eligible(0));
@@ -1403,13 +1437,12 @@ mod tests {
 
     #[test]
     fn hole_tail_append_lease_materializes_only_below_the_existing_length() {
-        let writer = ArrayRef::new_with_length(3);
+        let writer = ArrayRef::new_with_length(&crate::property::atom::AtomDomain::new(), 3);
         writer.set_length_writable(false);
-        let source = ArrayRef::new(vec![
-            Value::Number(2.0),
-            Value::Number(3.0),
-            Value::Number(5.0),
-        ]);
+        let source = ArrayRef::new(
+            &crate::property::atom::AtomDomain::new(),
+            vec![Value::Number(2.0), Value::Number(3.0), Value::Number(5.0)],
+        );
 
         assert_eq!(
             ArrayRef::with_dense_hole_tail_append_and_readable_elements(
@@ -1441,7 +1474,10 @@ mod tests {
 
     #[test]
     fn hole_tail_append_lease_rejects_integrity_shape_and_descriptor_hazards() {
-        let readable = ArrayRef::new(vec![Value::Number(1.0)]);
+        let readable = ArrayRef::new(
+            &crate::property::atom::AtomDomain::new(),
+            vec![Value::Number(1.0)],
+        );
         let invoke = |writer: ArrayRef, start_index| {
             let mut invoked = false;
             let result = ArrayRef::with_dense_hole_tail_append_and_readable_elements(
@@ -1453,41 +1489,48 @@ mod tests {
             (result, invoked)
         };
 
-        let non_extensible = ArrayRef::new_with_length(1);
+        let non_extensible =
+            ArrayRef::new_with_length(&crate::property::atom::AtomDomain::new(), 1);
         non_extensible.prevent_extensions();
         assert_eq!(invoke(non_extensible, 0), (None, false));
 
-        let sealed = ArrayRef::new_with_length(1);
+        let sealed = ArrayRef::new_with_length(&crate::property::atom::AtomDomain::new(), 1);
         sealed.seal();
         assert_eq!(invoke(sealed, 0), (None, false));
 
-        let frozen = ArrayRef::new_with_length(1);
+        let frozen = ArrayRef::new_with_length(&crate::property::atom::AtomDomain::new(), 1);
         frozen.freeze();
         assert_eq!(invoke(frozen, 0), (None, false));
 
-        let sparse_prefix =
-            ArrayRef::new_sparse(vec![Value::Number(1.0), Value::Undefined], vec![1]);
+        let sparse_prefix = ArrayRef::new_sparse(
+            &crate::property::atom::AtomDomain::new(),
+            vec![Value::Number(1.0), Value::Undefined],
+            vec![1],
+        );
         sparse_prefix.set_len(3);
         assert_eq!(invoke(sparse_prefix, 2), (None, false));
 
-        let described = ArrayRef::new_with_length(1);
+        let described = ArrayRef::new_with_length(&crate::property::atom::AtomDomain::new(), 1);
         described.define_property(
             "0".to_owned(),
             Property::data(Value::Number(7.0), true, true, true),
         );
         assert_eq!(invoke(described, 1), (None, false));
 
-        let wrong_start = ArrayRef::new_with_length(2);
+        let wrong_start = ArrayRef::new_with_length(&crate::property::atom::AtomDomain::new(), 2);
         wrong_start.set(0, Value::Number(1.0));
         assert_eq!(invoke(wrong_start, 0), (None, false));
 
-        let oversized = ArrayRef::new_with_length(MAX_DENSE_STORAGE_LENGTH + 1);
+        let oversized = ArrayRef::new_with_length(
+            &crate::property::atom::AtomDomain::new(),
+            MAX_DENSE_STORAGE_LENGTH + 1,
+        );
         assert_eq!(invoke(oversized, MAX_DENSE_STORAGE_LENGTH), (None, false));
     }
 
     #[test]
     fn hole_tail_append_lease_rejects_aliases_and_borrow_conflicts() {
-        let writer = ArrayRef::new_with_length(2);
+        let writer = ArrayRef::new_with_length(&crate::property::atom::AtomDomain::new(), 2);
         assert!(
             ArrayRef::with_dense_hole_tail_append_and_readable_elements(
                 &[writer.clone(), writer.clone()],
@@ -1498,7 +1541,10 @@ mod tests {
             .is_none()
         );
 
-        let readable = ArrayRef::new(vec![Value::Number(1.0)]);
+        let readable = ArrayRef::new(
+            &crate::property::atom::AtomDomain::new(),
+            vec![Value::Number(1.0)],
+        );
         let held_writer_read = writer.0.elements.borrow();
         assert!(
             ArrayRef::with_dense_hole_tail_append_and_readable_elements(

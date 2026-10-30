@@ -176,8 +176,11 @@ Defined in `value/mod.rs`, `value/object.rs`, `value/property.rs` and
 - Literal input-slot metadata is compiler-owned; its per-domain layout links
   feed the same transition tree as constructors, class fields, JSON and hosts.
   String virtual indices remain exotic and do not materialize/intern on reads.
-- Array/function independent named tables remain until S2; their index, length,
-  lazy-descriptor and live-prototype semantics stay in their existing hooks.
+- Arrays and functions use the same NamedStore for materialized text/symbol
+  descriptors. Arrays retain the realm domain and allocate the store with cold
+  state; functions allocate it lazily. Dense indices/length and lazy function
+  defaults remain explicit hooks. Default insertion order lives only in the
+  store once materialized; no independent function ordering index survives.
 - An array stores its elements in a `Vec<Value>`; holes are recorded in a
   lazily allocated side set.
 

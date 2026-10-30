@@ -35,7 +35,7 @@ pub(crate) fn install_finalization_registry(
         1,
         NativeFunction::FinalizationRegistryPrototypeUnregister,
     );
-    function.properties.borrow_mut().insert(
+    function.define_property(
         "prototype".to_owned(),
         Property::fixed_non_enumerable(Value::Object(prototype)),
     );
@@ -74,7 +74,7 @@ pub(crate) fn native_finalization_registry(
     object.set_to_string_tag("FinalizationRegistry");
     object.define_property(
         FINALIZATION_REGISTRY_CELLS.to_owned(),
-        Property::non_enumerable(Value::Array(ArrayRef::new(Vec::new()))),
+        Property::non_enumerable(Value::Array(ArrayRef::new(&object.domain(), Vec::new()))),
     );
     Ok(Value::Object(object))
 }
@@ -169,11 +169,10 @@ fn finalization_registry_register(
 ) -> Result<(), RuntimeError> {
     let cells = finalization_registry_cells(&object)?;
     let mut values = cells.to_vec();
-    values.push(Value::Array(ArrayRef::new(vec![
-        target,
-        holdings,
-        unregister_token,
-    ])));
+    values.push(Value::Array(ArrayRef::new(
+        &object.domain(),
+        vec![target, holdings, unregister_token],
+    )));
     cells.replace_with(values);
     Ok(())
 }

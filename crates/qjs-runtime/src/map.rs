@@ -94,7 +94,7 @@ pub(crate) fn install_map(env: &mut CallEnv, global_this: &Value, object_prototy
         NativeFunction::MapPrototypeValues,
     );
     symbol::define_well_known_iterator_alias(env, &map_prototype, "entries");
-    map_function.properties.borrow_mut().insert(
+    map_function.define_property(
         "prototype".to_owned(),
         Property::fixed_non_enumerable(Value::Object(map_prototype)),
     );
@@ -396,7 +396,9 @@ pub(crate) fn native_map_iterator_next(this_value: Value) -> Result<Value, Runti
     let item = match iterator_kind(&iterator)?.as_str() {
         MAP_ITERATOR_KIND_KEY => key,
         MAP_ITERATOR_KIND_VALUE => value,
-        MAP_ITERATOR_KIND_KEY_VALUE => Value::Array(ArrayRef::new(vec![key, value])),
+        MAP_ITERATOR_KIND_KEY_VALUE => {
+            Value::Array(ArrayRef::new(&iterator.domain(), vec![key, value]))
+        }
         _ => {
             return Err(RuntimeError {
                 thrown: None,
@@ -489,7 +491,10 @@ fn canonical_map_key_value(key: Value) -> Value {
 fn append_map_group(map: &MapRef, key: Value, value: Value) {
     match map.get(&key) {
         Some(Value::Array(group)) => group.set(group.len(), value),
-        _ => map.set(key, Value::Array(ArrayRef::new(vec![value]))),
+        _ => map.set(
+            key,
+            Value::Array(ArrayRef::new(&map.object().domain(), vec![value])),
+        ),
     }
 }
 
@@ -501,7 +506,7 @@ fn map_prototype(env: &CallEnv) -> Option<ObjectRef> {
 }
 
 fn define_map_function(function: &Function, key: &str, length: usize, native: NativeFunction) {
-    function.properties.borrow_mut().insert(
+    function.define_property(
         key.to_owned(),
         Property::non_enumerable(Value::Function(Function::new_native(
             Some(key),

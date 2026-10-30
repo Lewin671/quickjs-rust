@@ -848,7 +848,7 @@ pub(crate) fn proxy_apply(
     let Some(trap) = proxy_trap(handler.clone(), "apply", env)? else {
         return crate::call_function(target, this_value, arguments, env, false);
     };
-    let arguments_array = Value::Array(crate::ArrayRef::new(arguments));
+    let arguments_array = Value::Array(crate::ArrayRef::new(env.realm().atoms(), arguments));
     crate::call_function(
         trap,
         handler,
@@ -872,7 +872,7 @@ pub(crate) fn proxy_construct(
     let Some(trap) = proxy_trap(handler.clone(), "construct", env)? else {
         return crate::construct_function(target, new_target, arguments, env);
     };
-    let arguments_array = Value::Array(crate::ArrayRef::new(arguments));
+    let arguments_array = Value::Array(crate::ArrayRef::new(env.realm().atoms(), arguments));
     let result = crate::call_function(
         trap,
         handler,

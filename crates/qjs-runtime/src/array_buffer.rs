@@ -151,11 +151,11 @@ pub(crate) fn install_array_buffer(
             env.realm().atoms(),
         )),
     );
-    array_buffer_function.properties.borrow_mut().insert(
+    array_buffer_function.define_property(
         "prototype".to_owned(),
         Property::fixed_non_enumerable(Value::Object(array_buffer_prototype)),
     );
-    array_buffer_function.properties.borrow_mut().insert(
+    array_buffer_function.define_property(
         "isView".to_owned(),
         Property::non_enumerable(Value::Function(Function::new_native(
             Some("isView"),

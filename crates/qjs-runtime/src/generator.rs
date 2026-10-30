@@ -92,7 +92,7 @@ pub(crate) fn install_generator(
     );
     let _ =
         generator_function.set_internal_prototype_slot(function_constructor_as_prototype_slot(env));
-    generator_function.properties.borrow_mut().insert(
+    generator_function.define_property(
         "prototype".to_owned(),
         Property::data(
             Value::Object(generator_function_prototype.clone()),

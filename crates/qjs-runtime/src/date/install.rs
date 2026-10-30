@@ -309,7 +309,7 @@ pub(crate) fn install_date(env: &mut CallEnv, global_this: &Value, object_protot
         NativeFunction::DatePrototypeValueOf,
     );
 
-    date_function.properties.borrow_mut().insert(
+    date_function.define_property(
         "prototype".to_owned(),
         Property::fixed_non_enumerable(Value::Object(date_prototype)),
     );
@@ -325,7 +325,7 @@ pub(crate) fn install_date(env: &mut CallEnv, global_this: &Value, object_protot
 }
 
 fn define_date_function(function: &Function, key: &str, length: usize, native: NativeFunction) {
-    function.properties.borrow_mut().insert(
+    function.define_property(
         key.to_owned(),
         Property::non_enumerable(Value::Function(Function::new_native(
             Some(key),

@@ -121,26 +121,37 @@ pub(crate) fn native_string_prototype_split(
 
     if matches!(separator_value, Value::Undefined) {
         if limit == 0 {
-            return Ok(Value::Array(ArrayRef::new(Vec::new())));
+            return Ok(Value::Array(ArrayRef::new(
+                &env.realm().atoms().clone(),
+                Vec::new(),
+            )));
         }
-        return Ok(Value::Array(ArrayRef::new(vec![Value::String(
-            value.into(),
-        )])));
+        return Ok(Value::Array(ArrayRef::new(
+            &env.realm().atoms().clone(),
+            vec![Value::String(value.into())],
+        )));
     }
 
     if regexp::regexp_is_regexp(&separator_value) {
         if limit == 0 {
-            return Ok(Value::Array(ArrayRef::new(Vec::new())));
+            return Ok(Value::Array(ArrayRef::new(
+                &env.realm().atoms().clone(),
+                Vec::new(),
+            )));
         }
         return string_split_regexp(value, separator_value, limit, env);
     }
 
     let separator = to_js_string_with_env(separator_value, env)?;
     if limit == 0 {
-        return Ok(Value::Array(ArrayRef::new(Vec::new())));
+        return Ok(Value::Array(ArrayRef::new(
+            &env.realm().atoms().clone(),
+            Vec::new(),
+        )));
     }
     if !value.is_ascii() {
         return Ok(Value::Array(ArrayRef::new(
+            &env.realm().atoms().clone(),
             super::search::split_code_units(&value, &separator, limit),
         )));
     }
@@ -157,7 +168,10 @@ pub(crate) fn native_string_prototype_split(
             .map(|part| Value::String(part.to_owned().into()))
             .collect()
     };
-    Ok(Value::Array(ArrayRef::new(parts)))
+    Ok(Value::Array(ArrayRef::new(
+        &env.realm().atoms().clone(),
+        parts,
+    )))
 }
 
 fn symbol_split_method(value: Value, env: &mut CallEnv) -> Result<Option<Value>, RuntimeError> {
@@ -238,7 +252,10 @@ fn string_split_regexp(
             input_char_slice(&input, segment_start, match_start).into(),
         ));
         if parts.len() == limit {
-            return Ok(Value::Array(ArrayRef::new(parts)));
+            return Ok(Value::Array(ArrayRef::new(
+                &env.realm().atoms().clone(),
+                parts,
+            )));
         }
 
         segment_start = match_end;
@@ -256,6 +273,7 @@ fn string_split_regexp(
         ));
     }
     Ok(Value::Array(ArrayRef::new(
+        &env.realm().atoms().clone(),
         parts.into_iter().take(limit).collect(),
     )))
 }

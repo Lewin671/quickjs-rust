@@ -49,7 +49,7 @@ pub(crate) fn install_regexp(env: &mut CallEnv, global_this: &Value, object_prot
         true,
         env.realm().atoms(),
     );
-    regexp_function.properties.borrow_mut().insert(
+    regexp_function.define_property(
         "escape".to_owned(),
         Property::non_enumerable(Value::Function(Function::new_native(
             Some("escape"),
@@ -183,7 +183,7 @@ pub(crate) fn install_regexp(env: &mut CallEnv, global_this: &Value, object_prot
         "unicodeSets",
         NativeFunction::RegExpPrototypeUnicodeSets,
     );
-    regexp_function.properties.borrow_mut().insert(
+    regexp_function.define_property(
         "prototype".to_owned(),
         Property::fixed_non_enumerable(Value::Object(regexp_prototype)),
     );
@@ -852,7 +852,7 @@ pub(crate) fn native_regexp_global_match(
     if matches.is_empty() {
         Ok(Value::Null)
     } else {
-        Ok(Value::Array(ArrayRef::new(matches)))
+        Ok(Value::Array(ArrayRef::new(env.realm().atoms(), matches)))
     }
 }
 
@@ -991,7 +991,7 @@ fn regexp_match_array(
             .map(|(start, end)| Value::String(input_slice(input, start, end, unicode).into()))
             .unwrap_or(Value::Undefined)
     }));
-    let result = ArrayRef::new(values);
+    let result = ArrayRef::new(domain, values);
     let index = if unicode {
         code_unit_index_for_char_index(input, match_result.start)
     } else {
@@ -1031,13 +1031,13 @@ fn regexp_indices_array(
     domain: &crate::property::atom::AtomDomain,
 ) -> Value {
     let mut entries = Vec::with_capacity(1 + captures.len());
-    entries.push(index_pair_value(input, Some(whole), unicode));
+    entries.push(index_pair_value(input, Some(whole), unicode, domain));
     entries.extend(
         captures
             .iter()
-            .map(|capture| index_pair_value(input, *capture, unicode)),
+            .map(|capture| index_pair_value(input, *capture, unicode, domain)),
     );
-    let indices = ArrayRef::new(entries);
+    let indices = ArrayRef::new(domain, entries);
 
     let groups = if group_names.is_empty() {
         Value::Undefined
@@ -1049,6 +1049,7 @@ fn regexp_indices_array(
                 input,
                 captures.get(capture_index).copied().flatten(),
                 unicode,
+                domain,
             );
             object.set(name.clone(), value);
         }
@@ -1060,7 +1061,12 @@ fn regexp_indices_array(
 
 /// Convert a char-index range into a `[start, end]` array of code-unit
 /// positions, or `undefined` when the range is absent.
-fn index_pair_value(input: &str, range: Option<(usize, usize)>, unicode: bool) -> Value {
+fn index_pair_value(
+    input: &str,
+    range: Option<(usize, usize)>,
+    unicode: bool,
+    domain: &crate::property::atom::AtomDomain,
+) -> Value {
     let Some((start, end)) = range else {
         return Value::Undefined;
     };
@@ -1071,10 +1077,10 @@ fn index_pair_value(input: &str, range: Option<(usize, usize)>, unicode: bool) -
             char_index as f64
         }
     };
-    Value::Array(ArrayRef::new(vec![
-        Value::Number(to_units(start)),
-        Value::Number(to_units(end)),
-    ]))
+    Value::Array(ArrayRef::new(
+        domain,
+        vec![Value::Number(to_units(start)), Value::Number(to_units(end))],
+    ))
 }
 
 /// Build the `groups` property for a match result: `undefined` when the pattern

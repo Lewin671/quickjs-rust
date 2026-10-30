@@ -96,3 +96,25 @@ impl std::fmt::Debug for Layout {
             .finish()
     }
 }
+
+impl NamedStore {
+    pub(crate) fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    pub(crate) fn contains_text(&self, key: &str) -> bool {
+        self.domain()
+            .find(key)
+            .is_some_and(|k| self.position(&k).expect("own domain").is_some())
+    }
+    pub(crate) fn remove_text(&mut self, key: &str) -> Option<Property> {
+        let key = self.domain().find(key)?;
+        self.remove(&key).expect("own domain")
+    }
+    pub(crate) fn text_keys(&self) -> Vec<String> {
+        self.keys()
+            .into_iter()
+            .filter(|key| key.symbol().is_none())
+            .map(|key| key.as_str().to_owned())
+            .collect()
+    }
+}

@@ -47,7 +47,7 @@ pub(crate) fn native_regexp_prototype_split(
     )?;
     let mut parts = Vec::new();
     if limit == 0 {
-        return Ok(Value::Array(ArrayRef::new(parts)));
+        return Ok(Value::Array(ArrayRef::new(env.realm().atoms(), parts)));
     }
 
     // Every index here is a UTF-16 code unit, which is what `lastIndex` carries
@@ -65,7 +65,7 @@ pub(crate) fn native_regexp_prototype_split(
         } else {
             ensure_exec_result_object(result)?;
         }
-        return Ok(Value::Array(ArrayRef::new(parts)));
+        return Ok(Value::Array(ArrayRef::new(env.realm().atoms(), parts)));
     }
 
     let mut segment_start = 0usize;
@@ -89,12 +89,12 @@ pub(crate) fn native_regexp_prototype_split(
             super::input_slice(&input, segment_start, search_index, false).into(),
         ));
         if parts.len() == limit {
-            return Ok(Value::Array(ArrayRef::new(parts)));
+            return Ok(Value::Array(ArrayRef::new(env.realm().atoms(), parts)));
         }
 
         append_captures(match_result, &mut parts, limit, env)?;
         if parts.len() == limit {
-            return Ok(Value::Array(ArrayRef::new(parts)));
+            return Ok(Value::Array(ArrayRef::new(env.realm().atoms(), parts)));
         }
 
         segment_start = match_end;
@@ -104,7 +104,7 @@ pub(crate) fn native_regexp_prototype_split(
     parts.push(Value::String(
         super::input_slice(&input, segment_start, input_len, false).into(),
     ));
-    Ok(Value::Array(ArrayRef::new(parts)))
+    Ok(Value::Array(ArrayRef::new(env.realm().atoms(), parts)))
 }
 
 fn split_regexp_clone(value: Value, env: &mut CallEnv) -> Result<(Value, bool), RuntimeError> {

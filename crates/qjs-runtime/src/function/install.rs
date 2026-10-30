@@ -106,7 +106,7 @@ pub(crate) fn install_function(
     );
     function_prototype.define_property("arguments".to_owned(), restricted_property.clone());
     function_prototype.define_property("caller".to_owned(), restricted_property);
-    function_constructor.properties.borrow_mut().insert(
+    function_constructor.define_property(
         "prototype".to_owned(),
         Property::fixed_non_enumerable(Value::Function(function_prototype)),
     );

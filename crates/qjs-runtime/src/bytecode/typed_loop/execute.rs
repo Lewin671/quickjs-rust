@@ -1747,17 +1747,19 @@ mod tests {
 
     #[test]
     fn an_array_answers_length_from_its_element_count() {
-        let array = Value::Array(ArrayRef::new(vec![
-            Value::Number(1.0),
-            Value::Number(2.0),
-            Value::Number(3.0),
-        ]));
+        let array = Value::Array(ArrayRef::new(
+            &crate::property::atom::AtomDomain::new(),
+            vec![Value::Number(1.0), Value::Number(2.0), Value::Number(3.0)],
+        ));
         assert_eq!(read(&array, "length"), Some(Value::Number(3.0)));
     }
 
     #[test]
     fn an_array_declines_every_name_except_length() {
-        let array = Value::Array(ArrayRef::new(vec![Value::Number(1.0)]));
+        let array = Value::Array(ArrayRef::new(
+            &crate::property::atom::AtomDomain::new(),
+            vec![Value::Number(1.0)],
+        ));
         assert_eq!(read(&array, "push"), None);
         assert_eq!(read(&array, "0"), None);
     }

@@ -366,7 +366,7 @@ fn promise_jobs(env: &mut CallEnv) -> ArrayRef {
     {
         Some(Value::Array(jobs)) => jobs,
         _ => {
-            let jobs = ArrayRef::new(Vec::new());
+            let jobs = ArrayRef::new(env.realm().atoms(), Vec::new());
             global_this.define_non_enumerable(PROMISE_JOBS.to_owned(), Value::Array(jobs.clone()));
             jobs
         }

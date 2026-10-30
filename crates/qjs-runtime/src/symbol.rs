@@ -68,7 +68,7 @@ pub(crate) fn install_symbol(env: &mut CallEnv, global_this: &Value, object_prot
             ),
         );
     }
-    symbol_function.properties.borrow_mut().insert(
+    symbol_function.define_property(
         "for".to_owned(),
         Property::non_enumerable(Value::Function(Function::new_native(
             Some("for"),
@@ -78,7 +78,7 @@ pub(crate) fn install_symbol(env: &mut CallEnv, global_this: &Value, object_prot
             env.realm().atoms(),
         ))),
     );
-    symbol_function.properties.borrow_mut().insert(
+    symbol_function.define_property(
         "keyFor".to_owned(),
         Property::non_enumerable(Value::Function(Function::new_native(
             Some("keyFor"),
@@ -127,7 +127,7 @@ pub(crate) fn install_symbol(env: &mut CallEnv, global_this: &Value, object_prot
             true,
         ),
     );
-    symbol_function.properties.borrow_mut().insert(
+    symbol_function.define_property(
         "prototype".to_owned(),
         Property::fixed_non_enumerable(Value::Object(symbol_prototype)),
     );
@@ -140,14 +140,13 @@ pub(crate) fn install_symbol(env: &mut CallEnv, global_this: &Value, object_prot
 }
 
 fn install_well_known_symbols(symbol_function: &Function, symbol_prototype: &ObjectRef) {
-    let mut properties = symbol_function.properties.borrow_mut();
     for name in WELL_KNOWN_SYMBOL_NAMES {
         let symbol = Value::Object(symbol_object(
             Some(symbol_prototype.clone()),
             Value::String(format!("Symbol.{name}").into()),
             &symbol_prototype.domain(),
         ));
-        properties.insert(
+        symbol_function.define_property(
             name.to_string(),
             Property::data(symbol, false, false, false),
         );
@@ -348,7 +347,7 @@ fn well_known_symbol_from_binding(env: &CallEnv, name: &str) -> Option<ObjectRef
 }
 
 fn well_known_symbol_from_function(symbol_function: &Function, name: &str) -> Option<ObjectRef> {
-    match symbol_function.properties.borrow().get(name) {
+    match symbol_function.own_property(name) {
         Some(Property {
             value: Value::Object(symbol),
             ..

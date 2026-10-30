@@ -37,11 +37,10 @@ pub(crate) fn native_array_prototype_to_sorted(
 ) -> Result<Value, RuntimeError> {
     let comparator = array_sort_comparator(argument_values, "Array.prototype.toSorted")?;
     let values = to_sorted_array_like_values(this_value, env)?;
-    Ok(Value::Array(ArrayRef::new(sorted_array_values(
-        values,
-        comparator.as_ref(),
-        env,
-    )?)))
+    Ok(Value::Array(ArrayRef::new(
+        &env.realm().atoms().clone(),
+        sorted_array_values(values, comparator.as_ref(), env)?,
+    )))
 }
 
 fn to_sorted_array_like_values(

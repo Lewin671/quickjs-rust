@@ -92,7 +92,7 @@ pub(crate) fn install_disposable_stack(
         NativeFunction::DisposableStackPrototypeUse,
     );
 
-    function.properties.borrow_mut().insert(
+    function.define_property(
         "prototype".to_owned(),
         Property::fixed_non_enumerable(Value::Object(prototype)),
     );
@@ -176,7 +176,7 @@ fn install_async_disposable_stack(
         1,
         NativeFunction::AsyncDisposableStackPrototypeUse,
     );
-    function.properties.borrow_mut().insert(
+    function.define_property(
         "prototype".to_owned(),
         Property::fixed_non_enumerable(Value::Object(prototype)),
     );
@@ -211,7 +211,7 @@ pub(crate) fn native_async_disposable_stack(
     );
     object.define_property(
         DISPOSABLE_STACK_RESOURCES.to_owned(),
-        Property::non_enumerable(Value::Array(ArrayRef::new(Vec::new()))),
+        Property::non_enumerable(Value::Array(ArrayRef::new(env.realm().atoms(), Vec::new()))),
     );
     Ok(Value::Object(object))
 }
@@ -239,7 +239,7 @@ pub(crate) fn native_disposable_stack(
     );
     object.define_property(
         DISPOSABLE_STACK_RESOURCES.to_owned(),
-        Property::non_enumerable(Value::Array(ArrayRef::new(Vec::new()))),
+        Property::non_enumerable(Value::Array(ArrayRef::new(env.realm().atoms(), Vec::new()))),
     );
     Ok(Value::Object(object))
 }
@@ -360,7 +360,10 @@ pub(crate) fn native_async_disposable_stack_prototype_move(
     );
     new_stack.define_property(
         DISPOSABLE_STACK_RESOURCES.to_owned(),
-        Property::non_enumerable(Value::Array(ArrayRef::new(moved_resources))),
+        Property::non_enumerable(Value::Array(ArrayRef::new(
+            env.realm().atoms(),
+            moved_resources,
+        ))),
     );
     Ok(Value::Object(new_stack))
 }
@@ -539,7 +542,10 @@ pub(crate) fn native_disposable_stack_prototype_move(
     );
     new_stack.define_property(
         DISPOSABLE_STACK_RESOURCES.to_owned(),
-        Property::non_enumerable(Value::Array(ArrayRef::new(moved_resources))),
+        Property::non_enumerable(Value::Array(ArrayRef::new(
+            env.realm().atoms(),
+            moved_resources,
+        ))),
     );
     Ok(Value::Object(new_stack))
 }

@@ -42,7 +42,10 @@ fn append_group(result: &ObjectRef, key: PropertyKey, value: Value) {
         PropertyKey::String(key) => {
             match result.own_property(&key).map(|property| property.value) {
                 Some(Value::Array(group)) => group.set(group.len(), value),
-                _ => result.define_property(key, Property::enumerable(group_array(value))),
+                _ => result.define_property(
+                    key,
+                    Property::enumerable(group_array(value, &result.domain())),
+                ),
             }
         }
         PropertyKey::Symbol(symbol) => {
@@ -51,14 +54,15 @@ fn append_group(result: &ObjectRef, key: PropertyKey, value: Value) {
                 .map(|property| property.value)
             {
                 Some(Value::Array(group)) => group.set(group.len(), value),
-                _ => {
-                    result.define_symbol_property(symbol, Property::enumerable(group_array(value)))
-                }
+                _ => result.define_symbol_property(
+                    symbol,
+                    Property::enumerable(group_array(value, &result.domain())),
+                ),
             }
         }
     }
 }
 
-fn group_array(value: Value) -> Value {
-    Value::Array(ArrayRef::new(vec![value]))
+fn group_array(value: Value, domain: &crate::property::atom::AtomDomain) -> Value {
+    Value::Array(ArrayRef::new(domain, vec![value]))
 }

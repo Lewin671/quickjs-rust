@@ -37,13 +37,13 @@ pub(crate) fn native_array(
     if let [Value::Number(length)] = argument_values {
         let length = array_length_from_descriptor_value(Value::Number(*length), env)?;
         return Ok(Value::Array(array_with_prototype(
-            ArrayRef::new_with_length(length),
+            ArrayRef::new_with_length(env.realm().atoms(), length),
             prototype,
         )));
     }
 
     Ok(Value::Array(array_with_prototype(
-        ArrayRef::new(argument_values.to_vec()),
+        ArrayRef::new(env.realm().atoms(), argument_values.to_vec()),
         prototype,
     )))
 }
@@ -147,7 +147,7 @@ fn array_from_values(
             if let Value::Array(array) = &items
                 && let Some(values) = array.dense_argument_values(env)
             {
-                return Ok(Value::Array(ArrayRef::new(values)));
+                return Ok(Value::Array(ArrayRef::new(env.realm().atoms(), values)));
             }
             array_from_iterable_result(items, iterator_method, mapping, this_arg, constructor, env)
         }
@@ -175,7 +175,10 @@ fn array_from_array_like_result(
 ) -> Result<Value, RuntimeError> {
     let length = elements.values.len();
     let Some(constructor) = constructor else {
-        return Ok(Value::Array(ArrayRef::new(elements.values)));
+        return Ok(Value::Array(ArrayRef::new(
+            env.realm().atoms(),
+            elements.values,
+        )));
     };
 
     let arguments = elements
@@ -233,7 +236,7 @@ fn array_from_async_start_result(
             Some(constructor) => {
                 construct_function(constructor.clone(), constructor, Vec::new(), env)?
             }
-            None => Value::Array(ArrayRef::new(Vec::new())),
+            None => Value::Array(ArrayRef::new(env.realm().atoms(), Vec::new())),
         };
         let next = property_value(iterator.clone(), "next", env)?;
         if !matches!(next, Value::Function(_)) {
@@ -265,7 +268,7 @@ fn array_from_async_start_result(
             vec![Value::Number(source.length as f64)],
             env,
         )?,
-        None => Value::Array(ArrayRef::new(Vec::new())),
+        None => Value::Array(ArrayRef::new(env.realm().atoms(), Vec::new())),
     };
     state.define_non_enumerable(ARRAY_FROM_ASYNC_TARGET.to_owned(), target);
     state.define_non_enumerable(ARRAY_FROM_ASYNC_RECEIVER.to_owned(), source.receiver);
@@ -751,7 +754,7 @@ fn array_from_iterable_result(
 ) -> Result<Value, RuntimeError> {
     let target = match constructor {
         Some(constructor) => construct_function(constructor.clone(), constructor, Vec::new(), env)?,
-        None => Value::Array(ArrayRef::new(Vec::new())),
+        None => Value::Array(ArrayRef::new(env.realm().atoms(), Vec::new())),
     };
     let iterator = call_function(iterator_method, items, Vec::new(), env, false)?;
     let next = property_value(iterator.clone(), "next", env)?;
@@ -883,7 +886,7 @@ pub(crate) fn native_array_of(
             env,
         )?
     } else {
-        Value::Array(ArrayRef::new(Vec::new()))
+        Value::Array(ArrayRef::new(env.realm().atoms(), Vec::new()))
     };
     for (index, value) in argument_values.iter().enumerate() {
         create_array_of_data_property(&result, index.to_string(), value.clone(), env)?;

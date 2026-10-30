@@ -405,7 +405,10 @@ fn reduction_direct_this_source_rejects_accessor_proxy_and_typed_array_owners() 
 #[test]
 fn reduction_direct_this_source_rejects_module_namespace_exotics() {
     let domain = crate::property::atom::AtomDomain::new();
-    let array = ArrayRef::new(vec![Value::Number(1.0)]);
+    let array = ArrayRef::new(
+        &crate::property::atom::AtomDomain::new(),
+        vec![Value::Number(1.0)],
+    );
     let mut properties = HashMap::new();
     properties.insert("left".to_owned(), Value::Array(array));
     let ordinary = crate::ObjectRef::new(properties.clone(), &domain);
@@ -424,7 +427,10 @@ fn reduction_direct_this_source_rejects_module_namespace_exotics() {
 
 #[test]
 fn reduction_readable_lease_fails_closed_on_mutable_borrow() {
-    let array = ArrayRef::new(vec![Value::Number(1.0), Value::Number(2.0)]);
+    let array = ArrayRef::new(
+        &crate::property::atom::AtomDomain::new(),
+        vec![Value::Number(1.0), Value::Number(2.0)],
+    );
     let arrays = [array.clone()];
     let mut reduction_ran = false;
     array

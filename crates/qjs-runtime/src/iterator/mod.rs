@@ -271,15 +271,15 @@ pub(crate) fn install_iterator(
         true,
         env.realm().atoms(),
     );
-    iterator_function.properties.borrow_mut().insert(
+    iterator_function.define_property(
         "prototype".to_owned(),
         Property::fixed_non_enumerable(Value::Object(iterator_prototype.clone())),
     );
-    iterator_function.properties.borrow_mut().insert(
+    iterator_function.define_property(
         "__quickjsRustRealmIteratorPrototype".to_owned(),
         Property::fixed_non_enumerable(Value::Object(iterator_prototype.clone())),
     );
-    iterator_function.properties.borrow_mut().insert(
+    iterator_function.define_property(
         "from".to_owned(),
         Property::non_enumerable(Value::Function(Function::new_native(
             Some("from"),
@@ -289,7 +289,7 @@ pub(crate) fn install_iterator(
             env.realm().atoms(),
         ))),
     );
-    iterator_function.properties.borrow_mut().insert(
+    iterator_function.define_property(
         "concat".to_owned(),
         Property::non_enumerable(Value::Function(Function::new_native(
             Some("concat"),
@@ -299,7 +299,7 @@ pub(crate) fn install_iterator(
             env.realm().atoms(),
         ))),
     );
-    iterator_function.properties.borrow_mut().insert(
+    iterator_function.define_property(
         "zip".to_owned(),
         Property::non_enumerable(Value::Function(Function::new_native(
             Some("zip"),
@@ -309,7 +309,7 @@ pub(crate) fn install_iterator(
             env.realm().atoms(),
         ))),
     );
-    iterator_function.properties.borrow_mut().insert(
+    iterator_function.define_property(
         "zipKeyed".to_owned(),
         Property::non_enumerable(Value::Function(Function::new_native(
             Some("zipKeyed"),

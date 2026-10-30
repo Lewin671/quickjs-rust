@@ -163,7 +163,7 @@ pub(crate) fn install_async_generator(
     );
     let _ = async_generator_function
         .set_internal_prototype_slot(function_constructor_as_prototype_slot(env));
-    async_generator_function.properties.borrow_mut().insert(
+    async_generator_function.define_property(
         "prototype".to_owned(),
         Property::data(
             Value::Object(async_generator_function_prototype.clone()),

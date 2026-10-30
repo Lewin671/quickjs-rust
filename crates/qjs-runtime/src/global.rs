@@ -447,7 +447,7 @@ pub(crate) fn native_test262_to_numbers(argument_values: &[Value]) -> Result<Val
             value => value,
         })
         .collect();
-    Ok(Value::Array(ArrayRef::new(values)))
+    Ok(Value::Array(ArrayRef::new(&object.domain(), values)))
 }
 
 pub(crate) fn native_test262_compare_array(

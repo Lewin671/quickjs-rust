@@ -55,11 +55,11 @@ pub(crate) fn install_error(env: &mut CallEnv, global_this: &Value, object_proto
         env.realm().atoms(),
     );
     define_function_name(&is_error_function, "isError");
-    error_function.properties.borrow_mut().insert(
+    error_function.define_property(
         "isError".to_owned(),
         Property::non_enumerable(Value::Function(is_error_function)),
     );
-    error_function.properties.borrow_mut().insert(
+    error_function.define_property(
         "prototype".to_owned(),
         Property::fixed_non_enumerable(Value::Object(error_prototype)),
     );
@@ -75,9 +75,7 @@ pub(crate) fn install_error(env: &mut CallEnv, global_this: &Value, object_proto
         unreachable!("Error constructor must be a function");
     };
     let Some(Value::Object(error_prototype)) = error_function
-        .properties
-        .borrow()
-        .get("prototype")
+        .own_property("prototype")
         .map(|property| property.value.clone())
     else {
         unreachable!("Error constructor must have a prototype");
@@ -477,7 +475,7 @@ fn install_native_error(
         "message".to_owned(),
         Value::String(crate::JsString::default()),
     );
-    function.properties.borrow_mut().insert(
+    function.define_property(
         "prototype".to_owned(),
         Property::fixed_non_enumerable(Value::Object(prototype)),
     );
@@ -505,7 +503,7 @@ fn native_error_name(native: NativeFunction) -> Option<&'static str> {
 }
 
 fn define_function_name(function: &Function, name: &str) {
-    function.properties.borrow_mut().insert(
+    function.define_property(
         "name".to_owned(),
         Property::data(Value::String(name.to_owned().into()), false, false, true),
     );

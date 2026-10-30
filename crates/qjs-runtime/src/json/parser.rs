@@ -386,7 +386,7 @@ impl<'a> JsonParser<'a> {
         self.skip_whitespace();
         if self.consume_byte(b']') {
             return Ok(JsonNode {
-                value: Value::Array(ArrayRef::new(Vec::new())),
+                value: Value::Array(ArrayRef::new(self.env.realm().atoms(), Vec::new())),
                 source: None,
                 children: children
                     .map(JsonNodeChildren::Array)
@@ -409,7 +409,7 @@ impl<'a> JsonParser<'a> {
             self.expect_byte(b',')?;
         }
         Ok(JsonNode {
-            value: Value::Array(ArrayRef::new(values)),
+            value: Value::Array(ArrayRef::new(self.env.realm().atoms(), values)),
             source: None,
             children: children
                 .map(JsonNodeChildren::Array)

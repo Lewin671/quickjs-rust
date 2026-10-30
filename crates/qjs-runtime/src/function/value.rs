@@ -1,5 +1,7 @@
+//! Function identity, captured execution state and explicit lazy descriptor hooks.
+//! All materialized public keys share NamedStore; private names stay separate.
 use std::{
-    cell::{Cell, Ref, RefCell, RefMut},
+    cell::{Cell, RefCell},
     collections::HashMap,
     fmt,
     ops::Deref,
@@ -247,7 +249,7 @@ pub struct FunctionData {
     pub(crate) auxiliary: FunctionAuxiliaryState,
     pub(crate) bound: Option<Box<BoundFunction>>,
     /// Function object properties.
-    pub(crate) properties: LazyFunctionProperties,
+    named: RefCell<Option<Box<crate::value::layout::NamedStore>>>,
 }
 
 /// Identity-bearing mutable state that is cold for ordinary calls. Keeping
@@ -282,8 +284,6 @@ struct FunctionColdState {
     /// instance is constructed (base class: at construction start; derived
     /// class: immediately after `super()` returns).
     instance_elements: Rc<Vec<InstanceElementInitializer>>,
-    property_order: Vec<String>,
-    symbol_properties: Vec<(ObjectRef, Property)>,
     /// Explicit [[Prototype]] override. `None` means "use the default
     /// %Function.prototype% intrinsic"; `Some(None)` means it is null.
     internal_prototype: Option<Option<Prototype>>,
@@ -353,59 +353,6 @@ impl NativeContext {
     }
 }
 
-/// Compact property storage for functions that have not materialized an own
-/// property table.
-///
-/// The standard `length`, `name`, and ordinary-function `prototype` slots are
-/// already represented implicitly. Most short-lived closures therefore never
-/// need a general map at all. Explicit property observation or mutation keeps
-/// the existing `RefCell<HashMap<...>>` borrowing behavior while moving the
-/// much larger empty map header out of every function allocation.
-#[derive(Default)]
-// The indirection is deliberate: it removes the 56-byte empty map header from
-// every short-lived closure and is allocated only on explicit property access.
-#[allow(clippy::box_collection)]
-/// A function's string-keyed own properties, allocated on first use. Keyed
-/// with the object tables' fast name hasher: `Date.prototype`,
-/// `String.fromCharCode` and every other read of a constructor's property
-/// hashes the name here.
-pub(crate) struct LazyFunctionProperties(
-    RefCell<Option<Box<crate::value::name_hash::NameMap<String, Property>>>>,
-);
-
-impl LazyFunctionProperties {
-    pub(crate) fn borrow(&self) -> Ref<'_, crate::value::name_hash::NameMap<String, Property>> {
-        self.ensure_allocated();
-        Ref::map(self.0.borrow(), |properties| {
-            properties
-                .as_deref()
-                .expect("function properties initialized before borrowing")
-        })
-    }
-
-    pub(crate) fn borrow_mut(
-        &self,
-    ) -> RefMut<'_, crate::value::name_hash::NameMap<String, Property>> {
-        self.ensure_allocated();
-        RefMut::map(self.0.borrow_mut(), |properties| {
-            properties
-                .as_deref_mut()
-                .expect("function properties initialized before borrowing")
-        })
-    }
-
-    fn ensure_allocated(&self) {
-        if self.0.borrow().is_none() {
-            *self.0.borrow_mut() = Some(Box::default());
-        }
-    }
-
-    #[cfg(test)]
-    fn is_allocated(&self) -> bool {
-        self.0.borrow().is_some()
-    }
-}
-
 impl FunctionAuxiliaryState {
     fn new(home_object: Option<Value>, super_constructor: Option<Value>) -> Self {
         let cold = (home_object.is_some() || super_constructor.is_some())
@@ -440,8 +387,6 @@ impl FunctionColdState {
             lexical_derived_this: None,
             super_constructor,
             instance_elements: Rc::new(Vec::new()),
-            property_order: Vec::new(),
-            symbol_properties: Vec::new(),
             internal_prototype: None,
             private_state: crate::private::PrivateState::default(),
         }
@@ -680,7 +625,7 @@ impl Function {
             is_field_initializer: false,
             auxiliary,
             bound: None,
-            properties: LazyFunctionProperties::default(),
+            named: RefCell::new(None),
         }));
         function.define_length_property();
         function.define_name_property();
@@ -781,7 +726,7 @@ impl Function {
             is_field_initializer,
             auxiliary,
             bound: None,
-            properties: LazyFunctionProperties::default(),
+            named: RefCell::new(None),
         }));
         function.define_length_property();
         function.define_name_property();
@@ -941,7 +886,7 @@ impl Function {
                 this_value,
                 arguments,
             })),
-            properties: LazyFunctionProperties::default(),
+            named: RefCell::new(None),
         }));
         function.define_length_property();
         function.define_name_property();
@@ -1002,7 +947,7 @@ impl Function {
             is_field_initializer: false,
             auxiliary,
             bound: None,
-            properties: LazyFunctionProperties::default(),
+            named: RefCell::new(None),
         }));
         function.define_length_property();
         function.define_name_property();
@@ -1044,388 +989,6 @@ impl Function {
             false,
             true,
         )
-    }
-
-    /// Moves the implicit standard data properties into the general table.
-    /// Inserting at the front preserves the creation order (`length`, `name`,
-    /// then `prototype`) even when a constructable function has already
-    /// recorded its lazy prototype slot.
-    fn materialize_default_data_properties(&self) {
-        self.materialize_default_prototype_order();
-        let had_length = self.auxiliary.implicit_length_property.replace(false);
-        let had_name = self.auxiliary.implicit_name_property.replace(false);
-        if !had_length && !had_name {
-            return;
-        }
-
-        let mut properties = self.properties.borrow_mut();
-        self.auxiliary.with_cold_mut(|cold| {
-            let mut insert_at = 0;
-            if had_length {
-                properties
-                    .entry("length".to_owned())
-                    .or_insert_with(|| self.default_length_property());
-                cold.property_order.insert(insert_at, "length".to_owned());
-                insert_at += 1;
-            }
-            if had_name {
-                properties
-                    .entry("name".to_owned())
-                    .or_insert_with(|| self.default_name_property());
-                cold.property_order.insert(insert_at, "name".to_owned());
-            }
-        });
-    }
-
-    fn mark_lazy_default_prototype(&self) {
-        self.auxiliary.lazy_default_prototype.set(true);
-    }
-
-    /// Records the ordinary function's original `prototype` property slot
-    /// only when property observation or mutation needs ordering state. This
-    /// keeps unobserved closures from allocating a `Vec` buffer and owned key.
-    fn materialize_default_prototype_order(&self) {
-        if !self.auxiliary.lazy_default_prototype.get() {
-            return;
-        }
-        self.auxiliary.with_cold_mut(|cold| {
-            if !cold.property_order.iter().any(|key| key == "prototype") {
-                cold.property_order.push("prototype".to_owned());
-            }
-        });
-    }
-
-    fn ensure_default_prototype(&self) {
-        self.materialize_default_prototype_order();
-        if !self.auxiliary.lazy_default_prototype.replace(false) {
-            return;
-        }
-        let prototype = ObjectRef::with_prototype(
-            HashMap::new(),
-            object_prototype(&self.creation_env()),
-            self.property_domain(),
-        );
-        prototype.define_non_enumerable("constructor".to_owned(), Value::Function(self.clone()));
-        self.properties.borrow_mut().insert(
-            "prototype".to_owned(),
-            Property::data(Value::Object(prototype), false, true, false),
-        );
-    }
-
-    pub(crate) fn is_extensible(&self) -> bool {
-        self.auxiliary.extensible.get()
-    }
-
-    pub(crate) fn ptr_eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.0, &other.0)
-    }
-
-    /// Identity of the shared storage, for hashing this reference as a key.
-    pub(crate) fn address(&self) -> usize {
-        Rc::as_ptr(&self.0) as usize
-    }
-
-    pub(crate) fn prevent_extensions(&self) {
-        self.ensure_default_prototype();
-        self.auxiliary.extensible.set(false);
-    }
-
-    pub(crate) fn seal(&self) {
-        self.materialize_default_data_properties();
-        self.ensure_default_prototype();
-        self.prevent_extensions();
-        self.auxiliary.sealed.set(true);
-        for property in self.properties.borrow_mut().values_mut() {
-            property.make_non_configurable();
-        }
-        self.auxiliary.with_cold_mut(|cold| {
-            for (_, property) in &mut cold.symbol_properties {
-                property.make_non_configurable();
-            }
-        });
-    }
-
-    pub(crate) fn is_sealed(&self) -> bool {
-        self.ensure_default_prototype();
-        !self.auxiliary.extensible.get()
-            && self.auxiliary.sealed.get()
-            && self
-                .properties
-                .borrow()
-                .values()
-                .all(|property| !property.configurable)
-            && self.auxiliary.with_cold(|cold| {
-                cold.is_none_or(|cold| {
-                    cold.symbol_properties
-                        .iter()
-                        .all(|(_, property)| !property.configurable)
-                })
-            })
-    }
-
-    pub(crate) fn freeze(&self) {
-        self.materialize_default_data_properties();
-        self.ensure_default_prototype();
-        self.prevent_extensions();
-        self.auxiliary.sealed.set(true);
-        self.auxiliary.frozen.set(true);
-        for property in self.properties.borrow_mut().values_mut() {
-            property.freeze_data();
-        }
-        self.auxiliary.with_cold_mut(|cold| {
-            for (_, property) in &mut cold.symbol_properties {
-                property.freeze_data();
-            }
-        });
-    }
-
-    pub(crate) fn is_frozen(&self) -> bool {
-        self.ensure_default_prototype();
-        !self.auxiliary.extensible.get()
-            && self.auxiliary.sealed.get()
-            && self.auxiliary.frozen.get()
-            && self
-                .properties
-                .borrow()
-                .values()
-                .all(|property| !property.configurable && !property.writable)
-            && self.auxiliary.with_cold(|cold| {
-                cold.is_none_or(|cold| {
-                    cold.symbol_properties
-                        .iter()
-                        .all(|(_, property)| !property.configurable && !property.writable)
-                })
-            })
-    }
-
-    pub(crate) fn set_property(&self, key: String, value: Value) {
-        if (key == "length" && self.auxiliary.implicit_length_property.get())
-            || (key == "name" && self.auxiliary.implicit_name_property.get())
-        {
-            // Install-time built-ins may have replaced an implicit default by
-            // writing directly to the compatibility property table. Treat
-            // that entry as the same original slot; otherwise the untouched
-            // standard default is non-writable and needs no materialization.
-            if let Some(property) = self.properties.borrow_mut().get_mut(&key) {
-                if property.writable {
-                    property.value = value;
-                }
-            }
-            return;
-        }
-        if key == "prototype" {
-            self.ensure_default_prototype();
-        }
-        let mut properties = self.properties.borrow_mut();
-        if let Some(property) = properties.get_mut(&key) {
-            if property.writable {
-                property.value = value;
-            }
-            drop(properties);
-            self.refresh_dynamic_function_realm_override(&key);
-            return;
-        }
-        if !self.auxiliary.extensible.get() {
-            return;
-        }
-        self.materialize_default_prototype_order();
-        self.auxiliary
-            .with_cold_mut(|cold| cold.property_order.push(key.clone()));
-        properties.insert(key.clone(), Property::enumerable(value));
-        drop(properties);
-        self.refresh_dynamic_function_realm_override(&key);
-    }
-
-    pub(crate) fn define_property(&self, key: String, property: Property) {
-        self.materialize_default_prototype_order();
-        if (key == "length" && self.auxiliary.implicit_length_property.get())
-            || (key == "name" && self.auxiliary.implicit_name_property.get())
-        {
-            self.materialize_default_data_properties();
-        }
-        if key == "prototype" {
-            self.ensure_default_prototype();
-        }
-        let mut properties = self.properties.borrow_mut();
-        if !properties.contains_key(&key) {
-            self.auxiliary
-                .with_cold_mut(|cold| cold.property_order.push(key.clone()));
-        }
-        properties.insert(key.clone(), property);
-        drop(properties);
-        self.refresh_dynamic_function_realm_override(&key);
-    }
-
-    fn refresh_dynamic_function_realm_override(&self, key: &str) {
-        if key != DYNAMIC_FUNCTION_REALM_GLOBAL {
-            return;
-        }
-        self.has_dynamic_function_realm_override.set(
-            self.properties
-                .borrow()
-                .get(key)
-                .is_some_and(|property| matches!(&property.value, Value::Object(_))),
-        );
-    }
-
-    pub(crate) fn own_property(&self, key: &str) -> Option<Property> {
-        if key == "length" && self.auxiliary.implicit_length_property.get() {
-            return self
-                .properties
-                .borrow()
-                .get(key)
-                .cloned()
-                .or_else(|| Some(self.default_length_property()));
-        }
-        if key == "name" && self.auxiliary.implicit_name_property.get() {
-            return self
-                .properties
-                .borrow()
-                .get(key)
-                .cloned()
-                .or_else(|| Some(self.default_name_property()));
-        }
-        if key == "prototype" {
-            self.ensure_default_prototype();
-        }
-        self.properties.borrow().get(key).cloned()
-    }
-
-    pub(crate) fn own_property_keys(&self) -> Vec<String> {
-        self.ordered_property_names(|property| property.enumerable)
-    }
-
-    pub(crate) fn own_property_names(&self) -> Vec<String> {
-        self.ordered_property_names(|_| true)
-    }
-
-    fn ordered_property_names(&self, include: impl Fn(&Property) -> bool) -> Vec<String> {
-        self.ensure_default_prototype();
-        let properties = self.properties.borrow();
-        let property_order = self
-            .auxiliary
-            .with_cold(|cold| cold.map_or_else(Vec::new, |cold| cold.property_order.clone()));
-        let mut indices = Vec::new();
-        let mut strings = Vec::new();
-        let mut fallback_strings = Vec::new();
-
-        let implicit_length = self.auxiliary.implicit_length_property.get();
-        let implicit_name = self.auxiliary.implicit_name_property.get();
-        if implicit_length {
-            let property = properties
-                .get("length")
-                .cloned()
-                .unwrap_or_else(|| self.default_length_property());
-            if include(&property) {
-                strings.push("length".to_owned());
-            }
-        }
-        if implicit_name {
-            let property = properties
-                .get("name")
-                .cloned()
-                .unwrap_or_else(|| self.default_name_property());
-            if include(&property) {
-                strings.push("name".to_owned());
-            }
-        }
-
-        for key in property_order.iter() {
-            let Some(property) = properties.get(key.as_str()) else {
-                continue;
-            };
-            if !include(property) {
-                continue;
-            }
-            if let Some(index) = array_index_property_key(key) {
-                indices.push((index, key.clone()));
-            } else {
-                strings.push(key.clone());
-            }
-        }
-
-        for (key, property) in properties.iter() {
-            if (implicit_length && key == "length")
-                || (implicit_name && key == "name")
-                || property_order.iter().any(|ordered| ordered == key)
-                || !include(property)
-            {
-                continue;
-            }
-            if let Some(index) = array_index_property_key(key) {
-                indices.push((index, key.clone()));
-            } else {
-                fallback_strings.push(key.clone());
-            }
-        }
-
-        indices.sort_by_key(|(index, _)| *index);
-        fallback_strings.sort();
-        strings.extend(fallback_strings);
-        indices
-            .into_iter()
-            .map(|(_, key)| key)
-            .chain(strings)
-            .collect()
-    }
-
-    pub(crate) fn delete_own_property(&self, key: &str) -> bool {
-        let implicit_default = (key == "length" && self.auxiliary.implicit_length_property.get())
-            || (key == "name" && self.auxiliary.implicit_name_property.get());
-        if implicit_default {
-            let mut properties = self.properties.borrow_mut();
-            if let Some(property) = properties.get(key) {
-                if !property.configurable {
-                    return false;
-                }
-                properties.remove(key);
-            }
-            if key == "length" {
-                self.auxiliary.implicit_length_property.set(false);
-            } else {
-                self.auxiliary.implicit_name_property.set(false);
-            }
-            return true;
-        }
-        if key == "prototype" {
-            self.ensure_default_prototype();
-        }
-        let mut properties = self.properties.borrow_mut();
-        if properties
-            .get(key)
-            .is_some_and(|property| !property.configurable)
-        {
-            return false;
-        }
-        properties.remove(key);
-        drop(properties);
-        if key == DYNAMIC_FUNCTION_REALM_GLOBAL {
-            self.has_dynamic_function_realm_override.set(false);
-        }
-        self.auxiliary
-            .with_cold_mut(|cold| cold.property_order.retain(|existing| existing != key));
-        true
-    }
-
-    /// Removes an own property regardless of its `[[Configurable]]` attribute,
-    /// for install-time setup of native objects that must not expose a property
-    /// the generic builder added (e.g. `Proxy` has no own `prototype`).
-    pub(crate) fn remove_own_property_unchecked(&self, key: &str) {
-        if key == "length" {
-            self.auxiliary.implicit_length_property.set(false);
-        }
-        if key == "name" {
-            self.auxiliary.implicit_name_property.set(false);
-        }
-        if key == "prototype" {
-            self.ensure_default_prototype();
-        }
-        self.properties.borrow_mut().remove(key);
-        if key == DYNAMIC_FUNCTION_REALM_GLOBAL {
-            self.has_dynamic_function_realm_override.set(false);
-        }
-        self.auxiliary
-            .with_cold_mut(|cold| cold.property_order.retain(|existing| existing != key));
     }
 
     pub(crate) fn symbol_property(&self, symbol: &ObjectRef, env: &CallEnv) -> Option<Property> {
@@ -1507,69 +1070,6 @@ impl Function {
                 }),
                 None => None,
             })
-    }
-
-    pub(crate) fn define_symbol_property(&self, symbol: ObjectRef, property: Property) {
-        self.auxiliary.with_cold_mut(|cold| {
-            if let Some((_, existing)) = cold
-                .symbol_properties
-                .iter_mut()
-                .find(|(existing_symbol, _)| existing_symbol.ptr_eq(&symbol))
-            {
-                *existing = property;
-                return;
-            }
-            cold.symbol_properties.push((symbol, property));
-        });
-    }
-
-    pub(crate) fn has_own_symbol_property(&self, symbol: &ObjectRef) -> bool {
-        self.auxiliary.with_cold(|cold| {
-            cold.is_some_and(|cold| {
-                cold.symbol_properties
-                    .iter()
-                    .any(|(existing_symbol, _)| existing_symbol.ptr_eq(symbol))
-            })
-        })
-    }
-
-    pub(crate) fn own_symbol_property(&self, symbol: &ObjectRef) -> Option<Property> {
-        self.auxiliary.with_cold(|cold| {
-            cold.and_then(|cold| {
-                cold.symbol_properties
-                    .iter()
-                    .find(|(existing_symbol, _)| existing_symbol.ptr_eq(symbol))
-                    .map(|(_, property)| property.clone())
-            })
-        })
-    }
-
-    pub(crate) fn delete_own_symbol_property(&self, symbol: &ObjectRef) -> bool {
-        self.auxiliary.with_cold_mut(|cold| {
-            let Some(index) = cold
-                .symbol_properties
-                .iter()
-                .position(|(existing_symbol, _)| existing_symbol.ptr_eq(symbol))
-            else {
-                return true;
-            };
-            if !cold.symbol_properties[index].1.configurable {
-                return false;
-            }
-            cold.symbol_properties.remove(index);
-            true
-        })
-    }
-
-    pub(crate) fn own_property_symbols(&self) -> Vec<ObjectRef> {
-        self.auxiliary.with_cold(|cold| {
-            cold.map_or_else(Vec::new, |cold| {
-                cold.symbol_properties
-                    .iter()
-                    .map(|(symbol, _)| symbol.clone())
-                    .collect()
-            })
-        })
     }
 
     /// Returns the function's private-name storage, creating it on first use.
@@ -1699,17 +1199,14 @@ impl Function {
 
     #[cfg(test)]
     fn property_order(&self) -> Vec<String> {
-        self.auxiliary
-            .with_cold(|cold| cold.map_or_else(Vec::new, |cold| cold.property_order.clone()))
+        self.with_named(|s| s.map_or_else(Vec::new, |s| s.text_keys()))
     }
 }
 
 fn bound_function_name(target: &Value) -> String {
     let target_name = match target {
         Value::Function(function) => function
-            .properties
-            .borrow()
-            .get("name")
+            .own_property("name")
             .and_then(|property| match &property.value {
                 Value::String(name) => Some(name.to_string()),
                 _ => None,
@@ -1791,11 +1288,7 @@ fn prototype_chain_contains_function_inner(
     }
 }
 
-fn array_index_property_key(key: &str) -> Option<u32> {
-    key.parse::<u32>()
-        .ok()
-        .filter(|index| *index < u32::MAX && index.to_string() == key)
-}
-
 #[cfg(test)]
 mod tests;
+
+mod named;

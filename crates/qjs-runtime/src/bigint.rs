@@ -51,7 +51,7 @@ pub(crate) fn install_bigint(env: &mut CallEnv, global_this: &Value, object_prot
         2,
         NativeFunction::BigIntAsUintN,
     );
-    bigint_function.properties.borrow_mut().insert(
+    bigint_function.define_property(
         "prototype".to_owned(),
         Property::fixed_non_enumerable(Value::Object(bigint_prototype)),
     );
@@ -88,7 +88,7 @@ fn define_prototype_native(
 }
 
 fn define_static_native(function: &Function, key: &str, length: usize, native: NativeFunction) {
-    function.properties.borrow_mut().insert(
+    function.define_property(
         key.to_owned(),
         Property::non_enumerable(Value::Function(Function::new_native(
             Some(key),

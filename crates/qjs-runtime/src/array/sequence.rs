@@ -102,7 +102,7 @@ pub(crate) fn native_array_prototype_to_reversed(
             env,
         )?);
     }
-    Ok(Value::Array(ArrayRef::new(values)))
+    Ok(Value::Array(ArrayRef::new(env.realm().atoms(), values)))
 }
 
 pub(crate) fn native_array_prototype_to_spliced(
@@ -160,7 +160,7 @@ pub(crate) fn native_array_prototype_to_spliced(
             env,
         )?);
     }
-    Ok(Value::Array(ArrayRef::new(result)))
+    Ok(Value::Array(ArrayRef::new(env.realm().atoms(), result)))
 }
 
 pub(crate) fn native_array_prototype_with(
@@ -197,7 +197,7 @@ pub(crate) fn native_array_prototype_with(
             )?);
         }
     }
-    Ok(Value::Array(ArrayRef::new(values)))
+    Ok(Value::Array(ArrayRef::new(env.realm().atoms(), values)))
 }
 
 fn concat_array_item(

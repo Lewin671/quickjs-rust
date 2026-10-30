@@ -1,11 +1,11 @@
 # T077: In-place core rebuild
 
-- Status: active; S1 owner implementation/correctness complete on `agent/t077-s1-property-authority/codex`, base `dd0905b2`; lead formal performance acceptance pending.
-- Implementation: one NamedStore for ordinary strings/symbols; four old forms, dynamic file, literal payload index and cold symbols deleted. Creation/consumer ports complete; recycled leased keys, 96-byte header and exotic hooks preserved.
-- Verified at: `06044f96`, 2026-10-30 UTC: full check (2,414 runtime, 5,170 subset), combined features 2,454/2,454, NG 258/258, native/x86 size assertions and staged hook pass. Complete release/agents exact scan: 42,672/42,672 configured passes; zero fail/timeout/not-run/gaps; burndown recorded.
-- Evidence: [final receipt](archive/T077-s1-verification.md), [cutover/deletions](archive/T077-s1-cutover.md), [exotic correction](archive/T077-s1-exotic-hooks.md), [decided key lifetime](proposals/T077-s1-fallibility.md). Final receipt/ledger changes leave scanned engine sources unchanged.
-- Unresolved: lead-owned baseline/formal whole-portfolio comparison and S1 performance acceptance; historical linker-order symbols need measured revalidation. No correctness waiver, old-store fallback, push or merge.
-- Next action: lead measures frozen `06044f96` under the stage contract, records baseline/candidate standing, and accepts S1 before starting S2. This owner does not push or merge.
+- Status: active; S2 implementation in progress on `agent/t077-s2-named-stores/codex`, base `b2daec46`; explicitly authorized by the lead's S2 brief while S1 formal measurement/review runs.
+- Implementation: function/array named tables and function order index replaced by NamedStore; installers/array constructors ported. Shape IC cutover not yet present.
+- Verified at: S2 family cutover working tree, 2026-10-30 UTC: staged fast gate passes (2,414 runtime tests, 117 selected Test262 cases, clippy/context/size); complete stage gates remain pending.
+- Evidence: [S2 boundary](proposals/T077-s2-named-stores.md), [S1 receipt](archive/T077-s1-verification.md).
+- Unresolved: S2 implementation, correctness/counters/triage; lead-owned S1 and whole-portfolio formal acceptance.
+- Next action: replace function/array named authorities and port consumers, then implement weak shape ICs and structural chain dependencies; never push or merge.
 
 ## Authority and scope
 

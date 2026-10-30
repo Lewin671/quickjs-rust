@@ -198,7 +198,10 @@ pub(in crate::bytecode) fn enumerate_keys_cached(
     if let Some(keys) = enumerate_keys_from_cache(value, cache) {
         return Ok(keys);
     }
-    let keys = ArrayRef::new(enumerable_keys(value.clone(), env)?);
+    let keys = ArrayRef::new(
+        &env.realm().atoms().clone(),
+        enumerable_keys(value.clone(), env)?,
+    );
     cache.record(value, keys.clone());
     Ok(keys)
 }

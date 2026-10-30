@@ -31,7 +31,7 @@ pub(crate) fn install_weak_ref(
             env.realm().atoms(),
         )),
     );
-    function.properties.borrow_mut().insert(
+    function.define_property(
         "prototype".to_owned(),
         Property::fixed_non_enumerable(Value::Object(prototype)),
     );

@@ -25,7 +25,7 @@ pub(crate) fn native_promise_any(
         .get(PROMISE_AGGREGATE_ERROR)
         .cloned();
     let handler = AnyHandler {
-        errors: ArrayRef::new(Vec::new()),
+        errors: ArrayRef::new(env.realm().atoms(), Vec::new()),
         remaining: perform::new_remaining(1, env.realm().atoms()),
         aggregate_error,
     };

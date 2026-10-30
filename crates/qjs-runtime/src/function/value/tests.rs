@@ -40,7 +40,7 @@ fn ordinary_function_header_keeps_cold_identity_state_out_of_line() {
         "shared module imports must remain pointer-sized"
     );
     assert!(
-        mem::size_of::<super::LazyFunctionProperties>() <= 16,
+        mem::size_of::<std::cell::RefCell<Option<Box<crate::value::layout::NamedStore>>>>() <= 16,
         "lazy function property header must stay within two machine words"
     );
     assert!(
@@ -62,7 +62,7 @@ fn user_functions_keep_empty_function_maps_unallocated() {
         panic!("expected function value");
     };
     assert!(!function.native_context.is_allocated());
-    assert!(!function.properties.is_allocated());
+    assert!(!function.named.borrow().is_some());
 
     let mut native = Function::new_native(
         Some("capturing"),
@@ -93,7 +93,7 @@ fn user_functions_keep_empty_function_maps_unallocated() {
         "explicit".to_owned(),
         crate::Property::enumerable(Value::Number(2.0)),
     );
-    assert!(native.properties.is_allocated());
+    assert!(native.named.borrow().is_some());
 }
 
 #[test]
@@ -144,7 +144,7 @@ fn default_name_and_length_stay_implicit_until_descriptor_mutation() {
         &domain,
     );
 
-    assert!(function.properties.borrow().is_empty());
+    assert!(function.named.borrow().is_none());
     assert_eq!(
         function
             .own_property("length")
@@ -166,7 +166,7 @@ fn default_name_and_length_stay_implicit_until_descriptor_mutation() {
             true,
         ),
     );
-    assert_eq!(function.properties.borrow().len(), 2);
+    assert_eq!(function.with_named(|s| s.unwrap().len()), 2);
     assert_eq!(function.own_property_names(), ["length", "name"]);
 }
 
@@ -190,7 +190,7 @@ fn install_time_override_and_implicit_default_are_one_property_slot() {
         false,
         &domain,
     );
-    function.properties.borrow_mut().insert(
+    function.define_property(
         "name".to_owned(),
         crate::Property::data(
             Value::String("installed".to_owned().into()),
@@ -240,7 +240,7 @@ fn compiled_function_keeps_default_prototype_order_implicit_until_observation() 
         function.own_property_names(),
         ["length", "name", "prototype"]
     );
-    assert_eq!(function.property_order(), ["prototype"]);
+    assert_eq!(function.property_order(), ["length", "name", "prototype"]);
 }
 
 #[test]

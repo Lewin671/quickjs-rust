@@ -96,7 +96,7 @@ impl EnumerateKeysCache {
                 keys.push(key_value(key));
             }
         }
-        Some(ArrayRef::new(keys))
+        Some(ArrayRef::new(&object.domain(), keys))
     }
 
     /// Records a just-enumerated key array when `target` has an entirely

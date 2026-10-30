@@ -1368,7 +1368,7 @@ fn function_env<'a>(
             .skip(function.params.positional.len())
             .cloned()
             .collect();
-        let array = ArrayRef::new(values);
+        let array = ArrayRef::new(&crate::property::atom::AtomDomain::new(), values);
         apply_marked_realm_array_prototype(&array, &frame_env);
         frame_env.insert(rest_name.to_owned(), Value::Array(array));
     }

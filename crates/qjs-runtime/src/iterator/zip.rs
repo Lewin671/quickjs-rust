@@ -632,7 +632,7 @@ fn zip_result(
     domain: &crate::property::atom::AtomDomain,
 ) -> Value {
     if result_kind == ZipResultKind::Array {
-        return Value::Array(ArrayRef::new(values));
+        return Value::Array(ArrayRef::new(domain, values));
     }
 
     let result = ObjectRef::with_prototype(HashMap::new(), None, domain);

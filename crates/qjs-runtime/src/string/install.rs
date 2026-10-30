@@ -99,7 +99,7 @@ pub(crate) fn install_string(env: &mut CallEnv, global_this: &Value, object_prot
     }
     define_object_alias(&string_prototype, "trimLeft", "trimStart");
     define_object_alias(&string_prototype, "trimRight", "trimEnd");
-    string_function.properties.borrow_mut().insert(
+    string_function.define_property(
         "prototype".to_owned(),
         Property::fixed_non_enumerable(Value::Object(string_prototype)),
     );
@@ -162,7 +162,7 @@ fn define_object_alias(object: &ObjectRef, key: &str, target: &str) {
 }
 
 fn define_function_property(function: &Function, key: &str, length: usize, native: NativeFunction) {
-    function.properties.borrow_mut().insert(
+    function.define_property(
         key.to_owned(),
         Property::non_enumerable(Value::Function(Function::new_native(
             Some(key),

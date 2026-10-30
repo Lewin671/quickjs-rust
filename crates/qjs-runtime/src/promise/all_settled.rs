@@ -22,7 +22,7 @@ pub(crate) fn native_promise_all_settled(
 ) -> Result<Value, RuntimeError> {
     let iterable = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let handler = AllSettledHandler {
-        values: ArrayRef::new(Vec::new()),
+        values: ArrayRef::new(env.realm().atoms(), Vec::new()),
         remaining: perform::new_remaining(1, env.realm().atoms()),
     };
     perform::run_combinator(this_value, iterable, "Promise.allSettled", handler, env)

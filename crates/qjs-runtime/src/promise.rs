@@ -116,7 +116,7 @@ pub(crate) fn install_promise(env: &mut CallEnv, global_this: &Value, object_pro
     promise_prototype.define_non_enumerable("catch".to_owned(), Value::Function(promise_catch));
     promise_prototype.define_non_enumerable("finally".to_owned(), Value::Function(promise_finally));
     promise_prototype.define_non_enumerable("then".to_owned(), Value::Function(promise_then));
-    promise_function.properties.borrow_mut().insert(
+    promise_function.define_property(
         "prototype".to_owned(),
         Property::fixed_non_enumerable(Value::Object(promise_prototype.clone())),
     );
@@ -128,7 +128,7 @@ pub(crate) fn install_promise(env: &mut CallEnv, global_this: &Value, object_pro
         &promise_prototype,
         &object_prototype,
     );
-    promise_function.properties.borrow_mut().insert(
+    promise_function.define_property(
         "all".to_owned(),
         Property::non_enumerable(Value::Function(promise_all)),
     );
@@ -200,7 +200,7 @@ fn promise_static_function(
 }
 
 fn define_promise_static(promise_function: &Function, name: &str, function: Function) {
-    promise_function.properties.borrow_mut().insert(
+    promise_function.define_property(
         name.to_owned(),
         Property::non_enumerable(Value::Function(function)),
     );
@@ -852,7 +852,7 @@ fn initialize_promise(object: &ObjectRef) {
         object.define_non_enumerable(PROMISE_RESULT.to_owned(), Value::Undefined);
         object.define_non_enumerable(
             PROMISE_REACTIONS.to_owned(),
-            Value::Array(ArrayRef::new(Vec::new())),
+            Value::Array(ArrayRef::new(&object.domain(), Vec::new())),
         );
     }
 }
@@ -872,7 +872,7 @@ fn settle_promise(object: &ObjectRef, state: &str, result: Value, env: &mut Call
     let reactions = promise_reactions(object);
     object.define_non_enumerable(
         PROMISE_REACTIONS.to_owned(),
-        Value::Array(ArrayRef::new(Vec::new())),
+        Value::Array(ArrayRef::new(env.realm().atoms(), Vec::new())),
     );
     for reaction in reactions {
         let Value::Object(reaction) = reaction else {

@@ -125,7 +125,7 @@ pub(crate) fn install_set(env: &mut CallEnv, global_this: &Value, object_prototy
     );
     set_prototype.define_non_enumerable("values".to_owned(), values_function);
     symbol::define_well_known_iterator_alias(env, &set_prototype, "values");
-    set_function.properties.borrow_mut().insert(
+    set_function.define_property(
         "prototype".to_owned(),
         Property::fixed_non_enumerable(Value::Object(set_prototype)),
     );
@@ -452,7 +452,10 @@ pub(crate) fn native_set_iterator_next(this_value: Value) -> Result<Value, Runti
 
     let item = match iterator_kind(&iterator)?.as_str() {
         SET_ITERATOR_KIND_VALUE => value,
-        SET_ITERATOR_KIND_KEY_VALUE => Value::Array(ArrayRef::new(vec![value.clone(), value])),
+        SET_ITERATOR_KIND_KEY_VALUE => Value::Array(ArrayRef::new(
+            &iterator.domain(),
+            vec![value.clone(), value],
+        )),
         _ => {
             return Err(RuntimeError {
                 thrown: None,

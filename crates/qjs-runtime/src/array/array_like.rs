@@ -60,9 +60,7 @@ pub(crate) fn array_like_values_with_env(
             Ok((0..length)
                 .map(|index| {
                     function
-                        .properties
-                        .borrow()
-                        .get(&index.to_string())
+                        .own_property(&index.to_string())
                         .map(|property| property.value.clone())
                         .unwrap_or(Value::Undefined)
                 })
@@ -200,9 +198,7 @@ pub(crate) fn array_like_values_from_receiver(
         Value::Function(function) => Ok((0..length)
             .map(|index| {
                 function
-                    .properties
-                    .borrow()
-                    .get(&index.to_string())
+                    .own_property(&index.to_string())
                     .map(|property| property.value.clone())
                     .unwrap_or(Value::Undefined)
             })

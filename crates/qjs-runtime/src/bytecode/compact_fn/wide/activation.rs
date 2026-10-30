@@ -1091,7 +1091,7 @@ fn run_frames(
                             .collect();
                         execute::store(
                             &mut window[dst as usize],
-                            Value::Array(crate::ArrayRef::new(values)),
+                            Value::Array(crate::ArrayRef::new(env.realm().atoms(), values)),
                         );
                     }
                     WideOp::ClearLocal { slot } => {
@@ -1568,9 +1568,9 @@ fn construct_plain_array(env: &CallEnv, callee: &Value, arguments: &[Value]) -> 
             if !valid {
                 return None;
             }
-            crate::ArrayRef::new_with_length(*length as usize)
+            crate::ArrayRef::new_with_length(env.realm().atoms(), *length as usize)
         }
-        values => crate::ArrayRef::new(values.to_vec()),
+        values => crate::ArrayRef::new(env.realm().atoms(), values.to_vec()),
     };
     Some(Value::Array(array))
 }

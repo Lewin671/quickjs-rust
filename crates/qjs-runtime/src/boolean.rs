@@ -44,7 +44,7 @@ pub(super) fn install_boolean(env: &mut CallEnv, global_this: &Value, object_pro
             env.realm().atoms(),
         )),
     );
-    boolean_function.properties.borrow_mut().insert(
+    boolean_function.define_property(
         "prototype".to_owned(),
         Property::fixed_non_enumerable(Value::Object(boolean_prototype)),
     );
