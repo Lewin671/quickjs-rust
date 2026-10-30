@@ -39,3 +39,8 @@ builds with the same diagnostic ownership wrappers. Non-timing controls validate
 stdout; only unmodified canonical images provide retired instructions.
 Array header work follows construction repair, as directed. Prior S2 correctness
 and measurement standing remains bound to the round-1 revisions in its receipt.
+
+An optional third probe argument `--trace-shapes` prints append-miss width/key
+labels for diagnosis. These copies allocate/log while tracing: their allocator
+counts and timing are excluded from work/payoff evidence. Canonical stdout is
+still checked. The default probe has no tracing code or additional branch.

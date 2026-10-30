@@ -9,7 +9,8 @@ import re
 import subprocess
 import sys
 
-revision, destination = sys.argv[1:]
+revision, destination, *options = sys.argv[1:]
+assert options in ([], ["--trace-shapes"]), options
 out = Path(destination).resolve()
 out.mkdir(parents=True, exist_ok=False)
 p = subprocess.Popen(['git', 'archive', revision], stdout=subprocess.PIPE)
@@ -236,4 +237,8 @@ s=count_body(s,'unsafe fn alloc(&self, layout:', 'r2_objects_created') if False 
 for sig,call in [('unsafe fn alloc(&self, layout:', 'stats::request(layout.size(), false);'),('unsafe fn alloc_zeroed(&self, layout:', 'stats::request(layout.size(), false);'),('unsafe fn realloc(&self, block:', 'stats::request(new_size, true);')]:
  a=s.index(sig);b=s.index('{',a);s=s[:b+1]+'\n'+call+s[b+1:]
 a=s.index('pub(crate) fn report_counters()');b=s.index('{',a);s=s[:b+1]+'\n stats::report_requests();'+s[b+1:];p.write_text(s)
-print('diagnostic source',revision,out,'candidate' if candidate else 'base')
+if options:
+    assert candidate, 'shape labels require the layout implementation'
+    edit('value/layout/edit.rs', lambda s:s.replace('        crate::diagnostics::count!(property_transition_misses);',
+        '        crate::diagnostics::count!(property_transition_misses);\n        eprintln!("R2_SHAPE len={} key={:?}", self.len, key.string_text().unwrap_or("<symbol>"));',1))
+print('diagnostic source',revision,out,'candidate' if candidate else 'base', 'trace-shapes' if options else 'counts')
