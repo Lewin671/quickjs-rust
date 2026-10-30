@@ -61,6 +61,7 @@ pub(crate) struct RealmState {
     /// Intrinsic arguments schemas contain only descriptor metadata and this
     /// realm's well-known symbols; their actual values/accessors stay per object.
     arguments_layouts: RefCell<Vec<Rc<crate::value::layout::Layout>>>,
+    array_named_seed: OnceCell<Rc<crate::value::layout::NamedStorage>>,
     function_prototype: OnceCell<crate::Prototype>,
     function_constructor: OnceCell<Function>,
     /// Stable `%String.prototype%` identity used by primitive String reads.
@@ -114,6 +115,7 @@ impl RealmState {
             object_prototype: OnceCell::new(),
             array_prototype: OnceCell::new(),
             arguments_layouts: RefCell::default(),
+            array_named_seed: OnceCell::new(),
             function_prototype: OnceCell::new(),
             function_constructor: OnceCell::new(),
             string_prototype: OnceCell::new(),

@@ -19,6 +19,19 @@ impl NamedStorage {
             prototype: store.prototype,
         }
     }
+    /// Fork a realm's immutable empty seed on the first receiver mutation.
+    pub(crate) fn fork_empty_store(&self) -> NamedStore {
+        match self {
+            Self::Empty { layout, prototype } => NamedStore {
+                layout: layout.clone(),
+                prototype: prototype.clone(),
+                values: ValueSlots::Empty,
+                accessors: None,
+                epoch: 0,
+            },
+            _ => panic!("array seed must be an empty authority"),
+        }
+    }
     pub(crate) fn store(&self) -> Option<&NamedStore> {
         match self {
             Self::Full(s) => Some(s),

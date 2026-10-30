@@ -2,6 +2,26 @@
 //! Actual values/accessor closures and receiver/prototype edges remain live.
 use super::*;
 impl RealmState {
+    pub(crate) fn array_named_seed(&self) -> Rc<crate::value::layout::NamedStorage> {
+        let Some(prototype) = self.array_prototype.get() else {
+            // Bootstrap arrays keep the explicit null edge; do not poison the final seed.
+            return Rc::new(crate::value::layout::NamedStorage::new(
+                self.property_owner.domain(),
+                None,
+                4,
+            ));
+        };
+        self.array_named_seed
+            .get_or_init(|| {
+                Rc::new(crate::value::layout::NamedStorage::new(
+                    self.property_owner.domain(),
+                    Some(crate::Prototype::Object(prototype.clone())),
+                    4,
+                ))
+            })
+            .clone()
+    }
+
     pub(crate) fn retain_arguments_layout(&self, object: &ObjectRef) {
         object.with_named(|store| {
             let Some(layout) = store.shared_layout() else { return; };
@@ -88,5 +108,33 @@ mod tests {
         let object = ObjectRef::new(HashMap::new(), &foreign);
         realm.retain_arguments_layout(&object);
         assert_eq!(realm.arguments_layouts.borrow().len(), 32);
+    }
+}
+
+#[cfg(test)]
+mod array_seed_tests {
+    use super::*;
+    #[test]
+    fn bootstrap_seed_does_not_replace_the_final_intrinsic_or_share_mutations() {
+        let realm = super::super::new_realm(HashMap::new());
+        let early = crate::ArrayRef::new(&realm, Vec::new());
+        assert!(early.prototype_slot().is_none());
+        let prototype = ObjectRef::new(HashMap::new(), realm.property_owner.domain());
+        realm.array_prototype.set(prototype.clone()).unwrap();
+        let a = crate::ArrayRef::new(&realm, Vec::new());
+        let b = crate::ArrayRef::new(&realm, Vec::new());
+        assert!(Rc::ptr_eq(
+            &realm.array_named_seed(),
+            &realm.array_named_seed()
+        ));
+        assert_eq!(a.named_version(), b.named_version());
+        assert!(
+            matches!(a.prototype_slot(), Some(crate::Prototype::Object(p)) if p.ptr_eq(&prototype))
+        );
+        assert!(early.prototype_slot().is_none());
+        a.define_property("x".into(), crate::Property::enumerable(Value::Number(1.0)));
+        assert_ne!(a.named_version(), b.named_version());
+        assert!(b.property("x").is_none());
+        assert!(b.with_named(|store| store.is_none()));
     }
 }

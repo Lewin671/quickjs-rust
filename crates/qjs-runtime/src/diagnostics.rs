@@ -49,6 +49,9 @@ macro_rules! declare_counters {
 }
 
 declare_counters! {
+    property_array_seed_headers,
+    property_array_seed_releases,
+    property_array_cold_stores,
     property_constructor_prototype_hits,
     property_constructor_prototype_misses,
     property_arguments_template_hits,

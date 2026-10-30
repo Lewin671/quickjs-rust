@@ -462,11 +462,18 @@ impl NamedPropertyCache {
             })
         })?
     }
+    #[inline(always)]
     pub(super) fn read_string(&self, value: &Value, name: &str, _env: &CallEnv) -> Option<Value> {
         value.with_named_target(|t| {
             self.data_value(t)
-                .or_else(|| self.read_target(t, name, None).and_then(ReadOutcome::value))
+                .or_else(|| self.read_string_slow(t, name))
         })?
+    }
+    #[cold]
+    #[inline(never)]
+    fn read_string_slow(&self, target: NamedTarget<'_>, name: &str) -> Option<Value> {
+        self.read_target(target, name, None)
+            .and_then(ReadOutcome::value)
     }
     pub(super) fn read_outcome(&self, value: &Value, name: &str) -> Option<ReadOutcome> {
         value.with_named_target(|t| self.read_target(t, name, None))?

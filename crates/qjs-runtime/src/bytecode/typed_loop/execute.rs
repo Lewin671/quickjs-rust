@@ -1191,6 +1191,33 @@ fn get_named(
     intrinsics: &Intrinsics,
     env: Option<&crate::function::CallEnv>,
 ) -> Option<Value> {
+    // Unconditional own exotic lengths do not consult ordinary named storage.
+    if name.as_ref() == "length" {
+        match receiver {
+            Value::Array(array) => return Some(Value::Number(array.len() as f64)),
+            Value::String(text) => {
+                return Some(Value::Number(
+                    crate::string::js_string_code_unit_len(text) as f64
+                ));
+            }
+            _ => {}
+        }
+    }
+    // A string's `length` is its code-unit count; `for (i < text.length)`
+    // is the header test of every string scan. Any other non-index name is a
+    // method on the realm's `String.prototype`.
+    if let Value::String(text) = receiver {
+        if name.as_ref() == "length" {
+            return Some(Value::Number(
+                crate::string::js_string_code_unit_len(text) as f64
+            ));
+        }
+        if name.bytes().all(|byte| byte.is_ascii_digit()) {
+            return None;
+        }
+        return prototype_method(intrinsics.string_prototype(env)?, name, shapes);
+    }
+
     if let Some(env) = env
         && let Some(value) = shapes.read_string(receiver, name, env)
     {
@@ -1216,20 +1243,6 @@ fn get_named(
             return None;
         }
         return prototype_method(prototype, name, shapes);
-    }
-    // A string's `length` is its code-unit count; `for (i < text.length)`
-    // is the header test of every string scan. Any other non-index name is a
-    // method on the realm's `String.prototype`.
-    if let Value::String(text) = receiver {
-        if name.as_ref() == "length" {
-            return Some(Value::Number(
-                crate::string::js_string_code_unit_len(text) as f64
-            ));
-        }
-        if name.bytes().all(|byte| byte.is_ascii_digit()) {
-            return None;
-        }
-        return prototype_method(intrinsics.string_prototype(env)?, name, shapes);
     }
     let Value::Object(object) = receiver else {
         return None;

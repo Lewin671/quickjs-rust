@@ -35,6 +35,17 @@ pub(super) fn get_prop_named(
     cache: &NamedPropertyCache,
     env: &CallEnv,
 ) -> Result<Value, RuntimeError> {
+    if key.as_ref() == "length" {
+        match object {
+            Value::Array(array) => return Ok(Value::Number(array.len() as f64)),
+            Value::String(text) => {
+                return Ok(Value::Number(
+                    crate::string::js_string_code_unit_len(text) as f64
+                ));
+            }
+            _ => {}
+        }
+    }
     if let Some(outcome) = cache.read_outcome(object, key) {
         return match outcome {
             crate::bytecode::named_property_cache::ReadOutcome::Value(v) => Ok(v),
