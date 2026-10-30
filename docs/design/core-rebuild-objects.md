@@ -156,5 +156,5 @@ Proxy, namespace live exports and unmodeled exotic keys use their semantic hooks
 `QJS_DISABLE_IC=1` disables named/enumeration IC admission and hits.
 `QJS_VERIFY_IC=1` in debug builds compares hits with pure uncached data lookup,
 without replaying accessors, key coercion or Proxy traps. These modes are captured
-at cache creation. Perf counters partition IC hits/misses, generic ID probes and
-text linking by receiver family; they compile out of production timing builds.
+at cache creation. Perf counters partition IC hits/misses, generic own probes and
+text-index linking queries by receiver family; they compile out of production timing builds.

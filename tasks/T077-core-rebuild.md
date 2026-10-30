@@ -2,10 +2,10 @@
 
 - Status: active; S2 implementation in progress on `agent/t077-s2-named-stores/codex`, base `b2daec46`; explicitly authorized by the lead's S2 brief while S1 formal measurement/review runs.
 - Implementation: all materialized named families use NamedStore; weak 32-byte mono/four-way ICs, registered structural prototype/enumeration dependencies, and typed-loop/compact/interpreter ports present. Old exact-value caches and value epochs deleted.
-- Verified at: cache `3577b2c4` and carrier `fc5da912` fast gates pass (2,417 runtime tests). Debug IC verification 2,417 tests; combined features 2,456 before two added tests; NG 259/259; x86 cross-check passes. Ten development checksums/counters verified; full final/exact scans running.
-- Evidence: [S2 boundary](proposals/T077-s2-named-stores.md), [S2 counters](archive/T077-s2-counters.md), [S1 receipt](archive/T077-s1-verification.md).
+- Verified at: engine `fc5da912`: full gate passes (2,417 runtime; 5,170 curated), debug IC unit/subset, combined features 2,458, NG 259, executed x86 cache/size tests and release cache tests pass. Cached/IC-off exact scans remain running.
+- Evidence: [S2 verification](proposals/T077-s2-verification.md), [S2 counters](archive/T077-s2-counters.md), [implementation boundary](proposals/T077-s2-named-stores.md).
 - Unresolved: complete stage correctness/counters and iMac triage; runner submits via git push to temporary refs, so owner requested clarification of the explicit no-push instruction. Formal whole-portfolio acceptance remains lead-owned.
-- Next action: freeze/cache commit, finish full/IC-off exact gates and counter receipt, then iMac triage if authorized. Never push or merge project branches.
+- Next action: freeze/cache commit, finish full/IC-off exact gates and counter receipt, then iMac triage if authorized. Never push or merge.
 
 ## Authority and scope
 

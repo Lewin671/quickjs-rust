@@ -163,7 +163,10 @@ fn own_hit_has_no_id_probe_text_hash_or_descriptor_path() {
     let cache = NamedPropertyCache::default();
     cache.update(&o, "x", &Value::Null);
     // Verification intentionally resolves the key and semantic result again.
-    cache.0.borrow_mut().verify = false;
+    #[cfg(debug_assertions)]
+    {
+        cache.0.borrow_mut().verify = false;
+    }
     crate::diagnostics::reset_counters();
     assert_eq!(cache.get(&o), Some(Value::Number(1.0)));
     let c = crate::diagnostics::counters().unwrap();

@@ -75,7 +75,7 @@ declare_counters! {
     /// Statically named property reads and writes.
     named_property_reads,
     named_property_writes,
-    /// Shape IC probes, results, generic ID probes and text linking per receiver family.
+    /// Shape IC results, generic own probes (including hook declines), and text-index queries by receiver family.
     ic_object_hits,
     ic_object_misses,
     ic_object_probes,
