@@ -1,11 +1,11 @@
 # T077 S3a implementation and review repair
 
-- Status: independent-review repairs present; counters and depth parity pass; full gate passes; fresh complete exact scan pending.
+- Status: independent-review repairs locally complete; depth parity, counters, full gate, NG fixtures and fresh complete exact scan all pass. Lead formal acceptance remains pending.
 - Implementation: direct operation entries and borrowed arguments retained; no native/realm depth or stack limit. The rejected original report is [historical](../archive/T077-s3a-initial-results.md).
-- Verified at: runtime `03c8680c`: 2,391 runtime tests and clippy pass; debug/release depth diagnostics and twenty development counter runs pass. Full gate passes; complete exact scan pending.
+- Verified at: runtime `03c8680c`: full check (2,391 runtime tests; 5,170 curated cases), 257 NG fixtures, debug/release depth parity, twenty development counter runs and all 42,672 configured exact Rust cases pass; zero gaps/not-run.
 - Evidence: [depth records](T077-s3a-depth-parity.json), [depth reproducer](T077-s3a-depth-probe.py); fresh [counter rows](T077-s3a-review-counts.json), [temporary patch](T077-s3a-review-instrumentation.patch), [build identities](T077-s3a-review-metadata.json). Older counters remain bound to `27d503a6`.
-- Unresolved: complete configured exact scan/burndown; lead formal performance acceptance.
-- Next action: finish final gates on `03c8680c`, then hand off without push/merge.
+- Unresolved: lead formal performance acceptance/integration only. The known base deep Rust-stack gap remains S3d-owned.
+- Next action: lead reviews the repaired candidate and formal acceptance; S3b still needs accepted S2/T074 contracts. No push/merge by this owner.
 
 ## What the review corrected
 
@@ -135,12 +135,42 @@ At frozen runtime `03c8680c`:
 
 - `TEST262_DIR=/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/third_party/test262 TEST262_JOBS=4 ./scripts/check.sh`: all stages pass, including 2,391 runtime tests and 5,170 curated Test262 cases.
 - `QJS_CLI_BIN="$PWD/target/release/qjs" COMPARE_QJS_JOBS=4 ./scripts/compare-qjs.sh`: all 257 fixtures pass (clean agents-enabled release CLI).
-- Full development counter reproduction passes as above; the counter patch is absent from production source.
-- Complete configured exact scan is running on the same frozen binary with
+- Full development counter reproduction passes as above; the cleaned reproducer independently re-ran all twenty maps and matched the saved data. The counter patch is absent from production source.
+- Complete configured exact scan passed on the same frozen binary with
   `QJS_AGENTS=1 QJS_CLI_PROFILE=release QJS_CLI_BIN="$PWD/target/release/qjs" TEST262_TIMEOUT_RETRIES=1 TEST262_CASE_TIMEOUT_SECONDS=20 TEST262_BASELINE_JOBS=6 ./scripts/find-qjsng-gaps.sh --exact --all --no-recommend --out-dir target/t077-s3a-review/exact`.
 
-The scan uses a detached local runner so a UI/session continuation cannot stop
-aggregation. A fresh complete-scan ledger entry is pending; no earlier ledger
-line or archived evidence is edited. The historical scan establishes only
-`27d503a6`, not current source or adequate recursion behavior. Lead formal
-performance acceptance remains unmeasured; this owner never pushes or merges.
+The detached runner completed normally with exit 0, including its serial
+aggregation and cleanup; no recovery was needed. The original corpus is 53,572
+paths, with the unchanged 10,900 NG-config exclusions and 42,672 configured cases.
+**Rust: 42,672 pass; 0 fail, timeout or not-run. NG: 42,602 pass; 70 fail; 0 timeout.
+Actionable gaps and NG-pass/Rust-not-run are both zero.** All configured Rust
+cases pass, so no configured pass is lost. NG nonpasses are recorded as observed;
+no cause is inferred. The new ledger line is for `03c8680c`; no older line is edited.
+
+```sh
+./scripts/test262-burndown.sh --report target/t077-s3a-review/exact \
+  --commit 03c8680c --source local-exact-release-agents
+```
+
+The full command/environment, binary/source pins and result hashes are in
+[T077-s3a-review-metadata.json](T077-s3a-review-metadata.json). The native API still
+uses CallEnv as its only service authority, with borrowed callee/receiver and a
+construct flag; no Context adapter, dependency, crate, unsafe or FFI was added.
+The FunctionData header remains the earlier measured 304 bytes (base 296).
+S1 property/layout/linked-code paths are untouched. Debug-only obsolete build
+cache was cleaned after all gates; the frozen release scan binary was retained
+and hash-verified. Free disk stayed above 8 GiB.
+
+## Handoff
+
+This applies the independent review completely: no S3a recursion limit or realm
+state; all requested metadata/clone/probe/expect fixes; both-profile depth parity;
+fresh full gate, comparison, counters and complete exact coverage/burndown.
+The original safety claims are explicitly rejected in the historical report.
+The actual 300-level debug crash was pre-existing at base; the avoidable callback
+generic frame was removed, and every measured base-success ceiling and feedback
+landmark works on head.
+
+No push, merge, timing job or held-out access. The lead owns formal aggregate
+acceptance and integration/rebase with S1. S3b still requires accepted S2 and
+approved T074 contracts; S3d owns the pre-existing runtime-wide stack-policy gap.

@@ -1,11 +1,11 @@
 # T077: In-place core rebuild
 
-- Status: active; S3a independent-review repairs present; depth parity, counters and full gate pass, fresh complete exact scan pending (2026-10-30).
+- Status: active; S3a independent-review repairs locally complete/committed; fresh full gate/counters/depth parity/exact coverage pass, lead formal acceptance pending (2026-10-30).
 - Implementation: direct entries/slices retained; guard and realm state removed; borrowed metadata and universal VM argument owners eliminate hot-path cloning/probes. S3a adds no replacement limit.
-- Verified at: runtime `03c8680c`; 2,391 runtime tests, full check (5,170 curated cases), 257 NG fixtures, twenty development counter maps and all eight debug/release base-depth parity families pass. Fresh complete exact scan pending.
+- Verified at: runtime `03c8680c`; 2,391 runtime tests, full check (5,170 curated cases), 257 NG fixtures, twenty development maps, all eight debug/release base-depth parity families, and 42,672 configured Rust cases pass; zero gaps/not-run, fresh burndown recorded.
 - Evidence: [target](../docs/design/core-rebuild.md), [S1 brief](proposals/T077-s1-property-authority.md), [S3 plan/inventories](proposals/T077-s3-plan.md), [S3 counts](diagnostics/T077-s3-counts.md). S3a implementation/check record: [S3a results](diagnostics/T077-s3a-results.md).
-- Unresolved: fresh complete exact scan/burndown, then lead formal acceptance/integration; T074 contracts before S3b.
-- Next action: finish the detached complete exact scan on frozen `03c8680c`, record its fresh ledger entry, then hand off without push/merge.
+- Unresolved: lead formal S3a acceptance/integration and T074 contracts before S3b; pre-existing deep Rust-stack exhaustion remains S3d-owned.
+- Next action: lead reviews repaired S3a and runs formal acceptance/integration; no push/merge by this owner, and no new S3a resource limit.
 
 ## Authority and scope
 

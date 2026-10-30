@@ -7,5 +7,29 @@
   "counter_binary_sha256": "c9828d3f4b3a1f60ef941a4db5cb102a2c7f7b05e0d61f63e3307d3805c560c9",
   "release_agents_binary_sha256": "d8b1548e5a3ee377899ce16ffe2ea24a0d6f6277c41a74ffe36fc3b3a08d21a0",
   "patch_sha256": "d2d6020d60fea3be5a43cb86bb177d94ea74184af1bda03c0a1a7f49f58238c2",
-  "baseline": "d19d3aa6, original full-map baseline reproduced in the initial S3a run"
+  "baseline": "d19d3aa6, original full-map baseline reproduced in the initial S3a run",
+  "exact_scan": {
+    "runtime_revision": "03c8680c3024bf460ca15d6adeb6e74096409334",
+    "command": [
+      "./scripts/find-qjsng-gaps.sh",
+      "--exact",
+      "--all",
+      "--no-recommend",
+      "--out-dir",
+      "target/t077-s3a-review/exact"
+    ],
+    "environment": {
+      "QJS_AGENTS": "1",
+      "QJS_CLI_PROFILE": "release",
+      "QJS_CLI_BIN": "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3a/target/release/qjs",
+      "TEST262_TIMEOUT_RETRIES": "1",
+      "TEST262_CASE_TIMEOUT_SECONDS": "20",
+      "TEST262_BASELINE_JOBS": "6"
+    },
+    "exit_code": 0,
+    "summary_sha256": "cffdf394963ec66c41d006192593e9975e6b082a55483748550b7a9fb866e80f",
+    "cases_sha256": "2263183d8df546cb37338205c107cc4614a7ddee069a711be6181c0e27c2f61a",
+    "test262_pin": "4249661388e5d3f92a85186213da140a6481490f",
+    "ng_pin": "f7830186043e4488f2998759d60a514faf07cbc9"
+  }
 }

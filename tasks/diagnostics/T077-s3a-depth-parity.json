@@ -813,5 +813,215 @@
     67092480
   ],
   "base_build": "Exact d19d3aa6 crates overlay in this worktree; git diff d19d3aa6 -- crates was empty before both builds; no other checkout used.",
-  "head_build": "Runtime sources match 03c8680c; diagnostic binaries compiled in that hot-path worktree before its commit. CLI bookkeeping HEAD was 43a0a5be."
+  "head_build": "Runtime sources match 03c8680c; diagnostic binaries compiled in that hot-path worktree before its commit. CLI bookkeeping HEAD was 43a0a5be.",
+  "base_success_maxima_replayed_on_head": [
+    {
+      "profile": "debug",
+      "case": "forEach",
+      "base_depth": 143,
+      "result": {
+        "depth": 143,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "144\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "debug",
+      "case": "map",
+      "base_depth": 142,
+      "result": {
+        "depth": 142,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "143\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "debug",
+      "case": "reduce",
+      "base_depth": 176,
+      "result": {
+        "depth": 176,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "177\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "debug",
+      "case": "call",
+      "base_depth": 341,
+      "result": {
+        "depth": 341,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "341\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "debug",
+      "case": "apply",
+      "base_depth": 338,
+      "result": {
+        "depth": 338,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "338\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "debug",
+      "case": "reflect_apply",
+      "base_depth": 309,
+      "result": {
+        "depth": 309,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "309\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "debug",
+      "case": "yield_star",
+      "base_depth": 142,
+      "result": {
+        "depth": 142,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "42\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "debug",
+      "case": "plain_in_callback",
+      "base_depth": 4096,
+      "result": {
+        "depth": 4096,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "4096\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "release",
+      "case": "forEach",
+      "base_depth": 712,
+      "result": {
+        "depth": 712,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "713\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "release",
+      "case": "map",
+      "base_depth": 706,
+      "result": {
+        "depth": 706,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "707\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "release",
+      "case": "reduce",
+      "base_depth": 744,
+      "result": {
+        "depth": 744,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "745\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "release",
+      "case": "call",
+      "base_depth": 2034,
+      "result": {
+        "depth": 2034,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "2034\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "release",
+      "case": "apply",
+      "base_depth": 1879,
+      "result": {
+        "depth": 1879,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "1879\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "release",
+      "case": "reflect_apply",
+      "base_depth": 1674,
+      "result": {
+        "depth": 1674,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "1674\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "release",
+      "case": "yield_star",
+      "base_depth": 665,
+      "result": {
+        "depth": 665,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "42\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "release",
+      "case": "plain_in_callback",
+      "base_depth": 4096,
+      "result": {
+        "depth": 4096,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "4096\n",
+        "stderr": ""
+      }
+    }
+  ]
 }
