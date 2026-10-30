@@ -25,7 +25,7 @@ arguments, bound lists, Proxy trap arrays, apply/spread/rest lists still own val
   changing the native ABI. No new driver or backend is introduced.
 - Checked native re-entry needs one realm-local depth cell in `function/env.rs`.
   It is shared by callback frames, releases on return/throw, and limits synchronous
-  native depth to 32. No global mutable state or RefCell borrow spans callbacks.
+  native depth to 256. No global mutable state or RefCell borrow spans callbacks.
   This is the only service-state addition; S3b still replaces CallEnv directly.
 - `FunctionData` grows from 296 to 304 bytes on aarch64: the direct entry pointer
   replaces a one-byte family cache. Its explicit size test now admits that word;
@@ -61,3 +61,15 @@ async-generator entry adapters; the pre-commit fast gate verifies the final sour
 The subset honors TEST262_DIR. The exact-scan scripts hardcode their local
 submodule path, so both pinned top-level submodules were initialized in this
 worktree (no nested submodules, no main-checkout edits, no harness/config edits).
+
+## Depth-limit correction after the first commit
+
+`66301001` passed unit/NG/subset gates but failed the tenth development program:
+`graphlib/paths` threw `RangeError: native call depth limit exceeded` at the
+initial limit 32. A temporary non-timing, unbounded diagnostic (never production)
+ran that same checksum successfully and measured maximum native nesting **158**.
+The native budget is raised to 256; a general 48-level nested reduce-callback
+regression test accompanies it. The boundary limit/release unit test now uses the
+single declared budget. The old candidate is not claimed as a complete result.
+The obsolete exact scan was stopped while still partial; no burndown was recorded
+for it. The final candidate must run the complete scan and all ten counters again.

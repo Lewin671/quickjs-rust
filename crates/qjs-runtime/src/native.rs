@@ -85,10 +85,11 @@ pub(crate) fn call_native_function(
 struct NativeBoundary<'a>(&'a std::cell::Cell<usize>);
 
 impl<'a> NativeBoundary<'a> {
+    const MAX_DEPTH: usize = 256;
+
     fn enter(realm: &'a crate::function::Realm) -> Result<Self, RuntimeError> {
-        const MAX_NATIVE_DEPTH: usize = 32;
         let depth = &realm.native_depth;
-        if depth.get() >= MAX_NATIVE_DEPTH {
+        if depth.get() >= Self::MAX_DEPTH {
             return Err(RuntimeError {
                 thrown: None,
                 message: "RangeError: native call depth limit exceeded".to_owned(),

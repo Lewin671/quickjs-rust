@@ -172,7 +172,7 @@ fn depth_is_shared_by_callback_frames_and_restored_on_error() {
         false,
     ));
     let realm = env.realm_rc();
-    let guards = (0..32)
+    let guards = (0..NativeBoundary::MAX_DEPTH)
         .map(|_| NativeBoundary::enter(&realm).unwrap())
         .collect::<Vec<_>>();
     let mut callback_env = env.empty_frame();
@@ -184,7 +184,7 @@ fn depth_is_shared_by_callback_frames_and_restored_on_error() {
     )
     .unwrap_err();
     assert!(error.message.starts_with("RangeError:"));
-    assert_eq!(realm.native_depth.get(), 32);
+    assert_eq!(realm.native_depth.get(), NativeBoundary::MAX_DEPTH);
     drop(guards);
     assert_eq!(realm.native_depth.get(), 0);
     assert_eq!(
@@ -206,4 +206,23 @@ fn uninitialized_lexical_has_an_installed_throwing_entry() {
     let native = Value::Function(Function::uninitialized_lexical_marker());
     let error = call_function_slice(&native, Value::Undefined, &[], &mut empty_env()).unwrap_err();
     assert!(error.message.starts_with("ReferenceError:"));
+}
+
+#[test]
+fn nested_native_callbacks_allow_ordinary_graph_traversal_depths() {
+    assert_eq!(
+        crate::eval(
+            r#"
+        function sum(n) {
+            if (n === 0) return 0;
+            return [n].reduce(function(total, value) {
+                return total + value + sum(n - 1);
+            }, 0);
+        }
+        sum(48);
+    "#
+        )
+        .unwrap(),
+        Value::Number(1176.0)
+    );
 }
