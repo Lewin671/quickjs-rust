@@ -164,7 +164,7 @@ if candidate:
         if (src/'value/layout/append_batch.rs').exists():
             edit('value/layout/append_batch.rs',lambda s:s.replace('        store.values.extend(values);','        crate::diagnostics::update(|c| c.r2_store_adds += self.width as u64);\n        store.values.extend(values);'))
         edit('value/layout/append_recipe.rs',lambda s:s.replace('        store.values.push(value);','        crate::diagnostics::count!(r2_store_adds);\n        store.values.push(value);'))
-        edit('value/layout/sequence.rs',lambda s:s.replace('                values.push(value);','                crate::diagnostics::count!(r2_store_adds);\n                values.push(value);').replace('let prefix = prefix.clone();','let prefix = '+C+'::SchemaRc::clone_raw(prefix);'))
+        edit('value/layout/sequence.rs',lambda s:(s.replace('                self.indices += usize::from(index);','                crate::diagnostics::count!(r2_store_adds);\n                self.indices += usize::from(index);') if 'fn insert_property(' in s else s.replace('                values.push(value);','                crate::diagnostics::count!(r2_store_adds);\n                values.push(value);')).replace('let prefix = prefix.clone();','let prefix = '+C+'::SchemaRc::clone_raw(prefix);').replace('                prefix.clone(),','                '+C+'::SchemaRc::clone_raw(prefix),'))
         edit('value/layout/host.rs',lambda s:s.replace('Self::from_slots(layout, ValueSlots::pair(values))','{ crate::diagnostics::count!(r2_inline_pairs); Self::from_slots(layout, ValueSlots::pair(values)) }'))
     else:
         edit('value/layout/host.rs',lambda s:s.replace('        self.values.reserve(capacity);',C+'::reserve(&mut self.values, capacity);'))

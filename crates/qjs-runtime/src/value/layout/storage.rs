@@ -104,6 +104,10 @@ impl Drop for LayoutData {
     }
 }
 impl Layout {
+    /// Number of descriptors in this immutable prefix.
+    pub(crate) fn width(&self) -> usize {
+        self.len
+    }
     pub(super) fn entries(&self) -> Ref<'_, [ShapeEntry]> {
         Ref::map(self.data.borrow(), |data| &data.entries[..self.len])
     }

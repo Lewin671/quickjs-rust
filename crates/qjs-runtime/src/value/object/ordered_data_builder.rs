@@ -16,6 +16,10 @@ impl OrderedDataPropertyBuilder {
         let (properties, prediction, indices) = sequence.finish();
         (ObjectRef::from_ready_named(properties, indices), prediction)
     }
+    pub(crate) fn finish_unobserved(sequence: crate::value::layout::DataSequence) -> ObjectRef {
+        let (properties, indices) = sequence.finish_store();
+        ObjectRef::from_ready_named(properties, indices)
+    }
     pub(crate) fn new(domain: &AtomDomain) -> Self {
         Self {
             properties: NamedStore::empty(domain),

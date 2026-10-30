@@ -47,6 +47,13 @@ impl NamedStore {
         Self::from_slots(layout, ValueSlots::pair(values))
     }
     pub(super) fn from_slots(layout: Rc<Layout>, values: ValueSlots) -> Self {
+        Self::from_slot_parts(layout, values, None)
+    }
+    pub(super) fn from_slot_parts(
+        layout: Rc<Layout>,
+        values: ValueSlots,
+        accessors: Option<Box<AccessorSlots>>,
+    ) -> Self {
         let layout = if layout.dictionary {
             Rc::new(layout.copied(true))
         } else {
@@ -69,7 +76,7 @@ impl NamedStore {
         let store = Self {
             layout,
             values,
-            accessors: None,
+            accessors,
             epoch,
             prototype,
         };

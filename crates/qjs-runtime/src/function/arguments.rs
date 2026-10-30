@@ -1,12 +1,9 @@
 //! Per-call arguments values/accessors with realm-owned shared descriptor schemas.
 //! Parameter cells, poison callee and iterator identity retain their existing paths.
-use std::collections::HashMap;
-
 use qjs_ast::BindingPattern;
 
 use crate::{
-    Function, NativeFunction, ObjectRef, Property, Prototype, RuntimeError, Value,
-    object_prototype, symbol,
+    Function, NativeFunction, Property, Prototype, RuntimeError, Value, object_prototype, symbol,
 };
 
 use super::{CallEnv, Upvalue};
@@ -18,10 +15,16 @@ pub(super) fn arguments_object(
     argument_values: &[Value],
     env: &CallEnv,
 ) -> Value {
-    let object =
-        ObjectRef::with_prototype(HashMap::new(), object_prototype(env), env.realm().atoms());
-    object.define_property(
-        "length".to_owned(),
+    let prototype = object_prototype(env).map(Prototype::Object);
+    let iterator = symbol::iterator_symbol(env);
+    let width = argument_values.len() + 2 + usize::from(iterator.is_some());
+    let prediction = env
+        .realm()
+        .predict_arguments_layout(width, prototype.as_ref());
+    let mut sequence =
+        crate::value::layout::DataSequence::new(prediction, env.realm().atoms(), prototype);
+    sequence.insert_property(
+        "length",
         Property::data(
             Value::Number(argument_values.len() as f64),
             false,
@@ -34,27 +37,30 @@ pub(super) fn arguments_object(
             let parameter = env
                 .frame_binding_cell(parameter_name)
                 .unwrap_or_else(|| Upvalue::new(value.clone()));
-            object.define_property(
-                index.to_string(),
+            sequence.insert_property(
+                &index.to_string(),
                 mapped_argument_property(env.realm(), parameter, env.realm().atoms()),
             );
         } else {
-            object.define_property(index.to_string(), Property::enumerable(value));
+            sequence.insert(&index.to_string(), value);
         }
     }
     if function.is_strict || !function.params.is_simple() {
-        define_restricted_callee(&object, function, env);
+        sequence.insert_property("callee", restricted_callee_property(function, env));
     } else {
         // A sloppy-mode simple-parameter function's `arguments.callee` is a
         // data property holding the executing function (CreateUnmappedArguments
         // / CreateMappedArguments): `{value: F, writable, enumerable: false,
         // configurable}`.
-        object.define_property(
-            "callee".to_owned(),
+        sequence.insert_property(
+            "callee",
             Property::non_enumerable(Value::Function(function.clone())),
         );
     }
-    define_arguments_iterator(&object, function, env);
+    if let Some(iterator) = iterator {
+        sequence.insert_symbol(&iterator, arguments_iterator_property(function, env));
+    }
+    let object = crate::value::OrderedDataPropertyBuilder::finish_unobserved(sequence);
     object.set_to_string_tag("Arguments");
     env.realm().retain_arguments_layout(&object);
     Value::Object(object)
@@ -138,7 +144,7 @@ fn mapped_argument_setter(
     Value::Function(setter)
 }
 
-fn define_restricted_callee(object: &ObjectRef, function: &Function, env: &CallEnv) {
+fn restricted_callee_property(function: &Function, env: &CallEnv) -> Property {
     // Reuse the realm's shared %ThrowTypeError% so the strict `callee` poison
     // getter is the same object as `Function.prototype.arguments`/`caller`'s.
     let throw_type_error = cross_realm_throw_type_error(function).unwrap_or_else(|| {
@@ -153,15 +159,12 @@ fn define_restricted_callee(object: &ObjectRef, function: &Function, env: &CallE
                 ))
             })
     });
-    object.define_property(
-        "callee".to_owned(),
-        Property::accessor(
-            Some(throw_type_error.clone()),
-            Some(throw_type_error),
-            false,
-            false,
-        ),
-    );
+    Property::accessor(
+        Some(throw_type_error.clone()),
+        Some(throw_type_error),
+        false,
+        false,
+    )
 }
 
 fn cross_realm_throw_type_error(function: &Function) -> Option<Value> {
@@ -219,10 +222,7 @@ fn cross_realm_function_prototype(value: &Value) -> Option<Prototype> {
     Some(Prototype::Function(prototype.clone()))
 }
 
-fn define_arguments_iterator(object: &ObjectRef, function: &Function, env: &CallEnv) {
-    let Some(iterator) = symbol::iterator_symbol(env) else {
-        return;
-    };
+fn arguments_iterator_property(function: &Function, env: &CallEnv) -> Property {
     // Reuse the shared %Array.prototype.values% so `arguments[Symbol.iterator]`
     // has the same identity as `Array.prototype.values`, falling back to a fresh
     // native if the realm intrinsic is somehow absent.
@@ -243,7 +243,7 @@ fn define_arguments_iterator(object: &ObjectRef, function: &Function, env: &Call
                 env.realm(),
             ))
         });
-    object.define_symbol_property(iterator, Property::non_enumerable(values));
+    Property::non_enumerable(values)
 }
 
 fn cross_realm_array_proto_values(function: &Function) -> Option<Value> {

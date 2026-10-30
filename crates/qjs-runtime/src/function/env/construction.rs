@@ -22,12 +22,26 @@ impl RealmState {
             .clone()
     }
 
+    pub(crate) fn predict_arguments_layout(
+        &self,
+        width: usize,
+        prototype: Option<&crate::Prototype>,
+    ) -> Option<Rc<crate::value::layout::Layout>> {
+        self.arguments_layouts
+            .borrow()
+            .iter()
+            .rev()
+            .find(|layout| layout.width() == width && layout.matches_prototype(prototype, 0))
+            .cloned()
+    }
     pub(crate) fn retain_arguments_layout(&self, object: &ObjectRef) {
         object.with_named(|store| {
             let Some(layout) = store.shared_layout() else { return; };
             let mut layouts = self.arguments_layouts.borrow_mut();
-            if layouts.iter().any(|old| Rc::ptr_eq(old, layout)) {
+            if let Some(index) = layouts.iter().position(|old| Rc::ptr_eq(old, layout)) {
                 crate::diagnostics::count!(property_arguments_template_hits);
+                let recent = layouts.remove(index);
+                layouts.push(recent);
                 return;
             }
             crate::diagnostics::count!(property_arguments_template_misses);

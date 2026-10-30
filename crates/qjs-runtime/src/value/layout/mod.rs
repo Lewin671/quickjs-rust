@@ -25,6 +25,8 @@ use index::{IdIndex, IdProbe};
 mod lazy;
 mod prototype;
 mod sequence;
+#[cfg(test)]
+mod sequence_tests;
 mod slots;
 pub(crate) use sequence::DataSequence;
 mod value_slots;
