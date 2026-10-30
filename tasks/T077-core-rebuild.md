@@ -1,11 +1,11 @@
 # T077: In-place core rebuild
 
-- Status: active; S1 owner implementation/correctness complete on `agent/t077-s1-property-authority/codex`, base `dd0905b2`; lead formal performance acceptance pending.
-- Implementation: one NamedStore for ordinary strings/symbols; four old forms, dynamic file, literal payload index and cold symbols deleted. Creation/consumer ports complete; recycled leased keys, 96-byte header and exotic hooks preserved.
-- Verified at: `06044f96`, 2026-10-30 UTC: full check (2,414 runtime, 5,170 subset), combined features 2,454/2,454, NG 258/258, native/x86 size assertions and staged hook pass. Complete release/agents exact scan: 42,672/42,672 configured passes; zero fail/timeout/not-run/gaps; burndown recorded.
-- Evidence: [final receipt](archive/T077-s1-verification.md), [cutover/deletions](archive/T077-s1-cutover.md), [exotic correction](archive/T077-s1-exotic-hooks.md), [decided key lifetime](proposals/T077-s1-fallibility.md). Final receipt/ledger changes leave scanned engine sources unchanged.
-- Unresolved: lead-owned baseline/formal whole-portfolio comparison and S1 performance acceptance; historical linker-order symbols need measured revalidation. No correctness waiver, old-store fallback, push or merge.
-- Next action: lead measures frozen `06044f96` under the stage contract, records baseline/candidate standing, and accepts S1 before starting S2. This owner does not push or merge.
+- Status: active; S1 review repairs in progress on `agent/t077-s1-property-authority/codex`, repair base `b2daec46`; lead formal performance acceptance pending.
+- Implementation: live weak transitions, shared prefix descriptor arrays, byte-budgeted retention, cached attribute/integrity edits, last-key rollback and atom/index repairs are present; explicit ordered host construction is being verified.
+- Verified at: repair working tree, 2026-10-30: initial full perf-counter run 2,450/2,450; final gates pending. Previous `06044f96` correctness standing remains revision-bound in its receipt.
+- Evidence: [review repair receipt](archive/T077-s1-review-fixes.md), [repair architecture](proposals/T077-s1-review-fixes.md), [previous receipt](archive/T077-s1-verification.md), [decided key lifetime](proposals/T077-s1-fallibility.md).
+- Unresolved: final repair verification/counters/RSS and exact scan; RegExp ArrayRef ordering crosses the S2 storage boundary; lead formal whole-portfolio acceptance remains pending.
+- Next action: finish focused verification and host ordering, run fast/full/NG/exact gates, record complete burndown and repair revision. This owner never pushes or merges.
 
 ## Authority and scope
 

@@ -126,18 +126,12 @@ impl ObjectRef {
     }
     pub(crate) fn seal(&self) {
         self.prevent_extensions();
-        self.0
-            .properties
-            .borrow_mut()
-            .transform_descriptors(Property::make_non_configurable);
+        self.0.properties.borrow_mut().transform_descriptors(false);
         self.bump_property_revision();
     }
     pub(crate) fn freeze(&self) {
         self.prevent_extensions();
-        self.0
-            .properties
-            .borrow_mut()
-            .transform_descriptors(Property::freeze_data);
+        self.0.properties.borrow_mut().transform_descriptors(true);
         self.bump_property_revision();
     }
     pub(crate) fn is_sealed(&self) -> bool {

@@ -87,7 +87,8 @@ impl ObjectRef {
             return None;
         }
         let store = self.0.properties.borrow();
-        (store.slot_key(slot)? == key)
+        store
+            .slot_matches(slot, key)
             .then(|| store.load_data(slot))
             .flatten()
     }
@@ -105,7 +106,7 @@ impl ObjectRef {
             return None;
         }
         let mut store = self.0.properties.borrow_mut();
-        if store.slot_key(slot)? != key {
+        if !store.slot_matches(slot, key) {
             return None;
         }
         let result = store.replace_data(slot, value.clone())?;

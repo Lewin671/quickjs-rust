@@ -39,10 +39,7 @@ impl NamedStore {
         let Some(position) = self.position(key).expect("own domain") else {
             return (OwnDataPropertyRead::Missing, None);
         };
-        if self.layout.entries[position]
-            .attrs
-            .has(Attributes::ACCESSOR)
-        {
+        if self.layout.entry(position).attrs.has(Attributes::ACCESSOR) {
             (OwnDataPropertyRead::NeedsSlowPath, None)
         } else {
             (
@@ -78,20 +75,53 @@ impl NamedStore {
             None => OwnDataPropertyWrite::NeedsSlowPath,
         }
     }
-    pub(crate) fn transform_descriptors(&mut self, transform: impl Fn(&mut Property)) {
-        let keys = self.layout.keys.clone();
-        for (position, key) in keys.iter().enumerate() {
-            let mut descriptor = self.descriptor(position);
-            transform(&mut descriptor);
-            self.define(key, descriptor).expect("own domain");
+    pub(crate) fn transform_descriptors(&mut self, frozen: bool) {
+        let source = self.layout.clone();
+        let label = Transition::Integrity { frozen };
+        if let Some(next) = source.transitions.borrow().get(label) {
+            crate::diagnostics::count!(property_transition_hits);
+            self.layout = next;
+            self.bump_epoch();
+            return;
         }
+        let change = |attrs: Attributes| {
+            let mut next = Attributes(attrs.0 & !Attributes::CONFIGURABLE);
+            if frozen && !attrs.has(Attributes::ACCESSOR) {
+                next.0 &= !Attributes::WRITABLE;
+            }
+            next
+        };
+        if source
+            .entries()
+            .iter()
+            .all(|entry| change(entry.attrs) == entry.attrs)
+        {
+            return;
+        }
+        let mut next = source.copied(source.dictionary);
+        for entry in &mut next.private_data().entries {
+            entry.attrs = change(entry.attrs);
+        }
+        if !source.dictionary {
+            next.parent = Some(source.clone());
+            next.incoming = Some(label);
+        }
+        crate::diagnostics::count!(property_transition_misses);
+        crate::diagnostics::count!(property_shape_nodes_created);
+        let next = Rc::new(next);
+        if !source.dictionary {
+            source.cache(label, &next);
+        }
+        self.layout = next;
+        self.bump_epoch();
+        self.verify();
     }
 }
 
 impl std::fmt::Debug for Layout {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Layout")
-            .field("entries", &self.entries.len())
+            .field("entries", &self.len)
             .field("dictionary", &self.dictionary)
             .finish()
     }

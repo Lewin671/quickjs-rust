@@ -41,16 +41,19 @@ impl IdIndex {
             tombstones: 0,
         }
     }
-    pub(super) fn len(&self) -> usize {
-        self.len
+    pub(super) fn bytes(&self) -> usize {
+        self.buckets.capacity() * size_of::<Bucket>()
+    }
+    fn bucket(key: KeyId, capacity: usize) -> usize {
+        (key.get().wrapping_mul(0x9e37_79b1) >> (32 - capacity.trailing_zeros())) as usize
     }
     pub(super) fn probe(&self, key: KeyId) -> IdProbe {
         crate::diagnostics::count!(property_id_probes);
         self.probe_uncounted(key)
     }
-    fn probe_uncounted(&self, key: KeyId) -> IdProbe {
+    pub(super) fn probe_uncounted(&self, key: KeyId) -> IdProbe {
         let mask = self.buckets.len() - 1;
-        let mut bucket = (key.get().wrapping_mul(0x9e37_79b1) as usize) & mask;
+        let mut bucket = Self::bucket(key, self.buckets.len());
         let mut vacancy = None;
         loop {
             let entry = self.buckets[bucket];
@@ -79,6 +82,7 @@ impl IdIndex {
             bucket = (bucket + 1) & mask;
         }
     }
+    #[cfg(test)]
     pub(super) fn get(&self, key: KeyId) -> Option<usize> {
         self.probe(key).position
     }
@@ -154,13 +158,30 @@ mod tests {
     use crate::property::atom::AtomDomain;
 
     #[test]
+    fn strided_ids_disperse_across_high_product_bits() {
+        let domain = AtomDomain::new();
+        let mut held = Vec::new();
+        let mut starts = std::collections::HashSet::new();
+        for n in 0..128 {
+            for gap in 0..255 {
+                held.push(domain.intern(&format!("gap{n}_{gap}")));
+            }
+            let key = domain.intern(&format!("key{n}"));
+            starts.insert(IdIndex::bucket(key.id(), 256));
+            held.push(key);
+        }
+        // Low-bit multiplication puts every one of these keys in one bucket.
+        assert!(starts.len() >= 64, "{} distinct buckets", starts.len());
+    }
+
+    #[test]
     fn colliding_keys_survive_delete_reinsert_and_rebuild() {
         let domain = AtomDomain::new();
         let mut gaps = Vec::new();
         let keys: Vec<_> = (0..200)
             .map(|n| {
-                // Equal low ID bits force long collision chains at every
-                // capacity used here, rather than testing sequential IDs.
+                // Strided IDs exercise high-bit distribution rather than only
+                // sequential IDs; removal/rebuild must retain every mapping.
                 for gap in 0..255 {
                     gaps.push(domain.intern(&format!("gap{n}_{gap}")));
                 }
@@ -200,7 +221,7 @@ mod tests {
             let key = domain.intern(&format!("transient{n}"));
             index.insert_at(index.probe(key.id()), n);
             index.remove_at(index.probe(key.id()));
-            assert_eq!(index.len(), 0);
+            assert_eq!(index.len, 0);
             assert!(index.tombstones < index.buckets.len());
         }
     }

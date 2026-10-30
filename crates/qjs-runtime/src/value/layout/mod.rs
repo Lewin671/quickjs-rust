@@ -16,10 +16,14 @@ use crate::{Property, Value};
 mod edit;
 mod host;
 mod index;
+mod storage;
+mod transitions;
 use index::{IdIndex, IdProbe};
 mod slots;
 mod version;
 pub(crate) use version::LayoutVersion;
+#[cfg(test)]
+mod sharing_tests;
 #[cfg(test)]
 mod tests;
 
@@ -33,8 +37,7 @@ const _: () = {
     assert!(std::mem::size_of::<Value>() == 16);
 };
 
-const MAX_EDGES: usize = 16;
-const MAX_CACHED_NODES: usize = 4096;
+const MAX_CACHED_BYTES: usize = 1024 * 1024;
 const DICTIONARY_WIDTH: usize = 128;
 const DICTIONARY_EDITS: u64 = 32;
 
@@ -70,35 +73,38 @@ pub(crate) struct ShapeEntry {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-struct Transition {
-    key: KeyId,
-    attrs: Attributes,
+enum Transition {
+    Append { key: KeyId, attrs: Attributes },
+    Reconfigure { position: u32, attrs: Attributes },
+    Integrity { frozen: bool },
 }
 
 /// The index is the only key lookup authority. Shapes keep insertion-ordered
 /// entries; dictionaries retain explicit order numbers when slots move, and
 /// edit privately without transitions.
 pub(crate) struct Layout {
+    budget: storage::Budget,
     domain: AtomDomain,
     owner: Weak<OwnerState>,
-    entries: Vec<ShapeEntry>,
-    keys: Vec<KeyLease>,
-    index: IdIndex,
+    data: Rc<RefCell<storage::LayoutData>>,
+    len: usize,
+    parent: Option<Rc<Layout>>,
+    incoming: Option<Transition>,
     dictionary: bool,
     edits: u8,
     next_order: u32,
-    transitions: RefCell<Vec<(Transition, Weak<Layout>)>>,
+    transitions: RefCell<transitions::Transitions>,
 }
 
 pub(crate) struct OwnerState {
     root: Rc<Layout>,
-    retained: RefCell<VecDeque<Rc<Layout>>>,
+    retained: RefCell<transitions::Retention>,
 }
 
 #[cfg(feature = "perf-counters")]
 impl Drop for OwnerState {
     fn drop(&mut self) {
-        let released = 1 + self.retained.get_mut().len() as u64;
+        let released = 1 + self.retained.get_mut().nodes.len() as u64;
         crate::diagnostics::update(|counters| {
             // A diagnostic reset may occur while owners are live.
             counters.property_cached_shape_nodes = counters
@@ -118,19 +124,23 @@ impl PropertyOwner {
             return Self(owner);
         }
         let attachment = domain.clone();
+        let budget = storage::Budget::default();
+        budget.add(size_of::<Layout>());
         let owner = Rc::new_cyclic(|owner| OwnerState {
             root: Rc::new(Layout {
+                budget: budget.clone(),
                 domain,
                 owner: owner.clone(),
-                entries: Vec::new(),
-                keys: Vec::new(),
-                index: IdIndex::new(),
+                data: Rc::new(RefCell::new(storage::LayoutData::new(budget.clone()))),
+                len: 0,
+                parent: None,
+                incoming: None,
                 dictionary: false,
                 edits: 0,
                 next_order: 0,
-                transitions: RefCell::new(Vec::new()),
+                transitions: RefCell::new(transitions::Transitions::default()),
             }),
-            retained: RefCell::new(VecDeque::new()),
+            retained: RefCell::new(transitions::Retention::default()),
         });
         *attachment.shape_owner().borrow_mut() = Rc::downgrade(&owner);
         crate::diagnostics::count!(property_cached_shape_nodes);
@@ -149,7 +159,7 @@ impl PropertyOwner {
     }
     #[cfg(test)]
     fn retained_nodes(&self) -> usize {
-        1 + self.0.retained.borrow().len()
+        1 + self.0.retained.borrow().nodes.len()
     }
 }
 
@@ -182,13 +192,13 @@ impl NamedStore {
         if !key.belongs_to(self.domain()) {
             return Err(ForeignKey);
         }
-        Ok(self.layout.index.get(key.id()))
+        Ok(self.layout.probe(key.id()).position)
     }
     pub(crate) fn lookup<'a>(&'a mut self, key: &'a KeyLease) -> Result<Lookup<'a>, ForeignKey> {
         if !key.belongs_to(self.domain()) {
             return Err(ForeignKey);
         }
-        let proof = self.layout.index.probe(key.id());
+        let proof = self.layout.probe(key.id());
         Ok(Lookup {
             store: self,
             key,
@@ -206,7 +216,9 @@ impl NamedStore {
         Ok(())
     }
     pub(crate) fn key_enumerability(&self) -> Vec<(KeyLease, bool)> {
-        let mut entries: Vec<_> = self.layout.keys.iter().zip(&self.layout.entries).collect();
+        let keys = self.layout.keys();
+        let fields = self.layout.entries();
+        let mut entries: Vec<_> = keys.iter().zip(fields.iter()).collect();
         entries.sort_unstable_by_key(|(key, entry)| match key.array_index() {
             Some(index) => (0, index),
             None if key.symbol().is_none() => (1, entry.order),
@@ -220,13 +232,13 @@ impl NamedStore {
     fn verify_slot(&self, position: usize) {
         #[cfg(debug_assertions)]
         {
-            assert_eq!(self.layout.entries.len(), self.values.len());
-            assert_eq!(self.layout.entries.len(), self.layout.keys.len());
-            assert_eq!(self.layout.entries.len(), self.layout.index.len());
-            let entry = self.layout.entries[position];
+            assert_eq!(self.layout.len, self.values.len());
+            assert_eq!(self.layout.len, self.layout.keys().len());
+            assert!(self.layout.data.borrow().entries.len() >= self.layout.len);
+            let entry = self.layout.entry(position);
             assert_eq!(entry.slot as usize, position);
-            assert_eq!(entry.key, self.layout.keys[position].id());
-            assert_eq!(self.layout.index.verify_position(entry.key), Some(position));
+            assert_eq!(entry.key, self.layout.keys()[position].id());
+            assert_eq!(self.layout.verify_position(entry.key), Some(position));
             assert_eq!(
                 self.accessors
                     .as_deref()
@@ -244,7 +256,7 @@ impl NamedStore {
         let mut indices = Vec::new();
         let mut strings = Vec::new();
         let mut symbols = Vec::new();
-        for (key, entry) in self.layout.keys.iter().zip(&self.layout.entries) {
+        for (key, entry) in self.layout.keys().iter().zip(self.layout.entries().iter()) {
             if let Some(index) = key.array_index() {
                 indices.push((index, key.clone()));
             } else if key.symbol().is_some() {
@@ -279,7 +291,7 @@ impl NamedStore {
         self.layout.dictionary
     }
     pub(crate) fn len(&self) -> usize {
-        self.layout.entries.len()
+        self.layout.len
     }
 
     /// Structural verification has no callbacks and never repeats key coercion.
@@ -287,19 +299,24 @@ impl NamedStore {
         #[cfg(debug_assertions)]
         {
             let layout = &self.layout;
-            assert_eq!(layout.entries.len(), layout.keys.len());
-            assert_eq!(layout.entries.len(), layout.index.len());
-            assert_eq!(layout.entries.len(), self.values.len());
+            assert_eq!(layout.len, layout.keys().len());
+            assert!(layout.data.borrow().entries.len() >= layout.len);
+            assert_eq!(layout.len, self.values.len());
             let mut accessor_count = 0;
             let mut orders = std::collections::HashSet::new();
-            for (position, (entry, key)) in layout.entries.iter().zip(&layout.keys).enumerate() {
+            for (position, (entry, key)) in layout
+                .entries()
+                .iter()
+                .zip(layout.keys().iter())
+                .enumerate()
+            {
                 assert_eq!(entry.key, key.id());
                 assert!(key.belongs_to(&layout.domain));
                 assert_eq!(entry.slot as usize, position);
                 assert!(entry.order < layout.next_order);
                 assert!(orders.insert(entry.order));
                 assert_eq!(entry.reserved, 0);
-                assert_eq!(layout.index.verify_position(entry.key), Some(position));
+                assert_eq!(layout.verify_position(entry.key), Some(position));
                 let accessor = entry.attrs.has(Attributes::ACCESSOR);
                 assert_eq!(
                     self.accessors
@@ -317,7 +334,6 @@ impl NamedStore {
                 self.accessors.as_deref().map_or(0, HashMap::len),
                 accessor_count
             );
-            assert!(layout.transitions.borrow().len() <= MAX_EDGES);
             if layout.dictionary {
                 assert!(layout.transitions.borrow().is_empty());
             }

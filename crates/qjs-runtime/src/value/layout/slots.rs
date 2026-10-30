@@ -3,7 +3,7 @@ use super::*;
 
 impl NamedStore {
     pub(super) fn descriptor(&self, position: usize) -> Property {
-        let entry = self.layout.entries[position];
+        let entry = self.layout.entry(position);
         let attrs = entry.attrs;
         if attrs.has(Attributes::ACCESSOR) {
             let pair = &self.accessors.as_deref().expect("accessor table")[&entry.slot];
@@ -38,19 +38,17 @@ impl NamedStore {
         }
     }
     pub(crate) fn data_slot(&self, key: &KeyLease) -> Result<Option<usize>, ForeignKey> {
-        Ok(self.position(key)?.filter(|&position| {
-            !self.layout.entries[position]
-                .attrs
-                .has(Attributes::ACCESSOR)
-        }))
+        Ok(self
+            .position(key)?
+            .filter(|&position| !self.layout.entry(position).attrs.has(Attributes::ACCESSOR)))
     }
     pub(crate) fn load_data(&self, slot: usize) -> Option<Value> {
-        let entry = self.layout.entries.get(slot)?;
+        let entry = self.layout.entry_at(slot)?;
         (!entry.attrs.has(Attributes::ACCESSOR)).then(|| self.values[slot].clone())
     }
     /// None means accessor/missing; Some(false) is nonwritable own data.
     pub(crate) fn replace_data(&mut self, slot: usize, value: Value) -> Option<bool> {
-        let attrs = self.layout.entries.get(slot)?.attrs;
+        let attrs = self.layout.entry_at(slot)?.attrs;
         if attrs.has(Attributes::ACCESSOR) {
             return None;
         }
@@ -62,7 +60,7 @@ impl NamedStore {
         Some(true)
     }
     pub(crate) fn data_value_mut(&mut self, slot: usize) -> Option<&mut Value> {
-        let attrs = self.layout.entries.get(slot)?.attrs;
+        let attrs = self.layout.entry_at(slot)?.attrs;
         (!attrs.has(Attributes::ACCESSOR) && attrs.has(Attributes::WRITABLE))
             .then(|| &mut self.values[slot])
     }
@@ -90,7 +88,7 @@ impl NamedStore {
             }
         }
     }
-    pub(crate) fn slot_key(&self, slot: usize) -> Option<&KeyLease> {
-        self.layout.keys.get(slot)
+    pub(crate) fn slot_matches(&self, slot: usize, key: &KeyLease) -> bool {
+        self.layout.keys().get(slot) == Some(key)
     }
 }
