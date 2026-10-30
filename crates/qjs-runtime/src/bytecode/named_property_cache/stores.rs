@@ -48,6 +48,29 @@ impl NamedPropertyCache {
             self.0.borrow_mut().add = Some(Box::new(AddEntry { recipe, validity }));
         }
     }
+    /// Caller excludes the realm global; the entry proves own writable data.
+    #[inline(always)]
+    pub(in crate::bytecode) fn write_number(&self, object: &ObjectRef, number: f64) -> bool {
+        let state = self.0.borrow();
+        object.with_named_mut(|store| {
+            let entry = match &state.entries {
+                Entries::Mono(entry) => entry,
+                Entries::Poly(entries) | Entries::SharedOwnPoly(entries) => {
+                    let Some(entry) = entries
+                        .iter()
+                        .find(|entry| store.matches_version(&entry.version))
+                    else {
+                        return false;
+                    };
+                    entry
+                }
+                _ => return false,
+            };
+            entry.flags & (7 | OWN | WRITABLE | WRITE_FORBIDDEN) == DATA | OWN | WRITABLE
+                && store.matches_version(&entry.version)
+                && store.overwrite_guarded_number(entry.slot as usize, number)
+        })
+    }
     pub(in crate::bytecode) fn write_value(
         &self,
         value: &Value,

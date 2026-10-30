@@ -438,6 +438,13 @@ fn execute<F: LoopFrame>(
             } => {
                 // A number into a field the site already shares, as the
                 // inline numeric read.
+                if let (Value::Object(receiver), Typed::Number(number)) =
+                    (&boxed[object as usize], registers[reg(value)])
+                    && !vm.loop_env().is_realm_global_object(receiver)
+                    && shape_caches[cache as usize].write_number(receiver, number)
+                {
+                    continue;
+                }
                 if !set_named(
                     &boxed[object as usize],
                     &program.names[name as usize],

@@ -172,6 +172,8 @@ if candidate:
         edit('value/layout/edit.rs',lambda s:s.replace('                self.store.values.push(Value::Undefined);','                crate::diagnostics::count!(r2_store_adds);\n                '+C+'::push(&mut self.store.values, Value::Undefined);'))
     cache = 'bytecode/named_property_cache/stores.rs' if (src/'bytecode/named_property_cache/stores.rs').exists() else 'bytecode/named_property_cache.rs'
     edit(cache,lambda s:count_body(s,'fn write_target(', 'r2_store_ic_probes'))
+    if 'fn write_number(' in (src/cache).read_text():
+        edit(cache,lambda s:count_body(s,'fn write_number(', 'r2_store_ic_probes'))
     # Lease clones and drops are counted regardless of which API created them.
     edit('property/atom.rs',lambda s:s.replace('#[derive(Clone)]\npub(crate) struct KeyLease', 'pub(crate) struct KeyLease').replace('impl KeyLease {','''impl Clone for KeyLease {
         fn clone(&self) -> Self { crate::diagnostics::count!(r2_lease_clones); Self(self.0.clone()) }

@@ -464,3 +464,25 @@ fn append_recipe_counts_indices_and_keeps_values_live_without_pinning_receiver()
     ));
     assert_eq!(next.own_property("2").unwrap().value, Value::Null);
 }
+
+#[test]
+fn numeric_store_loads_live_types_and_rejects_reconfigured_descriptors() {
+    let domain = AtomDomain::new();
+    let _owner = crate::value::layout::PropertyOwner::new(domain.clone());
+    let o = object(&domain, "x", 1.0);
+    let cache = NamedPropertyCache::default();
+    cache.update(&o, "x", &Value::Undefined);
+    let version = o.layout_revision();
+    assert!(cache.write_number(&o, -0.0));
+    assert!(o.get("x").unwrap().same_value(&Value::Number(-0.0)));
+    o.set("x".into(), Value::String("changed".into()));
+    assert!(cache.write_number(&o, f64::NAN));
+    assert!(matches!(o.get("x"), Some(Value::Number(n)) if n.is_nan()));
+    assert_eq!(version, o.layout_revision());
+    o.define_property(
+        "x".into(),
+        Property::data(Value::Number(4.0), true, false, true),
+    );
+    assert!(!cache.write_number(&o, 5.0));
+    assert_eq!(o.get("x"), Some(Value::Number(4.0)));
+}

@@ -76,6 +76,19 @@ impl NamedStore {
         })
     }
     #[inline(always)]
+    pub(crate) fn overwrite_guarded_number(&mut self, slot: usize, number: f64) -> bool {
+        let Some(target) = self.values.get_mut(slot) else {
+            return false;
+        };
+        if let Value::Number(previous) = target {
+            *previous = number;
+        } else {
+            *target = Value::Number(number);
+        }
+        self.verify_slot(slot);
+        true
+    }
+    #[inline(always)]
     pub(crate) fn load_guarded_number(&self, slot: usize) -> Option<f64> {
         match self.values.get(slot)? {
             Value::Number(n) => Some(*n),
