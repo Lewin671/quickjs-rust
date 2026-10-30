@@ -1,11 +1,11 @@
 # T077: In-place core rebuild
 
-- Status: active; S1 implementation in progress; S3a locally complete/committed on its owner branch, awaiting lead formal acceptance (2026-10-30 UTC).
-- Implementation: partial; S3a direct operation entries and native slice transport present on the S3a owner branch; other stages remain unimplemented here.
-- Verified at: `27d503a68e0e5179fd47e8cecb242becf6dca87c`, 2026-10-30 UTC; full check (2,395 runtime tests; 5,170 curated cases), 51 optimized native tests, 257 NG fixtures, twenty development counter runs and complete configured exact coverage (42,672 Rust passes; zero gaps/not-run; recovered aggregation).
+- Status: active; S3a independent-review fixes in progress (2026-10-30); previous local-complete claim rejected because a new native guard changed base recursion behavior.
+- Implementation: partial review repair; direct native entries/slice transport retained, realm-local depth/stack guard and its lock-in tests removed. No replacement limit is authorized in S3a.
+- Verified at: base `d19d3aa6` and guard-removed `c8d15de4` source overlays, debug/release default CLI depth probes; hot-path fixes and final full gates/counters/exact scan pending.
 - Evidence: [target](../docs/design/core-rebuild.md), [S1 brief](proposals/T077-s1-property-authority.md), [S3 plan/inventories](proposals/T077-s3-plan.md), [S3 counts](diagnostics/T077-s3-counts.md). S3a implementation/check record: [S3a results](diagnostics/T077-s3a-results.md).
-- Unresolved: lead formal S3a aggregate acceptance/integration and T074 contracts before S3b; fresh baseline/portability/final campaign standing remain lead-owned and unmeasured here.
-- Next action: lead runs formal S3a acceptance and integrates/rebases with S1 as appropriate, then reviews T074 before S3b. No additional local baseline or closed-unit revival.
+- Unresolved: S3a hot-path repairs and final depth parity/full gates/counters/exact scan, then lead formal acceptance; T074 contracts before S3b.
+- Next action: complete lead feedback in this owner worktree; record base/head depth parity and fresh complete exact coverage before handoff.
 
 ## Authority and scope
 
@@ -122,6 +122,10 @@ plus aggregate improvement is progress, not proof of that campaign target.
 - Risk/fallback: cell/context/re-entry/suspension correctness and wide/scalar
   throughput; revert a failed stage/payer pair to the last verified milestone,
   never retain a compatibility interpreter. S4 still pays for neutral S3e.
+
+S3d owns the pre-existing deep Rust-stack crash (including native callbacks): one runtime-wide stack anchor with a host-configured budget,
+a CLI engine thread with an explicit stack size, and frame-counted JS depth after JS stops recursing in Rust.
+S3a preserves base depth behavior and adds no limit. Its rejected per-realm guard missed JS frames before the anchor and did not establish overflow protection.
 
 ## S4 — One scalar/escape optimizer; finish executor deletion
 

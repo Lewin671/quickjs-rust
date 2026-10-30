@@ -1,5 +1,11 @@
 # T077 S3a implementation and verification
 
+**Independent review at `c8d15de4` rejected the native guard and the prior local-
+complete claim. Review repair is in progress.** The guard rejected ordinary base
+programs and did not prove protection from stack overflow. The old depth/budget
+claims below describe that rejected implementation, not current guarantees.
+Current review results will supersede those claims; the base Rust-stack gap is S3d-owned.
+
 Owner branch `agent/t077-s3a-native-entries/codex`, base `d19d3aa6`.
 Implementation present at `27d503a6`; native/recycler tests and counters pass;
 full check, 257 NG fixtures and complete configured exact coverage pass.
