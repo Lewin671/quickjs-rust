@@ -2,10 +2,10 @@
 
 - Status: active; S3a accepted on main; S2 round-2 construction repair in progress on the owner branch.
 - Implementation: S1+S2 remain present; main merged at `28206401`. Inline slots, store-add plans, class/JSON sequence reuse, fused prepared global writes, constructor roots/width hints and branchy computed-map repair committed through `2d1fd80f`. Primitive own-data wrapper separated from cold resolution in the working tree.
-- Verified at: `2d1fd80f` fast gate: 2,457 runtime tests and 65 selected Test262; strict agents/perf-counters clippy and NG 266 pass. Constructor-root gate at `f33efd29`: 2,455 runtime/117 selected Test262. Full construction gate at the sequence stage: curated 5,170 passes. Current wrapper cache suite 20 passes. Final full/exact/off/verify gates remain required.
+- Verified at: `2d1fd80f` fast gate: 2,457 runtime tests and 65 selected Test262; strict agents/perf-counters clippy and NG 266 pass. Constructor-root gate at `f33efd29`: 2,455 runtime/117 selected Test262. Full construction gate at the sequence stage: curated 5,170 passes. Current wrapper cache suite 20 passes; `90719950` debug IC verification with agents/perf-counters: 2,504 pass. Final full/exact/off/verify gates remain required.
 - Evidence: [before-state](diagnostics/T077-s2-r2-before.md), [sequence cohort](diagnostics/T077-s2-r2-sequences.md), [follow-up plan](proposals/T077-s2-construction-followup.md), [primitive profile](diagnostics/T077-s2-r2-primitive-profile.md); [round-1 receipt](archive/T077-s2-round1-verification.md) and [S3a acceptance](diagnostics/T077-s3a-acceptance.md) remain revision-bound history.
 - Unresolved: construction payoff versus `dcee3c56`, array header/RSS ([queued design](proposals/T077-s2-array-header.md)), final gates and diagnostics. Sequence triage remains likely loss; no formal/held-out acceptance claim.
-- Next action: commit the guarded-load wrapper/probe update, recollect counts/plain instructions, complete construction repair, then shrink array header. Timing resumes only after iMac local 05:00. Never push origin or merge into main; held-out remains lead-owned.
+- Next action: finish paired counts/plain instructions and pinned construction exact scan, complete construction repair, then shrink array header. Timing resumes only after iMac local 05:00. Never push origin or merge into main; held-out remains lead-owned.
 
 ## Authority and scope
 
