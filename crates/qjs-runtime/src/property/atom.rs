@@ -178,6 +178,7 @@ struct DomainState {
     free_ids: RefCell<Vec<KeyId>>,
     // Only an attachment, never a strong root: layout owners retain the domain.
     shape_owner: RefCell<Weak<crate::value::layout::OwnerState>>,
+    empty_native_context: RefCell<Weak<crate::function::NativeContextData>>,
 }
 
 /// An owned atom interning domain. Cloning shares the domain.
@@ -198,6 +199,7 @@ impl AtomDomain {
         Self(Rc::new(DomainState {
             free_ids: RefCell::new(Vec::new()),
             shape_owner: RefCell::new(Weak::new()),
+            empty_native_context: RefCell::new(Weak::new()),
             table: RefCell::new(AtomTable {
                 entries: NameMap::default(),
                 symbols: NameMap::default(),
@@ -326,6 +328,12 @@ impl AtomDomain {
             .get(&id)
             .and_then(Weak::upgrade)
             .map(KeyLease)
+    }
+
+    pub(crate) fn empty_native_context(
+        &self,
+    ) -> &RefCell<Weak<crate::function::NativeContextData>> {
+        &self.0.empty_native_context
     }
 
     pub(crate) fn shape_owner(&self) -> &RefCell<Weak<crate::value::layout::OwnerState>> {

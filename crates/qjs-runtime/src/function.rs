@@ -81,5 +81,5 @@ pub(crate) use strict::is_strict_function_body;
 pub(crate) use upvalue::Upvalue;
 pub(crate) use value::{
     CompiledUserFunction, Function, FunctionWeakRef, InstanceElementInitializer,
-    InstanceFieldInitializer, InstancePrivateElement, PrivateFieldInit,
+    InstanceFieldInitializer, InstancePrivateElement, NativeContextData, PrivateFieldInit,
 };

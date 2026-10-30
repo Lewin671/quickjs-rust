@@ -300,14 +300,14 @@ struct FunctionColdState {
 /// Lazily allocated state captured by native closure-like functions.
 ///
 /// User bytecode functions use their creation realm and keep this absent.
-/// Native functions retain their explicit key domain here even without
-/// captures; the HashMap itself allocates buckets only on insertion. Native
+/// Native functions share one empty context per domain through a weak attachment;
+/// the HashMap allocates buckets only on insertion and mutations copy on write. Native
 /// capture COW never detaches function identity or the property domain.
 #[derive(Clone, Default)]
 pub(crate) struct NativeContext(Option<Rc<NativeContextData>>);
 
 #[derive(Clone)]
-struct NativeContextData {
+pub(crate) struct NativeContextData {
     bindings: HashMap<String, Value>,
     domain: crate::property::atom::AtomDomain,
 }
@@ -318,10 +318,24 @@ impl NativeContext {
         domain: Option<&crate::property::atom::AtomDomain>,
     ) -> Self {
         match domain {
-            Some(domain) => Self(Some(Rc::new(NativeContextData {
-                bindings: map,
-                domain: domain.clone(),
-            }))),
+            Some(domain) => {
+                if map.is_empty() {
+                    if let Some(context) = domain.empty_native_context().borrow().upgrade() {
+                        return Self(Some(context));
+                    }
+                    let context = Rc::new(NativeContextData {
+                        bindings: map,
+                        domain: domain.clone(),
+                    });
+                    *domain.empty_native_context().borrow_mut() = Rc::downgrade(&context);
+                    Self(Some(context))
+                } else {
+                    Self(Some(Rc::new(NativeContextData {
+                        bindings: map,
+                        domain: domain.clone(),
+                    })))
+                }
+            }
             None => {
                 debug_assert!(map.is_empty());
                 Self::default()

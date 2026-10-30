@@ -155,11 +155,16 @@ impl NamedPropertyCache {
         let value = answer?;
         #[cfg(debug_assertions)]
         if state.verify {
-            let key = target.with_store(|s| {
-                s.domain()
-                    .intern(state.name.as_deref().expect("verified name"))
-            })?;
-            let generic = resolve(target, &key, env, false)?.0;
+            let key = target
+                .with_store(|s| {
+                    s.domain()
+                        .find(state.name.as_deref().expect("verified name"))
+                })
+                .flatten()
+                .expect("cached key disappeared during verification");
+            let generic = resolve(target, &key, env, false)
+                .expect("cached outcome became accessor or exotic")
+                .0;
             assert!(
                 value.same_value(&generic),
                 "IC result differs from uncached data lookup"
@@ -187,10 +192,7 @@ impl NamedPropertyCache {
             return Some(value);
         }
         receiver.with_named_target(|t| count_event(t, Event::Hash));
-        let key = env.realm().atoms().find(name).unwrap_or_else(|| {
-            receiver.with_named_target(|t| count_event(t, Event::Hash));
-            env.realm().atoms().intern(name)
-        });
+        let key = env.realm().atoms().find(name)?;
         self.read_value(receiver, &key, Some(env))
     }
     pub(super) fn read_object(&self, receiver: &ObjectRef, name: &str) -> Option<Value> {
@@ -198,7 +200,7 @@ impl NamedPropertyCache {
             return Some(value);
         }
         count_event(NamedTarget::Object(receiver), Event::Hash);
-        let key = receiver.domain().intern(name);
+        let key = receiver.domain().find(name)?;
         self.read_target(NamedTarget::Object(receiver), &key, None)
     }
     fn read_target(
@@ -234,7 +236,9 @@ impl NamedPropertyCache {
         state.entries.record(entry);
     }
     pub(super) fn update(&self, receiver: &ObjectRef, key: &str, _value: &Value) {
-        let key = receiver.domain().intern(key);
+        let Some(key) = receiver.domain().find(key) else {
+            return;
+        };
         if let Some((_, Some(entry))) = resolve(NamedTarget::Object(receiver), &key, None, true) {
             self.record(entry, key.as_str());
         }

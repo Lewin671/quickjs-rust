@@ -274,3 +274,34 @@ fn native_function_retains_its_explicit_domain_without_a_dummy_prototype() {
     drop(function);
     assert!(!weak.is_live());
 }
+
+#[test]
+fn empty_native_captures_share_by_domain_and_detach_before_writes() {
+    let domain = crate::property::atom::AtomDomain::new();
+    let weak = domain.downgrade();
+    let mut first = Function::new_native(Some("a"), 0, NativeFunction::MathAbs, false, &domain);
+    let second = Function::new_native(Some("b"), 0, NativeFunction::MathAbs, false, &domain);
+    assert!(Rc::ptr_eq(
+        first.native_context.0.as_ref().unwrap(),
+        second.native_context.0.as_ref().unwrap()
+    ));
+    first.insert_native_context("capture".into(), Value::Number(1.0));
+    assert_eq!(
+        first.native_context.get("capture"),
+        Some(&Value::Number(1.0))
+    );
+    assert!(second.native_context.get("capture").is_none());
+    let third = Function::new_native(None, 0, NativeFunction::MathAbs, false, &domain);
+    assert!(Rc::ptr_eq(
+        second.native_context.0.as_ref().unwrap(),
+        third.native_context.0.as_ref().unwrap()
+    ));
+    drop(domain);
+    drop(first);
+    drop(second);
+    drop(third);
+    assert!(
+        !weak.is_live(),
+        "the domain's empty-context attachment must remain weak"
+    );
+}

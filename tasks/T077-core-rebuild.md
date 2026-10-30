@@ -1,11 +1,11 @@
 # T077: In-place core rebuild
 
-- Status: active; lead feedback round 1 in progress on `agent/t077-s2-named-stores/codex`; current increment A merges S1 review tip `9923098e` into the previous S2 candidate.
-- Implementation: S1 shared-tail/live-edge/byte-budget/order repairs integrated with S2 NamedStore families and existing ICs; RegExp ordering regression added. Prototype-layout redesign B-F is not yet present.
-- Verified at: round-1 A merge working tree: full gate passes (2,426 runtime; 5,170 curated), NG 261/261 including host and RegExp key order. Prior S1/S2 exact receipts remain historical; final round-1 gates follow B-F.
-- Evidence: [S1 repairs](archive/T077-s1-review-fixes.md), [previous S2](archive/T077-s2-verification.md); new feedback receipt will bind replacement source and measurements.
-- Unresolved: merge verification, queued read/native-context fixes, lead-approved prototype layout/cell redesign, correctness repairs and complete gates/counters/triage.
-- Next action: A is verified; execute queued read/native-context fixes B, then the approved C-F changes in order. Temporary iMac measurement refs are explicitly authorized; never push origin or merge main.
+- Status: active; round-1 A merged at `885e0e31`; queued fixes B present on `agent/t077-s2-named-stores/codex`.
+- Implementation: S1 review repairs and RegExp ordering regression integrated; named read helpers use find-only probes, empty native contexts share per domain with COW, and object guard comparisons avoid temporary Weak handles. Prototype redesign C-F remains next.
+- Verified at: A full gate (2,426 runtime; 5,170 curated) and NG 261/261 pass; B working tree runtime tests 2,428/2,428 pass. No new exact or timing standing claimed.
+- Evidence: [S1 repairs](archive/T077-s1-review-fixes.md), [previous S2](archive/T077-s2-verification.md); final round-1 receipt will replace current standing.
+- Unresolved: prototype-layout/cell redesign, remaining memory/verifier issues, E correctness fixes, full final gates/counters/iMac triage.
+- Next action: commit verified B, then implement the lead's C architecture before D-F. Temporary iMac refs are authorized measurement transport; never push origin or merge main.
 
 ## Authority and scope
 

@@ -145,7 +145,9 @@ impl NamedTarget<'_> {
                 if name == "caller" || name == "arguments" {
                     return slow();
                 }
-                f.prepare_named_read(name);
+                if let Some(read) = f.implicit_named_read(name) {
+                    return (read, None);
+                }
             }
             _ => {}
         }
@@ -163,7 +165,7 @@ impl NamedTarget<'_> {
             let (read, slot) = s.read_data_slot(key);
             (read, slot.map(|slot| (s.version(), slot as u32)))
         })
-        .unwrap_or_else(slow)
+        .unwrap_or((OwnDataPropertyRead::Missing, None))
     }
     pub(crate) fn prototype(self, env: Option<&CallEnv>) -> Option<Prototype> {
         match self {

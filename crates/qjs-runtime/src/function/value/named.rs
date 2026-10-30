@@ -233,11 +233,25 @@ impl Function {
 }
 
 impl Function {
-    pub(crate) fn prepare_named_read(&self, key: &str) {
-        self.materialize_default_data_properties();
+    pub(crate) fn implicit_named_read(
+        &self,
+        key: &str,
+    ) -> Option<crate::value::OwnDataPropertyRead> {
+        use crate::value::OwnDataPropertyRead;
+        if key == "length" && self.auxiliary.implicit_length_property.get() {
+            return Some(OwnDataPropertyRead::Data(Value::Number(
+                self.params.length() as f64,
+            )));
+        }
+        if key == "name" && self.auxiliary.implicit_name_property.get() {
+            return Some(OwnDataPropertyRead::Data(Value::String(
+                self.name.clone().unwrap_or_default().into(),
+            )));
+        }
         if key == "prototype" {
             self.ensure_default_prototype();
         }
+        None
     }
     pub(crate) fn named_kind(&self) -> u8 {
         if self.auxiliary.lazy_default_prototype.get() {

@@ -138,7 +138,7 @@ fn array_and_function_own_named_slots_use_the_same_cache_and_lazy_hooks() {
         Property::data(Value::String("g".into()), false, false, true),
     );
     assert_eq!(
-        names.get_value(&fvalue, None),
+        names.read_value(&fvalue, &domain.intern("name"), None),
         Some(Value::String("g".into()))
     );
     assert_eq!(f.own_property_names(), ["length", "name"]);
@@ -201,4 +201,15 @@ fn ic_entry_and_site_sizes_are_explicit() {
         std::mem::size_of::<State>(),
         std::mem::size_of::<NamedPropertyCache>()
     );
+}
+
+#[test]
+fn absent_text_reads_never_create_key_records() {
+    let domain = AtomDomain::new();
+    let object = ObjectRef::new(HashMap::new(), &domain);
+    let cache = NamedPropertyCache::default();
+    for _ in 0..10_000 {
+        assert!(cache.read_object(&object, "neverInstalled").is_none());
+    }
+    assert!(domain.find("neverInstalled").is_none());
 }

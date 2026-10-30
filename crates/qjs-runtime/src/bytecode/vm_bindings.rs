@@ -648,7 +648,7 @@ impl Vm<'_> {
         value: Value,
     ) -> bool {
         if let Some((slot, layout)) = target.property_slot.as_ref()
-            && target.global_this.layout_revision() == *layout
+            && target.global_this.layout_matches(layout)
         {
             if !matches!(
                 target
