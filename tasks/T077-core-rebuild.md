@@ -2,7 +2,7 @@
 
 - Status: active; S1 foundation milestones on `agent/t077-s1-property-authority/codex`, base `dd0905b2`; ordinary-object cutover pending.
 - Implementation: unified key leases, bounded shape owners and isolated NamedStore foundation present; no production object uses NamedStore yet. All S1 paths remain assigned to one owner.
-- Verified at: index milestone source tree, 2026-10-29: full `check.sh` passes (2,404 runtime tests, 5,170 subset cases), 257 NG fixtures pass, combined-feature layout tests 24/24; fast gate passes. `ace5f2ad` also passed the full gate.
+- Verified at: `c1c4a203`, 2026-10-29: full `check.sh` passes (2,404 runtime tests, 5,170 subset cases), 257 NG fixtures pass, combined-feature layout tests 24/24; fast gate passes. `ace5f2ad` also passed the full gate.
 - Evidence: [S1 brief/API](proposals/T077-s1-property-authority.md), [foundation](archive/T077-s1-foundation.md), [index milestone](archive/T077-s1-index.md).
 - Unresolved: ordinary string/symbol storage, explicit-owner constructor and cache cutover; deletion inventory remains empty; complete exact scan/burndown, other-target sizes and performance standing pending; baseline receipt remains lead-owned.
 - Next action: perform the ordinary string/symbol cutover in one reviewable increment, including explicit realm/host owners, all creation/mutation paths, executor/cache consumers and old-store deletion. Run full/NG/exact gates on that candidate. Never push or merge this owner branch.
