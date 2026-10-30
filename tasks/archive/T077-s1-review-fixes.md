@@ -27,3 +27,19 @@ The layout increment fast gate passed (default runtime tests, clippy, format,
 context and size checks); no focused Test262 filter matched these paths, so
 full/NG/exact gates remain required. Final source verification is pending below.
 Host ordering, final counters/RSS and complete exit gates are still in progress.
+
+## Explicit host order increment
+
+Nonempty ObjectRef host inputs now use ordered vectors through the existing
+OrderedDataPropertyBuilder. Every nonempty caller (including test fixtures) is
+ported; empty HashMap entry points stay source-compatible with S2 and reject
+nonempty input. The validated separate-permutation adapter remains test-only.
+Iterator results now insert value/done, Promise.withResolvers inserts
+promise/resolve/reject, and Proxy.revocable inserts proxy/revoke. Numeric keys
+still enumerate numerically; duplicate definitions keep the first key position.
+A focused host-order unit test and NG fixture cover these behaviors.
+RegExp match-array ordering lives in ArrayRef and requires a scope decision.
+
+Layout increment: `4f38ccdf`; pre-commit fast gate passes with 2,421 default
+runtime tests. No Test262 path filter matched that increment. Native and
+x86_64 agents/perf-counters checks compile the unchanged size assertions.

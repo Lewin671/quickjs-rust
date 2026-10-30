@@ -49,7 +49,9 @@ of inline Values enlarging the ordinary header.
 Slot storage may pool capacity, never keys. Accessor slots hold `undefined` in
 the value vector and their getter/setter pair in the cold slot-indexed table;
 the shape decides descriptor kind. Bulk descriptor APIs construct `Property`
-only on demand. Symbol descriptors join this authority, not a second cold table.
+only on demand. Symbol descriptors join this authority, not a second cold table. Nonempty host
+ObjectRef construction requires an ordered vector; legacy HashMap constructor
+entry points accept only empty input, keeping S2 empty creation sites compatible.
 
 ## Shapes and edits
 

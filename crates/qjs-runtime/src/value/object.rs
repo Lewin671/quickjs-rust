@@ -581,10 +581,40 @@ impl ObjectRef {
         prototype: Option<Prototype>,
         domain: &crate::property::atom::AtomDomain,
     ) -> Self {
-        let mut order: Vec<_> = properties.keys().cloned().collect();
-        order.sort();
-        Self::with_property_order(properties, order, prototype, domain)
-            .expect("complete sorted host order")
+        assert!(
+            properties.is_empty(),
+            "nonempty host input requires explicit order"
+        );
+        Self::with_ordered_prototype_slot(Vec::new(), prototype, domain)
+    }
+
+    /// Ordered host creation: duplicate keys keep their first insertion position
+    /// and last value. A HashMap cannot supply a JavaScript insertion order.
+    pub(crate) fn new_ordered(
+        properties: Vec<(String, Value)>,
+        domain: &crate::property::atom::AtomDomain,
+    ) -> Self {
+        Self::with_ordered_prototype_slot(properties, None, domain)
+    }
+
+    pub(crate) fn with_ordered_prototype(
+        properties: Vec<(String, Value)>,
+        prototype: Option<ObjectRef>,
+        domain: &crate::property::atom::AtomDomain,
+    ) -> Self {
+        Self::with_ordered_prototype_slot(properties, prototype.map(Prototype::Object), domain)
+    }
+
+    fn with_ordered_prototype_slot(
+        properties: Vec<(String, Value)>,
+        prototype: Option<Prototype>,
+        domain: &crate::property::atom::AtomDomain,
+    ) -> Self {
+        let mut builder = OrderedDataPropertyBuilder::with_capacity(properties.len(), domain);
+        for (key, value) in properties {
+            builder.insert(Rc::from(key), value);
+        }
+        builder.finish_slot(prototype)
     }
 
     /// Builds a plain object literal from statically known string keys without
@@ -593,6 +623,7 @@ impl ObjectRef {
     /// their last value, matching CreateDataProperty semantics.
     /// Host input with explicit order validates the complete key permutation
     /// before allocating any keys. Key creation itself is infallible.
+    #[cfg(test)]
     pub(crate) fn with_property_order(
         mut properties: HashMap<String, Value>,
         order: Vec<String>,

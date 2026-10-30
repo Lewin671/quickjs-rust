@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::CallEnv;
 use crate::{
     ObjectRef, PropertyKey, RuntimeError, Value, call_function, is_truthy, object, property_value,
@@ -242,19 +240,22 @@ pub(super) fn array_like_receiver(value: Value, env: &CallEnv) -> Value {
             object::boxed_primitive(value.clone(), env).unwrap_or(value)
         }
         Value::String(value) => {
-            let mut properties = HashMap::new();
-            properties.insert(
+            let mut properties = Vec::new();
+            properties.push((
                 "length".to_owned(),
                 Value::Number(value.chars().count() as f64),
-            );
+            ));
             for (index, character) in value.chars().enumerate() {
-                properties.insert(
+                properties.push((
                     index.to_string(),
                     Value::String(character.to_string().into()),
-                );
+                ));
             }
-            let object =
-                ObjectRef::with_prototype(properties, string_prototype(env), env.realm().atoms());
+            let object = ObjectRef::with_ordered_prototype(
+                properties,
+                string_prototype(env),
+                env.realm().atoms(),
+            );
             Value::Object(object)
         }
         _ => value,

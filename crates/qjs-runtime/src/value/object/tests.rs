@@ -50,11 +50,11 @@ fn cloned_object_is_a_pointer_sized_shared_handle() {
 #[test]
 fn ordinary_object_keeps_cold_state_unallocated() {
     let domain = crate::property::atom::AtomDomain::new();
-    let object = ObjectRef::new(
-        HashMap::from([
+    let object = ObjectRef::new_ordered(
+        vec![
             ("a".to_owned(), Value::Number(1.0)),
             ("b".to_owned(), Value::Number(2.0)),
-        ]),
+        ],
         &domain,
     );
 
@@ -127,10 +127,7 @@ fn small_object_enumerates_indices_before_strings() {
 #[test]
 fn existing_own_data_write_updates_or_rejects_without_slow_path() {
     let domain = crate::property::atom::AtomDomain::new();
-    let object = ObjectRef::new(
-        HashMap::from([("writable".to_owned(), Value::Number(1.0))]),
-        &domain,
-    );
+    let object = ObjectRef::new_ordered(vec![("writable".to_owned(), Value::Number(1.0))], &domain);
     object.define_property(
         "readonly".to_owned(),
         Property::data(Value::Number(2.0), true, false, true),
@@ -183,10 +180,7 @@ fn literal_data_writes_preserve_slots_until_descriptor_mutation() {
 #[test]
 fn module_namespace_own_data_write_stays_on_slow_path() {
     let domain = crate::property::atom::AtomDomain::new();
-    let object = ObjectRef::new(
-        HashMap::from([("exported".to_owned(), Value::Number(1.0))]),
-        &domain,
-    );
+    let object = ObjectRef::new_ordered(vec![("exported".to_owned(), Value::Number(1.0))], &domain);
     object.mark_module_namespace_exotic();
 
     assert!(matches!(
@@ -384,4 +378,19 @@ fn constructor_class_json_literal_and_null_prototype_share_one_layout() {
     for layout in &layouts[1..] {
         assert!(Rc::ptr_eq(&layouts[0], layout));
     }
+}
+
+#[test]
+fn ordered_host_input_preserves_duplicates_and_observable_insertion_order() {
+    let domain = crate::property::atom::AtomDomain::new();
+    let object = ObjectRef::new_ordered(
+        vec![
+            ("value".into(), Value::Number(1.0)),
+            ("done".into(), Value::Boolean(false)),
+            ("value".into(), Value::Number(2.0)),
+        ],
+        &domain,
+    );
+    assert_eq!(object.own_property_names(), ["value", "done"]);
+    assert_eq!(object.get("value"), Some(Value::Number(2.0)));
 }

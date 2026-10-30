@@ -315,7 +315,6 @@ pub(crate) fn try_eval_this_property_leaf(
 mod tests {
     use super::*;
     use crate::bytecode::compiler;
-    use std::collections::HashMap;
 
     #[test]
     fn this_property_plan_classifies_plain_reads_and_numeric_expressions() {
@@ -338,10 +337,8 @@ mod tests {
             .as_ref()
             .expect("plain receiver read should be admitted");
         assert!(matches!(plan, ThisPropertyLeafPlan::Read(_)));
-        let receiver = crate::ObjectRef::new(
-            HashMap::from([("value".to_owned(), Value::Number(7.0))]),
-            &domain,
-        );
+        let receiver =
+            crate::ObjectRef::new_ordered(vec![("value".to_owned(), Value::Number(7.0))], &domain);
         assert_eq!(
             plan.eval(&Value::Object(receiver), &[]),
             Some(Value::Number(7.0))
@@ -365,10 +362,8 @@ mod tests {
             .as_ref()
             .expect("numeric receiver expression should be admitted");
         assert!(matches!(plan, ThisPropertyLeafPlan::Numeric(_)));
-        let receiver = crate::ObjectRef::new(
-            HashMap::from([("value".to_owned(), Value::Number(7.0))]),
-            &domain,
-        );
+        let receiver =
+            crate::ObjectRef::new_ordered(vec![("value".to_owned(), Value::Number(7.0))], &domain);
         assert_eq!(
             plan.eval(&Value::Object(receiver), &[]),
             Some(Value::Number(8.0))
@@ -399,20 +394,20 @@ mod tests {
             matches!(plan, ThisPropertyLeafPlan::Numeric(_)),
             "{plan:#?}"
         );
-        let receiver = crate::ObjectRef::new(
-            HashMap::from([
+        let receiver = crate::ObjectRef::new_ordered(
+            vec![
                 ("x".to_owned(), Value::Number(1.0)),
                 ("y".to_owned(), Value::Number(2.0)),
                 ("z".to_owned(), Value::Number(3.0)),
-            ]),
+            ],
             &domain,
         );
-        let argument = crate::ObjectRef::new(
-            HashMap::from([
+        let argument = crate::ObjectRef::new_ordered(
+            vec![
                 ("x".to_owned(), Value::Number(4.0)),
                 ("y".to_owned(), Value::Number(5.0)),
                 ("z".to_owned(), Value::Number(6.0)),
-            ]),
+            ],
             &domain,
         );
         assert_eq!(
@@ -442,10 +437,8 @@ mod tests {
             .as_ref()
             .expect("an argument used as a numeric operand should be admitted");
         assert!(matches!(plan, ThisPropertyLeafPlan::Numeric(_)));
-        let receiver = crate::ObjectRef::new(
-            HashMap::from([("step".to_owned(), Value::Number(2.0))]),
-            &domain,
-        );
+        let receiver =
+            crate::ObjectRef::new_ordered(vec![("step".to_owned(), Value::Number(2.0))], &domain);
         assert_eq!(
             plan.eval(&Value::Object(receiver.clone()), &[Value::Number(5.0)]),
             Some(Value::Number(7.0))
@@ -481,18 +474,12 @@ mod tests {
             .this_property_leaf_plan
             .as_ref()
             .expect("duplicate-parameter property expression should be admitted");
-        let receiver = crate::ObjectRef::new(
-            HashMap::from([("x".to_owned(), Value::Number(2.0))]),
-            &domain,
-        );
-        let first_argument = crate::ObjectRef::new(
-            HashMap::from([("x".to_owned(), Value::Number(3.0))]),
-            &domain,
-        );
-        let last_argument = crate::ObjectRef::new(
-            HashMap::from([("x".to_owned(), Value::Number(4.0))]),
-            &domain,
-        );
+        let receiver =
+            crate::ObjectRef::new_ordered(vec![("x".to_owned(), Value::Number(2.0))], &domain);
+        let first_argument =
+            crate::ObjectRef::new_ordered(vec![("x".to_owned(), Value::Number(3.0))], &domain);
+        let last_argument =
+            crate::ObjectRef::new_ordered(vec![("x".to_owned(), Value::Number(4.0))], &domain);
         assert_eq!(
             plan.eval(
                 &Value::Object(receiver),
