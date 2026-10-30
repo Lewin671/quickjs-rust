@@ -135,6 +135,26 @@ impl fmt::Debug for FunctionWeakRef {
     }
 }
 
+impl Function {
+    pub(crate) fn is_last_reference(&self) -> bool {
+        Rc::strong_count(&self.0) == 1
+    }
+    pub(crate) fn release_into(self, pending: &mut Vec<Value>) {
+        if let Some(mut data) = Rc::into_inner(self.0) {
+            data.named.get_mut().defer_children(pending);
+        }
+    }
+}
+impl Drop for FunctionData {
+    fn drop(&mut self) {
+        let mut pending = Vec::new();
+        self.named.get_mut().defer_children(&mut pending);
+        if !pending.is_empty() {
+            crate::value::teardown::release(pending);
+        }
+    }
+}
+
 /// Storage behind [`Function`]. Public only because it is the target of the
 /// handle's public `Deref` implementation; the runtime does not re-export it.
 #[doc(hidden)]

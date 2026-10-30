@@ -944,14 +944,6 @@ pub(super) enum DirectPropertyRead {
     NeedsSlowPath,
 }
 
-fn direct_property_read(property: Property) -> DirectPropertyRead {
-    if property.is_accessor() {
-        DirectPropertyRead::NeedsSlowPath
-    } else {
-        DirectPropertyRead::Data(property.value)
-    }
-}
-
 /// Walks an ordinary object's string-keyed prototype chain for the VM get fast
 /// path. Ordinary data properties copy only their value from the HashMap;
 /// accessors and other observable special cases signal a slow-path fallback.
@@ -961,11 +953,14 @@ pub(super) fn ordinary_chain_data_value(
 ) -> Result<DirectPropertyRead, ProxyInChain> {
     let mut current = object.clone();
     loop {
-        if crate::typed_array::is_typed_array_object(&current)
-            && let Some(property) =
-                crate::typed_array::typed_array_own_property_descriptor(&current, key)
-        {
-            return Ok(direct_property_read(property));
+        if current.is_typed_array_exotic() {
+            match crate::typed_array::indexed_element_value(&current, key) {
+                crate::typed_array::IndexedRead::Present(v) => {
+                    return Ok(DirectPropertyRead::Data(*v));
+                }
+                crate::typed_array::IndexedRead::Missing => return Ok(DirectPropertyRead::Missing),
+                crate::typed_array::IndexedRead::NotIndexed => {}
+            }
         }
         match current.own_data_property_read(key) {
             OwnDataPropertyRead::Data(value) => return Ok(DirectPropertyRead::Data(value)),
@@ -1062,11 +1057,12 @@ fn prototype_chain_property(
                 if object.is_module_namespace_exotic() {
                     return Err(ProxyInChain);
                 }
-                if crate::typed_array::is_typed_array_object(&object)
-                    && let Some(property) =
-                        crate::typed_array::typed_array_own_property_descriptor(&object, key)
+                if object.is_typed_array_exotic()
+                    && crate::typed_array::canonical_numeric_index(key).is_some()
                 {
-                    return Ok(Some(property));
+                    return Ok(crate::typed_array::typed_array_own_property_descriptor(
+                        &object, key,
+                    ));
                 }
                 if let Some(property) = object.own_property(key) {
                     return Ok(Some(property));
@@ -1109,11 +1105,12 @@ fn prototype_chain_property(
                 if object.is_module_namespace_exotic() {
                     return Err(ProxyInChain);
                 }
-                if crate::typed_array::is_typed_array_object(&object)
-                    && let Some(property) =
-                        crate::typed_array::typed_array_own_property_descriptor(&object, key)
+                if object.is_typed_array_exotic()
+                    && crate::typed_array::canonical_numeric_index(key).is_some()
                 {
-                    return Ok(Some(property));
+                    return Ok(crate::typed_array::typed_array_own_property_descriptor(
+                        &object, key,
+                    ));
                 }
                 if let Some(property) = object.own_property(key) {
                     return Ok(Some(property));
@@ -1130,11 +1127,12 @@ fn prototype_chain_property(
                 if object.is_module_namespace_exotic() {
                     return Err(ProxyInChain);
                 }
-                if crate::typed_array::is_typed_array_object(&object)
-                    && let Some(property) =
-                        crate::typed_array::typed_array_own_property_descriptor(&object, key)
+                if object.is_typed_array_exotic()
+                    && crate::typed_array::canonical_numeric_index(key).is_some()
                 {
-                    return Ok(Some(property));
+                    return Ok(crate::typed_array::typed_array_own_property_descriptor(
+                        &object, key,
+                    ));
                 }
                 if let Some(property) = object.own_property(key) {
                     return Ok(Some(property));

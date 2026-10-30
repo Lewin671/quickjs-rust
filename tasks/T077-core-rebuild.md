@@ -1,11 +1,11 @@
 # T077: In-place core rebuild
 
-- Status: active; round-1 A/B committed at `885e0e31` / `c2d65271`; C/D architecture implemented on the S2 owner branch.
+- Status: active; round-1 A/B committed at `885e0e31` / `c2d65271`; C/D committed at `9fab7b0c`; E corrections implemented on the S2 owner branch.
 - Implementation: prototype-sensitive immutable layouts, private prototype validity generations, explicit realm creation, pure missing/accessor IC outcomes and lazy array/function authority replace the initial subscriptions and implicit prototypes.
-- Verified at: C/D working tree fast gate passes (2,434 runtime, 117 selected Test262); agents/perf-counters 2,477/2,477 and clippy pass. Cache proofs cover root churn, 600 sites, stale guards and verifier failure. Final stage gates remain pending.
+- Verified at: C/D working tree fast gate passes (2,434 runtime, 117 selected Test262); agents/perf-counters 2,477/2,477 and clippy pass. Cache proofs cover root churn, 600 sites, stale guards and verifier failure. E runtime 2,435/2,435 and NG 266/266 pass. Final stage gates remain pending.
 - Evidence: [correction plan](proposals/T077-s2-prototype-layout.md), [S1 repairs](archive/T077-s1-review-fixes.md), [previous S2](archive/T077-s2-verification.md). Round-1 receipt will record final source/counters/jobs.
-- Unresolved: E generic correctness/iterative teardown, final full/NG/IC-off/verify/exact gates, counters and iMac triage against `dd0905b2`.
-- Next action: commit verified C/D, apply E, then F. Temporary iMac refs are authorized measurement transport; never push origin or merge main.
+- Unresolved: final full/IC-off/verify/exact gates, counters and iMac triage against `dd0905b2`.
+- Next action: commit verified E, then F. Temporary iMac refs are authorized measurement transport; never push origin or merge main.
 ## Authority and scope
 
 The lead supersedes the 2026-10-23 no-rewrite decision on 2026-10-29 after the

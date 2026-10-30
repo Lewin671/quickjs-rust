@@ -99,6 +99,8 @@ fn prototype_value_to_slot(value: Value, env: &CallEnv) -> Option<crate::Prototy
         Value::Function(prototype) => Some(crate::Prototype::Function(prototype)),
         Value::Array(array) => Some(array_as_prototype_slot(&array, env)),
         Value::Proxy(prototype) => Some(crate::Prototype::Proxy(prototype)),
+        Value::Map(map) => Some(crate::Prototype::Map(map)),
+        Value::Set(set) => Some(crate::Prototype::Set(set)),
         _ => None,
     }
 }

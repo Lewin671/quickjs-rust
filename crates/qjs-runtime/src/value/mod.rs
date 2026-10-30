@@ -24,7 +24,7 @@ pub(crate) mod name_hash;
 mod object;
 mod property;
 mod set;
-mod teardown;
+pub(crate) mod teardown;
 
 pub use access::ValueKind;
 pub use array::ArrayRef;

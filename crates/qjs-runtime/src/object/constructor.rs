@@ -173,6 +173,16 @@ pub(crate) fn native_object_create(
             Some(crate::array_as_prototype_slot(prototype, env)),
             env.realm().atoms(),
         )),
+        Some(Value::Map(prototype)) => Value::Object(ObjectRef::with_prototype_slot(
+            HashMap::new(),
+            Some(crate::Prototype::Map(prototype.clone())),
+            env.realm().atoms(),
+        )),
+        Some(Value::Set(prototype)) => Value::Object(ObjectRef::with_prototype_slot(
+            HashMap::new(),
+            Some(crate::Prototype::Set(prototype.clone())),
+            env.realm().atoms(),
+        )),
         Some(Value::Null) => Value::Object(ObjectRef::new(HashMap::new(), env.realm().atoms())),
         _ => {
             return Err(RuntimeError {

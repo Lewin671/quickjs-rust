@@ -318,16 +318,13 @@ fn explicit_host_order_is_validated_before_key_creation() {
 fn string_virtual_indices_do_not_intern_or_materialize_on_reads() {
     let domain = crate::property::atom::AtomDomain::new();
     let object = ObjectRef::new(HashMap::new(), &domain);
-    object.define_non_enumerable(
-        crate::string::STRING_DATA_PROPERTY.to_owned(),
-        Value::String("a😀".into()),
-    );
+    object.set_string_data("a😀".into());
     object.defer_string_indices();
     let count = domain.created_count();
     assert_eq!(object.get("0"), Some(Value::String("a".into())));
     assert!(object.own_property("1").is_some());
     assert_eq!(object.own_property_keys(), ["0", "1", "2"]);
-    assert_eq!(object.0.properties.borrow().len(), 1);
+    assert_eq!(object.0.properties.borrow().len(), 0);
     assert_eq!(domain.created_count(), count);
     assert!(!object.delete_own_property("0"));
 }
@@ -409,4 +406,15 @@ fn ordered_host_input_preserves_duplicates_and_observable_insertion_order() {
     );
     assert_eq!(object.own_property_names(), ["value", "done"]);
     assert_eq!(object.get("value"), Some(Value::Number(2.0)));
+}
+
+#[test]
+fn string_data_cannot_be_forged_or_overwritten_by_an_ordinary_key() {
+    let object = ObjectRef::new(HashMap::new(), &crate::property::atom::AtomDomain::new());
+    object.set("\0StringData".into(), Value::String("forged".into()));
+    assert!(object.string_data().is_none());
+    object.set_string_data("actual".into());
+    object.set("\0StringData".into(), Value::String("changed".into()));
+    assert_eq!(object.string_data().unwrap(), "actual");
+    assert_eq!(object.own_property_names(), ["\0StringData"]);
 }

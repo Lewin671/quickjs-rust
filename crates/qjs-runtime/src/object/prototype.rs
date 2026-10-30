@@ -72,6 +72,8 @@ fn prototype_slot_from_value(
         Value::Array(array) => Ok(Some(array_as_prototype_slot(&array, env))),
         Value::Function(function) => Ok(Some(crate::Prototype::Function(function))),
         Value::Proxy(proxy) => Ok(Some(crate::Prototype::Proxy(proxy))),
+        Value::Map(map) => Ok(Some(crate::Prototype::Map(map))),
+        Value::Set(set) => Ok(Some(crate::Prototype::Set(set))),
         Value::Null => Ok(None),
         _ => Err(RuntimeError {
             thrown: None,

@@ -102,19 +102,13 @@ impl NamedStore {
     pub(crate) fn get_text(&self, key: &str) -> Option<Property> {
         self.get(&self.domain().find(key)?).expect("same domain")
     }
-    pub(crate) fn value_text(&self, key: &str) -> Option<Value> {
-        let key = self.domain().find(key)?;
-        self.position(&key)
-            .expect("same domain")
-            .map(|slot| self.values[slot].clone())
-    }
     pub(crate) fn descriptors(&self) -> impl Iterator<Item = Property> + '_ {
         (0..self.len()).map(|slot| self.descriptor(slot))
     }
     pub(crate) fn defer_children(&mut self, pending: &mut Vec<Value>) {
         if let Some(prototype) = self.prototype.take() {
             if let Some(prototype) = Rc::into_inner(prototype) {
-                let mut value = prototype.to_value();
+                let mut value = prototype.into_value();
                 crate::value::teardown::defer_if_last(&mut value, pending);
             }
         }

@@ -92,4 +92,16 @@ impl NamedStorage {
         let p = self.prototype();
         self.set_prototype(p, flavor)
     }
+    pub(crate) fn defer_children(&mut self, pending: &mut Vec<Value>) {
+        match self {
+            Self::Full(s) => s.defer_children(pending),
+            Self::Empty { prototype, .. } => {
+                if let Some(p) = prototype.take().and_then(Rc::into_inner) {
+                    let mut value = p.into_value();
+                    crate::value::teardown::defer_if_last(&mut value, pending);
+                }
+            }
+            Self::Sentinel => {}
+        }
+    }
 }

@@ -70,6 +70,7 @@ impl ArrayRef {
     pub(super) fn release_into(self, pending: &mut Vec<Value>) {
         if let Some(mut data) = Rc::into_inner(self.0) {
             defer_children(data.elements.get_mut(), pending);
+            data.named.get_mut().defer_children(pending);
         }
     }
 }
@@ -84,6 +85,7 @@ impl Drop for ArrayData {
     fn drop(&mut self) {
         let mut pending = Vec::new();
         defer_children(self.elements.get_mut(), &mut pending);
+        self.named.get_mut().defer_children(&mut pending);
         if !pending.is_empty() {
             super::teardown::release(pending);
         }

@@ -134,6 +134,17 @@ impl Prototype {
         Self::Array(ArrayPrototypeRef(array))
     }
 
+    pub(crate) fn into_value(self) -> Value {
+        match self {
+            Self::Object(v) => Value::Object(v),
+            Self::Array(v) => Value::Array(v.0),
+            Self::Function(v) => Value::Function(v),
+            Self::Proxy(v) => Value::Proxy(v),
+            Self::Map(v) => Value::Map(v),
+            Self::Set(v) => Value::Set(v),
+        }
+    }
+
     pub(crate) fn ptr_eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Object(left), Self::Object(right)) => left.ptr_eq(right),
@@ -168,10 +179,6 @@ impl Prototype {
                 object.property(key)
             }
         }
-    }
-
-    fn get(&self, key: &str) -> Option<Value> {
-        self.property(key).map(|property| property.value)
     }
 
     pub(crate) fn symbol_property(&self, symbol: &ObjectRef) -> Option<Property> {
@@ -468,6 +475,7 @@ const _: () = assert!(std::mem::size_of::<ObjectData>() == 80);
 
 #[derive(Default)]
 struct ObjectColdData {
+    string_data: RefCell<Option<crate::JsString>>,
     to_string_tag: RefCell<Option<String>>,
     module_namespace_bindings: RefCell<Option<ModuleNamespaceBindings>>,
     /// Generator [[GeneratorState]] for generator objects; `None` for ordinary
@@ -635,15 +643,11 @@ impl ObjectRef {
     /// A String wrapper's [[StringData]], read without defining its index
     /// properties.
     pub(crate) fn string_data(&self) -> Option<crate::JsString> {
-        match self
-            .0
-            .properties
-            .borrow()
-            .value_text(crate::string::STRING_DATA_PROPERTY)
-        {
-            Some(Value::String(text)) => Some(text),
-            _ => None,
-        }
+        self.0.cold_if_present()?.string_data.borrow().clone()
+    }
+
+    pub(crate) fn set_string_data(&self, text: crate::JsString) {
+        *self.0.cold().string_data.borrow_mut() = Some(text);
     }
 
     pub(crate) fn new(
@@ -916,12 +920,15 @@ impl ObjectRef {
     }
 
     pub(crate) fn get(&self, key: &str) -> Option<Value> {
-        self.own_property(key)
-            .map(|p| p.value)
-            .or_else(|| self.prototype_slot().as_ref().and_then(|p| p.get(key)))
+        self.property(key).map(|p| p.value)
     }
 
     pub(crate) fn property(&self, key: &str) -> Option<Property> {
+        if self.is_typed_array_exotic()
+            && crate::typed_array::canonical_numeric_index(key).is_some()
+        {
+            return crate::typed_array::typed_array_own_property_descriptor(self, key);
+        }
         self.own_property(key)
             .or_else(|| self.prototype_slot().as_ref().and_then(|p| p.property(key)))
     }
@@ -1116,7 +1123,7 @@ fn same_prototype_slot(left: Option<&Prototype>, right: Option<&Prototype>) -> b
 }
 
 fn is_internal_property_key(key: &str) -> bool {
-    key.starts_with('\0')
+    key.starts_with('\0') && key != "\0StringData"
 }
 
 /// Parses an array index in its canonical decimal spelling.

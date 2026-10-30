@@ -380,6 +380,7 @@ fn execute<F: LoopFrame>(
                     &program.names[name as usize],
                     &boxed[value as usize],
                     &mut shape_caches[cache as usize],
+                    vm.loop_env(),
                 ) {
                     deopt_here!(op);
                 }
@@ -436,6 +437,7 @@ fn execute<F: LoopFrame>(
                     &program.names[name as usize],
                     &registers[reg(value)].to_value(),
                     &mut shape_caches[cache as usize],
+                    vm.loop_env(),
                 ) {
                     deopt_here!(op);
                 }
@@ -1279,12 +1281,18 @@ fn set_named(
     name: &Rc<str>,
     value: &Value,
     shapes: &mut super::ShapeWays,
+    env: &crate::CallEnv,
 ) -> bool {
     use crate::value::OwnDataPropertyWrite;
 
     let Value::Object(object) = receiver else {
         return false;
     };
+    // The generic store synchronizes global-var cells and frame bindings.
+    // Deopt before any effect rather than publishing only half of that store.
+    if env.is_realm_global_object(object) {
+        return false;
+    }
     if matches!(
         shapes.write_hot(object, value),
         Some(OwnDataPropertyWrite::Written)

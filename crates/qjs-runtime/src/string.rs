@@ -51,8 +51,6 @@ pub(super) use prototype::{
     native_string_prototype_trim_end, native_string_prototype_trim_start,
 };
 
-pub(crate) const STRING_DATA_PROPERTY: &str = "\0StringData";
-
 const SURROGATE_ESCAPE_SENTINEL_BASE: u32 = 0xF0000;
 
 /// Iterates the UTF-16 code units of a stored string without allocating.
