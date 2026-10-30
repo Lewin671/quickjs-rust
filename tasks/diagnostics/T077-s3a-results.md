@@ -1,7 +1,8 @@
 # T077 S3a implementation and verification
 
 Owner branch `agent/t077-s3a-native-entries/codex`, base `d19d3aa6`.
-Implementation present; full check and NG fixtures pass; exact/counter gates pending. No push, merge,
+Implementation present at `2bd8d91a`; debug/release native tests and counters pass;
+full check and 257 NG fixtures pass; complete exact scan pending. No push, merge,
 iMac timing or held-out input access. Lead owns formal aggregate acceptance.
 
 ## Replacement and API
@@ -77,7 +78,7 @@ for it. The final candidate must run the complete scan and all ten counters agai
 
 ## Corrected candidate counters
 
-At `b2ead44bfbd310f064002bda4b93b927be3bd9e3`, all ten development programs pass
+At `2bd8d91a295dbe92364bde26cac211aa338507f9`, all ten development programs pass
 with the original workload SHA-256 and exact stdout. Two fresh processes per
 program produce identical complete counter maps. The raw [after counts](T077-s3a-counts.json),
 [temporary patch](T077-s3a-instrumentation.patch) and [identities](T077-s3a-metadata.json)
@@ -108,7 +109,8 @@ collector because their production sites no longer exist; source search verifies
 that deletion. A separate live pop_arguments check counts any plain native that
 still reaches the Vec site. Native direct entries exactly equal baseline native
 calls for every input. Maximum synchronous native nesting is 158 (graphlib);
-the other nine programs reach 2–6. These counts establish mechanism removal,
+the other nine programs reach 2–6. Maximum observed native stack growth is
+673,216 bytes (graphlib) under the diagnostic build. These counts establish mechanism removal,
 not speed or process-wide allocation counts.
 
 ## Reproduce after counters
@@ -191,6 +193,47 @@ One realm-local numeric anchor is reset at outermost return/throw. CallInfo and
 the S3b service migration ABI are unchanged; there is no FFI/unsafe/global state.
 The shallow arithmetic regression uses 16 debug / 48 optimized levels; a separate
 300-level reentry test requires catchable RangeError, successful subsequent native
-work and boundary restoration. Twelve focused debug tests pass; optimized tests
-and final checks follow. The budget bounds native-to-native callback segments;
+work and boundary restoration. Twelve focused tests pass in both debug and optimized library builds;
+final full/NG/exact checks follow. The budget bounds native-to-native callback segments;
 the existing pure-JS Rust recursion is still S3d's explicit-stack work.
+
+## Final revision verification commands
+
+Runtime revision `2bd8d91a295dbe92364bde26cac211aa338507f9`:
+
+- `cargo test -p qjs-runtime native::tests`: 12 passed.
+- `cargo test --release -p qjs-runtime native::tests`: 12 passed, including the
+  300-level callback rejection on the normal Rust test-thread stack. An existing
+  release-only unused-import warning in `string/canonical/tests.rs` is outside
+  this native-entry change and was not edited.
+- `TEST262_DIR=/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/third_party/test262 TEST262_JOBS=4 ./scripts/check.sh`: passed all stages, including 2,394 runtime tests and 5,170 curated cases.
+- `QJS_CLI_BIN="$PWD/target/release/qjs" COMPARE_QJS_JOBS=4 ./scripts/compare-qjs.sh`:
+  all 257 fixtures pass, using the clean agents-enabled release binary.
+- All ten development programs also pass once on that clean non-counter binary,
+  with exact manifest stdout; the diagnostic two-run full-map checks pass as above.
+- `QJS_AGENTS=1 QJS_CLI_PROFILE=release QJS_CLI_BIN="$PWD/target/release/qjs" TEST262_TIMEOUT_RETRIES=1 TEST262_CASE_TIMEOUT_SECONDS=20 TEST262_BASELINE_JOBS=4 ./scripts/find-qjsng-gaps.sh --exact --all --no-recommend --out-dir target/t077-s3a/exact-2bd8d91a`:
+  running; append the complete-scan burndown only after completion.
+
+Scope validation at this revision passes with the native/family/call-routing,
+mechanical service-state and documentation paths declared; no S1 property/object/
+layout/linked-code path changed. Runtime source is clean and contains no diagnostic
+patch. Disk remains above 8 GiB. No timing job or held-out input was used.
+
+## Operand recycler restoration correction
+
+The new native detach sites must restore with direct Vec ownership assignment,
+not `OperandStack::replace`: that API recycles the displaced vector, which here is
+always the empty take() placeholder. Repeated native calls could fill the pool
+with zero-capacity buffers and discard the useful caller buffer at frame teardown.
+Both new sites now restore the actual owner without recycling that placeholder;
+the pool/activation subsystem itself is unchanged. This preserves the existing
+recycler invariant instead of introducing allocation work at native return.
+The `2bd8d91a` exact scan was stopped while partial for this final routing change;
+no burndown was recorded. Final source checks and counters must be rerun.
+
+The operand-capacity regression evaluates forty native calls against reused
+bytecode twice, then checks that its recycler still retains a usable allocation.
+It passes with direct restoration; a temporary negative control using the old
+recycle-empty restoration fails exactly with `native return discarded the caller's
+reusable allocation`. The old restoration was restored only for that control and
+is absent from the candidate. This is a construction/reuse test, not timing.

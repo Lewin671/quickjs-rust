@@ -135,7 +135,8 @@ impl Vm<'_> {
             direct_eval_strict,
         );
         block.truncate(base);
-        self.stack.replace(block);
+        // Restore the owner without recycling the empty take() placeholder.
+        *self.stack = block;
         self.finish_callee(result)
     }
 
@@ -1094,4 +1095,25 @@ fn fast_string_from_char_code_primitives(
         crate::string::push_code_unit(&mut result, code_unit);
     }
     Some(Ok(result))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::{compiler::compile_script, eval_bytecode};
+
+    #[test]
+    fn native_argument_borrows_preserve_reusable_operand_capacity() {
+        let script = qjs_parser::parse_script(&"Math.max(1, 2);".repeat(40)).unwrap();
+        let code = compile_script(&script).unwrap();
+        for _ in 0..2 {
+            assert_eq!(eval_bytecode(&code).unwrap(), crate::Value::Number(2.0));
+            let recycler = code.operand_stack_recycler();
+            let buffer = recycler.take();
+            assert!(
+                buffer.capacity() > 0,
+                "native return discarded the caller's reusable allocation"
+            );
+            recycler.recycle(buffer);
+        }
+    }
 }

@@ -1308,7 +1308,8 @@ impl<'a> Vm<'a> {
             let callee = block[base].clone();
             let result = self.invoke_construct_callee(callee, &block[base + 1..]);
             block.truncate(base);
-            self.stack.replace(block);
+            // Restore the owner without recycling the empty take() placeholder.
+            *self.stack = block;
             if let Some(value) = self.handle_call_result(result)? {
                 self.stack.push(value);
             }
