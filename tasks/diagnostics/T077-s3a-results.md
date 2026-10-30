@@ -23,9 +23,10 @@ arguments, bound lists, Proxy trap arrays, apply/spread/rest lists still own val
 - The current interpreter has no explicit Context/activation directory. Use its
   existing OperandStack take/replace owner; S3c/d can replace that owner without
   changing the native ABI. No new driver or backend is introduced.
-- Checked native re-entry needs one realm-local depth cell in `function/env.rs`.
+- Checked native re-entry needs a realm-local depth and numeric stack-anchor cell
+  in `function/env.rs`.
   It is shared by callback frames, releases on return/throw, and limits synchronous
-  native depth to 32 debug / 256 optimized. No global mutable state or RefCell borrow spans callbacks.
+  native depth to 256 and native-boundary stack growth to 1 MiB in both profiles. No global mutable state or RefCell borrow spans callbacks.
   This is the only service-state addition; S3b still replaces CallEnv directly.
 - `FunctionData` grows from 296 to 304 bytes on aarch64: the direct entry pointer
   replaces a one-byte family cache. Its explicit size test now admits that word;
@@ -176,3 +177,20 @@ successful native call. All eleven focused debug tests pass. Optimized counters
 remain the intended 256-budget measurement. Both obsolete exact scans were
 stopped before completion; neither is a conformance record. A fresh final scan
 is required for the profile-budget revision.
+
+## Stack-space guard correction
+
+The optimized library's ordinary 2 MiB Rust test thread also overflowed before a
+256-depth-only guard (`ae5e009e`), even though the optimized CLI's larger host
+stack caught the same stress. A count alone cannot account for different Rust
+frame sizes. The final boundary combines depth 256 with a **1 MiB stack-growth
+budget from its outermost native entry**, for both profiles. It compares numeric
+addresses of local markers using safe `ptr::from_ref(...).addr()` and absolute
+distance, in either growth direction; it never retains or dereferences a pointer.
+One realm-local numeric anchor is reset at outermost return/throw. CallInfo and
+the S3b service migration ABI are unchanged; there is no FFI/unsafe/global state.
+The shallow arithmetic regression uses 16 debug / 48 optimized levels; a separate
+300-level reentry test requires catchable RangeError, successful subsequent native
+work and boundary restoration. Twelve focused debug tests pass; optimized tests
+and final checks follow. The budget bounds native-to-native callback segments;
+the existing pure-JS Rust recursion is still S3d's explicit-stack work.

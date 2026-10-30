@@ -210,7 +210,7 @@ fn uninitialized_lexical_has_an_installed_throwing_entry() {
 
 #[test]
 fn nested_native_callbacks_allow_ordinary_graph_traversal_depths() {
-    let depth = NativeBoundary::MAX_DEPTH.min(48);
+    let depth = if cfg!(debug_assertions) { 16 } else { 48 };
     let source = format!(
         r#"
         function sum(n) {{
@@ -245,4 +245,29 @@ fn exceeding_native_callback_depth_throws_without_losing_caller_state() {
         .unwrap(),
         Value::String("true:3".into())
     );
+}
+
+#[test]
+fn native_stack_space_rejection_keeps_the_enclosing_boundary_live() {
+    let mut env = empty_env();
+    let realm = env.realm_rc();
+    let root = NativeBoundary::enter(&realm).unwrap();
+    let anchor = realm.native_stack_anchor.get();
+    realm
+        .native_stack_anchor
+        .set(anchor.wrapping_add(NativeBoundary::MAX_STACK_BYTES * 2));
+    let native = Value::Function(Function::new_native(
+        None,
+        1,
+        NativeFunction::MathAbs,
+        false,
+    ));
+    let error = call_function_slice(&native, Value::Undefined, &[Value::Number(1.0)], &mut env)
+        .unwrap_err();
+    assert!(error.message.starts_with("RangeError:"));
+    assert_eq!(realm.native_depth.get(), 1);
+    realm.native_stack_anchor.set(anchor);
+    drop(root);
+    assert_eq!(realm.native_depth.get(), 0);
+    assert_eq!(realm.native_stack_anchor.get(), 0);
 }

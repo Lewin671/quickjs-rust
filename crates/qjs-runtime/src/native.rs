@@ -81,30 +81,44 @@ pub(crate) fn call_native_function(
 }
 
 /// The caller's detached operand/register owner or host slice stays outside
-/// this boundary. Only the depth cell is borrowed, never an Executor/RefCell.
-struct NativeBoundary<'a>(&'a std::cell::Cell<usize>);
+/// this boundary. Only short Cell operations occur here, never an Executor or
+/// RefCell borrow. Rc realm ownership keeps this synchronous state on one thread.
+struct NativeBoundary<'a>(&'a crate::function::Realm);
 
 impl<'a> NativeBoundary<'a> {
-    // Debug Rust frames are much larger than optimized frames. Keep the
-    // synchronous boundary below their stack budget; S3d removes recursive JS
-    // driver frames, but this stage still uses the existing executors.
-    const MAX_DEPTH: usize = if cfg!(debug_assertions) { 32 } else { 256 };
+    const MAX_DEPTH: usize = 256;
+    const MAX_STACK_BYTES: usize = 1024 * 1024;
 
     fn enter(realm: &'a crate::function::Realm) -> Result<Self, RuntimeError> {
-        let depth = &realm.native_depth;
-        if depth.get() >= Self::MAX_DEPTH {
+        // Observe addresses only: no pointer is retained or dereferenced. The
+        // absolute distance works for either stack growth direction and accounts
+        // for different Rust frame sizes across profiles/callback executors.
+        let marker = 0_u8;
+        let here = std::ptr::from_ref(&marker).addr();
+        let depth = realm.native_depth.get();
+        if depth >= Self::MAX_DEPTH
+            || (depth != 0
+                && realm.native_stack_anchor.get().abs_diff(here) >= Self::MAX_STACK_BYTES)
+        {
             return Err(RuntimeError {
                 thrown: None,
-                message: "RangeError: native call depth limit exceeded".to_owned(),
+                message: "RangeError: native call stack limit exceeded".to_owned(),
             });
         }
-        depth.set(depth.get() + 1);
-        Ok(Self(depth))
+        if depth == 0 {
+            realm.native_stack_anchor.set(here);
+        }
+        realm.native_depth.set(depth + 1);
+        Ok(Self(realm))
     }
 }
 
 impl Drop for NativeBoundary<'_> {
     fn drop(&mut self) {
-        self.0.set(self.0.get() - 1);
+        let depth = self.0.native_depth.get() - 1;
+        self.0.native_depth.set(depth);
+        if depth == 0 {
+            self.0.native_stack_anchor.set(0);
+        }
     }
 }

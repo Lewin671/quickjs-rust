@@ -59,7 +59,7 @@ callee/receiver/new.target and identifies the active realm; CallEnv supplies
 caller services until S3b. Host/callback and compact/wide entries borrow slices.
 Native VM call/construct detaches its operand owner until return/throw, restoring
 it before exception handling. Retained values/forwarding lists own references.
-Realm-local native depth is checked; no Executor/RefCell borrow crosses callbacks.
+Native depth/stack growth are checked; no Executor/RefCell borrow crosses callbacks.
 
 **Call dispatch.** `call_function` (`function/call.rs`) first resolves the
 callable kind: Proxy, bound function, native builtin, generator, async
