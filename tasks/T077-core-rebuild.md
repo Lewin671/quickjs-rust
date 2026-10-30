@@ -1,11 +1,11 @@
 # T077: In-place core rebuild
 
-- Status: active; target/stages designed under lead and user authorization of 2026-10-29; implementation next.
-- Implementation: none; documentation only. Runtime/parser/tools remain byte-identical to `6663738f`.
-- Verified at: source audit at `6663738f000135120f0217f6307859d5e13e750b`, 2026-10-29; context, diff and staged fast gates pass on this design tree; no runtime candidate.
-- Evidence: [target](../docs/design/core-rebuild.md), [S1 brief](proposals/T077-s1-property-authority.md), historical T065/T068/T075/T076 records linked from the target.
-- Unresolved: pending fresh baseline; S3 requires T074 eval decisions; compact-pointer portability qualification and final campaign-target progress remain unmeasured.
-- Next action: S1 owner implements the linked brief; in parallel the S3 inventory owner splits S3 into landable sub-stages (lead amendment 2026-10-29); lead records the pending baseline. Do not queue another baseline or revive closed unit gates.
+- Status: active; S1 implementation pending; S3 inventory/split proposed for lead review (2026-10-29).
+- Implementation: none; documentation only. S3 counters use a retained diagnostic patch; runtime/parser/tools remain byte-identical to `dd0905b2`.
+- Verified at: S3 source audit at `dd0905b2cb0236c38619089a27e8342b575dda61`, 2026-10-29; twenty deterministic checksum-checked diagnostic runs; context, diff and staged fast gates pass on this documentation tree; no runtime candidate.
+- Evidence: [target](../docs/design/core-rebuild.md), [S1 brief](proposals/T077-s1-property-authority.md), [S3 plan/inventories](proposals/T077-s3-plan.md), [S3 counts](diagnostics/T077-s3-counts.md).
+- Unresolved: pending fresh baseline; S3 split/payers and T074 scope contracts need lead review; compact-pointer portability qualification and final campaign-target progress remain unmeasured.
+- Next action: S1 owner implements its brief; lead reviews the S3 split and T074 decisions, freezes S3a at the accepted integration base, and records the pending baseline. Do not queue another baseline or revive closed unit gates.
 
 ## Authority and scope
 
@@ -15,9 +15,9 @@ Route: in-place staged replacement inside qjs-runtime on main; no second engine,
 tracing GC, FFI, Rust async, benchmark-specific recognizers or old-path fallback.
 Keep slot/shared-cell identity. Delete replaced code within its replacement stage.
 
-This design unit: branch `agent/core-rebuild-design/codex`, base `6663738f`;
-only this worktree and Markdown docs/task bookkeeping. No push, merge, code/tool
-edits, frozen-evidence changes or iMac jobs.
+Target design: `agent/core-rebuild-design/codex`, base `6663738f`; S3 inventory:
+`agent/t077-s3-inventory/codex`, base `dd0905b2`. Documents/diagnostic evidence
+only; no retained runtime/tool edits, push, merge, frozen-evidence edits or iMac jobs.
 Later implementations use isolated owner branches from one recorded main base;
 the lead integrates sequentially. Global/shared API changes have one owner.
 
@@ -97,29 +97,29 @@ plus aggregate improvement is progress, not proof of that campaign target.
 
 ## S3 — Universal bytecode, frames, calls and native ABI
 
-- Scope: bytecode compiler/IR/VM, function call/context/install, native and builtin
-  capability consumers, modules, generators/async. [Execution contract](../docs/design/core-rebuild-execution.md).
-- Delete: stack interpreter, nested general JS VMs, CallEnv, per-call argument
-  vectors, numeric/this leaves, compact/numeric-plan/wide/caller-env executors,
-  native family probe dispatch and their cached admissions/pools/handback.
-- Preconditions: S2 accepted; settle T074; freeze Context/BindingPlan/NativeEntry and exhaustive Op-to-Code map.
-- Correctness: verifier malformed/CFG tests; deep recursion and JS/native depth;
-  zero-based disassembly audit; T016 cell/TDZ/mapped-arguments/global/module tests;
-  transitive eval/with leases; callback/private/referrer/derived-this tests;
-  exception/finally/disposal and all suspension/job discriminators.
-- Payoff: eliminate entry/argument/env work and duplicate dispatch ownership,
-  not compression alone (T065 0.998); T068 calls+env deletion envelope 15.63%.
-  S3 may be neutral during scalar-tier loss; **S4 pays**.
-- Exit: universal register Code, no legacy opcode/fallback; ordinary calls no
-  Vec/CallEnv/Rust recursion; virtual streams gone, existing typed/mutation
-  executors consume common frames directly, with no retained scaffolding.
-- Size: **12–20 weeks**, largest integration risk. Lead amendment 2026-10-29: the Op/capability inventory runs in parallel with S1 and must split S3 into independently landable sub-stages (each with the common gates); no multi-month unlandable branch.
-- Parallel: lead owns `ir*`, compiler shared builder, `vm*`, `function/call*` and
-  Context; one owner ports `native/arrays.rs` + array builtin family, another
-  `native/strings.rs` + string/regexp families after NativeEntry freeze; serialize
-  other families/shared headers. Native ports use owned values/argument slices.
-- Risk/fallback: borrow/re-entry, cell authority, suspensions and suite losses;
-  source-revert S3 if gates fail. No partially supported engine can land as S3.
+- Contract: [execution](../docs/design/core-rebuild-execution.md); [five-stage proposal and complete inventories](proposals/T077-s3-plan.md). The split is proposed, not approved or implemented.
+- Proposed landings: S3a direct native entries/slices; S3b typed Context and T074
+  binding authority; S3c owning activations/suspension; S3d explicit JS stack and
+  callee argument writes; S3e universal register Code and executor deletion.
+- Every landing takes the common full/NG/complete exact zero-gap gates above;
+  no partial-language backend or old-path fallback. Proposed payers/endpoints
+  need lead approval; the approved S4-versus-S2 payer obligation remains.
+- Preconditions: accepted S2, T074 contract approval before S3b, frozen per-stage
+  APIs/deletions/test maps. Disjoint S3a preparation may parallel S1/S2; do not
+  edit S1-owned paths or assume authority to land ahead of S2.
+- Exit remains: universal Code; no CallEnv/nested JS Vm/ordinary argument Vec,
+  stack/leaf/compact/numeric-plan/wide/caller-env/virtual executable streams or
+  cached admissions. Typed/mutation loops consume common frames/Code exit maps
+  until S4 removes them. [Retirement](../docs/design/core-rebuild-retirement.md).
+- Evidence: [ten-program deterministic path counts](diagnostics/T077-s3-counts.md)
+  price reach, not savings: 78,693,537 native-family declines, 24,987,337 CallEnv
+  constructions/clones and 2,137,517 frame/VM constructions. No timing claim.
+- Proposed size: 13–21 engineer-weeks plus 1–2 weeks for review and unpriced repairs;
+  original 12–20-week estimate needs lead reconciliation. Largest landing is
+  S3e (4–6 weeks); all detailed boundaries, tests and risks live in the plan.
+- Risk/fallback: cell/context/re-entry/suspension correctness and wide/scalar
+  throughput; revert a failed stage/payer pair to the last verified milestone,
+  never retain a compatibility interpreter. S4 still pays for neutral S3e.
 
 ## S4 — One scalar/escape optimizer; finish executor deletion
 

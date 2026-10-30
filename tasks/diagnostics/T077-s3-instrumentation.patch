@@ -1,0 +1,849 @@
+diff --git a/crates/qjs-runtime/src/bytecode/compact_fn/activation.rs b/crates/qjs-runtime/src/bytecode/compact_fn/activation.rs
+index 636c3052..64ceb3b0 100644
+--- a/crates/qjs-runtime/src/bytecode/compact_fn/activation.rs
++++ b/crates/qjs-runtime/src/bytecode/compact_fn/activation.rs
+@@ -116,6 +116,8 @@ fn admit<'a>(
+     bytecode: &'a Bytecode,
+     upvalues: crate::bytecode::DirectCallUpvalues<'_>,
+ ) -> Option<CompactEntry<'a>> {
++crate::diagnostics::inventory_event("compact_admit_probe");
++let inventory_result = (|| {
+     let program = super::program_for(bytecode)?;
+     // The body's received cells must be reachable from one retained function,
+     // which is what makes an upvalue read a cell load rather than a binding
+@@ -143,6 +145,9 @@ fn admit<'a>(
+         upvalue_owner,
+         upvalue_slots,
+     })
++})();
++if inventory_result.is_some() { crate::diagnostics::inventory_event("compact_admit_hit"); } else { crate::diagnostics::inventory_event("compact_admit_decline"); }
++inventory_result
+ }
+
+ /// Whether an environment can host an admitted body at all.
+@@ -308,6 +313,8 @@ struct InlineCallee {
+ /// parameter prologues and `arguments` objects are among the shapes it
+ /// rejects, and the compact program's own admission does not subsume it.
+ fn inline_callee(callee: &Value, env: &CallEnv) -> Option<InlineCallee> {
++crate::diagnostics::inventory_event("compact_inline_probe");
++let inventory_result = (|| {
+     let Value::Function(function) = callee else {
+         return None;
+     };
+@@ -343,6 +350,9 @@ fn inline_callee(callee: &Value, env: &CallEnv) -> Option<InlineCallee> {
+         upvalue_owner,
+         upvalue_slots,
+     })
++})();
++if inventory_result.is_some() { crate::diagnostics::inventory_event("compact_inline_hit"); } else { crate::diagnostics::inventory_event("compact_inline_decline"); }
++inventory_result
+ }
+
+ /// Whether a numeric plan may call `function` (`numeric_plan`): the facts
+@@ -413,6 +423,7 @@ fn run(
+     parameter_slots: &[usize],
+     arguments: &[Value],
+ ) -> Result<Value, RuntimeError> {
++crate::diagnostics::inventory_event("compact_run");
+     crate::diagnostics::count!(compact_standalone_activations);
+     // Taking the storage rather than borrowing it keeps re-entrancy simple: a
+     // body that calls out to native code that calls back into this tier finds
+@@ -648,7 +659,7 @@ fn run_frames(
+                     // attribution is `compact_direct_calls`, not
+                     // `direct_leaf_frames`: no frame is built.
+                     crate::diagnostics::count!(ordinary_call_attempts);
+-                    crate::diagnostics::count!(compact_direct_calls);
++                    crate::diagnostics::count!(compact_direct_calls);crate::diagnostics::inventory_event("compact_inline_enter");
+                     let callee_base = current_base + current_len;
+                     let callee_len = inline.register_count;
+                     reserve_registers(registers, callee_base + callee_len);
+@@ -751,6 +762,8 @@ pub(in crate::bytecode) fn try_run_standalone(
+     env: &mut Option<CallEnv>,
+     slots: &mut Option<DirectCallSlots<'_>>,
+ ) -> Option<Result<Value, RuntimeError>> {
++crate::diagnostics::inventory_event("standalone_ladder_probe");
++let inventory_result = (|| {
+     // This tier resolves every name by slot index. An environment that can
+     // still answer a name, that carries deoptimized dynamic bindings, or that
+     // overrides the realm global belongs on the general path.
+@@ -775,12 +788,17 @@ pub(in crate::bytecode) fn try_run_standalone(
+         call_slots.parameter_slots,
+         call_slots.arguments,
+     ))
++})();
++if inventory_result.is_some() { crate::diagnostics::inventory_event("standalone_ladder_hit"); } else { crate::diagnostics::inventory_event("standalone_ladder_decline"); }
++inventory_result
+ }
+
+ /// Runs an admitted body's numeric plan (`numeric_plan`), when it has one
+ /// and every argument is a number; `None` leaves the call to the tier.
+ #[inline(never)]
+ fn run_numeric_plan(bytecode: &Bytecode, slots: &DirectCallSlots<'_>) -> Option<Value> {
++crate::diagnostics::inventory_event("numeric_plan_entry_probe");
++let inventory_result = (|| {
+     let plan = super::numeric_plan::plan_for(bytecode)?;
+     let mut numbers = [0.0; super::compile::MAX_CALL_ARITY];
+     if slots.arguments.len() > numbers.len() {
+@@ -798,6 +816,9 @@ fn run_numeric_plan(bytecode: &Bytecode, slots: &DirectCallSlots<'_>) -> Option<
+         slots.upvalues.as_slice(),
+         &numbers[..slots.arguments.len()],
+     )
++})();
++if inventory_result.is_some() { crate::diagnostics::inventory_event("numeric_plan_entry_hit"); } else { crate::diagnostics::inventory_event("numeric_plan_entry_decline"); }
++inventory_result
+ }
+
+ /// Runs a direct-leaf callee on a compact tier in the caller's own
+@@ -817,6 +838,8 @@ pub(crate) fn try_run_in_caller_env(
+     arguments: &[Value],
+     env: &CallEnv,
+ ) -> Option<Result<Value, RuntimeError>> {
++crate::diagnostics::inventory_event("caller_ladder_probe");
++let inventory_result = (|| {
+     if !environment_is_slot_only(env) || !shares_caller_environment(function, bytecode, env) {
+         return None;
+     }
+@@ -832,6 +855,9 @@ pub(crate) fn try_run_in_caller_env(
+         ));
+     }
+     super::wide::try_run_in_caller_env(bytecode, upvalues, arguments, env)
++})();
++if inventory_result.is_some() { crate::diagnostics::inventory_event("caller_ladder_hit"); } else { crate::diagnostics::inventory_event("caller_ladder_decline"); }
++inventory_result
+ }
+
+ /// Runs one call the driver could not inline.
+@@ -862,7 +888,7 @@ fn call_from_activation(
+     crate::function::call_function(
+         callee,
+         Value::Undefined,
+-        arguments.to_vec(),
++        { crate::diagnostics::inventory_event("argument_vec_tier_fallback"); arguments.to_vec() },
+         &mut env,
+         false,
+     )
+diff --git a/crates/qjs-runtime/src/bytecode/compact_fn/numeric_plan.rs b/crates/qjs-runtime/src/bytecode/compact_fn/numeric_plan.rs
+index 96e784bf..3c105f22 100644
+--- a/crates/qjs-runtime/src/bytecode/compact_fn/numeric_plan.rs
++++ b/crates/qjs-runtime/src/bytecode/compact_fn/numeric_plan.rs
+@@ -251,6 +251,8 @@ pub(in crate::bytecode) fn run(
+     cells: &[Upvalue],
+     args: &[f64],
+ ) -> Option<Value> {
++let inventory_result = (|| {
++crate::diagnostics::inventory_event("numeric_plan_run");
+     let result = if plan.leaf {
+         run_leaf(plan, args)?
+     } else {
+@@ -267,6 +269,9 @@ pub(in crate::bytecode) fn run(
+     } else {
+         Value::Number(result)
+     })
++})();
++if inventory_result.is_some(){crate::diagnostics::inventory_event("numeric_plan_hit");}else{crate::diagnostics::inventory_event("numeric_plan_decline");}
++inventory_result
+ }
+
+ /// Runs a leaf plan: one frame, registers on the native stack.
+@@ -363,6 +368,7 @@ fn run_with(
+                     let value = *registers.get(base + usize::from(args) + index)?;
+                     *registers.get_mut(callee_base + usize::from(parameter))? = value;
+                 }
++crate::diagnostics::inventory_event("numeric_plan_nested_call");
+                 frames.push(Frame {
+                     body: u16::try_from(body).ok()?,
+                     pc: u32::try_from(pc).ok()?,
+diff --git a/crates/qjs-runtime/src/bytecode/compact_fn/wide/activation.rs b/crates/qjs-runtime/src/bytecode/compact_fn/wide/activation.rs
+index e20c1c34..b9bc8015 100644
+--- a/crates/qjs-runtime/src/bytecode/compact_fn/wide/activation.rs
++++ b/crates/qjs-runtime/src/bytecode/compact_fn/wide/activation.rs
+@@ -202,6 +202,8 @@ fn admit<'a>(
+     bytecode: &'a Bytecode,
+     upvalues: crate::bytecode::DirectCallUpvalues<'_>,
+ ) -> Option<WideEntry<'a>> {
++crate::diagnostics::inventory_event("wide_admit_probe");
++let inventory_result = (|| {
+     let program = super::program_for(bytecode)?;
+     if !program.admit_activation() {
+         return None;
+@@ -226,6 +228,9 @@ fn admit<'a>(
+         upvalue_owner,
+         upvalue_slots,
+     })
++})();
++if inventory_result.is_some() { crate::diagnostics::inventory_event("wide_admit_hit"); } else { crate::diagnostics::inventory_event("wide_admit_decline"); }
++inventory_result
+ }
+
+ /// Whether an environment can host an admitted body at all.
+@@ -448,6 +453,8 @@ fn clear_window(window: &mut [Value]) {
+ /// `None` leaves the call to this driver.
+ #[inline(never)]
+ fn try_numeric_call(callee: &Value, arguments: &[Value]) -> Option<Value> {
++crate::diagnostics::inventory_event("wide_numeric_call_probe");
++let inventory_result = (|| {
+     let Value::Function(function) = callee else {
+         return None;
+     };
+@@ -469,6 +476,9 @@ fn try_numeric_call(callee: &Value, arguments: &[Value]) -> Option<Value> {
+         &function.upvalues,
+         &numbers[..arguments.len()],
+     )
++})();
++if inventory_result.is_some() { crate::diagnostics::inventory_event("wide_numeric_call_hit"); } else { crate::diagnostics::inventory_event("wide_numeric_call_decline"); }
++inventory_result
+ }
+
+ /// What the driver needs to enter an admitted callee in its own window.
+@@ -491,6 +501,8 @@ fn inline_callee(callee: &Value, env: &CallEnv) -> Option<InlineCallee> {
+ /// `inline_callee` for any admitted body, with whether it is a class
+ /// constructor, which only `new` may enter.
+ fn inline_entry(callee: &Value, env: &CallEnv) -> Option<(InlineCallee, bool)> {
++crate::diagnostics::inventory_event("wide_inline_probe");
++let inventory_result = (|| {
+     let Value::Function(function) = callee else {
+         return None;
+     };
+@@ -512,6 +524,9 @@ fn inline_entry(callee: &Value, env: &CallEnv) -> Option<(InlineCallee, bool)> {
+         },
+         facts & FACTS_CLASS != 0,
+     ))
++})();
++if inventory_result.is_some() { crate::diagnostics::inventory_event("wide_inline_hit"); } else { crate::diagnostics::inventory_event("wide_inline_decline"); }
++inventory_result
+ }
+
+ /// Proves `new callee(...)` may run on this driver: an ordinary (not class,
+@@ -584,7 +599,7 @@ fn enter_constructor(
+         )?;
+     }
+     crate::diagnostics::count!(ordinary_call_attempts);
+-    crate::diagnostics::count!(compact_direct_calls);
++    crate::diagnostics::count!(compact_direct_calls);crate::diagnostics::inventory_event("wide_inline_enter");
+     let callee_base = *current_base + *current_len;
+     let callee_len = inline.register_count;
+     reserve_registers(registers, callee_base + callee_len);
+@@ -664,6 +679,7 @@ fn run(
+     this_value: Option<Value>,
+     root: RootExit<'_>,
+ ) -> Result<Value, RuntimeError> {
++crate::diagnostics::inventory_event("wide_run");
+     crate::diagnostics::count!(compact_standalone_activations);
+     let mut storage = FRAME_STORAGE.with(|cell| cell.take());
+     let result = run_frames(
+@@ -1314,7 +1330,7 @@ fn run_frames(
+                 return Err(call_stack_exhausted());
+             }
+             crate::diagnostics::count!(ordinary_call_attempts);
+-            crate::diagnostics::count!(compact_direct_calls);
++            crate::diagnostics::count!(compact_direct_calls);crate::diagnostics::inventory_event("wide_inline_enter");
+             let callee_base = current_base + current_len;
+             let callee_len = inline.register_count;
+             reserve_registers(registers, callee_base + callee_len);
+@@ -1534,7 +1550,7 @@ fn construct_from_activation(
+         return result;
+     }
+     let mut env = env.empty_frame();
+-    crate::function::construct_function(callee.clone(), callee, arguments.to_vec(), &mut env)
++    crate::function::construct_function(callee.clone(), callee, { crate::diagnostics::inventory_event("argument_vec_tier_fallback"); arguments.to_vec() }, &mut env)
+ }
+
+ /// `new Array(...)` on the realm's own Array constructor, whose `prototype`
+@@ -1606,6 +1622,8 @@ pub(in crate::bytecode) fn try_run_standalone(
+     env: &mut Option<CallEnv>,
+     slots: &mut Option<DirectCallSlots<'_>>,
+ ) -> Option<Result<Value, RuntimeError>> {
++crate::diagnostics::inventory_event("wide_standalone_probe");
++let inventory_result = (|| {
+     if !environment_is_slot_only(env.as_ref()?) {
+         return None;
+     }
+@@ -1630,6 +1648,9 @@ pub(in crate::bytecode) fn try_run_standalone(
+         call_slots.this_value,
+         root,
+     ))
++})();
++if inventory_result.is_some() { crate::diagnostics::inventory_event("wide_standalone_hit"); } else { crate::diagnostics::inventory_event("wide_standalone_decline"); }
++inventory_result
+ }
+
+ /// The wide half of `compact_fn::try_run_in_caller_env`: the caller has
+@@ -1642,6 +1663,8 @@ pub(crate) fn try_run_in_caller_env(
+     arguments: &[Value],
+     env: &CallEnv,
+ ) -> Option<Result<Value, RuntimeError>> {
++crate::diagnostics::inventory_event("wide_caller_probe");
++let inventory_result = (|| {
+     let entry = admit(bytecode, upvalues)?;
+     if entry.program.requires_this {
+         return None;
+@@ -1662,6 +1685,9 @@ pub(crate) fn try_run_in_caller_env(
+         None,
+         root,
+     ))
++})();
++if inventory_result.is_some() { crate::diagnostics::inventory_event("wide_caller_hit"); } else { crate::diagnostics::inventory_event("wide_caller_decline"); }
++inventory_result
+ }
+
+ /// Runs one call the driver could not inline, through the same entries the
+@@ -1710,7 +1736,7 @@ fn call_from_activation(
+             function, native, this_value, arguments, false, &mut env,
+         );
+     }
+-    crate::function::call_function(callee, this_value, arguments.to_vec(), &mut env, false)
++    crate::function::call_function(callee, this_value, { crate::diagnostics::inventory_event("argument_vec_tier_fallback"); arguments.to_vec() }, &mut env, false)
+ }
+
+ /// What running a loop's typed program from an exit did.
+diff --git a/crates/qjs-runtime/src/bytecode/frame_program.rs b/crates/qjs-runtime/src/bytecode/frame_program.rs
+index e6a5137b..ecc09e17 100644
+--- a/crates/qjs-runtime/src/bytecode/frame_program.rs
++++ b/crates/qjs-runtime/src/bytecode/frame_program.rs
+@@ -105,6 +105,8 @@ impl<'a> FrameProgramView<'a> {
+             authoritative_slots,
+             allow_virtual_functions,
+         );
++        crate::diagnostics::inventory_event("stream_selection");
++        if !std::ptr::eq(execution_code.as_ptr(), bytecode.code.as_ptr()) { crate::diagnostics::inventory_event("virtual_stream_selected"); }
+         Self {
+             bytecode,
+             execution_code,
+diff --git a/crates/qjs-runtime/src/bytecode/operand_stack.rs b/crates/qjs-runtime/src/bytecode/operand_stack.rs
+index 5a86905b..7ca10571 100644
+--- a/crates/qjs-runtime/src/bytecode/operand_stack.rs
++++ b/crates/qjs-runtime/src/bytecode/operand_stack.rs
+@@ -49,6 +49,7 @@ impl OperandStackRecycler {
+     }
+
+     pub(super) fn take(&self) -> Vec<Value> {
++crate::diagnostics::inventory_event("operand_vec_request");
+         self.0
+             .borrow_mut()
+             .pop()
+diff --git a/crates/qjs-runtime/src/bytecode/typed_loop/execute.rs b/crates/qjs-runtime/src/bytecode/typed_loop/execute.rs
+index 28ef9b99..14ea095a 100644
+--- a/crates/qjs-runtime/src/bytecode/typed_loop/execute.rs
++++ b/crates/qjs-runtime/src/bytecode/typed_loop/execute.rs
+@@ -26,6 +26,8 @@ pub(crate) fn try_run_typed_loop<F: LoopFrame>(
+     header: usize,
+     backedge: usize,
+ ) -> bool {
++crate::diagnostics::inventory_event("typed_loop_probe");
++let inventory_result = (|| {
+     if vm.direct_eval_with_stack() {
+         return false;
+     }
+@@ -111,6 +113,9 @@ pub(crate) fn try_run_typed_loop<F: LoopFrame>(
+         }
+         Outcome::Declined => decline(vm),
+     }
++})();
++if inventory_result { crate::diagnostics::inventory_event("typed_loop_hit"); } else { crate::diagnostics::inventory_event("typed_loop_decline"); }
++inventory_result
+ }
+
+ /// What one attempt to run a program did.
+diff --git a/crates/qjs-runtime/src/bytecode/vm.rs b/crates/qjs-runtime/src/bytecode/vm.rs
+index bb63e2bb..833f5417 100644
+--- a/crates/qjs-runtime/src/bytecode/vm.rs
++++ b/crates/qjs-runtime/src/bytecode/vm.rs
+@@ -68,6 +68,7 @@ pub(super) fn eval_function_bytecode<'a>(
+     direct_call_slots: Option<DirectCallSlots<'_>>,
+     positional_arguments: Option<&[Value]>,
+ ) -> FunctionBytecodeResult<'a> {
++crate::diagnostics::inventory_event("eval_function_entry");
+     let direct_eval_with_stack = !env.direct_eval_with_stack().is_empty();
+     let mut vm = Vm::with_frame_bytecode(
+         FrameBytecode::Borrowed(bytecode),
+@@ -115,6 +116,7 @@ pub(super) fn eval_call_bytecode(
+     with_stack: Vec<Value>,
+     positional_arguments: Option<&[Value]>,
+ ) -> Result<Value, RuntimeError> {
++crate::diagnostics::inventory_event("general_entry");
+     let direct_eval_with_stack = !env.direct_eval_with_stack().is_empty();
+     let mut vm = Vm::with_frame_bytecode(
+         FrameBytecode::Borrowed(bytecode),
+@@ -140,6 +142,7 @@ pub(super) fn eval_direct_call_bytecode(
+     env: CallEnv,
+     direct_call_slots: DirectCallSlots<'_>,
+ ) -> Result<Value, RuntimeError> {
++crate::diagnostics::inventory_event("direct_frame_entry");
+     // A body the compact tier admits runs without a `Vm` at all: it has no
+     // handler, cannot suspend, runs no loop plans, and keeps its operands in
+     // registers, so nothing in `FrameState` would be read. Admission
+@@ -1372,6 +1375,7 @@ impl<'a> Vm<'a> {
+     }
+
+     pub(super) fn pop_arguments(&mut self, argc: usize) -> Result<Vec<Value>, RuntimeError> {
++crate::diagnostics::inventory_event("argument_vec_pop");
+         let mut arguments = Vec::with_capacity(argc);
+         for _ in 0..argc {
+             arguments.push(self.pop()?);
+diff --git a/crates/qjs-runtime/src/bytecode/vm/wide_resume.rs b/crates/qjs-runtime/src/bytecode/vm/wide_resume.rs
+index 4ca045d5..4b6e1045 100644
+--- a/crates/qjs-runtime/src/bytecode/vm/wide_resume.rs
++++ b/crates/qjs-runtime/src/bytecode/vm/wide_resume.rs
+@@ -84,6 +84,7 @@ pub(in crate::bytecode) fn resume_direct_call_bytecode(
+     registers: WideRegisters<'_>,
+     from: ResumeFrom,
+ ) -> Resumed {
++crate::diagnostics::inventory_event("wide_resume_vm");
+     let mut vm = Vm::new_with_globals_upvalues_with_stack_and_direct_call_slots(
+         bytecode,
+         env,
+@@ -193,6 +194,8 @@ impl Vm<'_> {
+     /// the tier expects there. The jump is undone so the tier performs it.
+     #[cold]
+     pub(super) fn hand_back_to_wide(&mut self, backedge: usize) -> Option<FrameExit> {
++crate::diagnostics::inventory_event("wide_handback_probe");
++let inventory_result=(||{
+         let Some(Some(None)) = self.current.cold().map(|cold| cold.wide_handback) else {
+             return None;
+         };
+@@ -208,5 +211,8 @@ impl Vm<'_> {
+         self.current.ip = backedge;
+         self.current.cold_mut().wide_handback = Some(Some(backedge));
+         Some(FrameExit::Completed(Completion::Yield(Value::Undefined)))
++})();
++if inventory_result.is_some(){crate::diagnostics::inventory_event("wide_handback_hit");}
++inventory_result
+     }
+ }
+diff --git a/crates/qjs-runtime/src/bytecode/vm_call.rs b/crates/qjs-runtime/src/bytecode/vm_call.rs
+index cfba6a5d..1f818962 100644
+--- a/crates/qjs-runtime/src/bytecode/vm_call.rs
++++ b/crates/qjs-runtime/src/bytecode/vm_call.rs
+@@ -502,6 +502,7 @@ impl Vm<'_> {
+     /// member-call bytecode. Declines leave that exact stack untouched before
+     /// replaying `CallResolved(1)`.
+     pub(super) fn call_resolved_guarded_math_unary(&mut self) -> Result<(), RuntimeError> {
++crate::diagnostics::inventory_event("guarded_math_probe");
+         let Some(receiver_index) = self.stack.len().checked_sub(3) else {
+             return Err(stack_underflow());
+         };
+@@ -524,6 +525,7 @@ impl Vm<'_> {
+         drop(argument);
+         drop(callee);
+         drop(receiver);
++crate::diagnostics::inventory_event("guarded_math_hit");
+         self.stack.push(Value::Number(result));
+         #[cfg(test)]
+         GUARDED_MATH_UNARY_HITS.with(|hits| hits.set(hits.get() + 1));
+@@ -628,6 +630,8 @@ pub(super) fn try_fast_global_native_call(
+     arguments: &[Value],
+     realm_env: &dyn Fn() -> CallEnv,
+ ) -> Option<Result<Value, RuntimeError>> {
++crate::diagnostics::inventory_event("fast_global_native_probe");
++let inventory_result = (|| {
+     let Value::Function(function) = callee else {
+         return None;
+     };
+@@ -859,6 +863,11 @@ pub(super) fn try_fast_global_native_call(
+         _ => return None,
+     };
+     Some(result)
++})();
++if inventory_result.is_some() { crate::diagnostics::inventory_event("fast_global_native_hit");
++if let Value::Function(f) = callee { if let Some(n)=f.native { let name=format!("{:?}",n); crate::diagnostics::inventory_event(if name.starts_with("Math") {"fast_native_math"} else if name.starts_with("String") {"fast_native_strings"} else if name.starts_with("Array") {"fast_native_arrays"} else if name.starts_with("Number") {"fast_native_numbers"} else {"fast_native_core"}); } }
++} else { crate::diagnostics::inventory_event("fast_global_native_decline"); }
++inventory_result
+ }
+
+ fn fast_primitive_unary_math(native: NativeFunction, arguments: &[Value]) -> Option<f64> {
+diff --git a/crates/qjs-runtime/src/bytecode/vm_frame_bindings.rs b/crates/qjs-runtime/src/bytecode/vm_frame_bindings.rs
+index 3dfd02b9..92083793 100644
+--- a/crates/qjs-runtime/src/bytecode/vm_frame_bindings.rs
++++ b/crates/qjs-runtime/src/bytecode/vm_frame_bindings.rs
+@@ -16,6 +16,7 @@ use crate::{
+
+ impl Vm<'_> {
+     pub(super) fn initial_slots(bytecode: &Bytecode, env: &CallEnv) -> Vec<Slot> {
++crate::diagnostics::inventory_event("local_vec_general_request");
+         let mut locals = bytecode.take_local_slots(bytecode.locals.len());
+         for (slot, route) in bytecode.frame_init_plan.initial_slots.iter().enumerate() {
+             let name = &bytecode.locals[slot].name;
+diff --git a/crates/qjs-runtime/src/bytecode/vm_frame_init.rs b/crates/qjs-runtime/src/bytecode/vm_frame_init.rs
+index 17c04479..ca89e7e4 100644
+--- a/crates/qjs-runtime/src/bytecode/vm_frame_init.rs
++++ b/crates/qjs-runtime/src/bytecode/vm_frame_init.rs
+@@ -115,6 +115,7 @@ impl<'a> Vm<'a> {
+         direct_call_slots: Option<DirectCallSlots<'_>>,
+         positional_arguments: Option<&[Value]>,
+     ) -> Self {
++crate::diagnostics::inventory_event("frame_vm_construct");
+         crate::diagnostics::count!(nested_vm_constructions);
+         let bytecode: &Bytecode = &handle;
+         // `QJS_CF_TRACE=1` names the body behind every general-path frame, so
+@@ -282,6 +283,7 @@ impl<'a> Vm<'a> {
+     }
+
+     pub(super) fn initial_direct_call_slots(bytecode: &Bytecode) -> Vec<Slot> {
++crate::diagnostics::inventory_event("local_vec_direct_request");
+         // Fill, then seed only the hoisted slots. Testing every local's flag
+         // made frame setup scale with the local count.
+         let mut locals = bytecode.take_local_slots(bytecode.locals.len());
+diff --git a/crates/qjs-runtime/src/bytecode/vm_numeric_leaf.rs b/crates/qjs-runtime/src/bytecode/vm_numeric_leaf.rs
+index 9b1d3785..2fb013fa 100644
+--- a/crates/qjs-runtime/src/bytecode/vm_numeric_leaf.rs
++++ b/crates/qjs-runtime/src/bytecode/vm_numeric_leaf.rs
+@@ -757,6 +757,8 @@ pub(super) fn eval_number_only_leaf(
+     upvalues: &[Upvalue],
+     arguments: &[f64],
+ ) -> Option<f64> {
++crate::diagnostics::inventory_event("number_only_leaf_probe");
++let inventory_result = (|| {
+     let Some(Some(NumericLeafPlan::NumberOnly(program))) = bytecode.numeric_leaf_plan.get() else {
+         return None;
+     };
+@@ -766,6 +768,9 @@ pub(super) fn eval_number_only_leaf(
+         return None;
+     }
+     program.eval_numbers(arguments)
++})();
++if inventory_result.is_some() { crate::diagnostics::inventory_event("number_only_leaf_hit"); } else { crate::diagnostics::inventory_event("number_only_leaf_decline"); }
++inventory_result
+ }
+
+ /// Executes a side-effect-free numeric leaf without constructing a nested VM.
+@@ -780,6 +785,8 @@ pub(crate) fn try_eval_numeric_leaf(
+     arguments: &[Value],
+     upvalues: &[Upvalue],
+ ) -> Option<Value> {
++crate::diagnostics::inventory_event("numeric_leaf_probe");
++let inventory_result = (|| {
+     let plan = bytecode
+         .numeric_leaf_plan
+         .get_or_init(|| NumericLeafPlan::compile(bytecode))
+@@ -932,6 +939,9 @@ pub(crate) fn try_eval_numeric_leaf(
+         }
+     }
+     None
++})();
++if inventory_result.is_some() { crate::diagnostics::inventory_event("numeric_leaf_hit"); } else { crate::diagnostics::inventory_event("numeric_leaf_decline"); }
++inventory_result
+ }
+
+ /// Original direct executor retained for received-upvalue writes. Its delayed
+diff --git a/crates/qjs-runtime/src/bytecode/vm_numeric_mutation_loop.rs b/crates/qjs-runtime/src/bytecode/vm_numeric_mutation_loop.rs
+index 93bd4f37..0b9636b2 100644
+--- a/crates/qjs-runtime/src/bytecode/vm_numeric_mutation_loop.rs
++++ b/crates/qjs-runtime/src/bytecode/vm_numeric_mutation_loop.rs
+@@ -223,6 +223,8 @@ pub(super) fn try_run_numeric_mutation_loop(
+     header: usize,
+     backedge: usize,
+ ) -> bool {
++crate::diagnostics::inventory_event("mutation_loop_probe");
++let inventory_result = (|| {
+     // A frame that has diverged runs its own override; every other frame runs
+     // the body's shared plans, which the caller supplies.
+     let active = vm
+@@ -274,6 +276,9 @@ pub(super) fn try_run_numeric_mutation_loop(
+             }
+         }
+     }
++})();
++if inventory_result { crate::diagnostics::inventory_event("mutation_loop_hit"); } else { crate::diagnostics::inventory_event("mutation_loop_decline"); }
++inventory_result
+ }
+
+ #[cfg(test)]
+diff --git a/crates/qjs-runtime/src/bytecode/vm_this_property_leaf.rs b/crates/qjs-runtime/src/bytecode/vm_this_property_leaf.rs
+index c7f233ef..191a6310 100644
+--- a/crates/qjs-runtime/src/bytecode/vm_this_property_leaf.rs
++++ b/crates/qjs-runtime/src/bytecode/vm_this_property_leaf.rs
+@@ -299,6 +299,8 @@ pub(crate) fn try_eval_this_property_leaf(
+     this_value: &Value,
+     arguments: &[Value],
+ ) -> Option<Value> {
++crate::diagnostics::inventory_event("this_leaf_probe");
++let inventory_result = (|| {
+     // A receiver-property body can only shortcut an already-object receiver.
+     // The bytecode shape was preclassified during compilation, so ordinary
+     // direct calls do not pay an additional lazy-plan probe here.
+@@ -309,6 +311,9 @@ pub(crate) fn try_eval_this_property_leaf(
+         .this_property_leaf_plan
+         .as_ref()?
+         .eval(this_value, arguments)
++})();
++if inventory_result.is_some() { crate::diagnostics::inventory_event("this_leaf_hit"); } else { crate::diagnostics::inventory_event("this_leaf_decline"); }
++inventory_result
+ }
+
+ #[cfg(test)]
+diff --git a/crates/qjs-runtime/src/bytecode/vm_virtual_object.rs b/crates/qjs-runtime/src/bytecode/vm_virtual_object.rs
+index e857c7aa..666cd1b5 100644
+--- a/crates/qjs-runtime/src/bytecode/vm_virtual_object.rs
++++ b/crates/qjs-runtime/src/bytecode/vm_virtual_object.rs
+@@ -477,6 +477,7 @@ impl<'a> Vm<'a> {
+         allocation_ip: usize,
+         argc: usize,
+     ) -> Result<(), RuntimeError> {
++crate::diagnostics::inventory_event("virtual_function_call");
+         let (params, bytecode) = match self.bytecode.code.get(allocation_ip) {
+             Some(Op::NewFunction {
+                 params, bytecode, ..
+diff --git a/crates/qjs-runtime/src/diagnostics.rs b/crates/qjs-runtime/src/diagnostics.rs
+index fababac1..5178149a 100644
+--- a/crates/qjs-runtime/src/diagnostics.rs
++++ b/crates/qjs-runtime/src/diagnostics.rs
+@@ -36,7 +36,7 @@ macro_rules! declare_counters {
+             /// declaration order, so a report stays stable across builds.
+             #[must_use]
+             pub fn entries(&self) -> Vec<(&'static str, u64)> {
+-                vec![$((stringify!($field), self.$field),)+]
++                { let mut result = vec![$((stringify!($field), self.$field),)+]; result.extend(inventory_entries()); result }
+             }
+         }
+
+@@ -180,3 +180,7 @@ macro_rules! count {
+ }
+
+ pub(crate) use count;
++
++thread_local! { static INVENTORY: std::cell::RefCell<std::collections::BTreeMap<&'static str,u64>> = const { std::cell::RefCell::new(std::collections::BTreeMap::new()) }; }
++pub(crate) fn inventory_event(name: &'static str) { INVENTORY.with(|c| { *c.borrow_mut().entry(name).or_default() += 1; }); }
++fn inventory_entries() -> Vec<(&'static str,u64)> { INVENTORY.with(|c| c.borrow().iter().map(|(k,v)| (*k,*v)).collect()) }
+diff --git a/crates/qjs-runtime/src/function/call.rs b/crates/qjs-runtime/src/function/call.rs
+index 9d15d798..cc71ab34 100644
+--- a/crates/qjs-runtime/src/function/call.rs
++++ b/crates/qjs-runtime/src/function/call.rs
+@@ -64,7 +64,9 @@ pub(crate) fn call_function(
+     env: &mut CallEnv,
+     is_construct: bool,
+ ) -> Result<Value, RuntimeError> {
++crate::diagnostics::inventory_event("vector_api_entry");
+     if let Value::Proxy(proxy) = &callee {
++crate::diagnostics::inventory_event("proxy_route");
+         if is_construct {
+             return crate::proxy::proxy_construct(
+                 proxy.clone(),
+@@ -82,6 +84,7 @@ pub(crate) fn call_function(
+         });
+     };
+     if let Some(bound) = &function.bound {
++crate::diagnostics::inventory_event("bound_route");
+         if !is_construct
+             && matches!(
+                 &bound.target,
+@@ -89,7 +92,8 @@ pub(crate) fn call_function(
+                     if target.native == Some(NativeFunction::FunctionPrototypeCall)
+             )
+         {
+-            let mut combined_arguments = bound.arguments.clone();
++            crate::diagnostics::inventory_event("argument_vec_bound");
++let mut combined_arguments = bound.arguments.clone();
+             combined_arguments.extend(argument_values);
+             let call_this = combined_arguments
+                 .first()
+@@ -104,7 +108,8 @@ pub(crate) fn call_function(
+                 false,
+             );
+         }
+-        let mut bound_arguments = bound.arguments.clone();
++        crate::diagnostics::inventory_event("argument_vec_bound");
++let mut bound_arguments = bound.arguments.clone();
+         bound_arguments.extend(argument_values);
+         let bound_this = if is_construct {
+             this_value
+@@ -136,6 +141,7 @@ pub(crate) fn call_function(
+     if let Some(bytecode) = &function.bytecode {
+         crate::diagnostics::count!(ordinary_call_attempts);
+         if function.is_generator && function.is_async {
++crate::diagnostics::inventory_event("async_generator_route");
+             let function_env = function_env(
+                 function,
+                 bytecode,
+@@ -157,6 +163,7 @@ pub(crate) fn call_function(
+         // A parameter-binding error therefore throws at the call, before the
+         // generator object exists.
+         if function.is_generator {
++crate::diagnostics::inventory_event("generator_route");
+             let function_env = function_env(
+                 function,
+                 bytecode,
+@@ -188,6 +195,7 @@ pub(crate) fn call_function(
+         // resolved/rejected with the body's eventual outcome (including
+         // parameter-binding errors, which reject rather than throw).
+         if function.is_async {
++crate::diagnostics::inventory_event("async_route");
+             let function_env = function_env(
+                 function,
+                 bytecode,
+@@ -216,6 +224,7 @@ pub(crate) fn call_function(
+         // below built a compatibility frame for every such call, which was
+         // most of a small callback's cost.
+         if !is_construct && is_direct_leaf_function(&callee) {
++crate::diagnostics::inventory_event("ordinary_forward_duplicate");
+             return call_direct_leaf_function(
+                 callee.clone(),
+                 this_value,
+@@ -252,6 +261,7 @@ pub(crate) fn call_function_slice(
+     argument_values: &[Value],
+     env: &mut CallEnv,
+ ) -> Result<Value, RuntimeError> {
++crate::diagnostics::inventory_event("slice_entry");
+     if is_direct_leaf_function(callee) {
+         return call_direct_leaf_function(
+             callee.clone(),
+@@ -266,7 +276,7 @@ pub(crate) fn call_function_slice(
+     call_function(
+         callee.clone(),
+         this_value,
+-        argument_values.to_vec(),
++        { crate::diagnostics::inventory_event("argument_vec_slice_fallback"); argument_values.to_vec() },
+         env,
+         false,
+     )
+@@ -673,6 +683,8 @@ pub(crate) fn call_direct_function_literal(
+ }
+
+ pub(crate) fn is_direct_leaf_function(callee: &Value) -> bool {
++crate::diagnostics::inventory_event("direct_predicate_probe");
++let inventory_result = (|| {
+     let Value::Function(function) = callee else {
+         return false;
+     };
+@@ -685,6 +697,9 @@ pub(crate) fn is_direct_leaf_function(callee: &Value) -> bool {
+         .is_some_and(|bytecode| can_seed_direct_leaf_call(function, bytecode));
+     function.direct_leaf_call_eligible.set(Some(eligible));
+     eligible
++})();
++if inventory_result { crate::diagnostics::inventory_event("direct_predicate_hit"); } else { crate::diagnostics::inventory_event("direct_predicate_decline"); }
++inventory_result
+ }
+
+ fn class_constructor_call_error(function: &Function) -> RuntimeError {
+@@ -960,7 +975,8 @@ pub(crate) fn construct_function(
+         && let Some(bound) = &function.bound
+     {
+         let real_target = bound.target.clone();
+-        let mut combined_arguments = bound.arguments.clone();
++        crate::diagnostics::inventory_event("argument_vec_bound");
++let mut combined_arguments = bound.arguments.clone();
+         combined_arguments.extend(argument_values);
+         let forwarded_new_target = if target.same_value(&new_target) {
+             real_target.clone()
+@@ -1188,6 +1204,7 @@ fn direct_leaf_function_env<'a>(
+     argument_values: &'a [Value],
+     env: &CallEnv,
+ ) -> FunctionCallEnv<'a> {
++crate::diagnostics::inventory_event("direct_env");
+     // Ordinary leaf calls and direct base class constructions both reach
+     // this frame; the class-constructor TypeError is the caller's concern.
+     debug_assert!(can_seed_slot_backed_call(function, bytecode));
+@@ -1234,6 +1251,7 @@ fn function_env<'a>(
+     env: &CallEnv,
+     is_construct: bool,
+ ) -> FunctionCallEnv<'a> {
++crate::diagnostics::inventory_event("function_env");
+     let use_direct_call_slots = is_direct_leaf_function(callee)
+         || (is_construct && can_seed_base_class_constructor_slots(function, bytecode));
+     let use_positional_arguments =
+diff --git a/crates/qjs-runtime/src/function/env.rs b/crates/qjs-runtime/src/function/env.rs
+index 75915e34..73b76c4d 100644
+--- a/crates/qjs-runtime/src/function/env.rs
++++ b/crates/qjs-runtime/src/function/env.rs
+@@ -875,6 +875,7 @@ pub(crate) struct CallEnv {
+
+ impl Clone for CallEnv {
+     fn clone(&self) -> Self {
++crate::diagnostics::inventory_event("env_clone");
+         Self {
+             scope: Rc::clone(&self.scope),
+             expose_global_lexical_values: self.expose_global_lexical_values,
+@@ -934,6 +935,7 @@ impl std::fmt::Debug for CallEnv {
+ impl CallEnv {
+     /// Builds an environment over `realm` with empty locals.
+     pub(crate) fn new(realm: Realm) -> Self {
++crate::diagnostics::inventory_event("env_new");
+         Self {
+             scope: Rc::new(RealmScope {
+                 realm,
+@@ -1057,6 +1059,7 @@ impl CallEnv {
+     /// `parse_json_text`) that run without a live VM; intrinsic lookups simply
+     /// return `None`, matching the prior empty-`HashMap` behavior.
+     pub(crate) fn detached() -> Self {
++crate::diagnostics::inventory_event("env_detached");
+         Self {
+             scope: Rc::new(RealmScope {
+                 realm: new_realm(HashMap::new()),
+@@ -1085,6 +1088,7 @@ impl CallEnv {
+     /// Used by native/dynamic compatibility entry points that receive an owned
+     /// map rather than a live VM realm.
+     pub(crate) fn from_map(map: HashMap<String, Value>) -> Self {
++crate::diagnostics::inventory_event("env_from_map");
+         Self {
+             scope: Rc::new(RealmScope {
+                 realm: new_realm(map),
+@@ -1111,6 +1115,7 @@ impl CallEnv {
+
+     /// Builds an environment over `realm` with the given frame locals.
+     pub(crate) fn with_locals(realm: Realm, locals: HashMap<String, Value>) -> Self {
++crate::diagnostics::inventory_event("env_with_locals");
+         Self {
+             scope: Rc::new(RealmScope {
+                 realm,
+@@ -1160,6 +1165,7 @@ impl CallEnv {
+     /// Builds a function frame with room for the bindings its call prologue
+     /// will materialize, avoiding repeated small-vector growth on hot calls.
+     pub(crate) fn new_function_frame_with_capacity(&self, capacity: usize) -> Self {
++crate::diagnostics::inventory_event("env_function_frame");
+         Self {
+             scope: Rc::clone(&self.scope),
+             expose_global_lexical_values: false,
+@@ -1185,6 +1191,7 @@ impl CallEnv {
+     /// state is installed by the caller, so copying the caller's transient maps
+     /// here would only allocate them before immediately replacing them.
+     pub(crate) fn new_direct_leaf_function_frame(&self, module_imports: ModuleImports) -> Self {
++crate::diagnostics::inventory_event("env_leaf_frame");
+         Self {
+             scope: Rc::clone(&self.scope),
+             expose_global_lexical_values: false,
+@@ -1820,6 +1827,7 @@ impl CallEnv {
+     /// name-keyed intermediate map. Explicit direct-eval/with cells are added
+     /// by the VM after it overlays live slot values.
+     pub(crate) fn fork_current_frame_values(&self) -> Self {
++crate::diagnostics::inventory_event("env_fork");
+         Self {
+             scope: Rc::clone(&self.scope),
+             expose_global_lexical_values: false,
+diff --git a/crates/qjs-runtime/src/native.rs b/crates/qjs-runtime/src/native.rs
+index 42570f70..202eed97 100644
+--- a/crates/qjs-runtime/src/native.rs
++++ b/crates/qjs-runtime/src/native.rs
+@@ -77,14 +77,14 @@ pub(crate) fn call_native_function(
+             return Ok(value);
+         }
+     }
+-    core::call_core_native(
++    { crate::diagnostics::inventory_event("native_core"); core::call_core_native(
+         function,
+         native,
+         this_value,
+         argument_values,
+         is_construct,
+         env,
+-    )
++    ) }
+ }
+
+ /// The number of families [`call_native_family`] asks.
+@@ -100,6 +100,9 @@ fn call_native_family(
+     is_construct: bool,
+     env: &mut CallEnv,
+ ) -> NativeCallResult {
++let names = ["core","native_family_01","native_family_02","native_family_03","native_family_04","native_family_05","native_family_06","native_family_07","native_family_08","native_family_09","native_family_10","native_family_11","native_family_12","native_family_13","native_family_14","native_family_15","native_family_16","native_family_17","native_family_18","native_family_19","native_family_20","native_family_21","native_family_22","native_family_23","native_family_24","native_family_25","native_family_26","native_family_27","native_family_28"];
++crate::diagnostics::inventory_event(names[family as usize]);
++let inventory_result = (|| {
+     match family {
+         1 => arrays::call_array_native(
+             function,
+@@ -281,4 +284,7 @@ fn call_native_family(
+         ),
+         _ => Ok(None),
+     }
++})();
++if matches!(&inventory_result, Ok(None)) { crate::diagnostics::inventory_event(["core","native_decline_01","native_decline_02","native_decline_03","native_decline_04","native_decline_05","native_decline_06","native_decline_07","native_decline_08","native_decline_09","native_decline_10","native_decline_11","native_decline_12","native_decline_13","native_decline_14","native_decline_15","native_decline_16","native_decline_17","native_decline_18","native_decline_19","native_decline_20","native_decline_21","native_decline_22","native_decline_23","native_decline_24","native_decline_25","native_decline_26","native_decline_27","native_decline_28"][family as usize]); } else { crate::diagnostics::inventory_event(["core","native_terminal_01","native_terminal_02","native_terminal_03","native_terminal_04","native_terminal_05","native_terminal_06","native_terminal_07","native_terminal_08","native_terminal_09","native_terminal_10","native_terminal_11","native_terminal_12","native_terminal_13","native_terminal_14","native_terminal_15","native_terminal_16","native_terminal_17","native_terminal_18","native_terminal_19","native_terminal_20","native_terminal_21","native_terminal_22","native_terminal_23","native_terminal_24","native_terminal_25","native_terminal_26","native_terminal_27","native_terminal_28"][family as usize]); }
++inventory_result
+ }
