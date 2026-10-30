@@ -1,11 +1,11 @@
 # T077: In-place core rebuild
 
 - Status: active; S3a accepted on main, S2 round-2 main merge implemented and verified on the owner branch.
-- Implementation: round-1 S2 remains present; merging main `dcee3c56` (S3a runtime `71294a20`) and preserving explicit realm creation in direct native entries. Construction before-state measured; [repair plan](proposals/T077-s2-round2-construction.md) frozen, inline one/two-value slots and direct pair literals committed at `78fc74be`; guarded string-only store-add plans implemented.
-- Verified at: prior S2 `e1d8a6a3` gates/exact remain historical; merged working tree fast gate passes (2,448 runtime, 117 selected Test262), focused native 8/function 13 and NG 266 pass. FunctionData is 320 bytes with S3a entry/alignment. Inline slots have 2,449 runtime tests, clippy and NG 266 passing; store-add focused tests 20 pass. Payoff not yet measured.
+- Implementation: round-1 S2 remains present; merging main `dcee3c56` (S3a runtime `71294a20`) and preserving explicit realm creation in direct native entries. Construction before-state measured; [repair plan](proposals/T077-s2-round2-construction.md) frozen, inline one/two-value slots and direct pair literals committed at `78fc74be`; guarded string-only store-add plans committed at `465eac09`; class-prefix and JSON sequence reuse implemented.
+- Verified at: prior S2 `e1d8a6a3` gates/exact remain historical; merged working tree fast gate passes (2,448 runtime, 117 selected Test262), focused native 8/function 13 and NG 266 pass. FunctionData is 320 bytes with S3a entry/alignment. Inline slots have 2,449 runtime tests, clippy and NG 266 passing; store-add focused tests 20 pass; class/JSON working tree runtime 2,451 and JSON-focused 5 pass. Payoff not yet measured.
 - Evidence: [round-1 receipt](archive/T077-s2-round1-verification.md), [construction before-state](diagnostics/T077-s2-r2-before.md), [S3a acceptance](diagnostics/T077-s3a-acceptance.md), [S3b brief](proposals/T077-s3b-brief.md).
 - Unresolved: construction payoff versus dcee3c56, array header/RSS, final gates and diagnostics.
-- Next action: verify/commit guarded store-add plans, add class/JSON sequence reuse, recollect counts/triage, then repair array header/RSS. Never push origin or merge into main; held-out remains lead-owned.
+- Next action: verify/commit class/JSON sequence reuse, recollect counts/triage, then repair array header/RSS. Never push origin or merge into main; held-out remains lead-owned.
 
 ## Authority and scope
 

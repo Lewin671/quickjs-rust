@@ -467,3 +467,13 @@ fn declined_long_constant_run_defines_every_field_sequentially() {
     );
     assert_eq!(eval(&script), Ok(Value::Boolean(true)));
 }
+
+#[test]
+fn warmed_field_prefixes_stay_observable_and_do_not_call_inherited_setters() {
+    assert_eq!(
+        eval(
+            "let seen=[];class C {a=1;b=(seen.push(Object.keys(this).join(',')),2);c=3;d=4;}for(let i=0;i<5;i++)new C();Object.defineProperty(C.prototype,'a',{set(v){throw 1},configurable:true});let c=new C();seen.join(':')==='a:a:a:a:a:a' && Object.keys(c).join(',')==='a,b,c,d' && c.d===4;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}

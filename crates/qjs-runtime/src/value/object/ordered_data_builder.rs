@@ -10,6 +10,12 @@ pub(crate) struct OrderedDataPropertyBuilder {
     index_property_count: usize,
 }
 impl OrderedDataPropertyBuilder {
+    pub(crate) fn finish_sequence(
+        sequence: crate::value::layout::DataSequence,
+    ) -> (ObjectRef, Option<Rc<crate::value::layout::Layout>>) {
+        let (properties, prediction, indices) = sequence.finish();
+        (ObjectRef::from_ready_named(properties, indices), prediction)
+    }
     pub(crate) fn new(domain: &AtomDomain) -> Self {
         Self {
             properties: NamedStore::empty(domain),

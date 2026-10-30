@@ -10,35 +10,72 @@ use crate::{Property, Value};
 
 use super::ObjectRef;
 
+use crate::value::layout::{AppendRecipe, NamedStore};
+use std::cell::RefCell;
+type Plan = RefCell<Option<AppendRecipe>>;
+
+fn define_field(store: &mut NamedStore, key: &str, value: &Value, plan: &Plan) -> bool {
+    if let Some(recipe) = plan.borrow().as_ref()
+        && recipe.apply(store, value.clone())
+    {
+        return recipe.is_index();
+    }
+    let before = store.version();
+    let slot = store.len();
+    let lease = store
+        .domain()
+        .find(key)
+        .unwrap_or_else(|| store.domain().intern(key));
+    let lookup = store.lookup(&lease).expect("own domain");
+    let added = lookup.descriptor().is_none();
+    lookup.define(Property::enumerable(value.clone()));
+    if added && store.domain().ic_policy().enabled {
+        *plan.borrow_mut() = store.append_recipe(before, slot);
+    }
+    added && lease.array_index().is_some()
+}
+fn ordinary(object: &ObjectRef) -> bool {
+    object.named_kind() == Some(0) && object.is_extensible()
+}
+fn special(key: &str) -> bool {
+    key == "globalThis" || key == "__quickjsRustDynamicFunctionRealm"
+}
 impl ObjectRef {
-    /// Defines a constant segment in order with one check and reservation.
-    /// The caller proves that values are primitive constants, keys are resolved
-    /// strings, and no initializer/observer occurs between these definitions.
-    /// Returns false before mutation if ordinary default definitions might fail.
+    /// One initialized field is published only after its initializer completes.
+    pub(crate) fn install_shared_class_field(&self, key: &str, value: &Value, plan: &Plan) -> bool {
+        if !ordinary(self) || special(key) {
+            return false;
+        }
+        let mut store = self.0.properties.borrow_mut();
+        // A recipe guard also proves absence; only the cold path probes by key.
+        if let Some(recipe) = plan.borrow().as_ref()
+            && recipe.apply(&mut store, value.clone())
+        {
+            self.note_cached_append(recipe.is_index());
+            return true;
+        }
+        if store.get_text(key).is_some() {
+            return false;
+        }
+        self.note_cached_append(define_field(&mut store, key, value, plan));
+        true
+    }
+    /// Only observer-free primitive segments may share a borrow/reservation.
+    /// All definitions still publish their prefixes in source order.
     pub(crate) fn install_constant_class_fields<'a>(
         &self,
-        fields: impl ExactSizeIterator<Item = (&'a Rc<str>, &'a Value)>,
+        fields: impl ExactSizeIterator<Item = (&'a Rc<str>, &'a Value, &'a Plan)> + Clone,
     ) -> bool {
-        if self.0.flag(super::flags::STRING_INDICES)
-            || !self.is_extensible()
-            || crate::typed_array::is_typed_array_object(self)
-            || self.is_module_namespace_exotic()
-            || self.is_array_prototype_exotic()
-            || self.is_symbol_object()
-        {
+        if !ordinary(self) || fields.clone().any(|(key, _, _)| special(key)) {
             return false;
         }
-        if self
-            .0
-            .properties
-            .borrow()
-            .descriptors()
-            .any(|p| !p.configurable)
-        {
+        let mut store = self.0.properties.borrow_mut();
+        if store.descriptors().any(|p| !p.configurable) {
             return false;
         }
-        for (key, value) in fields {
-            self.define_shared_property(key.clone(), Property::enumerable(value.clone()));
+        store.reserve(fields.len());
+        for (key, value, plan) in fields {
+            self.note_cached_append(define_field(&mut store, key, value, plan));
         }
         true
     }
@@ -49,6 +86,7 @@ mod tests {
     use std::{collections::HashMap, rc::Rc};
 
     use crate::{ObjectRef, Property, Value};
+    use std::cell::RefCell;
 
     #[test]
     fn declines_without_mutation_for_descriptor_boundaries() {
@@ -56,7 +94,9 @@ mod tests {
         let a: Rc<str> = "a".into();
         let b: Rc<str> = "b".into();
         let value = Value::Number(2.0);
-        let fields = [(&a, &value), (&b, &value)];
+        let plan_a = RefCell::default();
+        let plan_b = RefCell::default();
+        let fields = [(&a, &value, &plan_a), (&b, &value, &plan_b)];
         let object = ObjectRef::new(HashMap::new(), &domain);
         let mut fixed = Property::enumerable(Value::Number(1.0));
         fixed.configurable = false;
@@ -74,7 +114,11 @@ mod tests {
         let first = Value::Number(1.0);
         let last = Value::Number(2.0);
         let layout = object.layout_revision();
-        assert!(object.install_constant_class_fields([(&key, &first), (&key, &last)].into_iter()));
+        let plan_a = RefCell::default();
+        let plan_b = RefCell::default();
+        assert!(object.install_constant_class_fields(
+            [(&key, &first, &plan_a), (&key, &last, &plan_b)].into_iter()
+        ));
         assert_eq!(object.get("0"), Some(last));
         assert_eq!(object.0.index_property_count.get(), 1);
         assert_ne!(object.layout_revision(), layout);

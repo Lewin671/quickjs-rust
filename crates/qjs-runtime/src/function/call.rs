@@ -732,7 +732,7 @@ pub(crate) fn initialize_instance_fields(
             let installed = segments.install(&elements, next, object);
             if installed != 0 {
                 for element in &elements[next..next + installed] {
-                    let (key, _) =
+                    let (key, _, _) =
                         constant_public_field(element).expect("installed constant field");
                     env.sync_realm_global_object_property(object, key);
                 }
@@ -751,14 +751,8 @@ pub(crate) fn initialize_instance_fields(
                 if let Some(key) = field.shared_string_key()
                     && let Value::Object(object) = this_value
                     && is_ordinary_public_field_receiver(object)
-                    && object.is_extensible()
-                    && !object.has_own_property(key)
+                    && object.install_shared_class_field(key, &value, &field.definition_plan)
                 {
-                    // The checks above run before mutation and JavaScript has
-                    // no interleaving point between them and this write. The
-                    // existing shared-key helper creates exactly the default
-                    // enumerable, writable, configurable data property.
-                    object.set_shared_key(key.clone(), value);
                     env.sync_realm_global_object_property(object, key);
                 } else {
                     crate::bytecode::install_field_value(
@@ -781,7 +775,12 @@ pub(crate) fn initialize_instance_fields(
 
 /// Returns only a resolved public string key and a proven primitive constant.
 /// The existing bytecode proof excludes code execution and per-instance identity.
-fn constant_public_field(element: &InstanceElementInitializer) -> Option<(&Rc<str>, &Value)> {
+type ConstantPublicField<'a> = (
+    &'a Rc<str>,
+    &'a Value,
+    &'a std::cell::RefCell<Option<crate::value::layout::AppendRecipe>>,
+);
+fn constant_public_field(element: &InstanceElementInitializer) -> Option<ConstantPublicField<'_>> {
     let InstanceElementInitializer::PublicField(field) = element else {
         return None;
     };
@@ -800,7 +799,7 @@ fn constant_public_field(element: &InstanceElementInitializer) -> Option<(&Rc<st
     ) {
         return None;
     }
-    Some((field.shared_string_key()?, value))
+    Some((field.shared_string_key()?, value, &field.definition_plan))
 }
 
 /// Scans each observer-free segment once, including segments that decline.
@@ -1717,7 +1716,7 @@ mod tests {
         let mut segments = ConstantFieldSegments::default();
         for next in 0..elements.len() {
             assert_eq!(segments.install(&elements, next, &receiver), 0);
-            let (key, value) = constant_public_field(&elements[next]).unwrap();
+            let (key, value, _) = constant_public_field(&elements[next]).unwrap();
             receiver.set_shared_key(key.clone(), value.clone());
         }
         assert_eq!(segments.inspected, count);

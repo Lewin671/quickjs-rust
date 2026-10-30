@@ -17,7 +17,7 @@ impl NamedStore {
     pub(crate) fn from_data_pair(layout: Rc<Layout>, values: [Value; 2]) -> Self {
         Self::from_slots(layout, ValueSlots::pair(values))
     }
-    fn from_slots(layout: Rc<Layout>, values: ValueSlots) -> Self {
+    pub(super) fn from_slots(layout: Rc<Layout>, values: ValueSlots) -> Self {
         let layout = if layout.dictionary {
             Rc::new(layout.copied(true))
         } else {

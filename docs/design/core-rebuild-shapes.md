@@ -22,6 +22,11 @@ Live shapes and their weak lookup edges may exceed the keep-alive bound.
 Code-owned append plans may retain string-only transition metadata, as literal links do;
 they never retain receivers, symbol handles or prototype values. Store-add guards
 the old layout and the transitive prototype generation before publishing a prefix.
+Class definitions retain per-field prefix plans and publish only after each
+initializer. Observer-free primitive segments share one borrow/reservation.
+JSON parses retain the preceding string-key sequence per object depth: direct
+key comparisons fill owning slots; the first mismatch resumes generic insertion
+from its completed prefix. Reviver source records retain the metadata path.
 Repeated fixed-key construction within the budget reuses shapes after objects
 die. Delete/reconfigure churn after 32 edits or width
 over 128 entries uses dictionary mode. A dictionary never records transitions;

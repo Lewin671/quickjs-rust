@@ -29,6 +29,7 @@ pub(crate) struct InstanceFieldInitializer {
     /// The property key the field installs (computed keys are resolved at class
     /// definition time).
     key: InstanceFieldKey,
+    pub(crate) definition_plan: Rc<RefCell<Option<crate::value::layout::AppendRecipe>>>,
     /// The initializer thunk: a function evaluated with `this` = the instance.
     /// `None` for a field with no initializer (which installs `undefined`).
     pub(crate) initializer: Option<Function>,
@@ -52,7 +53,11 @@ impl InstanceFieldInitializer {
             PropertyKey::String(key) => InstanceFieldKey::String(key.into()),
             PropertyKey::Symbol(symbol) => InstanceFieldKey::Symbol(symbol),
         };
-        Self { key, initializer }
+        Self {
+            key,
+            initializer,
+            definition_plan: Rc::default(),
+        }
     }
 
     /// Returns the shareable public string key when the field can take the

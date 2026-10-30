@@ -1,3 +1,5 @@
+//! JSON parsing and reviver source records; parse-local schema reuse has no callbacks.
+mod objects;
 use std::{collections::HashMap, rc::Rc};
 
 use crate::CallEnv;
@@ -332,6 +334,8 @@ struct JsonParser<'a> {
     cursor: usize,
     env: &'a CallEnv,
     source_mode: JsonSourceMode,
+    object_depth: usize,
+    sequences: Vec<Option<Rc<crate::value::layout::Layout>>>,
     /// Object keys seen so far, shared: records in a JSON array repeat the
     /// same keys, and one `Rc<str>` per distinct key saves an allocation per
     /// member -- and lets a read cache keyed by interned name serve every
@@ -350,6 +354,8 @@ impl<'a> JsonParser<'a> {
             cursor: 0,
             env,
             source_mode,
+            object_depth: 0,
+            sequences: Vec::new(),
             keys: Default::default(),
         }
     }
@@ -418,6 +424,9 @@ impl<'a> JsonParser<'a> {
     }
 
     fn object<const PRESERVE_METADATA: bool>(&mut self) -> Result<JsonNode, RuntimeError> {
+        if !PRESERVE_METADATA {
+            return self.object_sequence();
+        }
         self.expect_byte(b'{')?;
         let mut properties = OrderedDataPropertyBuilder::with_prototype(
             0,

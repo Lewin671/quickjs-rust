@@ -628,6 +628,10 @@ impl ObjectRef {
         index_property_count: usize,
     ) -> Self {
         properties.set_prototype(prototype);
+        Self::from_ready_named(properties, index_property_count)
+    }
+    /// The store already owns its final explicit prototype.
+    fn from_ready_named(properties: NamedStore, index_property_count: usize) -> Self {
         Self(Rc::new(ObjectData {
             properties: RefCell::new(properties),
             index_property_count: Cell::new(
@@ -789,7 +793,7 @@ impl ObjectRef {
         let prototype = prototype.map(Prototype::Object);
         let store =
             NamedStore::from_data_layout(shape.linked_layout(domain, prototype.as_ref()), values);
-        Self::from_named(store, prototype, shape.index_property_count)
+        Self::from_ready_named(store, shape.index_property_count)
     }
 
     pub(crate) fn with_literal_pair(
@@ -804,7 +808,7 @@ impl ObjectRef {
         let prototype = prototype.map(Prototype::Object);
         let store =
             NamedStore::from_data_pair(shape.linked_layout(domain, prototype.as_ref()), values);
-        Self::from_named(store, prototype, shape.index_property_count)
+        Self::from_ready_named(store, shape.index_property_count)
     }
 
     /// The generator [[GeneratorState]] cell for this object. Non-generator
