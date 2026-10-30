@@ -25,6 +25,10 @@ Realm-owned construction retains at most 32 shared layouts with
 only that realm's intrinsic prototype/domain and already-owned well-known symbol
 keys. Values, parameter cells, poison accessors and iterator values stay per
 receiver. Cache retention hits acquire no extra schema owner.
+Typed-loop invariant reads may cross calls only after entry proves scalar
+arguments and pure native callees/receivers. Failed proofs select the normal
+region before effects. Hoisted values stay in cleared activation registers,
+never IC metadata; every entry reloads them.
 Code-owned append plans may retain string-only transition metadata, as literal links do;
 they never retain receivers, symbol handles or prototype values. Store-add guards
 the old layout and the transitive prototype generation before publishing a prefix.

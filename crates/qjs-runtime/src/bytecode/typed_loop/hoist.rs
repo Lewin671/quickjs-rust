@@ -4,7 +4,7 @@
 //! `this.length` and `obj.pos` on every iteration although neither can
 //! change while the loop runs: the receivers are locals (or globals) the
 //! region never writes, and the region stores nothing that could change them
-//! -- no element or global store, no push, no call, and no named write of
+//! -- no element or global store, no push, no unproved call, and no named write of
 //! the same name.
 //! Such a read is performed once when the loop is entered, into a register
 //! of its own, and the read inside the loop becomes a copy of it. A read that
@@ -25,8 +25,9 @@ pub(super) fn hoist_invariant_reads(
     invariant: impl IntoIterator<Item = u16>,
     register_count: &mut usize,
     boxed_count: &mut usize,
+    allow_native_calls: bool,
 ) -> Vec<TypedOp> {
-    if ops.iter().any(writes_or_calls) {
+    if ops.iter().any(|op| writes_or_calls(op, allow_native_calls)) {
         return Vec::new();
     }
     // A named write only overwrites an existing own data property (the
@@ -125,7 +126,7 @@ pub(super) fn hoist_invariant_reads(
 
 /// Whether `op` stores through anything but a known name, or calls code
 /// that could store.
-fn writes_or_calls(op: &TypedOp) -> bool {
+fn writes_or_calls(op: &TypedOp, allow_native_calls: bool) -> bool {
     matches!(
         op,
         TypedOp::DenseWrite { .. }
@@ -133,12 +134,11 @@ fn writes_or_calls(op: &TypedOp) -> bool {
             | TypedOp::StoreSloppyGlobal { .. }
             | TypedOp::ComputedWrite { .. }
             | TypedOp::ArrayPush { .. }
-            | TypedOp::CallClosedFormLeaf { .. }
-    )
+    ) || !allow_native_calls && matches!(op, TypedOp::CallClosedFormLeaf { .. })
 }
 
 /// The boxed register `op` writes, if any.
-fn boxed_destination(op: &TypedOp) -> Option<u16> {
+pub(super) fn boxed_destination(op: &TypedOp) -> Option<u16> {
     match *op {
         TypedOp::MoveBoxed { dst, .. }
         | TypedOp::Box { dst, .. }

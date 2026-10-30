@@ -131,20 +131,35 @@ fn run<F: LoopFrame>(vm: &mut F, program: &TypedLoopProgram) -> Outcome {
     // deoptimizing on every iteration.
     if !program.helper_sites.is_empty() {
         let Some(graphs) = super::helper_graph::Preparation::prepare(vm, program) else {
-            return Outcome::Declined;
+            return program
+                .unhoisted
+                .as_deref()
+                .map_or(Outcome::Declined, |p| run(vm, p));
         };
         *program.helper_graphs.borrow_mut() = graphs;
     }
     let mut scratch = program.take_scratch();
-    let outcome = seed_registers(vm, program, &mut scratch)
+    let admitted = seed_registers(vm, program, &mut scratch)
         .and_then(|()| {
             if program.hoisted_reads.is_empty() {
                 return Some(());
             }
             perform_hoisted_reads(vm, program, &mut scratch.registers, &mut scratch.boxed)
         })
-        .map(|()| execute(vm, program, &mut scratch))
-        .unwrap_or(Outcome::Declined);
+        .filter(|()| {
+            program
+                .native_call_guards
+                .iter()
+                .all(|guard| guard.holds(&scratch.boxed))
+        });
+    if admitted.is_none() {
+        program.recycle_scratch(scratch);
+        return program
+            .unhoisted
+            .as_deref()
+            .map_or(Outcome::Declined, |p| run(vm, p));
+    }
+    let outcome = execute(vm, program, &mut scratch);
     if program.deferred_global_publication && !matches!(outcome, Outcome::Declined) {
         publish_deferred_globals(vm, program, &scratch);
     }

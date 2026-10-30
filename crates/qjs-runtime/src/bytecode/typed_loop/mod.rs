@@ -71,6 +71,9 @@ mod frame;
 mod global_binding_tests;
 pub(in crate::bytecode) mod helper_graph;
 mod hoist;
+#[cfg(test)]
+mod pure_call_tests;
+mod pure_calls;
 mod register_packing;
 
 pub(super) use compile::compile_all;
@@ -564,6 +567,10 @@ pub(super) struct TypedLoopProgram {
     /// Loop-invariant property reads performed once on entry, each into its
     /// own register (`hoist`).
     hoisted_reads: Vec<TypedOp>,
+    /// Entry effect proofs for the optional call-hoisted operation list.
+    native_call_guards: Vec<pure_calls::Guard>,
+    /// Independently lowered normal region, selected before effects on proof failure.
+    unhoisted: Option<Box<TypedLoopProgram>>,
     /// Created only after the first native entry, so a program that compiles
     /// but never runs in this tier pays no pool allocation. One cleared bundle
     /// then serves the common sequential-entry case without retaining scratch
