@@ -1,9 +1,9 @@
 //! Key-ID index with consumable vacant-bucket proofs.
 //!
-//! A lookup searches once. Cloning an immutable layout preserves bucket
-//! positions, so an insertion into its copy consumes the same proof without
-//! searching again. Each insertion reserves space for the following one;
-//! rebuilds are cold structural work and explicitly counted separately.
+//! A lookup yields a bucket proof. Full index copies preserve that proof;
+//! prefix forks rebuild and consume a new proof as cold structural work.
+//! Each insertion reserves space for the next one; index rebuilds are counted
+//! separately from operation probes. Shared-tail admission lives in storage.
 
 use crate::property::atom::KeyId;
 
@@ -41,16 +41,19 @@ impl IdIndex {
             tombstones: 0,
         }
     }
-    pub(super) fn len(&self) -> usize {
-        self.len
+    pub(super) fn bytes(&self) -> usize {
+        self.buckets.capacity() * size_of::<Bucket>()
+    }
+    fn bucket(key: KeyId, capacity: usize) -> usize {
+        (key.get().wrapping_mul(0x9e37_79b1) >> (32 - capacity.trailing_zeros().min(32))) as usize
     }
     pub(super) fn probe(&self, key: KeyId) -> IdProbe {
         crate::diagnostics::count!(property_id_probes);
         self.probe_uncounted(key)
     }
-    fn probe_uncounted(&self, key: KeyId) -> IdProbe {
+    pub(super) fn probe_uncounted(&self, key: KeyId) -> IdProbe {
         let mask = self.buckets.len() - 1;
-        let mut bucket = (key.get().wrapping_mul(0x9e37_79b1) as usize) & mask;
+        let mut bucket = Self::bucket(key, self.buckets.len());
         let mut vacancy = None;
         loop {
             let entry = self.buckets[bucket];
@@ -79,6 +82,7 @@ impl IdIndex {
             bucket = (bucket + 1) & mask;
         }
     }
+    #[cfg(test)]
     pub(super) fn get(&self, key: KeyId) -> Option<usize> {
         self.probe(key).position
     }
@@ -153,14 +157,40 @@ mod tests {
     use super::*;
     use crate::property::atom::AtomDomain;
 
+    #[cfg(target_pointer_width = "64")]
+    #[test]
+    fn capacities_beyond_the_id_namespace_do_not_overflow_the_hash_shift() {
+        let domain = AtomDomain::new();
+        let key = domain.intern("x");
+        // Exercise the hash without allocating a multi-gigabyte bucket array.
+        assert!(IdIndex::bucket(key.id(), 1usize << 33) < 1usize << 33);
+    }
+
+    #[test]
+    fn strided_ids_disperse_across_high_product_bits() {
+        let domain = AtomDomain::new();
+        let mut held = Vec::new();
+        let mut starts = std::collections::HashSet::new();
+        for n in 0..128 {
+            for gap in 0..255 {
+                held.push(domain.intern(&format!("gap{n}_{gap}")));
+            }
+            let key = domain.intern(&format!("key{n}"));
+            starts.insert(IdIndex::bucket(key.id(), 256));
+            held.push(key);
+        }
+        // Low-bit multiplication puts every one of these keys in one bucket.
+        assert!(starts.len() >= 64, "{} distinct buckets", starts.len());
+    }
+
     #[test]
     fn colliding_keys_survive_delete_reinsert_and_rebuild() {
         let domain = AtomDomain::new();
         let mut gaps = Vec::new();
         let keys: Vec<_> = (0..200)
             .map(|n| {
-                // Equal low ID bits force long collision chains at every
-                // capacity used here, rather than testing sequential IDs.
+                // Strided IDs exercise high-bit distribution rather than only
+                // sequential IDs; removal/rebuild must retain every mapping.
                 for gap in 0..255 {
                     gaps.push(domain.intern(&format!("gap{n}_{gap}")));
                 }
@@ -200,7 +230,7 @@ mod tests {
             let key = domain.intern(&format!("transient{n}"));
             index.insert_at(index.probe(key.id()), n);
             index.remove_at(index.probe(key.id()));
-            assert_eq!(index.len(), 0);
+            assert_eq!(index.len, 0);
             assert!(index.tombstones < index.buckets.len());
         }
     }

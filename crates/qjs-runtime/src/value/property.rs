@@ -159,19 +159,6 @@ impl Property {
         )
         .set = set;
     }
-
-    pub(crate) fn make_non_configurable(&mut self) {
-        self.configurable = false;
-    }
-
-    pub(crate) fn make_non_writable(&mut self) {
-        self.writable = false;
-    }
-
-    pub(crate) fn freeze_data(&mut self) {
-        self.make_non_configurable();
-        self.make_non_writable();
-    }
 }
 
 #[cfg(test)]

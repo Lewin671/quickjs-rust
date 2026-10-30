@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, fmt, rc::Rc};
+use std::{cell::RefCell, fmt, rc::Rc};
 
 use crate::CallEnv;
 use crate::{
@@ -167,11 +167,11 @@ pub(crate) fn native_proxy_revocable(
         Property::non_enumerable(Value::Proxy(proxy.clone())),
     );
 
-    Ok(Value::Object(ObjectRef::new(
-        HashMap::from([
+    Ok(Value::Object(ObjectRef::new_ordered(
+        vec![
             ("proxy".to_owned(), Value::Proxy(proxy)),
             ("revoke".to_owned(), Value::Function(revoke)),
-        ]),
+        ],
         domain,
     )))
 }

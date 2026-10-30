@@ -14,12 +14,12 @@ index and a domain identity. It never folds `"01"` into `"1"`.
 
 `KeyLease(Rc<KeyRecord>)` is an 8-byte owner. Shapes, dictionaries and linked code
 retain leases; an operation's borrowed ID is valid while its lease/domain live.
-The domain's content index and ID directory are weak, swept with the existing
-live-size rule. Numeric IDs alone must not pin every historically interned key.
+The domain's string/symbol content indices are weak and swept with the live-size
+rule. The ID directory exists only in tests; production sweep sizing uses the
+content indices. Symbol identities use the engine's NameHasher. Numeric IDs alone must not pin every historically interned key.
 Escaping objects retain the domain through their layouts. Shape roots live on
 runtime/realm owners outside the domain: no domain→root→shape→domain RC cycle.
-The weak ID directory and a free list recycle dead IDs before minting new
-ones. Bare IDs never outlive their borrowed leases; live shapes, dictionaries,
+A free list recycles dead IDs before minting new ones. Bare IDs never outlive their borrowed leases; live shapes, dictionaries,
 linked code and lease-owning caches prevent reuse. Layout identities/versions
 remain non-reused. Production u32 exhaustion requires more than 2^32 live key
 records and follows allocation-failure abort, not a JS exception; an internal
@@ -49,41 +49,14 @@ of inline Values enlarging the ordinary header.
 Slot storage may pool capacity, never keys. Accessor slots hold `undefined` in
 the value vector and their getter/setter pair in the cold slot-indexed table;
 the shape decides descriptor kind. Bulk descriptor APIs construct `Property`
-only on demand. Symbol descriptors join this authority, not a second cold table.
+only on demand. Symbol descriptors join this authority, not a second cold table. Nonempty host
+ObjectRef construction requires an ordered vector; legacy HashMap constructor
+entry points accept only empty input, keeping S2 empty creation sites compatible.
 
 ## Shapes and edits
 
-Transition label is `(KeyId, attributes, descriptor kind)`; a hit allocates no
-shape, interns no key and copies no field list. A miss may copy immutable fields
-once and build the ID index once. Shared shapes apply equally to literals,
-constructor stores, class fields, JSON and host creation. No whole-vector hash
-or comparison on a hit. Duplicate keys preserve first insertion order and last
-definition semantics. Class/JSON builders execute each observable step in order.
-
-Bound each shape's retained transitions to 16 and domain cached shape nodes to
-4096; eviction removes cache ownership, not live object ownership. Live shapes
-may exceed that cache bound. Misses over budget create uncached shapes or use
-dictionary mode; repeated fixed-key construction below the bound reuses edges
-even after its last object dies. These are initial deterministic bounds, not
-performance-tuned thresholds. Delete/reconfigure churn after 32 edits or width
-over 128 entries uses dictionary mode. A dictionary never records transitions;
-S1 swap-removes dictionary slots and preserves explicit order numbers, leaving
-zero order tombstones; its ID-index tombstones are compacted with bounded slack.
-
-Delete/re-add appends a new order position; array-index keys enumerate in numeric
-order, then other strings, then symbols in insertion order. Reconfiguration,
-seal/freeze and preventExtensions preserve data/accessor semantics. A structural
-mutation prepares storage first, publishes layout+slots together, then bumps
-validity; slot reuse never occurs under an unchanged dictionary version.
-Value writes touch no shape/version. Existing property_revision consumers must
-be migrated individually: cached values cannot borrow slot-cache validity.
-
-S1 structural tokens pair weak allocation identity and epoch; epoch rollover
-publishes a fresh identity. A private dictionary with weak observers uses safe
-Rc::make_mut dissociation, moving rather than copying fields when uniquely owned.
-S2 deletes the legacy value revision after retiring its last exact-value
-consumer; the ordinary hot payload remains 96 bytes. Debug structural edits reconstruct all layout
-invariants; data-only writes check the affected slot and unchanged cardinalities.
+The [shape contract](core-rebuild-shapes.md) owns live transitions, append-shared
+metadata, byte-bounded retention, dictionary edits and integrity transitions.
 
 ## Shared semantic API
 

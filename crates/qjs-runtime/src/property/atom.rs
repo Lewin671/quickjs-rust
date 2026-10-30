@@ -2,12 +2,13 @@
 //!
 //! Strings use exact canonical UTF-16 equality; symbols use object identity in
 //! one ID namespace. IDs are recycled only after their last lease is gone. Layouts and linked code own
-//! leases. Content indices and the ID directory are weak and swept together;
-//! they do not keep historical keys or symbols alive. A lease records its
-//! domain weakly; layouts separately retain the owning domain.
+//! leases. Content indices are weak and swept together; the ID directory is
+//! test-only. Neither pins historical keys. A lease records its domain weakly;
+//! layouts separately retain the owning domain.
 
 use std::borrow::Cow;
 use std::cell::RefCell;
+#[cfg(test)]
 use std::collections::HashMap;
 use std::fmt;
 use std::num::NonZeroU32;
@@ -140,7 +141,8 @@ impl fmt::Debug for KeyLease {
 
 struct AtomTable {
     entries: NameMap<Rc<str>, Weak<KeyRecord>>,
-    symbols: HashMap<usize, Weak<KeyRecord>>,
+    symbols: NameMap<usize, Weak<KeyRecord>>,
+    #[cfg(test)]
     directory: HashMap<KeyId, Weak<KeyRecord>>,
     /// The next id to hand out; `None` once `u32::MAX` has been issued.
     next_id: Option<NonZeroU32>,
@@ -165,8 +167,9 @@ impl AtomTable {
         }
         self.entries.retain(|_, entry| entry.strong_count() > 0);
         self.symbols.retain(|_, entry| entry.strong_count() > 0);
+        #[cfg(test)]
         self.directory.retain(|_, entry| entry.strong_count() > 0);
-        self.sweep_at = (self.directory.len() * 2).max(MIN_SWEEP_LEN);
+        self.sweep_at = ((self.entries.len() + self.symbols.len()) * 2).max(MIN_SWEEP_LEN);
     }
 }
 
@@ -197,7 +200,8 @@ impl AtomDomain {
             shape_owner: RefCell::new(Weak::new()),
             table: RefCell::new(AtomTable {
                 entries: NameMap::default(),
-                symbols: HashMap::new(),
+                symbols: NameMap::default(),
+                #[cfg(test)]
                 directory: HashMap::new(),
                 next_id: Some(NonZeroU32::MIN),
                 sweep_at: MIN_SWEEP_LEN,
@@ -245,6 +249,7 @@ impl AtomDomain {
         table.entries.remove(text.as_ref());
         table.sweep_if_due();
         table.entries.insert(text, Rc::downgrade(&entry));
+        #[cfg(test)]
         table.directory.insert(id, Rc::downgrade(&entry));
         table.created += 1;
         crate::diagnostics::count!(property_atoms_created);
@@ -304,6 +309,7 @@ impl AtomDomain {
         table
             .symbols
             .insert(symbol.address(), Rc::downgrade(&entry));
+        #[cfg(test)]
         table.directory.insert(id, Rc::downgrade(&entry));
         table.created += 1;
         crate::diagnostics::count!(property_atoms_created);

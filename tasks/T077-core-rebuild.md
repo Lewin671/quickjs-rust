@@ -1,11 +1,11 @@
 # T077: In-place core rebuild
 
-- Status: active; S2 implementation and correctness complete on `agent/t077-s2-named-stores/codex`, base `b2daec46`; performance acceptance blocked on benchmark-transfer authorization and lead measurement.
-- Implementation: all materialized named families use NamedStore; weak 32-byte mono/four-way ICs and registered prototype/enumeration/creation dependencies; full named IC-off mode; exact-value caches and legacy value epochs deleted.
-- Verified at: engine `fc64629a`, 2026-10-30 UTC: full gate (2,418 runtime; 5,170 curated), combined features 2,459, debug IC tests, NG 259 in both modes, x86 size/cache proofs; cached and IC-off exact scans each 42,672/42,672 configured passes, zero gaps. Both burndowns recorded.
-- Evidence: [final verification](archive/T077-s2-verification.md), [first counters](archive/T077-s2-counters.md), [final replay](archive/T077-s2-creation-counters.md), [boundary](proposals/T077-s2-named-stores.md).
-- Unresolved: runner submits temporary refs via git push, forbidden by the user; no clarification received, timing job submitted or speedup claimed. S1/formal four-aggregate acceptance and linker-order revalidation remain lead-owned.
-- Next action: lead authorizes/performs benchmark transfer, measures quick triage against `dd0905b2` and all four formal aggregates, then decides S2 acceptance. This owner never pushes or merges.
+- Status: active; lead feedback round 1 in progress on `agent/t077-s2-named-stores/codex`; current increment A merges S1 review tip `9923098e` into the previous S2 candidate.
+- Implementation: S1 shared-tail/live-edge/byte-budget/order repairs integrated with S2 NamedStore families and existing ICs; RegExp ordering regression added. Prototype-layout redesign B-F is not yet present.
+- Verified at: round-1 A merge working tree: full gate passes (2,426 runtime; 5,170 curated), NG 261/261 including host and RegExp key order. Prior S1/S2 exact receipts remain historical; final round-1 gates follow B-F.
+- Evidence: [S1 repairs](archive/T077-s1-review-fixes.md), [previous S2](archive/T077-s2-verification.md); new feedback receipt will bind replacement source and measurements.
+- Unresolved: merge verification, queued read/native-context fixes, lead-approved prototype layout/cell redesign, correctness repairs and complete gates/counters/triage.
+- Next action: A is verified; execute queued read/native-context fixes B, then the approved C-F changes in order. Temporary iMac measurement refs are explicitly authorized; never push origin or merge main.
 
 ## Authority and scope
 

@@ -121,12 +121,14 @@ fn dictionary_churn_has_no_tombstones_and_invalidates_slots() {
         store.remove(&a).unwrap().unwrap();
         assert!(store.epoch() > epoch);
         store.define(&a, data(1.0)).unwrap();
+        store.remove(&b).unwrap().unwrap();
+        store.define(&b, data(2.0)).unwrap();
         assert_eq!(store.len(), 2);
         assert_eq!(store.values.len(), 2);
     }
     assert!(store.layout.dictionary);
     assert!(store.layout.transitions.borrow().is_empty());
-    assert_eq!(store.keys(), [b, a]);
+    assert_eq!(store.keys(), [a, b]);
 }
 
 #[test]
@@ -160,7 +162,7 @@ fn same_integer_in_foreign_domain_cannot_address_a_slot() {
 }
 
 #[test]
-fn live_shapes_exceed_cache_bound_and_edges_remain_bounded() {
+fn live_shapes_exceed_cache_bound_and_keep_all_edges() {
     let owner = owner();
     let mut live = Vec::new();
     for n in 0..5100 {
@@ -169,8 +171,21 @@ fn live_shapes_exceed_cache_bound_and_edges_remain_bounded() {
         store.define(&key, data(n as f64)).unwrap();
         live.push((store, key));
     }
-    assert_eq!(owner.retained_nodes(), MAX_CACHED_NODES);
-    assert!(owner.0.root.transitions.borrow().len() <= MAX_EDGES);
+    assert!(owner.retained_nodes() < live.len());
+    for (_, key) in &live {
+        assert!(
+            owner
+                .0
+                .root
+                .transitions
+                .borrow()
+                .get(Transition::Append {
+                    key: key.id(),
+                    attrs: Attributes::of(&data(0.0))
+                })
+                .is_some()
+        );
+    }
     for (n, (store, key)) in live.iter().enumerate() {
         assert_eq!(
             store.get(key).unwrap().unwrap().value,
@@ -275,7 +290,7 @@ fn owner_attachment_shares_one_cache_per_live_domain() {
     drop(second);
     assert!(weak.upgrade().is_none());
     let fresh = PropertyOwner::new(domain);
-    assert!(fresh.0.root.entries.is_empty());
+    assert!(fresh.0.root.len == 0);
 }
 
 #[test]
@@ -314,7 +329,7 @@ fn dictionary_swap_removal_moves_accessor_slots_but_preserves_key_order() {
         )
         .unwrap();
     store.remove(&keys[10]).unwrap().unwrap();
-    assert_eq!(store.slot_key(10), Some(&keys[128]));
+    assert!(store.slot_matches(10, &keys[128]));
     let accessor = store.get(&keys[128]).unwrap().unwrap();
     assert_eq!(accessor.getter(), Some(&Value::Number(7.0)));
     assert_eq!(accessor.setter(), Some(&Value::Number(8.0)));

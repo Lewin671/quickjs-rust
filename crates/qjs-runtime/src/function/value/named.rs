@@ -82,7 +82,7 @@ impl Function {
         self.ensure_default_prototype();
         self.prevent_extensions();
         self.auxiliary.sealed.set(true);
-        self.with_named_mut(|store| store.transform_descriptors(Property::make_non_configurable));
+        self.with_named_mut(|store| store.transform_descriptors(false));
     }
     pub(crate) fn is_sealed(&self) -> bool {
         self.ensure_default_prototype();
@@ -94,7 +94,7 @@ impl Function {
     pub(crate) fn freeze(&self) {
         self.seal();
         self.auxiliary.frozen.set(true);
-        self.with_named_mut(|store| store.transform_descriptors(Property::freeze_data));
+        self.with_named_mut(|store| store.transform_descriptors(true));
     }
     pub(crate) fn is_frozen(&self) -> bool {
         self.ensure_default_prototype();

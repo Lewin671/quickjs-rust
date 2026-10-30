@@ -1065,9 +1065,7 @@ impl ArrayRef {
     pub(crate) fn seal(&self) {
         self.prevent_extensions();
         if let Some(cold) = self.0.cold_if_present() {
-            cold.properties
-                .borrow_mut()
-                .transform_descriptors(Property::make_non_configurable);
+            cold.properties.borrow_mut().transform_descriptors(false);
         }
         self.0.sealed.set(true);
     }
@@ -1079,9 +1077,7 @@ impl ArrayRef {
     pub(crate) fn freeze(&self) {
         self.seal();
         if let Some(cold) = self.0.cold_if_present() {
-            cold.properties
-                .borrow_mut()
-                .transform_descriptors(Property::freeze_data);
+            cold.properties.borrow_mut().transform_descriptors(true);
         }
         self.0.frozen.set(true);
         self.0.length_writable.set(false);

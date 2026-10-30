@@ -92,7 +92,7 @@ impl NamedTarget<'_> {
         // Array length/index, typed numeric indices, String virtual indices,
         // namespaces and primitive symbols are never admitted by read().
         let replace = |s: &mut NamedStore| {
-            if s.slot_key(slot as usize)?.as_str() == "globalThis" {
+            if s.slot_name_is(slot as usize, "globalThis") {
                 return None;
             }
             if !s.matches_version(version) {
@@ -110,7 +110,7 @@ impl NamedTarget<'_> {
             Self::Object(o) | Self::Map(o) | Self::Set(o) => o.with_named_mut(replace),
             Self::Array(a) => a.with_named_mut(replace),
             Self::Function(f) => f.with_named_mut(|s| {
-                if s.slot_key(slot as usize)?.as_str() == "__quickjsRustDynamicFunctionRealm" {
+                if s.slot_name_is(slot as usize, "__quickjsRustDynamicFunctionRealm") {
                     return None;
                 }
                 replace(s)

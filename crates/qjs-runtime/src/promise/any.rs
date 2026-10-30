@@ -173,15 +173,15 @@ fn build_aggregate_error(
         }
     }
 
-    let object = ObjectRef::new(
-        HashMap::from([
+    let object = ObjectRef::new_ordered(
+        vec![
             (
                 "name".to_owned(),
                 Value::String("AggregateError".to_owned().into()),
             ),
             ("message".to_owned(), message),
             ("errors".to_owned(), errors_value),
-        ]),
+        ],
         env.realm().atoms(),
     );
     Value::Object(object)
