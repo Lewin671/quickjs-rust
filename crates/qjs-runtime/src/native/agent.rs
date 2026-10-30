@@ -1,26 +1,68 @@
-use crate::{CallEnv, NativeFunction, Value, agent};
+//! Operation entries for agent; bound once when a native is created.
 
-use super::NativeCallResult;
+use super::CallInfo;
+use crate::{CallEnv, RuntimeError, Value, agent};
 
-/// Dispatches the Test262 `$262.agent` primitives. Returns `Ok(None)` for any
-/// other native so the main dispatcher falls through to the next family.
-pub(super) fn call_agent_native(
-    native: NativeFunction,
-    argument_values: &[Value],
+pub(super) fn agent_start(
     env: &mut CallEnv,
-) -> NativeCallResult {
-    let value = match native {
-        NativeFunction::AgentStart => agent::native_agent_start(argument_values, env)?,
-        NativeFunction::AgentBroadcast => agent::native_agent_broadcast(argument_values, env)?,
-        NativeFunction::AgentGetReport => agent::native_agent_get_report(env)?,
-        NativeFunction::AgentReport => agent::native_agent_report(argument_values, env)?,
-        NativeFunction::AgentSleep => agent::native_agent_sleep(argument_values, env)?,
-        NativeFunction::AgentMonotonicNow => agent::native_agent_monotonic_now(env)?,
-        NativeFunction::AgentReceiveBroadcast => {
-            agent::native_agent_receive_broadcast(argument_values, env)?
-        }
-        NativeFunction::AgentLeaving => agent::native_agent_leaving()?,
-        _ => return Ok(None),
-    };
-    Ok(Some(value))
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    agent::native_agent_start(argument_values, env)
+}
+
+pub(super) fn agent_broadcast(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    agent::native_agent_broadcast(argument_values, env)
+}
+
+pub(super) fn agent_get_report(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    agent::native_agent_get_report(env)
+}
+
+pub(super) fn agent_report(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    agent::native_agent_report(argument_values, env)
+}
+
+pub(super) fn agent_sleep(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    agent::native_agent_sleep(argument_values, env)
+}
+
+pub(super) fn agent_monotonic_now(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    agent::native_agent_monotonic_now(env)
+}
+
+pub(super) fn agent_receive_broadcast(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    agent::native_agent_receive_broadcast(argument_values, env)
+}
+
+pub(super) fn agent_leaving(
+    _env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    agent::native_agent_leaving()
 }

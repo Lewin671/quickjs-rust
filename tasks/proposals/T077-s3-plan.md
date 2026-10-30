@@ -1,11 +1,11 @@
 # T077 S3: landable execution rebuild proposal
 
 - Status: approved by the lead 2026-10-29 with amendments in [T077](../T077-core-rebuild.md) (S3a may land before S1/S2; S3e prices growing the wide tier).
-- Implementation: none; documents and retained non-timing instrumentation patch only.
-- Verified at: source `dd0905b2cb0236c38619089a27e8342b575dda61`, 2026-10-29; diagnostic build and twenty checksum-checked development runs; document gates recorded in the diagnostics.
+- Implementation: S3a operation entries and native slice transport present on its owner branch; S3b–e remain planned. See [S3a results](../diagnostics/T077-s3a-results.md).
+- Verified at: S3a review repair `03c8680c`, 2026-10-30; full check/257 NG fixtures, debug/release depth parity, twenty development counter runs, and all 42,672 configured exact Rust cases pass; zero gaps/not-run, fresh ledger line.
 - Evidence: [counts/reproduction](../diagnostics/T077-s3-counts.md), [Op map](T077-s3-op-map.md), [construction inventory](T077-s3-activation-inventory.md), [native/executor inventory](T077-s3-native-executors.md).
-- Unresolved: lead approval of split, T074 contracts, paired payers and revised size; no performance acceptance has been measured.
-- Next action: lead approves/revises the sequence and T074 decisions, then freezes an S3a implementation brief at its accepted S1/S2 integration base.
+- Unresolved: lead formal S3a aggregate acceptance/integration and T074 contracts before S3b; the known Rust-stack gap is S3d-owned.
+- Next action: lead formal S3a acceptance and T074 review; S3a has no resource limit.
 
 ## Recommendation and authority at every landing
 
@@ -62,6 +62,10 @@ authority at that landing. `CallInfo` and borrowed arguments are already final i
 shape; S3b mechanically changes that parameter to Context and ports capabilities.
 This small explicit signature migration costs less than forcing the full builtin
 Context port into S3a. It is not a Context adapter or a second env authority.
+Lead review correction: CallInfo holds borrowed callee/receiver plus construct
+mode; actual new.target/realm are lazy service queries. Generic VM argument-owner
+borrowing also covers JS fallback calls to avoid a new native-kind admission load.
+S3a adds no depth/stack limit; runtime-wide resource policy is S3d-owned.
 Borrow immutable argument slices from an owned/detached operand/register block;
 callbacks cannot recycle it. Test retained args, callbacks, throw and cross-realm
 construct/new.target. Probe removal is measurable even if wall payoff fails.

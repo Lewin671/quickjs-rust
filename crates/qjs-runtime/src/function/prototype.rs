@@ -550,12 +550,11 @@ pub(crate) fn native_function_prototype_call(
     }
 
     let call_this = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    crate::call_function(
-        this_value,
+    super::call_function_slice(
+        &this_value,
         call_this,
-        argument_values.iter().skip(1).cloned().collect(),
+        argument_values.get(1..).unwrap_or_default(),
         env,
-        false,
     )
 }
 

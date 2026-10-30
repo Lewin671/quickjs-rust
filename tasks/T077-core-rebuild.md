@@ -1,11 +1,11 @@
 # T077: In-place core rebuild
 
-- Status: active; S1 implementation in progress; S3 split approved, S3a implementation in progress (2026-10-29).
-- Implementation: none; documentation only. S3 counters use a retained diagnostic patch; runtime/parser/tools remain byte-identical to `dd0905b2`.
-- Verified at: S3 source audit at `dd0905b2cb0236c38619089a27e8342b575dda61`, 2026-10-29; twenty deterministic checksum-checked diagnostic runs; context, diff and staged fast gates pass on this documentation tree; no runtime candidate.
-- Evidence: [target](../docs/design/core-rebuild.md), [S1 brief](proposals/T077-s1-property-authority.md), [S3 plan/inventories](proposals/T077-s3-plan.md), [S3 counts](diagnostics/T077-s3-counts.md).
-- Unresolved: S3 split/payers and T074 scope contracts need lead review; compact-pointer portability qualification and final campaign-target progress remain unmeasured.
-- Next action: S1 and S3a owners implement on their branches; T074 decisions approved (lead 2026-10-30); baseline recorded. Do not queue another baseline or revive closed unit gates.
+- Status: active; S3a accepted and integrated (lead 2026-10-30); S1+S2 land together, S2 repair round in progress.
+- Implementation: S3a direct native entries/borrowed slices on main; S1/S2 on owner branches (`agent/t077-s1-property-authority/codex`, `agent/t077-s2-named-stores/codex`).
+- Verified at: S3a runtime `03c8680c` (branch tip `3872d617`): full check, 257 NG fixtures, 42,672/42,672 exact; formal/held-out/RSS receipts in [S3a acceptance](diagnostics/T077-s3a-acceptance.md).
+- Evidence: [target](../docs/design/core-rebuild.md), [baseline](diagnostics/T077-baseline.md), [S1 brief](proposals/T077-s1-property-authority.md), [S3 plan](proposals/T077-s3-plan.md), [S3 counts](diagnostics/T077-s3-counts.md), [S3a results](diagnostics/T077-s3a-results.md).
+- Unresolved: S1+S2 payoff (S2 v1 regressed every aggregate; repair round adds prototype-in-layout and validity cells); pre-existing deep Rust-stack exhaustion is S3d-owned.
+- Next action: S2 owner finishes repair round 1; lead measures S1+S2 and integrates; then S3b (T074 approved) after S2. Do not queue another baseline or revive closed unit gates.
 
 ## Authority and scope
 
@@ -122,6 +122,10 @@ plus aggregate improvement is progress, not proof of that campaign target.
 - Risk/fallback: cell/context/re-entry/suspension correctness and wide/scalar
   throughput; revert a failed stage/payer pair to the last verified milestone,
   never retain a compatibility interpreter. S4 still pays for neutral S3e.
+
+S3d owns the pre-existing deep Rust-stack crash (including native callbacks): one runtime-wide stack anchor with a host-configured budget,
+a CLI engine thread with an explicit stack size, and frame-counted JS depth after JS stops recursing in Rust.
+S3a preserves base depth behavior and adds no limit. Its rejected per-realm guard missed JS frames before the anchor and did not establish overflow protection.
 
 ## S4 — One scalar/escape optimizer; finish executor deletion
 

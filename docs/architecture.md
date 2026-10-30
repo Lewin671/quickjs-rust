@@ -54,6 +54,13 @@ at a time. Everything below is an optional faster route to the same
 semantics. Each one decides admission before any observable step, and
 otherwise leaves the work to the interpreter.
 
+**Native entries.** `native/entry.rs` binds each operation at installation. `CallInfo`
+borrows callee/receiver and records construct mode; CallEnv supplies lazy realm/
+new.target services until S3b. Host/callback and compact/wide entries borrow slices.
+Generic VM calls/construct detach their operand owner through return/throw,
+restoring it before exception handling. Fixed-arity JS admission keeps its order.
+Retained values/forwarding lists own references. S3d owns stack policy; S3a adds no limit. No Executor/RefCell borrow crosses callbacks.
+
 **Call dispatch.** `call_function` (`function/call.rs`) first resolves the
 callable kind: Proxy, bound function, native builtin, generator, async
 function, class constructor. For an ordinary bytecode function it then tries,

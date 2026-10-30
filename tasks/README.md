@@ -7,7 +7,7 @@ update the resume block in the commit that lands it. When a task closes, move it
 ## Active
 | Task | Status | What it is |
 | --- | --- | --- |
-| [T077](T077-core-rebuild.md) core rebuild | active | Authorized in-place replacement; target/stages and S1 brief ready; baseline pending. |
+| [T077](T077-core-rebuild.md) core rebuild | active | Authorized rebuild; S1 active; S3a review repairs locally verified, formal acceptance pending. |
 | [T073](T073-local-read-bimodal.md) local-read bimodality | active | Diagnosis complete: candidate text-layout CPU tails; T017 adopts case-health containment only. |
 | [T074](T074-direct-eval-scope-model.md) direct eval scope model | design needed | Architecture review before code; tracks eval visibility, declarations, mutability, context and suspension constraints. |
 | [T057](T057-string-code-units.md) string code units | active | Stage 1 and UTF-16 correctness extraction integrated; stage 2 abandoned (0 attempts); linear-search follow-up awaits screening. |
@@ -117,3 +117,4 @@ Each file is under `archive/` with a resume block; outcomes record what happened
   [performance-units/README.md](performance-units/README.md).
 
 Search before repeating an experiment: `grep -rn -i "<mechanism>" tasks/`. Records describe their named revisions and never establish current priority.
+Historical S3a submission: [initial report](archive/T077-s3a-initial-results.md) (rejected by independent review; current evidence stays in T077).

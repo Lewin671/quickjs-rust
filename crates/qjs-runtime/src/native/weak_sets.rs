@@ -1,31 +1,36 @@
-use crate::{Function, NativeFunction, Value, weak_set};
+//! Operation entries for weak sets; bound once when a native is created.
 
-use super::NativeCallResult;
-use crate::CallEnv;
+use super::CallInfo;
+use crate::{CallEnv, RuntimeError, Value, weak_set};
 
-pub(super) fn call_weak_set_native(
-    function: &Function,
-    native: NativeFunction,
-    this_value: Value,
-    argument_values: &[Value],
-    is_construct: bool,
+pub(super) fn weak_set(
     env: &mut CallEnv,
-) -> NativeCallResult {
-    let value = match native {
-        NativeFunction::WeakSet => {
-            weak_set::native_weak_set(function, argument_values, is_construct, env)?
-        }
-        NativeFunction::WeakSetPrototypeAdd => {
-            weak_set::native_weak_set_prototype_add(this_value, argument_values, env)?
-        }
-        NativeFunction::WeakSetPrototypeDelete => {
-            weak_set::native_weak_set_prototype_delete(this_value, argument_values)?
-        }
-        NativeFunction::WeakSetPrototypeHas => {
-            weak_set::native_weak_set_prototype_has(this_value, argument_values)?
-        }
-        _ => return Ok(None),
-    };
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    weak_set::native_weak_set(info.callee, argument_values, info.is_construct, env)
+}
 
-    Ok(Some(value))
+pub(super) fn weak_set_prototype_add(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    weak_set::native_weak_set_prototype_add(info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn weak_set_prototype_delete(
+    _env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    weak_set::native_weak_set_prototype_delete(info.this_value.clone(), argument_values)
+}
+
+pub(super) fn weak_set_prototype_has(
+    _env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    weak_set::native_weak_set_prototype_has(info.this_value.clone(), argument_values)
 }

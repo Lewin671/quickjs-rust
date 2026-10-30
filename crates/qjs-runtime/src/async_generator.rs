@@ -258,52 +258,87 @@ fn async_generator_object_prototype(function: &Function, env: &CallEnv) -> Optio
     async_generator_prototype(env)
 }
 
-/// Dispatches the `%AsyncGeneratorPrototype%` methods. Each enqueues a request
+/// Operation entries for `%AsyncGeneratorPrototype%`; each method enqueues a request
 /// and returns a promise of the eventual iterator result.
-pub(crate) fn call_async_generator_native(
-    native: NativeFunction,
-    this_value: Value,
-    argument_values: &[Value],
+pub(crate) fn async_generator_prototype_next(
     env: &mut CallEnv,
-) -> Result<Option<Value>, RuntimeError> {
-    if matches!(native, NativeFunction::AsyncGeneratorPrototypeAsyncIterator) {
-        return Ok(Some(this_value));
-    }
-    if matches!(native, NativeFunction::AsyncIteratorPrototypeAsyncDispose) {
-        return Ok(Some(promise::async_iterator_async_dispose(
-            this_value, env,
-        )?));
-    }
-    if matches!(native, NativeFunction::AsyncDisposeReturnUndefined) {
-        return Ok(Some(Value::Undefined));
-    }
-    let kind = match native {
-        NativeFunction::AsyncGeneratorPrototypeNext => {
-            RequestKind::Next(argument_values.first().cloned().unwrap_or(Value::Undefined))
-        }
-        NativeFunction::AsyncGeneratorPrototypeReturn => {
-            RequestKind::Return(argument_values.first().cloned().unwrap_or(Value::Undefined))
-        }
-        NativeFunction::AsyncGeneratorPrototypeThrow => {
-            RequestKind::Throw(argument_values.first().cloned().unwrap_or(Value::Undefined))
-        }
-        _ => return Ok(None),
-    };
+    info: crate::native::CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    request_method(
+        info.this_value,
+        RequestKind::Next(argument_values.first().cloned().unwrap_or(Value::Undefined)),
+        env,
+    )
+}
 
+pub(crate) fn async_generator_prototype_return(
+    env: &mut CallEnv,
+    info: crate::native::CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    request_method(
+        info.this_value,
+        RequestKind::Return(argument_values.first().cloned().unwrap_or(Value::Undefined)),
+        env,
+    )
+}
+
+pub(crate) fn async_generator_prototype_throw(
+    env: &mut CallEnv,
+    info: crate::native::CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    request_method(
+        info.this_value,
+        RequestKind::Throw(argument_values.first().cloned().unwrap_or(Value::Undefined)),
+        env,
+    )
+}
+
+pub(crate) fn async_generator_prototype_async_iterator(
+    _env: &mut CallEnv,
+    info: crate::native::CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    Ok(info.this_value.clone())
+}
+
+pub(crate) fn async_iterator_prototype_async_dispose(
+    env: &mut CallEnv,
+    info: crate::native::CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    promise::async_iterator_async_dispose(info.this_value.clone(), env)
+}
+
+pub(crate) fn async_dispose_return_undefined(
+    _env: &mut CallEnv,
+    _info: crate::native::CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    Ok(Value::Undefined)
+}
+
+fn request_method(
+    this_value: &Value,
+    kind: RequestKind,
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
     let capability = promise::new_pending_promise(env);
-    let Value::Object(generator) = &this_value else {
+    let Value::Object(generator) = this_value else {
         let reason = not_an_async_generator_value(env);
         promise::reject_promise_capability(&capability, reason, env);
-        return Ok(Some(Value::Object(capability)));
+        return Ok(Value::Object(capability));
     };
     if generator.async_generator_state().borrow().is_none() {
         let reason = not_an_async_generator_value(env);
         promise::reject_promise_capability(&capability, reason, env);
-        return Ok(Some(Value::Object(capability)));
+        return Ok(Value::Object(capability));
     }
 
     enqueue(generator, kind, capability.clone(), env);
-    Ok(Some(Value::Object(capability)))
+    Ok(Value::Object(capability))
 }
 
 /// AsyncGeneratorEnqueue: appends a request and, unless the queue is already
@@ -537,109 +572,232 @@ fn reaction(native: NativeFunction, generator: &ObjectRef) -> Value {
     Value::Function(function)
 }
 
-/// Dispatches the async generator reaction natives that resume body suspensions
-/// or settle requests after an implicit yield await.
-pub(crate) fn call_async_generator_reaction(
-    function: &Function,
-    native: NativeFunction,
-    argument_values: &[Value],
+pub(crate) fn async_generator_await_fulfilled(
     env: &mut CallEnv,
-) -> Result<Option<Value>, RuntimeError> {
+    info: crate::native::CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    match native {
-        NativeFunction::AsyncGeneratorAwaitFulfilled
-        | NativeFunction::AsyncGeneratorAwaitRejected => {
-            let Some(Value::Object(generator)) = function.native_context.get(ASYNC_GEN) else {
-                return Ok(None);
-            };
-            let generator = generator.clone();
-            let resume = if matches!(native, NativeFunction::AsyncGeneratorAwaitFulfilled) {
-                Resume::Next(value)
-            } else {
-                Resume::Throw(value)
-            };
-            resume_body(&generator, resume, env);
-            Ok(Some(Value::Undefined))
-        }
-        NativeFunction::AsyncGeneratorYieldFulfilled => {
-            let Some(Value::Object(generator)) = function.native_context.get(ASYNC_GEN) else {
-                return Ok(None);
-            };
-            let generator = generator.clone();
-            // The implicit yield await fulfilled: resolve the consumer with the
-            // resolved value and continue draining the next request.
-            resolve_front(&generator, value, false, env);
-            set_draining(&generator, true);
-            drain(&generator, env);
-            Ok(Some(Value::Undefined))
-        }
-        NativeFunction::AsyncGeneratorYieldRejected => {
-            let Some(Value::Object(generator)) = function.native_context.get(ASYNC_GEN) else {
-                return Ok(None);
-            };
-            let generator = generator.clone();
-            // The implicit yield await rejected: throw at the yield site.
-            resume_body(&generator, Resume::Throw(value), env);
-            Ok(Some(Value::Undefined))
-        }
-        NativeFunction::AsyncGeneratorReturnResumeFulfilled => {
-            let Some(Value::Object(generator)) = function.native_context.get(ASYNC_GEN) else {
-                return Ok(None);
-            };
-            let generator = generator.clone();
-            resume_body(&generator, Resume::ReturnAlreadyAwaited(value), env);
-            Ok(Some(Value::Undefined))
-        }
-        NativeFunction::AsyncGeneratorReturnResumeRejected => {
-            let Some(Value::Object(generator)) = function.native_context.get(ASYNC_GEN) else {
-                return Ok(None);
-            };
-            let generator = generator.clone();
-            resume_body(&generator, Resume::Throw(value), env);
-            Ok(Some(Value::Undefined))
-        }
-        NativeFunction::AsyncGeneratorReturnFulfilled => {
-            let Some(Value::Object(generator)) = function.native_context.get(ASYNC_GEN) else {
-                return Ok(None);
-            };
-            let generator = generator.clone();
-            resolve_front(&generator, value, true, env);
-            set_draining(&generator, true);
-            drain(&generator, env);
-            Ok(Some(Value::Undefined))
-        }
-        NativeFunction::AsyncGeneratorReturnRejected => {
-            let Some(Value::Object(generator)) = function.native_context.get(ASYNC_GEN) else {
-                return Ok(None);
-            };
-            let generator = generator.clone();
-            reject_front(&generator, value, env);
-            set_draining(&generator, true);
-            drain(&generator, env);
-            Ok(Some(Value::Undefined))
-        }
-        NativeFunction::AsyncFromSyncIteratorValueFulfilled => {
-            async_from_sync_value_fulfilled(function, value, env);
-            Ok(Some(Value::Undefined))
-        }
-        NativeFunction::AsyncFromSyncIteratorValueRejected => {
-            async_from_sync_value_rejected(function, value, env);
-            Ok(Some(Value::Undefined))
-        }
-        NativeFunction::AsyncFromSyncIteratorNext
-        | NativeFunction::AsyncFromSyncIteratorReturn
-        | NativeFunction::AsyncFromSyncIteratorThrow => Ok(Some(async_from_sync_method(
-            function,
-            native,
-            argument_values,
-            env,
-        ))),
-        _ => Ok(None),
+    {
+        let Some(Value::Object(generator)) = info.callee.native_context.get(ASYNC_GEN) else {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: missing async generator reaction context".to_owned(),
+            });
+        };
+        let generator = generator.clone();
+        let resume = Resume::Next(value);
+        resume_body(&generator, resume, env);
+        Ok(Value::Undefined)
     }
 }
 
-/// Resumes the body for an in-flight request (after an internal await fired),
-/// re-entering the drain loop. Used by the await reactions.
+pub(crate) fn async_generator_await_rejected(
+    env: &mut CallEnv,
+    info: crate::native::CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    {
+        let Some(Value::Object(generator)) = info.callee.native_context.get(ASYNC_GEN) else {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: missing async generator reaction context".to_owned(),
+            });
+        };
+        let generator = generator.clone();
+        let resume = Resume::Throw(value);
+        resume_body(&generator, resume, env);
+        Ok(Value::Undefined)
+    }
+}
+
+pub(crate) fn async_generator_yield_fulfilled(
+    env: &mut CallEnv,
+    info: crate::native::CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    {
+        let Some(Value::Object(generator)) = info.callee.native_context.get(ASYNC_GEN) else {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: missing async generator reaction context".to_owned(),
+            });
+        };
+        let generator = generator.clone();
+        // The implicit yield await fulfilled: resolve the consumer with the
+        // resolved value and continue draining the next request.
+        resolve_front(&generator, value, false, env);
+        set_draining(&generator, true);
+        drain(&generator, env);
+        Ok(Value::Undefined)
+    }
+}
+
+pub(crate) fn async_generator_yield_rejected(
+    env: &mut CallEnv,
+    info: crate::native::CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    {
+        let Some(Value::Object(generator)) = info.callee.native_context.get(ASYNC_GEN) else {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: missing async generator reaction context".to_owned(),
+            });
+        };
+        let generator = generator.clone();
+        // The implicit yield await rejected: throw at the yield site.
+        resume_body(&generator, Resume::Throw(value), env);
+        Ok(Value::Undefined)
+    }
+}
+
+pub(crate) fn async_generator_return_resume_fulfilled(
+    env: &mut CallEnv,
+    info: crate::native::CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    {
+        let Some(Value::Object(generator)) = info.callee.native_context.get(ASYNC_GEN) else {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: missing async generator reaction context".to_owned(),
+            });
+        };
+        let generator = generator.clone();
+        resume_body(&generator, Resume::ReturnAlreadyAwaited(value), env);
+        Ok(Value::Undefined)
+    }
+}
+
+pub(crate) fn async_generator_return_resume_rejected(
+    env: &mut CallEnv,
+    info: crate::native::CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    {
+        let Some(Value::Object(generator)) = info.callee.native_context.get(ASYNC_GEN) else {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: missing async generator reaction context".to_owned(),
+            });
+        };
+        let generator = generator.clone();
+        resume_body(&generator, Resume::Throw(value), env);
+        Ok(Value::Undefined)
+    }
+}
+
+pub(crate) fn async_generator_return_fulfilled(
+    env: &mut CallEnv,
+    info: crate::native::CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    {
+        let Some(Value::Object(generator)) = info.callee.native_context.get(ASYNC_GEN) else {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: missing async generator reaction context".to_owned(),
+            });
+        };
+        let generator = generator.clone();
+        resolve_front(&generator, value, true, env);
+        set_draining(&generator, true);
+        drain(&generator, env);
+        Ok(Value::Undefined)
+    }
+}
+
+pub(crate) fn async_generator_return_rejected(
+    env: &mut CallEnv,
+    info: crate::native::CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    {
+        let Some(Value::Object(generator)) = info.callee.native_context.get(ASYNC_GEN) else {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: missing async generator reaction context".to_owned(),
+            });
+        };
+        let generator = generator.clone();
+        reject_front(&generator, value, env);
+        set_draining(&generator, true);
+        drain(&generator, env);
+        Ok(Value::Undefined)
+    }
+}
+
+pub(crate) fn async_from_sync_iterator_value_fulfilled(
+    env: &mut CallEnv,
+    info: crate::native::CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    {
+        async_from_sync_value_fulfilled(info.callee, value, env);
+        Ok(Value::Undefined)
+    }
+}
+
+pub(crate) fn async_from_sync_iterator_value_rejected(
+    env: &mut CallEnv,
+    info: crate::native::CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    {
+        async_from_sync_value_rejected(info.callee, value, env);
+        Ok(Value::Undefined)
+    }
+}
+
+pub(crate) fn async_from_sync_iterator_next(
+    env: &mut CallEnv,
+    info: crate::native::CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    Ok(async_from_sync_method(
+        info.callee,
+        NativeFunction::AsyncFromSyncIteratorNext,
+        argument_values,
+        env,
+    ))
+}
+
+pub(crate) fn async_from_sync_iterator_return(
+    env: &mut CallEnv,
+    info: crate::native::CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    Ok(async_from_sync_method(
+        info.callee,
+        NativeFunction::AsyncFromSyncIteratorReturn,
+        argument_values,
+        env,
+    ))
+}
+
+pub(crate) fn async_from_sync_iterator_throw(
+    env: &mut CallEnv,
+    info: crate::native::CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    Ok(async_from_sync_method(
+        info.callee,
+        NativeFunction::AsyncFromSyncIteratorThrow,
+        argument_values,
+        env,
+    ))
+}
+
 fn resume_body(generator: &ObjectRef, resume: Resume, env: &mut CallEnv) {
     // Mark draining so a reaction enqueued during the body run does not start a
     // second drain loop.

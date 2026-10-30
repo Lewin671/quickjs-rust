@@ -1,48 +1,114 @@
-use crate::{Function, NativeFunction, Value, number};
+//! Operation entries for numbers; bound once when a native is created.
 
-use super::NativeCallResult;
-use crate::CallEnv;
+use super::CallInfo;
+use crate::{CallEnv, RuntimeError, Value, number};
 
-pub(super) fn call_number_native(
-    function: &Function,
-    native: NativeFunction,
-    this_value: Value,
-    argument_values: &[Value],
-    is_construct: bool,
+pub(super) fn number(
     env: &mut CallEnv,
-) -> NativeCallResult {
-    let value = match native {
-        NativeFunction::Number => {
-            number::native_number(function, this_value, argument_values, is_construct, env)?
-        }
-        NativeFunction::NumberIsFinite => number::native_number_is_finite(argument_values)?,
-        NativeFunction::NumberIsInteger => number::native_number_is_integer(argument_values)?,
-        NativeFunction::NumberIsNaN => number::native_number_is_nan(argument_values)?,
-        NativeFunction::NumberIsSafeInteger => {
-            number::native_number_is_safe_integer(argument_values)?
-        }
-        NativeFunction::NumberPrototypeToExponential => {
-            number::native_number_prototype_to_exponential(this_value, argument_values, env)?
-        }
-        NativeFunction::NumberPrototypeToFixed => {
-            number::native_number_prototype_to_fixed(this_value, argument_values, env)?
-        }
-        NativeFunction::NumberPrototypeToPrecision => {
-            number::native_number_prototype_to_precision(this_value, argument_values, env)?
-        }
-        NativeFunction::NumberPrototypeToString => {
-            number::native_number_prototype_to_string(this_value, argument_values, env)?
-        }
-        NativeFunction::NumberPrototypeToLocaleString => {
-            number::native_number_prototype_to_string(this_value, &[], env)?
-        }
-        NativeFunction::NumberPrototypeValueOf => {
-            number::native_number_prototype_value_of(this_value)?
-        }
-        NativeFunction::ParseFloat => number::native_parse_float(argument_values, env)?,
-        NativeFunction::ParseInt => number::native_parse_int(argument_values, env)?,
-        _ => return Ok(None),
-    };
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    number::native_number(
+        info.callee,
+        info.this_value.clone(),
+        argument_values,
+        info.is_construct,
+        env,
+    )
+}
 
-    Ok(Some(value))
+pub(super) fn number_is_finite(
+    _env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    number::native_number_is_finite(argument_values)
+}
+
+pub(super) fn number_is_integer(
+    _env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    number::native_number_is_integer(argument_values)
+}
+
+pub(super) fn number_is_na_n(
+    _env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    number::native_number_is_nan(argument_values)
+}
+
+pub(super) fn number_is_safe_integer(
+    _env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    number::native_number_is_safe_integer(argument_values)
+}
+
+pub(super) fn number_prototype_to_exponential(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    number::native_number_prototype_to_exponential(info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn number_prototype_to_fixed(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    number::native_number_prototype_to_fixed(info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn number_prototype_to_precision(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    number::native_number_prototype_to_precision(info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn number_prototype_to_string(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    number::native_number_prototype_to_string(info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn number_prototype_to_locale_string(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    number::native_number_prototype_to_string(info.this_value.clone(), &[], env)
+}
+
+pub(super) fn number_prototype_value_of(
+    _env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    number::native_number_prototype_value_of(info.this_value.clone())
+}
+
+pub(super) fn parse_float(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    number::native_parse_float(argument_values, env)
+}
+
+pub(super) fn parse_int(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    number::native_parse_int(argument_values, env)
 }
