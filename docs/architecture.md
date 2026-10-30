@@ -172,15 +172,15 @@ Defined in `value/mod.rs`, `value/object.rs`, `value/property.rs` and
   descriptor API result. No literal-specific payload or ordinary symbol table.
 - Structural validity is weak layout identity plus epoch. Values overwrite live
   slots without changing that token; dictionary edits invalidate it before reuse.
-  Legacy exact-value consumers observe a separate lazy cold property revision.
+  ICs use weak mono/four-way/megamorphic slot guards and structural prototype
+  subscriptions. No cached value, strong receiver or value revision remains.
 - Literal input-slot metadata is compiler-owned; its per-domain layout links
   feed the same transition tree as constructors, class fields, JSON and hosts.
   String virtual indices remain exotic and do not materialize/intern on reads.
 - Arrays and functions use the same NamedStore for materialized text/symbol
   descriptors. Arrays retain the realm domain and allocate the store with cold
-  state; functions allocate it lazily. Dense indices/length and lazy function
-  defaults remain explicit hooks. Default insertion order lives only in the
-  store once materialized; no independent function ordering index survives.
+  state; functions allocate lazily. Index/length and lazy defaults keep their
+  hooks; NamedStore owns materialized descriptors and order.
 - An array stores its elements in a `Vec<Value>`; holes are recorded in a
   lazily allocated side set.
 

@@ -1155,6 +1155,7 @@ impl ArrayRef {
         {
             return Err(());
         }
+        self.with_named(|s| s.invalidate_dependencies());
         *self.0.cold().prototype.borrow_mut() = Some(prototype);
         Ok(())
     }
@@ -1199,6 +1200,18 @@ fn same_prototype_slot(left: Option<&Prototype>, right: Option<&Prototype>) -> b
     }
 }
 
+impl ArrayRef {
+    pub(crate) fn with_named<R>(&self, read: impl FnOnce(&super::layout::NamedStore) -> R) -> R {
+        read(&self.0.cold().properties.borrow())
+    }
+    pub(crate) fn with_named_mut<R>(
+        &self,
+        write: impl FnOnce(&mut super::layout::NamedStore) -> R,
+    ) -> R {
+        write(&mut self.0.cold().properties.borrow_mut())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::{mem, rc::Rc};
@@ -1208,6 +1221,12 @@ mod tests {
 
     #[test]
     fn cloned_array_is_a_pointer_sized_shared_handle() {
+        eprintln!(
+            "S2 sizes: ArrayData={} ArrayColdData={}",
+            mem::size_of::<ArrayData>(),
+            mem::size_of::<super::ArrayColdData>()
+        );
+        assert_eq!(mem::size_of::<ArrayData>(), 64);
         let array = ArrayRef::new(&crate::property::atom::AtomDomain::new(), Vec::new());
         let cloned = array.clone();
 

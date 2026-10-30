@@ -212,7 +212,7 @@ pub(in crate::bytecode) fn enumerate_keys_from_cache(
     value: &Value,
     cache: &EnumerateKeysCache,
 ) -> Option<ArrayRef> {
-    cache.get(value).or_else(|| cache.get_by_prototypes(value))
+    cache.get(value)
 }
 
 /// `for_in_property_is_enumerable` for an object whose chain, up to the

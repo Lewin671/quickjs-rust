@@ -9,7 +9,7 @@ impl Function {
         read(named.as_deref())
     }
 
-    fn with_named_mut<R>(&self, edit: impl FnOnce(&mut NamedStore) -> R) -> R {
+    pub(crate) fn with_named_mut<R>(&self, edit: impl FnOnce(&mut NamedStore) -> R) -> R {
         let mut named = self.named.borrow_mut();
         edit(named.get_or_insert_with(|| Box::new(NamedStore::empty(self.property_domain()))))
     }
@@ -229,5 +229,21 @@ impl Function {
                     .collect()
             })
         })
+    }
+}
+
+impl Function {
+    pub(crate) fn prepare_named_read(&self, key: &str) {
+        self.materialize_default_data_properties();
+        if key == "prototype" {
+            self.ensure_default_prototype();
+        }
+    }
+    pub(crate) fn named_kind(&self) -> u8 {
+        if self.auxiliary.lazy_default_prototype.get() {
+            5
+        } else {
+            6
+        }
     }
 }

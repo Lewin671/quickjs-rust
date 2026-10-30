@@ -16,6 +16,7 @@ impl Layout {
             edits: self.edits,
             next_order: self.next_order,
             transitions: RefCell::new(Vec::new()),
+            subscribers: RefCell::new(Vec::new()),
         }
     }
     fn allocate_order(&mut self) -> u32 {
@@ -134,6 +135,7 @@ impl Lookup<'_> {
                     });
                     layout.keys.push(key);
                 } else {
+                    self.store.invalidate_dependencies();
                     self.store.layout =
                         self.store.layout.append(self.key, attrs, false, self.proof);
                     self.store.bump_epoch();
@@ -219,6 +221,7 @@ impl NamedStore {
         }
     }
     fn edit_layout(&mut self) -> &mut Layout {
+        self.invalidate_dependencies();
         self.bump_epoch();
         let edits = self.layout.edits.saturating_add(1);
         let dictionary = self.layout.dictionary

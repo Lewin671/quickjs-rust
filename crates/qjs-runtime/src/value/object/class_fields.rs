@@ -73,12 +73,10 @@ mod tests {
         let key: Rc<str> = "0".into();
         let first = Value::Number(1.0);
         let last = Value::Number(2.0);
-        let revision = object.property_revision();
         let layout = object.layout_revision();
         assert!(object.install_constant_class_fields([(&key, &first), (&key, &last)].into_iter()));
         assert_eq!(object.get("0"), Some(last));
         assert_eq!(object.0.index_property_count.get(), 1);
-        assert!(object.property_revision() > revision);
         assert_ne!(object.layout_revision(), layout);
     }
 }

@@ -6,24 +6,17 @@ use crate::property::atom::KeyLease;
 impl ObjectRef {
     fn define_key(&self, key: &KeyLease, property: Property) {
         let mut store = self.0.properties.borrow_mut();
-        let before = store.epoch();
         let lookup = store
             .lookup(key)
             .expect("key normalized to receiver domain");
         let added = lookup.descriptor().is_none();
         lookup.define(property);
-        let structural = store.epoch() != before;
         if added && key.array_index().is_some() {
             self.0
                 .index_property_count
                 .set(self.0.index_property_count.get() + 1);
         }
         drop(store);
-        if structural {
-            self.bump_property_revision();
-        } else {
-            self.bump_value_revision();
-        }
     }
     pub(crate) fn set(&self, key: String, value: Value) {
         self.set_shared_key(key.into(), value);
@@ -60,7 +53,7 @@ impl ObjectRef {
         };
         lookup.define(property);
         drop(store);
-        self.bump_value_revision();
+
         if identity {
             self.capture_realm_intrinsic_identity();
         }
@@ -130,7 +123,6 @@ impl ObjectRef {
             .properties
             .borrow_mut()
             .transform_descriptors(Property::make_non_configurable);
-        self.bump_property_revision();
     }
     pub(crate) fn freeze(&self) {
         self.prevent_extensions();
@@ -138,7 +130,6 @@ impl ObjectRef {
             .properties
             .borrow_mut()
             .transform_descriptors(Property::freeze_data);
-        self.bump_property_revision();
     }
     pub(crate) fn is_sealed(&self) -> bool {
         !self.is_extensible()
@@ -170,7 +161,7 @@ impl ObjectRef {
         };
         crate::string::push_js_str(text.make_mut(), suffix);
         let result = Value::String(text.clone());
-        self.bump_value_revision();
+
         Some(result)
     }
     pub(crate) fn own_property(&self, key: &str) -> Option<Property> {
@@ -212,11 +203,8 @@ impl ObjectRef {
             .properties
             .borrow_mut()
             .write_existing_data(key, value, guard);
-        if matches!(result, OwnDataPropertyWrite::Written) {
-            self.bump_value_revision();
-            if identity {
-                self.capture_realm_intrinsic_identity();
-            }
+        if matches!(result, OwnDataPropertyWrite::Written) && identity {
+            self.capture_realm_intrinsic_identity();
         }
         result
     }
@@ -233,13 +221,10 @@ impl ObjectRef {
         }
         let removed = lookup.remove().is_some();
         drop(store);
-        if removed {
-            if lease.array_index().is_some() {
-                self.0
-                    .index_property_count
-                    .set(self.0.index_property_count.get() - 1);
-            }
-            self.bump_property_revision();
+        if removed && lease.array_index().is_some() {
+            self.0
+                .index_property_count
+                .set(self.0.index_property_count.get() - 1);
         }
         true
     }
@@ -369,7 +354,7 @@ impl ObjectRef {
                 .set(self.0.index_property_count.get() + 1);
         }
         drop(store);
-        self.bump_value_revision();
+
         if key.as_str() == "globalThis"
             && matches!(value, Value::Object(global) if self.ptr_eq(global))
         {

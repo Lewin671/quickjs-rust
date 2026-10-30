@@ -29,6 +29,7 @@ fn cloning_function_reuses_the_backing_allocation() {
 fn ordinary_function_header_keeps_cold_identity_state_out_of_line() {
     let auxiliary_size = mem::size_of::<super::FunctionAuxiliaryState>();
     let function_data_size = mem::size_of::<FunctionData>();
+    eprintln!("S2 sizes: FunctionData={function_data_size} auxiliary={auxiliary_size}");
     assert_eq!(
         mem::size_of::<super::NativeContext>(),
         mem::size_of::<Rc<()>>(),

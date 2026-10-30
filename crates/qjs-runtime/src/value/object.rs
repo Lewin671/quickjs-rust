@@ -98,12 +98,32 @@ pub(crate) enum Prototype {
 #[derive(Clone)]
 pub(crate) struct ArrayPrototypeRef(Rc<ArrayPrototypeData>);
 
+#[derive(Clone)]
+pub(crate) struct ArrayPrototypeWeakRef(Weak<ArrayPrototypeData>);
+impl fmt::Debug for ArrayPrototypeWeakRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("ArrayPrototypeWeakRef(..)")
+    }
+}
+impl ArrayPrototypeWeakRef {
+    pub(crate) fn same(&self, other: &Self) -> bool {
+        self.0.ptr_eq(&other.0)
+    }
+
+    pub(crate) fn ptr_eq(&self, value: &ArrayPrototypeRef) -> bool {
+        self.0.as_ptr() == Rc::as_ptr(&value.0)
+    }
+}
+
 struct ArrayPrototypeData {
     array: ArrayRef,
     default_prototype: Option<ObjectRef>,
 }
 
 impl ArrayPrototypeRef {
+    pub(crate) fn downgrade(&self) -> ArrayPrototypeWeakRef {
+        ArrayPrototypeWeakRef(Rc::downgrade(&self.0))
+    }
     fn new(array: ArrayRef, default_prototype: Option<ObjectRef>) -> Self {
         Self(Rc::new(ArrayPrototypeData {
             array,
@@ -383,8 +403,6 @@ const _: () = assert!(std::mem::size_of::<ObjectData>() == 96);
 
 #[derive(Default)]
 struct ObjectColdData {
-    /// Legacy exact-value validity, allocated only when a consumer observes it.
-    property_revision: Cell<u64>,
     to_string_tag: RefCell<Option<String>>,
     module_namespace_bindings: RefCell<Option<ModuleNamespaceBindings>>,
     /// Generator [[GeneratorState]] for generator objects; `None` for ordinary
@@ -726,31 +744,8 @@ impl ObjectRef {
         ObjectWeakRef(Rc::downgrade(&self.0))
     }
 
-    /// Starts observation of legacy value validity. Before observation there
-    /// can be no exact-value cache to invalidate, so the counter stays cold.
-    pub(crate) fn property_revision(&self) -> u64 {
-        self.0.cold().property_revision.get()
-    }
     pub(crate) fn layout_revision(&self) -> super::layout::LayoutVersion {
         self.0.properties.borrow().version()
-    }
-    fn bump_value_revision(&self) {
-        if let Some(cold) = self.0.cold_if_present() {
-            cold.property_revision
-                .set(
-                    cold.property_revision
-                        .get()
-                        .checked_add(1)
-                        .unwrap_or_else(|| {
-                            std::alloc::handle_alloc_error(
-                                std::alloc::Layout::new::<ObjectColdData>(),
-                            )
-                        }),
-                );
-        }
-    }
-    fn bump_property_revision(&self) {
-        self.bump_value_revision();
     }
 
     pub(crate) fn mark_raw_json(&self) {
@@ -919,6 +914,7 @@ impl ObjectRef {
         {
             return Err(());
         }
+        self.0.properties.borrow().invalidate_dependencies();
         *self.0.prototype.borrow_mut() = prototype;
         Ok(())
     }
@@ -1017,6 +1013,10 @@ impl ObjectRef {
 }
 
 impl ObjectWeakRef {
+    pub(crate) fn same(&self, other: &Self) -> bool {
+        self.0.ptr_eq(&other.0)
+    }
+
     pub(crate) fn ptr_eq(&self, object: &ObjectRef) -> bool {
         self.0.as_ptr() == Rc::as_ptr(&object.0)
     }

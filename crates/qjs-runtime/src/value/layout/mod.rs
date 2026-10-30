@@ -19,7 +19,7 @@ mod index;
 use index::{IdIndex, IdProbe};
 mod slots;
 mod version;
-pub(crate) use version::LayoutVersion;
+pub(crate) use version::{LayoutVersion, StructuralDependency};
 #[cfg(test)]
 mod tests;
 
@@ -88,6 +88,7 @@ pub(crate) struct Layout {
     edits: u8,
     next_order: u32,
     transitions: RefCell<Vec<(Transition, Weak<Layout>)>>,
+    subscribers: RefCell<Vec<Weak<std::cell::Cell<bool>>>>,
 }
 
 pub(crate) struct OwnerState {
@@ -129,6 +130,7 @@ impl PropertyOwner {
                 edits: 0,
                 next_order: 0,
                 transitions: RefCell::new(Vec::new()),
+                subscribers: RefCell::new(Vec::new()),
             }),
             retained: RefCell::new(VecDeque::new()),
         });
@@ -272,9 +274,11 @@ impl NamedStore {
     pub(crate) fn test_set_epoch(&mut self, epoch: u64) {
         self.epoch = epoch;
     }
+    #[cfg(test)]
     pub(crate) fn epoch(&self) -> u64 {
         self.epoch
     }
+    #[cfg(test)]
     pub(crate) fn is_dictionary(&self) -> bool {
         self.layout.dictionary
     }

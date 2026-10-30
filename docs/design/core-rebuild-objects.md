@@ -81,8 +81,8 @@ be migrated individually: cached values cannot borrow slot-cache validity.
 S1 structural tokens pair weak allocation identity and epoch; epoch rollover
 publishes a fresh identity. A private dictionary with weak observers uses safe
 Rc::make_mut dissociation, moving rather than copying fields when uniquely owned.
-Legacy value revision starts observation lazily in ObjectColdData, keeping the
-ordinary hot payload at 96 bytes. Debug structural edits reconstruct all layout
+S2 deletes the legacy value revision after retiring its last exact-value
+consumer; the ordinary hot payload remains 96 bytes. Debug structural edits reconstruct all layout
 invariants; data-only writes check the affected slot and unchanged cardinalities.
 
 ## Shared semantic API
@@ -112,15 +112,22 @@ One cache per named site, mono first, bounded four-way poly then megamorphic
 generic lookup. Own-data guard: domain + kind + shape ID (dictionary ID/version)
 + descriptor bits + slot. It does not guard the property's value or receiver
 address. Entries hold weak layout tokens, not a strong receiver or cached Value.
-An initial entry budget is 32 bytes: layout token 8, validity token 8, slot 4,
-kind/flags 4, epoch/version 8; four-way storage is allocated only when needed.
+The implemented entry is 32 bytes: weak layout/version 16, slot 4, kind and padding 4, optional cold chain pointer
+8; four-way storage is allocated only when a second guard is admitted. A fifth
+independent guard makes the site permanently megamorphic.
 
 Inherited entries additionally have a cold chain record: weak first-prototype
 and holder identities, weak dependencies and a validity cell (outside the 32-byte
 own-entry budget). Every hit guards the **current receiver's first prototype**
 as well as its own layout; equal shapes alone do not imply equal prototypes.
-Each prototype node registers layout/prototype dependencies; mutation invalidates
-dependents before publication and removes dead subscriptions. Hit checks the live
+Each prototype node registers weak validity-cell subscriptions on its current
+layout. Structural/prototype mutation invalidates them before publication;
+value writes do not. Shared-layout broadcasts conservatively retire proofs for
+other holders with that layout. Registration removes dead/invalid cells; a
+256-subscription bound invalidates and clears the list rather than growing it.
+This avoids adding a dependency field to every object or named store. Array
+prototype edges guard the weak contextual wrapper identity, including its
+captured realm fallback, rather than just the array payload identity. Hit checks the live
 token and reads the holder's current slot. Receiver prototype edits miss the
 explicit edge guard; value overwrites preserve validity. Proxy/unmodeled exotic
 chains remain uncached. Overflowed versions allocate new identities, never wrap.
@@ -132,3 +139,22 @@ uncached semantic lookup without replaying accessors; disable ICs entirely for
 a full correctness run. Count hits/misses by receiver family, hashing, transitions,
 key interning, allocations and bounded retained nodes; do not claim a 90% hit
 rate independent of the operations/programs measured.
+
+
+## S2 semantic ports and verification
+
+Array named stores remain in cold state; their hot header retains the explicit
+realm domain so packed arrays need no empty-store allocation. Function defaults
+remain implicit until a named probe/mutation needs storage; their original slots
+are reserved in NamedStore before later keys. A reserved lazy prototype is never
+read as a data answer: its hook publishes the live object, and IC receiver kinds
+distinguish pending and materialized prototypes.
+
+`value/named.rs` is the borrowed receiver facade for all cache consumers.
+Interpreter, compact/wide, typed loops and leaf readers share one shape IC;
+Proxy, namespace live exports and unmodeled exotic keys use their semantic hooks.
+`QJS_DISABLE_IC=1` disables named/enumeration IC admission and hits.
+`QJS_VERIFY_IC=1` in debug builds compares hits with pure uncached data lookup,
+without replaying accessors, key coercion or Proxy traps. These modes are captured
+at cache creation. Perf counters partition IC hits/misses, generic ID probes and
+text linking by receiver family; they compile out of production timing builds.

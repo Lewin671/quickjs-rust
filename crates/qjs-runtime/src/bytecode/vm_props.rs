@@ -21,7 +21,6 @@ use crate::{
 use super::vm::Vm;
 
 use super::ir::NamedPropertyCache;
-use super::named_property_cache::CacheProbe;
 use super::vm_set::property_set_uses_setter;
 use crate::CallEnv;
 use std::rc::Rc;
@@ -65,7 +64,7 @@ impl Vm<'_> {
             match write.result {
                 OwnDataPropertyWrite::Written => {
                     if let (Some(cache), Some((key, slot))) = (cache, write.cache_slot) {
-                        cache.record_data_slot(key, slot);
+                        cache.record_data_slot(receiver, &key, slot);
                     }
                     self.stack.push(value);
                     return Ok(());
@@ -457,58 +456,9 @@ impl Vm<'_> {
         name: &crate::property::atom::Atom,
         cache: &NamedPropertyCache,
     ) -> Option<Value> {
-        let key = name.as_str();
-        let Value::Object(object_ref) = object else {
-            cache.clear();
-            return self.try_direct_get_string(object, key);
-        };
-        if symbol::is_symbol_primitive(object_ref)
-            || crate::typed_array::is_typed_array_object(object_ref)
-            || object_ref.is_module_namespace_exotic()
-        {
-            cache.clear();
-            return self.try_direct_get_string(object, key);
-        }
-        if let Some(value) = cache.probe_hot(object_ref) {
-            return Some(value);
-        }
-        let probe = cache.probe(object_ref);
-        if let CacheProbe::Own(value) = probe {
-            return Some(value);
-        }
-        let (read, slot) = object_ref.read_own_data_key(name);
-        match read {
-            OwnDataPropertyRead::Data(value) => {
-                if let Some((key, slot)) = slot {
-                    cache.record_data_slot(key, slot);
-                } else {
-                    cache.update(object_ref, key, &value);
-                }
-                Some(value)
-            }
-            // The receiver has no own property of this name, so the read
-            // resolves on the prototype chain -- the shape of every method
-            // call, and the one answer this site used to respond to by
-            // clearing itself and walking the chain again next time.
-            //
-            // The receiver miss proven just above is exactly the precondition
-            // a prototype entry needs, which is why the candidate from the
-            // probe may only be used here.
-            OwnDataPropertyRead::Missing => {
-                if let CacheProbe::PrototypeCandidate { holder, slot } = probe
-                    && let Some(value) = holder.prototype_data_slot_value(slot)
-                {
-                    return Some(value);
-                }
-                let value = self.try_direct_get_string(object, key)?;
-                cache.update_from_prototype(object_ref, key);
-                Some(value)
-            }
-            OwnDataPropertyRead::NeedsSlowPath => {
-                cache.clear();
-                self.try_direct_get_string(object, key)
-            }
-        }
+        cache
+            .read_value(object, name, Some(&self.env))
+            .or_else(|| self.try_direct_get_string(object, name.as_str()))
     }
 
     /// Creates a missing ordinary own string data property without cloning the

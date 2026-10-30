@@ -396,9 +396,7 @@ fn execute<F: LoopFrame>(
                 // straight to the rest of `get_named`, whose first step this is.
                 if let Value::Object(receiver) = &boxed[object as usize] {
                     let shapes = &mut shape_caches[cache as usize];
-                    if let Some((key, slot)) = shapes.slot.as_ref()
-                        && let Some(number) = receiver.shared_data_slot_number(key, *slot)
-                    {
+                    if let Some(Value::Number(number)) = shapes.get(receiver) {
                         registers[reg(dst)] = Typed::Number(number);
                         continue;
                     }
@@ -433,13 +431,6 @@ fn execute<F: LoopFrame>(
             } => {
                 // A number into a field the site already shares, as the
                 // inline numeric read.
-                if let (Value::Object(receiver), Typed::Number(number)) =
-                    (&boxed[object as usize], registers[reg(value)])
-                    && let Some((key, slot)) = shape_caches[cache as usize].slot.as_ref()
-                    && receiver.shared_data_slot_write_number(key, *slot, number)
-                {
-                    continue;
-                }
                 if !set_named(
                     &boxed[object as usize],
                     &program.names[name as usize],
@@ -1184,16 +1175,7 @@ fn prototype_method(
     name: &Rc<str>,
     shapes: &mut super::ShapeWays,
 ) -> Option<Value> {
-    if let Some(exact) = shapes.exact()
-        && let Some(value) = exact.read(prototype)
-    {
-        return Some(value);
-    }
-    if let crate::value::OwnDataPropertyRead::Data(value) = prototype.own_data_property_read(name) {
-        shapes.record_exact(prototype, value.clone());
-        return Some(value);
-    }
-    None
+    shapes.read_object(prototype, name)
 }
 
 fn get_named(
@@ -1203,6 +1185,11 @@ fn get_named(
     intrinsics: &Intrinsics,
     env: Option<&crate::function::CallEnv>,
 ) -> Option<Value> {
+    if let Some(env) = env
+        && let Some(value) = shapes.read_string(receiver, name, env)
+    {
+        return Some(value);
+    }
     // An array's `length` is an own data property whose value is the element
     // count, and `try_direct_get_string` answers it exactly this way, without
     // consulting any descriptor. `for (i = 0; i < a.length; i++)` puts that read
@@ -1243,94 +1230,16 @@ fn get_named(
     let Value::Object(object) = receiver else {
         return None;
     };
-    if let Some((key, slot)) = shapes.slot.as_ref()
-        && let Some(value) = object.shared_data_slot_value(key, *slot)
-    {
-        return Some(value);
-    }
     get_named_object(object, name, shapes)
 }
 
-/// `get_named` of an ordinary object once the site's shared slot has
-/// missed: the executor's numeric field read checks that slot itself.
 #[inline(never)]
 fn get_named_object(
     object: &crate::ObjectRef,
     name: &Rc<str>,
     shapes: &mut super::ShapeWays,
 ) -> Option<Value> {
-    // Shape identity is an `Rc` pointer comparison, so scanning the remembered
-    // shapes is cheaper than resolving the name even when the site is
-    // polymorphic. `layout_data_slot_value` re-checks the revision, so a
-    // mutated receiver misses rather than reading a stale slot.
-    for (shape, slot) in shapes.entries() {
-        if let Some(value) = object.layout_data_slot_value(shape, *slot) {
-            return Some(value);
-        }
-    }
-    // A method call site that resolved on the prototype before: one own
-    // lookup proves the receiver still does not shadow it, where the
-    // resolutions below scanned its properties three times for the same
-    // miss (prototype_method_call).
-    if let Some(inherited) = shapes.inherited()
-        && let crate::value::OwnDataPropertyRead::Missing = object.own_data_property_read(name)
-        && let Some(value) = inherited.read(object)
-    {
-        return Some(value);
-    }
-    if let Some((key, slot)) = object.shared_data_slot(name)
-        && let Some(value) = object.shared_data_slot_value(&key, slot)
-    {
-        shapes.slot = Some((key, slot));
-        return Some(value);
-    }
-    if let Some((shape, slot)) = object.layout_data_slot(name)
-        && let Some(value) = object.layout_data_slot_value(&shape, slot)
-    {
-        shapes.record(shape, slot);
-        return Some(value);
-    }
-    if let Some(exact) = shapes.exact()
-        && let Some(value) = exact.read(object)
-    {
-        return Some(value);
-    }
-    // Exotic data answers without materialized slots retain the legacy exact
-    // receiver/value revision path until the S2 cache replacement.
-    match object.own_data_property_read(name) {
-        crate::value::OwnDataPropertyRead::Data(value) => {
-            shapes.record_exact(object, value.clone());
-            return Some(value);
-        }
-        // An own accessor (or exotic storage) shadows whatever the prototype
-        // holds; reading the remembered inherited value past it was wrong.
-        crate::value::OwnDataPropertyRead::NeedsSlowPath => return None,
-        crate::value::OwnDataPropertyRead::Missing => {}
-    }
-    // The name is not an own property. A method call site reads its callee
-    // from the prototype every iteration, so remember where it resolved:
-    // revisiting is then a pointer comparison and a slot read instead of a
-    // hash lookup per level of the chain.
-    //
-    // The own lookups above are what keep this sound -- they run first on
-    // every read, so a property that later appears on the receiver shadows the
-    // remembered one rather than being masked by it.
-    if let Some(inherited) = shapes.inherited()
-        && let Some(value) = inherited.read(object)
-    {
-        return Some(value);
-    }
-    if let crate::value::Prototype::Object(prototype) = object.prototype_slot()?
-        && let Some(slot) = prototype.own_data_slot(name)
-        && let Some(value) = prototype.own_data_slot_value(slot)
-    {
-        shapes.record_inherited(prototype.clone(), prototype.property_revision(), slot);
-        return Some(value);
-    }
-    // Storage the slot cache cannot address — a builtin's dynamic map, say — and
-    // inherited data properties still read without observable behaviour, they
-    // just resolve the name every time.
-    ordinary_data_property(object, name)
+    shapes.read_object(object, name)
 }
 
 /// Reads `name` as a plain data property of `object` or of its prototype chain,
@@ -1378,26 +1287,23 @@ fn set_named(
     let Value::Object(object) = receiver else {
         return false;
     };
-    if let Some((key, slot)) = shapes.slot.as_ref()
-        && let Some(OwnDataPropertyWrite::Written) =
-            object.shared_data_slot_write(key, *slot, value)
-    {
+    if matches!(
+        shapes.write_hot(object, value),
+        Some(OwnDataPropertyWrite::Written)
+    ) {
         return true;
     }
-    // `globalThis` as an own name establishes realm identity on the slow
-    // path, so it is never cached.
-    if name.as_ref() != "globalThis"
-        && let Some((key, slot)) = object.shared_data_slot(name)
-        && let Some(OwnDataPropertyWrite::Written) =
-            object.shared_data_slot_write(&key, slot, value)
-    {
-        shapes.slot = Some((key, slot));
-        return true;
+    if name.as_ref() == "globalThis" {
+        return false;
     }
-    matches!(
+    if matches!(
         object.write_existing_own_data_property(name, value),
         OwnDataPropertyWrite::Written
-    )
+    ) {
+        shapes.update(object, name, value);
+        return true;
+    }
+    false
 }
 
 /// Reads `receiver[key]` for a boxed key, discriminating on what the receiver

@@ -1,158 +1,199 @@
-//! Mechanism coverage: a successful JavaScript read alone cannot prove that
-//! the prototype cache installed a slot instead of taking its fallback.
+//! Structural proof tests inspect hits as well as observable JavaScript results.
+use super::*;
+use crate::property::atom::AtomDomain;
+use crate::{Function, NativeFunction, Property};
+use std::collections::HashMap;
 
-use std::{collections::HashMap, rc::Rc};
-
-use super::{CacheProbe, NamedPropertyCache};
-use crate::value::ObjectLiteralShape;
-use crate::{ObjectRef, Value};
-
-#[test]
-fn prototype_cache_records_and_reads_slots_across_literal_widths() {
-    let domain = crate::property::atom::AtomDomain::new();
-    for count in [2, 4, 20] {
-        let keys: Vec<Rc<str>> = (0..count).map(|i| Rc::from(format!("field{i}"))).collect();
-        let key = keys[count - 1].clone();
-        let holder = ObjectRef::with_literal_properties(
-            ObjectLiteralShape::new(keys),
-            (0..count).map(|i| Value::Number(i as f64)).collect(),
-            None,
-            &domain,
-        );
-        let receiver = ObjectRef::with_prototype(HashMap::new(), Some(holder.clone()), &domain);
-        assert_eq!(holder.own_data_slot(&key), Some(count - 1));
-        assert_eq!(
-            holder.own_data_slot_value(count - 1),
-            Some(Value::Number((count - 1) as f64))
-        );
-        let cache = NamedPropertyCache::default();
-        cache.update_from_prototype(&receiver, &key);
-        let CacheProbe::PrototypeCandidate { holder: hit, slot } = cache.probe(&receiver) else {
-            panic!("literal with {count} properties must install a prototype slot");
-        };
-        assert!(hit.ptr_eq(&holder));
-        assert_eq!(slot, count - 1);
-        assert_eq!(
-            hit.prototype_data_slot_value(slot),
-            Some(Value::Number((count - 1) as f64))
-        );
-
-        let revision = holder.layout_revision();
-        holder.write_existing_own_data_property(&key, &Value::Number(99.0));
-        assert_eq!(holder.layout_revision(), revision);
-        assert_eq!(
-            hit.prototype_data_slot_value(slot),
-            Some(Value::Number(99.0))
-        );
-        assert!(matches!(
-            cache.probe(&receiver),
-            CacheProbe::PrototypeCandidate { .. }
-        ));
-
-        // An insertion materializes the literal table and invalidates the old
-        // slot; the dynamic table it becomes is cached afresh by its own slot.
-        holder.set("extra".to_owned(), Value::Null);
-        assert!(matches!(cache.probe(&receiver), CacheProbe::Miss));
-        cache.update_from_prototype(&receiver, &key);
-        let CacheProbe::PrototypeCandidate { holder: hit, slot } = cache.probe(&receiver) else {
-            panic!("a dynamic prototype table must install a prototype slot");
-        };
-        assert_eq!(
-            hit.prototype_data_slot_value(slot),
-            Some(Value::Number(99.0))
-        );
-    }
+fn object(domain: &AtomDomain, name: &str, value: f64) -> ObjectRef {
+    let object = ObjectRef::new(HashMap::new(), domain);
+    object.set(name.into(), Value::Number(value));
+    object
 }
-
 #[test]
-fn a_value_with_no_by_value_entry_is_cached_by_slot() {
-    let domain = crate::property::atom::AtomDomain::new();
-    let object = ObjectRef::with_prototype(HashMap::new(), None, &domain);
-    object.set("items".to_owned(), Value::String("first".into()));
-    object.set("name".to_owned(), Value::String("n".into()));
-    let cache = NamedPropertyCache::default();
-    let value = Value::String("first".into());
-    cache.update(&object, "items", &value);
-    let CacheProbe::Own(hit) = cache.probe(&object) else {
-        panic!("a string-valued property must install a slot entry");
-    };
-    assert_eq!(hit, value);
-    // The slot follows a later write, and a layout change invalidates it.
-    object.write_existing_own_data_property("items", &Value::String("second".into()));
-    assert!(
-        matches!(cache.probe(&object), CacheProbe::Own(Value::String(s)) if s.as_str() == "second")
-    );
-    object.delete_own_property("items");
-    assert!(matches!(cache.probe(&object), CacheProbe::Miss));
-}
-
-#[test]
-fn a_function_in_shared_layout_is_read_live_across_unrelated_writes() {
-    let domain = crate::property::atom::AtomDomain::new();
-    // Enough properties to leave the small slot storage, as `Math` has.
-    let object = ObjectRef::with_prototype(HashMap::new(), None, &domain);
-    for index in 0..20 {
-        object.set(format!("p{index}"), Value::Number(index as f64));
-    }
-    let function =
-        crate::Function::new_native(Some("f"), 0, crate::NativeFunction::MathAbs, false, &domain);
-    object.set("f".to_owned(), Value::Function(function.clone()));
-    assert!(object.own_data_slot("f").is_some());
-    let cache = NamedPropertyCache::default();
-    cache.update(&object, "f", &Value::Function(function.clone()));
-    assert!(
-        matches!(cache.probe(&object), CacheProbe::Own(Value::Function(hit)) if hit.ptr_eq(&function))
-    );
-    // Any write to the object advances its revision and retires the entry.
-    object.set("p0".to_owned(), Value::Number(-1.0));
-    assert!(
-        matches!(cache.probe(&object), CacheProbe::Own(Value::Function(hit)) if hit.ptr_eq(&function))
-    );
-}
-
-#[test]
-fn shared_layout_cache_owns_key_leases_until_its_last_entry_drops() {
-    use crate::property::atom::AtomDomain;
+fn mono_hit_shares_layout_loads_live_values_and_does_not_pin_keys_or_receivers() {
     let domain = AtomDomain::limited_for_test(1);
     let owner = crate::value::layout::PropertyOwner::new(domain.clone());
-    let object = ObjectRef::new(HashMap::new(), &domain);
-    object.set("old".into(), Value::Number(1.0));
+    let a = object(&domain, "old", 1.0);
+    let b = object(&domain, "old", 2.0);
     let id = domain.find("old").unwrap().id();
     let cache = NamedPropertyCache::default();
-    cache.update(&object, "old", &Value::Number(1.0));
-    let guard = Rc::downgrade(&object.layout_data_slot("old").unwrap().0);
-    drop(object);
+    cache.update(&a, "old", &Value::Null);
+    assert_eq!(cache.get(&b), Some(Value::Number(2.0)));
+    b.set("old".into(), Value::Number(3.0));
+    assert_eq!(cache.get(&b), Some(Value::Number(3.0)));
+    let weak = a.downgrade();
+    drop(a);
+    drop(b);
     drop(owner);
+    assert!(weak.upgrade().is_none());
+    let new = domain.try_intern("new").unwrap();
+    assert_eq!(new.id(), id);
+    let c = object(&domain, "new", 4.0);
     assert!(
-        domain.try_intern("new").is_err(),
-        "a live cached layout must retain its key lease"
+        cache.get(&c).is_none(),
+        "recycled key ID must not validate the expired layout"
     );
+}
+#[test]
+fn site_promotes_to_four_ways_then_stays_megamorphic() {
+    let domain = AtomDomain::new();
+    let cache = NamedPropertyCache::default();
+    let mut objects = Vec::new();
+    for index in 0..5 {
+        let o = object(&domain, "x", index as f64);
+        for extra in 0..index {
+            o.set(format!("extra{extra}"), Value::Null);
+        }
+        cache.update(&o, "x", &Value::Null);
+        objects.push(o);
+        if index < 4 {
+            for o in &objects {
+                assert!(cache.get(o).is_some());
+            }
+        }
+    }
+    assert!(matches!(cache.0.borrow().entries, Entries::Mega));
+    cache.update(&objects[0], "x", &Value::Null);
+    assert!(cache.get(&objects[0]).is_none());
+}
+#[test]
+fn inherited_guards_first_edge_and_all_chain_nodes_but_preserves_value_writes() {
+    let domain = AtomDomain::new();
+    let holder = object(&domain, "x", 1.0);
+    let middle = ObjectRef::with_prototype(HashMap::new(), Some(holder.clone()), &domain);
+    let receiver = ObjectRef::with_prototype(HashMap::new(), Some(middle.clone()), &domain);
+    let other = ObjectRef::with_prototype(HashMap::new(), Some(holder.clone()), &domain);
+    let cache = NamedPropertyCache::default();
+    assert_eq!(cache.read_object(&receiver, "x"), Some(Value::Number(1.0)));
+    assert!(
+        cache.get(&other).is_none(),
+        "equal layouts do not prove equal first edges"
+    );
+    holder.set("x".into(), Value::Number(9.0));
+    assert_eq!(cache.get(&receiver), Some(Value::Number(9.0)));
+    middle.set("x".into(), Value::Number(2.0));
+    assert!(cache.get(&receiver).is_none());
+    assert_eq!(cache.read_object(&receiver, "x"), Some(Value::Number(2.0)));
+    middle.delete_own_property("x");
+    assert!(cache.get(&receiver).is_none());
+    assert_eq!(cache.read_object(&receiver, "x"), Some(Value::Number(9.0)));
+    middle.set_prototype(None).unwrap();
+    assert!(cache.get(&receiver).is_none());
+}
+#[test]
+fn dictionary_reconfiguration_and_epoch_rollover_retire_slots_before_reuse() {
+    let domain = AtomDomain::new();
+    let o = object(&domain, "x", 1.0);
+    for i in 0..130 {
+        o.set(format!("p{i}"), Value::Null);
+    }
+    let cache = NamedPropertyCache::default();
+    cache.update(&o, "x", &Value::Null);
+    o.test_set_layout_epoch(u64::MAX);
+    o.delete_own_property("x");
+    o.set("other".into(), Value::Number(4.0));
+    assert!(cache.get(&o).is_none());
+    o.set("x".into(), Value::Number(5.0));
+    cache.update(&o, "x", &Value::Null);
+    o.define_property(
+        "x".into(),
+        Property::data(Value::Number(6.0), true, false, true),
+    );
+    assert!(cache.get(&o).is_none());
+    cache.update(&o, "x", &Value::Null);
+    assert!(matches!(
+        cache.write(&o, "x", &Value::Null),
+        Some(OwnDataPropertyWrite::ReadOnly)
+    ));
+}
+#[test]
+fn array_and_function_own_named_slots_use_the_same_cache_and_lazy_hooks() {
+    let domain = AtomDomain::new();
+    let array = crate::ArrayRef::new(&domain, vec![]);
+    array.set_property("x".into(), Value::Number(1.0));
+    let value = Value::Array(array.clone());
+    let cache = NamedPropertyCache::default();
+    let key = domain.intern("x");
+    assert_eq!(
+        cache.read_value(&value, &key, None),
+        Some(Value::Number(1.0))
+    );
+    array.set_property("x".into(), Value::Number(2.0));
+    assert_eq!(cache.get_value(&value, None), Some(Value::Number(2.0)));
+    assert!(matches!(
+        cache.write_value(&value, &Value::Number(3.0)),
+        Some(OwnDataPropertyWrite::Written)
+    ));
+    let f = Function::new_native(Some("f"), 1, NativeFunction::MathAbs, false, &domain);
+    let fvalue = Value::Function(f.clone());
+    let names = NamedPropertyCache::default();
+    assert_eq!(
+        names.read_value(&fvalue, &domain.intern("name"), None),
+        Some(Value::String("f".into()))
+    );
+    f.define_property(
+        "name".into(),
+        Property::data(Value::String("g".into()), false, false, true),
+    );
+    assert_eq!(
+        names.get_value(&fvalue, None),
+        Some(Value::String("g".into()))
+    );
+    assert_eq!(f.own_property_names(), ["length", "name"]);
+}
+#[test]
+fn accessors_are_never_admitted_and_inherited_entries_never_write_holder() {
+    let domain = AtomDomain::new();
+    let holder = object(&domain, "x", 1.0);
+    let receiver = ObjectRef::with_prototype(HashMap::new(), Some(holder.clone()), &domain);
+    let cache = NamedPropertyCache::default();
+    cache.read_object(&receiver, "x");
+    assert!(cache.write(&receiver, "x", &Value::Null).is_none());
+    holder.define_property("x".into(), Property::accessor(None, None, true, true));
+    assert!(cache.get(&receiver).is_none());
+    assert!(cache.read_object(&receiver, "x").is_none());
     cache.clear();
-    assert!(guard.upgrade().is_none());
-    assert_eq!(domain.try_intern("new").unwrap().id(), id);
+}
+
+#[cfg(feature = "perf-counters")]
+#[test]
+fn own_hit_has_no_id_probe_text_hash_or_descriptor_path() {
+    let domain = AtomDomain::new();
+    let o = object(&domain, "x", 1.0);
+    let cache = NamedPropertyCache::default();
+    cache.update(&o, "x", &Value::Null);
+    // Verification intentionally resolves the key and semantic result again.
+    cache.0.borrow_mut().verify = false;
+    crate::diagnostics::reset_counters();
+    assert_eq!(cache.get(&o), Some(Value::Number(1.0)));
+    let c = crate::diagnostics::counters().unwrap();
+    assert_eq!(c.ic_object_hits, 1);
+    assert_eq!(c.ic_object_probes, 0);
+    assert_eq!(c.property_text_probes, 0);
+    assert_eq!(c.property_id_probes, 0);
 }
 
 #[test]
-fn weak_slot_cache_rejects_recycled_ids_even_when_epoch_restarts() {
-    use crate::property::atom::AtomDomain;
-    let domain = AtomDomain::limited_for_test(1);
-    let object = ObjectRef::with_literal_properties(
-        ObjectLiteralShape::new(vec![Rc::from("old")]),
-        vec![Value::Number(1.0)],
-        None,
-        &domain,
-    );
-    let id = domain.find("old").unwrap().id();
+fn namespace_live_binding_hooks_cannot_borrow_an_ordinary_shape_entry() {
+    let domain = AtomDomain::new();
+    let ordinary = object(&domain, "x", 1.0);
+    let namespace = object(&domain, "x", 2.0);
+    namespace.mark_module_namespace_exotic();
     let cache = NamedPropertyCache::default();
-    cache.record_write(&object, "old");
-    object.test_set_layout_epoch(u64::MAX - 1);
-    assert!(object.delete_own_property("old"));
-    let new = domain
-        .try_intern("new")
-        .expect("weak guards do not keep dead keys alive");
-    assert_eq!(new.id(), id);
-    object.set("new".into(), Value::Number(2.0));
-    assert!(matches!(cache.probe(&object), CacheProbe::Miss));
-    assert!(cache.write(&object, "old", &Value::Number(9.0)).is_none());
-    assert_eq!(object.get("new"), Some(Value::Number(2.0)));
+    cache.update(&ordinary, "x", &Value::Null);
+    assert!(cache.get(&namespace).is_none());
+    assert!(cache.read_object(&namespace, "x").is_none());
+    assert!(cache.write(&namespace, "x", &Value::Null).is_none());
+}
+
+#[test]
+fn ic_entry_and_site_sizes_are_explicit() {
+    assert_eq!(std::mem::size_of::<Entry>(), 32);
+    assert_eq!(std::mem::size_of::<NamedPropertyCache>(), 8);
+    eprintln!(
+        "S2 sizes: entry={} site-state={} site-handle={}",
+        std::mem::size_of::<Entry>(),
+        std::mem::size_of::<State>(),
+        std::mem::size_of::<NamedPropertyCache>()
+    );
 }

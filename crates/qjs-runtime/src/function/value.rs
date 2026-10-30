@@ -120,6 +120,13 @@ pub struct Function(Rc<FunctionData>);
 pub(crate) struct FunctionWeakRef(std::rc::Weak<FunctionData>);
 
 impl FunctionWeakRef {
+    pub(crate) fn same(&self, other: &Self) -> bool {
+        self.0.ptr_eq(&other.0)
+    }
+
+    pub(crate) fn ptr_eq(&self, value: &Function) -> bool {
+        self.0.as_ptr() == Rc::as_ptr(&value.0)
+    }
     pub(crate) fn upgrade(&self) -> Option<Function> {
         self.0.upgrade().map(Function)
     }
@@ -1153,6 +1160,11 @@ impl Function {
         {
             return Err(());
         }
+        self.with_named(|s| {
+            if let Some(s) = s {
+                s.invalidate_dependencies();
+            }
+        });
         self.auxiliary
             .with_cold_mut(|cold| cold.internal_prototype = Some(prototype));
         Ok(())

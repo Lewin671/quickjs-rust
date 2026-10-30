@@ -1,7 +1,10 @@
 //! Pure own-slot probes and live data-slot access. Shared guards own a layout
 //! or key lease, so recycling a numeric KeyId cannot validate a stale slot.
 use super::{ObjectRef, OwnDataPropertyRead, OwnDataPropertyWrite};
-use crate::{Value, property::atom::KeyLease, value::layout::Layout};
+use crate::Value;
+#[cfg(test)]
+use crate::value::layout::Layout;
+#[cfg(test)]
 use std::rc::Rc;
 
 impl ObjectRef {
@@ -27,18 +30,6 @@ impl ObjectRef {
     pub(crate) fn any_storage_data_slot(&self, key: &str) -> Option<usize> {
         self.own_data_slot(key)
     }
-    pub(crate) fn prototype_data_slot(&self, key: &str) -> Option<usize> {
-        self.own_data_slot(key)
-    }
-    pub(crate) fn own_data_slot_value(&self, slot: usize) -> Option<Value> {
-        if self.0.flag(super::flags::MODULE_NAMESPACE) {
-            return None;
-        }
-        self.0.properties.borrow().load_data(slot)
-    }
-    pub(crate) fn prototype_data_slot_value(&self, slot: usize) -> Option<Value> {
-        self.own_data_slot_value(slot)
-    }
     pub(crate) fn own_data_slot_write(
         &self,
         slot: usize,
@@ -56,9 +47,6 @@ impl ObjectRef {
             .properties
             .borrow_mut()
             .replace_data(slot, value.clone())?;
-        if result {
-            self.bump_value_revision();
-        }
         Some(if result {
             OwnDataPropertyWrite::Written
         } else {
@@ -72,69 +60,7 @@ impl ObjectRef {
     ) -> Option<OwnDataPropertyWrite> {
         self.own_data_slot_write(slot, value)
     }
-    pub(crate) fn shared_data_slot(&self, key: &str) -> Option<(KeyLease, usize)> {
-        if self.0.flag(super::flags::MODULE_NAMESPACE) || self.virtual_index_property(key).is_some()
-        {
-            return None;
-        }
-        let store = self.0.properties.borrow();
-        let key = store.domain().find(key)?;
-        let slot = store.data_slot(&key).expect("own domain")?;
-        Some((key, slot))
-    }
-    pub(crate) fn shared_data_slot_value(&self, key: &KeyLease, slot: usize) -> Option<Value> {
-        if self.0.flag(super::flags::MODULE_NAMESPACE) {
-            return None;
-        }
-        let store = self.0.properties.borrow();
-        (store.slot_key(slot)? == key)
-            .then(|| store.load_data(slot))
-            .flatten()
-    }
-    pub(crate) fn shared_data_slot_write(
-        &self,
-        key: &KeyLease,
-        slot: usize,
-        value: &Value,
-    ) -> Option<OwnDataPropertyWrite> {
-        if self.0.flag(super::flags::MODULE_NAMESPACE)
-            || self.is_array_prototype_exotic()
-            || self.is_typed_array_exotic()
-            || self.is_symbol_primitive()
-        {
-            return None;
-        }
-        let mut store = self.0.properties.borrow_mut();
-        if store.slot_key(slot)? != key {
-            return None;
-        }
-        let result = store.replace_data(slot, value.clone())?;
-        if result {
-            self.bump_value_revision();
-        }
-        Some(if result {
-            OwnDataPropertyWrite::Written
-        } else {
-            OwnDataPropertyWrite::ReadOnly
-        })
-    }
-    pub(crate) fn shared_data_slot_number(&self, key: &KeyLease, slot: usize) -> Option<f64> {
-        match self.shared_data_slot_value(key, slot)? {
-            Value::Number(n) => Some(n),
-            _ => None,
-        }
-    }
-    pub(crate) fn shared_data_slot_write_number(
-        &self,
-        key: &KeyLease,
-        slot: usize,
-        number: f64,
-    ) -> bool {
-        matches!(
-            self.shared_data_slot_write(key, slot, &Value::Number(number)),
-            Some(OwnDataPropertyWrite::Written)
-        )
-    }
+    #[cfg(test)]
     pub(crate) fn layout_data_slot(&self, key: &str) -> Option<(Rc<Layout>, usize)> {
         if self.0.flag(super::flags::MODULE_NAMESPACE) || self.virtual_index_property(key).is_some()
         {
@@ -148,6 +74,7 @@ impl ObjectRef {
         // immutable shared-layout arm without its edit version.
         (!store.is_dictionary()).then(|| (store.layout().clone(), slot))
     }
+    #[cfg(test)]
     pub(crate) fn layout_data_slot_value(&self, layout: &Rc<Layout>, slot: usize) -> Option<Value> {
         if self.0.flag(super::flags::MODULE_NAMESPACE) {
             return None;
@@ -157,38 +84,36 @@ impl ObjectRef {
             .then(|| store.load_data(slot))
             .flatten()
     }
-    #[cfg(feature = "perf-counters")]
-    pub(crate) fn storage_kind_for_trace(&self) -> &'static str {
-        if self.0.properties.borrow().is_dictionary() {
-            "dictionary"
-        } else {
-            "shape"
-        }
+}
+
+impl ObjectRef {
+    pub(crate) fn with_named<R>(
+        &self,
+        read: impl FnOnce(&super::super::layout::NamedStore) -> R,
+    ) -> R {
+        read(&self.0.properties.borrow())
+    }
+    pub(crate) fn with_named_mut<R>(
+        &self,
+        write: impl FnOnce(&mut super::super::layout::NamedStore) -> R,
+    ) -> R {
+        write(&mut self.0.properties.borrow_mut())
     }
 }
 
 impl ObjectRef {
-    /// Prelinked own read: one ID probe, with cache metadata from that probe.
-    pub(crate) fn read_own_data_key(
-        &self,
-        key: &KeyLease,
-    ) -> (OwnDataPropertyRead, Option<(KeyLease, usize)>) {
-        if self.is_module_namespace_exotic() {
-            return (OwnDataPropertyRead::NeedsSlowPath, None);
+    pub(crate) fn named_kind(&self) -> Option<u8> {
+        if self.is_module_namespace_exotic() || self.is_symbol_primitive() {
+            return None;
         }
-        if let Some(p) = self.virtual_index_property(key.as_str()) {
-            return (OwnDataPropertyRead::Data(p.value), None);
-        }
-        let store = self.0.properties.borrow();
-        let key = if key.belongs_to(store.domain()) {
-            key.clone()
+        Some(if self.is_typed_array_exotic() {
+            1
+        } else if self.is_array_prototype_exotic() {
+            2
+        } else if self.0.flag(super::flags::STRING_INDICES) {
+            3
         } else {
-            let Some(key) = store.domain().find(key.as_str()) else {
-                return (OwnDataPropertyRead::Missing, None);
-            };
-            key
-        };
-        let (result, slot) = store.read_data_slot(&key);
-        (result, slot.map(|slot| (key, slot)))
+            0
+        })
     }
 }

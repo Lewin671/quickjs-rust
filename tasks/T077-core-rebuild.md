@@ -1,11 +1,11 @@
 # T077: In-place core rebuild
 
 - Status: active; S2 implementation in progress on `agent/t077-s2-named-stores/codex`, base `b2daec46`; explicitly authorized by the lead's S2 brief while S1 formal measurement/review runs.
-- Implementation: function/array named tables and function order index replaced by NamedStore; installers/array constructors ported. Shape IC cutover not yet present.
-- Verified at: S2 family cutover working tree, 2026-10-30 UTC: staged fast gate passes (2,414 runtime tests, 117 selected Test262 cases, clippy/context/size); complete stage gates remain pending.
+- Implementation: all materialized named families use NamedStore; weak 32-byte mono/four-way ICs, registered structural prototype/enumeration dependencies, and typed-loop/compact/interpreter ports present. Old exact-value caches and value epochs deleted.
+- Verified at: family commit `dd06aa05` fast gate passes. S2 cache working tree: debug IC verification 2,417 runtime tests; combined features 2,456 before two added tests; NG 259/259; x86 cross-check passes. Full gate/exact scan/counters pending.
 - Evidence: [S2 boundary](proposals/T077-s2-named-stores.md), [S1 receipt](archive/T077-s1-verification.md).
-- Unresolved: S2 implementation, correctness/counters/triage; lead-owned S1 and whole-portfolio formal acceptance.
-- Next action: replace function/array named authorities and port consumers, then implement weak shape ICs and structural chain dependencies; never push or merge.
+- Unresolved: complete stage correctness/counters and iMac triage; runner submits via git push to temporary refs, so owner requested clarification of the explicit no-push instruction. Formal whole-portfolio acceptance remains lead-owned.
+- Next action: freeze/cache commit, finish full/IC-off exact gates and counter receipt, then iMac triage if authorized. Never push or merge project branches.
 
 ## Authority and scope
 
@@ -96,19 +96,19 @@ this receiver. No second index store or array snapshot.
 - Delete: function/array text/symbol named tables, payload indexes and old
   exact-value/receiver cache forms; wrappers/exotics use the same NamedStore.
 - Preconditions: S1 accepted; layout/key API fixed. Exotics keep index/length hooks.
-- Correctness: IC-off complete run, debug cached-vs-generic data probes; inherited
-  invalidation, setters/Proxy/super, lazy properties, namespaces, detach/resize.
+- Correctness: IC-off complete run; debug cached-vs-generic data probes; inherited invalidation, setters/Proxy/super, lazy properties, namespaces, detach/resize.
 - Payoff: shape-ID/live-slot hits remove repeated storage/descriptor routing over
   all receiver families. T065 non-Object frequency and T068 14.19% envelope
   motivate reach, not a forecast; text-elision oracle alone was nearly flat.
-- Exit: no named-store bypass, stale-value cache or strong receiver pin; bounded
-  mono/four-way ICs/prototype dependencies; all four aggregates improve.
+- Exit: no named-store bypass, stale-value cache or strong receiver pin; bounded mono/four-way ICs/prototype dependencies; all four aggregates improve.
 - Size: **4–7 weeks**. Parallel: array owner `value/array*` + `property/array.rs`;
   function owner `function/value*` + `property/function.rs`; lead cache/property
   integration and shared APIs. Each consumes S1 NamedStore, returns semantic hooks.
 - Risk/fallback: lazy/exotic order and invalidation omissions; source-revert S2,
   then repair with uncached shape lookup in the same core, never old storage.
+### S2 design corrections
 
+Keep array NamedStore cold with an explicit hot realm domain; register bounded weak dependency cells on shared layouts (conservative broadcasts), preserving hot sizes; guard array prototype contextual wrappers, whose captured realm fallback is part of the edge. Reasons and invariants: [object contract](../docs/design/core-rebuild-objects.md#s2-semantic-ports-and-verification).
 ## S3 — Universal bytecode, frames, calls and native ABI
 
 - Scope: bytecode compiler/IR/VM, function call/context/install, native and builtin
