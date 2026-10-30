@@ -418,3 +418,16 @@ fn string_data_cannot_be_forged_or_overwritten_by_an_ordinary_key() {
     assert_eq!(object.string_data().unwrap(), "actual");
     assert_eq!(object.own_property_names(), ["\0StringData"]);
 }
+
+#[test]
+fn string_payload_keeps_optional_general_extension_identity() {
+    let domain = crate::property::atom::AtomDomain::new();
+    let object = ObjectRef::new(HashMap::new(), &domain);
+    object.set_string_data("one".into());
+    assert!(object.0.cold_if_present().is_none());
+    object.set_to_string_tag("kept");
+    let general = object.0.cold_if_present().unwrap();
+    object.set_string_data("two".into());
+    assert_eq!(object.string_data().unwrap(), "two");
+    assert!(std::ptr::eq(general, object.0.cold_if_present().unwrap()));
+}

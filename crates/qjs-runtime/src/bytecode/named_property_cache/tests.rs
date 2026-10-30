@@ -546,3 +546,29 @@ fn first_guard_is_disabled_on_promotion_and_stays_disabled_after_clear() {
         std::mem::size_of::<Entry>()
     );
 }
+
+#[test]
+fn boxed_string_length_is_ordinary_data_while_indices_stay_exotic() {
+    let domain = AtomDomain::new();
+    let object = ObjectRef::new(HashMap::new(), &domain);
+    object.set_string_data("a😀".into());
+    object.define_property(
+        "length".into(),
+        Property::data(Value::Number(3.0), false, false, false),
+    );
+    object.defer_string_indices();
+    let cache = NamedPropertyCache::default();
+    assert_eq!(
+        cache.read_object(&object, "length"),
+        Some(Value::Number(3.0))
+    );
+    assert_eq!(cache.get_number(&object), Some(3.0));
+    assert!(!cache.write_number(&object, 9.0));
+    assert_eq!(
+        object.own_property("length").unwrap().value,
+        Value::Number(3.0)
+    );
+    let indices = NamedPropertyCache::default();
+    assert!(indices.read_object(&object, "0").is_none());
+    assert_eq!(object.get("0"), Some(Value::String("a".into())));
+}

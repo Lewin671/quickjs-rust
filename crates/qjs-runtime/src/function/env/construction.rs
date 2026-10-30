@@ -2,6 +2,34 @@
 //! Actual values/accessor closures and receiver/prototype edges remain live.
 use super::*;
 impl RealmState {
+    pub(crate) fn string_wrapper_store(
+        &self,
+        prototype: Option<ObjectRef>,
+        length: f64,
+    ) -> crate::value::layout::NamedStore {
+        if self.property_owner.domain().ic_policy().enabled
+            && let Some(actual) = prototype.as_ref()
+            && self
+                .string_prototype
+                .get()
+                .is_some_and(|p| p.ptr_eq(actual))
+        {
+            return self
+                .string_wrapper_layout
+                .get_or_init(|| {
+                    crate::value::layout::StringWrapperLayout::new(
+                        self.property_owner.domain(),
+                        actual.clone(),
+                    )
+                })
+                .instantiate(length);
+        }
+        crate::value::layout::NamedStore::string_wrapper(
+            self.property_owner.domain(),
+            prototype,
+            length,
+        )
+    }
     pub(crate) fn array_named_seed(&self) -> Rc<crate::value::layout::NamedStorage> {
         let Some(prototype) = self.array_prototype.get() else {
             // Bootstrap arrays keep the explicit null edge; do not poison the final seed.
@@ -150,5 +178,40 @@ mod array_seed_tests {
         assert_ne!(a.named_version(), b.named_version());
         assert!(b.property("x").is_none());
         assert!(b.with_named(|store| store.is_none()));
+    }
+}
+
+#[cfg(test)]
+mod string_layout_tests {
+    use super::*;
+    #[test]
+    fn intrinsic_template_shares_metadata_and_never_retains_custom_prototypes() {
+        let realm = super::super::new_realm(HashMap::new());
+        let domain = realm.property_owner.domain();
+        let prototype = ObjectRef::new(HashMap::new(), domain);
+        realm.initialize_string_prototype(prototype.clone());
+        let a = ObjectRef::from_string_named(
+            realm.string_wrapper_store(Some(prototype.clone()), 3.0),
+            "one".into(),
+        );
+        let b = ObjectRef::from_string_named(
+            realm.string_wrapper_store(Some(prototype), 5.0),
+            "other".into(),
+        );
+        assert_eq!(a.get("length"), Some(Value::Number(3.0)));
+        assert_eq!(b.get("length"), Some(Value::Number(5.0)));
+        assert_eq!(a.string_data().unwrap(), "one");
+        assert_eq!(b.string_data().unwrap(), "other");
+        a.with_named(|s| b.with_named(|t| assert!(Rc::ptr_eq(s.layout(), t.layout()))));
+        let custom = ObjectRef::new(HashMap::new(), domain);
+        let weak = custom.downgrade();
+        let c = ObjectRef::from_string_named(
+            realm.string_wrapper_store(Some(custom.clone()), 1.0),
+            "x".into(),
+        );
+        c.with_named(|store| assert!(store.prototype_is_object(&custom)));
+        drop(custom);
+        drop(c);
+        assert!(weak.upgrade().is_none());
     }
 }

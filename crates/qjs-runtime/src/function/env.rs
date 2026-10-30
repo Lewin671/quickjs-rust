@@ -67,6 +67,7 @@ pub(crate) struct RealmState {
     /// Stable `%String.prototype%` identity used by primitive String reads.
     /// The mutable global `String` binding is not the intrinsic authority.
     string_prototype: OnceCell<ObjectRef>,
+    string_wrapper_layout: OnceCell<crate::value::layout::StringWrapperLayout>,
     /// Stable `%Number.prototype%` identity used by primitive Number reads.
     number_prototype: OnceCell<ObjectRef>,
     /// The realm's well-known symbols, in `symbol::WELL_KNOWN_SYMBOL_NAMES`
@@ -119,6 +120,7 @@ impl RealmState {
             function_prototype: OnceCell::new(),
             function_constructor: OnceCell::new(),
             string_prototype: OnceCell::new(),
+            string_wrapper_layout: OnceCell::new(),
             number_prototype: OnceCell::new(),
             well_known_symbols: OnceCell::new(),
             string_object_keys: crate::string::StringObjectKeys::default(),

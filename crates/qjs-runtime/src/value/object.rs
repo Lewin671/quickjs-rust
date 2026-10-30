@@ -501,7 +501,6 @@ const _: () = assert!(std::mem::size_of::<ObjectData>() == 96);
 
 #[derive(Default)]
 struct ObjectColdData {
-    string_data: RefCell<Option<crate::JsString>>,
     to_string_tag: RefCell<Option<String>>,
     module_namespace_bindings: RefCell<Option<ModuleNamespaceBindings>>,
     /// Generator [[GeneratorState]] for generator objects; `None` for ordinary
@@ -660,16 +659,6 @@ impl ObjectRef {
     pub(crate) fn defer_string_indices(&self) {
         self.0.set_flag(flags::STRING_INDICES, true);
         self.refresh_named_flavor();
-    }
-
-    /// A String wrapper's [[StringData]], read without defining its index
-    /// properties.
-    pub(crate) fn string_data(&self) -> Option<crate::JsString> {
-        self.0.cold_if_present()?.string_data.borrow().clone()
-    }
-
-    pub(crate) fn set_string_data(&self, text: crate::JsString) {
-        *self.0.cold().string_data.borrow_mut() = Some(text);
     }
 
     pub(crate) fn new(

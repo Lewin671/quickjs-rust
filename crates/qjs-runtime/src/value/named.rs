@@ -175,9 +175,9 @@ impl<'a> NamedTarget<'a> {
             Self::Object(o)
                 if (o.is_typed_array_exotic()
                     && crate::typed_array::canonical_numeric_index(name).is_some())
+                    || (o.is_array_prototype_exotic() && name == "length")
                     || ((o.is_array_prototype_exotic() || o.named_kind() == Some(3))
-                        && (name == "length"
-                            || crate::array_index_property_key(name).is_some())) =>
+                        && crate::array_index_property_key(name).is_some()) =>
             {
                 return Probe::Exotic;
             }

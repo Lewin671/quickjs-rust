@@ -78,7 +78,7 @@ Arrays, functions, wrappers, Map/Set and ordinary objects embed the same NamedSt
 Dense/sparse indices, array length and mapped arguments stay exotic; typed-array
 canonical numeric indices and detachment use their own algorithms. String virtual
 indices, function lazy name/length/prototype, namespace live exports and private
-slots retain semantic hooks. StringData and DateValue are typed private slots, never named keys. Date uses a 16-byte boxed scalar/extension payload; other cold metadata remains stable behind its box. Hooks materialize into the same store when required.
+slots retain semantic hooks. StringData and DateValue use small typed payloads with lazy stable general extensions, never named keys. Boxed String length is ordinary readonly data; indices keep their hooks. An intrinsic realm template constructs the final String layout with live per-object text/length. Hooks materialize into the same store when required.
 S1's intrinsic Array.prototype is an ObjectRef: its length/index definitions run
 array validation/shrink hooks before NamedStore; ordinary creation and slot-write
 caches decline that receiver.

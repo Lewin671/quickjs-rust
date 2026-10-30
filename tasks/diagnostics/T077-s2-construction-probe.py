@@ -178,6 +178,8 @@ if candidate:
     edit('value/layout/prototype.rs',lambda s:s.replace('layout.root.as_ref().unwrap_or(layout)','layout.root.as_ref().map_or(layout, |r| &**r)').replace('let root = Rc::new(Layout {','let root: '+C+'::SchemaRc<Layout> = Rc::new(Layout {').replace('self.layout = Rc::new(layout);','self.layout = Rc::new(layout).into();').replace('self.layout = Rc::new(next);','self.layout = Rc::new(next).into();').replace('.and_then(Weak::upgrade)', '.and_then(Weak::upgrade).map('+C+'::SchemaRc::from_weak)'))
     edit('value/layout/prototype.rs',lambda s:wrap_rc(s,'let root: '+C+'::SchemaRc<Layout> = Rc::new(Layout {'))
     edit('value/layout/transitions.rs',lambda s:s.replace('.and_then(Weak::upgrade)', '.and_then(Weak::upgrade).map('+C+'::SchemaRc::from_weak)').replace('child.upgrade())','child.upgrade().map('+C+'::SchemaRc::from_weak))').replace('retained.nodes.push_back(child.clone())','retained.nodes.push_back('+C+'::SchemaRc::clone_raw(child))'))
+    if (src/'value/layout/string_wrapper.rs').exists():
+        edit('value/layout/string_wrapper.rs',lambda s:count_body(s,'fn instantiate(', 'r2_store_adds'))
     inline = (src/'value/layout/value_slots.rs').exists()
     if inline:
         edit('value/layout/edit.rs',lambda s:s.replace('                self.store.values.push(Value::Undefined);','                crate::diagnostics::count!(r2_store_adds);\n                self.store.values.push(Value::Undefined);'))

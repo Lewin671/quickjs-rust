@@ -20,6 +20,8 @@ mod edit;
 mod host;
 mod index;
 mod storage;
+mod string_wrapper;
+pub(crate) use string_wrapper::StringWrapperLayout;
 mod transitions;
 use index::{IdIndex, IdProbe};
 mod lazy;
