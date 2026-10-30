@@ -1,14 +1,11 @@
 # T077 S2 verification ledger (in progress)
 
-Executable candidate: `884d3ba27a38a6283342f10b4db9c79e747ee587`, base
-`b2daec46`; branch `agent/t077-s2-named-stores/codex`. Runtime implementation
-was frozen at `fc5da912`; `884d3ba2` adds only release-test cfg and counter-label
-corrections. The ten-program counter artifact remains bound to `fc5da912`.
-The final creation-proof correction is present and under verification: it
-replaces per-hit chain walks with the same subscriptions, and IC-off additionally
-disables creation and active-loop global-object slot proofs. Both exact drivers
-are paused before case execution pending the rebuilt artifact.
-No push, merge or main-checkout edit.
+Executable candidate: `fc64629a975431cd94cc22df2930bf49ad9593a8`, tree `d7cc512a089b65d7d8252d619f597daa9549f819`;
+base `b2daec46`, branch `agent/t077-s2-named-stores/codex`.
+The final creation-proof correction shares structural subscriptions and disables
+creation/global-object slot proofs in IC-off mode. Both exact drivers resumed
+on the final artifact before any configured case executed. No push, merge or
+main-checkout source edit.
 
 ## Implementation and deletions
 
@@ -74,15 +71,15 @@ the final coverage authority.
 
 Cached and IC-off complete configured release/agents comparisons are running;
 no complete-scan count or burndown is asserted yet. Frozen CLI SHA-256:
-`550a3cb33c7f71a9f6fa0c46405955c53424dea7264acd61f3eee583654d8a32`.
+`5181de100e8c5b838c1fe0ada28e620b2c9713e646d21080f0762f407ccfa717`.
 A separate release build differed from the initial CLI, so no byte-identity claim
 is made for that first build. Both drivers were paused during metadata setup,
 verified to have no workers or executed configured cases, and atomically pinned
-to this freshly rebuilt artifact before resuming (2026-10-30 09:24 UTC). Their
+to this freshly rebuilt artifact before resuming (2026-10-30 09:37 UTC). Their
 existing records were NG exclusions only. No configured case used the earlier
 binary; inventory/configuration and source remain unchanged.
 
-[Ten-program counter receipt](../archive/T077-s2-counters.md) records checksums,
+[Ten-program final replay](../archive/T077-s2-creation-counters.md) and [initial receipt](../archive/T077-s2-counters.md) records checksums,
 exact diagnostic binaries, per-program/family events, before/after work and
 instrumentation limits. Higher materialization/intern/field-copy work is an
 open risk. No timing was collected and no job name or speedup is asserted.

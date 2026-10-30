@@ -7,7 +7,7 @@ update the resume block in the commit that lands it. When a task closes, move it
 ## Active
 | Task | Status | What it is |
 | --- | --- | --- |
-| [T077](T077-core-rebuild.md) core rebuild | active | S2 named-store/shape-IC candidate `fc5da912`; [development counters](archive/T077-s2-counters.md), final cached/IC-off exact scans running; lead formal acceptance pending. |
+| [T077](T077-core-rebuild.md) core rebuild | active | S2 named-store/shape-IC candidate `fc64629a`; [first counters](archive/T077-s2-counters.md), [final replay](archive/T077-s2-creation-counters.md); cached/IC-off exact scans running; lead formal acceptance pending. |
 | [T073](T073-local-read-bimodal.md) local-read bimodality | active | Diagnosis complete: candidate text-layout CPU tails; T017 adopts case-health containment only. |
 | [T074](T074-direct-eval-scope-model.md) direct eval scope model | design needed | Architecture review before code; tracks eval visibility, declarations, mutability, context and suspension constraints. |
 | [T057](T057-string-code-units.md) string code units | active | Stage 1 and UTF-16 correctness extraction integrated; stage 2 abandoned (0 attempts); linear-search follow-up awaits screening. |

@@ -1,11 +1,11 @@
 # T077: In-place core rebuild
 
-- Status: active; S2 implementation in progress on `agent/t077-s2-named-stores/codex`, base `b2daec46`; explicitly authorized by the lead's S2 brief while S1 formal measurement/review runs.
-- Implementation: all materialized named families use NamedStore; weak 32-byte mono/four-way ICs, registered structural prototype/enumeration dependencies, and typed-loop/compact/interpreter ports present. Old exact-value caches and value epochs deleted.
-- Verified at: engine `fc5da912`: full gate passes (2,417 runtime; 5,170 curated), debug IC unit/subset, combined features 2,458, NG 259, executed x86 cache/size tests and release cache tests pass. Cached/IC-off exact scans remain running.
-- Evidence: [S2 verification](proposals/T077-s2-verification.md), [S2 counters](archive/T077-s2-counters.md), [implementation boundary](proposals/T077-s2-named-stores.md).
-- Unresolved: creation-proof structural/off-mode correction present; exact drivers paused in metadata before workers for a fresh artifact; runner submits via git push to temporary refs, so owner requested clarification of the explicit no-push instruction. Formal whole-portfolio acceptance remains lead-owned.
-- Next action: freeze/cache commit, finish full/IC-off exact gates and counter receipt, then iMac triage if authorized. Never push or merge.
+- Status: active; S2 runtime implementation present on `agent/t077-s2-named-stores/codex`, base `b2daec46`; correctness scans and formal acceptance remain open.
+- Implementation: NamedStore for all materialized families; weak 32-byte mono/four-way ICs; registered prototype, enumeration and creation dependencies; all consumers ported; full named IC-off mode; no exact-value caches or value epochs.
+- Verified at: `fc64629a` fast gate (2,418 runtime; 65 curated), debug IC tests 2,418 and ten development checksums/counters pass. Prior complete full/feature/NG/x86 gates pass; final full gate and cached/IC-off exact scans running on the frozen final artifact.
+- Evidence: [verification ledger](proposals/T077-s2-verification.md), [first counters](archive/T077-s2-counters.md), [final replay](archive/T077-s2-creation-counters.md), [boundary](proposals/T077-s2-named-stores.md).
+- Unresolved: complete exact scans/burndowns; iMac runner pushes temporary refs, so no-push clarification and timing remain pending. No stage acceptance or speedup claim.
+- Next action: complete scans and final gates, freeze receipts; lead resolves benchmark transfer and measures all four aggregates. Never push or merge.
 
 ## Authority and scope
 
