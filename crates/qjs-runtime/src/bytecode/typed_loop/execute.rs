@@ -403,7 +403,7 @@ fn execute<F: LoopFrame>(
                 // straight to the rest of `get_named`, whose first step this is.
                 if let Value::Object(receiver) = &boxed[object as usize] {
                     let shapes = &mut shape_caches[cache as usize];
-                    if let Some(Value::Number(number)) = shapes.get(receiver) {
+                    if let Some(number) = shapes.get_number(receiver) {
                         registers[reg(dst)] = Typed::Number(number);
                         continue;
                     }

@@ -393,6 +393,48 @@ impl NamedPropertyCache {
     pub(super) fn get(&self, object: &ObjectRef) -> Option<Value> {
         self.data_value(NamedTarget::Object(object))
     }
+    /// A numeric consumer can read the guarded slot without constructing or
+    /// cloning an owning Value. Value-type writes still check the live slot.
+    #[inline(always)]
+    pub(super) fn get_number(&self, object: &ObjectRef) -> Option<f64> {
+        let state = self.0.borrow();
+        let value = object.with_named(|store| {
+            let entry = match &state.entries {
+                Entries::Mono(e)
+                    if e.flags & (7 | OWN) == DATA | OWN && store.matches_version(&e.version) =>
+                {
+                    e
+                }
+                Entries::SharedOwnPoly(ways) => {
+                    let mask = u32::from(store.matches_shared_identity(&ways[0].version))
+                        | (u32::from(store.matches_shared_identity(&ways[1].version)) << 1)
+                        | (u32::from(store.matches_shared_identity(&ways[2].version)) << 2)
+                        | (u32::from(store.matches_shared_identity(&ways[3].version)) << 3);
+                    if mask == 0 {
+                        return None;
+                    }
+                    &ways[mask.trailing_zeros() as usize]
+                }
+                Entries::Poly(ways) => ways.iter().find(|e| {
+                    e.flags & (7 | OWN) == DATA | OWN && store.matches_version(&e.version)
+                })?,
+                _ => return None,
+            };
+            let number = store.load_guarded_number(entry.slot as usize)?;
+            #[cfg(debug_assertions)]
+            self.verify_entry(&state, entry, NamedTarget::Object(object));
+            Some(number)
+        });
+        count_event(
+            NamedTarget::Object(object),
+            if value.is_some() {
+                Event::Hit
+            } else {
+                Event::Miss
+            },
+        );
+        value
+    }
     pub(super) fn accessor(&self, value: &Value) -> Option<Property> {
         value.with_named_target(|t| match self.cached(t, true) {
             Some(ReadOutcome::Accessor(p)) => Some(p),

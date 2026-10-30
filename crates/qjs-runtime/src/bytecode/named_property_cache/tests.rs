@@ -357,3 +357,20 @@ fn shared_poly_hits_use_no_text_id_or_descriptor_probe() {
     assert_eq!(c.property_text_probes, 0);
     assert_eq!(c.property_id_probes, 0);
 }
+
+#[test]
+fn numeric_hits_read_live_types_without_invalidating_shared_shapes() {
+    let domain = AtomDomain::new();
+    let _owner = crate::value::layout::PropertyOwner::new(domain.clone());
+    let object = object(&domain, "x", 1.0);
+    let cache = NamedPropertyCache::default();
+    cache.read_object(&object, "x");
+    let version = object.layout_revision();
+    assert_eq!(cache.get_number(&object), Some(1.0));
+    object.set("x".into(), Value::String("changed".into()));
+    assert_eq!(object.layout_revision(), version);
+    assert_eq!(cache.get_number(&object), None);
+    assert_eq!(cache.get(&object), Some(Value::String("changed".into())));
+    object.set("x".into(), Value::Number(7.0));
+    assert_eq!(cache.get_number(&object), Some(7.0));
+}

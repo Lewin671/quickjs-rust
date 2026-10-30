@@ -90,3 +90,11 @@ bitmask under one authority borrow; admission proves immutable own-data layouts.
 Mixed/dictionary/inherited entries retain complete guards and the same four-way
 budget. Empty ways use dead weak tokens, never real identities. Tests prove
 shared-to-dictionary transition and zero hash/ID probes on shared poly hits.
+
+Fourth triage `20261030T150125Z-t077-s2-r1-parallel-triage` pays back the three
+read/churn points (0.9851/0.9125/0.7643), but prototype is 1.0402 and development
+1.013005. Numeric consumers now request a guarded f64 directly, avoiding Value
+construction/clone and return-tag transport on typed fields and the existing
+this-property numeric evaluator. Admission/shape guards stay identical; every
+hit checks the live Value kind, so value-only type changes remain correct.
+This admits by consumer operation/type, adding no body-template recognizer.

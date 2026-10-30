@@ -277,7 +277,7 @@ fn own_data_property_number(value: &Value, key: &str, cache: &NamedPropertyCache
     let Value::Object(receiver) = value else {
         return None;
     };
-    if let Some(Value::Number(value)) = cache.get(receiver) {
+    if let Some(value) = cache.get_number(receiver) {
         return Some(value);
     }
     match receiver.own_data_property_read(key) {

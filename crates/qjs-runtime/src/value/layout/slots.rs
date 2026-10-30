@@ -69,6 +69,13 @@ impl NamedStore {
     pub(crate) fn load_guarded_data(&self, slot: usize) -> Option<Value> {
         self.values.get(slot).cloned()
     }
+    #[inline(always)]
+    pub(crate) fn load_guarded_number(&self, slot: usize) -> Option<f64> {
+        match self.values.get(slot)? {
+            Value::Number(n) => Some(*n),
+            _ => None,
+        }
+    }
     pub(crate) fn accessor_at(&self, slot: usize) -> Option<Property> {
         let entry = self.layout.entry_at(slot)?;
         entry
