@@ -3,9 +3,17 @@ use std::rc::Rc;
 use super::Value;
 
 #[derive(Clone, Debug)]
-struct AccessorState {
+pub(in crate::value) struct AccessorState {
     get: Option<Value>,
     set: Option<Value>,
+}
+
+impl AccessorState {
+    pub(in crate::value) fn defer_children(&mut self, pending: &mut Vec<Value>) {
+        for value in [&mut self.get, &mut self.set].into_iter().flatten() {
+            super::teardown::defer_if_last(value, pending);
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -20,6 +28,23 @@ pub(crate) struct Property {
 }
 
 impl Property {
+    pub(in crate::value) fn shared_accessors(&self) -> Option<Rc<AccessorState>> {
+        self.accessors.clone()
+    }
+    pub(in crate::value) fn from_shared_accessors(
+        accessors: Rc<AccessorState>,
+        enumerable: bool,
+        configurable: bool,
+    ) -> Self {
+        Self {
+            value: Value::Undefined,
+            accessors: Some(accessors),
+            enumerable,
+            writable: false,
+            configurable,
+        }
+    }
+
     pub(crate) fn data(value: Value, enumerable: bool, writable: bool, configurable: bool) -> Self {
         Self {
             value,

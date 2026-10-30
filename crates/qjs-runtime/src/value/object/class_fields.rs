@@ -1,6 +1,6 @@
 //! Installation of observer-free constant public class-field segments.
 //!
-//! Admission completes before mutation. Only compact ordinary storage with
+//! Admission completes before mutation. Only ordinary storage with
 //! configurable existing descriptors is admitted; every other receiver keeps
 //! the sequential DefineOwnProperty path. No JavaScript runs under the borrow.
 
@@ -8,7 +8,7 @@ use std::rc::Rc;
 
 use crate::{Property, Value};
 
-use super::{ObjectRef, PropertyStorage, is_array_index_key};
+use super::ObjectRef;
 
 impl ObjectRef {
     /// Defines a constant segment in order with one check and reservation.
@@ -19,7 +19,7 @@ impl ObjectRef {
         &self,
         fields: impl ExactSizeIterator<Item = (&'a Rc<str>, &'a Value)>,
     ) -> bool {
-        if self.0.string_indices_pending.get()
+        if self.0.flag(super::flags::STRING_INDICES)
             || !self.is_extensible()
             || crate::typed_array::is_typed_array_object(self)
             || self.is_module_namespace_exotic()
@@ -28,30 +28,18 @@ impl ObjectRef {
         {
             return false;
         }
-        let mut properties = self.0.properties.borrow_mut();
-        let PropertyStorage::Small { entries } = &mut *properties else {
-            return false;
-        };
-        if entries.len() + fields.len() > PropertyStorage::SMALL_LIMIT
-            || entries.iter().any(|(_, property)| !property.configurable)
+        if self
+            .0
+            .properties
+            .borrow()
+            .descriptors()
+            .any(|p| !p.configurable)
         {
             return false;
         }
-        entries.reserve(fields.len());
-        let mut added_indices = 0;
         for (key, value) in fields {
-            let property = Property::enumerable(value.clone());
-            if let Some((_, existing)) = entries.iter_mut().find(|(name, _)| name == key) {
-                *existing = property;
-            } else {
-                added_indices += usize::from(is_array_index_key(key));
-                entries.push((key.clone(), property));
-            }
+            self.define_shared_property(key.clone(), Property::enumerable(value.clone()));
         }
-        self.0
-            .index_property_count
-            .set(self.0.index_property_count.get() + added_indices);
-        self.bump_property_revision();
         true
     }
 }
@@ -63,7 +51,7 @@ mod tests {
     use crate::{ObjectRef, Property, Value};
 
     #[test]
-    fn declines_without_mutation_for_storage_or_descriptor_boundaries() {
+    fn declines_without_mutation_for_descriptor_boundaries() {
         let domain = crate::property::atom::AtomDomain::new();
         let a: Rc<str> = "a".into();
         let b: Rc<str> = "b".into();
@@ -76,12 +64,6 @@ mod tests {
         assert!(!object.install_constant_class_fields(fields.into_iter()));
         assert!(!object.has_own_property("a"));
         assert_eq!(object.get("b"), Some(Value::Number(1.0)));
-        let large = ObjectRef::new(HashMap::new(), &domain);
-        for i in 0..13 {
-            large.set(format!("p{i}"), Value::Undefined);
-        }
-        assert!(!large.install_constant_class_fields(fields.into_iter()));
-        assert!(!large.has_own_property("a"));
     }
 
     #[test]
@@ -97,6 +79,6 @@ mod tests {
         assert_eq!(object.get("0"), Some(last));
         assert_eq!(object.0.index_property_count.get(), 1);
         assert!(object.property_revision() > revision);
-        assert!(object.layout_revision() > layout);
+        assert_ne!(object.layout_revision(), layout);
     }
 }

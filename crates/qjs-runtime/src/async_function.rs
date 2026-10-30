@@ -188,7 +188,7 @@ fn await_reaction(
     context: &ObjectRef,
     result_promise: &ObjectRef,
 ) -> Value {
-    let mut function = Function::new_native(None, 1, native, false, context.domain());
+    let mut function = Function::new_native(None, 1, native, false, &context.domain());
     function.insert_native_context(ASYNC_CONTEXT.to_owned(), Value::Object(context.clone()));
     function.insert_native_context(
         ASYNC_RESULT_PROMISE.to_owned(),

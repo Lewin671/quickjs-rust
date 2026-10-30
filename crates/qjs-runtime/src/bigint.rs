@@ -82,7 +82,7 @@ fn define_prototype_native(
             length,
             native,
             false,
-            prototype.domain(),
+            &prototype.domain(),
         )),
     );
 }

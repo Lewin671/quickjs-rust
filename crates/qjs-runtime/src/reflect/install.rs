@@ -83,7 +83,7 @@ fn define_reflect_function(object: &ObjectRef, key: &str, length: usize, native:
             length,
             native,
             false,
-            object.domain(),
+            &object.domain(),
         )),
     );
 }

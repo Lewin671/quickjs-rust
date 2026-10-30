@@ -324,7 +324,7 @@ impl Vm<'_> {
         crate::diagnostics::count!(named_property_reads);
         let result = code
             .linked_property_name(self.current.realm.atoms(), name)
-            .and_then(|atom| self.get_named_prop(atom.as_str(), cache));
+            .and_then(|atom| self.get_named_prop(&atom, cache));
         self.handle_runtime_result(result)?;
         Ok(())
     }
@@ -382,7 +382,7 @@ impl Vm<'_> {
         crate::diagnostics::count!(named_property_writes);
         let result = code
             .linked_property_name(self.current.realm.atoms(), name)
-            .and_then(|atom| self.set_named_prop(atom.text(), cache, is_strict));
+            .and_then(|atom| self.set_named_prop(&atom, cache, is_strict));
         self.handle_runtime_result(result)?;
         Ok(())
     }

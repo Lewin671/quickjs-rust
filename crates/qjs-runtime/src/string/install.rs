@@ -150,7 +150,7 @@ fn define_object_method(object: &ObjectRef, key: &str, length: usize, native: Na
             length,
             native,
             false,
-            object.domain(),
+            &object.domain(),
         )),
     );
 }

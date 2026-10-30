@@ -62,9 +62,19 @@ pub(super) fn get_prop_named(
         {
             return Ok(value);
         }
-        match object_ref.own_data_property_read(key) {
+        let lease = env
+            .realm()
+            .atoms()
+            .find(key)
+            .unwrap_or_else(|| env.realm().atoms().intern(key));
+        let (read, slot) = object_ref.read_own_data_key(&lease);
+        match read {
             OwnDataPropertyRead::Data(value) => {
-                cache.update(object_ref, key, &value);
+                if let Some((key, slot)) = slot {
+                    cache.record_data_slot(key, slot);
+                } else {
+                    cache.update(object_ref, key, &value);
+                }
                 return Ok(value);
             }
             // The receiver has no own property of this name; the candidate the
@@ -223,14 +233,35 @@ pub(super) fn set_prop_named(
         && let Value::Object(object_ref) = object
         && !crate::symbol::is_symbol_primitive(object_ref)
     {
-        let cached = cache.and_then(|cache| cache.write(object_ref, key, &value));
-        let cached_hit = cached.is_some();
-        let write =
-            cached.unwrap_or_else(|| object_ref.write_existing_own_data_property(key, &value));
-        match write {
+        if let Some(result) = cache.and_then(|cache| cache.write(object_ref, key, &value)) {
+            match result {
+                OwnDataPropertyWrite::Written => return Ok(value),
+                OwnDataPropertyWrite::ReadOnly => {
+                    if is_strict {
+                        return Err(read_only_set_error());
+                    }
+                    return Ok(value);
+                }
+                OwnDataPropertyWrite::NeedsSlowPath => {}
+            }
+        }
+        let lease = env
+            .realm()
+            .atoms()
+            .find(key)
+            .unwrap_or_else(|| env.realm().atoms().intern(key));
+        let proven = creation.is_some_and(|creation| creation.permits(object_ref));
+        let write = object_ref.write_or_create_data_key(&lease, &value, proven);
+        match write.result {
             OwnDataPropertyWrite::Written => {
-                if !cached_hit && let Some(cache) = cache {
-                    cache.record_write(object_ref, key);
+                if write.created
+                    && !proven
+                    && let Some(creation) = creation
+                {
+                    creation.record(object_ref, key);
+                }
+                if let (Some(cache), Some((key, slot))) = (cache, write.cache_slot) {
+                    cache.record_data_slot(key, slot);
                 }
                 return Ok(value);
             }
@@ -240,22 +271,7 @@ pub(super) fn set_prop_named(
                 }
                 return Ok(value);
             }
-            OwnDataPropertyWrite::NeedsSlowPath => {
-                // A constructor's `this.x = x` creates the property on every
-                // instance; the site's proof skips the prototype walk.
-                if creation.is_some_and(|creation| creation.try_create(object_ref, key, &value)) {
-                    return Ok(value);
-                }
-                if try_create_ordinary_own_data_property(object_ref, Rc::clone(key), &value) {
-                    if let Some(creation) = creation {
-                        creation.record(object_ref, key);
-                    }
-                    if let Some(cache) = cache {
-                        cache.record_write(object_ref, key);
-                    }
-                    return Ok(value);
-                }
-            }
+            OwnDataPropertyWrite::NeedsSlowPath => {}
         }
     }
     // The general fallback mirrors `Vm::set_property_value`: the named key is

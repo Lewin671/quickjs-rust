@@ -11,10 +11,9 @@
 //! next receiver is checked against, so a stale proof only misses.
 
 use std::cell::RefCell;
-use std::rc::Rc;
 
-use crate::value::{ObjectWeakRef, OwnDataPropertyRead};
-use crate::{ObjectRef, Prototype, Value};
+use crate::value::ObjectWeakRef;
+use crate::{ObjectRef, Prototype};
 
 /// Prototype chains longer than this are not remembered.
 const MAX_CHAIN: usize = 3;
@@ -33,36 +32,17 @@ impl Clone for CreationCache {
 struct CreationProof {
     /// The chain from the receiver's prototype to the end, none of whose
     /// objects had an own property of the site's name.
-    chain: Vec<(ObjectWeakRef, u64)>,
+    chain: Vec<(ObjectWeakRef, crate::value::layout::LayoutVersion)>,
 }
 
 impl CreationCache {
-    /// Creates `key` on `object` as an own enumerable data property when the
-    /// remembered chain still proves that plain; `false` leaves the store to
-    /// the general path.
-    pub(in crate::bytecode) fn try_create(
-        &self,
-        object: &ObjectRef,
-        key: &Rc<str>,
-        value: &Value,
-    ) -> bool {
-        let proof = self.0.borrow();
-        let Some(proof) = proof.as_ref() else {
-            return false;
-        };
-        if !receiver_is_plain(object)
-            || !matches!(
-                object.own_data_property_read(key),
-                OwnDataPropertyRead::Missing
-            )
-            || !chain_matches(object, &proof.chain)
-        {
-            return false;
-        }
-        if !object.create_absent_own_data_property(Rc::clone(key), value.clone()) {
-            return false;
-        }
-        true
+    pub(in crate::bytecode) fn permits(&self, object: &ObjectRef) -> bool {
+        receiver_is_plain(object)
+            && self
+                .0
+                .borrow()
+                .as_ref()
+                .is_some_and(|proof| chain_matches(object, &proof.chain))
     }
 
     /// Remembers `object`'s chain after the general path created `key` on
@@ -102,7 +82,10 @@ fn receiver_is_plain(object: &ObjectRef) -> bool {
 
 /// Whether `object`'s prototype chain is exactly `chain`, with every layout
 /// unchanged since it was remembered.
-fn chain_matches(object: &ObjectRef, chain: &[(ObjectWeakRef, u64)]) -> bool {
+fn chain_matches(
+    object: &ObjectRef,
+    chain: &[(ObjectWeakRef, crate::value::layout::LayoutVersion)],
+) -> bool {
     let Some(((first, _), _)) = chain.split_first() else {
         return object.prototype_slot().is_none();
     };

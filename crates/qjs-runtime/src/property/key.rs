@@ -18,22 +18,6 @@ impl PropertyKey {
     }
 }
 
-/// Performs observable ToPropertyKey exactly once, then obtains the current
-/// realm's owning lease. Ordinary named-store operations use this boundary;
-/// receiver-specific exotic hooks still receive the semantic PropertyKey.
-#[allow(dead_code)] // S1 foundation; ordinary property wrappers cut over next.
-pub(crate) fn to_key(
-    value: Value,
-    env: &mut CallEnv,
-) -> Result<super::atom::KeyLease, RuntimeError> {
-    let key = to_property_key_value(value, env)?;
-    let domain = env.realm().atoms();
-    Ok(match key {
-        PropertyKey::String(text) => domain.intern(&text),
-        PropertyKey::Symbol(symbol) => domain.intern_symbol(&symbol),
-    })
-}
-
 pub(crate) fn to_property_key_value(
     value: Value,
     env: &mut CallEnv,

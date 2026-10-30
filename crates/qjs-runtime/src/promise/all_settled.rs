@@ -107,7 +107,7 @@ fn element_function(
     already_called: &ObjectRef,
     capability: &PromiseCapability,
 ) -> Function {
-    let mut function = Function::new_native(None, 1, native, false, remaining.domain());
+    let mut function = Function::new_native(None, 1, native, false, &remaining.domain());
     function.insert_native_context(PROMISE_ALL_INDEX.to_owned(), Value::Number(index as f64));
     function.insert_native_context(PROMISE_ALL_VALUES.to_owned(), Value::Array(values.clone()));
     function.insert_native_context(

@@ -1261,22 +1261,12 @@ fn get_named_object(
 ) -> Option<Value> {
     // Shape identity is an `Rc` pointer comparison, so scanning the remembered
     // shapes is cheaper than resolving the name even when the site is
-    // polymorphic. `literal_data_slot_value` re-checks the revision, so a
+    // polymorphic. `layout_data_slot_value` re-checks the revision, so a
     // mutated receiver misses rather than reading a stale slot.
     for (shape, slot) in shapes.entries() {
-        if let Some(value) = object.literal_data_slot_value(shape, *slot) {
+        if let Some(value) = object.layout_data_slot_value(shape, *slot) {
             return Some(value);
         }
-    }
-    // The executor's inline read only takes a number from small storage: a
-    // dynamic-storage receiver (a constructor's twelfth property on) arrives
-    // here with the site's slot still valid, and re-resolving the name each
-    // time would be a hash lookup per read. Checked after the shapes: checked
-    // first, a polymorphic site's small-storage misses would pay for it.
-    if let Some((key, slot)) = shapes.slot.as_ref()
-        && let Some(value) = object.shared_dynamic_slot_value(key, *slot)
-    {
-        return Some(value);
     }
     // A method call site that resolved on the prototype before: one own
     // lookup proves the receiver still does not shadow it, where the
@@ -1294,8 +1284,8 @@ fn get_named_object(
         shapes.slot = Some((key, slot));
         return Some(value);
     }
-    if let Some((shape, slot)) = object.literal_data_slot(name)
-        && let Some(value) = object.literal_data_slot_value(&shape, slot)
+    if let Some((shape, slot)) = object.layout_data_slot(name)
+        && let Some(value) = object.layout_data_slot_value(&shape, slot)
     {
         shapes.record(shape, slot);
         return Some(value);
@@ -1305,8 +1295,8 @@ fn get_named_object(
     {
         return Some(value);
     }
-    // Dynamic own storage has no slot to remember, so remember the value
-    // against this exact receiver and its revision instead.
+    // Exotic data answers without materialized slots retain the legacy exact
+    // receiver/value revision path until the S2 cache replacement.
     match object.own_data_property_read(name) {
         crate::value::OwnDataPropertyRead::Data(value) => {
             shapes.record_exact(object, value.clone());

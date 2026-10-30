@@ -714,7 +714,7 @@ pub(crate) fn native_realm_throw_type_error(
         let error = crate::ObjectRef::with_prototype(
             HashMap::new(),
             Some(prototype.clone()),
-            prototype.domain(),
+            &prototype.domain(),
         );
         return Err(RuntimeError {
             thrown: Some(Box::new(Value::Object(error))),

@@ -218,7 +218,7 @@ fn define_object_prototype_function(
     length: usize,
     native: NativeFunction,
 ) -> Function {
-    let function = Function::new_native(Some(key), length, native, false, prototype.domain());
+    let function = Function::new_native(Some(key), length, native, false, &prototype.domain());
     prototype.define_non_enumerable(key.to_owned(), Value::Function(function.clone()));
     function
 }

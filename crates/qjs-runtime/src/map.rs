@@ -357,7 +357,7 @@ pub(crate) fn native_map_iterator_next(this_value: Value) -> Result<Value, Runti
         });
     };
     if iterator_done(&iterator) {
-        return Ok(iterator_result(Value::Undefined, true, iterator.domain()));
+        return Ok(iterator_result(Value::Undefined, true, &iterator.domain()));
     }
 
     let map = match iterator_slot(&iterator, MAP_ITERATOR)? {
@@ -379,7 +379,7 @@ pub(crate) fn native_map_iterator_next(this_value: Value) -> Result<Value, Runti
                 MAP_ITERATOR_NEXT_INDEX.to_owned(),
                 Value::Number(position as f64),
             );
-            return Ok(iterator_result(Value::Undefined, true, iterator.domain()));
+            return Ok(iterator_result(Value::Undefined, true, &iterator.domain()));
         }
         let entry = map.entry_at(position);
         position += 1;
@@ -404,7 +404,7 @@ pub(crate) fn native_map_iterator_next(this_value: Value) -> Result<Value, Runti
             });
         }
     };
-    Ok(iterator_result(item, false, iterator.domain()))
+    Ok(iterator_result(item, false, &iterator.domain()))
 }
 
 fn this_map(this_value: Value) -> Result<MapRef, RuntimeError> {
@@ -526,7 +526,7 @@ fn define_map_prototype_function(
             length,
             native,
             false,
-            prototype.domain(),
+            &prototype.domain(),
         )),
     );
 }

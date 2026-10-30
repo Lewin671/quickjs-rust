@@ -36,7 +36,7 @@ pub(crate) fn native_string_iterator_next(this_value: Value) -> Result<Value, Ru
         });
     };
     if iterator_done(&iterator) {
-        return Ok(iterator_result(Value::Undefined, true, iterator.domain()));
+        return Ok(iterator_result(Value::Undefined, true, &iterator.domain()));
     }
 
     let string = iterator_string(&iterator)?;
@@ -44,7 +44,7 @@ pub(crate) fn native_string_iterator_next(this_value: Value) -> Result<Value, Ru
     let code_units = string_code_units(&string);
     if index >= code_units.len() {
         iterator.define_non_enumerable(STRING_ITERATOR_DONE.to_owned(), Value::Boolean(true));
-        return Ok(iterator_result(Value::Undefined, true, iterator.domain()));
+        return Ok(iterator_result(Value::Undefined, true, &iterator.domain()));
     }
 
     let width = if is_leading_surrogate(code_units[index])
@@ -68,7 +68,7 @@ pub(crate) fn native_string_iterator_next(this_value: Value) -> Result<Value, Ru
     Ok(iterator_result(
         Value::String(value.into()),
         false,
-        iterator.domain(),
+        &iterator.domain(),
     ))
 }
 

@@ -352,7 +352,7 @@ fn define_weak_map_prototype_function(
             length,
             native,
             false,
-            prototype.domain(),
+            &prototype.domain(),
         )),
     );
 }

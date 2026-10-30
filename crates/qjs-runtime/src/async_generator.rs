@@ -549,7 +549,7 @@ fn schedule_return_await(generator: &ObjectRef, value: Value, env: &mut CallEnv)
 
 /// Builds a reaction native carrying the async generator object.
 fn reaction(native: NativeFunction, generator: &ObjectRef) -> Value {
-    let mut function = Function::new_native(None, 1, native, false, generator.domain());
+    let mut function = Function::new_native(None, 1, native, false, &generator.domain());
     function.insert_native_context(ASYNC_GEN.to_owned(), Value::Object(generator.clone()));
     Value::Function(function)
 }
@@ -1021,7 +1021,7 @@ fn value_await_reaction(
     done: bool,
     close_sync: Option<&Value>,
 ) -> Value {
-    let mut function = Function::new_native(None, 1, native, false, capability.domain());
+    let mut function = Function::new_native(None, 1, native, false, &capability.domain());
     function.insert_native_context(WRAP_PROMISE.to_owned(), Value::Object(capability.clone()));
     function.insert_native_context(WRAP_DONE.to_owned(), Value::Boolean(done));
     if let Some(sync_iterator) = close_sync {

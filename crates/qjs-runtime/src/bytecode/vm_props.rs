@@ -31,25 +31,41 @@ impl Vm<'_> {
     /// after it has proved an ordinary own data-property slot.
     pub(super) fn set_named_prop(
         &mut self,
-        key: &Rc<str>,
+        key: &crate::property::atom::Atom,
         cache: Option<&NamedPropertyCache>,
         is_strict: bool,
     ) -> Result<(), RuntimeError> {
         let value = self.pop()?;
         let object = self.pop()?;
         if !self.is_global_object(&object)
-            && let Some(object_ref) = object.as_ordinary_object()
+            && let Some(receiver) = object.as_ordinary_object()
         {
-            let cached = cache.and_then(|cache| cache.write(object_ref, key, &value));
-            let cached_hit = cached.is_some();
-            let write =
-                cached.unwrap_or_else(|| object_ref.write_existing_own_data_property(key, &value));
-            match write {
-                OwnDataPropertyWrite::Written => {
-                    if !cached_hit {
-                        if let Some(cache) = cache {
-                            cache.record_write(object_ref, key);
+            if let Some(result) =
+                cache.and_then(|cache| cache.write(receiver, key.as_str(), &value))
+            {
+                match result {
+                    OwnDataPropertyWrite::Written => {
+                        self.stack.push(value);
+                        return Ok(());
+                    }
+                    OwnDataPropertyWrite::ReadOnly => {
+                        if is_strict {
+                            return Err(RuntimeError {
+                                thrown: None,
+                                message: "TypeError: cannot set property".to_owned(),
+                            });
                         }
+                        self.stack.push(value);
+                        return Ok(());
+                    }
+                    OwnDataPropertyWrite::NeedsSlowPath => {}
+                }
+            }
+            let write = receiver.write_or_create_data_key(key, &value, false);
+            match write.result {
+                OwnDataPropertyWrite::Written => {
+                    if let (Some(cache), Some((key, slot))) = (cache, write.cache_slot) {
+                        cache.record_data_slot(key, slot);
                     }
                     self.stack.push(value);
                     return Ok(());
@@ -64,24 +80,12 @@ impl Vm<'_> {
                     self.stack.push(value);
                     return Ok(());
                 }
-                OwnDataPropertyWrite::NeedsSlowPath => {
-                    if self.try_create_ordinary_own_data_property(
-                        object_ref,
-                        Rc::clone(key),
-                        &value,
-                    ) {
-                        if let Some(cache) = cache {
-                            cache.record_write(object_ref, key);
-                        }
-                        self.stack.push(value);
-                        return Ok(());
-                    }
-                }
+                OwnDataPropertyWrite::NeedsSlowPath => {}
             }
         }
         self.set_property_value(
             object,
-            PropertyKey::String(key.to_string()),
+            PropertyKey::String(key.as_str().to_owned()),
             value,
             is_strict,
         )
@@ -447,12 +451,13 @@ impl Vm<'_> {
         )
     }
 
-    pub(super) fn try_cached_get_string(
+    pub(super) fn try_cached_get_named(
         &self,
         object: &Value,
-        key: &str,
+        name: &crate::property::atom::Atom,
         cache: &NamedPropertyCache,
     ) -> Option<Value> {
+        let key = name.as_str();
         let Value::Object(object_ref) = object else {
             cache.clear();
             return self.try_direct_get_string(object, key);
@@ -471,9 +476,14 @@ impl Vm<'_> {
         if let CacheProbe::Own(value) = probe {
             return Some(value);
         }
-        match object_ref.own_data_property_read(key) {
+        let (read, slot) = object_ref.read_own_data_key(name);
+        match read {
             OwnDataPropertyRead::Data(value) => {
-                cache.update(object_ref, key, &value);
+                if let Some((key, slot)) = slot {
+                    cache.record_data_slot(key, slot);
+                } else {
+                    cache.update(object_ref, key, &value);
+                }
                 Some(value)
             }
             // The receiver has no own property of this name, so the read

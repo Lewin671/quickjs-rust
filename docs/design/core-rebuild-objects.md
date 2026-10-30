@@ -7,8 +7,8 @@ named stores and caches. Paths below are under `crates/qjs-runtime/src/`.
 
 Extend `property/atom.rs::AtomDomain`, not a parallel interner. One runtime group
 owns the domain; communicating realms share it. `KeyId(NonZeroU32)` is 4 bytes,
-recycled only after the last lease dies: strings intern exact UTF-16, symbols intern identity
-in the same ID namespace. Private names remain separate internal identities.
+recycled only after the last lease dies. Strings intern exact UTF-16; symbols
+intern identity in the same namespace. Private names remain separate internal identities.
 `KeyRecord` contains kind, text or strong symbol handle, cached canonical array
 index and a domain identity. It never folds `"01"` into `"1"`.
 
@@ -23,8 +23,8 @@ ones. Bare IDs never outlive their borrowed leases; live shapes, dictionaries,
 linked code and lease-owning caches prevent reuse. Layout identities/versions
 remain non-reused. Production u32 exhaustion requires more than 2^32 live key
 records and follows allocation-failure abort, not a JS exception; an internal
-try_intern supports test-only capped domains (lead decision 2026-10-30). Foreign compiled names relink
-once by units; existing cross-realm values share the original domain. A foreign
+try_intern supports test-only capped domains (lead decision 2026-10-30). Foreign
+compiled names relink once by units; existing cross-realm values share the original domain. A foreign
 domain cannot validate an IC by integer equality; host ingress must normalize
 keys or report an explicit domain error, never reinterpret IDs.
 
@@ -32,7 +32,7 @@ keys or report an explicit domain error, never reinterpret IDs.
 once, then interns; named bytecode operands use prelinked leases. Host `&str`
 entry points convert once; internal slot access never formats or hashes text.
 
-## Physical layout (proposed 64-bit budgets, not current measurements)
+## Physical layout (S1 assertions; S2 cache budgets remain proposed)
 
 | Type | Fields / size |
 | --- | --- |
@@ -43,9 +43,9 @@ entry points convert once; internal slot access never formats or hashes text.
 | `Layout` | Immutable shape or unique dictionary; ID/domain, owned entries/key leases and one key-ID lookup index; transition cache is cold |
 | `Dictionary` | Private identity + `u64` structural version; key-ID index, attributes/order and slot allocation are its sole authority |
 
-Assert sizes on both production targets before adopting them; a Rust layout
-estimate is no ABI proof. Do not add two inline Values in every object: the
-existing ShapedPair benefit must be repriced against object/header growth.
+S1 compile-time assertions verify these sizes on aarch64/x86_64 macOS; a layout
+estimate alone is no ABI proof. Values remain in a keyless vector, with no pair
+of inline Values enlarging the ordinary header.
 Slot storage may pool capacity, never keys. Accessor slots hold `undefined` in
 the value vector and their getter/setter pair in the cold slot-indexed table;
 the shape decides descriptor kind. Bulk descriptor APIs construct `Property`
@@ -67,7 +67,8 @@ dictionary mode; repeated fixed-key construction below the bound reuses edges
 even after its last object dies. These are initial deterministic bounds, not
 performance-tuned thresholds. Delete/reconfigure churn after 32 edits or width
 over 128 entries uses dictionary mode. A dictionary never records transitions;
-compact order tombstones when they exceed live entries plus a fixed reserve.
+S1 swap-removes dictionary slots and preserves explicit order numbers, leaving
+zero order tombstones; its ID-index tombstones are compacted with bounded slack.
 
 Delete/re-add appends a new order position; array-index keys enumerate in numeric
 order, then other strings, then symbols in insertion order. Reconfiguration,
@@ -76,6 +77,13 @@ mutation prepares storage first, publishes layout+slots together, then bumps
 validity; slot reuse never occurs under an unchanged dictionary version.
 Value writes touch no shape/version. Existing property_revision consumers must
 be migrated individually: cached values cannot borrow slot-cache validity.
+
+S1 structural tokens pair weak allocation identity and epoch; epoch rollover
+publishes a fresh identity. A private dictionary with weak observers uses safe
+Rc::make_mut dissociation, moving rather than copying fields when uniquely owned.
+Legacy value revision starts observation lazily in ObjectColdData, keeping the
+ordinary hot payload at 96 bytes. Debug structural edits reconstruct all layout
+invariants; data-only writes check the affected slot and unchanged cardinalities.
 
 ## Shared semantic API
 

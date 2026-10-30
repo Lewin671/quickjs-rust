@@ -696,7 +696,7 @@ fn class_constructor_call_error(function: &Function) -> RuntimeError {
     }) = function.own_property(CROSS_REALM_TYPE_ERROR_PROTOTYPE)
     {
         let error =
-            ObjectRef::with_prototype(HashMap::new(), Some(prototype.clone()), prototype.domain());
+            ObjectRef::with_prototype(HashMap::new(), Some(prototype.clone()), &prototype.domain());
         return RuntimeError {
             thrown: Some(Box::new(Value::Object(error))),
             message,

@@ -63,7 +63,7 @@ impl Drop for KeyRecord {
 
 enum KeyKind {
     String(Rc<str>),
-    #[allow(dead_code)] // S1 foundation; ordinary symbol cutover follows.
+
     Symbol(ObjectRef),
 }
 
@@ -78,7 +78,6 @@ pub(crate) struct KeyLease(Rc<KeyRecord>);
 pub(crate) type Atom = KeyLease;
 
 impl KeyLease {
-    #[allow(dead_code)] // S1 layout foundation; ordinary cutover follows.
     pub(crate) fn id(&self) -> AtomId {
         self.0.id
     }
@@ -97,7 +96,6 @@ impl KeyLease {
 
     /// The array index this key denotes when it is the canonical decimal form
     /// of an integer below 2^32 - 1. `"01"` and `"4294967295"` are not.
-    #[allow(dead_code)] // S1 layout foundation; ordinary cutover follows.
     pub(crate) fn array_index(&self) -> Option<u32> {
         (self.0.array_index != NO_ARRAY_INDEX).then_some(self.0.array_index)
     }
@@ -218,6 +216,7 @@ impl AtomDomain {
 
     pub(crate) fn try_intern(&self, text: &str) -> Result<Atom, AtomDomainExhausted> {
         crate::diagnostics::count!(property_key_interns);
+        crate::diagnostics::count!(property_text_probes);
         let canonical = canonical_property_text(text);
         let mut table = self.0.table.borrow_mut();
         if let Some(entry) = table
@@ -255,6 +254,7 @@ impl AtomDomain {
     /// Looks up a live lease without allocating a new ID. Read-only property
     /// probes must remain possible after namespace exhaustion.
     pub(crate) fn find(&self, text: &str) -> Option<KeyLease> {
+        crate::diagnostics::count!(property_text_probes);
         let canonical = canonical_property_text(text);
         self.0
             .table
@@ -265,8 +265,8 @@ impl AtomDomain {
             .map(KeyLease)
     }
 
-    #[allow(dead_code)] // Used by the impending ordinary-symbol storage cutover.
     pub(crate) fn find_symbol(&self, symbol: &ObjectRef) -> Option<KeyLease> {
+        crate::diagnostics::count!(property_symbol_probes);
         self.0
             .table
             .borrow()
@@ -278,7 +278,6 @@ impl AtomDomain {
 
     /// Symbols are interned by identity, never by description. A live lease
     /// pins its symbol, so its address cannot be reused while indexed.
-    #[allow(dead_code)] // S1 foundation; ordinary symbol cutover follows.
     pub(crate) fn intern_symbol(&self, symbol: &ObjectRef) -> KeyLease {
         self.try_intern_symbol(symbol)
             .unwrap_or_else(|_| key_allocation_failure())
@@ -286,6 +285,7 @@ impl AtomDomain {
 
     fn try_intern_symbol(&self, symbol: &ObjectRef) -> Result<KeyLease, AtomDomainExhausted> {
         crate::diagnostics::count!(property_key_interns);
+        crate::diagnostics::count!(property_symbol_probes);
         let mut table = self.0.table.borrow_mut();
         if let Some(entry) = table.symbols.get(&symbol.address()).and_then(Weak::upgrade) {
             return Ok(KeyLease(entry));
@@ -311,7 +311,7 @@ impl AtomDomain {
     }
 
     /// A borrowed numeric ID alone never keeps its record alive.
-    #[allow(dead_code)] // ID-directory API; callers own a lease while borrowing its ID.
+    #[cfg(test)]
     pub(crate) fn lease(&self, id: KeyId) -> Option<KeyLease> {
         self.0
             .table
@@ -322,7 +322,6 @@ impl AtomDomain {
             .map(KeyLease)
     }
 
-    #[allow(dead_code)] // S1 foundation; runtime owners are installed at cutover.
     pub(crate) fn shape_owner(&self) -> &RefCell<Weak<crate::value::layout::OwnerState>> {
         &self.0.shape_owner
     }

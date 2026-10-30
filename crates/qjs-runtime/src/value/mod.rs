@@ -18,7 +18,6 @@ mod access;
 mod array;
 mod collection_key;
 mod js_string;
-#[allow(dead_code)] // S1 foundation; ordinary-object cutover is the next milestone.
 pub(crate) mod layout;
 mod map;
 pub(crate) mod name_hash;

@@ -7,9 +7,8 @@ impl NamedStore {
         let attrs = entry.attrs;
         if attrs.has(Attributes::ACCESSOR) {
             let pair = &self.accessors.as_deref().expect("accessor table")[&entry.slot];
-            Property::accessor(
-                pair.get.clone(),
-                pair.set.clone(),
+            Property::from_shared_accessors(
+                pair.clone(),
                 attrs.has(Attributes::ENUMERABLE),
                 attrs.has(Attributes::CONFIGURABLE),
             )
@@ -23,11 +22,7 @@ impl NamedStore {
         }
     }
     pub(super) fn install(&mut self, position: usize, property: Property) {
-        if property.is_accessor() {
-            let pair = AccessorPair {
-                get: property.getter().cloned(),
-                set: property.setter().cloned(),
-            };
+        if let Some(pair) = property.shared_accessors() {
             self.values[position] = Value::Undefined;
             self.accessors
                 .get_or_insert_with(|| Box::new(HashMap::new()))
@@ -63,7 +58,7 @@ impl NamedStore {
             return Some(false);
         }
         self.values[slot] = value;
-        self.verify();
+        self.verify_slot(slot);
         Some(true)
     }
     pub(crate) fn data_value_mut(&mut self, slot: usize) -> Option<&mut Value> {
@@ -89,8 +84,8 @@ impl NamedStore {
         }
         if let Some(slots) = &mut self.accessors {
             for pair in slots.values_mut() {
-                for value in [&mut pair.get, &mut pair.set].into_iter().flatten() {
-                    crate::value::teardown::defer_if_last(value, pending);
+                if let Some(pair) = Rc::get_mut(pair) {
+                    pair.defer_children(pending);
                 }
             }
         }

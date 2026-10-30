@@ -239,7 +239,7 @@ fn define_finalization_registry_prototype_function(
             length,
             native,
             false,
-            prototype.domain(),
+            &prototype.domain(),
         )),
     );
 }

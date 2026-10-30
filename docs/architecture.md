@@ -124,18 +124,14 @@ interpreter drops its own extra references to the target, so a uniquely held
 buffer is extended in place; a real JavaScript alias keeps the buffer shared
 and immutable (`bytecode/vm_string_append.rs`).
 
-**Named operands.** A named property opcode indexes its body's name pool;
-the interpreter resolves it to an atom of the frame realm's `AtomDomain`
-(`property/atom.rs`), linking each body once per domain
-(`bytecode/linked_code.rs`). Stores still key by text; the atom-keyed shape/slot
-authority is the target in [core rebuild objects](design/core-rebuild-objects.md).
-The key domain supports string and symbol-identity leases in one lease-protected
-`KeyId` namespace with weak content/ID indices. `value/layout/` contains the
-isolated layout foundation; production stores use the representation below.
+**Named operands.** A named opcode indexes its body's pool and links it once
+per `AtomDomain` (`bytecode/linked_code.rs`). Ordinary operations use KeyLease
+IDs; host text boundaries resolve leases once. Strings and symbol identities
+share recyclable IDs; live leases prevent reuse. Domain indices are weak.
 
 **Construction domains.** Constructors/builders receive a domain, including null prototypes.
-Realm roots own PropertyOwner; natives retain their domain in native state.
-ObjectData's staging domain field moves into Layout at the NamedStore cutover.
+Realm roots own PropertyOwner outside the domain. Layouts retain their domain;
+natives retain it in native state. No per-object default domain is created.
 
 **Per-site caches.** `bytecode/named_property_cache.rs` caches named property
 reads and writes per instruction site, keyed by receiver layout.
@@ -167,20 +163,21 @@ Defined in `value/mod.rs`, `value/object.rs`, `value/property.rs` and
   is pointer identity. Caches hold `ObjectWeakRef`/`ArrayWeakRef`, never a
   strong reference. There is no tracing collector: a reference cycle is
   never freed.
-- `ObjectData` holds the fields every object needs inline. Rare state
-  (symbol-keyed properties, generator state, private names, ArrayBuffer and
-  TypedArray slots) sits behind a lazily allocated `ObjectColdData` box.
-- String-keyed properties use one of four `PropertyStorage` forms: `Small`
-  (an insertion-ordered vector, up to 12 properties), `Dynamic` (a boxed
-  slot vector with a name index and an order list), and `Shaped` or
-  `ShapedPair` for object literals, which share one `ObjectLiteralShape` key
-  layout and store only values or descriptors per object.
-- `Property` is 32 bytes: value and flags inline, the accessor pair behind an
-  optional shared `Rc`.
-- Each object has two counters. `property_revision` advances on any own
-  string property change. `layout_revision` advances only when a slot index
-  could change (insert, delete, descriptor replacement), so a slot-keyed
-  cache survives ordinary field assignment.
+- `ObjectData` is 96 bytes on the two 64-bit production targets: NamedStore,
+  live prototype, cold pointer, index count and packed flags. Internal buffer,
+  namespace, generator and private state remain cold.
+- Ordinary string and symbol properties share one `NamedStore`
+  (`value/layout/`): immutable shared shapes or a private dictionary, one ID
+  index, keyless values and cold shared accessor pairs. Property is a 32-byte
+  descriptor API result. No literal-specific payload or ordinary symbol table.
+- Structural validity is weak layout identity plus epoch. Values overwrite live
+  slots without changing that token; dictionary edits invalidate it before reuse.
+  Legacy exact-value consumers observe a separate lazy cold property revision.
+- Literal input-slot metadata is compiler-owned; its per-domain layout links
+  feed the same transition tree as constructors, class fields, JSON and hosts.
+  String virtual indices remain exotic and do not materialize/intern on reads.
+- Array/function independent named tables remain until S2; their index, length,
+  lazy-descriptor and live-prototype semantics stay in their existing hooks.
 - An array stores its elements in a `Vec<Value>`; holes are recorded in a
   lazily allocated side set.
 

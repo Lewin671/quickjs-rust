@@ -292,7 +292,7 @@ fn define_array_prototype_function(
             length,
             native,
             false,
-            prototype.domain(),
+            &prototype.domain(),
         )),
     );
 }

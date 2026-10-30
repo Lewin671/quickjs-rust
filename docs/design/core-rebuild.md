@@ -1,8 +1,9 @@
 # Core rebuild: target architecture
 
 Target for [T077](../../tasks/T077-core-rebuild.md), authorized by the user and
-lead on 2026-10-29. **Design only; none of this document establishes implemented
-behavior or measured gains.** The current system remains [architecture](../architecture.md).
+lead on 2026-10-29. Stage implementation/verification is recorded in T077;
+this target document establishes no measured gains. Current implemented behavior
+is mapped in [architecture](../architecture.md).
 This replaces the v2/v3 proposed targets and their migration routes. Binding and
 suspension invariants remain authoritative in their existing documents.
 

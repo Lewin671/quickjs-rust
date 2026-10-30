@@ -626,7 +626,7 @@ fn define_prototype_method(
             length,
             native,
             false,
-            prototype.domain(),
+            &prototype.domain(),
         )),
     );
 }
@@ -690,7 +690,7 @@ fn push_resource(
     let resources = disposable_stack_resources(object)?;
     resources.set(
         resources.len(),
-        resource_record(kind, value, method, object.domain()),
+        resource_record(kind, value, method, &object.domain()),
     );
     Ok(())
 }

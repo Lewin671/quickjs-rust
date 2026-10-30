@@ -971,9 +971,10 @@ impl<'a> Vm<'a> {
 
     fn get_named_prop(
         &mut self,
-        key: &str,
+        name: &crate::property::atom::Atom,
         cache: &NamedPropertyCache,
     ) -> Result<(), RuntimeError> {
+        let key = name.as_str();
         let object = if let Some(slot) = cache.local_slot() {
             let direct_eval_lookup =
                 self.direct_eval_with_stack && self.bytecode.local_is_from_env(slot);
@@ -984,7 +985,7 @@ impl<'a> Vm<'a> {
                     object,
                     Value::Function(function) if function.is_uninitialized_lexical_marker()
                 )
-                && let Some(value) = self.try_cached_get_string(object, key, cache)
+                && let Some(value) = self.try_cached_get_named(object, name, cache)
             {
                 self.stack.push(value);
                 return Ok(());
@@ -1006,7 +1007,7 @@ impl<'a> Vm<'a> {
                 ),
             });
         }
-        let value = if let Some(value) = self.try_cached_get_string(&object, key, cache) {
+        let value = if let Some(value) = self.try_cached_get_named(&object, name, cache) {
             value
         } else if let Some(result) = self.try_direct_leaf_getter(&object, key) {
             result?

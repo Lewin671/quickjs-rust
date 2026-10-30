@@ -462,3 +462,31 @@ fn shapes_and_dictionaries_pin_ids_until_every_layout_owner_is_gone() {
         assert_eq!(fresh.get(&new).unwrap().unwrap().value, Value::Number(2.0));
     }
 }
+
+#[test]
+fn reconfiguration_at_width_limit_uses_the_edit_budget_not_append_threshold() {
+    let owner = owner();
+    let mut store = owner.empty_store();
+    let keys: Vec<_> = (0..128)
+        .map(|n| owner.domain().intern(&format!("k{n}")))
+        .collect();
+    for key in &keys {
+        store.define(key, data(1.0)).unwrap();
+    }
+    store
+        .define(
+            &keys[0],
+            Property::data(Value::Number(1.0), false, true, true),
+        )
+        .unwrap();
+    assert!(!store.is_dictionary());
+    for n in 0..31 {
+        store
+            .define(
+                &keys[0],
+                Property::data(Value::Number(1.0), n % 2 == 0, true, true),
+            )
+            .unwrap();
+    }
+    assert!(store.is_dictionary());
+}

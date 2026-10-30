@@ -186,7 +186,7 @@ fn promise_static_function(
         length,
         native,
         false,
-        promise_prototype.domain(),
+        &promise_prototype.domain(),
     );
     function.insert_native_context(
         PROMISE_OBJECT_PROTOTYPE.to_owned(),
@@ -1058,7 +1058,7 @@ fn callable_or_undefined(value: Option<&Value>) -> Value {
 }
 
 fn promise_reaction(handler: Value, capability: ObjectRef, fulfill: bool) -> ObjectRef {
-    let reaction = ObjectRef::new(HashMap::new(), capability.domain());
+    let reaction = ObjectRef::new(HashMap::new(), &capability.domain());
     reaction.define_non_enumerable(PROMISE_HANDLER.to_owned(), handler);
     reaction.define_non_enumerable(
         PROMISE_REACTION_CAPABILITY.to_owned(),

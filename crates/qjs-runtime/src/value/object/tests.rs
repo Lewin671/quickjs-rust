@@ -7,7 +7,7 @@
 
 use std::{collections::HashMap, mem, rc::Rc};
 
-use super::{ObjectData, ObjectLiteralShape, ObjectRef, OwnDataPropertyWrite, PropertyStorage};
+use super::{ObjectData, ObjectLiteralShape, ObjectRef, OwnDataPropertyWrite};
 use crate::{Property, Value};
 
 #[test]
@@ -62,39 +62,27 @@ fn ordinary_object_keeps_cold_state_unallocated() {
     assert!(object.own_property_symbols().is_empty());
     assert!(object.to_string_tag().is_none());
     assert!(object.0.cold.get().is_none());
-    // Boxing the cold `Dynamic` property-storage payload (HashMap + Vec)
-    // keeps this at 104 bytes instead of the 136 it cost when that
-    // payload sized the whole `PropertyStorage` enum for every object.
-    assert!(mem::size_of::<ObjectData>() <= 120); // S1 constructor migration staging; domain moves into Layout at cutover.
+    assert_eq!(mem::size_of::<ObjectData>(), 96);
 }
 
 #[test]
-fn ordinary_small_object_promotes_only_after_the_compact_limit() {
+fn ordinary_object_enters_dictionary_above_shared_shape_width() {
     let domain = crate::property::atom::AtomDomain::new();
     let object = ObjectRef::new(HashMap::new(), &domain);
 
-    for index in 0..PropertyStorage::SMALL_LIMIT {
+    for index in 0..128 {
         object.set(format!("field{index}"), Value::Number(index as f64));
     }
-    assert!(matches!(
-        &*object.0.properties.borrow(),
-        PropertyStorage::Small { entries } if entries.len() == PropertyStorage::SMALL_LIMIT
-    ));
 
-    let dynamic_index = PropertyStorage::SMALL_LIMIT;
+    let dynamic_index = 128;
     object.set(
         format!("field{dynamic_index}"),
         Value::Number(dynamic_index as f64),
     );
-    assert!(matches!(
-        &*object.0.properties.borrow(),
-        PropertyStorage::Dynamic(dynamic)
-            if dynamic.entries.len() == PropertyStorage::SMALL_LIMIT + 1
-                && dynamic.order.len() == PropertyStorage::SMALL_LIMIT + 1
-    ));
+
     assert_eq!(
         object.own_property_names(),
-        (0..=PropertyStorage::SMALL_LIMIT)
+        (0..=128)
             .map(|index| format!("field{index}"))
             .collect::<Vec<_>>()
     );
@@ -108,11 +96,6 @@ fn ordinary_object_retains_shared_static_property_key() {
 
     object.set_shared_key(Rc::clone(&key), Value::Number(1.0));
 
-    assert!(matches!(
-        &*object.0.properties.borrow(),
-        PropertyStorage::Small { entries }
-            if entries.len() == 1 && Rc::ptr_eq(&entries[0].0, &key)
-    ));
     assert_eq!(object.get("field"), Some(Value::Number(1.0)));
 }
 
@@ -128,10 +111,6 @@ fn small_object_removal_preserves_property_order() {
     object.set("second".to_owned(), Value::Number(4.0));
 
     assert_eq!(object.own_property_names(), ["first", "third", "second"]);
-    assert!(matches!(
-        &*object.0.properties.borrow(),
-        PropertyStorage::Small { entries } if entries.len() == 3
-    ));
 }
 
 #[test]
@@ -143,10 +122,6 @@ fn small_object_enumerates_indices_before_strings() {
     object.set("2".to_owned(), Value::Number(2.0));
 
     assert_eq!(object.own_property_names(), ["2", "10", "label"]);
-    assert!(matches!(
-        &*object.0.properties.borrow(),
-        PropertyStorage::Small { entries } if entries.len() == 3
-    ));
 }
 
 #[test]
@@ -178,7 +153,7 @@ fn existing_own_data_write_updates_or_rejects_without_slow_path() {
 }
 
 #[test]
-fn literal_pair_keeps_inline_values_until_descriptor_mutation() {
+fn literal_data_writes_preserve_slots_until_descriptor_mutation() {
     let domain = crate::property::atom::AtomDomain::new();
     let shape = ObjectLiteralShape::new(vec![Rc::from("a"), Rc::from("b")]);
     let object = ObjectRef::with_literal_pair(
@@ -189,27 +164,16 @@ fn literal_pair_keeps_inline_values_until_descriptor_mutation() {
     );
 
     assert!(matches!(
-        &*object.0.properties.borrow(),
-        PropertyStorage::ShapedPair { .. }
-    ));
-    assert!(matches!(
         object.write_existing_own_data_property("a", &Value::Number(3.0)),
         OwnDataPropertyWrite::Written
     ));
     assert_eq!(object.get("a"), Some(Value::Number(3.0)));
-    assert!(matches!(
-        &*object.0.properties.borrow(),
-        PropertyStorage::ShapedPair { .. }
-    ));
 
     object.define_property(
         "a".to_owned(),
         Property::data(Value::Number(4.0), false, false, true),
     );
-    assert!(matches!(
-        &*object.0.properties.borrow(),
-        PropertyStorage::Dynamic(_)
-    ));
+
     let descriptor = object.own_property("a").expect("defined property");
     assert_eq!(descriptor.value, Value::Number(4.0));
     assert!(!descriptor.enumerable);
@@ -245,31 +209,31 @@ fn literal_slot_survives_value_writes_and_misses_on_accessors() {
         None,
         &domain,
     );
-    let (cached_shape, slot) = object.literal_data_slot("b").expect("literal slot");
+    let (cached_shape, slot) = object.layout_data_slot("b").expect("literal slot");
     assert_eq!(slot, 1);
     assert!(matches!(
         object.write_existing_own_data_property("b", &Value::Number(5.0)),
         OwnDataPropertyWrite::Written
     ));
     assert_eq!(
-        object.literal_data_slot_value(&cached_shape, slot),
+        object.layout_data_slot_value(&cached_shape, slot),
         Some(Value::Number(5.0))
     );
-    assert!(object.literal_data_slot("b").is_some());
+    assert!(object.layout_data_slot("b").is_some());
 
     object.define_property(
         "b".to_owned(),
         Property::accessor(Some(Value::Undefined), None, true, true),
     );
-    assert_eq!(object.literal_data_slot_value(&cached_shape, slot), None);
-    assert!(object.literal_data_slot("b").is_none());
+    assert_eq!(object.layout_data_slot_value(&cached_shape, slot), None);
+    assert!(object.layout_data_slot("b").is_none());
 }
 
 #[test]
-fn dynamic_storage_keeps_order_values_and_slots_across_a_removal() {
+fn dictionary_keeps_order_values_and_slots_across_a_removal() {
     let domain = crate::property::atom::AtomDomain::new();
     let object = ObjectRef::with_prototype(HashMap::new(), None, &domain);
-    let count = PropertyStorage::SMALL_LIMIT + 4;
+    let count = 132;
     for index in 0..count {
         object.set(format!("k{index}"), Value::Number(index as f64));
     }
@@ -294,7 +258,7 @@ fn dynamic_storage_keeps_order_values_and_slots_across_a_removal() {
 }
 
 #[test]
-fn all_property_storage_forms_share_surrogate_pair_key_bytes() {
+fn ordinary_creation_paths_share_surrogate_pair_key_identity() {
     let domain = crate::property::atom::AtomDomain::new();
     use crate::string::{push_js_str, string_from_code_unit};
     let literal = "😀";
@@ -317,22 +281,7 @@ fn all_property_storage_forms_share_surrogate_pair_key_bytes() {
         None,
         &domain,
     );
-    assert!(matches!(
-        &*small.0.properties.borrow(),
-        PropertyStorage::Small { .. }
-    ));
-    assert!(matches!(
-        &*dynamic.0.properties.borrow(),
-        PropertyStorage::Dynamic(_)
-    ));
-    assert!(matches!(
-        &*shaped.0.properties.borrow(),
-        PropertyStorage::Shaped { .. }
-    ));
-    assert!(matches!(
-        &*pair.0.properties.borrow(),
-        PropertyStorage::ShapedPair { .. }
-    ));
+
     for object in [small, dynamic, shaped, pair] {
         for (stored, queried) in [(literal, built.as_str()), (built.as_str(), literal)] {
             object.set(stored.to_owned(), Value::Number(1.0));
@@ -348,5 +297,91 @@ fn all_property_storage_forms_share_surrogate_pair_key_bytes() {
                 1
             );
         }
+    }
+}
+
+#[test]
+fn explicit_host_order_is_validated_before_key_creation() {
+    let domain = crate::property::atom::AtomDomain::new();
+    let make = || {
+        HashMap::from([
+            ("a".to_owned(), Value::Number(1.0)),
+            ("b".to_owned(), Value::Number(2.0)),
+        ])
+    };
+    assert!(
+        ObjectRef::with_property_order(make(), vec!["a".into(), "a".into()], None, &domain)
+            .is_err()
+    );
+    assert_eq!(domain.created_count(), 0);
+    let object =
+        ObjectRef::with_property_order(make(), vec!["b".into(), "a".into()], None, &domain)
+            .unwrap();
+    assert_eq!(object.own_property_names(), ["b", "a"]);
+}
+
+#[test]
+fn string_virtual_indices_do_not_intern_or_materialize_on_reads() {
+    let domain = crate::property::atom::AtomDomain::new();
+    let object = ObjectRef::new(HashMap::new(), &domain);
+    object.define_non_enumerable(
+        crate::string::STRING_DATA_PROPERTY.to_owned(),
+        Value::String("a😀".into()),
+    );
+    object.defer_string_indices();
+    let count = domain.created_count();
+    assert_eq!(object.get("0"), Some(Value::String("a".into())));
+    assert!(object.own_property("1").is_some());
+    assert_eq!(object.own_property_keys(), ["0", "1", "2"]);
+    assert_eq!(object.0.properties.borrow().len(), 1);
+    assert_eq!(domain.created_count(), count);
+    assert!(!object.delete_own_property("0"));
+}
+
+#[cfg(feature = "perf-counters")]
+#[test]
+fn ordinary_constructor_append_hit_uses_one_probe_and_no_interns_or_copies() {
+    let owner = crate::value::layout::PropertyOwner::new(crate::property::atom::AtomDomain::new());
+    let first = ObjectRef::new(HashMap::new(), owner.domain());
+    first.set("x".into(), Value::Number(1.0));
+    let second = ObjectRef::new(HashMap::new(), owner.domain());
+    let before = crate::diagnostics::counters().unwrap();
+    second.set("x".into(), Value::Number(2.0));
+    let after = crate::diagnostics::counters().unwrap();
+    assert_eq!(after.property_id_probes - before.property_id_probes, 1);
+    assert_eq!(after.property_key_interns - before.property_key_interns, 0);
+    assert_eq!(
+        after.property_shape_field_copies - before.property_shape_field_copies,
+        0
+    );
+    assert_eq!(
+        after.property_transition_hits - before.property_transition_hits,
+        1
+    );
+}
+
+#[test]
+fn nonextensible_receiver_still_calls_an_inherited_setter() {
+    assert_eq!(
+        crate::eval(
+            "let hit = 0; let parent = { set x(v) { hit = v; } }; let child = Object.create(parent); Object.preventExtensions(child); child.x = 7; hit;"
+        ),
+        Ok(Value::Number(7.0))
+    );
+}
+
+#[test]
+fn constructor_class_json_literal_and_null_prototype_share_one_layout() {
+    let Value::Array(values) = crate::eval("function C() { this.a = 1; this.b = 2; } class K { a = 3; b = 4; } const n = Object.create(null); n.a = 5; n.b = 6; [new C(), new K(), JSON.parse('{\"a\":7,\"b\":8}'), {a:9,b:10}, n];").unwrap() else { panic!("expected objects"); };
+    let mut layouts = Vec::new();
+    for index in 0..values.len() {
+        let Value::Object(object) = values.get(index).unwrap() else {
+            panic!("expected ordinary object");
+        };
+        assert_eq!(object.own_property_names(), ["a", "b"]);
+        layouts.push(object.layout_data_slot("a").unwrap().0);
+    }
+    for layout in &layouts[1..] {
+        assert!(Rc::ptr_eq(&layouts[0], layout));
     }
 }

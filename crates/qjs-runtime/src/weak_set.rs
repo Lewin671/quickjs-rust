@@ -227,7 +227,7 @@ fn define_weak_set_prototype_function(
             length,
             native,
             false,
-            prototype.domain(),
+            &prototype.domain(),
         )),
     );
 }

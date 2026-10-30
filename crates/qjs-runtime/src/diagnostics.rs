@@ -80,6 +80,9 @@ declare_counters! {
     property_atoms_created,
     /// Calls to string or symbol interning, including existing-key hits.
     property_key_interns,
+    /// Content/identity index searches at host key boundaries, including finds.
+    property_text_probes,
+    property_symbol_probes,
     /// ID lookup probes performed by the named-store authority.
     property_id_probes,
     /// Cold ID-index reconstruction work, separate from operation lookup probes.
@@ -89,6 +92,7 @@ declare_counters! {
     property_transition_hits,
     property_transition_misses,
     property_shape_field_copies,
+    /// Append nodes created on transition misses (private edits/root excluded).
     property_shape_nodes_created,
     /// Gauge: shape nodes retained by live domain owners, including roots.
     /// Live uncached layouts are excluded; this returns to zero on owner drop.

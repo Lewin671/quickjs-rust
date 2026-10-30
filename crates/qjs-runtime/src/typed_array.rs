@@ -343,7 +343,7 @@ fn define_prototype_method(
             length,
             native,
             false,
-            prototype.domain(),
+            &prototype.domain(),
         )),
     );
 }

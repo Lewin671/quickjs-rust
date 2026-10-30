@@ -50,7 +50,7 @@ struct EnumerateKeysCacheEntry {
 
 struct OrdinaryChainLink {
     object: ObjectWeakRef,
-    layout_revision: u64,
+    layout_revision: crate::value::layout::LayoutVersion,
 }
 
 impl EnumerateKeysCache {
@@ -154,7 +154,7 @@ fn prototype_keys(chain: &[OrdinaryChainLink]) -> Option<PrototypeKeys> {
             .iter()
             .map(|link| OrdinaryChainLink {
                 object: link.object.clone(),
-                layout_revision: link.layout_revision,
+                layout_revision: link.layout_revision.clone(),
             })
             .collect(),
         inherited,

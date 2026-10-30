@@ -207,7 +207,7 @@ fn define_regexp_accessor(
         0,
         native,
         false,
-        prototype.domain(),
+        &prototype.domain(),
     );
     getter.insert_native_context(
         REGEXP_PROTOTYPE_BINDING.to_owned(),

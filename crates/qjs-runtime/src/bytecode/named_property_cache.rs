@@ -4,7 +4,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     ObjectRef, Value,
-    value::{ObjectLiteralShape, ObjectWeakRef, OwnDataPropertyWrite},
+    value::{ObjectWeakRef, OwnDataPropertyWrite},
 };
 
 /// Number of receiver layouts one site retains before falling back.
@@ -36,7 +36,7 @@ struct NamedPropertyCacheState {
     /// with the layout revision it had then. A method read on the same
     /// receiver (`this.m()` in a loop) skips re-proving the miss until an own
     /// property is added, removed or reconfigured.
-    receiver_miss: Option<(ObjectWeakRef, u64)>,
+    receiver_miss: Option<(ObjectWeakRef, crate::value::layout::LayoutVersion)>,
     /// The entry that answered the last own-property probe, which
     /// `probe_hot` checks alone before the full walk.
     hot: std::cell::Cell<u8>,
@@ -49,17 +49,17 @@ enum NamedPropertyCacheEntry {
         revision: u64,
         value: CachedValue,
     },
-    LiteralShape {
-        shape: Rc<ObjectLiteralShape>,
+    LayoutSlot {
+        shape: Rc<crate::value::layout::Layout>,
         slot: usize,
     },
     OwnSlot {
         object: ObjectWeakRef,
-        layout_revision: u64,
+        layout_revision: crate::value::layout::LayoutVersion,
         slot: usize,
     },
     SharedSlot {
-        key: Rc<str>,
+        key: crate::property::atom::KeyLease,
         slot: usize,
     },
     /// A read that resolved on the receiver's direct prototype.
@@ -84,7 +84,7 @@ enum NamedPropertyCacheEntry {
     ///   cached here.
     PrototypeSlot {
         holder: ObjectWeakRef,
-        holder_layout_revision: u64,
+        holder_layout_revision: crate::value::layout::LayoutVersion,
         slot: usize,
     },
     /// A read that resolved one prototype further, on the receiver's
@@ -95,9 +95,9 @@ enum NamedPropertyCacheEntry {
     /// revision -- and still inherit from this holder.
     GrandprototypeSlot {
         parent: ObjectWeakRef,
-        parent_layout_revision: u64,
+        parent_layout_revision: crate::value::layout::LayoutVersion,
         holder: ObjectWeakRef,
-        holder_layout_revision: u64,
+        holder_layout_revision: crate::value::layout::LayoutVersion,
         slot: usize,
     },
 }
@@ -201,7 +201,7 @@ impl NamedPropertyCache {
                 if !receiver.ptr_eq(object) || *revision != object.layout_revision() {
                     return None;
                 }
-                let holder = grandprototype(object, parent, *parent_layout_revision, holder)?;
+                let holder = grandprototype(object, parent, parent_layout_revision, holder)?;
                 if *holder_layout_revision != holder.layout_revision() {
                     return None;
                 }
@@ -258,7 +258,7 @@ impl NamedPropertyCache {
             {
                 if candidate.is_none()
                     && let Some(holder) =
-                        grandprototype(object, parent, *parent_layout_revision, holder)
+                        grandprototype(object, parent, parent_layout_revision, holder)
                     && *holder_layout_revision == holder.layout_revision()
                 {
                     *candidate = Some((holder, *slot));
@@ -309,8 +309,8 @@ impl NamedPropertyCache {
                 }
                 value
             }
-            NamedPropertyCacheEntry::LiteralShape { shape, slot } => {
-                return object.literal_data_slot_value(shape, *slot);
+            NamedPropertyCacheEntry::LayoutSlot { shape, slot } => {
+                return object.layout_data_slot_value(shape, *slot);
             }
             NamedPropertyCacheEntry::OwnSlot {
                 object: cached_object,
@@ -431,13 +431,13 @@ impl NamedPropertyCache {
             .any(|entry| match entry {
                 NamedPropertyCacheEntry::Exact { object: cached, .. }
                 | NamedPropertyCacheEntry::OwnSlot { object: cached, .. } => !cached.ptr_eq(object),
-                NamedPropertyCacheEntry::LiteralShape { .. }
+                NamedPropertyCacheEntry::LayoutSlot { .. }
                 | NamedPropertyCacheEntry::SharedSlot { .. }
                 | NamedPropertyCacheEntry::PrototypeSlot { .. }
                 | NamedPropertyCacheEntry::GrandprototypeSlot { .. } => false,
             });
-        let entry = if let Some((shape, slot)) = object.literal_data_slot(key) {
-            NamedPropertyCacheEntry::LiteralShape { shape, slot }
+        let entry = if let Some((shape, slot)) = object.layout_data_slot(key) {
+            NamedPropertyCacheEntry::LayoutSlot { shape, slot }
         } else if let Some((key, slot)) = saw_other_object
             .then(|| object.shared_data_slot(key))
             .flatten()
@@ -542,7 +542,7 @@ impl NamedPropertyCache {
                 // receiver had no own property of that name. A write creates
                 // the own property instead, which is the general path's job.
                 NamedPropertyCacheEntry::Exact { .. }
-                | NamedPropertyCacheEntry::LiteralShape { .. }
+                | NamedPropertyCacheEntry::LayoutSlot { .. }
                 | NamedPropertyCacheEntry::OwnSlot { .. }
                 | NamedPropertyCacheEntry::PrototypeSlot { .. }
                 | NamedPropertyCacheEntry::GrandprototypeSlot { .. } => {}
@@ -568,6 +568,15 @@ impl NamedPropertyCache {
         object.shared_data_slot_write(key, *slot, value)
     }
 
+    pub(super) fn record_data_slot(&self, key: crate::property::atom::KeyLease, slot: usize) {
+        let mut state = self.0.borrow_mut();
+        let index = state.next_slot;
+        state.entries[index] = Some(NamedPropertyCacheEntry::SharedSlot { key, slot });
+        state.hot.set(index as u8);
+        state.next_slot = (index + 1) % POLYMORPHIC_CACHE_SLOTS;
+    }
+
+    #[cfg(test)] // Legacy entry fixture; production records the resolved slot.
     pub(super) fn record_write(&self, object: &ObjectRef, key: &str) {
         let mut state = self.0.borrow_mut();
         let saw_other_object = state.entries.iter().flatten().any(|entry| {
@@ -631,14 +640,14 @@ impl NamedPropertyCache {
 fn grandprototype(
     object: &ObjectRef,
     parent: &ObjectWeakRef,
-    parent_layout_revision: u64,
+    parent_layout_revision: &crate::value::layout::LayoutVersion,
     holder: &ObjectWeakRef,
 ) -> Option<ObjectRef> {
     if !object.prototype_is_weak(parent) {
         return None;
     }
     let parent = parent.upgrade()?;
-    if parent.layout_revision() != parent_layout_revision || !parent.prototype_is_weak(holder) {
+    if parent.layout_revision() != *parent_layout_revision || !parent.prototype_is_weak(holder) {
         return None;
     }
     holder.upgrade()

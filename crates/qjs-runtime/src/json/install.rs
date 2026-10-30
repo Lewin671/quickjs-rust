@@ -28,7 +28,7 @@ fn define_json_function(object: &ObjectRef, key: &str, length: usize, native: Na
             length,
             native,
             false,
-            object.domain(),
+            &object.domain(),
         )),
     );
 }

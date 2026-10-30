@@ -35,7 +35,7 @@ pub(super) struct TypedLoopSloppyGlobalWrite {
     /// straight to the slot instead of hashing the name into the global
     /// object's table. `None` for a name whose store has a side effect of
     /// its own.
-    property_slot: Option<(usize, u64)>,
+    property_slot: Option<(usize, crate::value::layout::LayoutVersion)>,
 }
 
 impl Vm<'_> {
@@ -645,11 +645,13 @@ impl Vm<'_> {
         target: &TypedLoopSloppyGlobalWrite,
         value: Value,
     ) -> bool {
-        if let Some((slot, layout)) = target.property_slot
-            && target.global_this.layout_revision() == layout
+        if let Some((slot, layout)) = target.property_slot.as_ref()
+            && target.global_this.layout_revision() == *layout
         {
             if !matches!(
-                target.global_this.any_storage_data_slot_write(slot, &value),
+                target
+                    .global_this
+                    .any_storage_data_slot_write(*slot, &value),
                 Some(OwnDataPropertyWrite::Written)
             ) {
                 return false;

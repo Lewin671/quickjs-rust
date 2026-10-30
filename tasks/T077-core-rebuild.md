@@ -1,11 +1,11 @@
 # T077: In-place core rebuild
 
-- Status: active; S1 owner propagation implemented on `agent/t077-s1-property-authority/codex`, base `dd0905b2`; lead approved recycled key IDs; ordinary cutover in progress.
-- Implementation: ordinary constructors/builders take explicit domains; realm roots own shared shape roots; native functions retain their domain. Ordinary stores are unchanged; temporary ObjectData domain storage moves into Layout at cutover.
-- Verified at: `d9b518ec`, 2026-10-30 UTC: full check passes (2,406 runtime tests, 5,170 subset cases), NG 257/257; staged fast gate passes with 117 selected Test262 cases. Prior index source `c1c4a203` remains verified separately.
-- Evidence: [S1 brief/API](proposals/T077-s1-property-authority.md), [foundation](archive/T077-s1-foundation.md), [index](archive/T077-s1-index.md), [owner migration](archive/T077-s1-owner-migration.md).
-- Unresolved: [key lifetime decision](proposals/T077-s1-fallibility.md) approved: recycle IDs and keep existing error APIs; implement its tests, then ordinary/caches cutover and all old-store deletions remain; exact scan/burndown, x86 sizes and formal standing pending.
-- Next action: implement the decided recycling contract and preserve pure String/slot probes; perform the single string/symbol cutover and deletion, then full/NG/configured-exact scan and burndown. Never push or merge this branch.
+- Status: active; S1 cutover implemented on `agent/t077-s1-property-authority/codex`, base `dd0905b2`; final gates in progress.
+- Implementation: ordinary string/symbol storage uses NamedStore; old forms, dynamic storage file, literal payload index and cold symbols deleted. Construction domains and legacy cache consumers migrated; 96-byte ordinary header, pure String indices, recycled leased keys.
+- Verified at: cutover working tree, 2026-10-30 UTC: full check passes (2,411 runtime tests, 5,170 subset cases); combined-feature tests 2,451/2,451, NG 257/257 and x86 size assertions pass; staged hook next. Recycling source `4e39af1f` passed its fast gate.
+- Evidence: [S1 brief/API](proposals/T077-s1-property-authority.md), [decided key lifetime](proposals/T077-s1-fallibility.md), [prior owner migration](archive/T077-s1-owner-migration.md), [cutover receipt](archive/T077-s1-cutover.md).
+- Unresolved: committed configured exact scan and burndown; formal performance standing remains lead-owned. No correctness waiver, fallback store, push or merge.
+- Next action: finish final verification, commit the cutover, scan its exact release/agents binary, append complete-scan burndown and bind the final source/evidence. Never push or merge this branch.
 
 ## Authority and scope
 
@@ -75,6 +75,14 @@ plus aggregate improvement is progress, not proof of that campaign target.
   measure full portfolio; revert this stage if authority/neutrality cannot hold.
 
 Foundation inventory, sizes and verification: [milestone evidence](archive/T077-s1-foundation.md).
+
+### S1 design corrections
+
+The [lead decision](proposals/T077-s1-fallibility.md) replaces monotonic keys
+with lease-safe recycling and allocation-error abort. [Object invariants](../docs/design/core-rebuild-objects.md)
+record paired identity/epoch guards, cold legacy value revisions and incremental
+data-write checks. [Cutover evidence](archive/T077-s1-cutover.md) records reasons;
+no error ABI, fallback store or correctness waiver was introduced.
 
 ## S2 — All named stores and shape ICs
 

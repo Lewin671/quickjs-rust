@@ -14,11 +14,24 @@ use crate::property::atom::{AtomDomain, KeyId, KeyLease};
 use crate::{Property, Value};
 
 mod edit;
+mod host;
 mod index;
 use index::{IdIndex, IdProbe};
 mod slots;
+mod version;
+pub(crate) use version::LayoutVersion;
 #[cfg(test)]
 mod tests;
+
+#[cfg(target_pointer_width = "64")]
+const _: () = {
+    assert!(std::mem::size_of::<KeyId>() == 4);
+    assert!(std::mem::size_of::<KeyLease>() == 8);
+    assert!(std::mem::size_of::<ShapeEntry>() == 16);
+    assert!(std::mem::size_of::<NamedStore>() == 48);
+    assert!(std::mem::size_of::<RefCell<NamedStore>>() == 56);
+    assert!(std::mem::size_of::<Value>() == 16);
+};
 
 const MAX_EDGES: usize = 16;
 const MAX_CACHED_NODES: usize = 4096;
@@ -140,11 +153,7 @@ impl PropertyOwner {
     }
 }
 
-struct AccessorPair {
-    get: Option<Value>,
-    set: Option<Value>,
-}
-type AccessorSlots = HashMap<u32, AccessorPair>;
+type AccessorSlots = HashMap<u32, Rc<super::property::AccessorState>>;
 
 pub(crate) struct NamedStore {
     layout: Rc<Layout>,
@@ -196,6 +205,41 @@ impl NamedStore {
         self.lookup(key)?.define(property);
         Ok(())
     }
+    pub(crate) fn key_enumerability(&self) -> Vec<(KeyLease, bool)> {
+        let mut entries: Vec<_> = self.layout.keys.iter().zip(&self.layout.entries).collect();
+        entries.sort_unstable_by_key(|(key, entry)| match key.array_index() {
+            Some(index) => (0, index),
+            None if key.symbol().is_none() => (1, entry.order),
+            None => (2, entry.order),
+        });
+        entries
+            .into_iter()
+            .map(|(key, entry)| (key.clone(), entry.attrs.has(Attributes::ENUMERABLE)))
+            .collect()
+    }
+    fn verify_slot(&self, position: usize) {
+        #[cfg(debug_assertions)]
+        {
+            assert_eq!(self.layout.entries.len(), self.values.len());
+            assert_eq!(self.layout.entries.len(), self.layout.keys.len());
+            assert_eq!(self.layout.entries.len(), self.layout.index.len());
+            let entry = self.layout.entries[position];
+            assert_eq!(entry.slot as usize, position);
+            assert_eq!(entry.key, self.layout.keys[position].id());
+            assert_eq!(self.layout.index.verify_position(entry.key), Some(position));
+            assert_eq!(
+                self.accessors
+                    .as_deref()
+                    .is_some_and(|slots| slots.contains_key(&entry.slot)),
+                entry.attrs.has(Attributes::ACCESSOR)
+            );
+            if entry.attrs.has(Attributes::ACCESSOR) {
+                assert_eq!(self.values[position], Value::Undefined);
+            }
+        }
+        #[cfg(not(debug_assertions))]
+        let _ = position;
+    }
     pub(crate) fn keys(&self) -> Vec<KeyLease> {
         let mut indices = Vec::new();
         let mut strings = Vec::new();
@@ -224,8 +268,15 @@ impl NamedStore {
     pub(crate) fn layout(&self) -> &Rc<Layout> {
         &self.layout
     }
+    #[cfg(test)]
+    pub(crate) fn test_set_epoch(&mut self, epoch: u64) {
+        self.epoch = epoch;
+    }
     pub(crate) fn epoch(&self) -> u64 {
         self.epoch
+    }
+    pub(crate) fn is_dictionary(&self) -> bool {
+        self.layout.dictionary
     }
     pub(crate) fn len(&self) -> usize {
         self.layout.entries.len()

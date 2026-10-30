@@ -8,7 +8,7 @@ use crate::value::ObjectLiteralShape;
 use crate::{ObjectRef, Value};
 
 #[test]
-fn prototype_cache_records_and_reads_both_literal_representations() {
+fn prototype_cache_records_and_reads_slots_across_literal_widths() {
     let domain = crate::property::atom::AtomDomain::new();
     for count in [2, 4, 20] {
         let keys: Vec<Rc<str>> = (0..count).map(|i| Rc::from(format!("field{i}"))).collect();
@@ -20,8 +20,11 @@ fn prototype_cache_records_and_reads_both_literal_representations() {
             &domain,
         );
         let receiver = ObjectRef::with_prototype(HashMap::new(), Some(holder.clone()), &domain);
-        assert!(holder.own_data_slot(&key).is_none());
-        assert!(holder.own_data_slot_value(count - 1).is_none());
+        assert_eq!(holder.own_data_slot(&key), Some(count - 1));
+        assert_eq!(
+            holder.own_data_slot_value(count - 1),
+            Some(Value::Number((count - 1) as f64))
+        );
         let cache = NamedPropertyCache::default();
         cache.update_from_prototype(&receiver, &key);
         let CacheProbe::PrototypeCandidate { holder: hit, slot } = cache.probe(&receiver) else {
@@ -84,7 +87,7 @@ fn a_value_with_no_by_value_entry_is_cached_by_slot() {
 }
 
 #[test]
-fn a_function_on_slotless_storage_is_cached_by_value_and_revision() {
+fn a_function_in_shared_layout_is_read_live_across_unrelated_writes() {
     let domain = crate::property::atom::AtomDomain::new();
     // Enough properties to leave the small slot storage, as `Math` has.
     let object = ObjectRef::with_prototype(HashMap::new(), None, &domain);
@@ -94,7 +97,7 @@ fn a_function_on_slotless_storage_is_cached_by_value_and_revision() {
     let function =
         crate::Function::new_native(Some("f"), 0, crate::NativeFunction::MathAbs, false, &domain);
     object.set("f".to_owned(), Value::Function(function.clone()));
-    assert!(object.own_data_slot("f").is_none());
+    assert!(object.own_data_slot("f").is_some());
     let cache = NamedPropertyCache::default();
     cache.update(&object, "f", &Value::Function(function.clone()));
     assert!(
@@ -102,5 +105,54 @@ fn a_function_on_slotless_storage_is_cached_by_value_and_revision() {
     );
     // Any write to the object advances its revision and retires the entry.
     object.set("p0".to_owned(), Value::Number(-1.0));
+    assert!(
+        matches!(cache.probe(&object), CacheProbe::Own(Value::Function(hit)) if hit.ptr_eq(&function))
+    );
+}
+
+#[test]
+fn shared_layout_cache_owns_key_leases_until_its_last_entry_drops() {
+    use crate::property::atom::AtomDomain;
+    let domain = AtomDomain::limited_for_test(1);
+    let owner = crate::value::layout::PropertyOwner::new(domain.clone());
+    let object = ObjectRef::new(HashMap::new(), &domain);
+    object.set("old".into(), Value::Number(1.0));
+    let id = domain.find("old").unwrap().id();
+    let cache = NamedPropertyCache::default();
+    cache.update(&object, "old", &Value::Number(1.0));
+    let guard = Rc::downgrade(&object.layout_data_slot("old").unwrap().0);
+    drop(object);
+    drop(owner);
+    assert!(
+        domain.try_intern("new").is_err(),
+        "a live cached layout must retain its key lease"
+    );
+    cache.clear();
+    assert!(guard.upgrade().is_none());
+    assert_eq!(domain.try_intern("new").unwrap().id(), id);
+}
+
+#[test]
+fn weak_slot_cache_rejects_recycled_ids_even_when_epoch_restarts() {
+    use crate::property::atom::AtomDomain;
+    let domain = AtomDomain::limited_for_test(1);
+    let object = ObjectRef::with_literal_properties(
+        ObjectLiteralShape::new(vec![Rc::from("old")]),
+        vec![Value::Number(1.0)],
+        None,
+        &domain,
+    );
+    let id = domain.find("old").unwrap().id();
+    let cache = NamedPropertyCache::default();
+    cache.record_write(&object, "old");
+    object.test_set_layout_epoch(u64::MAX - 1);
+    assert!(object.delete_own_property("old"));
+    let new = domain
+        .try_intern("new")
+        .expect("weak guards do not keep dead keys alive");
+    assert_eq!(new.id(), id);
+    object.set("new".into(), Value::Number(2.0));
     assert!(matches!(cache.probe(&object), CacheProbe::Miss));
+    assert!(cache.write(&object, "old", &Value::Number(9.0)).is_none());
+    assert_eq!(object.get("new"), Some(Value::Number(2.0)));
 }

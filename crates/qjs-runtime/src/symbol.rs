@@ -145,7 +145,7 @@ fn install_well_known_symbols(symbol_function: &Function, symbol_prototype: &Obj
         let symbol = Value::Object(symbol_object(
             Some(symbol_prototype.clone()),
             Value::String(format!("Symbol.{name}").into()),
-            symbol_prototype.domain(),
+            &symbol_prototype.domain(),
         ));
         properties.insert(
             name.to_string(),

@@ -2,7 +2,7 @@
 use super::*;
 
 impl Layout {
-    fn copied(&self, dictionary: bool) -> Self {
+    pub(super) fn copied(&self, dictionary: bool) -> Self {
         for _ in &self.entries {
             crate::diagnostics::count!(property_shape_field_copies);
         }
@@ -92,6 +92,10 @@ impl Layout {
 }
 
 impl Lookup<'_> {
+    pub(crate) fn data_slot(&self) -> Option<usize> {
+        self.position
+            .filter(|&p| !self.store.layout.entries[p].attrs.has(Attributes::ACCESSOR))
+    }
     pub(crate) fn descriptor(&self) -> Option<Property> {
         self.position
             .map(|position| self.store.descriptor(position))
@@ -102,8 +106,13 @@ impl Lookup<'_> {
             Some(position) => {
                 if self.store.layout.entries[position].attrs != attrs {
                     self.store.edit_layout().entries[position].attrs = attrs;
+                    self.store.install(position, property);
+                    self.store.verify();
+                    return;
                 }
                 self.store.install(position, property);
+                self.store.verify_slot(position);
+                return;
             }
             None => {
                 let dictionary =
@@ -111,6 +120,7 @@ impl Lookup<'_> {
                 if dictionary {
                     let key = self.key.clone();
                     let layout = self.store.edit_layout();
+                    layout.dictionary = true;
                     let slot =
                         u32::try_from(layout.entries.len()).expect("property slot space exhausted");
                     let order = layout.allocate_order();
@@ -135,6 +145,7 @@ impl Lookup<'_> {
         }
         self.store.verify();
     }
+    #[allow(dead_code)] // Shared semantic API; ObjectRef consumes Lookup directly.
     pub(crate) fn remove(self) -> Option<Property> {
         let position = self.position?;
         let old = self.store.descriptor(position);
@@ -211,18 +222,16 @@ impl NamedStore {
         self.bump_epoch();
         let edits = self.layout.edits.saturating_add(1);
         let dictionary = self.layout.dictionary
-            || self.len() >= DICTIONARY_WIDTH
+            || self.len() > DICTIONARY_WIDTH
             || u64::from(edits) >= DICTIONARY_EDITS;
-        if !self.layout.dictionary
-            || Rc::strong_count(&self.layout) != 1
-            || Rc::weak_count(&self.layout) != 0
-        {
+        if !self.layout.dictionary {
             self.layout = Rc::new(self.layout.copied(dictionary));
         }
-        let layout = Rc::get_mut(&mut self.layout).expect("private edited layout");
+        let layout = Rc::make_mut(&mut self.layout);
         layout.edits = edits;
         layout
     }
+    #[allow(dead_code)] // Shared semantic API; ObjectRef consumes Lookup directly.
     pub(crate) fn remove(&mut self, key: &KeyLease) -> Result<Option<Property>, ForeignKey> {
         Ok(self.lookup(key)?.remove())
     }

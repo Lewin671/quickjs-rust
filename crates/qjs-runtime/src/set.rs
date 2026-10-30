@@ -416,7 +416,7 @@ pub(crate) fn native_set_iterator_next(this_value: Value) -> Result<Value, Runti
         });
     };
     if iterator_done(&iterator) {
-        return Ok(iterator_result(Value::Undefined, true, iterator.domain()));
+        return Ok(iterator_result(Value::Undefined, true, &iterator.domain()));
     }
 
     let set = match iterator_slot(&iterator, SET_ITERATOR)? {
@@ -437,7 +437,7 @@ pub(crate) fn native_set_iterator_next(this_value: Value) -> Result<Value, Runti
                 SET_ITERATOR_NEXT_INDEX.to_owned(),
                 Value::Number(position as f64),
             );
-            return Ok(iterator_result(Value::Undefined, true, iterator.domain()));
+            return Ok(iterator_result(Value::Undefined, true, &iterator.domain()));
         }
         let entry = set.value_at(position);
         position += 1;
@@ -460,7 +460,7 @@ pub(crate) fn native_set_iterator_next(this_value: Value) -> Result<Value, Runti
             });
         }
     };
-    Ok(iterator_result(item, false, iterator.domain()))
+    Ok(iterator_result(item, false, &iterator.domain()))
 }
 
 fn this_set(this_value: Value) -> Result<SetRef, RuntimeError> {
@@ -574,7 +574,7 @@ fn define_set_prototype_function(
             length,
             native,
             false,
-            prototype.domain(),
+            &prototype.domain(),
         )),
     );
 }
