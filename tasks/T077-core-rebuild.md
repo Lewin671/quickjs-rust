@@ -1,11 +1,11 @@
 # T077: In-place core rebuild
 
-- Status: active; S1 implementation in progress; S3 split approved, S3a implementation in progress (2026-10-29).
+- Status: active; S1 implementation in progress; S3a implementation/counters/full gates complete on its owner branch, complete exact scan pending (2026-10-30 UTC).
 - Implementation: partial; S3a direct operation entries and native slice transport present on the S3a owner branch; other stages remain unimplemented here.
-- Verified at: S3a worktree based on `d19d3aa6`, 2026-10-30; nine focused native tests, full check (5,170 curated cases), and all 257 NG fixtures pass; exact comparison/counters pending; development counters found a depth-32 regression, optimized budget corrected to 256 after measuring nesting 158; subsequent debug/optimized stack stress requires a stack-space guard alongside depth 256. Historical S3 inventory remains revision-bound.
+- Verified at: `27d503a68e0e5179fd47e8cecb242becf6dca87c`, 2026-10-30 UTC; native/recycler tests (51 optimized), full check (2,395 runtime tests; 5,170 curated cases), 257 NG fixtures and ten two-repeat development counter maps pass; exact scan pending.
 - Evidence: [target](../docs/design/core-rebuild.md), [S1 brief](proposals/T077-s1-property-authority.md), [S3 plan/inventories](proposals/T077-s3-plan.md), [S3 counts](diagnostics/T077-s3-counts.md). S3a implementation/check record: [S3a results](diagnostics/T077-s3a-results.md).
-- Unresolved: S3a full correctness/counter gates and lead formal aggregate acceptance; pending fresh baseline and T074 contracts before S3b. Compact-pointer portability and final campaign progress remain unmeasured.
-- Next action: S1 and S3a owners implement on their branches; lead reviews T074 decisions before S3b and records the pending baseline. Do not queue another baseline or revive closed unit gates.
+- Unresolved: S3a complete exact comparison/burndown and lead formal aggregate acceptance; pending fresh baseline and T074 contracts before S3b. Compact-pointer portability and final campaign progress remain unmeasured.
+- Next action: S3a owner finishes the complete exact scan/burndown; lead performs formal acceptance and reviews T074 before S3b, while S1 continues. Do not queue another baseline or revive closed unit gates.
 
 ## Authority and scope
 

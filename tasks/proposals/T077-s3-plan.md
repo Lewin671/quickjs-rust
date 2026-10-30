@@ -2,10 +2,10 @@
 
 - Status: approved by the lead 2026-10-29 with amendments in [T077](../T077-core-rebuild.md) (S3a may land before S1/S2; S3e prices growing the wide tier).
 - Implementation: S3a operation entries and native slice transport present on its owner branch; S3b–e remain planned. See [S3a results](../diagnostics/T077-s3a-results.md).
-- Verified at: source `dd0905b2cb0236c38619089a27e8342b575dda61`, 2026-10-29; diagnostic build and twenty checksum-checked development runs; document gates recorded in the diagnostics.
+- Verified at: S3a `27d503a6`, 2026-10-30 UTC; full check, all 257 NG fixtures, 51 optimized native tests and twenty checksum-checked development counter runs pass; complete exact scan pending. Historical inventories stay bound to their recorded source.
 - Evidence: [counts/reproduction](../diagnostics/T077-s3-counts.md), [Op map](T077-s3-op-map.md), [construction inventory](T077-s3-activation-inventory.md), [native/executor inventory](T077-s3-native-executors.md).
-- Unresolved: S3a final correctness/counter gates and formal aggregate acceptance; T074 contracts before S3b; no performance acceptance measured here.
-- Next action: complete S3a verification on its frozen `d19d3aa6` base; lead runs formal acceptance and reviews T074 before S3b.
+- Unresolved: S3a complete exact scan/burndown and formal aggregate acceptance; T074 contracts before S3b; no performance acceptance measured here.
+- Next action: finish S3a complete exact verification; lead runs formal acceptance and reviews T074 before S3b.
 
 ## Recommendation and authority at every landing
 

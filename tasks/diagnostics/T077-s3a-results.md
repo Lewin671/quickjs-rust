@@ -1,7 +1,7 @@
 # T077 S3a implementation and verification
 
 Owner branch `agent/t077-s3a-native-entries/codex`, base `d19d3aa6`.
-Implementation present at `2bd8d91a`; debug/release native tests and counters pass;
+Implementation present at `27d503a6`; native/recycler tests and counters pass;
 full check and 257 NG fixtures pass; complete exact scan pending. No push, merge,
 iMac timing or held-out input access. Lead owns formal aggregate acceptance.
 
@@ -78,7 +78,7 @@ for it. The final candidate must run the complete scan and all ten counters agai
 
 ## Corrected candidate counters
 
-At `2bd8d91a295dbe92364bde26cac211aa338507f9`, all ten development programs pass
+At `27d503a68e0e5179fd47e8cecb242becf6dca87c`, all ten development programs pass
 with the original workload SHA-256 and exact stdout. Two fresh processes per
 program produce identical complete counter maps. The raw [after counts](T077-s3a-counts.json),
 [temporary patch](T077-s3a-instrumentation.patch) and [identities](T077-s3a-metadata.json)
@@ -199,19 +199,19 @@ the existing pure-JS Rust recursion is still S3d's explicit-stack work.
 
 ## Final revision verification commands
 
-Runtime revision `2bd8d91a295dbe92364bde26cac211aa338507f9`:
+Runtime revision `27d503a68e0e5179fd47e8cecb242becf6dca87c`:
 
 - `cargo test -p qjs-runtime native::tests`: 12 passed.
-- `cargo test --release -p qjs-runtime native::tests`: 12 passed, including the
+- `cargo test --release -p qjs-runtime native`: 51 passed, including all 12 focused native tests, the operand-capacity regression, and the
   300-level callback rejection on the normal Rust test-thread stack. An existing
   release-only unused-import warning in `string/canonical/tests.rs` is outside
   this native-entry change and was not edited.
-- `TEST262_DIR=/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/third_party/test262 TEST262_JOBS=4 ./scripts/check.sh`: passed all stages, including 2,394 runtime tests and 5,170 curated cases.
+- `TEST262_DIR=/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/third_party/test262 TEST262_JOBS=4 ./scripts/check.sh`: passed all stages, including 2,395 runtime tests and 5,170 curated cases.
 - `QJS_CLI_BIN="$PWD/target/release/qjs" COMPARE_QJS_JOBS=4 ./scripts/compare-qjs.sh`:
   all 257 fixtures pass, using the clean agents-enabled release binary.
 - All ten development programs also pass once on that clean non-counter binary,
   with exact manifest stdout; the diagnostic two-run full-map checks pass as above.
-- `QJS_AGENTS=1 QJS_CLI_PROFILE=release QJS_CLI_BIN="$PWD/target/release/qjs" TEST262_TIMEOUT_RETRIES=1 TEST262_CASE_TIMEOUT_SECONDS=20 TEST262_BASELINE_JOBS=4 ./scripts/find-qjsng-gaps.sh --exact --all --no-recommend --out-dir target/t077-s3a/exact-2bd8d91a`:
+- `QJS_AGENTS=1 QJS_CLI_PROFILE=release QJS_CLI_BIN="$PWD/target/release/qjs" TEST262_TIMEOUT_RETRIES=1 TEST262_CASE_TIMEOUT_SECONDS=20 TEST262_BASELINE_JOBS=4 ./scripts/find-qjsng-gaps.sh --exact --all --no-recommend --out-dir target/t077-s3a/exact-27d503a6`:
   running; append the complete-scan burndown only after completion.
 
 Scope validation at this revision passes with the native/family/call-routing,

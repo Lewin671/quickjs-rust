@@ -1,0 +1,25 @@
+{
+  "revision": "27d503a68e0e5179fd47e8cecb242becf6dca87c",
+  "base": "d19d3aa6",
+  "counter_binary_sha256": "0844c86f2a3b31440fefc749df86849805513467a4703746493ae3892aadbd20",
+  "patch_sha256": "b6d0ebfa7d374a4998b9abb9154e7ce41d6e344c2210772d3d05269cc01edd7b",
+  "rustc": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: aarch64-apple-darwin\nrelease: 1.95.0\nLLVM version: 22.1.2\n",
+  "host": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+  "repeats": 2,
+  "timing": false,
+  "held_out_access": false,
+  "argv": [
+    "<binary>",
+    "--raw",
+    "<case.workload>"
+  ],
+  "environment": "inherited with all QJS_* removed",
+  "manifest_sha256": "2f35fddc49930a43644cfe9452a6c994da2059bc59e2fc855f706f602076fd13",
+  "before_revision": "d19d3aa6",
+  "before_binary_sha256": "cea47f7d02c7de4a7655b95a8d240420885863e3e2fee8d6815dddff84f9f880",
+  "release_agents_binary_sha256": "506dd72e025285008db71f3be12179c8ed9be4fe390008dca0bbd15f39e0a0d2",
+  "quickjs_ng_revision": "f7830186043e4488f2998759d60a514faf07cbc9",
+  "test262_revision": "4249661388e5d3f92a85186213da140a6481490f",
+  "max_native_depth": 256,
+  "max_native_stack_bytes": 1048576
+}
