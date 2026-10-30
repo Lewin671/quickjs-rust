@@ -98,3 +98,16 @@ construction/clone and return-tag transport on typed fields and the existing
 this-property numeric evaluator. Admission/shape guards stay identical; every
 hit checks the live Value kind, so value-only type changes remain correct.
 This admits by consumer operation/type, adding no body-template recognizer.
+
+Fifth triage `20261030T151732Z-t077-s2-r1-numeric-triage` is faster at all four
+requested read/churn points (0.6580/0.9826/0.9040/0.7655), with development still
+1.007384. Remove redundant construction work: seed array authorities directly
+with the realm prototype instead of creating a null-prototype root then rebasing;
+borrow literal prototype inputs and reuse live prototype-owner boxes before
+upgrading their underlying Weak identities. Preserve sparse/all-hole storage,
+realm identity, transition sharing and payload sizes. No new semantic fast path.
+
+Literal metadata also proves an identity input-slot map when input and unique
+cardinalities match. Skip the remapping loop/truncation in that case; retain
+ordered duplicate compaction otherwise. This uses construction metadata, never
+a source/bytecode template, and keeps all observable definition order unchanged.

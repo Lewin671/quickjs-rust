@@ -69,15 +69,16 @@ impl ObjectLiteralShape {
     pub(super) fn linked_layout(
         &self,
         domain: &AtomDomain,
-        prototype: Option<Prototype>,
+        prototype: Option<&Prototype>,
     ) -> Rc<Layout> {
         let mut links = self.links.borrow_mut();
-        if let Some(link) = links.iter().find(|link| {
-            link.domain.is(domain) && link.layout.matches_prototype(prototype.as_ref(), 0)
-        }) {
+        if let Some(link) = links
+            .iter()
+            .find(|link| link.domain.is(domain) && link.layout.matches_prototype(prototype, 0))
+        {
             return link.layout.clone();
         }
-        let mut store = NamedStore::empty_with_prototype(domain, prototype, 0);
+        let mut store = NamedStore::empty_with_prototype(domain, prototype.cloned(), 0);
         for key in self.keys.iter() {
             store
                 .define(&domain.intern(key), Property::enumerable(Value::Undefined))

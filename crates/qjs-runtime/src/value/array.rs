@@ -182,87 +182,84 @@ impl ArrayData {
 
 impl ArrayRef {
     pub(crate) fn new(realm: &crate::function::Realm, elements: Vec<Value>) -> Self {
-        let array = Self::new_in_domain(realm.atoms(), elements);
-        array
-            .0
-            .named
-            .borrow_mut()
-            .set_prototype(realm.array_prototype().map(Prototype::Object), 4);
-        array
+        let length = elements.len();
+        Self::with_storage(
+            realm.atoms(),
+            realm.array_prototype().map(Prototype::Object),
+            elements,
+            length,
+            BTreeSet::new(),
+        )
     }
     pub(crate) fn new_with_length(realm: &crate::function::Realm, length: usize) -> Self {
-        let array = Self::new_with_length_in_domain(realm.atoms(), length);
-        array
-            .0
-            .named
-            .borrow_mut()
-            .set_prototype(realm.array_prototype().map(Prototype::Object), 4);
-        array
+        Self::with_storage(
+            realm.atoms(),
+            realm.array_prototype().map(Prototype::Object),
+            Vec::new(),
+            length,
+            BTreeSet::new(),
+        )
     }
     pub(crate) fn new_sparse(
         realm: &crate::function::Realm,
         elements: Vec<Value>,
         holes: Vec<usize>,
     ) -> Self {
-        let array = Self::new_sparse_in_domain(realm.atoms(), elements, holes);
-        array
-            .0
-            .named
-            .borrow_mut()
-            .set_prototype(realm.array_prototype().map(Prototype::Object), 4);
-        array
+        Self::sparse_with_prototype(
+            realm.atoms(),
+            realm.array_prototype().map(Prototype::Object),
+            elements,
+            holes,
+        )
     }
+    #[cfg(test)]
     pub(crate) fn new_in_domain(
         domain: &crate::property::atom::AtomDomain,
         elements: Vec<Value>,
     ) -> Self {
         let length = elements.len();
-        Self(Rc::new(ArrayData {
-            named: RefCell::new(super::layout::NamedStorage::new(domain, None, 4)),
-            elements: RefCell::new(elements),
-            length: Cell::new(length),
-            length_writable: Cell::new(true),
-            extensible: Cell::new(true),
-            sealed: Cell::new(false),
-            frozen: Cell::new(false),
-            cold: OnceCell::new(),
-        }))
+        Self::with_storage(domain, None, elements, length, BTreeSet::new())
     }
-
+    #[cfg(test)]
     pub(crate) fn new_with_length_in_domain(
         domain: &crate::property::atom::AtomDomain,
         length: usize,
     ) -> Self {
-        Self(Rc::new(ArrayData {
-            named: RefCell::new(super::layout::NamedStorage::new(domain, None, 4)),
-            elements: RefCell::new(Vec::new()),
-            length: Cell::new(length),
-            length_writable: Cell::new(true),
-            extensible: Cell::new(true),
-            sealed: Cell::new(false),
-            frozen: Cell::new(false),
-            cold: OnceCell::new(),
-        }))
+        Self::with_storage(domain, None, Vec::new(), length, BTreeSet::new())
     }
-
+    #[cfg(test)]
     pub(crate) fn new_sparse_in_domain(
         domain: &crate::property::atom::AtomDomain,
         elements: Vec<Value>,
         holes: Vec<usize>,
     ) -> Self {
-        if holes.is_empty() {
-            return Self::new_in_domain(domain, elements);
-        }
+        Self::sparse_with_prototype(domain, None, elements, holes)
+    }
+    fn sparse_with_prototype(
+        domain: &crate::property::atom::AtomDomain,
+        prototype: Option<Prototype>,
+        elements: Vec<Value>,
+        holes: Vec<usize>,
+    ) -> Self {
         let length = elements.len();
         let holes: BTreeSet<_> = holes.into_iter().collect();
-        let all_holes = holes.len() == length && (0..length).all(|index| holes.contains(&index));
+        let all_holes = holes.len() == length && (0..length).all(|i| holes.contains(&i));
         let (elements, holes) = if all_holes {
             (Vec::new(), BTreeSet::new())
         } else {
             (elements, holes)
         };
+        Self::with_storage(domain, prototype, elements, length, holes)
+    }
+    fn with_storage(
+        domain: &crate::property::atom::AtomDomain,
+        prototype: Option<Prototype>,
+        elements: Vec<Value>,
+        length: usize,
+        holes: BTreeSet<usize>,
+    ) -> Self {
         let data = ArrayData {
-            named: RefCell::new(super::layout::NamedStorage::new(domain, None, 4)),
+            named: RefCell::new(super::layout::NamedStorage::new(domain, prototype, 4)),
             elements: RefCell::new(elements),
             length: Cell::new(length),
             length_writable: Cell::new(true),

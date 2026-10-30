@@ -17,10 +17,19 @@ impl NamedStore {
             layout
         };
         let epoch = if layout.dictionary { 1 } else { 0 };
-        let prototype = Self::retain_prototype(
-            &layout,
-            layout.prototype.as_ref().and_then(WeakPrototype::upgrade),
-        );
+        let cached = layout
+            .root
+            .as_ref()
+            .unwrap_or(&layout)
+            .prototype_value
+            .borrow()
+            .upgrade();
+        let prototype = cached.or_else(|| {
+            Self::retain_prototype(
+                &layout,
+                layout.prototype.as_ref().and_then(WeakPrototype::upgrade),
+            )
+        });
         let store = Self {
             layout,
             values,

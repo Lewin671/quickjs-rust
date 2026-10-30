@@ -1,8 +1,8 @@
 //! Ordinary object identity, internal slots and live prototype edges.
 //!
 //! NamedStore is the sole string/symbol authority. Layouts own key leases;
-//! per-object slots contain values, with accessors cold. Value revision guards
-//! legacy exact-value consumers; layout revision guards slot/prototype consumers.
+//! per-object slots contain values, with accessors cold. Layouts include
+//! prototype identity; prototype-mode cells guard inherited structural facts.
 //! Pure String virtual-index hooks do not materialize or intern on reads.
 
 use std::{
@@ -775,22 +775,21 @@ impl ObjectRef {
         assert_eq!(shape.input_len(), values.len());
         // Input slots never point ahead: each unique key gets its slot on
         // first encounter. Compact duplicates in the producer's vector.
-        for (input, slot) in shape.input_slots.iter().copied().enumerate() {
-            if input != slot {
-                let value = std::mem::replace(&mut values[input], Value::Undefined);
-                values[slot] = value;
+        // Equal input/unique cardinalities prove that the first-occurrence
+        // slot map is the identity. Most literals need no remapping at all.
+        if shape.input_len() != shape.unique_len() {
+            for (input, slot) in shape.input_slots.iter().copied().enumerate() {
+                if input != slot {
+                    let value = std::mem::replace(&mut values[input], Value::Undefined);
+                    values[slot] = value;
+                }
             }
+            values.truncate(shape.unique_len());
         }
-        values.truncate(shape.unique_len());
-        let store = NamedStore::from_data_layout(
-            shape.linked_layout(domain, prototype.clone().map(Prototype::Object)),
-            values,
-        );
-        Self::from_named(
-            store,
-            prototype.map(Prototype::Object),
-            shape.index_property_count,
-        )
+        let prototype = prototype.map(Prototype::Object);
+        let store =
+            NamedStore::from_data_layout(shape.linked_layout(domain, prototype.as_ref()), values);
+        Self::from_named(store, prototype, shape.index_property_count)
     }
 
     pub(crate) fn with_literal_pair(

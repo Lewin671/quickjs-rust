@@ -1,10 +1,10 @@
 # T077: In-place core rebuild
 
-- Status: active; A/B/C/D/E committed through `26fee930`. Four iMac diagnostics show remaining payoff gaps; numeric slot reads are verified and ready to measure.
+- Status: active; A/B/C/D/E committed through `26fee930`. Five iMac diagnostics pay back all requested read/churn points; direct construction seeding targets the remaining development geomean loss.
 - Implementation: prototype-layout/cell redesign, pure outcome ICs, explicit creation intrinsics, lazy stores and E fixes are present. Repair separates data-hit ABI, fuses poly/ID probes, memoizes computed string-key leases and borrows first holders through owning edges.
-- Verified at: `26fee930` full gate, NG 266/266 default/off/verify, verify runtime 2,436, IC-off semantic 2,419; iMac agents/counters 2,481 tests pass. 300 seeded on/off/verify replays agree. `dbe43671` and `63d30d83` full gates pass; `26fee930` exact scan has 42,672 passes/zero gaps and a recorded burndown. `903a5dc0` full gate passes; numeric repair agents/counters verify tests 2,485 and NG 266/266 pass. Final-source gates remain pending.
+- Verified at: `26fee930` full gate, NG 266/266 default/off/verify, verify runtime 2,436, IC-off semantic 2,419; iMac agents/counters 2,481 tests pass. 300 seeded on/off/verify replays agree. `dbe43671` and `63d30d83` full gates pass; `26fee930` exact scan has 42,672 passes/zero gaps and a recorded burndown. `903a5dc0` full gate passes; `61966610` full gate passes; creation repair agents/counters verify tests 2,485 and NG 266/266 pass. Final-source gates remain pending.
 - Evidence: [correction plan](proposals/T077-s2-prototype-layout.md), [round-1 counters](archive/T077-s2-round1-counters.md), [previous S2](archive/T077-s2-verification.md). Jobs `20261030T135556Z-t077-s2-r1-triage` / `20261030T140601Z-t077-s2-r1-property-profiles` bind the first measurement/diagnosis.
-- Unresolved: payoff: fourth triage heterogeneous/churn/dynamic 0.9851/0.9125/0.7643, but prototype 1.0402 and development 1.013005 versus dd0905b2; final repair counters/triage and gates. Earlier cached exact scan retains its pinned binary; obsolete IC-off metadata run stopped.
+- Unresolved: payoff: fifth triage heterogeneous/prototype/churn/dynamic 0.6580/0.9826/0.9040/0.7655, but development 1.007384 versus dd0905b2; final repair counters/triage and gates. Earlier cached exact scan retains its pinned binary; obsolete IC-off metadata run stopped.
 - Next action: verify/commit the general repair, measure on iMac, then freeze final source and complete F. Temporary iMac refs are authorized transport; never push origin or merge main.
 
 ## Authority and scope

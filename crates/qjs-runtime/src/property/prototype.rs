@@ -185,9 +185,8 @@ pub(crate) fn function_prototype(function: &Function) -> Option<ObjectRef> {
 }
 
 /// Preserve an array's live identity when it is installed in a [[Prototype]]
-/// slot. The realm fallback is captured separately so an implicit array
-/// prototype remains available without snapshotting the array's own
-/// descriptors.
+/// slot. The array retains its own explicit prototype; no contextual wrapper
+/// or descriptor snapshot is created.
 pub(crate) fn array_as_prototype_slot(array: &ArrayRef, _env: &CallEnv) -> crate::Prototype {
     crate::Prototype::array(array.clone())
 }
