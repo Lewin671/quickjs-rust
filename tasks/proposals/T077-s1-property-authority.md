@@ -22,7 +22,7 @@ even where its internal key becomes an ID.
 
 ## Freeze these source contracts first
 
-- `property/atom.rs`: extend the existing domain with a unified non-reused u32
+- `property/atom.rs`: extend the existing domain with a unified lease-protected u32
   KeyId namespace and `KeyLease`; retain canonical string equality/index parsing.
   Symbols receive IDs by identity, never description. The domain owns weak
   indices; layouts and linked code own leases. No second atom domain per object.
@@ -102,7 +102,7 @@ this same API, with exotic index/length hooks outside NamedStore.
 | Creation sharing | Repeated fixed-key constructor/class/JSON/literal/host creation reuses shapes even when previous objects die; transition hits copy/intern zero fields/keys. |
 | Descriptors | Data↔accessor, writable/configurable errors, nonextensible/seal/freeze, accessor recursion and throw; data overwrites preserve layout/slot cache and read live values. |
 | Order | Integer keys vs `01`/2^32−1, strings then symbols, duplicate keys, delete/re-add, huge dictionaries and bounded order tombstones. |
-| Key equality | Astral pairs assembled in halves, lone surrogates, real sentinel-range scalars; distinct symbols with same description; key-ID exhaustion without wrap. |
+| Key equality | Astral pairs assembled in halves, lone surrogates, real sentinel-range scalars; distinct symbols with same description; key-ID recycling, lease retention and test-only live-record caps. |
 | Prototype/receiver | Live array/function/proxy prototypes, inherited getter/setter this, Reflect/super receiver, prototype edits, global delete/accessor/recreate cells. |
 | Exotic boundary | Lazy String indices, namespace live exports, typed-array detach/canonical numeric keys, Array length and function lazy descriptors; named storage never overrides these hooks. |
 | Ownership | Escaping object outlives realm handle; domains/atoms/shapes release after owners drop; symbol-key cycles remain known RC leaks until S6, not falsely counted as reclaimed. |

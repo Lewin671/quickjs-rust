@@ -19,8 +19,8 @@ fn physical_budgets() {
 #[test]
 fn repeated_creation_reuses_layout_after_objects_die() {
     let owner = owner();
-    let a = owner.domain().intern("a").unwrap();
-    let b = owner.domain().intern("b").unwrap();
+    let a = owner.domain().intern("a");
+    let b = owner.domain().intern("b");
     let weak = {
         let mut store = owner.empty_store();
         store.define(&a, data(1.0)).unwrap();
@@ -37,7 +37,7 @@ fn repeated_creation_reuses_layout_after_objects_die() {
 #[test]
 fn data_overwrite_preserves_validity_and_reads_live_values() {
     let owner = owner();
-    let key = owner.domain().intern("x").unwrap();
+    let key = owner.domain().intern("x");
     let mut store = owner.empty_store();
     store.define(&key, data(1.0)).unwrap();
     let layout = store.layout().clone();
@@ -53,7 +53,7 @@ fn data_overwrite_preserves_validity_and_reads_live_values() {
 #[test]
 fn reconfiguration_moves_accessor_payload_out_of_data_slots() {
     let owner = owner();
-    let key = owner.domain().intern("x").unwrap();
+    let key = owner.domain().intern("x");
     let mut store = owner.empty_store();
     store.define(&key, data(1.0)).unwrap();
     let original = store.layout().clone();
@@ -82,7 +82,7 @@ fn order_classifies_indices_and_appends_deleted_keys() {
     let mut store = owner.empty_store();
     let keys: Vec<_> = ["01", "4294967295", "9", "2", "x"]
         .iter()
-        .map(|text| owner.domain().intern(text).unwrap())
+        .map(|text| owner.domain().intern(text))
         .collect();
     for key in &keys {
         store.define(key, data(1.0)).unwrap();
@@ -111,8 +111,8 @@ fn order_classifies_indices_and_appends_deleted_keys() {
 #[test]
 fn dictionary_churn_has_no_tombstones_and_invalidates_slots() {
     let owner = owner();
-    let a = owner.domain().intern("a").unwrap();
-    let b = owner.domain().intern("b").unwrap();
+    let a = owner.domain().intern("a");
+    let b = owner.domain().intern("b");
     let mut store = owner.empty_store();
     store.define(&a, data(1.0)).unwrap();
     store.define(&b, data(2.0)).unwrap();
@@ -134,12 +134,12 @@ fn wide_dictionary_is_private_and_data_writes_preserve_version() {
     let owner = owner();
     let mut store = owner.empty_store();
     for n in 0..2000 {
-        let key = owner.domain().intern(&format!("key{n}")).unwrap();
+        let key = owner.domain().intern(&format!("key{n}"));
         store.define(&key, data(n as f64)).unwrap();
     }
     assert!(store.layout.dictionary);
     let epoch = store.epoch();
-    let key = owner.domain().intern("key1999").unwrap();
+    let key = owner.domain().intern("key1999");
     let slot = store.data_slot(&key).unwrap().unwrap();
     assert_eq!(store.replace_data(slot, Value::Number(7.0)), Some(true));
     assert_eq!(store.epoch(), epoch);
@@ -150,8 +150,8 @@ fn wide_dictionary_is_private_and_data_writes_preserve_version() {
 fn same_integer_in_foreign_domain_cannot_address_a_slot() {
     let first = owner();
     let second = owner();
-    let a = first.domain().intern("a").unwrap();
-    let b = second.domain().intern("b").unwrap();
+    let a = first.domain().intern("a");
+    let b = second.domain().intern("b");
     assert_eq!(a.id(), b.id());
     let mut store = first.empty_store();
     store.define(&a, data(1.0)).unwrap();
@@ -164,7 +164,7 @@ fn live_shapes_exceed_cache_bound_and_edges_remain_bounded() {
     let owner = owner();
     let mut live = Vec::new();
     for n in 0..5100 {
-        let key = owner.domain().intern(&format!("key{n}")).unwrap();
+        let key = owner.domain().intern(&format!("key{n}"));
         let mut store = owner.empty_store();
         store.define(&key, data(n as f64)).unwrap();
         live.push((store, key));
@@ -184,13 +184,13 @@ fn escaping_store_retains_domain_but_does_not_pin_owner_cache() {
     let owner = owner();
     let weak_owner = Rc::downgrade(&owner.0);
     let weak_domain = owner.domain().downgrade();
-    let key = owner.domain().intern("escape").unwrap();
+    let key = owner.domain().intern("escape");
     let mut store = owner.empty_store();
     store.define(&key, data(1.0)).unwrap();
     drop(owner);
     assert!(weak_owner.upgrade().is_none());
     assert!(weak_domain.is_live());
-    let another = store.domain().intern("after owner").unwrap();
+    let another = store.domain().intern("after owner");
     store.define(&another, data(2.0)).unwrap();
     assert_eq!(store.get(&key).unwrap().unwrap().value, Value::Number(1.0));
     drop(store);
@@ -201,8 +201,8 @@ fn escaping_store_retains_domain_but_does_not_pin_owner_cache() {
 #[test]
 fn append_hit_has_one_probe_zero_interns_and_zero_field_copies() {
     let owner = owner();
-    let a = owner.domain().intern("a").unwrap();
-    let b = owner.domain().intern("b").unwrap();
+    let a = owner.domain().intern("a");
+    let b = owner.domain().intern("b");
     let mut first = owner.empty_store();
     first.define(&a, data(1.0)).unwrap();
     first.define(&b, data(2.0)).unwrap();
@@ -232,10 +232,10 @@ fn symbols_follow_strings_and_duplicate_identity_keeps_first_order() {
     let owner = owner();
     let first = crate::ObjectRef::new(HashMap::new(), owner.domain());
     let second = crate::ObjectRef::new(HashMap::new(), owner.domain());
-    let a = owner.domain().intern_symbol(&first).unwrap();
-    let b = owner.domain().intern_symbol(&second).unwrap();
-    let text = owner.domain().intern("text").unwrap();
-    let index = owner.domain().intern("0").unwrap();
+    let a = owner.domain().intern_symbol(&first);
+    let b = owner.domain().intern_symbol(&second);
+    let text = owner.domain().intern("text");
+    let index = owner.domain().intern("0");
     let mut store = owner.empty_store();
     for key in [&a, &text, &b, &index] {
         store.define(key, data(1.0)).unwrap();
@@ -253,7 +253,7 @@ fn symbols_follow_strings_and_duplicate_identity_keeps_first_order() {
 #[test]
 fn exhausted_epoch_publishes_a_new_identity_before_restarting_version() {
     let owner = owner();
-    let key = owner.domain().intern("x").unwrap();
+    let key = owner.domain().intern("x");
     let mut store = owner.empty_store();
     store.define(&key, data(1.0)).unwrap();
     let old = store.layout().clone();
@@ -283,11 +283,11 @@ fn width_boundary_enters_dictionary_on_the_first_property_over_limit() {
     let owner = owner();
     let mut store = owner.empty_store();
     for n in 0..DICTIONARY_WIDTH {
-        let key = owner.domain().intern(&format!("key{n}")).unwrap();
+        let key = owner.domain().intern(&format!("key{n}"));
         store.define(&key, data(n as f64)).unwrap();
     }
     assert!(!store.layout.dictionary);
-    let next = owner.domain().intern("over limit").unwrap();
+    let next = owner.domain().intern("over limit");
     store.define(&next, data(9.0)).unwrap();
     assert!(store.layout.dictionary);
 }
@@ -296,7 +296,7 @@ fn width_boundary_enters_dictionary_on_the_first_property_over_limit() {
 fn dictionary_swap_removal_moves_accessor_slots_but_preserves_key_order() {
     let owner = owner();
     let keys: Vec<_> = (0..129)
-        .map(|n| owner.domain().intern(&format!("key{n}")).unwrap())
+        .map(|n| owner.domain().intern(&format!("key{n}")))
         .collect();
     let mut store = owner.empty_store();
     for key in &keys[..128] {
@@ -337,14 +337,14 @@ fn dictionary_order_exhaustion_compacts_live_order_without_changing_slots() {
     let owner = owner();
     let mut store = owner.empty_store();
     let keys: Vec<_> = (0..129)
-        .map(|n| owner.domain().intern(&format!("key{n}")).unwrap())
+        .map(|n| owner.domain().intern(&format!("key{n}")))
         .collect();
     for (n, key) in keys.iter().enumerate() {
         store.define(key, data(n as f64)).unwrap();
     }
     store.remove(&keys[60]).unwrap().unwrap();
     Rc::get_mut(&mut store.layout).unwrap().next_order = u32::MAX;
-    let fresh = owner.domain().intern("fresh").unwrap();
+    let fresh = owner.domain().intern("fresh");
     store.define(&fresh, data(1000.0)).unwrap();
     let expected: Vec<_> = keys
         .iter()
@@ -368,10 +368,10 @@ fn dictionary_insertion_consumes_one_probe_even_when_index_rebuilds() {
     let owner = owner();
     let mut store = owner.empty_store();
     for n in 0..255 {
-        let key = owner.domain().intern(&format!("key{n}")).unwrap();
+        let key = owner.domain().intern(&format!("key{n}"));
         store.define(&key, data(n as f64)).unwrap();
     }
-    let key = owner.domain().intern("triggers growth").unwrap();
+    let key = owner.domain().intern("triggers growth");
     let before = crate::diagnostics::counters().unwrap();
     store.lookup(&key).unwrap().define(data(256.0));
     let after = crate::diagnostics::counters().unwrap();
@@ -398,7 +398,7 @@ fn retention_gauge_releases_cache_ownership_while_escaping_layout_stays_live() {
         .unwrap()
         .property_cached_shape_nodes;
     let owner = owner();
-    let key = owner.domain().intern("kept").unwrap();
+    let key = owner.domain().intern("kept");
     let mut store = owner.empty_store();
     store.define(&key, data(1.0)).unwrap();
     assert_eq!(
@@ -415,4 +415,50 @@ fn retention_gauge_releases_cache_ownership_while_escaping_layout_stays_live() {
         before
     );
     assert_eq!(store.get(&key).unwrap().unwrap().value, Value::Number(1.0));
+}
+
+#[test]
+fn shapes_and_dictionaries_pin_ids_until_every_layout_owner_is_gone() {
+    for dictionary in [false, true] {
+        let domain = AtomDomain::limited_for_test(1);
+        let owner = PropertyOwner::new(domain.clone());
+        let key = domain.intern("old");
+        let id = key.id();
+        let mut store = owner.empty_store();
+        store.define(&key, data(1.0)).unwrap();
+        if dictionary {
+            for n in 0..33 {
+                store
+                    .define(
+                        &key,
+                        Property::data(Value::Number(1.0), n % 2 == 0, true, true),
+                    )
+                    .unwrap();
+            }
+            assert!(store.layout.dictionary);
+        }
+        let guard = Rc::downgrade(store.layout());
+        drop(key);
+        assert!(
+            domain.try_intern("new").is_err(),
+            "live layouts must pin the lease"
+        );
+        drop(store);
+        assert!(
+            domain.try_intern("new").is_err(),
+            "cached shapes must also pin the lease"
+        );
+        drop(owner);
+        assert!(
+            guard.upgrade().is_none(),
+            "expired layout guards cannot validate a new key"
+        );
+        let new = domain.intern("new");
+        assert_eq!(new.id(), id);
+        let new_owner = PropertyOwner::new(domain);
+        let mut fresh = new_owner.empty_store();
+        fresh.define(&new, data(2.0)).unwrap();
+        assert!(!guard.ptr_eq(&Rc::downgrade(fresh.layout())));
+        assert_eq!(fresh.get(&new).unwrap().unwrap().value, Value::Number(2.0));
+    }
 }

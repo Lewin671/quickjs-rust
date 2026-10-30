@@ -28,11 +28,10 @@ pub(crate) fn to_key(
 ) -> Result<super::atom::KeyLease, RuntimeError> {
     let key = to_property_key_value(value, env)?;
     let domain = env.realm().atoms();
-    match key {
+    Ok(match key {
         PropertyKey::String(text) => domain.intern(&text),
         PropertyKey::Symbol(symbol) => domain.intern_symbol(&symbol),
-    }
-    .map_err(super::atom::AtomDomainExhausted::into_runtime_error)
+    })
 }
 
 pub(crate) fn to_property_key_value(

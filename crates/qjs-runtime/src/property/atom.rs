@@ -1,7 +1,7 @@
 //! Runtime property-key identity and weak interning.
 //!
 //! Strings use exact canonical UTF-16 equality; symbols use object identity in
-//! the same monotonic, non-reused ID namespace. Layouts and linked code own
+//! one ID namespace. IDs are recycled only after their last lease is gone. Layouts and linked code own
 //! leases. Content indices and the ID directory are weak and swept together;
 //! they do not keep historical keys or symbols alive. A lease records its
 //! domain weakly; layouts separately retain the owning domain.
@@ -13,10 +13,10 @@ use std::fmt;
 use std::num::NonZeroU32;
 use std::rc::{Rc, Weak};
 
+use crate::ObjectRef;
 use crate::string::{string_code_units, string_from_code_units_canonical};
 use crate::value::array_index_property_key;
 use crate::value::name_hash::NameMap;
-use crate::{ObjectRef, RuntimeError};
 
 /// Smallest table size that triggers a sweep of dead entries.
 const MIN_SWEEP_LEN: usize = 64;
@@ -24,7 +24,7 @@ const MIN_SWEEP_LEN: usize = 64;
 /// Marks an atom whose key is not a canonical array index.
 const NO_ARRAY_INDEX: u32 = u32::MAX;
 
-/// An atom's id within its domain. Ids start at 1 and are never reused.
+/// An ID borrowed from a live lease. Recycling cannot outlive that lease.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub(crate) struct KeyId(NonZeroU32);
 
@@ -42,17 +42,6 @@ impl KeyId {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct AtomDomainExhausted;
 
-impl AtomDomainExhausted {
-    /// The engine-limit error reported to the code that needed a new atom.
-    /// Not a `From` impl: that would make every untyped `?` ambiguous.
-    pub(crate) fn into_runtime_error(self) -> RuntimeError {
-        RuntimeError {
-            thrown: None,
-            message: "RangeError: too many distinct property names".to_owned(),
-        }
-    }
-}
-
 pub(crate) struct KeyRecord {
     id: AtomId,
     /// String units or a strong symbol identity, owned only by live leases.
@@ -62,6 +51,14 @@ pub(crate) struct KeyRecord {
     /// The owning domain. Weak, so atoms never keep a dead domain's table
     /// alive; compared only by allocation identity.
     domain: Weak<DomainState>,
+}
+
+impl Drop for KeyRecord {
+    fn drop(&mut self) {
+        if let Some(domain) = self.domain.upgrade() {
+            domain.free_ids.borrow_mut().push(self.id);
+        }
+    }
 }
 
 enum KeyKind {
@@ -151,17 +148,21 @@ struct AtomTable {
     next_id: Option<NonZeroU32>,
     sweep_at: usize,
     created: u64,
+    limit: u32,
 }
 
 impl AtomTable {
     fn allocate_id(&mut self) -> Result<AtomId, AtomDomainExhausted> {
-        let id = self.next_id.ok_or(AtomDomainExhausted)?;
+        let id = self
+            .next_id
+            .filter(|id| id.get() <= self.limit)
+            .ok_or(AtomDomainExhausted)?;
         self.next_id = id.checked_add(1);
         Ok(KeyId(id))
     }
 
     fn sweep_if_due(&mut self) {
-        if self.directory.len() < self.sweep_at {
+        if self.entries.len() + self.symbols.len() < self.sweep_at {
             return;
         }
         self.entries.retain(|_, entry| entry.strong_count() > 0);
@@ -173,6 +174,7 @@ impl AtomTable {
 
 struct DomainState {
     table: RefCell<AtomTable>,
+    free_ids: RefCell<Vec<KeyId>>,
     // Only an attachment, never a strong root: layout owners retain the domain.
     shape_owner: RefCell<Weak<crate::value::layout::OwnerState>>,
 }
@@ -183,26 +185,38 @@ pub(crate) struct AtomDomain(Rc<DomainState>);
 
 impl AtomDomain {
     pub(crate) fn new() -> Self {
-        Self::starting_at(NonZeroU32::MIN)
+        Self::with_limit(u32::MAX)
     }
 
-    fn starting_at(first_id: NonZeroU32) -> Self {
+    #[cfg(test)]
+    pub(crate) fn limited_for_test(limit: u32) -> Self {
+        Self::with_limit(limit)
+    }
+
+    fn with_limit(limit: u32) -> Self {
         Self(Rc::new(DomainState {
+            free_ids: RefCell::new(Vec::new()),
             shape_owner: RefCell::new(Weak::new()),
             table: RefCell::new(AtomTable {
                 entries: NameMap::default(),
                 symbols: HashMap::new(),
                 directory: HashMap::new(),
-                next_id: Some(first_id),
+                next_id: Some(NonZeroU32::MIN),
                 sweep_at: MIN_SWEEP_LEN,
                 created: 0,
+                limit,
             }),
         }))
     }
 
     /// Interns the key `text` (stored runtime form), returning the domain's
     /// live atom for its code units or a new one.
-    pub(crate) fn intern(&self, text: &str) -> Result<Atom, AtomDomainExhausted> {
+    pub(crate) fn intern(&self, text: &str) -> Atom {
+        self.try_intern(text)
+            .unwrap_or_else(|_| key_allocation_failure())
+    }
+
+    pub(crate) fn try_intern(&self, text: &str) -> Result<Atom, AtomDomainExhausted> {
         crate::diagnostics::count!(property_key_interns);
         let canonical = canonical_property_text(text);
         let mut table = self.0.table.borrow_mut();
@@ -213,7 +227,10 @@ impl AtomDomain {
         {
             return Ok(KeyLease(entry));
         }
-        let id = table.allocate_id()?;
+        let id = match self.0.free_ids.borrow_mut().pop() {
+            Some(id) => id,
+            None => table.allocate_id()?,
+        };
         let text: Rc<str> = Rc::from(canonical.as_ref());
         let array_index = array_index_property_key(&text)
             .and_then(|index| u32::try_from(index).ok())
@@ -262,16 +279,21 @@ impl AtomDomain {
     /// Symbols are interned by identity, never by description. A live lease
     /// pins its symbol, so its address cannot be reused while indexed.
     #[allow(dead_code)] // S1 foundation; ordinary symbol cutover follows.
-    pub(crate) fn intern_symbol(
-        &self,
-        symbol: &ObjectRef,
-    ) -> Result<KeyLease, AtomDomainExhausted> {
+    pub(crate) fn intern_symbol(&self, symbol: &ObjectRef) -> KeyLease {
+        self.try_intern_symbol(symbol)
+            .unwrap_or_else(|_| key_allocation_failure())
+    }
+
+    fn try_intern_symbol(&self, symbol: &ObjectRef) -> Result<KeyLease, AtomDomainExhausted> {
         crate::diagnostics::count!(property_key_interns);
         let mut table = self.0.table.borrow_mut();
         if let Some(entry) = table.symbols.get(&symbol.address()).and_then(Weak::upgrade) {
             return Ok(KeyLease(entry));
         }
-        let id = table.allocate_id()?;
+        let id = match self.0.free_ids.borrow_mut().pop() {
+            Some(id) => id,
+            None => table.allocate_id()?,
+        };
         let entry = Rc::new(KeyRecord {
             id,
             kind: KeyKind::Symbol(symbol.clone()),
@@ -371,6 +393,11 @@ impl WeakAtomDomain {
     pub(crate) fn is_live(&self) -> bool {
         self.0.strong_count() > 0
     }
+}
+
+/// Same non-unwinding resource failure path as Rust allocation failure.
+fn key_allocation_failure() -> ! {
+    std::alloc::handle_alloc_error(std::alloc::Layout::new::<KeyRecord>())
 }
 
 /// The canonical stored form of a string key's code units.

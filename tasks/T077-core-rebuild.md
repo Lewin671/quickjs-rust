@@ -1,11 +1,11 @@
 # T077: In-place core rebuild
 
-- Status: active; S1 owner propagation implemented on `agent/t077-s1-property-authority/codex`, base `dd0905b2`; ordinary cutover awaits the lead's cross-stage error-ABI decision.
+- Status: active; S1 owner propagation implemented on `agent/t077-s1-property-authority/codex`, base `dd0905b2`; lead approved recycled key IDs; ordinary cutover in progress.
 - Implementation: ordinary constructors/builders take explicit domains; realm roots own shared shape roots; native functions retain their domain. Ordinary stores are unchanged; temporary ObjectData domain storage moves into Layout at cutover.
 - Verified at: `d9b518ec`, 2026-10-30 UTC: full check passes (2,406 runtime tests, 5,170 subset cases), NG 257/257; staged fast gate passes with 117 selected Test262 cases. Prior index source `c1c4a203` remains verified separately.
 - Evidence: [S1 brief/API](proposals/T077-s1-property-authority.md), [foundation](archive/T077-s1-foundation.md), [index](archive/T077-s1-index.md), [owner migration](archive/T077-s1-owner-migration.md).
-- Unresolved: [fallibility amendment](proposals/T077-s1-fallibility.md) needs lead decision before changing native/install/module and String-materialization error APIs; ordinary/caches cutover and all old-store deletions remain; exact scan/burndown, x86 sizes and formal standing pending.
-- Next action: lead resolves the linked error ABI, then make allocating paths fallible and preserve pure slot probes; perform the single string/symbol cutover and deletion, then full/NG/configured-exact scan and burndown. Never push or merge this branch.
+- Unresolved: [key lifetime decision](proposals/T077-s1-fallibility.md) approved: recycle IDs and keep existing error APIs; implement its tests, then ordinary/caches cutover and all old-store deletions remain; exact scan/burndown, x86 sizes and formal standing pending.
+- Next action: implement the decided recycling contract and preserve pure String/slot probes; perform the single string/symbol cutover and deletion, then full/NG/configured-exact scan and burndown. Never push or merge this branch.
 
 ## Authority and scope
 

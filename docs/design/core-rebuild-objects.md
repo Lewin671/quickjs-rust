@@ -7,7 +7,7 @@ named stores and caches. Paths below are under `crates/qjs-runtime/src/`.
 
 Extend `property/atom.rs::AtomDomain`, not a parallel interner. One runtime group
 owns the domain; communicating realms share it. `KeyId(NonZeroU32)` is 4 bytes,
-monotonic and never reused: strings intern exact UTF-16, symbols intern identity
+recycled only after the last lease dies: strings intern exact UTF-16, symbols intern identity
 in the same ID namespace. Private names remain separate internal identities.
 `KeyRecord` contains kind, text or strong symbol handle, cached canonical array
 index and a domain identity. It never folds `"01"` into `"1"`.
@@ -18,7 +18,12 @@ The domain's content index and ID directory are weak, swept with the existing
 live-size rule. Numeric IDs alone must not pin every historically interned key.
 Escaping objects retain the domain through their layouts. Shape roots live on
 runtime/realm owners outside the domain: no domain→root→shape→domain RC cycle.
-Exhaustion reports an engine limit, never wraps. Foreign compiled names relink
+The weak ID directory and a free list recycle dead IDs before minting new
+ones. Bare IDs never outlive their borrowed leases; live shapes, dictionaries,
+linked code and lease-owning caches prevent reuse. Layout identities/versions
+remain non-reused. Production u32 exhaustion requires more than 2^32 live key
+records and follows allocation-failure abort, not a JS exception; an internal
+try_intern supports test-only capped domains (lead decision 2026-10-30). Foreign compiled names relink
 once by units; existing cross-realm values share the original domain. A foreign
 domain cannot validate an IC by integer equality; host ingress must normalize
 keys or report an explicit domain error, never reinterpret IDs.

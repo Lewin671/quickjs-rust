@@ -156,14 +156,15 @@ mod tests {
     #[test]
     fn colliding_keys_survive_delete_reinsert_and_rebuild() {
         let domain = AtomDomain::new();
+        let mut gaps = Vec::new();
         let keys: Vec<_> = (0..200)
             .map(|n| {
                 // Equal low ID bits force long collision chains at every
                 // capacity used here, rather than testing sequential IDs.
-                for _ in 0..255 {
-                    drop(domain.intern("gap").unwrap());
+                for gap in 0..255 {
+                    gaps.push(domain.intern(&format!("gap{n}_{gap}")));
                 }
-                domain.intern(&format!("k{n}")).unwrap()
+                domain.intern(&format!("k{n}"))
             })
             .collect();
         let mut index = IdIndex::new();
@@ -196,7 +197,7 @@ mod tests {
         let domain = AtomDomain::new();
         let mut index = IdIndex::new();
         for n in 0..10_000 {
-            let key = domain.intern(&format!("transient{n}")).unwrap();
+            let key = domain.intern(&format!("transient{n}"));
             index.insert_at(index.probe(key.id()), n);
             index.remove_at(index.probe(key.id()));
             assert_eq!(index.len(), 0);
@@ -207,8 +208,8 @@ mod tests {
     #[test]
     fn cloned_layout_consumes_the_original_vacancy_without_searching_again() {
         let domain = AtomDomain::new();
-        let a = domain.intern("a").unwrap();
-        let b = domain.intern("b").unwrap();
+        let a = domain.intern("a");
+        let b = domain.intern("b");
         let mut index = IdIndex::new();
         index.insert_at(index.probe(a.id()), 0);
         let proof = index.probe(b.id());
