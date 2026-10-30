@@ -38,21 +38,24 @@ source text -> qjs-lexer (tokens with spans) -> qjs-parser (qjs-ast)
 `third_party/quickjs-ng` (behavioural oracle and reference) and
 `third_party/test262` (conformance input) are pinned submodules outside the
 Cargo workspace. They are read-only and never a build dependency.
-`scripts/bootstrap.sh` initialises only these two top-level submodules;
-QuickJS-NG's own nested `test262` is not used.
 
 ## Execution
 
-Paths below are relative to `crates/qjs-runtime/src/`. The source-local map of
-the executors is the module header of `bytecode/mod.rs`; each module's header
-states its admission rule and why its fallback is unobservable.
+Paths are relative to `crates/qjs-runtime/src/`; `bytecode/mod.rs` and executor
+headers own their source maps, admission rules and fallback invariants.
 
 **Pipeline.** `bytecode/compiler*.rs` lower a parsed script or function to a
 `Bytecode` (`bytecode/ir.rs`): a stack-machine instruction stream plus the
 slot table for its locals. `Vm` (`bytecode/vm.rs`) interprets one `FrameState`
 at a time. Everything below is an optional faster route to the same
-semantics. Each one decides admission before any observable step, and
-otherwise leaves the work to the interpreter.
+semantics. Admission precedes observable work; declined paths use the interpreter.
+
+**Native entries.** `native/entry.rs` binds each operation at installation. `CallInfo`
+borrows callee/receiver and records construct mode; CallEnv supplies lazy realm/
+new.target services until S3b. Host/callback and compact/wide entries borrow slices.
+Generic VM calls/construct detach their operand owner through return/throw,
+restoring it before exception handling. Fixed-arity JS admission keeps its order.
+Retained values/forwarding lists own references. S3d owns stack policy; S3a adds no limit. No Executor/RefCell borrow crosses callbacks.
 
 **Call dispatch.** `call_function` (`function/call.rs`) first resolves the
 callable kind: Proxy, bound function, native builtin, generator, async

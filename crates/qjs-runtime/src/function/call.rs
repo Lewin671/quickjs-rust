@@ -64,18 +64,30 @@ pub(crate) fn call_function(
     env: &mut CallEnv,
     is_construct: bool,
 ) -> Result<Value, RuntimeError> {
-    if let Value::Proxy(proxy) = &callee {
+    call_with_arguments(&callee, this_value, &argument_values, env, is_construct)
+}
+
+/// Common host/callback/native entry. Only semantic forwarding lists (bound
+/// arguments and Proxy trap arrays) need ownership; ordinary calls borrow.
+fn call_with_arguments(
+    callee: &Value,
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut CallEnv,
+    is_construct: bool,
+) -> Result<Value, RuntimeError> {
+    if let Value::Proxy(proxy) = callee {
         if is_construct {
             return crate::proxy::proxy_construct(
                 proxy.clone(),
                 callee.clone(),
-                argument_values,
+                argument_values.to_vec(),
                 env,
             );
         }
-        return crate::proxy::proxy_apply(proxy.clone(), this_value, argument_values, env);
+        return crate::proxy::proxy_apply(proxy.clone(), this_value, argument_values.to_vec(), env);
     }
-    let Value::Function(function) = &callee else {
+    let Value::Function(function) = callee else {
         return Err(RuntimeError {
             thrown: None,
             message: "value is not callable".to_owned(),
@@ -90,31 +102,25 @@ pub(crate) fn call_function(
             )
         {
             let mut combined_arguments = bound.arguments.clone();
-            combined_arguments.extend(argument_values);
+            combined_arguments.extend_from_slice(argument_values);
             let call_this = combined_arguments
                 .first()
                 .cloned()
                 .unwrap_or(Value::Undefined);
-            let call_arguments = combined_arguments.into_iter().skip(1).collect();
-            return call_function(
-                bound.this_value.clone(),
-                call_this,
-                call_arguments,
-                env,
-                false,
-            );
+            let call_arguments = &combined_arguments[usize::from(!combined_arguments.is_empty())..];
+            return call_with_arguments(&bound.this_value, call_this, call_arguments, env, false);
         }
         let mut bound_arguments = bound.arguments.clone();
-        bound_arguments.extend(argument_values);
+        bound_arguments.extend_from_slice(argument_values);
         let bound_this = if is_construct {
             this_value
         } else {
             bound.this_value.clone()
         };
-        return call_function(
-            bound.target.clone(),
+        return call_with_arguments(
+            &bound.target,
             bound_this,
-            bound_arguments,
+            &bound_arguments,
             env,
             is_construct,
         );
@@ -122,13 +128,13 @@ pub(crate) fn call_function(
     if function.is_class_constructor && !is_construct {
         return Err(class_constructor_call_error(function));
     }
-    if let Some(native) = function.native {
+    if let Some(entry) = function.native_entry {
         crate::diagnostics::count!(native_calls);
         return call_native_function(
+            entry,
             function,
-            native,
-            this_value,
-            &argument_values,
+            &this_value,
+            argument_values,
             is_construct,
             env,
         );
@@ -139,9 +145,9 @@ pub(crate) fn call_function(
             let function_env = function_env(
                 function,
                 bytecode,
-                &callee,
+                callee,
                 this_value,
-                &argument_values,
+                argument_values,
                 env,
                 is_construct,
             );
@@ -160,9 +166,9 @@ pub(crate) fn call_function(
             let function_env = function_env(
                 function,
                 bytecode,
-                &callee,
+                callee,
                 this_value,
-                &argument_values,
+                argument_values,
                 env,
                 is_construct,
             );
@@ -191,9 +197,9 @@ pub(crate) fn call_function(
             let function_env = function_env(
                 function,
                 bytecode,
-                &callee,
+                callee,
                 this_value,
-                &argument_values,
+                argument_values,
                 env,
                 is_construct,
             );
@@ -215,11 +221,11 @@ pub(crate) fn call_function(
         // body they decline builds its slot-seeded frame. The general path
         // below built a compatibility frame for every such call, which was
         // most of a small callback's cost.
-        if !is_construct && is_direct_leaf_function(&callee) {
+        if !is_construct && is_direct_leaf_function(callee) {
             return call_direct_leaf_function(
                 callee.clone(),
                 this_value,
-                &argument_values,
+                argument_values,
                 env,
                 env.module_host(),
                 #[cfg(feature = "agents")]
@@ -230,9 +236,9 @@ pub(crate) fn call_function(
         let prepared = prepare_bytecode_call(
             function,
             bytecode,
-            &callee,
+            callee,
             this_value,
-            &argument_values,
+            argument_values,
             env,
             is_construct,
         );
@@ -242,16 +248,15 @@ pub(crate) fn call_function(
     Err(missing_bytecode_body())
 }
 
-/// [`call_function`] for a native passing a callback its arguments by slice:
-/// a body the direct-leaf path takes reads them in place, and only a callee
-/// that needs an owned argument list gets one. `Array.prototype.forEach` and
-/// its family allocated that list on every element.
+/// Invokes a callback or host callee without copying its argument slice.
 pub(crate) fn call_function_slice(
     callee: &Value,
     this_value: Value,
     argument_values: &[Value],
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
+    // Preserve the base callback route: admitted JS bodies never enter the
+    // general dispatcher's large generator/async/prepared-frame stack frame.
     if is_direct_leaf_function(callee) {
         return call_direct_leaf_function(
             callee.clone(),
@@ -263,13 +268,7 @@ pub(crate) fn call_function_slice(
             env.agent_context(),
         );
     }
-    call_function(
-        callee.clone(),
-        this_value,
-        argument_values.to_vec(),
-        env,
-        false,
-    )
+    call_with_arguments(callee, this_value, argument_values, env, false)
 }
 
 /// Builds everything an ordinary synchronous call needs, without running it.
@@ -944,12 +943,26 @@ pub(crate) fn construct_function(
     argument_values: Vec<Value>,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
+    construct_function_slice(target, new_target, &argument_values, env)
+}
+
+pub(crate) fn construct_function_slice(
+    target: Value,
+    new_target: Value,
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
     // A constructor Proxy dispatches through its `construct` trap. The trap (or
     // a forwarded target construction) produces the instance directly, so the
     // ordinary receiver-allocation path below is skipped.
     if let Value::Proxy(proxy) = &target {
         ensure_constructor(&new_target)?;
-        return crate::proxy::proxy_construct(proxy.clone(), new_target, argument_values, env);
+        return crate::proxy::proxy_construct(
+            proxy.clone(),
+            new_target,
+            argument_values.to_vec(),
+            env,
+        );
     }
     // A bound function's [[Construct]] prepends the bound arguments and forwards
     // to its target. Per step 4, when the bound function is itself the
@@ -963,18 +976,23 @@ pub(crate) fn construct_function(
     {
         let real_target = bound.target.clone();
         let mut combined_arguments = bound.arguments.clone();
-        combined_arguments.extend(argument_values);
+        combined_arguments.extend_from_slice(argument_values);
         let forwarded_new_target = if target.same_value(&new_target) {
             real_target.clone()
         } else {
             new_target
         };
-        return construct_function(real_target, forwarded_new_target, combined_arguments, env);
+        return construct_function_slice(
+            real_target,
+            forwarded_new_target,
+            &combined_arguments,
+            env,
+        );
     }
     if let Value::Function(function) = &target
         && function.native.is_some()
         && target.same_value(&new_target)
-        && let Some(result) = super::construct_intrinsic_directly(function, &argument_values, env)
+        && let Some(result) = super::construct_intrinsic_directly(function, argument_values, env)
     {
         return result;
     }
@@ -992,34 +1010,37 @@ pub(crate) fn construct_function(
     let is_derived =
         matches!(&target, Value::Function(function) if function.is_derived_constructor);
     let constructs_receiver_lazily = native_constructs_receiver_lazily(&target);
-    let this_value = if is_derived || constructs_receiver_lazily {
-        Value::Undefined
-    } else {
-        let prototype = construct_prototype_slot(&target, &new_target, env)?;
-        Value::Object(ObjectRef::with_prototype_slot(
-            HashMap::new(),
-            prototype,
-            env.realm().atoms(),
-        ))
-    };
+    let result = (|| {
+        let this_value = if is_derived || constructs_receiver_lazily {
+            Value::Undefined
+        } else {
+            let prototype = construct_prototype_slot(&target, &new_target, env)?;
+            Value::Object(ObjectRef::with_prototype_slot(
+                HashMap::new(),
+                prototype,
+                env.realm().atoms(),
+            ))
+        };
 
-    let result = call_function(target, this_value.clone(), argument_values, env, true);
+        let result = call_with_arguments(&target, this_value.clone(), argument_values, env, true);
 
+        let result = result?;
+
+        match result {
+            Value::Array(_)
+            | Value::Function(_)
+            | Value::Map(_)
+            | Value::Set(_)
+            | Value::Object(_)
+            | Value::Proxy(_) => Ok(result),
+            // A derived constructor that returns no object must have called
+            // `super(...)`, which bound `this` and is returned as the result.
+            _ if is_derived || constructs_receiver_lazily => Ok(result),
+            _ => Ok(this_value),
+        }
+    })();
     env.set_new_target(previous_new_target);
-    let result = result?;
-
-    match result {
-        Value::Array(_)
-        | Value::Function(_)
-        | Value::Map(_)
-        | Value::Set(_)
-        | Value::Object(_)
-        | Value::Proxy(_) => Ok(result),
-        // A derived constructor that returns no object must have called
-        // `super(...)`, which bound `this` and is returned as the result.
-        _ if is_derived || constructs_receiver_lazily => Ok(result),
-        _ => Ok(this_value),
-    }
+    result
 }
 
 fn native_constructs_receiver_lazily(target: &Value) -> bool {

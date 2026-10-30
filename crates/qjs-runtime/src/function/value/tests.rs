@@ -42,14 +42,14 @@ fn ordinary_function_header_keeps_cold_identity_state_out_of_line() {
     );
     assert!(
         mem::size_of::<std::cell::RefCell<crate::value::layout::NamedStorage>>() <= 32,
-        "lazy function property header must stay within two machine words"
+        "lazy function property header must stay within 32 bytes"
     );
     assert!(
         auxiliary_size <= 48,
         "function auxiliary header grew to {auxiliary_size} bytes"
     );
     assert!(
-        function_data_size <= 304,
+        function_data_size <= 320,
         "function object grew to {function_data_size} bytes"
     );
 }

@@ -100,10 +100,13 @@ derived-this and field failure rules. Count JS-depth separately from native dept
 
 ## Native boundary
 
-Install `NativeEntry = fn(&mut Context, CallInfo<'_>, &[Value]) -> Result<Value>`
-directly on native functions; CallInfo borrows callee/this/new.target and identifies
-the active realm and caller context. Port family implementations to Context
-capabilities, deleting `&mut CallEnv` and the 28-family `Option` probe dispatch.
+S3a installs operation-specific entries with the existing `CallEnv` service
+parameter and borrowed `CallInfo`/arguments. S3b changes that service parameter
+to Context; it does not add an adapter or another environment authority.
+The final ABI is `NativeEntry = fn(&mut Context, CallInfo<'_>, &[Value]) -> Result<Value>`
+directly on native functions; CallInfo borrows callee/this and records construct mode; Context supplies
+the active realm, caller context and actual new.target lazily. Port family implementations to Context
+capabilities, deleting `&mut CallEnv`; S3a has already removed family probing.
 All return/throw values own references. Ordinary natives allocate no CallEnv.
 
 For safe re-entry, the driver detaches and owns the caller's block in a local
@@ -112,8 +115,11 @@ argument slice while Context drives callbacks to a boundary token. Callback fram
 cannot reuse/mutate that block; no RefCell borrow of Executor remains held. A
 native retaining an argument clones it. Host slices work identically. No borrowed
 argument range/pointer escapes the invocation. Restore typed current-context
-fields and the detached block on return/throw. Synchronous native→JS→native may
-nest Rust boundaries under a checked native-depth limit; pure JS recursion cannot.
+fields and the detached block on return/throw. S3d owns the resource policy: one runtime-wide stack-pointer anchor and a
+host-configured budget, with the CLI running the engine on an explicitly sized
+thread. Once JS calls use the explicit activation stack, count JS depth by frames
+without Rust recursion. Synchronous native→JS→native boundaries remain checked
+against that runtime-wide budget. S3a adds no native-only or realm-local limit.
 
 ## Abrupt completion and suspension
 

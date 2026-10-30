@@ -1,25 +1,20 @@
-use crate::{Function, NativeFunction, Value, weak_ref};
+//! Operation entries for weak refs; bound once when a native is created.
 
-use super::NativeCallResult;
-use crate::CallEnv;
+use super::CallInfo;
+use crate::{CallEnv, RuntimeError, Value, weak_ref};
 
-pub(super) fn call_weak_ref_native(
-    function: &Function,
-    native: NativeFunction,
-    this_value: Value,
-    argument_values: &[Value],
-    is_construct: bool,
+pub(super) fn weak_ref(
     env: &mut CallEnv,
-) -> NativeCallResult {
-    let value = match native {
-        NativeFunction::WeakRef => {
-            weak_ref::native_weak_ref(function, argument_values, is_construct, env)?
-        }
-        NativeFunction::WeakRefPrototypeDeref => {
-            weak_ref::native_weak_ref_prototype_deref(this_value)?
-        }
-        _ => return Ok(None),
-    };
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    weak_ref::native_weak_ref(info.callee, argument_values, info.is_construct, env)
+}
 
-    Ok(Some(value))
+pub(super) fn weak_ref_prototype_deref(
+    _env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    weak_ref::native_weak_ref_prototype_deref(info.this_value.clone())
 }

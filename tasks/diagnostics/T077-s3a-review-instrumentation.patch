@@ -1,0 +1,112 @@
+diff --git a/crates/qjs-runtime/src/bytecode/vm.rs b/crates/qjs-runtime/src/bytecode/vm.rs
+index 80eb2674..cc65c27d 100644
+--- a/crates/qjs-runtime/src/bytecode/vm.rs
++++ b/crates/qjs-runtime/src/bytecode/vm.rs
+@@ -1305,6 +1305,12 @@ impl<'a> Vm<'a> {
+             .ok_or_else(stack_underflow)?;
+         let mut block = self.stack.take();
+         let callee = std::mem::replace(&mut block[base], Value::Undefined);
++        if matches!(&callee, Value::Function(f) if f.native_entry.is_some() && f.bound.is_none()) {
++            crate::diagnostics::inventory_event("native_stack_construct_borrow");
++        } else {
++            crate::diagnostics::inventory_event("non_native_stack_construct_borrow");
++        }
++
+         let result = self.invoke_construct_callee(callee, &block[base + 1..]);
+         block.truncate(base);
+         // Restore the owner without recycling the empty take() placeholder.
+@@ -1392,6 +1398,10 @@ impl<'a> Vm<'a> {
+     }
+ 
+     pub(super) fn pop_arguments(&mut self, argc: usize) -> Result<Vec<Value>, RuntimeError> {
++        crate::diagnostics::inventory_event("argument_vec_pop");
++        if self.stack.len().checked_sub(argc + 1).and_then(|i| self.stack.get(i)).is_some_and(|v| matches!(v, Value::Function(f) if f.native_entry.is_some() && f.bound.is_none())) {
++            crate::diagnostics::inventory_event("argument_vec_native_pop");
++        }
+         let mut arguments = Vec::with_capacity(argc);
+         for _ in 0..argc {
+             arguments.push(self.pop()?);
+diff --git a/crates/qjs-runtime/src/bytecode/vm_call.rs b/crates/qjs-runtime/src/bytecode/vm_call.rs
+index e0c7a29b..1ee42f5f 100644
+--- a/crates/qjs-runtime/src/bytecode/vm_call.rs
++++ b/crates/qjs-runtime/src/bytecode/vm_call.rs
+@@ -106,6 +106,12 @@ impl Vm<'_> {
+         let mut block = self.stack.take();
+         let callee_index = base + usize::from(resolved);
+         let callee = std::mem::replace(&mut block[callee_index], Value::Undefined);
++        if matches!(&callee, Value::Function(f) if f.native_entry.is_some() && f.bound.is_none()) {
++            crate::diagnostics::inventory_event("native_stack_call_borrow");
++        } else {
++            crate::diagnostics::inventory_event("non_native_stack_call_borrow");
++        }
++
+         let this_value = if resolved {
+             std::mem::replace(&mut block[base], Value::Undefined)
+         } else {
+diff --git a/crates/qjs-runtime/src/diagnostics.rs b/crates/qjs-runtime/src/diagnostics.rs
+index fababac1..b8348f0d 100644
+--- a/crates/qjs-runtime/src/diagnostics.rs
++++ b/crates/qjs-runtime/src/diagnostics.rs
+@@ -36,7 +36,7 @@ macro_rules! declare_counters {
+             /// declaration order, so a report stays stable across builds.
+             #[must_use]
+             pub fn entries(&self) -> Vec<(&'static str, u64)> {
+-                vec![$((stringify!($field), self.$field),)+]
++                { let mut result = vec![$((stringify!($field), self.$field),)+]; result.extend(inventory_entries()); result }
+             }
+         }
+ 
+@@ -180,3 +180,11 @@ macro_rules! count {
+ }
+ 
+ pub(crate) use count;
++
++thread_local! { static INVENTORY: std::cell::RefCell<std::collections::BTreeMap<&'static str,u64>> = const { std::cell::RefCell::new(std::collections::BTreeMap::new()) }; }
++pub(crate) fn inventory_event(name: &'static str) { INVENTORY.with(|c| { *c.borrow_mut().entry(name).or_default() += 1; }); }
++fn inventory_entries() -> Vec<(&'static str,u64)> {
++ INVENTORY.with(|c| { let mut c=c.borrow_mut();
++ for name in ["argument_vec_pop","argument_vec_native_pop","argument_vec_tier_fallback","argument_vec_slice_fallback","argument_vec_bound","native_family_probes","native_family_declines","native_stack_call_borrow","native_stack_construct_borrow","non_native_stack_call_borrow","non_native_stack_construct_borrow"] { c.entry(name).or_default(); }
++ c.iter().map(|(k,v)|(*k,*v)).collect() })
++}
+diff --git a/crates/qjs-runtime/src/function/call.rs b/crates/qjs-runtime/src/function/call.rs
+index 012e4bdd..ddf248df 100644
+--- a/crates/qjs-runtime/src/function/call.rs
++++ b/crates/qjs-runtime/src/function/call.rs
+@@ -101,7 +101,8 @@ fn call_with_arguments(
+                     if target.native == Some(NativeFunction::FunctionPrototypeCall)
+             )
+         {
+-            let mut combined_arguments = bound.arguments.clone();
++            crate::diagnostics::inventory_event("argument_vec_bound");
++        let mut combined_arguments = bound.arguments.clone();
+             combined_arguments.extend_from_slice(argument_values);
+             let call_this = combined_arguments
+                 .first()
+@@ -110,6 +111,7 @@ fn call_with_arguments(
+             let call_arguments = &combined_arguments[usize::from(!combined_arguments.is_empty())..];
+             return call_with_arguments(&bound.this_value, call_this, call_arguments, env, false);
+         }
++        crate::diagnostics::inventory_event("argument_vec_bound");
+         let mut bound_arguments = bound.arguments.clone();
+         bound_arguments.extend_from_slice(argument_values);
+         let bound_this = if is_construct {
+@@ -973,6 +975,7 @@ pub(crate) fn construct_function_slice(
+         && let Some(bound) = &function.bound
+     {
+         let real_target = bound.target.clone();
++        crate::diagnostics::inventory_event("argument_vec_bound");
+         let mut combined_arguments = bound.arguments.clone();
+         combined_arguments.extend_from_slice(argument_values);
+         let forwarded_new_target = if target.same_value(&new_target) {
+diff --git a/crates/qjs-runtime/src/native.rs b/crates/qjs-runtime/src/native.rs
+index 4bce78bd..9b18100f 100644
+--- a/crates/qjs-runtime/src/native.rs
++++ b/crates/qjs-runtime/src/native.rs
+@@ -63,6 +63,7 @@ pub(crate) fn call_native_function(
+     is_construct: bool,
+     env: &mut CallEnv,
+ ) -> Result<Value, RuntimeError> {
++    crate::diagnostics::inventory_event("native_direct_entry");
+     let info = CallInfo {
+         callee: function,
+         this_value,

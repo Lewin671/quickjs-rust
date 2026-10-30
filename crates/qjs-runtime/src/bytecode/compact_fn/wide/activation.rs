@@ -1542,7 +1542,7 @@ fn construct_from_activation(
         return result;
     }
     let mut env = env.empty_frame();
-    crate::function::construct_function(callee.clone(), callee, arguments.to_vec(), &mut env)
+    crate::function::construct_function_slice(callee.clone(), callee, arguments, &mut env)
 }
 
 /// `new Array(...)` on the realm's own Array constructor, whose `prototype`
@@ -1707,18 +1707,23 @@ fn call_from_activation(
     }
     let mut env = activation.env.empty_frame();
     // A plain native takes its arguments where they are; only a bytecode
-    // callee, a bound function or a proxy needs an owned vector.
+    // callee can also read a slice; only semantic forwarding builds a list.
     if let Value::Function(function) = &callee
-        && let Some(native) = function.native
+        && let Some(entry) = function.native_entry
         && function.bound.is_none()
         && !function.is_class_constructor
     {
         crate::diagnostics::count!(native_calls);
         return crate::native::call_native_function(
-            function, native, this_value, arguments, false, &mut env,
+            entry,
+            function,
+            &this_value,
+            arguments,
+            false,
+            &mut env,
         );
     }
-    crate::function::call_function(callee, this_value, arguments.to_vec(), &mut env, false)
+    crate::function::call_function_slice(&callee, this_value, arguments, &mut env)
 }
 
 /// What running a loop's typed program from an exit did.

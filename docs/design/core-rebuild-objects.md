@@ -124,7 +124,7 @@ rate independent of the operations/programs measured.
 
 Arrays/functions embed a 32-byte lazy authority: canonical empty layout plus
 explicit prototype, materializing the same NamedStore only on mutation. Packed
-array headers are 88 bytes; functions are 304 bytes, excluding RC headers. Named
+array headers are 88 bytes; functions are 320 bytes, excluding RC headers. Named
 probes allocate no array cold data and never install unrelated function defaults.
 Original lazy property order is reserved before later keys. Function virtual
 state is part of layout flavor; hooks publish into the authority when observed.

@@ -209,10 +209,6 @@ pub struct FunctionData {
     /// loop. Resolved on the first construction, after class definition has
     /// recorded every instance element.
     pub(crate) direct_construct_eligible: Cell<Option<bool>>,
-    /// Memoized: which builtin family's dispatcher answered this native
-    /// function last (`crate::native`), so later calls go straight to it
-    /// instead of asking every family in turn. Zero until the first call.
-    pub(crate) native_family: Cell<u8>,
     /// Memoized, packed: whether the compact wide tier may run this function
     /// in a window of its caller's register stack as far as the function's
     /// own fixed facts decide, and the facts the driver enters it with
@@ -243,6 +239,8 @@ pub struct FunctionData {
     /// mutable auxiliary header.
     pub(crate) source_text: Option<Rc<str>>,
     pub(crate) native: Option<NativeFunction>,
+    /// Operation-specific entry bound at native installation, never on first call.
+    pub(crate) native_entry: Option<crate::native::NativeEntry>,
     pub(crate) constructable: bool,
     pub(crate) is_strict: bool,
     pub(crate) lexical_this: bool,
@@ -635,7 +633,6 @@ impl Function {
             has_dynamic_function_realm_override: Cell::new(false),
             direct_leaf_call_eligible: Cell::new(None),
             direct_construct_eligible: Cell::new(None),
-            native_family: Cell::new(0),
             wide_inline_facts: Cell::new(0),
             compact_inline_facts: Cell::new(0),
             scope_bypassed: Cell::new(false),
@@ -649,6 +646,7 @@ impl Function {
             bytecode: Some(bytecode),
             source_text: Some(source_text),
             native: None,
+            native_entry: None,
             constructable,
             is_strict,
             lexical_this: lexical_bindings.this,
@@ -737,7 +735,6 @@ impl Function {
             has_dynamic_function_realm_override: Cell::new(false),
             direct_leaf_call_eligible: Cell::new(None),
             direct_construct_eligible: Cell::new(None),
-            native_family: Cell::new(0),
             wide_inline_facts: Cell::new(0),
             compact_inline_facts: Cell::new(0),
             scope_bypassed: Cell::new(false),
@@ -751,6 +748,7 @@ impl Function {
             bytecode: Some(bytecode),
             source_text,
             native: None,
+            native_entry: None,
             constructable,
             is_strict,
             lexical_this,
@@ -919,7 +917,6 @@ impl Function {
             has_dynamic_function_realm_override: Cell::new(false),
             direct_leaf_call_eligible: Cell::new(None),
             direct_construct_eligible: Cell::new(None),
-            native_family: Cell::new(0),
             wide_inline_facts: Cell::new(0),
             compact_inline_facts: Cell::new(0),
             scope_bypassed: Cell::new(false),
@@ -933,6 +930,7 @@ impl Function {
             bytecode: None,
             source_text: None,
             native: None,
+            native_entry: None,
             constructable,
             is_strict: false,
             lexical_this: false,
@@ -986,7 +984,6 @@ impl Function {
             has_dynamic_function_realm_override: Cell::new(false),
             direct_leaf_call_eligible: Cell::new(None),
             direct_construct_eligible: Cell::new(None),
-            native_family: Cell::new(0),
             wide_inline_facts: Cell::new(0),
             compact_inline_facts: Cell::new(0),
             scope_bypassed: Cell::new(false),
@@ -1000,6 +997,7 @@ impl Function {
             bytecode: None,
             source_text: None,
             native,
+            native_entry: native.map(crate::native::bind),
             constructable,
             is_strict: false,
             lexical_this: false,

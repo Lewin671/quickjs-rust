@@ -92,8 +92,8 @@ challenge payoff assumptions, not those defaults:
 
 Historical instruction geomeans differ: T065 **2.3763× NG** at `9eba7a1d`,
 T068 **2.1199×** at `f49be95c`; neither is current HEAD standing. Historical
-wall is about 2.6–3× NG; the fresh lead job
-`20261030T045926Z-core-rebuild-baseline` is **pending baseline**, not a result.
+wall is about 2.6–3× NG; the rebuild baseline at `6663738f` measured development
+**2.632×** NG wall ([receipt](../../tasks/diagnostics/T077-baseline.md)).
 Shares overlap; T075's dispatch samples (5.7042% whole-process self) are not a
 removable instruction budget. No component percentages are added into a forecast.
 

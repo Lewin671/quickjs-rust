@@ -1,39 +1,146 @@
-use crate::{Function, NativeFunction, Value, error};
+//! Operation entries for errors; bound once when a native is created.
 
-use super::NativeCallResult;
-use crate::CallEnv;
+use super::CallInfo;
+use crate::{CallEnv, RuntimeError, Value, error};
 
-pub(super) fn call_error_native(
-    function: &Function,
-    native: NativeFunction,
-    this_value: Value,
-    argument_values: &[Value],
-    is_construct: bool,
+pub(super) fn error(
     env: &mut CallEnv,
-) -> NativeCallResult {
-    let value = match native {
-        NativeFunction::Error => {
-            error::native_error(function, this_value, argument_values, is_construct, env)?
-        }
-        NativeFunction::AggregateError => {
-            error::native_aggregate_error(function, this_value, argument_values, is_construct, env)?
-        }
-        NativeFunction::SuppressedError => error::native_suppressed_error(
-            function,
-            this_value,
-            argument_values,
-            is_construct,
-            env,
-        )?,
-        NativeFunction::ErrorIsError => error::native_error_is_error(argument_values),
-        NativeFunction::ErrorPrototypeToString => {
-            error::native_error_prototype_to_string(this_value, env)?
-        }
-        native if error::is_native_error(native) => {
-            error::native_error(function, this_value, argument_values, is_construct, env)?
-        }
-        _ => return Ok(None),
-    };
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    error::native_error(
+        info.callee,
+        info.this_value.clone(),
+        argument_values,
+        info.is_construct,
+        env,
+    )
+}
 
-    Ok(Some(value))
+pub(super) fn aggregate_error(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    error::native_aggregate_error(
+        info.callee,
+        info.this_value.clone(),
+        argument_values,
+        info.is_construct,
+        env,
+    )
+}
+
+pub(super) fn suppressed_error(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    error::native_suppressed_error(
+        info.callee,
+        info.this_value.clone(),
+        argument_values,
+        info.is_construct,
+        env,
+    )
+}
+
+pub(super) fn error_is_error(
+    _env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    Ok(error::native_error_is_error(argument_values))
+}
+
+pub(super) fn error_prototype_to_string(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    error::native_error_prototype_to_string(info.this_value.clone(), env)
+}
+
+pub(super) fn eval_error(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    error::native_error(
+        info.callee,
+        info.this_value.clone(),
+        argument_values,
+        info.is_construct,
+        env,
+    )
+}
+
+pub(super) fn range_error(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    error::native_error(
+        info.callee,
+        info.this_value.clone(),
+        argument_values,
+        info.is_construct,
+        env,
+    )
+}
+
+pub(super) fn reference_error(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    error::native_error(
+        info.callee,
+        info.this_value.clone(),
+        argument_values,
+        info.is_construct,
+        env,
+    )
+}
+
+pub(super) fn syntax_error(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    error::native_error(
+        info.callee,
+        info.this_value.clone(),
+        argument_values,
+        info.is_construct,
+        env,
+    )
+}
+
+pub(super) fn type_error(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    error::native_error(
+        info.callee,
+        info.this_value.clone(),
+        argument_values,
+        info.is_construct,
+        env,
+    )
+}
+
+pub(super) fn uri_error(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    error::native_error(
+        info.callee,
+        info.this_value.clone(),
+        argument_values,
+        info.is_construct,
+        env,
+    )
 }

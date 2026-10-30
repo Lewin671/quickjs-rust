@@ -1,45 +1,108 @@
-use crate::{NativeFunction, Value, reflect};
+//! Operation entries for reflect; bound once when a native is created.
 
-use super::NativeCallResult;
-use crate::CallEnv;
+use super::CallInfo;
+use crate::{CallEnv, RuntimeError, Value, reflect};
 
-pub(super) fn call_reflect_native(
-    native: NativeFunction,
-    argument_values: &[Value],
+pub(super) fn reflect_apply(
     env: &mut CallEnv,
-) -> NativeCallResult {
-    let value = match native {
-        NativeFunction::ReflectApply => reflect::native_reflect_apply(argument_values, env)?,
-        NativeFunction::ReflectConstruct => {
-            reflect::native_reflect_construct(argument_values, env)?
-        }
-        NativeFunction::ReflectDefineProperty => {
-            reflect::native_reflect_define_property(argument_values, env)?
-        }
-        NativeFunction::ReflectDeleteProperty => {
-            reflect::native_reflect_delete_property(argument_values, env)?
-        }
-        NativeFunction::ReflectGet => reflect::native_reflect_get(argument_values, env)?,
-        NativeFunction::ReflectGetPrototypeOf => {
-            reflect::native_reflect_get_prototype_of(argument_values, env)?
-        }
-        NativeFunction::ReflectGetOwnPropertyDescriptor => {
-            reflect::native_reflect_get_own_property_descriptor(argument_values, env)?
-        }
-        NativeFunction::ReflectHas => reflect::native_reflect_has(argument_values, env)?,
-        NativeFunction::ReflectIsExtensible => {
-            reflect::native_reflect_is_extensible(argument_values, env)?
-        }
-        NativeFunction::ReflectOwnKeys => reflect::native_reflect_own_keys(argument_values, env)?,
-        NativeFunction::ReflectPreventExtensions => {
-            reflect::native_reflect_prevent_extensions(argument_values, env)?
-        }
-        NativeFunction::ReflectSet => reflect::native_reflect_set(argument_values, env)?,
-        NativeFunction::ReflectSetPrototypeOf => {
-            reflect::native_reflect_set_prototype_of(argument_values, env)?
-        }
-        _ => return Ok(None),
-    };
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    reflect::native_reflect_apply(argument_values, env)
+}
 
-    Ok(Some(value))
+pub(super) fn reflect_construct(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    reflect::native_reflect_construct(argument_values, env)
+}
+
+pub(super) fn reflect_define_property(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    reflect::native_reflect_define_property(argument_values, env)
+}
+
+pub(super) fn reflect_delete_property(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    reflect::native_reflect_delete_property(argument_values, env)
+}
+
+pub(super) fn reflect_get(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    reflect::native_reflect_get(argument_values, env)
+}
+
+pub(super) fn reflect_get_prototype_of(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    reflect::native_reflect_get_prototype_of(argument_values, env)
+}
+
+pub(super) fn reflect_get_own_property_descriptor(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    reflect::native_reflect_get_own_property_descriptor(argument_values, env)
+}
+
+pub(super) fn reflect_has(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    reflect::native_reflect_has(argument_values, env)
+}
+
+pub(super) fn reflect_is_extensible(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    reflect::native_reflect_is_extensible(argument_values, env)
+}
+
+pub(super) fn reflect_own_keys(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    reflect::native_reflect_own_keys(argument_values, env)
+}
+
+pub(super) fn reflect_prevent_extensions(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    reflect::native_reflect_prevent_extensions(argument_values, env)
+}
+
+pub(super) fn reflect_set(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    reflect::native_reflect_set(argument_values, env)
+}
+
+pub(super) fn reflect_set_prototype_of(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    reflect::native_reflect_set_prototype_of(argument_values, env)
 }

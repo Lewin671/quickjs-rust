@@ -228,26 +228,48 @@ fn generator_object_prototype(function: &Function, env: &CallEnv) -> Option<Obje
 }
 
 /// Dispatches the `%GeneratorPrototype%` `next`/`return`/`throw` natives.
-pub(crate) fn call_generator_native(
-    native: NativeFunction,
-    this_value: Value,
-    argument_values: &[Value],
+pub(crate) fn generator_prototype_next(
     env: &mut CallEnv,
-) -> Result<Option<Value>, RuntimeError> {
-    let resume = match native {
-        NativeFunction::GeneratorPrototypeNext => {
-            Resume::Next(argument_values.first().cloned().unwrap_or(Value::Undefined))
-        }
-        NativeFunction::GeneratorPrototypeReturn => {
-            Resume::Return(argument_values.first().cloned().unwrap_or(Value::Undefined))
-        }
-        NativeFunction::GeneratorPrototypeThrow => {
-            Resume::Throw(argument_values.first().cloned().unwrap_or(Value::Undefined))
-        }
-        _ => return Ok(None),
-    };
+    info: crate::native::CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    resume_method(
+        info.this_value,
+        Resume::Next(argument_values.first().cloned().unwrap_or(Value::Undefined)),
+        env,
+    )
+}
 
-    let Value::Object(generator) = &this_value else {
+pub(crate) fn generator_prototype_return(
+    env: &mut CallEnv,
+    info: crate::native::CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    resume_method(
+        info.this_value,
+        Resume::Return(argument_values.first().cloned().unwrap_or(Value::Undefined)),
+        env,
+    )
+}
+
+pub(crate) fn generator_prototype_throw(
+    env: &mut CallEnv,
+    info: crate::native::CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    resume_method(
+        info.this_value,
+        Resume::Throw(argument_values.first().cloned().unwrap_or(Value::Undefined)),
+        env,
+    )
+}
+
+fn resume_method(
+    this_value: &Value,
+    resume: Resume,
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let Value::Object(generator) = this_value else {
         return Err(not_a_generator());
     };
     if generator.generator_state().borrow().is_none() {
@@ -268,7 +290,7 @@ pub(crate) fn call_generator_native(
             iterator_result(value, true, env, env.realm().atoms())
         }
     };
-    Ok(Some(result))
+    Ok(result)
 }
 
 fn iterator_result(

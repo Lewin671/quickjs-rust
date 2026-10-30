@@ -1,0 +1,17 @@
+{
+  "revision": "dd0905b2cb0236c38619089a27e8342b575dda61",
+  "binary_sha256": "7da4553ce43032d0611cb7b64be740c9d06fb8483766bc28a1098147be9e2765",
+  "rustc": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: aarch64-apple-darwin\nrelease: 1.95.0\nLLVM version: 22.1.2\n",
+  "host": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+  "manifest_sha256": "2f35fddc49930a43644cfe9452a6c994da2059bc59e2fc855f706f602076fd13",
+  "repeats": 2,
+  "timing": false,
+  "patch_sha256": "9a2cff8d6bdea973e51f00a661ce4f44a5c708fa4bccae721072deaa4ba4cfe9",
+  "source_date": "2026-10-29",
+  "argv": [
+    "<binary>",
+    "--raw",
+    "<case.workload>"
+  ],
+  "environment": "inherited with all QJS_* removed"
+}

@@ -1,44 +1,64 @@
-use crate::{Function, NativeFunction, Value, weak_map};
+//! Operation entries for weak maps; bound once when a native is created.
 
-use super::NativeCallResult;
-use crate::CallEnv;
+use super::CallInfo;
+use crate::{CallEnv, RuntimeError, Value, weak_map};
 
-pub(super) fn call_weak_map_native(
-    function: &Function,
-    native: NativeFunction,
-    this_value: Value,
-    argument_values: &[Value],
-    is_construct: bool,
+pub(super) fn weak_map(
     env: &mut CallEnv,
-) -> NativeCallResult {
-    let value = match native {
-        NativeFunction::WeakMap => {
-            weak_map::native_weak_map(function, argument_values, is_construct, env)?
-        }
-        NativeFunction::WeakMapPrototypeDelete => {
-            weak_map::native_weak_map_prototype_delete(this_value, argument_values)?
-        }
-        NativeFunction::WeakMapPrototypeGet => {
-            weak_map::native_weak_map_prototype_get(this_value, argument_values)?
-        }
-        NativeFunction::WeakMapPrototypeGetOrInsert => {
-            weak_map::native_weak_map_prototype_get_or_insert(this_value, argument_values, env)?
-        }
-        NativeFunction::WeakMapPrototypeGetOrInsertComputed => {
-            weak_map::native_weak_map_prototype_get_or_insert_computed(
-                this_value,
-                argument_values,
-                env,
-            )?
-        }
-        NativeFunction::WeakMapPrototypeHas => {
-            weak_map::native_weak_map_prototype_has(this_value, argument_values)?
-        }
-        NativeFunction::WeakMapPrototypeSet => {
-            weak_map::native_weak_map_prototype_set(this_value, argument_values, env)?
-        }
-        _ => return Ok(None),
-    };
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    weak_map::native_weak_map(info.callee, argument_values, info.is_construct, env)
+}
 
-    Ok(Some(value))
+pub(super) fn weak_map_prototype_delete(
+    _env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    weak_map::native_weak_map_prototype_delete(info.this_value.clone(), argument_values)
+}
+
+pub(super) fn weak_map_prototype_get(
+    _env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    weak_map::native_weak_map_prototype_get(info.this_value.clone(), argument_values)
+}
+
+pub(super) fn weak_map_prototype_get_or_insert(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    weak_map::native_weak_map_prototype_get_or_insert(info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn weak_map_prototype_get_or_insert_computed(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    weak_map::native_weak_map_prototype_get_or_insert_computed(
+        info.this_value.clone(),
+        argument_values,
+        env,
+    )
+}
+
+pub(super) fn weak_map_prototype_has(
+    _env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    weak_map::native_weak_map_prototype_has(info.this_value.clone(), argument_values)
+}
+
+pub(super) fn weak_map_prototype_set(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    weak_map::native_weak_map_prototype_set(info.this_value.clone(), argument_values, env)
 }

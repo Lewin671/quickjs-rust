@@ -1,41 +1,41 @@
-use crate::{Function, NativeFunction, Value, finalization_registry};
+//! Operation entries for finalization registries; bound once when a native is created.
 
-use super::NativeCallResult;
-use crate::CallEnv;
+use super::CallInfo;
+use crate::{CallEnv, RuntimeError, Value, finalization_registry};
 
-pub(super) fn call_finalization_registry_native(
-    function: &Function,
-    native: NativeFunction,
-    this_value: Value,
-    argument_values: &[Value],
-    is_construct: bool,
+pub(super) fn finalization_registry(
     env: &mut CallEnv,
-) -> NativeCallResult {
-    let value = match native {
-        NativeFunction::FinalizationRegistry => {
-            finalization_registry::native_finalization_registry(
-                function,
-                argument_values,
-                is_construct,
-                env,
-            )?
-        }
-        NativeFunction::FinalizationRegistryPrototypeRegister => {
-            finalization_registry::native_finalization_registry_prototype_register(
-                this_value,
-                argument_values,
-                env,
-            )?
-        }
-        NativeFunction::FinalizationRegistryPrototypeUnregister => {
-            finalization_registry::native_finalization_registry_prototype_unregister(
-                this_value,
-                argument_values,
-                env,
-            )?
-        }
-        _ => return Ok(None),
-    };
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    finalization_registry::native_finalization_registry(
+        info.callee,
+        argument_values,
+        info.is_construct,
+        env,
+    )
+}
 
-    Ok(Some(value))
+pub(super) fn finalization_registry_prototype_register(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    finalization_registry::native_finalization_registry_prototype_register(
+        info.this_value.clone(),
+        argument_values,
+        env,
+    )
+}
+
+pub(super) fn finalization_registry_prototype_unregister(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    finalization_registry::native_finalization_registry_prototype_unregister(
+        info.this_value.clone(),
+        argument_values,
+        env,
+    )
 }

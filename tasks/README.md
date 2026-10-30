@@ -7,7 +7,7 @@ update the resume block in the commit that lands it. When a task closes, move it
 ## Active
 | Task | Status | What it is |
 | --- | --- | --- |
-| [T077](T077-core-rebuild.md) core rebuild | active | S2 round-1 owner work verified: [receipt](archive/T077-s2-round1-verification.md), [source](archive/T077-s2-round1-source.md), [counters](archive/T077-s2-round1-final-counters.md), [iMac/RSS](archive/T077-s2-round1-measurements.md); cached/off exact 42,672 passes each; lead formal acceptance pending. |
+| [T077](T077-core-rebuild.md) core rebuild | active | S3a integrated; S2 round-2 repair in progress. Prior S2 evidence: [receipt](archive/T077-s2-round1-verification.md), [source](archive/T077-s2-round1-source.md), [counters](archive/T077-s2-round1-final-counters.md), [iMac/RSS](archive/T077-s2-round1-measurements.md); cached/off exact 42,672 passes each; lead formal acceptance pending. |
 | [T073](T073-local-read-bimodal.md) local-read bimodality | active | Diagnosis complete: candidate text-layout CPU tails; T017 adopts case-health containment only. |
 | [T074](T074-direct-eval-scope-model.md) direct eval scope model | design needed | Architecture review before code; tracks eval visibility, declarations, mutability, context and suspension constraints. |
 | [T057](T057-string-code-units.md) string code units | active | Stage 1 and UTF-16 correctness extraction integrated; stage 2 abandoned (0 attempts); linear-search follow-up awaits screening. |
@@ -89,7 +89,6 @@ Each file is under `archive/` with a resume block; outcomes record what happened
 | `T030-packed-typed-loop-scalars.md` | Rejected and reverted. |
 | `T031-realm-code-unit-strings.md` | Retained, then removed when String wrapper index properties became lazy. |
 | `T032-shaped-prototype-slot-reads.md` | Retained. |
-
 ## Other Records In `archive/`
 
 - T077 S1: [foundation](archive/T077-s1-foundation.md), [index](archive/T077-s1-index.md), [owner migration](archive/T077-s1-owner-migration.md), [cutover](archive/T077-s1-cutover.md), [exotic hooks](archive/T077-s1-exotic-hooks.md), [verification](archive/T077-s1-verification.md), [review repairs](archive/T077-s1-review-fixes.md). T077 S2 initial: [verification](archive/T077-s2-verification.md), [first counters](archive/T077-s2-counters.md), [creation replay](archive/T077-s2-creation-counters.md), [initial round-1 counters](archive/T077-s2-round1-counters.md).
@@ -118,3 +117,4 @@ Each file is under `archive/` with a resume block; outcomes record what happened
   [performance-units/README.md](performance-units/README.md).
 
 Search before repeating an experiment: `grep -rn -i "<mechanism>" tasks/`. Records describe their named revisions and never establish current priority.
+Historical S3a submission: [initial report](archive/T077-s3a-initial-results.md) (rejected by independent review; current evidence stays in T077).

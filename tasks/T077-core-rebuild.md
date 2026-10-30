@@ -1,11 +1,11 @@
 # T077: In-place core rebuild
 
-- Status: active; S2 round-1 owner work complete on this branch; engine frozen at `e1d8a6a3`. Lead formal acceptance remains pending.
-- Implementation: all A-E feedback and general payoff repairs are present; one named authority, prototype-sensitive layouts/cells, pure IC outcomes and explicit realm creation. No new dependency, unsafe code or environment snapshot.
-- Verified at: `e1d8a6a3` full gate (2,439 runtime; 5,170 curated), 2,486 verify tests on arm64 and 2,486 x86 feature tests; NG 266/266 default/off/verify; final cached/off exact 42,672 passes each, zero gaps/lost passes/new exclusions. Both burndowns recorded (off uses identical-source docs descendant `3cba3b6c`).
-- Evidence: [round-1 receipt](archive/T077-s2-round1-verification.md), [source pins](archive/T077-s2-round1-source.md), [final counters](archive/T077-s2-round1-final-counters.md), [all iMac cohorts/RSS](archive/T077-s2-round1-measurements.md). Final diagnostic development 0.998020; heterogeneous/prototype/churn/dynamic 0.6571/0.9954/0.8926/0.7956 versus dd0905b2.
-- Unresolved: automatic triage verdict remains "likely loss" because broader controls regress; some intervals cross 1.0 and array RSS is higher. No formal four-aggregate or resource acceptance is claimed.
-- Next action: lead formal S1+S2 aggregate/held-out and resource assessment; diagnose remaining control/construction costs if it fails. Never push origin or merge main from this owner branch.
+- Status: active; S3a accepted on main, S2 round-2 main merge implemented and verified on the owner branch.
+- Implementation: round-1 S2 remains present; merging main `dcee3c56` (S3a runtime `71294a20`) and preserving explicit realm creation in direct native entries. No construction/array-size repair yet.
+- Verified at: prior S2 `e1d8a6a3` gates/exact remain historical; merged working tree fast gate passes (2,448 runtime, 117 selected Test262), focused native 8/function 13 and NG 266 pass. FunctionData is 320 bytes with S3a entry/alignment. No new performance standing.
+- Evidence: [round-1 receipt](archive/T077-s2-round1-verification.md), [S3a acceptance](diagnostics/T077-s3a-acceptance.md), [S3b brief](proposals/T077-s3b-brief.md).
+- Unresolved: merge verification, per-object construction breakdown versus dcee3c56, construction payoff, array header/RSS, final gates and diagnostics.
+- Next action: commit the authorized main-to-owner merge, measure construction before changes, then repair construction and arrays. Never push origin or merge into main; held-out remains lead-owned.
 
 ## Authority and scope
 
@@ -15,11 +15,7 @@ Route: in-place staged replacement inside qjs-runtime on main; no second engine,
 tracing GC, FFI, Rust async, benchmark-specific recognizers or old-path fallback.
 Keep slot/shared-cell identity. Delete replaced code within its replacement stage.
 
-The approved target originated on `agent/core-rebuild-design/codex` from
-`6663738f`. S1 implementation uses the isolated owner branch/base in the resume
-block; its single owner has all paths assigned by the self-contained brief.
-The lead owns integration and formal timing; this branch never pushes or merges.
-Global/shared API changes have one owner.
+The [target design](../docs/design/core-rebuild.md) owns architecture. The lead owns integration/formal timing; this owner may merge main into its branch only when directed. Global/shared API changes have one owner.
 
 ## Stage acceptance (overrides ordinary unit gates for T077 only)
 
@@ -52,7 +48,7 @@ repair/re-scope the stage for lead review; do not close on promised later gains.
 Do not change the predeclared contract to fit results. A stage fallback is a
 source revert to the last verified main milestone, never retained dual execution.
 
-Job `20261030T045926Z-core-rebuild-baseline`: **pending baseline**, main vs main vs NG, 30 blocks; no new standing.
+Rebuild baseline ([receipt](diagnostics/T077-baseline.md)): job `20261030T045926Z-core-rebuild-baseline`, source `6663738f`, 30 blocks: Rust/NG development **2.632**, external 0.911, selection 0.971, sentinel 1.046; A/A 1.000.
 Bind its exact source/binary/corpus/recipe hashes when the lead records it.
 T018's 2×-faster-than-NG per-case target stays open; architectural completion
 plus aggregate improvement is progress, not proof of that campaign target.
@@ -111,29 +107,35 @@ The [round-1 correction](proposals/T077-s2-prototype-layout.md) replaces shared-
 
 ## S3 — Universal bytecode, frames, calls and native ABI
 
-- Scope: bytecode compiler/IR/VM, function call/context/install, native and builtin
-  capability consumers, modules, generators/async. [Execution contract](../docs/design/core-rebuild-execution.md).
-- Delete: stack interpreter, nested general JS VMs, CallEnv, per-call argument
-  vectors, numeric/this leaves, compact/numeric-plan/wide/caller-env executors,
-  native family probe dispatch and their cached admissions/pools/handback.
-- Preconditions: S2 accepted; settle T074; freeze Context/BindingPlan/NativeEntry and exhaustive Op-to-Code map.
-- Correctness: verifier malformed/CFG tests; deep recursion and JS/native depth;
-  zero-based disassembly audit; T016 cell/TDZ/mapped-arguments/global/module tests;
-  transitive eval/with leases; callback/private/referrer/derived-this tests;
-  exception/finally/disposal and all suspension/job discriminators.
-- Payoff: eliminate entry/argument/env work and duplicate dispatch ownership,
-  not compression alone (T065 0.998); T068 calls+env deletion envelope 15.63%.
-  S3 may be neutral during scalar-tier loss; **S4 pays**.
-- Exit: universal register Code, no legacy opcode/fallback; ordinary calls no
-  Vec/CallEnv/Rust recursion; virtual streams gone, existing typed/mutation
-  executors consume common frames directly, with no retained scaffolding.
-- Size: **12–20 weeks**, largest integration risk. Lead amendment 2026-10-29: the Op/capability inventory runs in parallel with S1 and must split S3 into independently landable sub-stages (each with the common gates); no multi-month unlandable branch.
-- Parallel: lead owns `ir*`, compiler shared builder, `vm*`, `function/call*` and
-  Context; one owner ports `native/arrays.rs` + array builtin family, another
-  `native/strings.rs` + string/regexp families after NativeEntry freeze; serialize
-  other families/shared headers. Native ports use owned values/argument slices.
-- Risk/fallback: borrow/re-entry, cell authority, suspensions and suite losses;
-  source-revert S3 if gates fail. No partially supported engine can land as S3.
+- Contract: [execution](../docs/design/core-rebuild-execution.md); [approved five-stage plan](proposals/T077-s3-plan.md); [frozen S3b implementation brief](proposals/T077-s3b-brief.md) with typed Context, complete ports, binding structures, B1–B6 commits and verification matrix. S3a is integrated; S3b remains design only.
+- Landings: S3a direct native entries/slices; S3b typed Context and T074
+  binding authority; S3c owning activations/suspension; S3d explicit JS stack and
+  callee argument writes; S3e universal register Code and executor deletion.
+- Every landing takes the common full/NG/complete exact zero-gap gates above;
+  no partial-language backend or old-path fallback. Payers/endpoints as in the
+  plan (approved); the S4-versus-S2 payer obligation remains.
+- Lead decision 2026-10-29: split approved. S3a may land ahead of S1/S2 on its
+  disjoint paths (whichever lands second rebases). S3b–e need accepted S2, T074
+  approval before S3b and frozen per-stage APIs/deletions/test maps. The S3e brief
+  must price growing the existing wide register tier (62.5% of routed entries,
+  most executed ops) into universal Code against a fresh lowering.
+- Exit remains: universal Code; no CallEnv/nested JS Vm/ordinary argument Vec,
+  stack/leaf/compact/numeric-plan/wide/caller-env/virtual executable streams or
+  cached admissions. Typed/mutation loops consume common frames/Code exit maps
+  until S4 removes them. [Retirement](../docs/design/core-rebuild-retirement.md).
+- Evidence: [ten-program deterministic path counts](diagnostics/T077-s3-counts.md)
+  price reach, not savings: 78,693,537 native-family declines, 24,987,337 CallEnv
+  constructions/clones and 2,137,517 frame/VM constructions. No timing claim.
+- Proposed size: 13–21 engineer-weeks plus 1–2 weeks for review and unpriced repairs;
+  original 12–20-week estimate needs lead reconciliation. Largest landing is
+  S3e (4–6 weeks); all detailed boundaries, tests and risks live in the plan.
+- Risk/fallback: cell/context/re-entry/suspension correctness and wide/scalar
+  throughput; revert a failed stage/payer pair to the last verified milestone,
+  never retain a compatibility interpreter. S4 still pays for neutral S3e.
+
+S3d owns the pre-existing deep Rust-stack crash (including native callbacks): one runtime-wide stack anchor with a host-configured budget,
+a CLI engine thread with an explicit stack size, and frame-counted JS depth after JS stops recursing in Rust.
+S3a preserves base depth behavior and adds no limit. Its rejected per-realm guard missed JS frames before the anchor and did not establish overflow protection.
 
 ## S4 — One scalar/escape optimizer; finish executor deletion
 
@@ -207,9 +209,7 @@ The [round-1 correction](proposals/T077-s2-prototype-layout.md) replaces shared-
 
 ## Throughput and verification
 
-Total **44–72 engineer-weeks**, roughly **55–90 with 25% contingency**, one
-experienced owner; ranges are planning estimates, not measured throughput. Extra
-owners shorten family ports after APIs freeze, not shared architecture. Re-estimate after S2 and S3 inventory; sizes imply no T022 attempt budget.
+Stage estimates remain planning ranges, not measured throughput; re-estimate after S2/S3. No T022 attempt budget governs these rebuild stages.
 
 Lead serializes iMac timing (~9 min triage/~25 min 30-block comparison); retain
 K=6, complete formal precision/health evidence, held-out 30 pairs and RSS >=15

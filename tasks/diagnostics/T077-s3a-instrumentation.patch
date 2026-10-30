@@ -1,0 +1,87 @@
+diff --git a/crates/qjs-runtime/src/bytecode/vm.rs b/crates/qjs-runtime/src/bytecode/vm.rs
+index 87f6bab0..52e8b714 100644
+--- a/crates/qjs-runtime/src/bytecode/vm.rs
++++ b/crates/qjs-runtime/src/bytecode/vm.rs
+@@ -1299,6 +1299,7 @@ impl<'a> Vm<'a> {
+ 
+     fn construct(&mut self, argc: usize) -> Result<(), RuntimeError> {
+         if self.stack_native_callee(argc) {
++            crate::diagnostics::inventory_event("native_stack_construct_borrow");
+             let base = self
+                 .stack
+                 .len()
+@@ -1397,6 +1398,10 @@ impl<'a> Vm<'a> {
+     }
+ 
+     pub(super) fn pop_arguments(&mut self, argc: usize) -> Result<Vec<Value>, RuntimeError> {
++        crate::diagnostics::inventory_event("argument_vec_pop");
++        if self.stack_native_callee(argc) {
++            crate::diagnostics::inventory_event("argument_vec_native_pop");
++        }
+         let mut arguments = Vec::with_capacity(argc);
+         for _ in 0..argc {
+             arguments.push(self.pop()?);
+diff --git a/crates/qjs-runtime/src/bytecode/vm_call.rs b/crates/qjs-runtime/src/bytecode/vm_call.rs
+index 6e5f3402..90c6d66a 100644
+--- a/crates/qjs-runtime/src/bytecode/vm_call.rs
++++ b/crates/qjs-runtime/src/bytecode/vm_call.rs
+@@ -113,6 +113,7 @@ impl Vm<'_> {
+         direct_eval: bool,
+         direct_eval_strict: bool,
+     ) -> Result<(), RuntimeError> {
++        crate::diagnostics::inventory_event("native_stack_call_borrow");
+         let prefix = usize::from(resolved) + 1;
+         let base = self
+             .stack
+diff --git a/crates/qjs-runtime/src/diagnostics.rs b/crates/qjs-runtime/src/diagnostics.rs
+index fababac1..c0d79dca 100644
+--- a/crates/qjs-runtime/src/diagnostics.rs
++++ b/crates/qjs-runtime/src/diagnostics.rs
+@@ -36,7 +36,7 @@ macro_rules! declare_counters {
+             /// declaration order, so a report stays stable across builds.
+             #[must_use]
+             pub fn entries(&self) -> Vec<(&'static str, u64)> {
+-                vec![$((stringify!($field), self.$field),)+]
++                { let mut result = vec![$((stringify!($field), self.$field),)+]; result.extend(inventory_entries()); result }
+             }
+         }
+ 
+@@ -180,3 +180,17 @@ macro_rules! count {
+ }
+ 
+ pub(crate) use count;
++
++thread_local! { static INVENTORY: std::cell::RefCell<std::collections::BTreeMap<&'static str,u64>> = const { std::cell::RefCell::new(std::collections::BTreeMap::new()) }; }
++pub(crate) fn inventory_event(name: &'static str) { INVENTORY.with(|c| { *c.borrow_mut().entry(name).or_default() += 1; }); }
++fn inventory_entries() -> Vec<(&'static str,u64)> {
++    INVENTORY.with(|c| {
++        let mut c = c.borrow_mut();
++        for name in ["argument_vec_native_pop", "argument_vec_tier_fallback", "argument_vec_slice_fallback", "argument_vec_bound", "native_family_probes", "native_family_declines"] {
++            c.entry(name).or_default();
++        }
++        c.iter().map(|(k,v)| (*k,*v)).collect()
++    })
++}
++
++pub(crate) fn inventory_max(name: &'static str, value: u64) { INVENTORY.with(|c| { let mut c = c.borrow_mut(); let entry = c.entry(name).or_default(); *entry = (*entry).max(value); }); }
+diff --git a/crates/qjs-runtime/src/native.rs b/crates/qjs-runtime/src/native.rs
+index 91434172..3ac6245f 100644
+--- a/crates/qjs-runtime/src/native.rs
++++ b/crates/qjs-runtime/src/native.rs
+@@ -62,6 +62,7 @@ pub(crate) fn call_native_function(
+     is_construct: bool,
+     env: &mut CallEnv,
+ ) -> Result<Value, RuntimeError> {
++    crate::diagnostics::inventory_event("native_direct_entry");
+     let new_target = is_construct.then(|| {
+         env.get(crate::NEW_TARGET_BINDING)
+             .unwrap_or_else(|| Value::Function(function.clone()))
+@@ -109,6 +110,8 @@ impl<'a> NativeBoundary<'a> {
+             realm.native_stack_anchor.set(here);
+         }
+         realm.native_depth.set(depth + 1);
++        crate::diagnostics::inventory_max("native_depth_max", (depth + 1) as u64);
++        crate::diagnostics::inventory_max("native_stack_bytes_max", realm.native_stack_anchor.get().abs_diff(here) as u64);
+         Ok(Self(realm))
+     }
+ }

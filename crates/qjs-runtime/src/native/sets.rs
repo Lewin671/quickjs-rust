@@ -1,60 +1,140 @@
-use crate::{Function, NativeFunction, Value, set};
+//! Operation entries for sets; bound once when a native is created.
 
-use super::NativeCallResult;
-use crate::CallEnv;
+use super::CallInfo;
+use crate::{CallEnv, RuntimeError, Value, set};
 
-pub(super) fn call_set_native(
-    function: &Function,
-    native: NativeFunction,
-    this_value: Value,
-    argument_values: &[Value],
-    is_construct: bool,
+pub(super) fn set(
     env: &mut CallEnv,
-) -> NativeCallResult {
-    let value = match native {
-        NativeFunction::Set => set::native_set(function, argument_values, is_construct, env)?,
-        NativeFunction::SetPrototypeAdd => {
-            set::native_set_prototype_add(this_value, argument_values)?
-        }
-        NativeFunction::SetPrototypeClear => set::native_set_prototype_clear(this_value)?,
-        NativeFunction::SetPrototypeDelete => {
-            set::native_set_prototype_delete(this_value, argument_values)?
-        }
-        NativeFunction::SetPrototypeDifference => {
-            set::native_set_prototype_difference(this_value, argument_values, env)?
-        }
-        NativeFunction::SetPrototypeEntries => set::native_set_prototype_entries(this_value, env)?,
-        NativeFunction::SetPrototypeForEach => {
-            set::native_set_prototype_for_each(this_value, argument_values, env)?
-        }
-        NativeFunction::SetPrototypeHas => {
-            set::native_set_prototype_has(this_value, argument_values)?
-        }
-        NativeFunction::SetPrototypeIntersection => {
-            set::native_set_prototype_intersection(this_value, argument_values, env)?
-        }
-        NativeFunction::SetPrototypeIsDisjointFrom => {
-            set::native_set_prototype_is_disjoint_from(this_value, argument_values, env)?
-        }
-        NativeFunction::SetPrototypeIsSubsetOf => {
-            set::native_set_prototype_is_subset_of(this_value, argument_values, env)?
-        }
-        NativeFunction::SetPrototypeIsSupersetOf => {
-            set::native_set_prototype_is_superset_of(this_value, argument_values, env)?
-        }
-        NativeFunction::SetPrototypeSize => set::native_set_prototype_size(this_value)?,
-        NativeFunction::SetPrototypeSymmetricDifference => {
-            set::native_set_prototype_symmetric_difference(this_value, argument_values, env)?
-        }
-        NativeFunction::SetPrototypeUnion => {
-            set::native_set_prototype_union(this_value, argument_values, env)?
-        }
-        NativeFunction::SetPrototypeValues => set::native_set_prototype_values(this_value, env)?,
-        NativeFunction::SetIteratorPrototypeNext => {
-            set::native_set_iterator_next(env.realm(), this_value)?
-        }
-        _ => return Ok(None),
-    };
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    set::native_set(info.callee, argument_values, info.is_construct, env)
+}
 
-    Ok(Some(value))
+pub(super) fn set_prototype_add(
+    _env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    set::native_set_prototype_add(info.this_value.clone(), argument_values)
+}
+
+pub(super) fn set_prototype_clear(
+    _env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    set::native_set_prototype_clear(info.this_value.clone())
+}
+
+pub(super) fn set_prototype_delete(
+    _env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    set::native_set_prototype_delete(info.this_value.clone(), argument_values)
+}
+
+pub(super) fn set_prototype_difference(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    set::native_set_prototype_difference(info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn set_prototype_entries(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    set::native_set_prototype_entries(info.this_value.clone(), env)
+}
+
+pub(super) fn set_prototype_for_each(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    set::native_set_prototype_for_each(info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn set_prototype_has(
+    _env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    set::native_set_prototype_has(info.this_value.clone(), argument_values)
+}
+
+pub(super) fn set_prototype_intersection(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    set::native_set_prototype_intersection(info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn set_prototype_is_disjoint_from(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    set::native_set_prototype_is_disjoint_from(info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn set_prototype_is_subset_of(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    set::native_set_prototype_is_subset_of(info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn set_prototype_is_superset_of(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    set::native_set_prototype_is_superset_of(info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn set_prototype_size(
+    _env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    set::native_set_prototype_size(info.this_value.clone())
+}
+
+pub(super) fn set_prototype_symmetric_difference(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    set::native_set_prototype_symmetric_difference(info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn set_prototype_union(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    set::native_set_prototype_union(info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn set_prototype_values(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    set::native_set_prototype_values(info.this_value.clone(), env)
+}
+
+pub(super) fn set_iterator_prototype_next(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    set::native_set_iterator_next(env.realm(), info.this_value.clone())
 }
