@@ -1,9 +1,14 @@
 # T077 S2 verification ledger (in progress)
 
-Executable candidate: `fc5da912bdd646af2ae05f991fe0618afc961195`, base
-`b2daec46`; branch `agent/t077-s2-named-stores/codex`. The subsequent counter
-receipt and release-test cfg/counter-label correction do not change executable
-engine behavior. No push, merge or main-checkout edit.
+Executable candidate: `884d3ba27a38a6283342f10b4db9c79e747ee587`, base
+`b2daec46`; branch `agent/t077-s2-named-stores/codex`. Runtime implementation
+was frozen at `fc5da912`; `884d3ba2` adds only release-test cfg and counter-label
+corrections. The ten-program counter artifact remains bound to `fc5da912`.
+The final creation-proof correction is present and under verification: it
+replaces per-hit chain walks with the same subscriptions, and IC-off additionally
+disables creation and active-loop global-object slot proofs. Both exact drivers
+are paused before case execution pending the rebuilt artifact.
+No push, merge or main-checkout edit.
 
 ## Implementation and deletions
 
@@ -69,7 +74,13 @@ the final coverage authority.
 
 Cached and IC-off complete configured release/agents comparisons are running;
 no complete-scan count or burndown is asserted yet. Frozen CLI SHA-256:
-`4bb228117947e01b6d85a6f54bd75928433e1bb40c1c45f3ebf8579eec8fbb29`.
+`550a3cb33c7f71a9f6fa0c46405955c53424dea7264acd61f3eee583654d8a32`.
+A separate release build differed from the initial CLI, so no byte-identity claim
+is made for that first build. Both drivers were paused during metadata setup,
+verified to have no workers or executed configured cases, and atomically pinned
+to this freshly rebuilt artifact before resuming (2026-10-30 09:24 UTC). Their
+existing records were NG exclusions only. No configured case used the earlier
+binary; inventory/configuration and source remain unchanged.
 
 [Ten-program counter receipt](../archive/T077-s2-counters.md) records checksums,
 exact diagnostic binaries, per-program/family events, before/after work and

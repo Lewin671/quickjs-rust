@@ -59,10 +59,12 @@ fn site_promotes_to_four_ways_then_stays_megamorphic() {
 #[test]
 fn inherited_guards_first_edge_and_all_chain_nodes_but_preserves_value_writes() {
     let domain = AtomDomain::new();
+    let _owner = crate::value::layout::PropertyOwner::new(domain.clone());
     let holder = object(&domain, "x", 1.0);
     let middle = ObjectRef::with_prototype(HashMap::new(), Some(holder.clone()), &domain);
     let receiver = ObjectRef::with_prototype(HashMap::new(), Some(middle.clone()), &domain);
     let other = ObjectRef::with_prototype(HashMap::new(), Some(holder.clone()), &domain);
+    assert_eq!(receiver.layout_revision(), other.layout_revision());
     let cache = NamedPropertyCache::default();
     assert_eq!(cache.read_object(&receiver, "x"), Some(Value::Number(1.0)));
     assert!(

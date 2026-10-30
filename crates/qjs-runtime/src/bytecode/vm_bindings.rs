@@ -623,10 +623,12 @@ impl Vm<'_> {
         // `globalThis` itself and the dynamic-function realm marker have
         // effects beyond the value (`write_existing_own_data_property`,
         // `replace_existing_realm_with_cell`); they keep the named path.
-        let property_slot = (name != "globalThis" && name != "__quickjsRustDynamicFunctionRealm")
-            .then(|| global_this.any_storage_data_slot(name))
-            .flatten()
-            .map(|slot| (slot, global_this.layout_revision()));
+        let property_slot = (name != "globalThis"
+            && name != "__quickjsRustDynamicFunctionRealm"
+            && std::env::var_os("QJS_DISABLE_IC").is_none())
+        .then(|| global_this.any_storage_data_slot(name))
+        .flatten()
+        .map(|slot| (slot, global_this.layout_revision()));
         Some(TypedLoopSloppyGlobalWrite {
             slot,
             name: name.to_owned(),

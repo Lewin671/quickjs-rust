@@ -1,75 +1,77 @@
-//! A named write site's proof that creating its property is a plain append.
-//!
-//! `this.left = left` in a constructor meets a receiver without the property,
-//! so [[Set]] has to walk the prototype chain for a setter or a read-only
-//! property of that name before it may create an own data property. Every
-//! instance built by the constructor walks the same chain, so the site
-//! remembers the chain it walked -- each prototype by identity and layout
-//! revision -- and later receivers with that chain skip the walk. Adding,
-//! removing or reconfiguring a property on any of those prototypes changes
-//! its layout revision, and replacing a prototype changes the identity the
-//! next receiver is checked against, so a stale proof only misses.
-
+//! A named store site's negative prototype proof. Creation still uses the
+//! shared own-property algorithm; this memo only skips a previously established
+//! prototype miss. Weak structural subscriptions guard the whole chain, and the
+//! current receiver's first edge is checked explicitly on every hit.
+use crate::value::{ObjectWeakRef, layout::StructuralDependency};
+use crate::{ObjectRef, Prototype};
 use std::cell::RefCell;
 
-use crate::value::ObjectWeakRef;
-use crate::{ObjectRef, Prototype};
-
-/// Prototype chains longer than this are not remembered.
-const MAX_CHAIN: usize = 3;
-
-#[derive(Debug, Default)]
-pub(in crate::bytecode) struct CreationCache(RefCell<Option<CreationProof>>);
-
-/// A copied program starts without a proof.
+#[derive(Debug)]
+pub(in crate::bytecode) struct CreationCache {
+    proof: RefCell<Option<CreationProof>>,
+    enabled: bool,
+}
+impl Default for CreationCache {
+    fn default() -> Self {
+        Self {
+            proof: RefCell::new(None),
+            enabled: std::env::var_os("QJS_DISABLE_IC").is_none(),
+        }
+    }
+}
 impl Clone for CreationCache {
     fn clone(&self) -> Self {
         Self::default()
     }
 }
-
 #[derive(Debug)]
 struct CreationProof {
-    /// The chain from the receiver's prototype to the end, none of whose
-    /// objects had an own property of the site's name.
-    chain: Vec<(ObjectWeakRef, crate::value::layout::LayoutVersion)>,
+    first: Option<ObjectWeakRef>,
+    validity: StructuralDependency,
 }
-
 impl CreationCache {
     pub(in crate::bytecode) fn permits(&self, object: &ObjectRef) -> bool {
-        receiver_is_plain(object)
-            && self
-                .0
-                .borrow()
-                .as_ref()
-                .is_some_and(|proof| chain_matches(object, &proof.chain))
+        if !self.enabled || !ordinary(object) || !object.is_extensible() {
+            return false;
+        }
+        let proof = self.proof.borrow();
+        let Some(proof) = proof.as_ref() else {
+            return false;
+        };
+        proof.validity.is_valid()
+            && match &proof.first {
+                Some(first) => object.prototype_is_weak(first),
+                None => object.prototype_slot().is_none(),
+            }
     }
-
-    /// Remembers `object`'s chain after the general path created `key` on
-    /// it, when no object on the chain has an own property of that name.
     pub(in crate::bytecode) fn record(&self, object: &ObjectRef, key: &str) {
-        let mut chain = Vec::new();
+        if !self.enabled {
+            return;
+        }
         let mut current = object.prototype_slot();
-        loop {
+        let first = match &current {
+            Some(Prototype::Object(o)) => Some(o.downgrade()),
+            None => None,
+            _ => return,
+        };
+        let validity = StructuralDependency::new();
+        for _ in 0..16 {
             match current {
-                None => break,
-                Some(Prototype::Object(prototype)) => {
-                    if chain.len() == MAX_CHAIN
-                        || !ordinary(&prototype)
-                        || prototype.own_property(key).is_some()
-                    {
-                        return;
-                    }
-                    current = prototype.prototype_slot();
-                    chain.push((prototype.downgrade(), prototype.layout_revision()));
+                None => {
+                    *self.proof.borrow_mut() = Some(CreationProof { first, validity });
+                    return;
                 }
-                Some(_) => return,
+                Some(Prototype::Object(ref node))
+                    if ordinary(node) && node.own_property(key).is_none() =>
+                {
+                    node.with_named(|store| store.subscribe(&validity));
+                    current = node.prototype_slot();
+                }
+                _ => return,
             }
         }
-        *self.0.borrow_mut() = Some(CreationProof { chain });
     }
 }
-
 fn ordinary(object: &ObjectRef) -> bool {
     !crate::symbol::is_symbol_primitive(object)
         && !crate::typed_array::is_typed_array_object(object)
@@ -77,36 +79,42 @@ fn ordinary(object: &ObjectRef) -> bool {
         && !object.is_array_prototype_exotic()
 }
 
-fn receiver_is_plain(object: &ObjectRef) -> bool {
-    ordinary(object) && object.is_extensible()
-}
-
-/// Whether `object`'s prototype chain is exactly `chain`, with every layout
-/// unchanged since it was remembered.
-fn chain_matches(
-    object: &ObjectRef,
-    chain: &[(ObjectWeakRef, crate::value::layout::LayoutVersion)],
-) -> bool {
-    let Some(((first, _), _)) = chain.split_first() else {
-        return object.prototype_slot().is_none();
-    };
-    if !object.prototype_is_weak(first) {
-        return false;
-    }
-    for (index, (link, revision)) in chain.iter().enumerate() {
-        let Some(prototype) = link.upgrade() else {
-            return false;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+    #[test]
+    fn creation_proof_observes_all_structural_edges_and_ignores_value_writes() {
+        let domain = crate::property::atom::AtomDomain::new();
+        let _owner = crate::value::layout::PropertyOwner::new(domain.clone());
+        let holder = ObjectRef::new(HashMap::new(), &domain);
+        holder.set("other".into(), crate::Value::Null);
+        let middle = ObjectRef::with_prototype(HashMap::new(), Some(holder.clone()), &domain);
+        let receiver = ObjectRef::with_prototype(HashMap::new(), Some(middle.clone()), &domain);
+        let cache = CreationCache {
+            enabled: true,
+            ..CreationCache::default()
         };
-        if prototype.layout_revision() != *revision {
-            return false;
-        }
-        let continues = match chain.get(index + 1) {
-            Some((next, _)) => prototype.prototype_is_weak(next),
-            None => prototype.prototype_slot().is_none(),
+        cache.record(&receiver, "x");
+        assert!(cache.permits(&receiver));
+        holder.set("other".into(), crate::Value::Boolean(true));
+        assert!(cache.permits(&receiver));
+        holder.set("x".into(), crate::Value::Null);
+        assert!(!cache.permits(&receiver));
+        holder.delete_own_property("x");
+        cache.record(&receiver, "x");
+        assert!(cache.permits(&receiver));
+        middle.set_prototype(None).unwrap();
+        assert!(!cache.permits(&receiver));
+        cache.record(&receiver, "x");
+        assert!(cache.permits(&receiver));
+        receiver.set_prototype(Some(holder)).unwrap();
+        assert!(!cache.permits(&receiver));
+        let disabled = CreationCache {
+            enabled: false,
+            ..CreationCache::default()
         };
-        if !continues {
-            return false;
-        }
+        disabled.record(&receiver, "x");
+        assert!(!disabled.permits(&receiver));
     }
-    true
 }
