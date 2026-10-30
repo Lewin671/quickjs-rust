@@ -197,28 +197,48 @@ fn await_reaction(
 
 /// Dispatches the await-resume reactions: delivers the fulfillment value (or an
 /// injected throw at the await site) to the suspended body, then drives it.
-pub(crate) fn call_async_await_native(
-    function: &Function,
-    native: NativeFunction,
-    argument_values: &[Value],
+pub(crate) fn async_function_await_fulfilled(
     env: &mut CallEnv,
-) -> Result<Option<Value>, RuntimeError> {
+    info: crate::native::CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    resume_await(
+        info.callee,
+        Resume::Next(argument_values.first().cloned().unwrap_or(Value::Undefined)),
+        env,
+    )
+}
+
+pub(crate) fn async_function_await_rejected(
+    env: &mut CallEnv,
+    info: crate::native::CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    resume_await(
+        info.callee,
+        Resume::Throw(argument_values.first().cloned().unwrap_or(Value::Undefined)),
+        env,
+    )
+}
+
+fn resume_await(
+    function: &Function,
+    resume: Resume,
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
     let (Some(Value::Object(context)), Some(Value::Object(result_promise))) = (
         function.native_context.get(ASYNC_CONTEXT),
         function.native_context.get(ASYNC_RESULT_PROMISE),
     ) else {
-        return Ok(None);
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: missing async reaction context".to_owned(),
+        });
     };
     let context = context.clone();
     let result_promise = result_promise.clone();
-    let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    let resume = match native {
-        NativeFunction::AsyncFunctionAwaitFulfilled => Resume::Next(value),
-        NativeFunction::AsyncFunctionAwaitRejected => Resume::Throw(value),
-        _ => return Ok(None),
-    };
     drive(&context, &result_promise, resume, env);
-    Ok(Some(Value::Undefined))
+    Ok(Value::Undefined)
 }
 
 /// Wires a freshly created async function into the async intrinsic chain: its

@@ -50,6 +50,8 @@ pub(super) const REALM_ARRAY_PROTOTYPE_INTRINSIC: &str = "\0realm:Array.prototyp
 /// needs a *second* hash lookup into a separate registry to keep that cell in
 /// sync, which the old two-map design required on every store.
 pub(crate) struct RealmState {
+    /// Shared synchronous native re-entry depth; independent frames cannot reset it.
+    pub(crate) native_depth: std::cell::Cell<usize>,
     bindings: DynamicBindings,
     /// Stable realm intrinsics are separate from the mutable global bindings.
     /// Rebinding `Object` or `Array` must not change the default prototype used
@@ -103,6 +105,7 @@ impl RealmState {
                     _ => None,
                 });
         let realm = Self {
+            native_depth: std::cell::Cell::new(0),
             bindings: DynamicBindings::from_values(bindings),
             object_prototype: OnceCell::new(),
             array_prototype: OnceCell::new(),

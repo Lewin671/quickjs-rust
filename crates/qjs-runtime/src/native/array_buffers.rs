@@ -1,102 +1,203 @@
-use crate::{Function, NativeFunction, Value, array_buffer};
+//! Operation entries for array buffers; bound once when a native is created.
 
-use super::NativeCallResult;
-use crate::CallEnv;
+use super::CallInfo;
+use crate::{CallEnv, RuntimeError, Value, array_buffer};
 
-pub(super) fn call_array_buffer_native(
-    function: &Function,
-    native: NativeFunction,
-    this_value: Value,
-    argument_values: &[Value],
-    is_construct: bool,
+pub(super) fn array_buffer(
     env: &mut CallEnv,
-) -> NativeCallResult {
-    let value = match native {
-        NativeFunction::ArrayBuffer => array_buffer::native_array_buffer(
-            function,
-            this_value,
-            argument_values,
-            is_construct,
-            env,
-        )?,
-        NativeFunction::ArrayBufferIsView => {
-            array_buffer::native_array_buffer_is_view(argument_values)?
-        }
-        NativeFunction::ArrayBufferPrototypeByteLength => {
-            array_buffer::native_array_buffer_prototype_byte_length(this_value)?
-        }
-        NativeFunction::ArrayBufferPrototypeMaxByteLength => {
-            array_buffer::native_array_buffer_prototype_max_byte_length(this_value)?
-        }
-        NativeFunction::ArrayBufferPrototypeResizable => {
-            array_buffer::native_array_buffer_prototype_resizable(this_value)?
-        }
-        NativeFunction::ArrayBufferPrototypeDetached => {
-            array_buffer::native_array_buffer_prototype_detached(this_value)?
-        }
-        NativeFunction::ArrayBufferPrototypeImmutable => {
-            array_buffer::native_array_buffer_prototype_immutable(this_value)?
-        }
-        NativeFunction::ArrayBufferPrototypeResize => {
-            array_buffer::native_array_buffer_prototype_resize(this_value, argument_values, env)?
-        }
-        NativeFunction::ArrayBufferPrototypeSlice => {
-            array_buffer::native_array_buffer_prototype_slice(this_value, argument_values, env)?
-        }
-        NativeFunction::ArrayBufferPrototypeSliceToImmutable => {
-            array_buffer::native_array_buffer_prototype_slice_to_immutable(
-                this_value,
-                argument_values,
-                env,
-            )?
-        }
-        NativeFunction::ArrayBufferPrototypeTransfer => {
-            array_buffer::native_array_buffer_prototype_transfer(this_value, argument_values, env)?
-        }
-        NativeFunction::ArrayBufferPrototypeTransferToFixedLength => {
-            array_buffer::native_array_buffer_prototype_transfer_to_fixed_length(
-                this_value,
-                argument_values,
-                env,
-            )?
-        }
-        NativeFunction::ArrayBufferPrototypeTransferToImmutable => {
-            array_buffer::native_array_buffer_prototype_transfer_to_immutable(
-                this_value,
-                argument_values,
-                env,
-            )?
-        }
-        NativeFunction::SharedArrayBuffer => {
-            array_buffer::native_shared_array_buffer(function, argument_values, is_construct, env)?
-        }
-        NativeFunction::SharedArrayBufferPrototypeByteLength => {
-            array_buffer::native_shared_array_buffer_prototype_byte_length(this_value)?
-        }
-        NativeFunction::SharedArrayBufferPrototypeMaxByteLength => {
-            array_buffer::native_shared_array_buffer_prototype_max_byte_length(this_value)?
-        }
-        NativeFunction::SharedArrayBufferPrototypeGrowable => {
-            array_buffer::native_shared_array_buffer_prototype_growable(this_value)?
-        }
-        NativeFunction::SharedArrayBufferPrototypeGrow => {
-            array_buffer::native_shared_array_buffer_prototype_grow(
-                this_value,
-                argument_values,
-                env,
-            )?
-        }
-        NativeFunction::SharedArrayBufferPrototypeSlice => {
-            array_buffer::native_shared_array_buffer_prototype_slice(
-                this_value,
-                argument_values,
-                env,
-            )?
-        }
-        NativeFunction::DetachArrayBuffer => {
-            array_buffer::native_detach_array_buffer(argument_values)?
-        }
-        _ => return Ok(None),
-    };
-    Ok(Some(value))
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    array_buffer::native_array_buffer(
+        info.callee,
+        info.this_value.clone(),
+        argument_values,
+        info.new_target.is_some(),
+        env,
+    )
+}
+
+pub(super) fn array_buffer_is_view(
+    _env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    array_buffer::native_array_buffer_is_view(argument_values)
+}
+
+pub(super) fn array_buffer_prototype_byte_length(
+    _env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    array_buffer::native_array_buffer_prototype_byte_length(info.this_value.clone())
+}
+
+pub(super) fn array_buffer_prototype_max_byte_length(
+    _env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    array_buffer::native_array_buffer_prototype_max_byte_length(info.this_value.clone())
+}
+
+pub(super) fn array_buffer_prototype_resizable(
+    _env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    array_buffer::native_array_buffer_prototype_resizable(info.this_value.clone())
+}
+
+pub(super) fn array_buffer_prototype_detached(
+    _env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    array_buffer::native_array_buffer_prototype_detached(info.this_value.clone())
+}
+
+pub(super) fn array_buffer_prototype_immutable(
+    _env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    array_buffer::native_array_buffer_prototype_immutable(info.this_value.clone())
+}
+
+pub(super) fn array_buffer_prototype_resize(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    array_buffer::native_array_buffer_prototype_resize(
+        info.this_value.clone(),
+        argument_values,
+        env,
+    )
+}
+
+pub(super) fn array_buffer_prototype_slice(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    array_buffer::native_array_buffer_prototype_slice(info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn array_buffer_prototype_slice_to_immutable(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    array_buffer::native_array_buffer_prototype_slice_to_immutable(
+        info.this_value.clone(),
+        argument_values,
+        env,
+    )
+}
+
+pub(super) fn array_buffer_prototype_transfer(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    array_buffer::native_array_buffer_prototype_transfer(
+        info.this_value.clone(),
+        argument_values,
+        env,
+    )
+}
+
+pub(super) fn array_buffer_prototype_transfer_to_fixed_length(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    array_buffer::native_array_buffer_prototype_transfer_to_fixed_length(
+        info.this_value.clone(),
+        argument_values,
+        env,
+    )
+}
+
+pub(super) fn array_buffer_prototype_transfer_to_immutable(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    array_buffer::native_array_buffer_prototype_transfer_to_immutable(
+        info.this_value.clone(),
+        argument_values,
+        env,
+    )
+}
+
+pub(super) fn shared_array_buffer(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    array_buffer::native_shared_array_buffer(
+        info.callee,
+        argument_values,
+        info.new_target.is_some(),
+        env,
+    )
+}
+
+pub(super) fn shared_array_buffer_prototype_byte_length(
+    _env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    array_buffer::native_shared_array_buffer_prototype_byte_length(info.this_value.clone())
+}
+
+pub(super) fn shared_array_buffer_prototype_max_byte_length(
+    _env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    array_buffer::native_shared_array_buffer_prototype_max_byte_length(info.this_value.clone())
+}
+
+pub(super) fn shared_array_buffer_prototype_growable(
+    _env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    array_buffer::native_shared_array_buffer_prototype_growable(info.this_value.clone())
+}
+
+pub(super) fn shared_array_buffer_prototype_grow(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    array_buffer::native_shared_array_buffer_prototype_grow(
+        info.this_value.clone(),
+        argument_values,
+        env,
+    )
+}
+
+pub(super) fn shared_array_buffer_prototype_slice(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    array_buffer::native_shared_array_buffer_prototype_slice(
+        info.this_value.clone(),
+        argument_values,
+        env,
+    )
+}
+
+pub(super) fn detach_array_buffer(
+    _env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    array_buffer::native_detach_array_buffer(argument_values)
 }

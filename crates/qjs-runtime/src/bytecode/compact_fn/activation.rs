@@ -838,7 +838,7 @@ pub(crate) fn try_run_in_caller_env(
 ///
 /// A slot-seeded direct-leaf callee reaches `call_direct_leaf_function`, which
 /// takes an argument slice directly. Every other callee shape goes through
-/// `call_function`, which is the same entry the interpreter's general call
+/// `call_function_slice`, which shares the interpreter's general call
 /// path reaches, so native, bound, Proxy, and class-constructor behaviour keeps
 /// one implementation.
 #[inline(never)]
@@ -859,11 +859,5 @@ fn call_from_activation(
         );
     }
     let mut env = activation.env.empty_frame();
-    crate::function::call_function(
-        callee,
-        Value::Undefined,
-        arguments.to_vec(),
-        &mut env,
-        false,
-    )
+    crate::function::call_function_slice(&callee, Value::Undefined, arguments, &mut env)
 }

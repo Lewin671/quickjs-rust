@@ -100,10 +100,13 @@ derived-this and field failure rules. Count JS-depth separately from native dept
 
 ## Native boundary
 
-Install `NativeEntry = fn(&mut Context, CallInfo<'_>, &[Value]) -> Result<Value>`
+S3a installs operation-specific entries with the existing `CallEnv` service
+parameter and borrowed `CallInfo`/arguments. S3b changes that service parameter
+to Context; it does not add an adapter or another environment authority.
+The final ABI is `NativeEntry = fn(&mut Context, CallInfo<'_>, &[Value]) -> Result<Value>`
 directly on native functions; CallInfo borrows callee/this/new.target and identifies
 the active realm and caller context. Port family implementations to Context
-capabilities, deleting `&mut CallEnv` and the 28-family `Option` probe dispatch.
+capabilities, deleting `&mut CallEnv`; S3a has already removed family probing.
 All return/throw values own references. Ordinary natives allocate no CallEnv.
 
 For safe re-entry, the driver detaches and owns the caller's block in a local

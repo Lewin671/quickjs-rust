@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::cell::Cell;
 
 use crate::{
-    CallEnv, Function, NativeFunction, RuntimeError, Value, call_function,
+    CallEnv, Function, NativeFunction, RuntimeError, Value,
     function::{call_direct_leaf_function, is_direct_leaf_function},
     to_int32_number,
 };
@@ -64,6 +64,9 @@ impl Vm<'_> {
     }
 
     pub(super) fn call(&mut self, argc: usize) -> Result<(), RuntimeError> {
+        if self.stack_native_callee(argc) {
+            return self.call_native_stack(argc, false, false, false);
+        }
         let direct_leaf = argc <= 1
             && self
                 .stack
@@ -90,6 +93,50 @@ impl Vm<'_> {
         let arguments = self.pop_arguments(argc)?;
         let callee = self.pop()?;
         self.call_callee(callee, Value::Undefined, arguments)
+    }
+
+    pub(super) fn stack_native_callee(&self, argc: usize) -> bool {
+        self.stack
+            .len()
+            .checked_sub(argc + 1)
+            .and_then(|index| self.stack.get(index))
+            .is_some_and(|callee| {
+                matches!(callee, Value::Function(function)
+                if function.native_entry.is_some() && function.bound.is_none())
+            })
+    }
+
+    fn call_native_stack(
+        &mut self,
+        argc: usize,
+        resolved: bool,
+        direct_eval: bool,
+        direct_eval_strict: bool,
+    ) -> Result<(), RuntimeError> {
+        let prefix = usize::from(resolved) + 1;
+        let base = self
+            .stack
+            .len()
+            .checked_sub(argc + prefix)
+            .ok_or_else(stack_underflow)?;
+        let mut block = self.stack.take();
+        let callee_index = base + usize::from(resolved);
+        let callee = block[callee_index].clone();
+        let this_value = if resolved {
+            block[base].clone()
+        } else {
+            Value::Undefined
+        };
+        let result = self.invoke_callee(
+            callee,
+            this_value,
+            &block[callee_index + 1..],
+            direct_eval,
+            direct_eval_strict,
+        );
+        block.truncate(base);
+        self.stack.replace(block);
+        self.finish_callee(result)
     }
 
     // Keep the fixed-array setup out of the main opcode dispatch body. The
@@ -120,6 +167,9 @@ impl Vm<'_> {
         argc: usize,
         is_strict: bool,
     ) -> Result<(), RuntimeError> {
+        if self.stack_native_callee(argc) {
+            return self.call_native_stack(argc, false, true, is_strict);
+        }
         let arguments = self.pop_arguments(argc)?;
         let callee = self.pop()?;
         self.call_callee_with_direct_eval(callee, Value::Undefined, arguments, is_strict)
@@ -276,17 +326,39 @@ impl Vm<'_> {
         direct_eval: bool,
         direct_eval_strict: bool,
     ) -> Result<(), RuntimeError> {
+        let result = self.invoke_callee(
+            callee,
+            this_value,
+            &arguments,
+            direct_eval,
+            direct_eval_strict,
+        );
+        self.finish_callee(result)
+    }
+
+    fn finish_callee(&mut self, result: Result<Value, RuntimeError>) -> Result<(), RuntimeError> {
+        if let Some(value) = self.handle_call_result(result)? {
+            self.stack.push(value);
+        }
+        Ok(())
+    }
+
+    fn invoke_callee(
+        &mut self,
+        callee: Value,
+        this_value: Value,
+        arguments: &[Value],
+        direct_eval: bool,
+        direct_eval_strict: bool,
+    ) -> Result<Value, RuntimeError> {
         if matches!(&callee, Value::Function(function) if function.native.is_some()) {
             // Most fast native paths never touch an environment, so the realm
             // frame is built only by the arms that need one instead of once
             // per native call.
             if let Some(result) =
-                try_fast_global_native_call(&callee, &this_value, &arguments, &|| self.realm_env())
+                try_fast_global_native_call(&callee, &this_value, arguments, &|| self.realm_env())
             {
-                if let Some(value) = self.handle_runtime_result(result)? {
-                    self.stack.push(value);
-                }
-                return Ok(());
+                return result;
             }
         }
         // `fn.apply(this, denseArray)` for a self-contained native target reads
@@ -300,18 +372,21 @@ impl Vm<'_> {
             &callee,
             Value::Function(function)
                 if function.native == Some(NativeFunction::FunctionPrototypeApply)
-        ) && let Some(result) = crate::function::apply_dense_native_fast_path(
-            &this_value,
-            &arguments,
-            &self.realm_env(),
-        ) {
-            if let Some(value) = self.handle_runtime_result(result)? {
-                self.stack.push(value);
-            }
-            return Ok(());
+        ) && let Some(result) =
+            crate::function::apply_dense_native_fast_path(&this_value, arguments, &self.realm_env())
+        {
+            return result;
         }
         if !direct_eval && is_direct_leaf_function(&callee) {
-            return self.call_direct_leaf_callee(callee, this_value, &arguments);
+            return call_direct_leaf_function(
+                callee,
+                this_value,
+                arguments,
+                &self.env,
+                self.module_host.clone(),
+                #[cfg(feature = "agents")]
+                self.agent_context.clone(),
+            );
         }
         let effective_direct_eval = direct_eval
             && matches!(&callee, Value::Function(function) if function.native == Some(NativeFunction::Eval));
@@ -378,7 +453,8 @@ impl Vm<'_> {
         let dynamic_realm_snapshot = restore_dynamic_realm_after_call
             .then(|| self.marked_dynamic_realm_snapshot())
             .flatten();
-        let result = call_function(callee, this_value, arguments, &mut env.env, false);
+        let result =
+            crate::function::call_function_slice(&callee, this_value, arguments, &mut env.env);
         env.env.remove(crate::DIRECT_EVAL_BINDING);
         env.env.remove(crate::DIRECT_EVAL_STRICT_BINDING);
         env.env
@@ -396,10 +472,7 @@ impl Vm<'_> {
         if let Some(snapshot) = dynamic_realm_snapshot {
             self.restore_marked_dynamic_realm(snapshot);
         }
-        if let Some(result) = self.handle_call_result(result)? {
-            self.stack.push(result);
-        }
-        Ok(())
+        result
     }
 
     fn marked_dynamic_realm_snapshot(&self) -> Option<HashMap<String, Value>> {
@@ -466,6 +539,9 @@ impl Vm<'_> {
     /// Calls a pre-resolved callee whose receiver and callee are already on the
     /// stack as `[receiver, callee, args...]`.
     pub(super) fn call_resolved(&mut self, argc: usize) -> Result<(), RuntimeError> {
+        if self.stack_native_callee(argc) {
+            return self.call_native_stack(argc, true, false, false);
+        }
         let direct_leaf = argc <= 1
             && self
                 .stack

@@ -1,76 +1,139 @@
-use crate::{CallEnv, Function, NativeFunction, Value, disposable_stack};
+//! Operation entries for disposable stacks; bound once when a native is created.
 
-use super::NativeCallResult;
+use super::CallInfo;
+use crate::{CallEnv, RuntimeError, Value, disposable_stack};
 
-pub(super) fn call_disposable_stack_native(
-    function: &Function,
-    native: NativeFunction,
-    this_value: Value,
-    argument_values: &[Value],
-    is_construct: bool,
+pub(super) fn async_disposable_stack(
     env: &mut CallEnv,
-) -> NativeCallResult {
-    let value = match native {
-        NativeFunction::AsyncDisposableStack => {
-            disposable_stack::native_async_disposable_stack(function, is_construct, env)?
-        }
-        NativeFunction::AsyncDisposableStackPrototypeAdopt => {
-            disposable_stack::native_async_disposable_stack_prototype_adopt(
-                this_value,
-                argument_values,
-            )?
-        }
-        NativeFunction::AsyncDisposableStackPrototypeDefer => {
-            disposable_stack::native_async_disposable_stack_prototype_defer(
-                this_value,
-                argument_values,
-            )?
-        }
-        NativeFunction::AsyncDisposableStackPrototypeDisposed => {
-            disposable_stack::native_async_disposable_stack_prototype_disposed(this_value)?
-        }
-        NativeFunction::AsyncDisposableStackPrototypeDisposeAsync => {
-            disposable_stack::native_async_disposable_stack_prototype_dispose_async(
-                this_value, env,
-            )?
-        }
-        NativeFunction::AsyncDisposableStackPrototypeMove => {
-            disposable_stack::native_async_disposable_stack_prototype_move(this_value, env)?
-        }
-        NativeFunction::AsyncDisposableStackPrototypeUse => {
-            disposable_stack::native_async_disposable_stack_prototype_use(
-                this_value,
-                argument_values,
-                env,
-            )?
-        }
-        NativeFunction::DisposableStack => {
-            disposable_stack::native_disposable_stack(function, is_construct, env)?
-        }
-        NativeFunction::DisposableStackPrototypeAdopt => {
-            disposable_stack::native_disposable_stack_prototype_adopt(this_value, argument_values)?
-        }
-        NativeFunction::DisposableStackPrototypeDefer => {
-            disposable_stack::native_disposable_stack_prototype_defer(this_value, argument_values)?
-        }
-        NativeFunction::DisposableStackPrototypeDisposed => {
-            disposable_stack::native_disposable_stack_prototype_disposed(this_value)?
-        }
-        NativeFunction::DisposableStackPrototypeDispose => {
-            disposable_stack::native_disposable_stack_prototype_dispose(this_value, env)?
-        }
-        NativeFunction::DisposableStackPrototypeMove => {
-            disposable_stack::native_disposable_stack_prototype_move(this_value, env)?
-        }
-        NativeFunction::DisposableStackPrototypeUse => {
-            disposable_stack::native_disposable_stack_prototype_use(
-                this_value,
-                argument_values,
-                env,
-            )?
-        }
-        _ => return Ok(None),
-    };
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    disposable_stack::native_async_disposable_stack(info.callee, info.new_target.is_some(), env)
+}
 
-    Ok(Some(value))
+pub(super) fn async_disposable_stack_prototype_adopt(
+    _env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    disposable_stack::native_async_disposable_stack_prototype_adopt(
+        info.this_value.clone(),
+        argument_values,
+    )
+}
+
+pub(super) fn async_disposable_stack_prototype_defer(
+    _env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    disposable_stack::native_async_disposable_stack_prototype_defer(
+        info.this_value.clone(),
+        argument_values,
+    )
+}
+
+pub(super) fn async_disposable_stack_prototype_disposed(
+    _env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    disposable_stack::native_async_disposable_stack_prototype_disposed(info.this_value.clone())
+}
+
+pub(super) fn async_disposable_stack_prototype_dispose_async(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    disposable_stack::native_async_disposable_stack_prototype_dispose_async(
+        info.this_value.clone(),
+        env,
+    )
+}
+
+pub(super) fn async_disposable_stack_prototype_move(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    disposable_stack::native_async_disposable_stack_prototype_move(info.this_value.clone(), env)
+}
+
+pub(super) fn async_disposable_stack_prototype_use(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    disposable_stack::native_async_disposable_stack_prototype_use(
+        info.this_value.clone(),
+        argument_values,
+        env,
+    )
+}
+
+pub(super) fn disposable_stack(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    disposable_stack::native_disposable_stack(info.callee, info.new_target.is_some(), env)
+}
+
+pub(super) fn disposable_stack_prototype_adopt(
+    _env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    disposable_stack::native_disposable_stack_prototype_adopt(
+        info.this_value.clone(),
+        argument_values,
+    )
+}
+
+pub(super) fn disposable_stack_prototype_defer(
+    _env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    disposable_stack::native_disposable_stack_prototype_defer(
+        info.this_value.clone(),
+        argument_values,
+    )
+}
+
+pub(super) fn disposable_stack_prototype_disposed(
+    _env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    disposable_stack::native_disposable_stack_prototype_disposed(info.this_value.clone())
+}
+
+pub(super) fn disposable_stack_prototype_dispose(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    disposable_stack::native_disposable_stack_prototype_dispose(info.this_value.clone(), env)
+}
+
+pub(super) fn disposable_stack_prototype_move(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    disposable_stack::native_disposable_stack_prototype_move(info.this_value.clone(), env)
+}
+
+pub(super) fn disposable_stack_prototype_use(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    disposable_stack::native_disposable_stack_prototype_use(
+        info.this_value.clone(),
+        argument_values,
+        env,
+    )
 }

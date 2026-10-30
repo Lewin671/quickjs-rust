@@ -1,107 +1,302 @@
-use crate::{Function, NativeFunction, Value, object};
+//! Operation entries for objects; bound once when a native is created.
 
-use super::NativeCallResult;
-use crate::CallEnv;
+use super::CallInfo;
+use crate::{CallEnv, RuntimeError, Value, object};
 
-pub(super) fn call_object_native(
-    function: &Function,
-    native: NativeFunction,
-    this_value: Value,
-    argument_values: &[Value],
-    is_construct: bool,
+pub(super) fn object(
     env: &mut CallEnv,
-) -> NativeCallResult {
-    let value = match native {
-        NativeFunction::Object => {
-            object::native_object(function, this_value, argument_values, is_construct, env)?
-        }
-        NativeFunction::ObjectAssign => object::native_object_assign(argument_values, env)?,
-        NativeFunction::ObjectCreate => object::native_object_create(argument_values, env)?,
-        NativeFunction::ObjectDefineProperties => {
-            object::native_object_define_properties(argument_values, env)?
-        }
-        NativeFunction::ObjectDefineProperty => {
-            object::native_object_define_property(argument_values, env)?
-        }
-        NativeFunction::ObjectGetOwnPropertyDescriptor => {
-            object::native_object_get_own_property_descriptor(argument_values, env)?
-        }
-        NativeFunction::ObjectGetOwnPropertyDescriptors => {
-            object::native_object_get_own_property_descriptors(argument_values, env)?
-        }
-        NativeFunction::ObjectGetPrototypeOf => {
-            object::native_object_get_prototype_of(argument_values, env)?
-        }
-        NativeFunction::ObjectGetOwnPropertyNames => {
-            object::native_object_get_own_property_names(argument_values, env)?
-        }
-        NativeFunction::ObjectGetOwnPropertySymbols => {
-            object::native_object_get_own_property_symbols(argument_values, env)?
-        }
-        NativeFunction::ObjectFromEntries => {
-            object::native_object_from_entries(argument_values, env)?
-        }
-        NativeFunction::ObjectGroupBy => object::native_object_group_by(argument_values, env)?,
-        NativeFunction::ObjectFreeze => object::native_object_freeze(argument_values, env)?,
-        NativeFunction::ObjectHasOwn => object::native_object_has_own(argument_values, env)?,
-        NativeFunction::ObjectIs => object::native_object_is(argument_values)?,
-        NativeFunction::ObjectIsExtensible => {
-            object::native_object_is_extensible(argument_values, env)?
-        }
-        NativeFunction::ObjectIsFrozen => object::native_object_is_frozen(argument_values, env)?,
-        NativeFunction::ObjectIsSealed => object::native_object_is_sealed(argument_values, env)?,
-        NativeFunction::ObjectPreventExtensions => {
-            object::native_object_prevent_extensions(argument_values, env)?
-        }
-        NativeFunction::ObjectSeal => object::native_object_seal(argument_values, env)?,
-        NativeFunction::ObjectSetPrototypeOf => {
-            object::native_object_set_prototype_of(argument_values, env)?
-        }
-        NativeFunction::ObjectEntries => object::native_object_entries(argument_values, env)?,
-        NativeFunction::ObjectKeys => object::native_object_keys(argument_values, env)?,
-        NativeFunction::ObjectValues => object::native_object_values(argument_values, env)?,
-        NativeFunction::ObjectPrototypeHasOwnProperty => {
-            object::native_object_prototype_has_own_property(this_value, argument_values, env)?
-        }
-        NativeFunction::ObjectPrototypeIsPrototypeOf => {
-            object::native_object_prototype_is_prototype_of(this_value, argument_values, env)?
-        }
-        NativeFunction::ObjectPrototypePropertyIsEnumerable => {
-            object::native_object_prototype_property_is_enumerable(
-                this_value,
-                argument_values,
-                env,
-            )?
-        }
-        NativeFunction::ObjectPrototypeToString => {
-            object::native_object_prototype_to_string(this_value, env)?
-        }
-        NativeFunction::ObjectPrototypeToLocaleString => {
-            object::native_object_prototype_to_locale_string(this_value, env)?
-        }
-        NativeFunction::ObjectPrototypeValueOf => {
-            object::native_object_prototype_value_of(this_value, env)?
-        }
-        NativeFunction::ObjectPrototypeGetProto => {
-            object::native_object_prototype_get_proto(this_value, env)?
-        }
-        NativeFunction::ObjectPrototypeSetProto => {
-            object::native_object_prototype_set_proto(this_value, argument_values, env)?
-        }
-        NativeFunction::ObjectPrototypeDefineGetter => {
-            object::native_object_prototype_define_getter(this_value, argument_values, env)?
-        }
-        NativeFunction::ObjectPrototypeDefineSetter => {
-            object::native_object_prototype_define_setter(this_value, argument_values, env)?
-        }
-        NativeFunction::ObjectPrototypeLookupGetter => {
-            object::native_object_prototype_lookup_getter(this_value, argument_values, env)?
-        }
-        NativeFunction::ObjectPrototypeLookupSetter => {
-            object::native_object_prototype_lookup_setter(this_value, argument_values, env)?
-        }
-        _ => return Ok(None),
-    };
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    object::native_object(
+        info.callee,
+        info.this_value.clone(),
+        argument_values,
+        info.new_target.is_some(),
+        env,
+    )
+}
 
-    Ok(Some(value))
+pub(super) fn object_assign(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    object::native_object_assign(argument_values, env)
+}
+
+pub(super) fn object_create(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    object::native_object_create(argument_values, env)
+}
+
+pub(super) fn object_define_properties(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    object::native_object_define_properties(argument_values, env)
+}
+
+pub(super) fn object_define_property(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    object::native_object_define_property(argument_values, env)
+}
+
+pub(super) fn object_get_own_property_descriptor(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    object::native_object_get_own_property_descriptor(argument_values, env)
+}
+
+pub(super) fn object_get_own_property_descriptors(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    object::native_object_get_own_property_descriptors(argument_values, env)
+}
+
+pub(super) fn object_get_prototype_of(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    object::native_object_get_prototype_of(argument_values, env)
+}
+
+pub(super) fn object_get_own_property_names(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    object::native_object_get_own_property_names(argument_values, env)
+}
+
+pub(super) fn object_get_own_property_symbols(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    object::native_object_get_own_property_symbols(argument_values, env)
+}
+
+pub(super) fn object_from_entries(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    object::native_object_from_entries(argument_values, env)
+}
+
+pub(super) fn object_group_by(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    object::native_object_group_by(argument_values, env)
+}
+
+pub(super) fn object_freeze(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    object::native_object_freeze(argument_values, env)
+}
+
+pub(super) fn object_has_own(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    object::native_object_has_own(argument_values, env)
+}
+
+pub(super) fn object_is(
+    _env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    object::native_object_is(argument_values)
+}
+
+pub(super) fn object_is_extensible(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    object::native_object_is_extensible(argument_values, env)
+}
+
+pub(super) fn object_is_frozen(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    object::native_object_is_frozen(argument_values, env)
+}
+
+pub(super) fn object_is_sealed(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    object::native_object_is_sealed(argument_values, env)
+}
+
+pub(super) fn object_prevent_extensions(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    object::native_object_prevent_extensions(argument_values, env)
+}
+
+pub(super) fn object_seal(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    object::native_object_seal(argument_values, env)
+}
+
+pub(super) fn object_set_prototype_of(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    object::native_object_set_prototype_of(argument_values, env)
+}
+
+pub(super) fn object_entries(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    object::native_object_entries(argument_values, env)
+}
+
+pub(super) fn object_keys(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    object::native_object_keys(argument_values, env)
+}
+
+pub(super) fn object_values(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    object::native_object_values(argument_values, env)
+}
+
+pub(super) fn object_prototype_has_own_property(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    object::native_object_prototype_has_own_property(info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn object_prototype_is_prototype_of(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    object::native_object_prototype_is_prototype_of(info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn object_prototype_property_is_enumerable(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    object::native_object_prototype_property_is_enumerable(
+        info.this_value.clone(),
+        argument_values,
+        env,
+    )
+}
+
+pub(super) fn object_prototype_to_string(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    object::native_object_prototype_to_string(info.this_value.clone(), env)
+}
+
+pub(super) fn object_prototype_to_locale_string(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    object::native_object_prototype_to_locale_string(info.this_value.clone(), env)
+}
+
+pub(super) fn object_prototype_value_of(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    object::native_object_prototype_value_of(info.this_value.clone(), env)
+}
+
+pub(super) fn object_prototype_get_proto(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    object::native_object_prototype_get_proto(info.this_value.clone(), env)
+}
+
+pub(super) fn object_prototype_set_proto(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    object::native_object_prototype_set_proto(info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn object_prototype_define_getter(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    object::native_object_prototype_define_getter(info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn object_prototype_define_setter(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    object::native_object_prototype_define_setter(info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn object_prototype_lookup_getter(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    object::native_object_prototype_lookup_getter(info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn object_prototype_lookup_setter(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    object::native_object_prototype_lookup_setter(info.this_value.clone(), argument_values, env)
 }

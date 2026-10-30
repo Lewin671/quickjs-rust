@@ -1,193 +1,604 @@
-use crate::{Function, NativeFunction, Value, typed_array};
+//! Operation entries for typed arrays; bound once when a native is created.
 
-use super::NativeCallResult;
-use crate::CallEnv;
+use super::CallInfo;
+use crate::{CallEnv, NativeFunction, RuntimeError, Value, typed_array};
 
-pub(super) fn call_typed_array_native(
-    function: &Function,
-    native: NativeFunction,
-    this_value: Value,
-    argument_values: &[Value],
-    is_construct: bool,
+pub(super) fn typed_array(
     env: &mut CallEnv,
-) -> NativeCallResult {
-    let value = match native {
-        NativeFunction::TypedArray
-        | NativeFunction::Uint8Array
-        | NativeFunction::Int8Array
-        | NativeFunction::Uint8ClampedArray
-        | NativeFunction::Uint16Array
-        | NativeFunction::Int16Array
-        | NativeFunction::Uint32Array
-        | NativeFunction::Int32Array
-        | NativeFunction::Float32Array
-        | NativeFunction::Float64Array
-        | NativeFunction::BigInt64Array
-        | NativeFunction::BigUint64Array => typed_array::native_typed_array(
-            function,
-            native,
-            this_value,
-            argument_values,
-            is_construct,
-            env,
-        )?,
-        NativeFunction::TypedArrayFrom => {
-            typed_array::native_typed_array_from(this_value, argument_values, env)?
-        }
-        NativeFunction::TypedArrayOf => {
-            typed_array::native_typed_array_of(this_value, argument_values, env)?
-        }
-        NativeFunction::Uint8ArrayFromBase64 => {
-            typed_array::native_uint8_array_from_base64(argument_values, env)?
-        }
-        NativeFunction::Uint8ArrayFromHex => {
-            typed_array::native_uint8_array_from_hex(argument_values, env)?
-        }
-        NativeFunction::TypedArrayPrototypeBuffer => {
-            typed_array::native_typed_array_prototype_buffer(this_value)?
-        }
-        NativeFunction::TypedArrayPrototypeByteLength => {
-            typed_array::native_typed_array_prototype_byte_length(this_value)?
-        }
-        NativeFunction::TypedArrayPrototypeByteOffset => {
-            typed_array::native_typed_array_prototype_byte_offset(this_value)?
-        }
-        NativeFunction::TypedArrayPrototypeLength => {
-            typed_array::native_typed_array_prototype_length(this_value)?
-        }
-        NativeFunction::TypedArrayPrototypeToStringTag => {
-            typed_array::native_typed_array_prototype_to_string_tag(this_value)?
-        }
-        NativeFunction::TypedArrayPrototypeAt => {
-            typed_array::native_typed_array_prototype_at(this_value, argument_values, env)?
-        }
-        NativeFunction::TypedArrayPrototypeIndexOf => {
-            typed_array::native_typed_array_prototype_index_of(this_value, argument_values, env)?
-        }
-        NativeFunction::TypedArrayPrototypeLastIndexOf => {
-            typed_array::native_typed_array_prototype_last_index_of(
-                this_value,
-                argument_values,
-                env,
-            )?
-        }
-        NativeFunction::TypedArrayPrototypeIncludes => {
-            typed_array::native_typed_array_prototype_includes(this_value, argument_values, env)?
-        }
-        NativeFunction::TypedArrayPrototypeJoin => {
-            typed_array::native_typed_array_prototype_join(this_value, argument_values, env)?
-        }
-        NativeFunction::TypedArrayPrototypeKeys => {
-            typed_array::native_typed_array_prototype_keys(this_value, env)?
-        }
-        NativeFunction::TypedArrayPrototypeValues => {
-            typed_array::native_typed_array_prototype_values(this_value, env)?
-        }
-        NativeFunction::TypedArrayPrototypeEntries => {
-            typed_array::native_typed_array_prototype_entries(this_value, env)?
-        }
-        NativeFunction::TypedArrayPrototypeForEach => {
-            typed_array::native_typed_array_prototype_for_each(this_value, argument_values, env)?
-        }
-        NativeFunction::TypedArrayPrototypeSome => {
-            typed_array::native_typed_array_prototype_some(this_value, argument_values, env)?
-        }
-        NativeFunction::TypedArrayPrototypeEvery => {
-            typed_array::native_typed_array_prototype_every(this_value, argument_values, env)?
-        }
-        NativeFunction::TypedArrayPrototypeFind => {
-            typed_array::native_typed_array_prototype_find(this_value, argument_values, env)?
-        }
-        NativeFunction::TypedArrayPrototypeFindIndex => {
-            typed_array::native_typed_array_prototype_find_index(this_value, argument_values, env)?
-        }
-        NativeFunction::TypedArrayPrototypeFindLast => {
-            typed_array::native_typed_array_prototype_find_last(this_value, argument_values, env)?
-        }
-        NativeFunction::TypedArrayPrototypeFindLastIndex => {
-            typed_array::native_typed_array_prototype_find_last_index(
-                this_value,
-                argument_values,
-                env,
-            )?
-        }
-        NativeFunction::TypedArrayPrototypeMap => {
-            typed_array::native_typed_array_prototype_map(this_value, argument_values, env)?
-        }
-        NativeFunction::TypedArrayPrototypeFilter => {
-            typed_array::native_typed_array_prototype_filter(this_value, argument_values, env)?
-        }
-        NativeFunction::TypedArrayPrototypeReduce => {
-            typed_array::native_typed_array_prototype_reduce(this_value, argument_values, env)?
-        }
-        NativeFunction::TypedArrayPrototypeReduceRight => {
-            typed_array::native_typed_array_prototype_reduce_right(
-                this_value,
-                argument_values,
-                env,
-            )?
-        }
-        NativeFunction::TypedArrayPrototypeSlice => {
-            typed_array::native_typed_array_prototype_slice(this_value, argument_values, env)?
-        }
-        NativeFunction::TypedArrayPrototypeSubarray => {
-            typed_array::native_typed_array_prototype_subarray(this_value, argument_values, env)?
-        }
-        NativeFunction::TypedArrayPrototypeToString => {
-            typed_array::native_typed_array_prototype_to_string(this_value, argument_values, env)?
-        }
-        NativeFunction::TypedArrayPrototypeToLocaleString => {
-            typed_array::native_typed_array_prototype_to_locale_string(
-                this_value,
-                argument_values,
-                env,
-            )?
-        }
-        NativeFunction::TypedArrayPrototypeSet => {
-            typed_array::native_typed_array_prototype_set(this_value, argument_values, env)?
-        }
-        NativeFunction::TypedArrayPrototypeFill => {
-            typed_array::native_typed_array_prototype_fill(this_value, argument_values, env)?
-        }
-        NativeFunction::TypedArrayPrototypeCopyWithin => {
-            typed_array::native_typed_array_prototype_copy_within(this_value, argument_values, env)?
-        }
-        NativeFunction::TypedArrayPrototypeReverse => {
-            typed_array::native_typed_array_prototype_reverse(this_value, argument_values, env)?
-        }
-        NativeFunction::TypedArrayPrototypeSort => {
-            typed_array::native_typed_array_prototype_sort(this_value, argument_values, env)?
-        }
-        NativeFunction::TypedArrayPrototypeToReversed => {
-            typed_array::native_typed_array_prototype_to_reversed(this_value, argument_values, env)?
-        }
-        NativeFunction::TypedArrayPrototypeToSorted => {
-            typed_array::native_typed_array_prototype_to_sorted(this_value, argument_values, env)?
-        }
-        NativeFunction::TypedArrayPrototypeWith => {
-            typed_array::native_typed_array_prototype_with(this_value, argument_values, env)?
-        }
-        NativeFunction::Uint8ArrayPrototypeToBase64 => {
-            typed_array::native_uint8_array_prototype_to_base64(this_value, argument_values, env)?
-        }
-        NativeFunction::Uint8ArrayPrototypeToHex => {
-            typed_array::native_uint8_array_prototype_to_hex(this_value)?
-        }
-        NativeFunction::Uint8ArrayPrototypeSetFromBase64 => {
-            typed_array::native_uint8_array_prototype_set_from_base64(
-                this_value,
-                argument_values,
-                env,
-            )?
-        }
-        NativeFunction::Uint8ArrayPrototypeSetFromHex => {
-            typed_array::native_uint8_array_prototype_set_from_hex(
-                this_value,
-                argument_values,
-                env,
-            )?
-        }
-        _ => return Ok(None),
-    };
-    Ok(Some(value))
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array(
+        info.callee,
+        NativeFunction::TypedArray,
+        info.this_value.clone(),
+        argument_values,
+        info.new_target.is_some(),
+        env,
+    )
+}
+
+pub(super) fn uint8_array(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array(
+        info.callee,
+        NativeFunction::Uint8Array,
+        info.this_value.clone(),
+        argument_values,
+        info.new_target.is_some(),
+        env,
+    )
+}
+
+pub(super) fn int8_array(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array(
+        info.callee,
+        NativeFunction::Int8Array,
+        info.this_value.clone(),
+        argument_values,
+        info.new_target.is_some(),
+        env,
+    )
+}
+
+pub(super) fn uint8_clamped_array(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array(
+        info.callee,
+        NativeFunction::Uint8ClampedArray,
+        info.this_value.clone(),
+        argument_values,
+        info.new_target.is_some(),
+        env,
+    )
+}
+
+pub(super) fn uint16_array(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array(
+        info.callee,
+        NativeFunction::Uint16Array,
+        info.this_value.clone(),
+        argument_values,
+        info.new_target.is_some(),
+        env,
+    )
+}
+
+pub(super) fn int16_array(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array(
+        info.callee,
+        NativeFunction::Int16Array,
+        info.this_value.clone(),
+        argument_values,
+        info.new_target.is_some(),
+        env,
+    )
+}
+
+pub(super) fn uint32_array(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array(
+        info.callee,
+        NativeFunction::Uint32Array,
+        info.this_value.clone(),
+        argument_values,
+        info.new_target.is_some(),
+        env,
+    )
+}
+
+pub(super) fn int32_array(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array(
+        info.callee,
+        NativeFunction::Int32Array,
+        info.this_value.clone(),
+        argument_values,
+        info.new_target.is_some(),
+        env,
+    )
+}
+
+pub(super) fn float32_array(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array(
+        info.callee,
+        NativeFunction::Float32Array,
+        info.this_value.clone(),
+        argument_values,
+        info.new_target.is_some(),
+        env,
+    )
+}
+
+pub(super) fn float64_array(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array(
+        info.callee,
+        NativeFunction::Float64Array,
+        info.this_value.clone(),
+        argument_values,
+        info.new_target.is_some(),
+        env,
+    )
+}
+
+pub(super) fn big_int64_array(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array(
+        info.callee,
+        NativeFunction::BigInt64Array,
+        info.this_value.clone(),
+        argument_values,
+        info.new_target.is_some(),
+        env,
+    )
+}
+
+pub(super) fn big_uint64_array(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array(
+        info.callee,
+        NativeFunction::BigUint64Array,
+        info.this_value.clone(),
+        argument_values,
+        info.new_target.is_some(),
+        env,
+    )
+}
+
+pub(super) fn typed_array_from(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array_from(info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn typed_array_of(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array_of(info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn uint8_array_from_base64(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_uint8_array_from_base64(argument_values, env)
+}
+
+pub(super) fn uint8_array_from_hex(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_uint8_array_from_hex(argument_values, env)
+}
+
+pub(super) fn typed_array_prototype_buffer(
+    _env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array_prototype_buffer(info.this_value.clone())
+}
+
+pub(super) fn typed_array_prototype_byte_length(
+    _env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array_prototype_byte_length(info.this_value.clone())
+}
+
+pub(super) fn typed_array_prototype_byte_offset(
+    _env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array_prototype_byte_offset(info.this_value.clone())
+}
+
+pub(super) fn typed_array_prototype_length(
+    _env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array_prototype_length(info.this_value.clone())
+}
+
+pub(super) fn typed_array_prototype_to_string_tag(
+    _env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array_prototype_to_string_tag(info.this_value.clone())
+}
+
+pub(super) fn typed_array_prototype_at(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array_prototype_at(info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn typed_array_prototype_index_of(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array_prototype_index_of(
+        info.this_value.clone(),
+        argument_values,
+        env,
+    )
+}
+
+pub(super) fn typed_array_prototype_last_index_of(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array_prototype_last_index_of(
+        info.this_value.clone(),
+        argument_values,
+        env,
+    )
+}
+
+pub(super) fn typed_array_prototype_includes(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array_prototype_includes(
+        info.this_value.clone(),
+        argument_values,
+        env,
+    )
+}
+
+pub(super) fn typed_array_prototype_join(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array_prototype_join(info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn typed_array_prototype_keys(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array_prototype_keys(info.this_value.clone(), env)
+}
+
+pub(super) fn typed_array_prototype_values(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array_prototype_values(info.this_value.clone(), env)
+}
+
+pub(super) fn typed_array_prototype_entries(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array_prototype_entries(info.this_value.clone(), env)
+}
+
+pub(super) fn typed_array_prototype_for_each(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array_prototype_for_each(
+        info.this_value.clone(),
+        argument_values,
+        env,
+    )
+}
+
+pub(super) fn typed_array_prototype_some(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array_prototype_some(info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn typed_array_prototype_every(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array_prototype_every(info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn typed_array_prototype_find(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array_prototype_find(info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn typed_array_prototype_find_index(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array_prototype_find_index(
+        info.this_value.clone(),
+        argument_values,
+        env,
+    )
+}
+
+pub(super) fn typed_array_prototype_find_last(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array_prototype_find_last(
+        info.this_value.clone(),
+        argument_values,
+        env,
+    )
+}
+
+pub(super) fn typed_array_prototype_find_last_index(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array_prototype_find_last_index(
+        info.this_value.clone(),
+        argument_values,
+        env,
+    )
+}
+
+pub(super) fn typed_array_prototype_map(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array_prototype_map(info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn typed_array_prototype_filter(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array_prototype_filter(info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn typed_array_prototype_reduce(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array_prototype_reduce(info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn typed_array_prototype_reduce_right(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array_prototype_reduce_right(
+        info.this_value.clone(),
+        argument_values,
+        env,
+    )
+}
+
+pub(super) fn typed_array_prototype_slice(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array_prototype_slice(info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn typed_array_prototype_subarray(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array_prototype_subarray(
+        info.this_value.clone(),
+        argument_values,
+        env,
+    )
+}
+
+pub(super) fn typed_array_prototype_to_string(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array_prototype_to_string(
+        info.this_value.clone(),
+        argument_values,
+        env,
+    )
+}
+
+pub(super) fn typed_array_prototype_to_locale_string(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array_prototype_to_locale_string(
+        info.this_value.clone(),
+        argument_values,
+        env,
+    )
+}
+
+pub(super) fn typed_array_prototype_set(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array_prototype_set(info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn typed_array_prototype_fill(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array_prototype_fill(info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn typed_array_prototype_copy_within(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array_prototype_copy_within(
+        info.this_value.clone(),
+        argument_values,
+        env,
+    )
+}
+
+pub(super) fn typed_array_prototype_reverse(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array_prototype_reverse(info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn typed_array_prototype_sort(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array_prototype_sort(info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn typed_array_prototype_to_reversed(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array_prototype_to_reversed(
+        info.this_value.clone(),
+        argument_values,
+        env,
+    )
+}
+
+pub(super) fn typed_array_prototype_to_sorted(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array_prototype_to_sorted(
+        info.this_value.clone(),
+        argument_values,
+        env,
+    )
+}
+
+pub(super) fn typed_array_prototype_with(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_typed_array_prototype_with(info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn uint8_array_prototype_to_base64(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_uint8_array_prototype_to_base64(
+        info.this_value.clone(),
+        argument_values,
+        env,
+    )
+}
+
+pub(super) fn uint8_array_prototype_to_hex(
+    _env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_uint8_array_prototype_to_hex(info.this_value.clone())
+}
+
+pub(super) fn uint8_array_prototype_set_from_base64(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_uint8_array_prototype_set_from_base64(
+        info.this_value.clone(),
+        argument_values,
+        env,
+    )
+}
+
+pub(super) fn uint8_array_prototype_set_from_hex(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    typed_array::native_uint8_array_prototype_set_from_hex(
+        info.this_value.clone(),
+        argument_values,
+        env,
+    )
 }

@@ -1,96 +1,206 @@
-use crate::{Function, NativeFunction, Value, promise};
+//! Operation entries for promises; bound once when a native is created.
 
-use super::NativeCallResult;
-use crate::CallEnv;
+use super::CallInfo;
+use crate::{CallEnv, RuntimeError, Value, promise};
 
-pub(super) fn call_promise_native(
-    function: &Function,
-    native: NativeFunction,
-    this_value: Value,
-    argument_values: &[Value],
-    is_construct: bool,
+pub(super) fn promise(
     env: &mut CallEnv,
-) -> NativeCallResult {
-    let value = match native {
-        NativeFunction::Promise => {
-            promise::native_promise(function, this_value, argument_values, is_construct, env)?
-        }
-        NativeFunction::PromiseAll => {
-            promise::native_promise_all(this_value, argument_values, env)?
-        }
-        NativeFunction::PromiseAny => {
-            promise::any::native_promise_any(function, this_value, argument_values, env)?
-        }
-        NativeFunction::PromiseAnyRejectElement => {
-            promise::any::native_promise_any_reject_element(function, argument_values, env)?
-        }
-        NativeFunction::PromiseAllSettled => {
-            promise::all_settled::native_promise_all_settled(this_value, argument_values, env)?
-        }
-        NativeFunction::PromiseAllSettledRejectElement => {
-            promise::all_settled::native_promise_all_settled_reject_element(
-                function,
-                argument_values,
-                env,
-            )?
-        }
-        NativeFunction::PromiseAllSettledResolveElement => {
-            promise::all_settled::native_promise_all_settled_resolve_element(
-                function,
-                argument_values,
-                env,
-            )?
-        }
-        NativeFunction::PromiseAllResolveElement => {
-            promise::native_promise_all_resolve_element(function, argument_values, env)?
-        }
-        NativeFunction::PromiseGetCapabilitiesExecutor => {
-            promise::native_get_capabilities_executor(function, argument_values, env)?
-        }
-        NativeFunction::PromisePrototypeCatch => {
-            promise::native_promise_catch(function, this_value, argument_values, env)?
-        }
-        NativeFunction::PromisePrototypeFinally => {
-            promise::native_promise_finally(function, this_value, argument_values, env)?
-        }
-        NativeFunction::PromisePrototypeFinallyFulfilled => {
-            promise::native_promise_finally_fulfilled(function, argument_values, env)?
-        }
-        NativeFunction::PromisePrototypeFinallyRejected => {
-            promise::native_promise_finally_rejected(function, argument_values, env)?
-        }
-        NativeFunction::PromisePrototypeFinallyValueThunk => {
-            promise::native_promise_finally_value_thunk(function)?
-        }
-        NativeFunction::PromisePrototypeFinallyThrowerThunk => {
-            promise::native_promise_finally_thrower_thunk(function)?
-        }
-        NativeFunction::PromisePrototypeThen => {
-            promise::native_promise_then(function, this_value, argument_values, env)?
-        }
-        NativeFunction::PromiseRace => {
-            promise::native_promise_race(this_value, argument_values, env)?
-        }
-        NativeFunction::PromiseReject => {
-            promise::native_promise_reject(this_value, argument_values, env)?
-        }
-        NativeFunction::PromiseResolve => {
-            promise::native_promise_resolve(this_value, argument_values, env)?
-        }
-        NativeFunction::PromiseTry => {
-            promise::r#try::native_promise_try(function, this_value, argument_values, env)?
-        }
-        NativeFunction::PromiseWithResolvers => {
-            promise::with_resolvers::native_promise_with_resolvers(function, this_value, env)?
-        }
-        NativeFunction::PromiseRejectFunction => {
-            promise::native_promise_reject_function(function, argument_values, env)?
-        }
-        NativeFunction::PromiseResolveFunction => {
-            promise::native_promise_resolve_function(function, argument_values, env)?
-        }
-        _ => return Ok(None),
-    };
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    promise::native_promise(
+        info.callee,
+        info.this_value.clone(),
+        argument_values,
+        info.new_target.is_some(),
+        env,
+    )
+}
 
-    Ok(Some(value))
+pub(super) fn promise_all(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    promise::native_promise_all(info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn promise_any(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    promise::any::native_promise_any(info.callee, info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn promise_any_reject_element(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    promise::any::native_promise_any_reject_element(info.callee, argument_values, env)
+}
+
+pub(super) fn promise_all_settled(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    promise::all_settled::native_promise_all_settled(info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn promise_all_settled_reject_element(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    promise::all_settled::native_promise_all_settled_reject_element(
+        info.callee,
+        argument_values,
+        env,
+    )
+}
+
+pub(super) fn promise_all_settled_resolve_element(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    promise::all_settled::native_promise_all_settled_resolve_element(
+        info.callee,
+        argument_values,
+        env,
+    )
+}
+
+pub(super) fn promise_all_resolve_element(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    promise::native_promise_all_resolve_element(info.callee, argument_values, env)
+}
+
+pub(super) fn promise_get_capabilities_executor(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    promise::native_get_capabilities_executor(info.callee, argument_values, env)
+}
+
+pub(super) fn promise_prototype_catch(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    promise::native_promise_catch(info.callee, info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn promise_prototype_finally(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    promise::native_promise_finally(info.callee, info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn promise_prototype_finally_fulfilled(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    promise::native_promise_finally_fulfilled(info.callee, argument_values, env)
+}
+
+pub(super) fn promise_prototype_finally_rejected(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    promise::native_promise_finally_rejected(info.callee, argument_values, env)
+}
+
+pub(super) fn promise_prototype_finally_value_thunk(
+    _env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    promise::native_promise_finally_value_thunk(info.callee)
+}
+
+pub(super) fn promise_prototype_finally_thrower_thunk(
+    _env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    promise::native_promise_finally_thrower_thunk(info.callee)
+}
+
+pub(super) fn promise_prototype_then(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    promise::native_promise_then(info.callee, info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn promise_race(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    promise::native_promise_race(info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn promise_reject(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    promise::native_promise_reject(info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn promise_resolve(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    promise::native_promise_resolve(info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn promise_try(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    promise::r#try::native_promise_try(info.callee, info.this_value.clone(), argument_values, env)
+}
+
+pub(super) fn promise_with_resolvers(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    promise::with_resolvers::native_promise_with_resolvers(
+        info.callee,
+        info.this_value.clone(),
+        env,
+    )
+}
+
+pub(super) fn promise_reject_function(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    promise::native_promise_reject_function(info.callee, argument_values, env)
+}
+
+pub(super) fn promise_resolve_function(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    promise::native_promise_resolve_function(info.callee, argument_values, env)
 }

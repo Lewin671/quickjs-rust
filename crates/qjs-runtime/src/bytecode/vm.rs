@@ -25,7 +25,7 @@ use super::{
     ir::{Bytecode, NamedPropertyCache, Op, decode_index_receiver},
 };
 use crate::{
-    Function, ObjectRef, PropertyKey, RuntimeError, Value, construct_function,
+    Function, ObjectRef, PropertyKey, RuntimeError, Value,
     function::{CallEnv, Realm, Upvalue},
     is_truthy,
     property::try_to_property_key_without_coercion,
@@ -1298,6 +1298,22 @@ impl<'a> Vm<'a> {
     }
 
     fn construct(&mut self, argc: usize) -> Result<(), RuntimeError> {
+        if self.stack_native_callee(argc) {
+            let base = self
+                .stack
+                .len()
+                .checked_sub(argc + 1)
+                .ok_or_else(stack_underflow)?;
+            let mut block = self.stack.take();
+            let callee = block[base].clone();
+            let result = self.invoke_construct_callee(callee, &block[base + 1..]);
+            block.truncate(base);
+            self.stack.replace(block);
+            if let Some(value) = self.handle_call_result(result)? {
+                self.stack.push(value);
+            }
+            return Ok(());
+        }
         let arguments = self.pop_arguments(argc)?;
         let callee = self.pop()?;
         self.construct_callee(callee, arguments)
@@ -1314,7 +1330,19 @@ impl<'a> Vm<'a> {
         callee: Value,
         arguments: Vec<Value>,
     ) -> Result<(), RuntimeError> {
-        if let [Value::Number(date_value)] = arguments.as_slice()
+        let result = self.invoke_construct_callee(callee, &arguments);
+        if let Some(value) = self.handle_call_result(result)? {
+            self.stack.push(value);
+        }
+        Ok(())
+    }
+
+    fn invoke_construct_callee(
+        &mut self,
+        callee: Value,
+        arguments: &[Value],
+    ) -> Result<Value, RuntimeError> {
+        if let [Value::Number(date_value)] = arguments
             && matches!(
                 &callee,
                 Value::Function(function) if function.native_kind() == Some(crate::NativeFunction::Date)
@@ -1323,10 +1351,7 @@ impl<'a> Vm<'a> {
             let mut env = self.realm_env();
             let result =
                 crate::date::fast_construct_date_from_number(callee.clone(), *date_value, &mut env);
-            if let Some(result) = self.handle_call_result(result)? {
-                self.stack.push(result);
-            }
-            return Ok(());
+            return result;
         }
         // An ordinary bytecode constructor admitted by the direct-leaf
         // predicate builds its receiver and runs on a slot-seeded frame, the
@@ -1334,16 +1359,13 @@ impl<'a> Vm<'a> {
         // construct path's name-keyed compatibility frame.
         if let Some(result) = crate::function::try_construct_direct_leaf_function(
             &callee,
-            &arguments,
+            arguments,
             &self.env,
             self.module_host.clone(),
             #[cfg(feature = "agents")]
             self.agent_context.clone(),
         ) {
-            if let Some(result) = self.handle_call_result(result)? {
-                self.stack.push(result);
-            }
-            return Ok(());
+            return result;
         }
         // A native constructor, like a native call, does not inherit the
         // caller's lexical environment. Any coercion hooks or callbacks it
@@ -1363,12 +1385,14 @@ impl<'a> Vm<'a> {
         } else {
             self.call_env(&callee)
         };
-        let result = construct_function(callee.clone(), callee, arguments, &mut env.env);
+        let result = crate::function::construct_function_slice(
+            callee.clone(),
+            callee,
+            arguments,
+            &mut env.env,
+        );
         self.apply_call_env(env);
-        if let Some(result) = self.handle_call_result(result)? {
-            self.stack.push(result);
-        }
-        Ok(())
+        result
     }
 
     pub(super) fn pop_arguments(&mut self, argc: usize) -> Result<Vec<Value>, RuntimeError> {

@@ -1,11 +1,11 @@
 # T077 S3: landable execution rebuild proposal
 
 - Status: approved by the lead 2026-10-29 with amendments in [T077](../T077-core-rebuild.md) (S3a may land before S1/S2; S3e prices growing the wide tier).
-- Implementation: none; documents and retained non-timing instrumentation patch only.
+- Implementation: S3a operation entries and native slice transport present on its owner branch; S3b–e remain planned. See [S3a results](../diagnostics/T077-s3a-results.md).
 - Verified at: source `dd0905b2cb0236c38619089a27e8342b575dda61`, 2026-10-29; diagnostic build and twenty checksum-checked development runs; document gates recorded in the diagnostics.
 - Evidence: [counts/reproduction](../diagnostics/T077-s3-counts.md), [Op map](T077-s3-op-map.md), [construction inventory](T077-s3-activation-inventory.md), [native/executor inventory](T077-s3-native-executors.md).
-- Unresolved: lead approval of split, T074 contracts, paired payers and revised size; no performance acceptance has been measured.
-- Next action: lead approves/revises the sequence and T074 decisions, then freezes an S3a implementation brief at its accepted S1/S2 integration base.
+- Unresolved: S3a final correctness/counter gates and formal aggregate acceptance; T074 contracts before S3b; no performance acceptance measured here.
+- Next action: complete S3a verification on its frozen `d19d3aa6` base; lead runs formal acceptance and reviews T074 before S3b.
 
 ## Recommendation and authority at every landing
 

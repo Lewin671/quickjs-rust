@@ -22,6 +22,7 @@ pub(crate) use zip::ZipState;
 use std::collections::HashMap;
 
 use crate::CallEnv;
+use crate::native::CallInfo;
 use crate::{Function, NativeFunction, ObjectRef, Property, RuntimeError, Value, symbol};
 
 /// Intrinsic binding for `%Iterator.prototype%`, propagated into call frames so
@@ -346,72 +347,268 @@ pub(crate) fn install_iterator(
     }
 }
 
-/// Dispatches the `Iterator` constructor, `Iterator.from`, the
-/// `%Iterator.prototype%` accessors and helper methods, and the
-/// `%IteratorHelperPrototype%` `next`/`return` methods.
-pub(crate) fn call_iterator_native(
-    native: NativeFunction,
-    this_value: Value,
-    argument_values: &[Value],
-    is_construct: bool,
+pub(crate) fn iterator(
     env: &mut CallEnv,
-) -> Result<Option<Value>, RuntimeError> {
-    let result = match native {
-        NativeFunction::Iterator => native_iterator_constructor(is_construct, env)?,
-        NativeFunction::IteratorFrom => from::native_iterator_from(argument_values, env)?,
-        NativeFunction::IteratorConcat => helpers::native_iterator_concat(argument_values, env)?,
-        NativeFunction::IteratorZip => helpers::native_iterator_zip(argument_values, env)?,
-        NativeFunction::IteratorZipKeyed => {
-            helpers::native_iterator_zip_keyed(argument_values, env)?
-        }
-        NativeFunction::IteratorPrototypeToStringTagGet => {
-            return Ok(Some(Value::String("Iterator".to_owned().into())));
-        }
-        NativeFunction::IteratorPrototypeToStringTagSet => {
-            let key = symbol::to_string_tag_symbol(env).map(SetterKey::Symbol);
-            setter_ignoring_prototype(this_value, key, argument_values, env)?
-        }
-        NativeFunction::IteratorPrototypeConstructorGet => match env.get("Iterator") {
-            Some(value) => value.clone(),
-            None => Value::Undefined,
-        },
-        NativeFunction::IteratorPrototypeConstructorSet => setter_ignoring_prototype(
-            this_value,
-            Some(SetterKey::Named("constructor")),
-            argument_values,
-            env,
-        )?,
-        NativeFunction::IteratorPrototypeDispose => native_iterator_dispose(this_value, env)?,
-        NativeFunction::IteratorPrototypeMap
-        | NativeFunction::IteratorPrototypeFilter
-        | NativeFunction::IteratorPrototypeTake
-        | NativeFunction::IteratorPrototypeDrop
-        | NativeFunction::IteratorPrototypeFlatMap => {
-            helpers::native_lazy_helper(native, this_value, argument_values, env)?
-        }
-        NativeFunction::IteratorHelperPrototypeNext => {
-            helpers::native_helper_next(this_value, env)?
-        }
-        NativeFunction::IteratorHelperPrototypeReturn => {
-            helpers::native_helper_return(this_value, env)?
-        }
-        NativeFunction::WrapForValidIteratorPrototypeNext => {
-            from::native_wrap_next(this_value, env)?
-        }
-        NativeFunction::WrapForValidIteratorPrototypeReturn => {
-            from::native_wrap_return(this_value, env)?
-        }
-        NativeFunction::IteratorPrototypeReduce
-        | NativeFunction::IteratorPrototypeToArray
-        | NativeFunction::IteratorPrototypeForEach
-        | NativeFunction::IteratorPrototypeSome
-        | NativeFunction::IteratorPrototypeEvery
-        | NativeFunction::IteratorPrototypeFind => {
-            eager::native_eager_helper(native, this_value, argument_values, env)?
-        }
-        _ => return Ok(None),
-    };
-    Ok(Some(result))
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    native_iterator_constructor(info.new_target.is_some(), env)
+}
+
+pub(crate) fn iterator_from(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    from::native_iterator_from(argument_values, env)
+}
+
+pub(crate) fn iterator_concat(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    helpers::native_iterator_concat(argument_values, env)
+}
+
+pub(crate) fn iterator_zip(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    helpers::native_iterator_zip(argument_values, env)
+}
+
+pub(crate) fn iterator_zip_keyed(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    helpers::native_iterator_zip_keyed(argument_values, env)
+}
+
+pub(crate) fn iterator_prototype_to_string_tag_get(
+    _env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    Ok(Value::String("Iterator".to_owned().into()))
+}
+
+pub(crate) fn iterator_prototype_to_string_tag_set(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let key = symbol::to_string_tag_symbol(env).map(SetterKey::Symbol);
+    setter_ignoring_prototype(info.this_value.clone(), key, argument_values, env)
+}
+
+pub(crate) fn iterator_prototype_constructor_get(
+    env: &mut CallEnv,
+    _info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    Ok(match env.get("Iterator") {
+        Some(value) => value.clone(),
+        None => Value::Undefined,
+    })
+}
+
+pub(crate) fn iterator_prototype_constructor_set(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    setter_ignoring_prototype(
+        info.this_value.clone(),
+        Some(SetterKey::Named("constructor")),
+        argument_values,
+        env,
+    )
+}
+
+pub(crate) fn iterator_prototype_dispose(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    native_iterator_dispose(info.this_value.clone(), env)
+}
+
+pub(crate) fn iterator_prototype_map(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    helpers::native_lazy_helper(
+        NativeFunction::IteratorPrototypeMap,
+        info.this_value.clone(),
+        argument_values,
+        env,
+    )
+}
+
+pub(crate) fn iterator_prototype_filter(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    helpers::native_lazy_helper(
+        NativeFunction::IteratorPrototypeFilter,
+        info.this_value.clone(),
+        argument_values,
+        env,
+    )
+}
+
+pub(crate) fn iterator_prototype_take(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    helpers::native_lazy_helper(
+        NativeFunction::IteratorPrototypeTake,
+        info.this_value.clone(),
+        argument_values,
+        env,
+    )
+}
+
+pub(crate) fn iterator_prototype_drop(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    helpers::native_lazy_helper(
+        NativeFunction::IteratorPrototypeDrop,
+        info.this_value.clone(),
+        argument_values,
+        env,
+    )
+}
+
+pub(crate) fn iterator_prototype_flat_map(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    helpers::native_lazy_helper(
+        NativeFunction::IteratorPrototypeFlatMap,
+        info.this_value.clone(),
+        argument_values,
+        env,
+    )
+}
+
+pub(crate) fn iterator_helper_prototype_next(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    helpers::native_helper_next(info.this_value.clone(), env)
+}
+
+pub(crate) fn iterator_helper_prototype_return(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    helpers::native_helper_return(info.this_value.clone(), env)
+}
+
+pub(crate) fn wrap_for_valid_iterator_prototype_next(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    from::native_wrap_next(info.this_value.clone(), env)
+}
+
+pub(crate) fn wrap_for_valid_iterator_prototype_return(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    _argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    from::native_wrap_return(info.this_value.clone(), env)
+}
+
+pub(crate) fn iterator_prototype_reduce(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    eager::native_eager_helper(
+        NativeFunction::IteratorPrototypeReduce,
+        info.this_value.clone(),
+        argument_values,
+        env,
+    )
+}
+
+pub(crate) fn iterator_prototype_to_array(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    eager::native_eager_helper(
+        NativeFunction::IteratorPrototypeToArray,
+        info.this_value.clone(),
+        argument_values,
+        env,
+    )
+}
+
+pub(crate) fn iterator_prototype_for_each(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    eager::native_eager_helper(
+        NativeFunction::IteratorPrototypeForEach,
+        info.this_value.clone(),
+        argument_values,
+        env,
+    )
+}
+
+pub(crate) fn iterator_prototype_some(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    eager::native_eager_helper(
+        NativeFunction::IteratorPrototypeSome,
+        info.this_value.clone(),
+        argument_values,
+        env,
+    )
+}
+
+pub(crate) fn iterator_prototype_every(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    eager::native_eager_helper(
+        NativeFunction::IteratorPrototypeEvery,
+        info.this_value.clone(),
+        argument_values,
+        env,
+    )
+}
+
+pub(crate) fn iterator_prototype_find(
+    env: &mut CallEnv,
+    info: CallInfo<'_>,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    eager::native_eager_helper(
+        NativeFunction::IteratorPrototypeFind,
+        info.this_value.clone(),
+        argument_values,
+        env,
+    )
 }
 
 fn native_iterator_dispose(this_value: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
