@@ -26,6 +26,12 @@ const ASCII_NO: u8 = 2;
 
 const UTF16_LEN_UNKNOWN: usize = usize::MAX;
 
+#[derive(Debug, Default)]
+struct StringCache {
+    matcher_view: Option<(bool, Rc<[char]>)>,
+    key: Option<crate::property::atom::KeyLease>,
+}
+
 #[derive(Debug)]
 struct StringData {
     text: String,
@@ -38,7 +44,7 @@ struct StringData {
     /// The matcher-indexed character view and the Unicode mode it was built
     /// for. A RegExp scan re-executes against the same subject once per match,
     /// and rebuilding this view every time made scanning quadratic.
-    matcher_view: RefCell<Option<(bool, Rc<[char]>)>>,
+    cache: RefCell<StringCache>,
     /// Test-only work count: how many times this buffer was scanned to
     /// classify it as ASCII.
     #[cfg(test)]
@@ -52,7 +58,7 @@ impl StringData {
             atom: Cell::new(false),
             ascii: Cell::new(ASCII_UNKNOWN),
             utf16_len: Cell::new(UTF16_LEN_UNKNOWN),
-            matcher_view: RefCell::new(None),
+            cache: RefCell::default(),
             #[cfg(test)]
             ascii_scans: Cell::new(0),
         }
@@ -62,7 +68,7 @@ impl StringData {
         self.atom.set(false);
         self.ascii.set(ASCII_UNKNOWN);
         self.utf16_len.set(UTF16_LEN_UNKNOWN);
-        *self.matcher_view.borrow_mut() = None;
+        *self.cache.get_mut() = StringCache::default();
     }
 }
 
@@ -73,7 +79,10 @@ impl Clone for StringData {
             atom: Cell::new(false),
             ascii: Cell::new(self.ascii.get()),
             utf16_len: Cell::new(self.utf16_len.get()),
-            matcher_view: RefCell::new(self.matcher_view.borrow().clone()),
+            cache: RefCell::new(StringCache {
+                matcher_view: self.cache.borrow().matcher_view.clone(),
+                key: None,
+            }),
             #[cfg(test)]
             ascii_scans: Cell::new(0),
         }
@@ -172,13 +181,13 @@ impl JsString {
         // In ASCII text a code unit, a scalar value, and a byte all coincide,
         // so one view serves both modes.
         let ascii = self.is_ascii();
-        if let Some((cached_unicode, view)) = self.0.matcher_view.borrow().as_ref()
+        if let Some((cached_unicode, view)) = self.0.cache.borrow().matcher_view.as_ref()
             && (ascii || *cached_unicode == unicode)
         {
             return Rc::clone(view);
         }
         let view: Rc<[char]> = build(&self.0.text).into();
-        *self.0.matcher_view.borrow_mut() = Some((unicode, Rc::clone(&view)));
+        self.0.cache.borrow_mut().matcher_view = Some((unicode, Rc::clone(&view)));
         view
     }
 
@@ -189,6 +198,23 @@ impl JsString {
         let data = Rc::make_mut(&mut self.0);
         data.invalidate();
         &mut data.text
+    }
+
+    /// A memoized live lease for a computed string key. Reads never intern;
+    /// COW/string mutation clears this metadata and foreign domains cannot hit.
+    #[inline]
+    pub(crate) fn property_key_lease(
+        &self,
+        domain: &crate::property::atom::AtomDomain,
+    ) -> Option<crate::property::atom::KeyLease> {
+        if let Some(key) = &self.0.cache.borrow().key
+            && key.belongs_to(domain)
+        {
+            return Some(key.clone());
+        }
+        let key = domain.find(self.as_str())?;
+        self.0.cache.borrow_mut().key = Some(key.clone());
+        Some(key)
     }
 
     /// Reports whether two values share one buffer.
@@ -384,5 +410,31 @@ mod tests {
         assert_eq!(value.utf16_len_with(&mut measure), 2);
         assert_eq!(value.utf16_len_with(&mut measure), 2);
         assert_eq!(calls, 1);
+    }
+}
+
+#[cfg(test)]
+mod property_key_tests {
+    use super::*;
+    use crate::property::atom::AtomDomain;
+
+    #[test]
+    fn property_key_memo_is_find_only_domain_checked_and_cleared_on_mutation() {
+        let a = AtomDomain::new();
+        let b = AtomDomain::new();
+        let mut text = JsString::from("key");
+        assert!(text.property_key_lease(&a).is_none());
+        assert!(a.find("key").is_none());
+        let ak = a.intern("key");
+        let bk = b.intern("key");
+        assert_eq!(text.property_key_lease(&a), Some(ak.clone()));
+        assert_eq!(text.property_key_lease(&b), Some(bk));
+        let alias = text.clone();
+        text.make_mut().push('2');
+        assert!(text.property_key_lease(&a).is_none());
+        assert_eq!(alias.property_key_lease(&a), Some(ak));
+        drop(alias);
+        text.make_mut().clear();
+        assert!(text.0.cache.borrow().key.is_none());
     }
 }

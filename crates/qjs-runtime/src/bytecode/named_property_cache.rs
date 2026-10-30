@@ -246,13 +246,89 @@ impl NamedPropertyCache {
             "IC complete outcome differs from pure generic lookup: {name}"
         );
     }
+    // Keep the data-only hit ABI small. The descriptor outcome belongs to the
+    // cold accessor path and must not inflate every typed/compact read frame.
+    #[inline(always)]
+    fn data_value(&self, target: NamedTarget<'_>) -> Option<Value> {
+        let state = self.0.borrow();
+        if let Entries::Mono(entry) = &state.entries
+            && entry.flags & (7 | OWN) == DATA | OWN
+        {
+            let value = target.load_matched_data(&entry.version, entry.slot);
+            #[cfg(debug_assertions)]
+            if value.is_some() {
+                self.verify_entry(&state, entry, target);
+            }
+            count_event(
+                target,
+                if value.is_some() {
+                    Event::Hit
+                } else {
+                    Event::Miss
+                },
+            );
+            return value;
+        }
+        if let Entries::Poly(entries) = &state.entries {
+            // Compare all own guards and load while the authority is borrowed
+            // once. No Weak traffic, repeated RefCell borrow or ID probe.
+            let own = target
+                .with_store(|store| {
+                    entries
+                        .iter()
+                        .flatten()
+                        .find(|entry| {
+                            entry.flags & (7 | OWN) == DATA | OWN
+                                && store.matches_version(&entry.version)
+                        })
+                        .and_then(|entry| {
+                            #[cfg(debug_assertions)]
+                            self.verify_entry(&state, entry, target);
+                            store.load_guarded_data(entry.slot as usize)
+                        })
+                })
+                .flatten();
+            if own.is_some() {
+                count_event(target, Event::Hit);
+                return own;
+            }
+        }
+        self.data_value_slow(&state, target)
+    }
+    #[inline(never)]
+    fn data_value_slow(&self, state: &State, target: NamedTarget<'_>) -> Option<Value> {
+        let Some(entry) = state.entries.find(target) else {
+            count_event(target, Event::Miss);
+            return None;
+        };
+        #[cfg(debug_assertions)]
+        self.verify_entry(state, entry, target);
+        let probe = entry.probe();
+        if matches!(probe, Probe::Accessor { .. }) {
+            return None;
+        }
+        count_event(target, Event::Hit);
+        if probe == Probe::Missing {
+            return Some(Value::Undefined);
+        }
+        let load = |t: NamedTarget<'_>| match probe {
+            Probe::Data { slot, .. } => t.load_data(slot),
+            Probe::Virtual(hook) => t.virtual_value(hook),
+            _ => None,
+        };
+        if let Some(chain) = &entry.chain {
+            chain.holder.as_ref()?.upgrade()?.with_named_target(load)?
+        } else {
+            load(target)
+        }
+    }
     #[inline(always)]
     pub(super) fn get_value(&self, value: &Value, _env: Option<&CallEnv>) -> Option<Value> {
-        value.with_named_target(|t| self.cached(t, false).and_then(ReadOutcome::value))?
+        value.with_named_target(|t| self.data_value(t))?
     }
+    #[inline(always)]
     pub(super) fn get(&self, object: &ObjectRef) -> Option<Value> {
-        self.cached(NamedTarget::Object(object), false)
-            .and_then(ReadOutcome::value)
+        self.data_value(NamedTarget::Object(object))
     }
     pub(super) fn accessor(&self, value: &Value) -> Option<Property> {
         value.with_named_target(|t| match self.cached(t, true) {
@@ -287,6 +363,9 @@ impl NamedPropertyCache {
         name: &str,
         key: Option<&KeyLease>,
     ) -> Option<ReadOutcome> {
+        if matches!(self.0.borrow().entries, Entries::Mega) {
+            return resolve(target, name, key)?.fetch(target);
+        }
         if let Some(value) = self.cached(target, false) {
             return Some(value);
         }
@@ -298,6 +377,9 @@ impl NamedPropertyCache {
         resolution.fetch(target)
     }
     fn record_resolution(&self, target: NamedTarget<'_>, name: &str, resolution: &Resolution) {
+        if matches!(self.0.borrow().entries, Entries::Mega) {
+            return;
+        }
         let policy = target.policy();
         if !policy.enabled {
             return;
@@ -426,7 +508,7 @@ fn resolve(target: NamedTarget<'_>, name: &str, key: Option<&KeyLease>) -> Optio
     if probe != Probe::Missing {
         return Some(Resolution {
             probe,
-            holder: Some(target.downgrade()),
+            holder: None,
             inherited: false,
         });
     }

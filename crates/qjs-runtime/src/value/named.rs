@@ -88,6 +88,7 @@ impl<'a> NamedTarget<'a> {
             Self::Set(_) => 8,
         })
     }
+    #[inline(always)]
     pub(crate) fn with_store<R>(self, f: impl FnOnce(&NamedStore) -> R) -> Option<R> {
         if let Some(o) = self.object() {
             return Some(o.with_named(f));
@@ -201,6 +202,7 @@ impl<'a> NamedTarget<'a> {
         probe
     }
     /// Called only after shape or prototype-cell validation proves this kind.
+    #[inline(always)]
     pub(crate) fn load_matched_data(self, v: &LayoutVersion, slot: u32) -> Option<Value> {
         self.with_store(|s| {
             s.matches_version(v)

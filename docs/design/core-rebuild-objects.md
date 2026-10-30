@@ -31,6 +31,8 @@ keys or report an explicit domain error, never reinterpret IDs.
 `to_key(&mut Context, Value) -> Result<KeyLease>` performs observable ToPrimitive
 once, then interns; named bytecode operands use prelinked leases. Host `&str`
 entry points convert once; internal slot access never formats or hashes text.
+Computed JsString keys memoize one domain-checked live lease in existing metadata;
+reads never intern, and mutation/COW clears the memo. No receiver/domain is pinned.
 
 ## Physical layout (S2 assertions)
 

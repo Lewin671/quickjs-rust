@@ -12,10 +12,30 @@ impl ObjectRef {
         if self.0.flag(super::flags::MODULE_NAMESPACE) {
             return OwnDataPropertyRead::NeedsSlowPath;
         }
-        if let Some(property) = self.virtual_index_property(key) {
+        if self.0.flag(super::flags::STRING_INDICES)
+            && let Some(property) = self.virtual_index_property(key)
+        {
             return OwnDataPropertyRead::Data(property.value);
         }
         self.0.properties.borrow().own_data_read(key)
+    }
+    pub(crate) fn own_data_property_read_string(
+        &self,
+        key: &crate::JsString,
+    ) -> OwnDataPropertyRead {
+        if self.is_module_namespace_exotic() {
+            return OwnDataPropertyRead::NeedsSlowPath;
+        }
+        if self.0.flag(super::flags::STRING_INDICES)
+            && let Some(property) = self.virtual_index_property(key.as_str())
+        {
+            return OwnDataPropertyRead::Data(property.value);
+        }
+        let store = self.0.properties.borrow();
+        let Some(key) = key.property_key_lease(store.domain()) else {
+            return OwnDataPropertyRead::Missing;
+        };
+        store.read_data_slot(&key).0
     }
     pub(crate) fn own_data_slot(&self, key: &str) -> Option<usize> {
         if self.0.flag(super::flags::MODULE_NAMESPACE) || self.virtual_index_property(key).is_some()

@@ -1045,6 +1045,13 @@ fn run_frames(
                             execute::store(&mut window[dst as usize], value);
                             continue;
                         }
+                        if let Some(value) = property::get_prop_string_own(
+                            &window[obj as usize],
+                            &window[key as usize],
+                        ) {
+                            execute::store(&mut window[dst as usize], value);
+                            continue;
+                        }
                         let key = take_operand(window, key, dst, program.local_registers);
                         // A forwarded local receiver is read, not consumed.
                         let result = if obj != dst && obj < program.local_registers {

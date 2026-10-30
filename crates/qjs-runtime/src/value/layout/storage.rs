@@ -121,6 +121,11 @@ impl Layout {
         proof.position = proof.position.filter(|&position| position < self.len);
         proof
     }
+    pub(super) fn entry_for_key(&self, key: KeyId) -> Option<ShapeEntry> {
+        let data = self.data.borrow();
+        let position = data.index.probe(key).position?;
+        (position < self.len).then(|| data.entries[position])
+    }
     pub(super) fn verify_position(&self, key: KeyId) -> Option<usize> {
         self.data
             .borrow()

@@ -484,7 +484,10 @@ fn execute<F: LoopFrame>(
                 let written = match (&boxed[receiver as usize], &boxed[key as usize]) {
                     (Value::Object(object), Value::String(name)) => {
                         let value = &boxed[value as usize];
-                        match object.write_existing_own_data_property(name.as_str(), value) {
+                        if vm.loop_env().is_realm_global_object(object) {
+                            deopt_here!(op);
+                        }
+                        match object.write_existing_own_data_property_string(name, value) {
                             crate::value::OwnDataPropertyWrite::Written => true,
                             // The property does not exist yet. A dictionary
                             // loop creates each key exactly once, so refusing
@@ -1317,7 +1320,13 @@ fn set_named(
 fn computed_read(receiver: &Value, key: &Value) -> Option<Value> {
     match (receiver, key) {
         (Value::Object(object), Value::String(name)) => {
-            ordinary_data_property(object, name.as_str())
+            match object.own_data_property_read_string(name) {
+                crate::value::OwnDataPropertyRead::Data(v) => Some(v),
+                crate::value::OwnDataPropertyRead::NeedsSlowPath => None,
+                crate::value::OwnDataPropertyRead::Missing => {
+                    ordinary_data_property(object, name.as_str())
+                }
+            }
         }
         // A boxed key is not automatically a string: the same site carries an
         // array index once a discovery forces its producer boxed. Answering

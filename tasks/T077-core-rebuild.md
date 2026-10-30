@@ -1,11 +1,12 @@
 # T077: In-place core rebuild
 
-- Status: active; round-1 A/B committed at `885e0e31` / `c2d65271`; C/D committed at `9fab7b0c`; E corrections implemented on the S2 owner branch.
-- Implementation: prototype-sensitive immutable layouts, private prototype validity generations, explicit realm creation, pure missing/accessor IC outcomes and lazy array/function authority replace the initial subscriptions and implicit prototypes.
-- Verified at: C/D working tree fast gate passes (2,434 runtime, 117 selected Test262); agents/perf-counters 2,477/2,477 and clippy pass. Cache proofs cover root churn, 600 sites, stale guards and verifier failure. E runtime 2,435/2,435 and NG 266/266 pass. Final stage gates remain pending.
-- Evidence: [correction plan](proposals/T077-s2-prototype-layout.md), [S1 repairs](archive/T077-s1-review-fixes.md), [previous S2](archive/T077-s2-verification.md). Round-1 receipt will record final source/counters/jobs.
-- Unresolved: final full/IC-off/verify/exact gates, counters and iMac triage against `dd0905b2`.
-- Next action: commit verified E, then F. Temporary iMac refs are authorized measurement transport; never push origin or merge main.
+- Status: active; A/B/C/D/E committed through `26fee930`. First round-1 iMac triage misses payoff; general hot-path repair is in progress.
+- Implementation: prototype-layout/cell redesign, pure outcome ICs, explicit creation intrinsics, lazy stores and E fixes are present. Repair separates data-hit ABI, fuses poly/ID probes and memoizes live computed string-key leases.
+- Verified at: `26fee930` full gate, NG 266/266 default/off/verify, verify runtime 2,436, IC-off semantic 2,419; iMac agents/counters 2,481 tests pass. 300 seeded on/off/verify replays agree. New repair runtime 2,437 and clippy pass; final-source gates remain pending.
+- Evidence: [correction plan](proposals/T077-s2-prototype-layout.md), [round-1 counters](archive/T077-s2-round1-counters.md), [previous S2](archive/T077-s2-verification.md). Jobs `20261030T135556Z-t077-s2-r1-triage` / `20261030T140601Z-t077-s2-r1-property-profiles` bind the first measurement/diagnosis.
+- Unresolved: payoff (initial ratios heterogeneous 1.3525, prototype 1.2908, churn 1.3564, dynamic 1.3165 versus dd0905b2); final repair counters/triage and full/exact gates. Old-artifact exact scans continue on their pinned binary.
+- Next action: verify/commit the general repair, measure on iMac, then freeze final source and complete F. Temporary iMac refs are authorized transport; never push origin or merge main.
+
 ## Authority and scope
 
 The lead supersedes the 2026-10-23 no-rewrite decision on 2026-10-29 after the
@@ -79,8 +80,7 @@ Foundation inventory, sizes and verification: [milestone evidence](archive/T077-
 
 The [lead decision](proposals/T077-s1-fallibility.md) replaces monotonic keys
 with lease-safe recycling and allocation-error abort. [Object invariants](../docs/design/core-rebuild-objects.md)
-record prototype-sensitive identities, dictionary versions and incremental
-data-write checks. [Cutover evidence](archive/T077-s1-cutover.md) records reasons;
+record prototype-sensitive identities, dictionary versions and incremental data-write checks. [Cutover evidence](archive/T077-s1-cutover.md) records reasons;
 no error ABI, fallback store or correctness waiver was introduced.
 Array.prototype needs array length/index [[DefineOwnProperty]] before NamedStore: the previous raw length/index setter and cache writes could
 bypass validation/shrink semantics. The correction routes interpreter, compact,

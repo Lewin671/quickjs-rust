@@ -42,10 +42,12 @@ impl NamedStore {
         added
     }
     pub(crate) fn read_data_slot(&self, key: &KeyLease) -> (OwnDataPropertyRead, Option<usize>) {
-        let Some(position) = self.position(key).expect("own domain") else {
+        assert!(key.belongs_to(self.domain()), "own domain");
+        let Some(entry) = self.layout.entry_for_key(key.id()) else {
             return (OwnDataPropertyRead::Missing, None);
         };
-        if self.layout.entry(position).attrs.has(Attributes::ACCESSOR) {
+        let position = entry.slot as usize;
+        if entry.attrs.has(Attributes::ACCESSOR) {
             (OwnDataPropertyRead::NeedsSlowPath, None)
         } else {
             (
@@ -69,17 +71,31 @@ impl NamedStore {
         let Some(key) = self.domain().find(key) else {
             return OwnDataPropertyWrite::NeedsSlowPath;
         };
-        let Some(slot) = self.data_slot(&key).expect("own domain") else {
+        self.write_existing_key(&key, value, guard)
+    }
+    pub(crate) fn write_existing_key(
+        &mut self,
+        key: &KeyLease,
+        value: &Value,
+        guard: impl FnOnce(&Value) -> bool,
+    ) -> OwnDataPropertyWrite {
+        assert!(key.belongs_to(self.domain()), "own domain");
+        let Some(entry) = self.layout.entry_for_key(key.id()) else {
             return OwnDataPropertyWrite::NeedsSlowPath;
         };
+        if entry.attrs.has(Attributes::ACCESSOR) {
+            return OwnDataPropertyWrite::NeedsSlowPath;
+        }
+        let slot = entry.slot as usize;
         if !guard(&self.values[slot]) {
             return OwnDataPropertyWrite::NeedsSlowPath;
         }
-        match self.replace_data(slot, value.clone()) {
-            Some(true) => OwnDataPropertyWrite::Written,
-            Some(false) => OwnDataPropertyWrite::ReadOnly,
-            None => OwnDataPropertyWrite::NeedsSlowPath,
+        if !entry.attrs.has(Attributes::WRITABLE) {
+            return OwnDataPropertyWrite::ReadOnly;
         }
+        self.values[slot] = value.clone();
+        self.verify_slot(slot);
+        OwnDataPropertyWrite::Written
     }
     pub(crate) fn transform_descriptors(&mut self, frozen: bool) {
         let source = self.layout.clone();

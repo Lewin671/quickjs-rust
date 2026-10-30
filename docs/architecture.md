@@ -129,15 +129,17 @@ per `AtomDomain` (`bytecode/linked_code.rs`). Ordinary operations use KeyLease
 IDs; host text boundaries resolve leases once. Strings and symbol identities
 share recyclable IDs; live leases prevent reuse. Domain indices are weak.
 
-**Construction domains.** Constructors/builders receive a domain, including null prototypes.
-Realm roots own PropertyOwner outside the domain. Layouts retain their domain;
-natives retain it in native state. No per-object default domain is created.
+**Creation inputs.** Realm-aware constructors receive stable intrinsic prototypes;
+low-level builders receive explicit prototype/domain inputs, including null.
+Realm roots own PropertyOwner outside the domain; layouts retain the domain.
+Native functions share empty native state per domain and copy it on mutation.
 
 **Per-site caches.** `bytecode/named_property_cache.rs` caches named property
 reads and writes per instruction site, keyed by receiver layout.
-`bytecode/enumerate_keys_cache.rs` caches a `for-in` key list while the whole
-prototype chain keeps its identities and layouts. Both validate against the
-object revisions described below.
+Layouts include prototype identity; shared guards use allocation identity,
+dictionaries also use versions. Inherited, missing, accessor, enumeration and
+creation proofs share per-prototype validity generations with a weak user graph.
+The [object contract](design/core-rebuild-objects.md) owns these invariants.
 
 ## State
 
@@ -163,24 +165,19 @@ Defined in `value/mod.rs`, `value/object.rs`, `value/property.rs` and
   is pointer identity. Caches hold `ObjectWeakRef`/`ArrayWeakRef`, never a
   strong reference. There is no tracing collector: a reference cycle is
   never freed.
-- `ObjectData` is 96 bytes on the two 64-bit production targets: NamedStore,
-  live prototype, cold pointer, index count and packed flags. Internal buffer,
-  namespace, generator and private state remain cold.
+- `ObjectData` owns NamedStore, a cold pointer, index count and packed flags;
+  NamedStore owns the live prototype. Buffer, namespace, generator and private
+  state remain cold. Sizes are asserted in the object contract.
 - Ordinary string and symbol properties share one `NamedStore`
   (`value/layout/`): immutable shared shapes or a private dictionary, one ID
   index, keyless values and cold shared accessor pairs. Property is a 32-byte
   descriptor API result. No literal-specific payload or ordinary symbol table.
-- Structural validity is weak layout identity plus epoch. Values overwrite live
-  slots without changing that token; dictionary edits invalidate it before reuse.
-  ICs use weak mono/four-way/megamorphic slot guards and structural prototype
-  subscriptions. No cached value, strong receiver or value revision remains.
 - Literal input-slot metadata is compiler-owned; its per-domain layout links
   feed the same transition tree as constructors, class fields, JSON and hosts.
   String virtual indices remain exotic and do not materialize/intern on reads.
-- Arrays and functions use the same NamedStore for materialized text/symbol
-  descriptors. Arrays retain the realm domain and allocate the store with cold
-  state; functions allocate lazily. Index/length and lazy defaults keep their
-  hooks; NamedStore owns materialized descriptors and order.
+- Arrays/functions embed a lazy named authority with explicit prototypes and
+  canonical empty layouts; probes allocate no payload or unrelated defaults.
+  Materialized descriptors and order live in the same NamedStore.
 - An array stores its elements in a `Vec<Value>`; holes are recorded in a
   lazily allocated side set.
 

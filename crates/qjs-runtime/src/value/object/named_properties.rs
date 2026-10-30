@@ -144,7 +144,7 @@ impl ObjectRef {
                 .all(|p| !p.configurable && !p.writable)
     }
     pub(crate) fn append_string_property(&self, key: &str, suffix: &str) -> Option<Value> {
-        if self.virtual_index_property(key).is_some() {
+        if self.0.flag(super::flags::STRING_INDICES) && self.virtual_index_property(key).is_some() {
             return None;
         }
         let mut store = self.0.properties.borrow_mut();
@@ -178,6 +178,31 @@ impl ObjectRef {
     ) -> OwnDataPropertyWrite {
         self.write_existing_own_data_property_if(key, value, |_| true)
     }
+    pub(crate) fn write_existing_own_data_property_string(
+        &self,
+        key: &crate::JsString,
+        value: &Value,
+    ) -> OwnDataPropertyWrite {
+        if self.is_module_namespace_exotic()
+            || self.is_array_prototype_exotic()
+            || self.is_typed_array_exotic()
+        {
+            return OwnDataPropertyWrite::NeedsSlowPath;
+        }
+        if self.0.flag(super::flags::STRING_INDICES)
+            && self.virtual_index_property(key.as_str()).is_some()
+        {
+            return OwnDataPropertyWrite::ReadOnly;
+        }
+        if key.as_str() == "globalThis" || key.as_str() == "__quickjsRustDynamicFunctionRealm" {
+            return self.write_existing_own_data_property(key.as_str(), value);
+        }
+        let mut store = self.0.properties.borrow_mut();
+        let Some(key) = key.property_key_lease(store.domain()) else {
+            return OwnDataPropertyWrite::NeedsSlowPath;
+        };
+        store.write_existing_key(&key, value, |_| true)
+    }
     pub(crate) fn write_existing_own_data_property_if(
         &self,
         key: &str,
@@ -187,7 +212,7 @@ impl ObjectRef {
         if self.0.flag(super::flags::MODULE_NAMESPACE) || self.is_array_prototype_exotic() {
             return OwnDataPropertyWrite::NeedsSlowPath;
         }
-        if self.virtual_index_property(key).is_some() {
+        if self.0.flag(super::flags::STRING_INDICES) && self.virtual_index_property(key).is_some() {
             return OwnDataPropertyWrite::ReadOnly;
         }
         let identity =
@@ -223,7 +248,7 @@ impl ObjectRef {
         true
     }
     pub(crate) fn delete_own_property(&self, key: &str) -> bool {
-        if self.virtual_index_property(key).is_some() {
+        if self.0.flag(super::flags::STRING_INDICES) && self.virtual_index_property(key).is_some() {
             return false;
         }
         let Some(lease) = self.domain().find(key) else {
@@ -274,7 +299,9 @@ impl ObjectRef {
         {
             return decline();
         }
-        if self.virtual_index_property(key.as_str()).is_some() {
+        if self.0.flag(super::flags::STRING_INDICES)
+            && self.virtual_index_property(key.as_str()).is_some()
+        {
             return OrdinaryDataWrite {
                 result: OwnDataPropertyWrite::ReadOnly,
                 ..decline()

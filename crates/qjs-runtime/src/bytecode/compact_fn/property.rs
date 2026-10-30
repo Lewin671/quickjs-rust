@@ -514,6 +514,20 @@ pub(super) fn get_prop_element(
     get_prop_computed(std::mem::replace(object, Value::Undefined), key, env)
 }
 
+/// Pure own string-key read with a borrowed receiver/key. Slot/descriptor
+/// semantics remain in the common authority; hooks stay on the general path.
+#[inline(always)]
+pub(super) fn get_prop_string_own(object: &Value, key: &Value) -> Option<Value> {
+    if let (Value::Object(object), Value::String(key)) = (object, key)
+        && !object.is_symbol_primitive()
+        && !object.is_typed_array_exotic()
+        && let OwnDataPropertyRead::Data(value) = object.own_data_property_read_string(key)
+    {
+        return Some(value);
+    }
+    None
+}
+
 /// `get_prop_element` of a receiver that stays where it is.
 #[inline(never)]
 pub(super) fn get_prop_element_of(
@@ -637,6 +651,9 @@ pub(super) fn get_prop_computed(
         && !object_ref.is_module_namespace_exotic()
     {
         use crate::bytecode::vm_props::{DirectPropertyRead, ordinary_chain_data_value};
+        if let OwnDataPropertyRead::Data(value) = object_ref.own_data_property_read_string(name) {
+            return Ok(value);
+        }
         match ordinary_chain_data_value(object_ref, name.as_str()) {
             Ok(DirectPropertyRead::Data(value)) => return Ok(value),
             Ok(DirectPropertyRead::Missing) => return Ok(Value::Undefined),

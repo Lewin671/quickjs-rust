@@ -58,3 +58,16 @@ removing the separate ordinary prototype cell shrinks ObjectData from 96 to
 around 304, avoiding their former probe-time cold/name-slot allocations. These
 are estimates until measured; correctness and whole-portfolio payoff govern.
 No dependency, crate, unsafe, public error ABI, AST or binding-model change.
+
+## Payoff repair after the first triage
+
+Job `20261030T135556Z-t077-s2-r1-triage` misses payoff versus dd0905b2.
+Profiles `20261030T140601Z-t077-s2-r1-property-profiles` identify descriptor-size
+cache return frames on named hits and repeated atom recovery on computed keys.
+Keep data-hit ABI separate from cold descriptor outcomes and compare own poly
+ways under one store borrow. Memoize one domain-checked KeyLease in shared
+JsString metadata, using its existing metadata RefCell; reads only find live
+keys, mutations/COW clear the memo, and foreign domains replace it. The memo
+pins a lease, never a domain/receiver. This adds 8 logical header bytes without
+changing Value/JsString handle sizes; measure the whole development set again.
+All semantic hooks and generic fallbacks remain the same NamedStore authority.
