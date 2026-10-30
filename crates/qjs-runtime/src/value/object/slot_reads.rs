@@ -44,7 +44,11 @@ impl ObjectRef {
         slot: usize,
         value: &Value,
     ) -> Option<OwnDataPropertyWrite> {
-        if self.0.flag(super::flags::MODULE_NAMESPACE) {
+        if self.0.flag(super::flags::MODULE_NAMESPACE)
+            || self.is_array_prototype_exotic()
+            || self.is_typed_array_exotic()
+            || self.is_symbol_primitive()
+        {
             return None;
         }
         let result = self
@@ -93,7 +97,11 @@ impl ObjectRef {
         slot: usize,
         value: &Value,
     ) -> Option<OwnDataPropertyWrite> {
-        if self.0.flag(super::flags::MODULE_NAMESPACE) {
+        if self.0.flag(super::flags::MODULE_NAMESPACE)
+            || self.is_array_prototype_exotic()
+            || self.is_typed_array_exotic()
+            || self.is_symbol_primitive()
+        {
             return None;
         }
         let mut store = self.0.properties.borrow_mut();

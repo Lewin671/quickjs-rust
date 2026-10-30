@@ -22,6 +22,9 @@ pub(crate) fn set_property(
 ) -> Result<bool, RuntimeError> {
     match object {
         Value::Object(object) => {
+            if object.is_array_prototype_exotic() && key == "length" {
+                return crate::object::set_array_prototype_length(&object, value, env);
+            }
             if crate::symbol::is_symbol_primitive(&object) {
                 return set_primitive_property("Symbol", Value::Object(object), key, value, env);
             }
@@ -487,6 +490,18 @@ fn ordinary_set_object(
             // overwritten in place regardless of extensibility.
             if object.own_property(&key).is_none() && !object.is_extensible() {
                 return Ok(false);
+            }
+            if object.is_array_prototype_exotic() {
+                return crate::object::define_array_prototype_property(
+                    object,
+                    &key,
+                    if object.has_own_property(&key) {
+                        crate::object::PropertyDescriptor::data_value(value)
+                    } else {
+                        crate::object::PropertyDescriptor::data(value, true, true, true)
+                    },
+                    env,
+                );
             }
             object.set(key.clone(), value);
             // A native [[Set]] on the global object (`Reflect.set`,

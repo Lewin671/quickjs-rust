@@ -100,6 +100,9 @@ Dense/sparse indices, array length and mapped arguments stay exotic; typed-array
 canonical numeric indices and detachment use their own algorithms. String virtual
 indices, function lazy name/length/prototype, namespace live exports and private
 slots retain semantic hooks. Hooks materialize into the same store when required.
+S1's intrinsic Array.prototype is an ObjectRef: its length/index definitions run
+array validation/shrink hooks before NamedStore; ordinary creation and slot-write
+caches decline that receiver.
 No symbol/text property table survives outside it. Prototype slots retain live
 array/function identity (`value/object.rs::Prototype`), never copied descriptors.
 

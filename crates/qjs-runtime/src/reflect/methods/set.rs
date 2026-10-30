@@ -143,6 +143,18 @@ fn set_receiver_data_property(
                     crate::typed_array::IndexedDefine::NotIndexed => {}
                 }
             }
+            if object.is_array_prototype_exotic() {
+                let descriptor = match object.own_property(key) {
+                    Some(existing) if existing.is_accessor() || !existing.writable => {
+                        return Ok(false);
+                    }
+                    Some(_) => PropertyDescriptor::data_value(value),
+                    None => PropertyDescriptor::data(value, true, true, true),
+                };
+                return crate::object::define_array_prototype_property(
+                    &object, key, descriptor, env,
+                );
+            }
             let descriptor = match object.own_property(key) {
                 Some(existing) if !existing.writable => return Ok(false),
                 Some(existing) => Property::data(

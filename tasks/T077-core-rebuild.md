@@ -1,11 +1,11 @@
 # T077: In-place core rebuild
 
-- Status: active; S1 cutover implemented on `agent/t077-s1-property-authority/codex`, base `dd0905b2`; final gates in progress.
+- Status: active; S1 cutover implemented on `agent/t077-s1-property-authority/codex`, base `dd0905b2`; Array.prototype exotic-hook correction verified; exact scan next.
 - Implementation: ordinary string/symbol storage uses NamedStore; old forms, dynamic storage file, literal payload index and cold symbols deleted. Construction domains and legacy cache consumers migrated; 96-byte ordinary header, pure String indices, recycled leased keys.
-- Verified at: cutover working tree, 2026-10-30 UTC: full check passes (2,411 runtime tests, 5,170 subset cases); combined-feature tests 2,451/2,451, NG 257/257 and x86 size assertions pass; staged hook next. Recycling source `4e39af1f` passed its fast gate.
-- Evidence: [S1 brief/API](proposals/T077-s1-property-authority.md), [decided key lifetime](proposals/T077-s1-fallibility.md), [prior owner migration](archive/T077-s1-owner-migration.md), [cutover receipt](archive/T077-s1-cutover.md).
+- Verified at: cutover `01d25055`, 2026-10-30 UTC: full check (2,411 runtime tests, 5,170 subset), combined features 2,451/2,451, NG 257/257, x86 size assertions and staged hook pass. Exotic-hook working tree: full check (2,414 runtime, 5,170 subset), combined features 2,454/2,454, NG 258/258 and x86 assertions pass.
+- Evidence: [S1 brief/API](proposals/T077-s1-property-authority.md), [decided key lifetime](proposals/T077-s1-fallibility.md), [prior owner migration](archive/T077-s1-owner-migration.md), [cutover receipt](archive/T077-s1-cutover.md), [exotic correction](archive/T077-s1-exotic-hooks.md).
 - Unresolved: committed configured exact scan and burndown; formal performance standing remains lead-owned. No correctness waiver, fallback store, push or merge.
-- Next action: finish final verification, commit the cutover, scan its exact release/agents binary, append complete-scan burndown and bind the final source/evidence. Never push or merge this branch.
+- Next action: commit the verified exotic-hook correction, scan its exact release/agents binary, append complete-scan burndown and bind the final source/evidence. Never push or merge this branch.
 
 ## Authority and scope
 
@@ -83,6 +83,10 @@ with lease-safe recycling and allocation-error abort. [Object invariants](../doc
 record paired identity/epoch guards, cold legacy value revisions and incremental
 data-write checks. [Cutover evidence](archive/T077-s1-cutover.md) records reasons;
 no error ABI, fallback store or correctness waiver was introduced.
+Array.prototype needs array length/index [[DefineOwnProperty]] before NamedStore: the previous raw length/index setter and cache writes could
+bypass validation/shrink semantics. The correction routes interpreter, compact,
+Reflect and descriptor writes through one hook; creation/slot-write caches decline
+this receiver. No second index store or array snapshot.
 
 ## S2 — All named stores and shape ICs
 

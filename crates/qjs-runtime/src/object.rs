@@ -1,3 +1,5 @@
+mod array_prototype;
+pub(crate) use array_prototype::{define_array_prototype_property, set_array_prototype_length};
 mod constructor;
 mod descriptor;
 mod descriptor_query;

@@ -34,18 +34,6 @@ impl ObjectRef {
         }
         let identity = key.as_ref() == "globalThis"
             && matches!(&value, Value::Object(global) if self.ptr_eq(global));
-        if self.0.flag(super::flags::ARRAY_PROTOTYPE) && super::is_array_index_key(&key) {
-            // Array.prototype's length hook is outside ordinary named storage.
-            if !self.has_own_property(&key)
-                && let Some(index) = array_index_property_key(&key)
-                && let Some(length) = self.own_property("length")
-                && length.writable
-                && let Value::Number(current) = length.value
-                && (index as f64) >= current
-            {
-                self.write_existing_own_data_property("length", &Value::Number((index + 1) as f64));
-            }
-        }
         let domain = self.domain();
         let lease = domain.find(&key).unwrap_or_else(|| domain.intern(&key));
         let mut store = self.0.properties.borrow_mut();
@@ -211,7 +199,7 @@ impl ObjectRef {
         value: &Value,
         guard: impl FnOnce(&Value) -> bool,
     ) -> OwnDataPropertyWrite {
-        if self.0.flag(super::flags::MODULE_NAMESPACE) {
+        if self.0.flag(super::flags::MODULE_NAMESPACE) || self.is_array_prototype_exotic() {
             return OwnDataPropertyWrite::NeedsSlowPath;
         }
         if self.virtual_index_property(key).is_some() {

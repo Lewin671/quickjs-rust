@@ -524,6 +524,7 @@ impl Vm<'_> {
         if symbol::is_symbol_primitive(object)
             || crate::typed_array::is_typed_array_object(object)
             || object.is_module_namespace_exotic()
+            || object.is_array_prototype_exotic()
             || !object.is_extensible()
             || !matches!(
                 object.own_data_property_read(&key),

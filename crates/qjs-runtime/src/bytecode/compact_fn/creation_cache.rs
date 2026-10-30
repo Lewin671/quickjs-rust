@@ -74,6 +74,7 @@ fn ordinary(object: &ObjectRef) -> bool {
     !crate::symbol::is_symbol_primitive(object)
         && !crate::typed_array::is_typed_array_object(object)
         && !object.is_module_namespace_exotic()
+        && !object.is_array_prototype_exotic()
 }
 
 fn receiver_is_plain(object: &ObjectRef) -> bool {
