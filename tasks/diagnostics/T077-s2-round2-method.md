@@ -31,6 +31,11 @@ supply retired instructions in a separate non-timing iMac job.
   raw counts plus per-object normalization. Counts are collected in release mode
   so debug verification does not contaminate the breakdown.
 
-Structural repair plans will be frozen after this before-state is recorded.
+The [repair plan](../proposals/T077-s2-round2-construction.md) was frozen after the before-state.
+The probe follows inline slot spills/adoption, direct pair literals, store-add
+plans and JSON fills without treating inline capacity as a heap allocation.
+Its original Vec path still builds at `28206401`; post-repair source `e320817e`
+builds with the same diagnostic ownership wrappers. Non-timing controls validate
+stdout; only unmodified canonical images provide retired instructions.
 Array header work follows construction repair, as directed. Prior S2 correctness
 and measurement standing remains bound to the round-1 revisions in its receipt.

@@ -629,9 +629,7 @@ pub(crate) fn initialize_direct_instance_fields(
         let key = field
             .shared_string_key()
             .expect("direct construct admission requires string keys");
-        if receiver.is_extensible() && !receiver.has_own_property(key) {
-            receiver.set_shared_key(key.clone(), value);
-        } else {
+        if !receiver.install_shared_class_field(key, &value, &field.definition_plan) {
             let mut define_env = env.empty_frame();
             crate::bytecode::install_field_value(
                 &Value::Object(receiver.clone()),

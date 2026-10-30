@@ -60,7 +60,7 @@ pub(crate) mod construction {
     pub(crate) fn write<T>(cell: &RefCell<T>) -> RefMut<'_, T> {
         super::count!(r2_ref_writes); cell.borrow_mut()
     }
-    fn capacity<T>(before: usize, after: usize) {
+    pub(crate) fn capacity<T>(before: usize, after: usize) {
         if after > before {
             if before==0 { super::count!(r2_slot_allocs); } else { super::count!(r2_slot_reallocs); }
             super::update(|c| c.r2_slot_capacity_bytes += ((after-before)*std::mem::size_of::<T>()) as u64);
@@ -144,17 +144,28 @@ if candidate:
         s=p.read_text()
         # Borrowed Rc parameters retain the standard type and coerce through
         # Deref; owned references are tracked at every clone/drop boundary.
-        s=re.sub(r'(?<!&)Rc<Layout>', C+'::SchemaRc<Layout>',s)
+        s=re.sub(r'(?<!&)Rc<((?:crate::value::layout::)?Layout)>', lambda m:C+'::SchemaRc<'+m[1]+'>',s)
         p.write_text(s)
     edit('value/layout/mod.rs',lambda s:wrap_rc(s,'root: Rc::new(Layout {'))
     edit('value/layout/edit.rs',lambda s:s.replace(') -> Rc<Self> {',') -> '+C+'::SchemaRc<Self> {').replace('Some(self.clone())','Some('+C+'::SchemaRc::clone_raw(self))').replace('Some(self.root.as_ref().unwrap_or(self).clone())','Some(self.root.as_ref().map_or_else(|| '+C+'::SchemaRc::clone_raw(self), Clone::clone))').replace('let next = Rc::new(Self {','let next: '+C+'::SchemaRc<Layout> = Rc::new(Self {').replace('let next = Rc::new(next);','let next: '+C+'::SchemaRc<Layout> = Rc::new(next).into();').replace('self.layout = Rc::new(layout);','self.layout = Rc::new(layout).into();'))
     # End of the explicit append allocation.
     edit('value/layout/edit.rs',lambda s:s.replace('            flavor: self.flavor,\n        });','            flavor: self.flavor,\n        }).into();'))
-    edit('value/layout/host.rs',lambda s:s.replace('Rc::new(layout.copied(true))','Rc::new(layout.copied(true)).into()').replace('        self.values.reserve(capacity);',C+'::reserve(&mut self.values, capacity);').replace('        let epoch = if layout.dictionary', '        if values.capacity()>0 { crate::diagnostics::count!(r2_slot_adopted_buffers); }\n        let epoch = if layout.dictionary'))
+    edit('value/layout/host.rs',lambda s:s.replace('Rc::new(layout.copied(true))','Rc::new(layout.copied(true)).into()'))
     edit('value/layout/prototype.rs',lambda s:s.replace('layout.root.as_ref().unwrap_or(layout)','layout.root.as_ref().map_or(layout, |r| &**r)').replace('let root = Rc::new(Layout {','let root: '+C+'::SchemaRc<Layout> = Rc::new(Layout {').replace('            flavor,\n        });','            flavor,\n        }).into();').replace('self.layout = Rc::new(layout);','self.layout = Rc::new(layout).into();').replace('self.layout = Rc::new(next);','self.layout = Rc::new(next).into();').replace('.and_then(Weak::upgrade)', '.and_then(Weak::upgrade).map('+C+'::SchemaRc::from_weak)'))
     edit('value/layout/transitions.rs',lambda s:s.replace('.and_then(Weak::upgrade)', '.and_then(Weak::upgrade).map('+C+'::SchemaRc::from_weak)').replace('child.upgrade())','child.upgrade().map('+C+'::SchemaRc::from_weak))').replace('retained.nodes.push_back(child.clone())','retained.nodes.push_back('+C+'::SchemaRc::clone_raw(child))'))
-    edit('value/layout/edit.rs',lambda s:s.replace('                self.store.values.push(Value::Undefined);','                crate::diagnostics::count!(r2_store_adds);\n                '+C+'::push(&mut self.store.values, Value::Undefined);'))
-    edit('bytecode/named_property_cache.rs',lambda s:count_body(s,'fn write_target(', 'r2_store_ic_probes'))
+    inline = (src/'value/layout/value_slots.rs').exists()
+    if inline:
+        edit('value/layout/edit.rs',lambda s:s.replace('                self.store.values.push(Value::Undefined);','                crate::diagnostics::count!(r2_store_adds);\n                self.store.values.push(Value::Undefined);'))
+        edit('value/layout/value_slots.rs',lambda s:s.replace('_ => Self::Heap(values),','_ => { crate::diagnostics::count!(r2_slot_adopted_buffers); Self::Heap(values) },').replace('values.reserve(additional);',C+'::reserve(values, additional);').replace('let mut values = Vec::with_capacity(needed);','let mut values = Vec::with_capacity(needed); '+C+'::capacity::<Value>(0, values.capacity());').replace('let mut values = Vec::with_capacity(4);','let mut values = Vec::with_capacity(4); '+C+'::capacity::<Value>(0, values.capacity());').replace('                values.push(value);\n                Self::Heap(values)','                '+C+'::push(&mut values, value);\n                Self::Heap(values)'))
+        edit('value/layout/append_recipe.rs',lambda s:s.replace('        store.values.push(value);','        crate::diagnostics::count!(r2_store_adds);\n        store.values.push(value);'))
+        edit('value/layout/sequence.rs',lambda s:s.replace('                values.push(value);','                crate::diagnostics::count!(r2_store_adds);\n                values.push(value);').replace('let prefix = prefix.clone();','let prefix = '+C+'::SchemaRc::clone_raw(prefix);'))
+        edit('value/layout/host.rs',lambda s:s.replace('Self::from_slots(layout, ValueSlots::pair(values))','{ crate::diagnostics::count!(r2_inline_pairs); Self::from_slots(layout, ValueSlots::pair(values)) }'))
+    else:
+        edit('value/layout/host.rs',lambda s:s.replace('        self.values.reserve(capacity);',C+'::reserve(&mut self.values, capacity);'))
+        edit('value/layout/host.rs',lambda s:s.replace('        let epoch = if layout.dictionary','        if values.capacity()>0 { crate::diagnostics::count!(r2_slot_adopted_buffers); }\n        let epoch = if layout.dictionary'))
+        edit('value/layout/edit.rs',lambda s:s.replace('                self.store.values.push(Value::Undefined);','                crate::diagnostics::count!(r2_store_adds);\n                '+C+'::push(&mut self.store.values, Value::Undefined);'))
+    cache = 'bytecode/named_property_cache/stores.rs' if (src/'bytecode/named_property_cache/stores.rs').exists() else 'bytecode/named_property_cache.rs'
+    edit(cache,lambda s:count_body(s,'fn write_target(', 'r2_store_ic_probes'))
     # Lease clones and drops are counted regardless of which API created them.
     edit('property/atom.rs',lambda s:s.replace('#[derive(Clone)]\npub(crate) struct KeyLease', 'pub(crate) struct KeyLease').replace('impl KeyLease {','''impl Clone for KeyLease {
         fn clone(&self) -> Self { crate::diagnostics::count!(r2_lease_clones); Self(self.0.clone()) }
