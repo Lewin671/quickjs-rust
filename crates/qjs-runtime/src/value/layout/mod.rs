@@ -111,6 +111,7 @@ pub(crate) struct Layout {
     mode: Option<Rc<PrototypeState>>,
     flavor: u16,
     capacity_hint: std::cell::Cell<u8>,
+    append_misses: std::cell::Cell<u8>,
 }
 
 pub(crate) struct OwnerState {
@@ -164,6 +165,7 @@ impl PropertyOwner {
                 mode: None,
                 flavor: 0,
                 capacity_hint: std::cell::Cell::new(0),
+                append_misses: std::cell::Cell::new(0),
             }),
             roots: RefCell::default(),
             retained: RefCell::new(transitions::Retention::default()),

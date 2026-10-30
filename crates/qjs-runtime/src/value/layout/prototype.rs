@@ -175,6 +175,7 @@ impl PropertyOwner {
             mode: None,
             flavor,
             capacity_hint: std::cell::Cell::new(0),
+            append_misses: std::cell::Cell::new(0),
         });
         let mut roots = self.0.roots.borrow_mut();
         if roots.len() >= 64 && roots.len().is_power_of_two() {

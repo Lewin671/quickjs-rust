@@ -44,9 +44,9 @@ seal/freeze and preventExtensions preserve data/accessor semantics. Seal/freeze
 use one cached bulk transition per source shape and integrity level, copying
 descriptors once and preserving per-object accessor payloads. No-op integrity
 changes copy nothing. Extensibility remains an object flag; preventExtensions
-requires no descriptor edit. Individual attribute changes also cache transitions. Computed additions retain a known shared transition, but a new branch at a
-layout with more than eight live outgoing transitions enters private dictionary
-mode. Static construction plans retain shared layouts. Computed writes reuse
+requires no descriptor edit. Individual attribute changes also cache transitions. Computed additions retain a known live shared transition. After more than eight
+append misses at a layout, an uncached computed addition enters private dictionary
+mode. A saturating byte survives expired child edges without retaining keys. Static construction plans retain shared layouts. Computed writes reuse
 JsString leases and consume one own-slot lookup before chain proof/creation.
 A structural mutation prepares storage first, publishes layout+slots together, then bumps
 validity; slot reuse never occurs under an unchanged dictionary version.

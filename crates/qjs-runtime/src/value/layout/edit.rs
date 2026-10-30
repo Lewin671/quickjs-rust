@@ -23,6 +23,7 @@ impl Layout {
             mode: self.mode.clone(),
             flavor: self.flavor,
             capacity_hint: std::cell::Cell::new(0),
+            append_misses: std::cell::Cell::new(0),
         }
     }
 
@@ -56,6 +57,8 @@ impl Layout {
             return shape;
         }
         crate::diagnostics::count!(property_transition_misses);
+        self.append_misses
+            .set(self.append_misses.get().saturating_add(1));
         let tail = self.len > 0 && self.data.borrow().entries.len() == self.len;
         let data = if tail {
             self.data.clone()
@@ -94,6 +97,7 @@ impl Layout {
             mode: None,
             flavor: self.flavor,
             capacity_hint: std::cell::Cell::new(0),
+            append_misses: std::cell::Cell::new(0),
         });
         crate::diagnostics::count!(property_shape_nodes_created);
         self.cache(label, &next);
@@ -187,7 +191,8 @@ impl Lookup<'_> {
                 let dictionary = self.store.layout.dictionary
                     || self.store.len() >= DICTIONARY_WIDTH
                     || (dynamic
-                        && self.store.layout.transitions.borrow().prefer_dictionary(
+                        && self.store.layout.append_misses.get() > 8
+                        && !self.store.layout.transitions.borrow().contains_live(
                             Transition::Append {
                                 key: self.key.id(),
                                 attrs,

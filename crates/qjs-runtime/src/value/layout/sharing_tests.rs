@@ -217,3 +217,27 @@ fn repeated_noop_freeze_does_not_copy_or_change_identity() {
         0
     );
 }
+
+#[test]
+fn expired_transition_paths_keep_pressure_without_pinning_keys() {
+    let owner = owner();
+    // Real live metadata exceeds the bounded keep-alive budget. Ephemeral
+    // children can then expire between separate constructions.
+    let mut anchor = owner.empty_store();
+    let long = owner.domain().intern(&"x".repeat(MAX_CACHED_BYTES + 1));
+    anchor.define(&long, data()).unwrap();
+    let mut expired = Vec::new();
+    for i in 0..10 {
+        let key = owner.domain().intern(&format!("ephemeral{i}"));
+        let mut store = owner.empty_store();
+        store.define(&key, data()).unwrap();
+        expired.push(Rc::downgrade(store.layout()));
+    }
+    assert!(expired.iter().all(|layout| layout.strong_count() == 0));
+    let key = owner.domain().intern("next");
+    let mut next = owner.empty_store();
+    next.lookup(&key).unwrap().define_dynamic(data());
+    assert!(next.is_dictionary());
+    assert_eq!(next.keys(), [key]);
+    assert!(anchor.get(&long).unwrap().is_some());
+}
