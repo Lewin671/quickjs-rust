@@ -1179,6 +1179,12 @@ impl ArrayRef {
     ) -> R {
         write(&mut self.0.named_store_mut())
     }
+    pub(crate) fn with_key_domain<R>(
+        &self,
+        read: impl FnOnce(&crate::property::atom::AtomDomain) -> R,
+    ) -> R {
+        read(self.0.named.borrow().domain())
+    }
     pub(crate) fn named_policy(&self) -> crate::property::atom::IcPolicy {
         self.0.named.borrow().domain().ic_policy()
     }

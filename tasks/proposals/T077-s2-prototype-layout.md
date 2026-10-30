@@ -111,3 +111,11 @@ Literal metadata also proves an identity input-slot map when input and unique
 cardinalities match. Skip the remapping loop/truncation in that case; retain
 ordered duplicate compaction otherwise. This uses construction metadata, never
 a source/bytecode template, and keeps all observable definition order unchanged.
+
+Sixth triage `20261030T153711Z-t077-s2-r1-creation-triage` keeps all four read/churn
+points below base but development is 1.002736. Static named misses in compact/
+typed consumers still recover their operand from text repeatedly at megamorphic
+sites. Keep a domain-checked weak lease link per site, find-only on link miss;
+prelinked operands continue to pass their own leases. The link pins neither key
+nor domain and survives no ID recycling without a successful weak upgrade.
+This completes static-name linking for those consumers without result caching.

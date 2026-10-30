@@ -146,6 +146,26 @@ impl<'a> NamedTarget<'a> {
             Self::Set(s) => WeakTarget::Set(s.downgrade()),
         }
     }
+    pub(crate) fn owns_key(self, key: &KeyLease) -> bool {
+        if let Some(o) = self.object() {
+            return o.with_named(|s| key.belongs_to(s.domain()));
+        }
+        match self {
+            Self::Array(a) => a.with_key_domain(|d| key.belongs_to(d)),
+            Self::Function(f) => key.belongs_to(f.property_domain()),
+            _ => false,
+        }
+    }
+    pub(crate) fn find_key(self, name: &str) -> Option<KeyLease> {
+        if let Some(o) = self.object() {
+            return o.with_named(|s| s.domain().find(name));
+        }
+        match self {
+            Self::Array(a) => a.with_key_domain(|d| d.find(name)),
+            Self::Function(f) => f.property_domain().find(name),
+            _ => None,
+        }
+    }
     pub(crate) fn probe(self, name: &str, key: Option<&KeyLease>) -> Probe {
         if self.kind().is_none() {
             return Probe::Exotic;

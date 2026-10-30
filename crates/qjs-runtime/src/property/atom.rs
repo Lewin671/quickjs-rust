@@ -75,10 +75,23 @@ enum KeyKind {
 #[derive(Clone)]
 pub(crate) struct KeyLease(Rc<KeyRecord>);
 
+/// A find-only link that cannot pin a dead property key or its domain.
+#[derive(Clone, Debug)]
+pub(crate) struct WeakKeyLease(Weak<KeyRecord>);
+impl WeakKeyLease {
+    pub(crate) fn upgrade(&self) -> Option<KeyLease> {
+        self.0.upgrade().map(KeyLease)
+    }
+}
+
 /// Named bytecode operands are string key leases.
 pub(crate) type Atom = KeyLease;
 
 impl KeyLease {
+    pub(crate) fn downgrade(&self) -> WeakKeyLease {
+        WeakKeyLease(Rc::downgrade(&self.0))
+    }
+
     pub(crate) fn id(&self) -> AtomId {
         self.0.id
     }

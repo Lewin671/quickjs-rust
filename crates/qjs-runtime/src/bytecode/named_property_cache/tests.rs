@@ -374,3 +374,32 @@ fn numeric_hits_read_live_types_without_invalidating_shared_shapes() {
     object.set("x".into(), Value::Number(7.0));
     assert_eq!(cache.get_number(&object), Some(7.0));
 }
+
+#[cfg(feature = "perf-counters")]
+#[test]
+fn megamorphic_reads_reuse_static_names_without_pinning_dead_keys() {
+    let domain = AtomDomain::new();
+    let _owner = crate::value::layout::PropertyOwner::new(domain.clone());
+    let cache = NamedPropertyCache::default();
+    let mut objects = Vec::new();
+    for i in 0..5 {
+        let o = object(&domain, "x", i as f64);
+        for j in 0..i {
+            o.set(format!("p{j}"), Value::Null);
+        }
+        cache.read_object(&o, "x");
+        objects.push(o);
+    }
+    assert!(matches!(cache.0.borrow().entries, Entries::Mega));
+    crate::diagnostics::reset_counters();
+    for i in 0..1000 {
+        assert_eq!(
+            cache.read_object(&objects[i % 5], "x"),
+            Some(Value::Number((i % 5) as f64))
+        );
+    }
+    let c = crate::diagnostics::counters().unwrap();
+    assert_eq!(c.property_text_probes, 0);
+    assert_eq!(c.property_atoms_created, 0);
+    assert_eq!(c.property_id_probes, 1000);
+}

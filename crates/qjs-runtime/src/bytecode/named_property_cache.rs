@@ -1,7 +1,7 @@
 //! Per-site mono/four-way/mega caches over complete pure lookup outcomes.
 //! Layout identity implies [[Prototype]]; inherited hits use one prototype
 //! generation plus a live holder slot. No IC subscriptions or cached Values.
-use crate::property::atom::KeyLease;
+use crate::property::atom::{KeyLease, WeakKeyLease};
 use crate::value::{
     OwnDataPropertyWrite,
     layout::{LayoutVersion, StructuralDependency},
@@ -17,6 +17,7 @@ pub(super) struct NamedPropertyCache(Rc<RefCell<State>>);
 struct State {
     entries: Entries,
     local_slot: Option<usize>,
+    key: Option<WeakKeyLease>,
     #[cfg(debug_assertions)]
     name: Option<String>,
 }
@@ -469,6 +470,32 @@ impl NamedPropertyCache {
                 .and_then(ReadOutcome::value)
         })
     }
+    fn resolve_read(
+        &self,
+        target: NamedTarget<'_>,
+        name: &str,
+        key: Option<&KeyLease>,
+    ) -> Option<Resolution> {
+        if let Some(key) = key {
+            return resolve(target, name, Some(key));
+        }
+        let cached = self
+            .0
+            .borrow()
+            .key
+            .as_ref()
+            .and_then(WeakKeyLease::upgrade)
+            .filter(|key| target.owns_key(key));
+        let key = if let Some(key) = cached {
+            Some(key)
+        } else {
+            count_event(target, Event::Hash);
+            let key = target.find_key(name);
+            self.0.borrow_mut().key = key.as_ref().map(KeyLease::downgrade);
+            key
+        };
+        resolve(target, name, key.as_ref())
+    }
     fn read_target(
         &self,
         target: NamedTarget<'_>,
@@ -476,7 +503,7 @@ impl NamedPropertyCache {
         key: Option<&KeyLease>,
     ) -> Option<ReadOutcome> {
         if matches!(self.0.borrow().entries, Entries::Mega) {
-            return resolve(target, name, key)?.fetch(target);
+            return self.resolve_read(target, name, key)?.fetch(target);
         }
         if let Some(value) = self.cached(target, false) {
             return Some(value);
@@ -484,7 +511,7 @@ impl NamedPropertyCache {
         if let Some(value) = self.cached(target, true) {
             return Some(value);
         }
-        let resolution = resolve(target, name, key)?;
+        let resolution = self.resolve_read(target, name, key)?;
         self.record_resolution(target, name, &resolution);
         resolution.fetch(target)
     }
@@ -560,7 +587,7 @@ impl NamedPropertyCache {
     }
     pub(super) fn update(&self, object: &ObjectRef, name: &str, _value: &Value) {
         let target = NamedTarget::Object(object);
-        if let Some(r) = resolve(target, name, None) {
+        if let Some(r) = self.resolve_read(target, name, None) {
             self.record_resolution(target, name, &r)
         }
     }
@@ -606,7 +633,9 @@ impl NamedPropertyCache {
     }
     #[cfg(test)]
     pub(super) fn clear(&self) {
-        self.0.borrow_mut().entries = Entries::Empty;
+        let mut state = self.0.borrow_mut();
+        state.entries = Entries::Empty;
+        state.key = None;
     }
 }
 /// One pure chain walk on a miss. No cell construction/registration, getters,
