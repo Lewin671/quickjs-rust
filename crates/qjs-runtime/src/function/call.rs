@@ -469,23 +469,13 @@ pub(crate) fn try_construct_direct_leaf_function(
         }
         None
     };
-    let prototype = match function.own_property("prototype") {
-        Some(property) if !property.is_accessor() => match property.value {
-            Value::Object(prototype) if !symbol::is_symbol_primitive(&prototype) => {
-                crate::Prototype::Object(prototype)
-            }
-            Value::Function(prototype) => crate::Prototype::Function(prototype),
-            _ => return None,
-        },
-        _ => return None,
-    };
+    let receiver = function.direct_instance_receiver(env.realm().atoms())?;
     let bytecode = function
         .bytecode
         .as_ref()
         .expect("direct leaf predicate requires bytecode");
     crate::diagnostics::count!(ordinary_call_attempts);
     crate::diagnostics::count!(direct_leaf_frames);
-    let receiver = function.new_instance_receiver(Some(prototype), env.realm().atoms());
     // A base class initializes its instance fields before the body runs.
     if let Some(elements) = class_fields
         && let Err(error) = initialize_direct_instance_fields(
@@ -1072,10 +1062,15 @@ fn construct_prototype_slot(
     new_target: &Value,
     env: &mut CallEnv,
 ) -> Result<Option<crate::Prototype>, RuntimeError> {
-    let prototype = prototype_value_to_slot(
-        crate::property_value(new_target.clone(), "prototype", env)?,
-        env,
-    );
+    let cached = match new_target {
+        Value::Function(function) => function.constructor_prototype_data(),
+        _ => None,
+    };
+    let value = match cached {
+        Some(value) => value,
+        None => crate::property_value(new_target.clone(), "prototype", env)?,
+    };
+    let prototype = prototype_value_to_slot(value, env);
     if prototype.is_none()
         && let Some(prototype) = cross_realm_construct_prototype_slot(target, new_target, env)?
     {

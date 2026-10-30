@@ -95,6 +95,8 @@ The implemented entry is 32 bytes: weak layout/version 16, slot 4, kind and padd
 independent live guard makes the site permanently megamorphic. Shared-own poly
 hits compare four identities in parallel; numeric consumers load a live f64
 with a value-kind check, without constructing an owning Value.
+Constructor prototype links use the same weak layout/version and live own-slot
+read. Lazy/accessor misses retain full Get; no prototype value is cached.
 A cold store-add plan uses the prefix/prototype guards described in the
 [shape contract](core-rebuild-shapes.md). Typed-loop stores explicitly exclude
 additions, preserving their invariant-read hoisting proof.

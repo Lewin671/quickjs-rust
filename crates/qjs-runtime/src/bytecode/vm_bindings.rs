@@ -642,6 +642,7 @@ impl Vm<'_> {
     /// code can run in an admitted region, so the entry proof stays valid until
     /// the loop yields; if the data-property write nevertheless declines, the
     /// caller deoptimizes before the bytecode store and replays it normally.
+    #[inline(always)]
     pub(super) fn write_typed_loop_sloppy_global(
         &mut self,
         target: &TypedLoopSloppyGlobalWrite,
@@ -659,6 +660,15 @@ impl Vm<'_> {
             self.locals[target.slot] = Some(value);
             return true;
         }
+        self.write_typed_loop_sloppy_global_slow(target, value)
+    }
+    #[cold]
+    #[inline(never)]
+    fn write_typed_loop_sloppy_global_slow(
+        &mut self,
+        target: &TypedLoopSloppyGlobalWrite,
+        value: Value,
+    ) -> bool {
         if !matches!(
             target
                 .global_this

@@ -529,19 +529,7 @@ fn inline_constructor(
         return None;
     }
     let (inline, class) = inline_entry(callee, env)?;
-    let prototype = match function.own_property("prototype") {
-        Some(property) if !property.is_accessor() => match property.value {
-            Value::Object(prototype) if !crate::symbol::is_symbol_primitive(&prototype) => {
-                prototype
-            }
-            _ => return None,
-        },
-        _ => return None,
-    };
-    let receiver = function.new_instance_receiver(
-        Some(crate::Prototype::Object(prototype)),
-        env.realm().atoms(),
-    );
+    let receiver = function.wide_instance_receiver(env.realm().atoms())?;
     Some((inline, receiver, class))
 }
 

@@ -49,6 +49,8 @@ macro_rules! declare_counters {
 }
 
 declare_counters! {
+    property_constructor_prototype_hits,
+    property_constructor_prototype_misses,
     property_arguments_template_hits,
     property_arguments_template_misses,
     property_arguments_templates_inserted,
