@@ -13,6 +13,8 @@ use std::rc::{Rc, Weak};
 use crate::property::atom::{AtomDomain, KeyId, KeyLease};
 use crate::{Property, Value};
 
+mod append_recipe;
+pub(crate) use append_recipe::AppendRecipe;
 mod edit;
 mod host;
 mod index;

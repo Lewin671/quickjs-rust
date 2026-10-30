@@ -277,7 +277,7 @@ impl ObjectRef {
 /// survives this operation or crosses an observable callback.
 pub(crate) struct OrdinaryDataWrite {
     pub(crate) result: OwnDataPropertyWrite,
-    pub(crate) cache_slot: Option<(KeyLease, usize)>,
+    pub(crate) cache_slot: Option<usize>,
     pub(crate) created: bool,
 }
 impl ObjectRef {
@@ -308,16 +308,18 @@ impl ObjectRef {
             };
         }
         let mut store = self.0.properties.borrow_mut();
+        let normalized;
         let key = if key.belongs_to(store.domain()) {
-            key.clone()
+            key
         } else {
-            store
+            normalized = store
                 .domain()
                 .find(key.as_str())
-                .unwrap_or_else(|| store.domain().intern(key.as_str()))
+                .unwrap_or_else(|| store.domain().intern(key.as_str()));
+            &normalized
         };
         let append_slot = store.len();
-        let lookup = store.lookup(&key).expect("normalized receiver key");
+        let lookup = store.lookup(key).expect("normalized receiver key");
         let (property, created) = match lookup.descriptor() {
             Some(mut property) => {
                 if property.is_accessor() {
@@ -383,8 +385,18 @@ impl ObjectRef {
         }
         OrdinaryDataWrite {
             result: OwnDataPropertyWrite::Written,
-            cache_slot: Some((key, slot)),
+            cache_slot: Some(slot),
             created,
+        }
+    }
+}
+
+impl ObjectRef {
+    pub(crate) fn note_cached_append(&self, index: bool) {
+        if index {
+            self.0
+                .index_property_count
+                .set(self.0.index_property_count.get() + 1);
         }
     }
 }

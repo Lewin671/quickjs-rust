@@ -182,6 +182,7 @@ pub(super) fn set_prop_named(
             .find(key)
             .unwrap_or_else(|| env.realm().atoms().intern(key));
         let proven = creation.is_some_and(|creation| creation.permits(object_ref));
+        let before = cache.map(|_| object_ref.with_named(|s| s.version()));
         let write = object_ref.write_or_create_data_key(&lease, &value, proven);
         match write.result {
             OwnDataPropertyWrite::Written => {
@@ -191,8 +192,8 @@ pub(super) fn set_prop_named(
                 {
                     creation.record(object_ref, key);
                 }
-                if let (Some(cache), Some((key, slot))) = (cache, write.cache_slot) {
-                    cache.record_data_slot(object_ref, &key, slot);
+                if let (Some(cache), Some(slot)) = (cache, write.cache_slot) {
+                    cache.record_data_slot(object_ref, &lease, slot, before, write.created);
                 }
                 return Ok(value);
             }

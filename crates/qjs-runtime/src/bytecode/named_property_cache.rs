@@ -9,8 +9,10 @@ use crate::value::{
 };
 use crate::{CallEnv, ObjectRef, Property, Value};
 use std::{cell::RefCell, rc::Rc};
+mod stores;
 #[cfg(test)]
 mod tests;
+use stores::AddEntry;
 #[derive(Clone, Debug)]
 pub(super) struct NamedPropertyCache(Rc<RefCell<State>>);
 #[derive(Debug, Default)]
@@ -18,6 +20,7 @@ struct State {
     entries: Entries,
     local_slot: Option<usize>,
     key: Option<WeakKeyLease>,
+    add: Option<Box<AddEntry>>,
     #[cfg(debug_assertions)]
     name: Option<String>,
 }
@@ -591,51 +594,12 @@ impl NamedPropertyCache {
             self.record_resolution(target, name, &r)
         }
     }
-    pub(super) fn record_data_slot(&self, object: &ObjectRef, key: &KeyLease, _slot: usize) {
-        self.update(object, key.as_str(), &Value::Undefined)
-    }
-    pub(super) fn write_value(&self, value: &Value, new: &Value) -> Option<OwnDataPropertyWrite> {
-        value.with_named_target(|t| self.write_target(t, new))?
-    }
-    fn write_target(&self, target: NamedTarget<'_>, value: &Value) -> Option<OwnDataPropertyWrite> {
-        let state = self.0.borrow();
-        if let Entries::Mono(e) = &state.entries
-            && e.flags & 7 == DATA
-            && e.flags & OWN != 0
-            && e.flags & WRITE_FORBIDDEN == 0
-            && e.flags & WRITABLE != 0
-        {
-            return target.write_matched_data(&e.version, e.slot, value);
-        }
-        let entry = state.entries.find(target)?;
-        if entry.flags & 7 != DATA || entry.flags & OWN == 0 || entry.flags & WRITE_FORBIDDEN != 0 {
-            return None;
-        }
-        if entry.flags & WRITABLE == 0 {
-            return Some(OwnDataPropertyWrite::ReadOnly);
-        }
-        target.write_matched_data(&entry.version, entry.slot, value)
-    }
-    pub(super) fn write(
-        &self,
-        object: &ObjectRef,
-        _name: &str,
-        value: &Value,
-    ) -> Option<OwnDataPropertyWrite> {
-        self.write_target(NamedTarget::Object(object), value)
-    }
-    pub(super) fn write_hot(
-        &self,
-        object: &ObjectRef,
-        value: &Value,
-    ) -> Option<OwnDataPropertyWrite> {
-        self.write_target(NamedTarget::Object(object), value)
-    }
     #[cfg(test)]
     pub(super) fn clear(&self) {
         let mut state = self.0.borrow_mut();
         state.entries = Entries::Empty;
         state.key = None;
+        state.add = None;
     }
 }
 /// One pure chain walk on a miss. No cell construction/registration, getters,
