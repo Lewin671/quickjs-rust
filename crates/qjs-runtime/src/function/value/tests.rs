@@ -49,7 +49,7 @@ fn ordinary_function_header_keeps_cold_identity_state_out_of_line() {
         "function auxiliary header grew to {auxiliary_size} bytes"
     );
     assert!(
-        function_data_size <= 320,
+        function_data_size <= 304,
         "function object grew to {function_data_size} bytes"
     );
 }

@@ -1274,7 +1274,7 @@ pub(crate) fn call_async_generator_function(
                 .immutable_name_binding
                 .then(|| function.name.clone())
                 .flatten()
-                .or_else(|| function.immutable_env_binding.clone()),
+                .or_else(|| function.immutable_env_binding().map(str::to_owned)),
         },
         env,
     )

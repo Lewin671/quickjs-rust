@@ -119,6 +119,9 @@ pub(crate) struct PrivateFieldInit {
 #[derive(Clone)]
 pub struct Function(Rc<FunctionData>);
 
+#[cfg(target_pointer_width = "64")]
+const _: () = assert!(std::mem::size_of::<FunctionData>() <= 304);
+
 /// A non-owning handle to a [`Function`], for caches that must not keep
 /// the function, or a cycle through its own code, alive.
 #[derive(Clone)]
@@ -141,6 +144,9 @@ impl fmt::Debug for FunctionWeakRef {
 }
 
 impl Function {
+    pub(crate) fn immutable_env_binding(&self) -> Option<&str> {
+        self.immutable_env_binding.as_deref().map(String::as_str)
+    }
     pub(crate) fn is_last_reference(&self) -> bool {
         Rc::strong_count(&self.0) == 1
     }
@@ -177,7 +183,10 @@ pub struct FunctionData {
     pub(crate) immutable_name_binding: bool,
     /// An immutable binding supplied through the captured environment rather
     /// than the function's own name, currently used for class inner names.
-    pub(crate) immutable_env_binding: Option<String>,
+    // Absent from ordinary closures; indirection keeps their Rc allocation
+    // within the 320-byte CLI size class. The binding cell remains separate.
+    #[allow(clippy::box_collection)]
+    immutable_env_binding: Option<Box<String>>,
     /// Value for the rare immutable outer name that is not represented by a
     /// compiler-generated received-upvalue slot (notably the self binding of a
     /// named function expression referenced only by a nested function).
@@ -734,7 +743,7 @@ impl Function {
         let function = Self(Rc::new(FunctionData {
             has_name_binding,
             immutable_name_binding,
-            immutable_env_binding,
+            immutable_env_binding: immutable_env_binding.map(Box::new),
             immutable_env_value,
             name,
             params,

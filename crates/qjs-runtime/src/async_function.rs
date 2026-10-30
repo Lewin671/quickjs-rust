@@ -106,7 +106,7 @@ pub(crate) fn call_async_function(
                 .immutable_name_binding
                 .then(|| function.name.clone())
                 .flatten()
-                .or_else(|| function.immutable_env_binding.clone()),
+                .or_else(|| function.immutable_env_binding().map(str::to_owned)),
         })));
 
     let result_promise = promise::new_pending_promise(env);

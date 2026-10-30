@@ -183,7 +183,7 @@ fn call_with_arguments(
                         .immutable_name_binding
                         .then(|| function.name.clone())
                         .flatten()
-                        .or_else(|| function.immutable_env_binding.clone()),
+                        .or_else(|| function.immutable_env_binding().map(str::to_owned)),
                 },
                 env,
             );
@@ -1404,19 +1404,19 @@ fn function_env<'a>(
             Value::Boolean(true),
         );
     }
-    if let Some(name) = &function.immutable_env_binding {
+    if let Some(name) = function.immutable_env_binding() {
         let captured_value = received_upvalue_value(function, bytecode, name)
             .or_else(|| function.immutable_env_value.as_ref().map(|cell| cell.get()));
         if let Some(value) = captured_value {
-            frame_env.insert(name.clone(), value);
+            frame_env.insert(name.to_owned(), value);
         }
     }
     if function.immutable_name_binding
         && let Some(name) = &function.name
     {
-        frame_env.set_immutable_function_name(name.clone());
-    } else if let Some(name) = &function.immutable_env_binding {
-        frame_env.set_immutable_function_name(name.clone());
+        frame_env.set_immutable_function_name(name.to_owned());
+    } else if let Some(name) = function.immutable_env_binding() {
+        frame_env.set_immutable_function_name(name.to_owned());
     } else if function.lexical_this
         && let Some(name) = env.immutable_function_name()
     {
@@ -1484,7 +1484,7 @@ fn can_seed_positional_call(function: &Function, bytecode: &Bytecode, env: &Call
                 .name
                 .as_deref()
                 .filter(|_| function.has_name_binding),
-            function.immutable_env_binding.as_deref(),
+            function.immutable_env_binding(),
         ]
         .into_iter()
         .flatten()
@@ -1527,7 +1527,7 @@ fn can_seed_slot_backed_call(function: &Function, bytecode: &Bytecode) -> bool {
         // immutable frame binding that normally accompanies it only serves
         // the assignment diagnostic, so a body that never assigns the name
         // can run without the binding.
-        && (function.immutable_env_binding.as_deref().is_none_or(|name| {
+        && (function.immutable_env_binding().is_none_or(|name| {
             function.is_field_initializer || bytecode.reads_immutable_env_binding_through_cell(name)
         }))
         && function.dynamic_scope_bypassed()

@@ -134,10 +134,10 @@ rate independent of the operations/programs measured.
 
 ## S2 semantic ports and verification
 
-Arrays/functions embed a 32-byte lazy authority: canonical empty layout plus
-explicit prototype, materializing the same NamedStore only on mutation. Packed
-array headers are 88 bytes; functions are 320 bytes, excluding RC headers. Named
-probes allocate no array cold data and never install unrelated function defaults.
+Arrays share a realm-owned empty authority and explicit prototype; mutation
+forks the same NamedStore into cold storage. Array headers are 56 bytes, cold
+NamedStore/holes data 104; functions embed a 32-byte lazy authority and have
+304-byte headers, excluding RC headers. Named probes allocate no array cold data.
 Original lazy property order is reserved before later keys. Function virtual
 state is part of layout flavor; hooks publish into the authority when observed.
 Every production constructor receives the realm/prototype explicitly. Realm
