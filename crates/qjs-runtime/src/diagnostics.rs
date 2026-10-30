@@ -25,7 +25,7 @@
 /// order, and the thread-local storage cannot drift apart as fields are added.
 macro_rules! declare_counters {
     ($($(#[$doc:meta])* $field:ident,)+) => {
-        /// One monotonic count per diagnosed execution event.
+        /// Execution event counts and explicitly documented current-size gauges.
         #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
         pub struct Counters {
             $($(#[$doc])* pub $field: u64,)+
@@ -82,11 +82,17 @@ declare_counters! {
     property_key_interns,
     /// ID lookup probes performed by the named-store authority.
     property_id_probes,
+    /// Cold ID-index reconstruction work, separate from operation lookup probes.
+    property_id_index_rebuilds,
+    property_id_index_rebuilt_entries,
     /// Shape transition hits and misses; hits copy no fields.
     property_transition_hits,
     property_transition_misses,
     property_shape_field_copies,
     property_shape_nodes_created,
+    /// Gauge: shape nodes retained by live domain owners, including roots.
+    /// Live uncached layouts are excluded; this returns to zero on owner drop.
+    property_cached_shape_nodes,
     /// Bodies whose named operands were linked to an atom domain. One per
     /// body and domain; a count that grows with executed operations means
     /// linking is not cached.

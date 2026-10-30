@@ -129,6 +129,10 @@ the interpreter resolves it to an atom of the frame realm's `AtomDomain`
 (`property/atom.rs`), linking each body once per domain
 (`bytecode/linked_code.rs`). Stores still key by text; the atom-keyed shape/slot
 authority is the target in [core rebuild objects](design/core-rebuild-objects.md).
+The key domain supports string and symbol-identity leases in one non-reused
+`KeyId` namespace with weak content/ID indices. `value/layout/` contains the
+isolated shape/dictionary foundation; production object stores still use the
+representation below.
 
 **Per-site caches.** `bytecode/named_property_cache.rs` caches named property
 reads and writes per instruction site, keyed by receiver layout.

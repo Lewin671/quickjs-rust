@@ -291,3 +291,128 @@ fn width_boundary_enters_dictionary_on_the_first_property_over_limit() {
     store.define(&next, data(9.0)).unwrap();
     assert!(store.layout.dictionary);
 }
+
+#[test]
+fn dictionary_swap_removal_moves_accessor_slots_but_preserves_key_order() {
+    let owner = owner();
+    let keys: Vec<_> = (0..129)
+        .map(|n| owner.domain().intern(&format!("key{n}")).unwrap())
+        .collect();
+    let mut store = owner.empty_store();
+    for key in &keys[..128] {
+        store.define(key, data(1.0)).unwrap();
+    }
+    store
+        .define(
+            &keys[128],
+            Property::accessor(
+                Some(Value::Number(7.0)),
+                Some(Value::Number(8.0)),
+                true,
+                true,
+            ),
+        )
+        .unwrap();
+    store.remove(&keys[10]).unwrap().unwrap();
+    assert_eq!(store.slot_key(10), Some(&keys[128]));
+    let accessor = store.get(&keys[128]).unwrap().unwrap();
+    assert_eq!(accessor.getter(), Some(&Value::Number(7.0)));
+    assert_eq!(accessor.setter(), Some(&Value::Number(8.0)));
+    assert_eq!(
+        store.keys(),
+        keys.iter()
+            .enumerate()
+            .filter(|(n, _)| *n != 10)
+            .map(|(_, k)| k.clone())
+            .collect::<Vec<_>>()
+    );
+    store.remove(&keys[128]).unwrap().unwrap();
+    assert!(store.accessors.is_none());
+    store.define(&keys[10], data(9.0)).unwrap();
+    assert_eq!(store.keys().last(), Some(&keys[10]));
+}
+
+#[test]
+fn dictionary_order_exhaustion_compacts_live_order_without_changing_slots() {
+    let owner = owner();
+    let mut store = owner.empty_store();
+    let keys: Vec<_> = (0..129)
+        .map(|n| owner.domain().intern(&format!("key{n}")).unwrap())
+        .collect();
+    for (n, key) in keys.iter().enumerate() {
+        store.define(key, data(n as f64)).unwrap();
+    }
+    store.remove(&keys[60]).unwrap().unwrap();
+    Rc::get_mut(&mut store.layout).unwrap().next_order = u32::MAX;
+    let fresh = owner.domain().intern("fresh").unwrap();
+    store.define(&fresh, data(1000.0)).unwrap();
+    let expected: Vec<_> = keys
+        .iter()
+        .enumerate()
+        .filter(|(n, _)| *n != 60)
+        .map(|(_, key)| key.clone())
+        .chain([fresh])
+        .collect();
+    assert_eq!(store.keys(), expected);
+    for (n, key) in keys.iter().enumerate().filter(|(n, _)| *n != 60) {
+        assert_eq!(
+            store.get(key).unwrap().unwrap().value,
+            Value::Number(n as f64)
+        );
+    }
+}
+
+#[cfg(feature = "perf-counters")]
+#[test]
+fn dictionary_insertion_consumes_one_probe_even_when_index_rebuilds() {
+    let owner = owner();
+    let mut store = owner.empty_store();
+    for n in 0..255 {
+        let key = owner.domain().intern(&format!("key{n}")).unwrap();
+        store.define(&key, data(n as f64)).unwrap();
+    }
+    let key = owner.domain().intern("triggers growth").unwrap();
+    let before = crate::diagnostics::counters().unwrap();
+    store.lookup(&key).unwrap().define(data(256.0));
+    let after = crate::diagnostics::counters().unwrap();
+    assert_eq!(after.property_id_probes - before.property_id_probes, 1);
+    assert_eq!(
+        after.property_id_index_rebuilds - before.property_id_index_rebuilds,
+        1
+    );
+    assert_eq!(
+        after.property_id_index_rebuilt_entries - before.property_id_index_rebuilt_entries,
+        256
+    );
+    assert_eq!(
+        after.property_shape_field_copies - before.property_shape_field_copies,
+        0
+    );
+    assert_eq!(after.property_key_interns - before.property_key_interns, 0);
+}
+
+#[cfg(feature = "perf-counters")]
+#[test]
+fn retention_gauge_releases_cache_ownership_while_escaping_layout_stays_live() {
+    let before = crate::diagnostics::counters()
+        .unwrap()
+        .property_cached_shape_nodes;
+    let owner = owner();
+    let key = owner.domain().intern("kept").unwrap();
+    let mut store = owner.empty_store();
+    store.define(&key, data(1.0)).unwrap();
+    assert_eq!(
+        crate::diagnostics::counters()
+            .unwrap()
+            .property_cached_shape_nodes,
+        before + 2
+    );
+    drop(owner);
+    assert_eq!(
+        crate::diagnostics::counters()
+            .unwrap()
+            .property_cached_shape_nodes,
+        before
+    );
+    assert_eq!(store.get(&key).unwrap().unwrap().value, Value::Number(1.0));
+}

@@ -1,11 +1,11 @@
 # T077: In-place core rebuild
 
-- Status: active; S1 implementation in progress on `agent/t077-s1-property-authority/codex`, base `dd0905b2`.
-- Implementation: key-ID/lease and isolated layout foundation present; ordinary objects still use their original storage pending the single cutover. All S1 paths assigned to one owner, no parallel edits.
-- Verified at: foundation milestone working tree, 2026-10-29; default fast gate: clippy clean, 2,396 runtime tests pass (before final epoch discriminator); focused atom tests 12/12 and perf-counters layout tests 13/13 pass. No S1 acceptance claim.
-- Evidence: [target](../docs/design/core-rebuild.md), [S1 brief](proposals/T077-s1-property-authority.md); foundation tests in `value/layout/tests.rs` and `property/atom/tests.rs`.
-- Unresolved: ordinary storage/constructor/cache cutover, final semantic/exact gates and deletion audit; baseline receipt remains lead-owned; S3 requires T074 decisions.
-- Next action: replace ordinary string and symbol storage together, migrate explicit owners at every construction site, and delete replaced stores. Run feature/full/NG/exact gates after cutover. Never push or merge this owner branch.
+- Status: active; S1 foundation milestones on `agent/t077-s1-property-authority/codex`, base `dd0905b2`; ordinary-object cutover pending.
+- Implementation: unified key leases, bounded shape owners and isolated NamedStore foundation present; no production object uses NamedStore yet. All S1 paths remain assigned to one owner.
+- Verified at: index milestone source tree, 2026-10-29: full `check.sh` passes (2,404 runtime tests, 5,170 subset cases), 257 NG fixtures pass, combined-feature layout tests 24/24; fast gate passes. `ace5f2ad` also passed the full gate.
+- Evidence: [S1 brief/API](proposals/T077-s1-property-authority.md), [foundation](archive/T077-s1-foundation.md), [index milestone](archive/T077-s1-index.md).
+- Unresolved: ordinary string/symbol storage, explicit-owner constructor and cache cutover; deletion inventory remains empty; complete exact scan/burndown, other-target sizes and performance standing pending; baseline receipt remains lead-owned.
+- Next action: perform the ordinary string/symbol cutover in one reviewable increment, including explicit realm/host owners, all creation/mutation paths, executor/cache consumers and old-store deletion. Run full/NG/exact gates on that candidate. Never push or merge this owner branch.
 
 ## Authority and scope
 
@@ -15,11 +15,11 @@ Route: in-place staged replacement inside qjs-runtime on main; no second engine,
 tracing GC, FFI, Rust async, benchmark-specific recognizers or old-path fallback.
 Keep slot/shared-cell identity. Delete replaced code within its replacement stage.
 
-This design unit: branch `agent/core-rebuild-design/codex`, base `6663738f`;
-only this worktree and Markdown docs/task bookkeeping. No push, merge, code/tool
-edits, frozen-evidence changes or iMac jobs.
-Later implementations use isolated owner branches from one recorded main base;
-the lead integrates sequentially. Global/shared API changes have one owner.
+The approved target originated on `agent/core-rebuild-design/codex` from
+`6663738f`. S1 implementation uses the isolated owner branch/base in the resume
+block; its single owner has all paths assigned by the self-contained brief.
+The lead owns integration and formal timing; this branch never pushes or merges.
+Global/shared API changes have one owner.
 
 ## Stage acceptance (overrides ordinary unit gates for T077 only)
 
@@ -206,11 +206,3 @@ measuring, implementers run correctness and design the next stage on isolated
 branches; no source/result drift, host timing overlap or cancellation of others.
 Every stage receipt records hashes, both relative baselines, deletions, counters,
 all local regressions, aggregate results and the lead decision in the repository.
-
-Documentation-tree verification, 2026-10-29: `git diff --check`, context and
-`PYTHONDONTWRITEBYTECODE=1 ./scripts/check-touched.sh --staged --explain` pass.
-Fast gate reports `docs-only change; skipping Rust and Test262 checks`. All
-changes are Markdown; no runtime/Cargo/scripts/executable examples changed,
-so no semantic slice/full runtime gate applies. No new conformance/performance
-standing, iMac job, push or merge. Existing frozen evidence is untouched;
-current diagnostic navigation only retargets links to the moved task files.
