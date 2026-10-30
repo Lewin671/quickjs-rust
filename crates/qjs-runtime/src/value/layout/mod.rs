@@ -22,9 +22,11 @@ use index::{IdIndex, IdProbe};
 mod lazy;
 mod prototype;
 mod slots;
+mod value_slots;
 mod version;
 pub(crate) use lazy::NamedStorage;
 pub(crate) use prototype::{PrototypeState, WeakPrototype};
+use value_slots::ValueSlots;
 pub(crate) use version::{LayoutVersion, StructuralDependency};
 #[cfg(test)]
 mod sharing_tests;
@@ -36,8 +38,8 @@ const _: () = {
     assert!(std::mem::size_of::<KeyId>() == 4);
     assert!(std::mem::size_of::<KeyLease>() == 8);
     assert!(std::mem::size_of::<ShapeEntry>() == 16);
-    assert!(std::mem::size_of::<NamedStore>() == 56);
-    assert!(std::mem::size_of::<RefCell<NamedStore>>() == 64);
+    assert!(std::mem::size_of::<NamedStore>() == 64);
+    assert!(std::mem::size_of::<RefCell<NamedStore>>() == 72);
     assert!(std::mem::size_of::<Value>() == 16);
 };
 
@@ -170,7 +172,7 @@ impl PropertyOwner {
     pub(crate) fn empty_store(&self) -> NamedStore {
         NamedStore {
             layout: self.0.root.clone(),
-            values: Vec::new(),
+            values: ValueSlots::Empty,
             accessors: None,
             epoch: 0,
             prototype: None,
@@ -186,7 +188,7 @@ type AccessorSlots = HashMap<u32, Rc<super::property::AccessorState>>;
 
 pub(crate) struct NamedStore {
     layout: Rc<Layout>,
-    values: Vec<Value>,
+    values: ValueSlots,
     accessors: Option<Box<AccessorSlots>>,
     epoch: u64,
     prototype: Option<Rc<crate::Prototype>>,

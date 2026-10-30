@@ -493,7 +493,7 @@ struct ObjectData {
 }
 
 #[cfg(target_pointer_width = "64")]
-const _: () = assert!(std::mem::size_of::<ObjectData>() == 80);
+const _: () = assert!(std::mem::size_of::<ObjectData>() == 88);
 
 #[derive(Default)]
 struct ObjectColdData {
@@ -798,7 +798,13 @@ impl ObjectRef {
         prototype: Option<ObjectRef>,
         domain: &crate::property::atom::AtomDomain,
     ) -> Self {
-        Self::with_literal_properties(shape, Vec::from(values), prototype, domain)
+        if shape.input_len() != 2 || shape.unique_len() != 2 {
+            return Self::with_literal_properties(shape, Vec::from(values), prototype, domain);
+        }
+        let prototype = prototype.map(Prototype::Object);
+        let store =
+            NamedStore::from_data_pair(shape.linked_layout(domain, prototype.as_ref()), values);
+        Self::from_named(store, prototype, shape.index_property_count)
     }
 
     /// The generator [[GeneratorState]] cell for this object. Non-generator

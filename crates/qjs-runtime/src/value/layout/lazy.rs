@@ -30,7 +30,7 @@ impl NamedStorage {
             let store = NamedStore {
                 layout: layout.clone(),
                 prototype: prototype.clone(),
-                values: Vec::new(),
+                values: ValueSlots::Empty,
                 accessors: None,
                 epoch: 0,
             };

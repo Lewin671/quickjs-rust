@@ -11,6 +11,13 @@ impl NamedStore {
         self.values.reserve(capacity);
     }
     pub(crate) fn from_data_layout(layout: Rc<Layout>, values: Vec<Value>) -> Self {
+        Self::from_slots(layout, ValueSlots::from_vec(values))
+    }
+    /// Unique two-key input is already in slot order and needs no Vec allocation.
+    pub(crate) fn from_data_pair(layout: Rc<Layout>, values: [Value; 2]) -> Self {
+        Self::from_slots(layout, ValueSlots::pair(values))
+    }
+    fn from_slots(layout: Rc<Layout>, values: ValueSlots) -> Self {
         let layout = if layout.dictionary {
             Rc::new(layout.copied(true))
         } else {

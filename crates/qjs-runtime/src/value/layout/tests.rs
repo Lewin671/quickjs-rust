@@ -12,8 +12,8 @@ fn physical_budgets() {
     assert_eq!(std::mem::size_of::<KeyId>(), 4);
     assert_eq!(std::mem::size_of::<KeyLease>(), 8);
     assert_eq!(std::mem::size_of::<ShapeEntry>(), 16);
-    assert_eq!(std::mem::size_of::<NamedStore>(), 56);
-    assert_eq!(std::mem::size_of::<RefCell<NamedStore>>(), 64);
+    assert_eq!(std::mem::size_of::<NamedStore>(), 64);
+    assert_eq!(std::mem::size_of::<RefCell<NamedStore>>(), 72);
 }
 
 #[test]
@@ -505,4 +505,34 @@ fn reconfiguration_at_width_limit_uses_the_edit_budget_not_append_threshold() {
             .unwrap();
     }
     assert!(store.is_dictionary());
+}
+
+#[test]
+fn small_slot_growth_deletion_and_descriptors_preserve_values_and_order() {
+    let owner = PropertyOwner::new(AtomDomain::new());
+    let a = owner.domain().intern("a");
+    let b = owner.domain().intern("b");
+    let c = owner.domain().intern("c");
+    let mut store = owner.empty_store();
+    store
+        .define(&a, Property::enumerable(Value::Number(1.0)))
+        .unwrap();
+    store
+        .define(&b, Property::accessor(None, None, true, true))
+        .unwrap();
+    assert!(store.get(&b).unwrap().unwrap().is_accessor());
+    store
+        .define(&c, Property::enumerable(Value::Number(3.0)))
+        .unwrap();
+    store.remove(&b).unwrap();
+    assert_eq!(store.text_keys(), ["a", "c"]);
+    assert_eq!(store.get(&a).unwrap().unwrap().value, Value::Number(1.0));
+    assert_eq!(store.get(&c).unwrap().unwrap().value, Value::Number(3.0));
+    store.remove(&c).unwrap();
+    store.remove(&a).unwrap();
+    assert!(store.is_empty());
+    store
+        .define(&b, Property::enumerable(Value::Number(7.0)))
+        .unwrap();
+    assert_eq!(store.get(&b).unwrap().unwrap().value, Value::Number(7.0));
 }

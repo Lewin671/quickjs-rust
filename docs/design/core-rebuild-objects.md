@@ -40,15 +40,15 @@ reads never intern, and mutation/COW clears the memo. No receiver/domain is pinn
 | Type | Fields / size |
 | --- | --- |
 | `ShapeEntry` | `key:u32, slot:u32, order:u32, attrs:u16, reserved:u16` = 16 bytes |
-| `NamedStore` | `layout:Rc<Layout>` 8, `values:Vec<Value>` 24, `accessors:Option<Box<AccessorSlots>>` 8, `epoch:u64` 8, strong prototype owner 8 = 56 bytes; `RefCell` wrapper 64 |
-| Ordinary hot payload | `named:RefCell<NamedStore>` 64, cold pointer 8, index count 4, packed flags/edit count/padding 4 = 80 bytes, excluding RC header |
+| `NamedStore` | `layout:Rc<Layout>` 8, `values:ValueSlots` 32, `accessors:Option<Box<AccessorSlots>>` 8, `epoch:u64` 8, strong prototype owner 8 = 64 bytes; `RefCell` wrapper 72 |
+| Ordinary hot payload | `named:RefCell<NamedStore>` 72, cold pointer 8, index count 4, packed flags/edit count/padding 4 = 88 bytes, excluding RC header |
 | `Slot` | One owning `Value`: initially 16 bytes, S5 target 8; TDZ/hole state separate from ordinary data |
 | `Layout` | Immutable shape or unique dictionary; ID/domain, owned entries/key leases and one key-ID lookup index; transition cache is cold |
 | `Dictionary` | Private identity + `u64` structural version; key-ID index, attributes/order and slot allocation are its sole authority |
 
 Compile-time assertions verify these sizes on aarch64/x86_64 macOS; a layout
-estimate alone is no ABI proof. Values remain in a keyless vector, with no pair
-of inline Values enlarging the ordinary header.
+estimate alone is no ABI proof. Values remain keyless: zero/one/two slots are inline; larger stores use one
+heap vector. Direct pair literals allocate no temporary slot buffer.
 Slot storage may pool capacity, never keys. Accessor slots hold `undefined` in
 the value vector and their getter/setter pair in the cold slot-indexed table;
 the shape decides descriptor kind. Bulk descriptor APIs construct `Property`

@@ -196,7 +196,7 @@ impl NamedStore {
         let strong = Self::retain_prototype(&layout, prototype);
         Self {
             layout,
-            values: Vec::new(),
+            values: ValueSlots::Empty,
             accessors: None,
             epoch: 0,
             prototype: strong,
