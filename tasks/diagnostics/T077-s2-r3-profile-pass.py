@@ -1,7 +1,7 @@
 """One exact-image root-cause pass; sample self counts and static disassembly."""
 from pathlib import Path
 from collections import Counter
-import argparse, dataclasses, hashlib, json, os, re, subprocess, sys
+import argparse, bisect, dataclasses, hashlib, json, os, re, subprocess, sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from tools.benchmark.screen import counter_tool, sample
 from tools.benchmark.layout_symbols import parse_symbol
@@ -52,10 +52,18 @@ for role, binary in binaries.items():
  symbols = text_symbols(binary)
  counts = Counter()
  process = subprocess.Popen(['otool', '-tvV', str(binary)], stdout=subprocess.PIPE, text=True)
- current = None
+ # Attribute decoded addresses to unique nm extents; printed labels may be
+ # aliases or local labels and are not reliable function boundaries.
+ ranges = sorted((symbols.address_of(raw), symbols.size_of(raw), raw)
+                 for raw in symbols.names if symbols.size_of(raw))
+ starts = [row[0] for row in ranges]
  for line in process.stdout:
-  if line.rstrip().endswith(':') and not line[0].isspace(): current = line.strip()[:-1]
-  elif current and re.match(r'^[0-9a-fA-F]{16}\s+[a-z]', line): counts[current] += 1
+  match = re.match(r'^([0-9a-fA-F]{16})\s+[a-z]', line)
+  if not match: continue
+  address = int(match[1], 16); index = bisect.bisect_right(starts, address) - 1
+  if index < 0: continue
+  start, extent, raw = ranges[index]
+  if address < start + extent: counts[raw] += 1
  assert process.wait() == 0
  static[role] = {raw: {'canonical': canonical(raw), 'decoded_instructions': count, 'extent_bytes': symbols.size_of(raw), 'address': symbols.address_of(raw)} for raw, count in counts.items()}
 (a.output / 'static-functions.json').write_text(json.dumps(static, indent=2))
