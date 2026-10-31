@@ -41,7 +41,9 @@ cases = ['development/diff/compare', 'development/lodash/transform',
 records = []
 for case in cases:
     raw = a.triage / 'variant0' / (case.replace('/', '--') + '.jsonl')
-    argv = json.loads(raw.read_text().splitlines()[0])['argv'][1:]
+    rows = [json.loads(line) for line in raw.read_text().splitlines()]
+    measured = max(rows, key=lambda row: int(row['argv'][-1])) if case.startswith(('broad/', 'sentinel/')) else rows[-1]
+    argv = measured['argv'][1:]
     outputs = {}
     record = {'case': case, 'argv_without_binary': argv, 'roles': {}}
     for role, build in roles.items():

@@ -1,11 +1,11 @@
 # T077 S2 follow-up, lead feedback round 2
 
-- Status: active; A–D implemented, final qualification in progress.
+- Status: active; B–D implemented, A performance repair still open; final qualification paused pending instruction acceptance.
 - Implementation: A–D present, with shared-epoch cleanup at `6bf1055b`; current repair stops retaining otherwise unused empty roots. Current x86 order regenerated from `3c6ce3d7` (job below).
 - Verified at: native full check on `362d1bf0` passes 2,519 runtime tests/5,170 curated cases; all 268 NG fixtures cached/off/verify; eight x86 cycle tests. Preliminary owned-child RSS meets <=1.25. Final exact/performance/resource results pending.
 - Evidence: this record and the named job/artifact receipts below; [round 1](T077-s2-followup.md) is historical.
 - Unresolved: final per-lane instruction/wall limits, exact cached/off with burndown, complete native/x86 resource gates.
-- Next action: collect final jobs and exact summaries; no origin push or merge.
+- Next action: focused instruction replays on restored guard code; freeze a passing source before final full/exact/resource replays. No origin push or merge.
 
 
 ## Authority and ordered scope
@@ -220,3 +220,22 @@ All 268 NG fixtures pass cached/off/IC-verify (debug verify uses two workers at
 the original ten-second timeout after the initial parallel-load timeout).
 An inline annotation on tiny/indexed probe dispatch gives no useful native
 instruction reduction and is reverted without committing a runtime change.
+
+
+Relinked `5b2728ef`, job `20261031T121533Z-t077-s2fu-r2-relinked-public86`,
+passes strict audit and collects 430 valid pairs without invalid/heavy pairs.
+Wall/instruction ratios: development 0.999139/1.007950; external
+0.999616/1.006343; broad 0.995045/1.003246; sentinel 0.937821/0.998041.
+A still fails. Restore the earlier direct `matches_layout` own-guard expression;
+the explicit short-circuit experiment worsens the generated engine. Do not
+restart expensive final scans until instruction diagnostics identify a candidate.
+The partial cached/off scans on superseded 5b2728ef are stopped without burndown.
+Native release at 5b2728ef exactly reproduces 3c6ce3d7 SHA-256
+`b419ab0bde59761f486e48c7cc4c2fbd746ae7836478831cac81c938db75ec84`;
+full check, 268 fixtures in all modes and a real agent start/report smoke pass.
+The native resource replay overlaps the order-file fast gate and is rejected
+for timing acceptance despite its load monitor missing the brief CLI tests.
+A final quiet replay remains due. Diagnostic counter replays now choose measured
+internal argv rather than their initial calibration sizes; a focused instruction
+helper retains two N/2N pairs (startup-subtracted for internal cases), without
+making acceptance or wall-time claims.
