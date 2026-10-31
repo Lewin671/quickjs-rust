@@ -291,3 +291,12 @@ two fields. This removes hashing for all narrow layouts, independent of source
 or access sequence. A focused prefix test crosses promotion and then forks a
 four-field prefix with a different fifth descriptor, exercising proof refresh
 and hidden-tail rejection. Final instructions/resources still decide acceptance.
+
+
+Threshold-only `269b3c5f`, job `20261031T130305Z-t077-s2fu-r2-linear-four`,
+does not improve dynamic read (1.041006 versus b731ea83 1.036241). Keep the
+allocation threshold, but choose own-data reads by Layout's visible prefix,
+not the append-only buffer's physical width. Read narrow prefixes directly as
+ShapeEntry; wide layouts necessarily have an index and skip the generic mode
+branch. Both paths count exactly one probe and reject hidden shared-tail keys.
+The promotion/fork test now checks direct data reads in both paths as well.

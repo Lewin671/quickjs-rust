@@ -1,5 +1,6 @@
 //! Regression proofs for sharing, prefix lookup, retention and integrity edits.
 use super::*;
+use crate::value::OwnDataPropertyRead;
 fn data() -> Property {
     Property::enumerable(Value::Number(1.0))
 }
@@ -41,6 +42,18 @@ fn prefix_forks_preserve_keys_and_descriptors_across_index_promotion() {
     longer.define(&keys[4], data()).unwrap();
     assert!(Rc::ptr_eq(&prefix.layout.data, &longer.layout.data));
     assert!(prefix.get(&keys[4]).unwrap().is_none());
+    assert!(matches!(
+        prefix.read_data_slot(&keys[4]).0,
+        OwnDataPropertyRead::Missing
+    ));
+    for key in &keys[..4] {
+        assert!(
+            matches!(prefix.read_data_slot(key).0, OwnDataPropertyRead::Data(v) if v == Value::Number(1.0))
+        );
+    }
+    assert!(
+        matches!(longer.read_data_slot(&keys[4]).0, OwnDataPropertyRead::Data(v) if v == Value::Number(1.0))
+    );
     prefix
         .define(&keys[4], Property::non_enumerable(Value::Number(9.0)))
         .unwrap();

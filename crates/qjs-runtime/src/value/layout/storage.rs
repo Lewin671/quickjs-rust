@@ -158,7 +158,17 @@ impl Layout {
     }
     pub(super) fn entry_for_key(&self, key: KeyId) -> Option<ShapeEntry> {
         let data = self.data.borrow();
-        let position = data.probe(key, true).position?;
+        crate::diagnostics::count!(property_id_probes);
+        // A shared tail can be wider than this receiver. Choose the read path
+        // by its visible prefix, never by another shape's future fields.
+        if self.len <= LINEAR_WIDTH {
+            return data.entries[..self.len]
+                .iter()
+                .find(|entry| entry.key == key)
+                .copied();
+        }
+        debug_assert!(data.index.allocated());
+        let position = data.index.probe_uncounted(key).position?;
         (position < self.len).then(|| data.entries[position])
     }
     pub(super) fn verify_position(&self, key: KeyId) -> Option<usize> {
