@@ -67,9 +67,12 @@ impl CacheData {
         if !policy.enabled {
             return;
         }
-        // Ordinary empty receivers defer roots until admission. Publish the
-        // root once so inherited hits use the normal direct layout guard.
-        // Array/function empty authorities already carry their final root.
+        // Publish ordinary bound metadata once so own hits stay direct.
+        // Present array/function named slots prove Full storage and publish too.
+        // Compact Empty authorities already carry their root, but Full storage
+        // can be cleared and rebased to a seed. Missing/inherited/virtual cases
+        // retain the general cold guard until publication; do not allocate a
+        // Full authority solely to record a pure empty/virtual read.
         match target {
             NamedTarget::Object(o) => o.with_named_mut(NamedStore::materialize_layout),
             NamedTarget::Map(m) => m
