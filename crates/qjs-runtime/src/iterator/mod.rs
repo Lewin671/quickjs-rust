@@ -117,8 +117,11 @@ pub(crate) fn install_iterator(
     global_this: &Value,
     object_prototype: ObjectRef,
 ) {
-    let iterator_prototype =
-        ObjectRef::with_prototype(HashMap::new(), Some(object_prototype.clone()));
+    let iterator_prototype = ObjectRef::with_prototype(
+        HashMap::new(),
+        Some(object_prototype.clone()),
+        env.realm().atoms(),
+    );
 
     // Lazy helper methods.
     for (name, length, native) in [
@@ -137,7 +140,13 @@ pub(crate) fn install_iterator(
     ] {
         iterator_prototype.define_non_enumerable(
             name.to_owned(),
-            Value::Function(Function::new_native(Some(name), length, native, false)),
+            Value::Function(Function::new_native(
+                Some(name),
+                length,
+                native,
+                false,
+                env.realm(),
+            )),
         );
     }
 
@@ -150,6 +159,7 @@ pub(crate) fn install_iterator(
                 0,
                 NativeFunction::IteratorPrototypeIterator,
                 false,
+                env.realm(),
             ))),
         );
     }
@@ -161,6 +171,7 @@ pub(crate) fn install_iterator(
                 0,
                 NativeFunction::IteratorPrototypeDispose,
                 false,
+                env.realm(),
             ))),
         );
     }
@@ -178,12 +189,14 @@ pub(crate) fn install_iterator(
                     0,
                     NativeFunction::IteratorPrototypeToStringTagGet,
                     false,
+                    env.realm(),
                 ))),
                 Some(Value::Function(Function::new_native(
                     Some("set [Symbol.toStringTag]"),
                     1,
                     NativeFunction::IteratorPrototypeToStringTagSet,
                     false,
+                    env.realm(),
                 ))),
                 false,
                 true,
@@ -198,12 +211,14 @@ pub(crate) fn install_iterator(
                 0,
                 NativeFunction::IteratorPrototypeConstructorGet,
                 false,
+                env.realm(),
             ))),
             Some(Value::Function(Function::new_native(
                 Some("set constructor"),
                 1,
                 NativeFunction::IteratorPrototypeConstructorSet,
                 false,
+                env.realm(),
             ))),
             false,
             true,
@@ -212,8 +227,11 @@ pub(crate) fn install_iterator(
 
     // `%IteratorHelperPrototype%` inherits `%Iterator.prototype%`, exposes
     // `next`/`return`, and carries the "Iterator Helper" toStringTag.
-    let helper_prototype =
-        ObjectRef::with_prototype(HashMap::new(), Some(iterator_prototype.clone()));
+    let helper_prototype = ObjectRef::with_prototype(
+        HashMap::new(),
+        Some(iterator_prototype.clone()),
+        env.realm().atoms(),
+    );
     helper_prototype.define_non_enumerable(
         "next".to_owned(),
         Value::Function(Function::new_native(
@@ -221,6 +239,7 @@ pub(crate) fn install_iterator(
             0,
             NativeFunction::IteratorHelperPrototypeNext,
             false,
+            env.realm(),
         )),
     );
     helper_prototype.define_non_enumerable(
@@ -230,6 +249,7 @@ pub(crate) fn install_iterator(
             0,
             NativeFunction::IteratorHelperPrototypeReturn,
             false,
+            env.realm(),
         )),
     );
     if let Some(tag_symbol) = symbol::to_string_tag_symbol(env) {
@@ -245,50 +265,59 @@ pub(crate) fn install_iterator(
     }
 
     // The `Iterator` constructor: not directly constructable, subclassable.
-    let iterator_function =
-        Function::new_native(Some("Iterator"), 0, NativeFunction::Iterator, true);
-    iterator_function.properties.borrow_mut().insert(
+    let iterator_function = Function::new_native(
+        Some("Iterator"),
+        0,
+        NativeFunction::Iterator,
+        true,
+        env.realm(),
+    );
+    iterator_function.define_property(
         "prototype".to_owned(),
         Property::fixed_non_enumerable(Value::Object(iterator_prototype.clone())),
     );
-    iterator_function.properties.borrow_mut().insert(
+    iterator_function.define_property(
         "__quickjsRustRealmIteratorPrototype".to_owned(),
         Property::fixed_non_enumerable(Value::Object(iterator_prototype.clone())),
     );
-    iterator_function.properties.borrow_mut().insert(
+    iterator_function.define_property(
         "from".to_owned(),
         Property::non_enumerable(Value::Function(Function::new_native(
             Some("from"),
             1,
             NativeFunction::IteratorFrom,
             false,
+            env.realm(),
         ))),
     );
-    iterator_function.properties.borrow_mut().insert(
+    iterator_function.define_property(
         "concat".to_owned(),
         Property::non_enumerable(Value::Function(Function::new_native(
             Some("concat"),
             0,
             NativeFunction::IteratorConcat,
             false,
+            env.realm(),
         ))),
     );
-    iterator_function.properties.borrow_mut().insert(
+    iterator_function.define_property(
         "zip".to_owned(),
         Property::non_enumerable(Value::Function(Function::new_native(
             Some("zip"),
             1,
             NativeFunction::IteratorZip,
             false,
+            env.realm(),
         ))),
     );
-    iterator_function.properties.borrow_mut().insert(
+    iterator_function.define_property(
         "zipKeyed".to_owned(),
         Property::non_enumerable(Value::Function(Function::new_native(
             Some("zipKeyed"),
             1,
             NativeFunction::IteratorZipKeyed,
             false,
+            env.realm(),
         ))),
     );
 
@@ -303,7 +332,11 @@ pub(crate) fn install_iterator(
         BuiltinIteratorKind::Set,
         BuiltinIteratorKind::RegExpString,
     ] {
-        let prototype = ObjectRef::with_prototype(HashMap::new(), Some(iterator_prototype.clone()));
+        let prototype = ObjectRef::with_prototype(
+            HashMap::new(),
+            Some(iterator_prototype.clone()),
+            env.realm().atoms(),
+        );
         prototype.define_non_enumerable(
             "next".to_owned(),
             Value::Function(Function::new_native(
@@ -311,6 +344,7 @@ pub(crate) fn install_iterator(
                 0,
                 kind.next_native(),
                 false,
+                env.realm(),
             )),
         );
         if let Some(tag_symbol) = symbol::to_string_tag_symbol(env) {

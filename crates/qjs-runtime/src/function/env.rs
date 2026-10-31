@@ -19,6 +19,8 @@
 //! (getters, setters, Proxy traps, `valueOf`/`toString`, iterators): callers
 //! copy the needed value out, drop the borrow, then call.
 
+mod construction;
+
 use std::{
     cell::{OnceCell, RefCell},
     collections::{HashMap, HashSet},
@@ -56,9 +58,16 @@ pub(crate) struct RealmState {
     /// by literals, classes, or abstract operations that name an intrinsic.
     object_prototype: OnceCell<ObjectRef>,
     array_prototype: OnceCell<ObjectRef>,
+    /// Intrinsic arguments schemas contain only descriptor metadata and this
+    /// realm's well-known symbols; their actual values/accessors stay per object.
+    arguments_layouts: RefCell<Vec<Rc<crate::value::layout::Layout>>>,
+    array_named_seed: OnceCell<Rc<crate::value::layout::NamedStorage>>,
+    function_prototype: OnceCell<crate::Prototype>,
+    function_constructor: OnceCell<Function>,
     /// Stable `%String.prototype%` identity used by primitive String reads.
     /// The mutable global `String` binding is not the intrinsic authority.
     string_prototype: OnceCell<ObjectRef>,
+    string_wrapper_layout: OnceCell<crate::value::layout::StringWrapperLayout>,
     /// Stable `%Number.prototype%` identity used by primitive Number reads.
     number_prototype: OnceCell<ObjectRef>,
     /// The realm's well-known symbols, in `symbol::WELL_KNOWN_SYMBOL_NAMES`
@@ -81,7 +90,7 @@ pub(crate) struct RealmState {
     /// The property-name atom domain. A realm derived from another (a
     /// dynamic-function scope) shares its parent's domain because the two
     /// exchange objects; an independent root owns a fresh one.
-    atoms: AtomDomain,
+    property_owner: crate::value::layout::PropertyOwner,
 }
 
 impl RealmState {
@@ -106,7 +115,12 @@ impl RealmState {
             bindings: DynamicBindings::from_values(bindings),
             object_prototype: OnceCell::new(),
             array_prototype: OnceCell::new(),
+            arguments_layouts: RefCell::default(),
+            array_named_seed: OnceCell::new(),
+            function_prototype: OnceCell::new(),
+            function_constructor: OnceCell::new(),
             string_prototype: OnceCell::new(),
+            string_wrapper_layout: OnceCell::new(),
             number_prototype: OnceCell::new(),
             well_known_symbols: OnceCell::new(),
             string_object_keys: crate::string::StringObjectKeys::default(),
@@ -114,7 +128,7 @@ impl RealmState {
             dynamic_function_realm_global: RefCell::new(dynamic_function_realm_global),
             direct_eval_cache: RefCell::new(DirectEvalCache::default()),
             regexp_programs: RefCell::default(),
-            atoms,
+            property_owner: crate::value::layout::PropertyOwner::new(atoms.clone()),
         };
         if let Some(prototype) = object_prototype {
             let _ = realm.object_prototype.set(prototype);
@@ -136,7 +150,7 @@ impl RealmState {
     /// The property-name atom domain this realm's code links against.
     #[inline]
     pub(crate) fn atoms(&self) -> &AtomDomain {
-        &self.atoms
+        self.property_owner.domain()
     }
 
     pub(crate) fn initialize_object_prototype(&self, prototype: ObjectRef) {
@@ -153,6 +167,24 @@ impl RealmState {
         );
     }
 
+    pub(crate) fn initialize_function_prototype(&self, prototype: crate::Prototype) {
+        assert!(
+            self.function_prototype.set(prototype).is_ok(),
+            "Function.prototype initialized twice"
+        );
+    }
+    pub(crate) fn function_prototype(&self) -> Option<crate::Prototype> {
+        self.function_prototype.get().cloned()
+    }
+    pub(crate) fn initialize_function_constructor(&self, constructor: Function) {
+        assert!(
+            self.function_constructor.set(constructor).is_ok(),
+            "Function constructor initialized twice"
+        );
+    }
+    pub(crate) fn function_constructor(&self) -> Option<Function> {
+        self.function_constructor.get().cloned()
+    }
     pub(crate) fn initialize_number_prototype(&self, prototype: ObjectRef) {
         assert!(
             self.number_prototype.set(prototype).is_ok(),

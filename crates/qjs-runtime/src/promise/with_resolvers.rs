@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::{Function, ObjectRef, RuntimeError, Value};
 
 use super::{PROMISE_OBJECT_PROTOTYPE, capability::new_promise_capability};
@@ -13,13 +11,14 @@ pub(crate) fn native_promise_with_resolvers(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let capability = new_promise_capability(&this_value, env)?;
-    let result = ObjectRef::with_prototype(
-        HashMap::from([
+    let result = ObjectRef::with_ordered_prototype(
+        vec![
             ("promise".to_owned(), capability.promise),
             ("resolve".to_owned(), capability.resolve),
             ("reject".to_owned(), capability.reject),
-        ]),
+        ],
         object_prototype(function),
+        env.realm().atoms(),
     );
     Ok(Value::Object(result))
 }

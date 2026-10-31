@@ -2,7 +2,8 @@ use super::ObjectRef;
 
 impl ObjectRef {
     fn mark_typed_array_exotic(&self) {
-        self.0.typed_array_exotic.set(true);
+        self.0.set_flag(super::flags::TYPED_ARRAY, true);
+        self.refresh_named_flavor();
     }
 
     pub(crate) fn install_typed_array_slots(&self, slots: crate::typed_array::TypedArraySlots) {
@@ -21,6 +22,6 @@ impl ObjectRef {
     }
 
     pub(crate) fn is_typed_array_exotic(&self) -> bool {
-        self.0.typed_array_exotic.get()
+        self.0.flag(super::flags::TYPED_ARRAY)
     }
 }

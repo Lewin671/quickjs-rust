@@ -153,7 +153,7 @@ pub(super) fn string_substring_index(
     }
 }
 
-pub(super) fn canonical_string_index(key: &str) -> Option<usize> {
+pub(crate) fn canonical_string_index(key: &str) -> Option<usize> {
     if key.is_empty() {
         return None;
     }

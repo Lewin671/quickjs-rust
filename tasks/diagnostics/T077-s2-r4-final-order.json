@@ -1,0 +1,19 @@
+{
+  "job": "20261031T025507Z-t077-s2-r4-frozen-x86-order",
+  "runtime_source": "dc710e4b",
+  "canonical_input": {
+    "revision": "dc710e4b",
+    "path": "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261031T025457Z-t077-s2-r4-frozen-source-counters/out/canonical/qjs",
+    "sha256": "9e7ff5169017994044778d28adcb76ced19c0f841a9e79a392b7c3223657eec2",
+    "cache_hit": false,
+    "cache_key": "616b4fb6db73862d8f2b22d3aa788bcff575e213631377754fa3785cd24693ca",
+    "cache_spec_sha256": "1a3d4f7b42f91e789b775756f9ff930bfc3c6c634436da6aa12f1bee879aaba4"
+  },
+  "generator": "python3 -m tools.benchmark.order_file --binary <canonical> --output crates/qjs-cli/hot-functions-x86_64.order",
+  "case_set": "generator defaults: external/sentinel/broad only; no development or held-out",
+  "ranked_symbols": 467,
+  "order_sha256": "1914e0e94d2d13dfe23c3e46f1dcff4e28f0a5fcba14c1008056bf3922f329af",
+  "arm64_order_sha256": "978820e5ef704ae26f5f791b0a63229a326124f8eae795cda84c85f2c68bf3df",
+  "build_rs_sha256": "ef3d5d3daa2cc2d46b613e11e3c5b5d1b8afee05a6f9859beb2f706ae454aced",
+  "pins": "unchanged default conventions, wide offset 0x400; no offset/address search"
+}

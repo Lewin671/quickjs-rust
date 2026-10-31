@@ -7,12 +7,10 @@
 //! runs a loop's program at the loop's backedge without building an
 //! interpreter frame first.
 
-use std::rc::Rc;
-
 use super::super::vm::Vm;
 use super::super::vm_bindings::TypedLoopSloppyGlobalWrite;
 use crate::function::CallEnv;
-use crate::{ArrayRef, ObjectRef, Property, RuntimeError, Value};
+use crate::{ArrayRef, Property, RuntimeError, Value};
 
 pub(in crate::bytecode) trait LoopFrame {
     /// The environment calls and realm lookups made by the program use.
@@ -39,12 +37,7 @@ pub(in crate::bytecode) trait LoopFrame {
     /// Whether `array` uses the realm's `Array.prototype` and nothing on
     /// that chain has an own indexed property an element access could meet.
     fn array_access_is_plain(&mut self, array: &ArrayRef) -> bool;
-    fn try_create_ordinary_own_data_property(
-        &self,
-        object: &ObjectRef,
-        key: Rc<str>,
-        value: &Value,
-    ) -> bool;
+
     fn prepare_typed_loop_sloppy_global_write(
         &self,
         slot: usize,
@@ -120,16 +113,6 @@ impl LoopFrame for Vm<'_> {
             && !self
                 .array_prototype_chain_has_index_hazard()
                 .unwrap_or(true)
-    }
-
-    #[inline]
-    fn try_create_ordinary_own_data_property(
-        &self,
-        object: &ObjectRef,
-        key: Rc<str>,
-        value: &Value,
-    ) -> bool {
-        Vm::try_create_ordinary_own_data_property(self, object, key, value)
     }
 
     #[inline]

@@ -61,8 +61,13 @@ pub(crate) fn native_reflect_set_prototype_of(
                 message: "Reflect.setPrototypeOf prototype must be an object or null".to_owned(),
             });
         }
-        Value::Object(_) | Value::Array(_) | Value::Function(_) | Value::Proxy(_) | Value::Null => {
-        }
+        Value::Object(_)
+        | Value::Map(_)
+        | Value::Set(_)
+        | Value::Array(_)
+        | Value::Function(_)
+        | Value::Proxy(_)
+        | Value::Null => {}
         _ => {
             return Err(RuntimeError {
                 thrown: None,

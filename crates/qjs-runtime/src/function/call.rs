@@ -183,7 +183,7 @@ fn call_with_arguments(
                         .immutable_name_binding
                         .then(|| function.name.clone())
                         .flatten()
-                        .or_else(|| function.immutable_env_binding.clone()),
+                        .or_else(|| function.immutable_env_binding().map(str::to_owned)),
                 },
                 env,
             );
@@ -469,23 +469,13 @@ pub(crate) fn try_construct_direct_leaf_function(
         }
         None
     };
-    let prototype = match function.own_property("prototype") {
-        Some(property) if !property.is_accessor() => match property.value {
-            Value::Object(prototype) if !symbol::is_symbol_primitive(&prototype) => {
-                crate::Prototype::Object(prototype)
-            }
-            Value::Function(prototype) => crate::Prototype::Function(prototype),
-            _ => return None,
-        },
-        _ => return None,
-    };
+    let receiver = function.direct_instance_receiver(env.realm().atoms())?;
     let bytecode = function
         .bytecode
         .as_ref()
         .expect("direct leaf predicate requires bytecode");
     crate::diagnostics::count!(ordinary_call_attempts);
     crate::diagnostics::count!(direct_leaf_frames);
-    let receiver = ObjectRef::with_prototype_slot(HashMap::new(), Some(prototype));
     // A base class initializes its instance fields before the body runs.
     if let Some(elements) = class_fields
         && let Err(error) = initialize_direct_instance_fields(
@@ -628,9 +618,7 @@ pub(crate) fn initialize_direct_instance_fields(
         let key = field
             .shared_string_key()
             .expect("direct construct admission requires string keys");
-        if receiver.is_extensible() && !receiver.has_own_property(key) {
-            receiver.set_shared_key(key.clone(), value);
-        } else {
+        if !receiver.install_shared_class_field(key, &value, &field.definition_plan) {
             let mut define_env = env.empty_frame();
             crate::bytecode::install_field_value(
                 &Value::Object(receiver.clone()),
@@ -693,7 +681,8 @@ fn class_constructor_call_error(function: &Function) -> RuntimeError {
         ..
     }) = function.own_property(CROSS_REALM_TYPE_ERROR_PROTOTYPE)
     {
-        let error = ObjectRef::with_prototype(HashMap::new(), Some(prototype));
+        let error =
+            ObjectRef::with_prototype(HashMap::new(), Some(prototype.clone()), &prototype.domain());
         return RuntimeError {
             thrown: Some(Box::new(Value::Object(error))),
             message,
@@ -730,7 +719,7 @@ pub(crate) fn initialize_instance_fields(
             let installed = segments.install(&elements, next, object);
             if installed != 0 {
                 for element in &elements[next..next + installed] {
-                    let (key, _) =
+                    let (key, _, _) =
                         constant_public_field(element).expect("installed constant field");
                     env.sync_realm_global_object_property(object, key);
                 }
@@ -749,14 +738,8 @@ pub(crate) fn initialize_instance_fields(
                 if let Some(key) = field.shared_string_key()
                     && let Value::Object(object) = this_value
                     && is_ordinary_public_field_receiver(object)
-                    && object.is_extensible()
-                    && !object.has_own_property(key)
+                    && object.install_shared_class_field(key, &value, &field.definition_plan)
                 {
-                    // The checks above run before mutation and JavaScript has
-                    // no interleaving point between them and this write. The
-                    // existing shared-key helper creates exactly the default
-                    // enumerable, writable, configurable data property.
-                    object.set_shared_key(key.clone(), value);
                     env.sync_realm_global_object_property(object, key);
                 } else {
                     crate::bytecode::install_field_value(
@@ -779,7 +762,12 @@ pub(crate) fn initialize_instance_fields(
 
 /// Returns only a resolved public string key and a proven primitive constant.
 /// The existing bytecode proof excludes code execution and per-instance identity.
-fn constant_public_field(element: &InstanceElementInitializer) -> Option<(&Rc<str>, &Value)> {
+type ConstantPublicField<'a> = (
+    &'a Rc<str>,
+    &'a Value,
+    &'a std::cell::RefCell<crate::value::layout::FieldPlans>,
+);
+fn constant_public_field(element: &InstanceElementInitializer) -> Option<ConstantPublicField<'_>> {
     let InstanceElementInitializer::PublicField(field) = element else {
         return None;
     };
@@ -798,7 +786,7 @@ fn constant_public_field(element: &InstanceElementInitializer) -> Option<(&Rc<st
     ) {
         return None;
     }
-    Some((field.shared_string_key()?, value))
+    Some((field.shared_string_key()?, value, &field.definition_plan))
 }
 
 /// Scans each observer-free segment once, including segments that decline.
@@ -1013,7 +1001,12 @@ pub(crate) fn construct_function_slice(
             Value::Undefined
         } else {
             let prototype = construct_prototype_slot(&target, &new_target, env)?;
-            Value::Object(ObjectRef::with_prototype_slot(HashMap::new(), prototype))
+            Value::Object(match &new_target {
+                Value::Function(function) => {
+                    function.new_instance_receiver(prototype, env.realm().atoms())
+                }
+                _ => ObjectRef::with_prototype_slot(HashMap::new(), prototype, env.realm().atoms()),
+            })
         };
 
         let result = call_with_arguments(&target, this_value.clone(), argument_values, env, true);
@@ -1069,10 +1062,15 @@ fn construct_prototype_slot(
     new_target: &Value,
     env: &mut CallEnv,
 ) -> Result<Option<crate::Prototype>, RuntimeError> {
-    let prototype = prototype_value_to_slot(
-        crate::property_value(new_target.clone(), "prototype", env)?,
-        env,
-    );
+    let cached = match new_target {
+        Value::Function(function) => function.constructor_prototype_data(),
+        _ => None,
+    };
+    let value = match cached {
+        Some(value) => value,
+        None => crate::property_value(new_target.clone(), "prototype", env)?,
+    };
+    let prototype = prototype_value_to_slot(value, env);
     if prototype.is_none()
         && let Some(prototype) = cross_realm_construct_prototype_slot(target, new_target, env)?
     {
@@ -1383,7 +1381,7 @@ fn function_env<'a>(
             .skip(function.params.positional.len())
             .cloned()
             .collect();
-        let array = ArrayRef::new(values);
+        let array = ArrayRef::new(env.realm(), values);
         apply_marked_realm_array_prototype(&array, &frame_env);
         frame_env.insert(rest_name.to_owned(), Value::Array(array));
     }
@@ -1406,19 +1404,19 @@ fn function_env<'a>(
             Value::Boolean(true),
         );
     }
-    if let Some(name) = &function.immutable_env_binding {
+    if let Some(name) = function.immutable_env_binding() {
         let captured_value = received_upvalue_value(function, bytecode, name)
             .or_else(|| function.immutable_env_value.as_ref().map(|cell| cell.get()));
         if let Some(value) = captured_value {
-            frame_env.insert(name.clone(), value);
+            frame_env.insert(name.to_owned(), value);
         }
     }
     if function.immutable_name_binding
         && let Some(name) = &function.name
     {
-        frame_env.set_immutable_function_name(name.clone());
-    } else if let Some(name) = &function.immutable_env_binding {
-        frame_env.set_immutable_function_name(name.clone());
+        frame_env.set_immutable_function_name(name.to_owned());
+    } else if let Some(name) = function.immutable_env_binding() {
+        frame_env.set_immutable_function_name(name.to_owned());
     } else if function.lexical_this
         && let Some(name) = env.immutable_function_name()
     {
@@ -1486,7 +1484,7 @@ fn can_seed_positional_call(function: &Function, bytecode: &Bytecode, env: &Call
                 .name
                 .as_deref()
                 .filter(|_| function.has_name_binding),
-            function.immutable_env_binding.as_deref(),
+            function.immutable_env_binding(),
         ]
         .into_iter()
         .flatten()
@@ -1529,7 +1527,7 @@ fn can_seed_slot_backed_call(function: &Function, bytecode: &Bytecode) -> bool {
         // immutable frame binding that normally accompanies it only serves
         // the assignment diagnostic, so a body that never assigns the name
         // can run without the binding.
-        && (function.immutable_env_binding.as_deref().is_none_or(|name| {
+        && (function.immutable_env_binding().is_none_or(|name| {
             function.is_field_initializer || bytecode.reads_immutable_env_binding_through_cell(name)
         }))
         && function.dynamic_scope_bypassed()
@@ -1694,13 +1692,14 @@ mod tests {
 
     #[test]
     fn declined_long_constant_segment_is_scanned_once() {
+        let domain = crate::property::atom::AtomDomain::new();
         let count = 512;
         let fields = (0..count).map(|i| format!("p{i}={i};")).collect::<String>();
         let Value::Function(class) = eval(&format!("(class {{ {fields} }})")).unwrap() else {
             panic!("expected class constructor");
         };
         let elements = class.instance_elements();
-        let receiver = ObjectRef::new(std::collections::HashMap::new());
+        let receiver = ObjectRef::new(std::collections::HashMap::new(), &domain);
         // An unrelated non-configurable descriptor declines before the batch
         // consumes any field. All sequential field definitions still succeed.
         receiver.define_property(
@@ -1710,7 +1709,7 @@ mod tests {
         let mut segments = ConstantFieldSegments::default();
         for next in 0..elements.len() {
             assert_eq!(segments.install(&elements, next, &receiver), 0);
-            let (key, value) = constant_public_field(&elements[next]).unwrap();
+            let (key, value, _) = constant_public_field(&elements[next]).unwrap();
             receiver.set_shared_key(key.clone(), value.clone());
         }
         assert_eq!(segments.inspected, count);

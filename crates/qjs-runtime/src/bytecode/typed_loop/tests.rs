@@ -3,7 +3,7 @@
 
 use crate::{Value, eval};
 
-fn nested_function(source: &str) -> crate::bytecode::Bytecode {
+pub(super) fn nested_function(source: &str) -> crate::bytecode::Bytecode {
     let script = qjs_parser::parse_script(source).expect("source should parse");
     let bytecode = crate::bytecode::compile_script(&script).expect("source should compile");
     bytecode

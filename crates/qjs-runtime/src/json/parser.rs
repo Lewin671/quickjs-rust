@@ -1,3 +1,5 @@
+//! JSON parsing and reviver source records; parse-local schema reuse has no callbacks.
+mod objects;
 use std::{collections::HashMap, rc::Rc};
 
 use crate::CallEnv;
@@ -22,6 +24,7 @@ pub(crate) fn native_json_parse(
         let root = Value::Object(crate::ObjectRef::with_prototype(
             std::collections::HashMap::new(),
             object_prototype(env),
+            env.realm().atoms(),
         ));
         if let Value::Object(ref obj) = root {
             obj.define_property(String::new(), crate::Property::enumerable(value));
@@ -188,7 +191,8 @@ fn empty_node(value: Value) -> JsonNode {
 }
 
 fn reviver_context(node: &JsonNode, env: &CallEnv) -> Value {
-    let context = ObjectRef::with_prototype(HashMap::new(), object_prototype(env));
+    let context =
+        ObjectRef::with_prototype(HashMap::new(), object_prototype(env), env.realm().atoms());
     if let Some(source) = &node.source {
         context.define_property(
             "source".to_owned(),
@@ -330,6 +334,8 @@ struct JsonParser<'a> {
     cursor: usize,
     env: &'a CallEnv,
     source_mode: JsonSourceMode,
+    object_depth: usize,
+    sequences: Vec<Option<Rc<crate::value::layout::Layout>>>,
     /// Object keys seen so far, shared: records in a JSON array repeat the
     /// same keys, and one `Rc<str>` per distinct key saves an allocation per
     /// member -- and lets a read cache keyed by interned name serve every
@@ -348,6 +354,8 @@ impl<'a> JsonParser<'a> {
             cursor: 0,
             env,
             source_mode,
+            object_depth: 0,
+            sequences: Vec::new(),
             keys: Default::default(),
         }
     }
@@ -384,7 +392,7 @@ impl<'a> JsonParser<'a> {
         self.skip_whitespace();
         if self.consume_byte(b']') {
             return Ok(JsonNode {
-                value: Value::Array(ArrayRef::new(Vec::new())),
+                value: Value::Array(ArrayRef::new(self.env.realm(), Vec::new())),
                 source: None,
                 children: children
                     .map(JsonNodeChildren::Array)
@@ -407,7 +415,7 @@ impl<'a> JsonParser<'a> {
             self.expect_byte(b',')?;
         }
         Ok(JsonNode {
-            value: Value::Array(ArrayRef::new(values)),
+            value: Value::Array(ArrayRef::new(self.env.realm(), values)),
             source: None,
             children: children
                 .map(JsonNodeChildren::Array)
@@ -416,8 +424,15 @@ impl<'a> JsonParser<'a> {
     }
 
     fn object<const PRESERVE_METADATA: bool>(&mut self) -> Result<JsonNode, RuntimeError> {
+        if !PRESERVE_METADATA {
+            return self.object_sequence();
+        }
         self.expect_byte(b'{')?;
-        let mut properties = OrderedDataPropertyBuilder::new();
+        let mut properties = OrderedDataPropertyBuilder::with_prototype(
+            0,
+            self.env.realm().atoms(),
+            object_prototype(self.env).map(crate::Prototype::Object),
+        );
         let mut children = PRESERVE_METADATA.then(Vec::new);
         self.skip_whitespace();
         if self.consume_byte(b'}') {

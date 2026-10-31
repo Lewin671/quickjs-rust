@@ -14,6 +14,7 @@ pub(crate) fn install_regexp_prototype_match(env: &CallEnv, prototype: &ObjectRe
                 1,
                 NativeFunction::RegExpPrototypeMatch,
                 false,
+                env.realm(),
             ))),
         );
     }
@@ -62,7 +63,7 @@ fn global_match(
             return if matches.is_empty() {
                 Ok(Value::Null)
             } else {
-                Ok(Value::Array(ArrayRef::new(matches)))
+                Ok(Value::Array(ArrayRef::new(env.realm(), matches)))
             };
         }
 

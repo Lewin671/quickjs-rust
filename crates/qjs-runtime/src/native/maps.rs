@@ -116,9 +116,9 @@ pub(super) fn map_prototype_values(
 }
 
 pub(super) fn map_iterator_prototype_next(
-    _env: &mut CallEnv,
+    env: &mut CallEnv,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
-    map::native_map_iterator_next(info.this_value.clone())
+    map::native_map_iterator_next(env.realm(), info.this_value.clone())
 }

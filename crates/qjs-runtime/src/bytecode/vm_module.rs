@@ -10,7 +10,7 @@ use std::{collections::HashMap, rc::Rc};
 
 use crate::{
     Function, GLOBAL_THIS_BINDING, ObjectRef, RuntimeError, Value,
-    function::{CallEnv, DynamicBindings, Realm, new_realm},
+    function::{CallEnv, DynamicBindings, Realm},
     initialize_builtins,
 };
 
@@ -40,11 +40,12 @@ pub(super) fn eval_prelude_script(bytecode: &Bytecode, realm: &Realm) -> Result<
 /// `globalThis`, and `this` = undefined (module top-level `this`).
 pub(super) fn new_module_realm() -> Realm {
     let mut globals = HashMap::new();
-    let global_this = Value::Object(ObjectRef::new(HashMap::new()));
+    let atoms = crate::property::atom::AtomDomain::new();
+    let global_this = Value::Object(ObjectRef::new(HashMap::new(), &atoms));
     globals.insert("this".to_owned(), Value::Undefined);
     globals.insert(GLOBAL_THIS_BINDING.to_owned(), global_this.clone());
     globals.insert("undefined".to_owned(), Value::Undefined);
-    let realm: Realm = new_realm(globals);
+    let realm: Realm = crate::function::new_realm_sharing_atoms(globals, atoms);
     let mut env = CallEnv::new(Rc::clone(&realm));
     initialize_builtins(&mut env, &global_this);
     realm
@@ -180,7 +181,7 @@ fn eval_async_module_body(
     }
     let live_bindings = live_exports.bindings;
     let function_env = env.clone();
-    let context = ObjectRef::new(HashMap::new());
+    let context = ObjectRef::new(HashMap::new(), env.realm().atoms());
     *context.generator_state().borrow_mut() =
         Some(GeneratorState::SuspendedStart(Box::new(GeneratorStart {
             bytecode: Rc::new(bytecode.clone()),

@@ -35,7 +35,11 @@ pub(crate) fn native_number(
 
     let object = match this_value {
         Value::Object(object) => object,
-        _ => ObjectRef::with_prototype(HashMap::new(), function_prototype(function)),
+        _ => ObjectRef::with_prototype(
+            HashMap::new(),
+            function_prototype(function),
+            env.realm().atoms(),
+        ),
     };
     object.define_non_enumerable(NUMBER_DATA_PROPERTY.to_owned(), Value::Number(number));
     Ok(Value::Object(object))

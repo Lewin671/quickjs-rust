@@ -18,8 +18,10 @@ const NATIVE_ERRORS: &[(&str, NativeFunction)] = &[
 ];
 
 pub(crate) fn install_error(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
-    let error_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
-    let error_function = Function::new_native(Some("Error"), 1, NativeFunction::Error, true);
+    let error_prototype =
+        ObjectRef::with_prototype(HashMap::new(), Some(object_prototype), env.realm().atoms());
+    let error_function =
+        Function::new_native(Some("Error"), 1, NativeFunction::Error, true, env.realm());
     error_prototype.define_non_enumerable(
         "constructor".to_owned(),
         Value::Function(error_function.clone()),
@@ -37,16 +39,22 @@ pub(crate) fn install_error(env: &mut CallEnv, global_this: &Value, object_proto
             0,
             NativeFunction::ErrorPrototypeToString,
             false,
+            env.realm(),
         )),
     );
-    let is_error_function =
-        Function::new_native(Some("isError"), 1, NativeFunction::ErrorIsError, false);
+    let is_error_function = Function::new_native(
+        Some("isError"),
+        1,
+        NativeFunction::ErrorIsError,
+        false,
+        env.realm(),
+    );
     define_function_name(&is_error_function, "isError");
-    error_function.properties.borrow_mut().insert(
+    error_function.define_property(
         "isError".to_owned(),
         Property::non_enumerable(Value::Function(is_error_function)),
     );
-    error_function.properties.borrow_mut().insert(
+    error_function.define_property(
         "prototype".to_owned(),
         Property::fixed_non_enumerable(Value::Object(error_prototype)),
     );
@@ -62,9 +70,7 @@ pub(crate) fn install_error(env: &mut CallEnv, global_this: &Value, object_proto
         unreachable!("Error constructor must be a function");
     };
     let Some(Value::Object(error_prototype)) = error_function
-        .properties
-        .borrow()
-        .get("prototype")
+        .own_property("prototype")
         .map(|property| property.value.clone())
     else {
         unreachable!("Error constructor must have a prototype");
@@ -107,7 +113,11 @@ pub(crate) fn native_error(
 ) -> Result<Value, RuntimeError> {
     let object = match (is_construct, this_value) {
         (true, Value::Object(object)) => object,
-        _ => ObjectRef::with_prototype(HashMap::new(), function_prototype(function)),
+        _ => ObjectRef::with_prototype(
+            HashMap::new(),
+            function_prototype(function),
+            env.realm().atoms(),
+        ),
     };
     ensure_default_error_prototype(&object, function);
     define_error_data(&object);
@@ -137,7 +147,11 @@ pub(crate) fn native_aggregate_error(
 ) -> Result<Value, RuntimeError> {
     let object = match (is_construct, this_value) {
         (true, Value::Object(object)) => object,
-        _ => ObjectRef::with_prototype(HashMap::new(), function_prototype(function)),
+        _ => ObjectRef::with_prototype(
+            HashMap::new(),
+            function_prototype(function),
+            env.realm().atoms(),
+        ),
     };
     ensure_default_error_prototype(&object, function);
     define_error_data(&object);
@@ -172,7 +186,11 @@ pub(crate) fn native_suppressed_error(
 ) -> Result<Value, RuntimeError> {
     let object = match (is_construct, this_value) {
         (true, Value::Object(object)) => object,
-        _ => ObjectRef::with_prototype(HashMap::new(), function_prototype(function)),
+        _ => ObjectRef::with_prototype(
+            HashMap::new(),
+            function_prototype(function),
+            env.realm().atoms(),
+        ),
     };
     ensure_default_error_prototype(&object, function);
     define_error_data(&object);
@@ -430,13 +448,17 @@ fn install_native_error(
     name: &str,
     native: NativeFunction,
 ) {
-    let prototype = ObjectRef::with_prototype(HashMap::new(), Some(error_prototype.clone()));
+    let prototype = ObjectRef::with_prototype(
+        HashMap::new(),
+        Some(error_prototype.clone()),
+        env.realm().atoms(),
+    );
     let length = match name {
         "AggregateError" => 2,
         "SuppressedError" => 3,
         _ => 1,
     };
-    let function = Function::new_native(Some(name), length, native, true);
+    let function = Function::new_native(Some(name), length, native, true, env.realm());
     // Native error constructors have the creating realm's `%Error%` as their
     // real [[Prototype]]; global rebinding must not replace that fixed identity.
     function
@@ -448,7 +470,7 @@ fn install_native_error(
         "message".to_owned(),
         Value::String(crate::JsString::default()),
     );
-    function.properties.borrow_mut().insert(
+    function.define_property(
         "prototype".to_owned(),
         Property::fixed_non_enumerable(Value::Object(prototype)),
     );
@@ -476,7 +498,7 @@ fn native_error_name(native: NativeFunction) -> Option<&'static str> {
 }
 
 fn define_function_name(function: &Function, name: &str) {
-    function.properties.borrow_mut().insert(
+    function.define_property(
         "name".to_owned(),
         Property::data(Value::String(name.to_owned().into()), false, false, true),
     );

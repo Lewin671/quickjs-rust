@@ -2,7 +2,6 @@ use super::*;
 use crate::bytecode::compiler;
 use crate::value::ArrayRef;
 use crate::{Value, eval};
-use std::collections::HashMap;
 
 fn nested_function(source: &str) -> Bytecode {
     let script = qjs_parser::parse_script(source).expect("source should parse");
@@ -404,16 +403,16 @@ fn reduction_direct_this_source_rejects_accessor_proxy_and_typed_array_owners() 
 
 #[test]
 fn reduction_direct_this_source_rejects_module_namespace_exotics() {
-    let array = ArrayRef::new(vec![Value::Number(1.0)]);
-    let mut properties = HashMap::new();
-    properties.insert("left".to_owned(), Value::Array(array));
-    let ordinary = crate::ObjectRef::new(properties.clone());
+    let domain = crate::property::atom::AtomDomain::new();
+    let array = ArrayRef::new_in_domain(&domain, vec![Value::Number(1.0)]);
+    let properties = vec![("left".to_owned(), Value::Array(array))];
+    let ordinary = crate::ObjectRef::new_ordered(properties.clone(), &domain);
     assert!(dense::test_legacy_direct_this_array_source_resolves(
         &Value::Object(ordinary),
         "left"
     ));
 
-    let namespace = crate::ObjectRef::new(properties);
+    let namespace = crate::ObjectRef::new_ordered(properties, &domain);
     namespace.mark_module_namespace_exotic();
     assert!(!dense::test_legacy_direct_this_array_source_resolves(
         &Value::Object(namespace),
@@ -423,7 +422,10 @@ fn reduction_direct_this_source_rejects_module_namespace_exotics() {
 
 #[test]
 fn reduction_readable_lease_fails_closed_on_mutable_borrow() {
-    let array = ArrayRef::new(vec![Value::Number(1.0), Value::Number(2.0)]);
+    let array = ArrayRef::new_in_domain(
+        &crate::property::atom::AtomDomain::new(),
+        vec![Value::Number(1.0), Value::Number(2.0)],
+    );
     let arrays = [array.clone()];
     let mut reduction_ran = false;
     array

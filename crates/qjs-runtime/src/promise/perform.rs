@@ -13,8 +13,6 @@
 //! The per-element bookkeeping (remaining counter, result array, element
 //! functions) differs per combinator and is supplied through `ElementHandler`.
 
-use std::collections::HashMap;
-
 use crate::{ObjectRef, PropertyKey, RuntimeError, Value, call_function, property_value, symbol};
 
 use super::capability::{self, PromiseCapability};
@@ -248,11 +246,11 @@ fn is_truthy(value: &Value) -> bool {
 /// Combinators initialise it to 1 (PerformPromiseAll step "remainingElementsCount
 /// = 1"), increment per element, then decrement once after the loop so the
 /// capability is settled only after every element has been queued.
-pub(super) fn new_remaining(count: usize) -> ObjectRef {
-    ObjectRef::new(HashMap::from([(
-        "count".to_owned(),
-        Value::Number(count as f64),
-    )]))
+pub(super) fn new_remaining(count: usize, domain: &crate::property::atom::AtomDomain) -> ObjectRef {
+    ObjectRef::new_ordered(
+        vec![("count".to_owned(), Value::Number(count as f64))],
+        domain,
+    )
 }
 
 /// Increments a remaining record's count.

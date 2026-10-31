@@ -18,7 +18,7 @@ pub(crate) fn native_string_prototype_iterator(
         env,
         crate::iterator::BuiltinIteratorKind::String,
     );
-    let iterator = ObjectRef::with_prototype(HashMap::new(), prototype);
+    let iterator = ObjectRef::with_prototype(HashMap::new(), prototype, env.realm().atoms());
     iterator.define_non_enumerable(
         STRING_ITERATOR_STRING.to_owned(),
         Value::String(source.into()),
@@ -36,7 +36,7 @@ pub(crate) fn native_string_iterator_next(this_value: Value) -> Result<Value, Ru
         });
     };
     if iterator_done(&iterator) {
-        return Ok(iterator_result(Value::Undefined, true));
+        return Ok(iterator_result(Value::Undefined, true, &iterator.domain()));
     }
 
     let string = iterator_string(&iterator)?;
@@ -44,7 +44,7 @@ pub(crate) fn native_string_iterator_next(this_value: Value) -> Result<Value, Ru
     let code_units = string_code_units(&string);
     if index >= code_units.len() {
         iterator.define_non_enumerable(STRING_ITERATOR_DONE.to_owned(), Value::Boolean(true));
-        return Ok(iterator_result(Value::Undefined, true));
+        return Ok(iterator_result(Value::Undefined, true, &iterator.domain()));
     }
 
     let width = if is_leading_surrogate(code_units[index])
@@ -65,7 +65,11 @@ pub(crate) fn native_string_iterator_next(this_value: Value) -> Result<Value, Ru
     } else {
         string_from_code_units(&code_units[index..index + width])
     };
-    Ok(iterator_result(Value::String(value.into()), false))
+    Ok(iterator_result(
+        Value::String(value.into()),
+        false,
+        &iterator.domain(),
+    ))
 }
 
 fn iterator_done(iterator: &ObjectRef) -> bool {
@@ -107,11 +111,12 @@ fn iterator_slot(iterator: &ObjectRef, key: &str) -> Result<Value, RuntimeError>
         })
 }
 
-fn iterator_result(value: Value, done: bool) -> Value {
-    let mut properties = HashMap::new();
-    properties.insert("value".to_owned(), value);
-    properties.insert("done".to_owned(), Value::Boolean(done));
-    Value::Object(ObjectRef::new(properties))
+fn iterator_result(value: Value, done: bool, domain: &crate::property::atom::AtomDomain) -> Value {
+    let properties = vec![
+        ("value".to_owned(), value),
+        ("done".to_owned(), Value::Boolean(done)),
+    ];
+    Value::Object(ObjectRef::new_ordered(properties, domain))
 }
 
 fn is_leading_surrogate(code_unit: u16) -> bool {

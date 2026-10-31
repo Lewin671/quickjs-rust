@@ -99,6 +99,8 @@ fn prototype_value_to_slot(value: Value, env: &CallEnv) -> Option<crate::Prototy
         Value::Function(prototype) => Some(crate::Prototype::Function(prototype)),
         Value::Array(array) => Some(array_as_prototype_slot(&array, env)),
         Value::Proxy(prototype) => Some(crate::Prototype::Proxy(prototype)),
+        Value::Map(map) => Some(crate::Prototype::Map(map)),
+        Value::Set(set) => Some(crate::Prototype::Set(set)),
         _ => None,
     }
 }
@@ -164,37 +166,12 @@ pub(crate) fn string_prototype(env: &CallEnv) -> Option<ObjectRef> {
 /// constructors are subclasses of `Function`, so their `[[Prototype]]` is the
 /// `Function` constructor itself (not `%Function.prototype%`).
 pub(crate) fn function_constructor_as_prototype_slot(env: &CallEnv) -> Option<crate::Prototype> {
-    match env.get("Function") {
-        Some(Value::Function(function_constructor)) => {
-            Some(crate::Prototype::Function(function_constructor))
-        }
-        _ => None,
-    }
+    env.realm()
+        .function_constructor()
+        .map(crate::Prototype::Function)
 }
-
 pub(crate) fn function_intrinsic_prototype_slot(env: &CallEnv) -> Option<crate::Prototype> {
-    let Some(Value::Function(function_constructor)) = env.get("Function") else {
-        return None;
-    };
-    match function_constructor.own_property("prototype") {
-        Some(Property {
-            value: Value::Object(prototype),
-            ..
-        }) => Some(crate::Prototype::Object(prototype)),
-        Some(Property {
-            value: Value::Function(prototype),
-            ..
-        }) => Some(crate::Prototype::Function(prototype)),
-        Some(Property {
-            value: Value::Array(array),
-            ..
-        }) => Some(array_as_prototype_slot(&array, env)),
-        Some(Property {
-            value: Value::Proxy(prototype),
-            ..
-        }) => Some(crate::Prototype::Proxy(prototype)),
-        _ => None,
-    }
+    env.realm().function_prototype()
 }
 
 pub(crate) fn function_prototype(function: &Function) -> Option<ObjectRef> {
@@ -208,11 +185,10 @@ pub(crate) fn function_prototype(function: &Function) -> Option<ObjectRef> {
 }
 
 /// Preserve an array's live identity when it is installed in a [[Prototype]]
-/// slot. The realm fallback is captured separately so an implicit array
-/// prototype remains available without snapshotting the array's own
-/// descriptors.
-pub(crate) fn array_as_prototype_slot(array: &ArrayRef, env: &CallEnv) -> crate::Prototype {
-    crate::Prototype::array(array.clone(), array_prototype(env))
+/// slot. The array retains its own explicit prototype; no contextual wrapper
+/// or descriptor snapshot is created.
+pub(crate) fn array_as_prototype_slot(array: &ArrayRef, _env: &CallEnv) -> crate::Prototype {
+    crate::Prototype::array(array.clone())
 }
 
 /// The immediate [[Prototype]] slot of `value`, preserving a function
@@ -277,7 +253,27 @@ pub(crate) fn function_prototype_chain_descriptor(
                 .target_result()
                 .ok()
                 .and_then(|target| crate::property::own_or_inherited_descriptor(target, key)),
+
+            crate::Prototype::Map(_carrier) => {
+                let prototype = _carrier.object();
+                prototype.property(key)
+            }
+
+            crate::Prototype::Set(_carrier) => {
+                let prototype = _carrier.object();
+                prototype.property(key)
+            }
         }),
+
+        Some(Some(crate::Prototype::Map(_carrier))) => {
+            let prototype = _carrier.object();
+            prototype.property(key)
+        }
+
+        Some(Some(crate::Prototype::Set(_carrier))) => {
+            let prototype = _carrier.object();
+            prototype.property(key)
+        }
     }
 }
 

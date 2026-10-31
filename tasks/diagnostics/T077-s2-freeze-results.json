@@ -1,0 +1,89 @@
+{
+  "candidate": "fc3deef7f899b519db82848a531cc09011b8a2cf",
+  "runtime": "dc710e4b",
+  "order": "4098ee67",
+  "test262_revision": "4249661388e5d3f92a85186213da140a6481490f",
+  "test262_dir": "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/third_party/test262",
+  "cli_sha256": "f8dbeab935c0376b12f0a26cc954911226ba9d5c6329fca6aa9b771e2dd9aeab",
+  "timeout_seconds": 20,
+  "jobs_per_mode": 4,
+  "modes": {
+    "cached": {
+      "exit": 0,
+      "ic_disabled": false,
+      "summary_file": "T077-s2-freeze-cached-summary.json",
+      "summary_sha256": "cffdf394963ec66c41d006192593e9975e6b082a55483748550b7a9fb866e80f",
+      "case_results_sha256": "2263183d8df546cb37338205c107cc4614a7ddee069a711be6181c0e27c2f61a",
+      "case_rows": 53572,
+      "scan_log_sha256": "b7ccd0102f6f5684d331a852a59f915f7934d4a1e6b838077400251e68488586",
+      "baseline_log_sha256": "d54eb0e1e82c4c1f49ad8f6160a3a169b0bcf2382bc8072413e80208070b73f8",
+      "burndown_entry": {
+        "schema": 1,
+        "recorded": "2026-10-31",
+        "commit": "fc3deef7",
+        "source": "local-exact-release-agents-s2-freeze-cached-shared-corpus",
+        "total": 53572,
+        "ng_config_skipped": 10900,
+        "configured": 42672,
+        "rust": {
+          "pass": 42672,
+          "fail": 0,
+          "timeout": 0,
+          "not_run": 0
+        },
+        "ng": {
+          "pass": 42602,
+          "fail": 70,
+          "timeout": 0
+        },
+        "comparison": {
+          "both_pass": 42602,
+          "actionable_gap": 0,
+          "ng_pass_rust_fail": 0,
+          "ng_pass_rust_timeout": 0,
+          "ng_pass_rust_not_run": 0,
+          "rust_pass_ng_nonpass": 70
+        }
+      }
+    },
+    "off": {
+      "exit": 0,
+      "ic_disabled": true,
+      "summary_file": "T077-s2-freeze-off-summary.json",
+      "summary_sha256": "cffdf394963ec66c41d006192593e9975e6b082a55483748550b7a9fb866e80f",
+      "case_results_sha256": "2263183d8df546cb37338205c107cc4614a7ddee069a711be6181c0e27c2f61a",
+      "case_rows": 53572,
+      "scan_log_sha256": "c890e7ebe4a486314cc5b25b91f42d6ff3861f724616bb83f5cdbc5dea901143",
+      "baseline_log_sha256": "ec667e397b03eb40d3195be6763f72f543cf8decd874f7928570c3472f3fe18d",
+      "burndown_entry": {
+        "schema": 1,
+        "recorded": "2026-10-31",
+        "commit": "4a6cbab8",
+        "source": "local-exact-release-agents-s2-freeze-ic-off-shared-corpus",
+        "total": 53572,
+        "ng_config_skipped": 10900,
+        "configured": 42672,
+        "rust": {
+          "pass": 42672,
+          "fail": 0,
+          "timeout": 0,
+          "not_run": 0
+        },
+        "ng": {
+          "pass": 42602,
+          "fail": 70,
+          "timeout": 0
+        },
+        "comparison": {
+          "both_pass": 42602,
+          "actionable_gap": 0,
+          "ng_pass_rust_fail": 0,
+          "ng_pass_rust_timeout": 0,
+          "ng_pass_rust_not_run": 0,
+          "rust_pass_ng_nonpass": 70
+        }
+      }
+    }
+  },
+  "identity_proof": "git diff --quiet fc3deef7 HEAD -- crates scripts Cargo.toml Cargo.lock .cargo rust-toolchain.toml: exit 0; same pinned binary for both modes; off ledger uses doc-only 4a6cbab8 because ledger deduplicates commit"
+}

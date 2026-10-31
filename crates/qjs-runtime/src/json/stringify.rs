@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Write as _};
+use std::fmt::Write as _;
 
 use crate::{
     ObjectRef, Property, PropertyKey, RuntimeError, Value, call_function, number, property_value,
@@ -28,9 +28,10 @@ pub(crate) fn native_json_stringify(
         stack: Vec::new(),
         indent: String::new(),
     };
-    let wrapper = ObjectRef::with_prototype(
-        HashMap::from([("".to_owned(), value)]),
+    let wrapper = ObjectRef::with_ordered_prototype(
+        vec![("".to_owned(), value)],
         crate::object_prototype(env),
+        env.realm().atoms(),
     );
     let mut state = ctx;
     let mut output = String::new();

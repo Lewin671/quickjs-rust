@@ -1,0 +1,73 @@
+{
+  "full-check": {
+    "exit": 0,
+    "log_sha256": "73c4864ab86efcd8022d6e7623b0f305f698c44991ef6b885b22ac29a404591c",
+    "stages": [
+      "check: ok format (1s)",
+      "check: ok clippy (0s)",
+      "check: ok clippy (agents) (0s)",
+      "check: ok agents feature tests (1s)",
+      "check: ok clippy (perf-counters) (0s)",
+      "check: ok perf-counters feature tests (0s)",
+      "check: ok workspace tests (20s)",
+      "check: ok benchmark tool tests (130s)",
+      "check: ok performance unit plans (12s)",
+      "check: ok agent context (0s)",
+      "check: ok script tests (1s)",
+      "check: ok git hook worktree isolation (2s)",
+      "check: ok benchmark shell syntax (0s)",
+      "check: ok file-size guard (0s)",
+      "check: ok Test262 subset (98s)"
+    ]
+  },
+  "arm64-verified-tests": {
+    "exit": 0,
+    "log_sha256": "dcdab23a148d14737494d7e50a3ff9a5daea70129825daca1f2a577f12cb6feb",
+    "result": "test result: ok. 2532 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 25.03s"
+  },
+  "ng-on": {
+    "exit": 0,
+    "log_sha256": "9d72b3376d91e7701c9f6ae133cc10193ef5e51bef3fd6f25d62812bd442620f",
+    "fixtures": 268
+  },
+  "ng-off": {
+    "exit": 0,
+    "log_sha256": "9d72b3376d91e7701c9f6ae133cc10193ef5e51bef3fd6f25d62812bd442620f",
+    "fixtures": 268
+  },
+  "ng-verify": {
+    "exit": 0,
+    "log_sha256": "9d72b3376d91e7701c9f6ae133cc10193ef5e51bef3fd6f25d62812bd442620f",
+    "fixtures": 268
+  },
+  "x86-verified-tests": {
+    "exit": 0,
+    "log_sha256": "286647eeacb601fde365abd146d127dc96110c92e126a5271d41c81aca78f197",
+    "result": "test result: ok. 2532 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 27.37s"
+  },
+  "fuzz-original": {
+    "seeds": 300,
+    "same": 300,
+    "modes": [
+      "on",
+      "off",
+      "verify"
+    ],
+    "binary_sha256": "c6118e6ce58464a93a019d2454842c13e9394e973a9e9581cec7044860ded326",
+    "template_sha256": "fc68035a176d9a7d27edffc46b28c275233b1c4c71745d8d4ff74b467d602130",
+    "records_sha256": "3309d58e7a093f501d5f60cfaaa8ac5f82908d6b1c972db8f38e2d01039b583f"
+  },
+  "fuzz-warmed": {
+    "seeds": 50,
+    "same": 50,
+    "modes": [
+      "on",
+      "off",
+      "verify"
+    ],
+    "binary_sha256": "c6118e6ce58464a93a019d2454842c13e9394e973a9e9581cec7044860ded326",
+    "template_sha256": "fc68035a176d9a7d27edffc46b28c275233b1c4c71745d8d4ff74b467d602130",
+    "records_sha256": "38a99118faa5d9a4577e46a566ccfd0d73991592a5ec75f9ce0ee3fa869e1a7d"
+  },
+  "exact": "cached/off scans deliberately interrupted by lead round4; no complete result or burndown row"
+}

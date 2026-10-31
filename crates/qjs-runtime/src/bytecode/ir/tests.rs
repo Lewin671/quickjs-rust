@@ -196,16 +196,19 @@ fn a_sloppy_global_fallback_keeps_only_the_frame_independent_read_only_mask() {
 
 #[test]
 fn named_property_cache_reuses_literal_shape_across_objects() {
+    let domain = crate::property::atom::AtomDomain::new();
     let shape = ObjectLiteralShape::new(vec![Rc::from("a"), Rc::from("b")]);
     let first = ObjectRef::with_literal_pair(
         shape.clone(),
         [Value::Number(1.0), Value::Number(2.0)],
         None,
+        &domain,
     );
     let second = ObjectRef::with_literal_pair(
         shape.clone(),
         [Value::Number(3.0), Value::Number(4.0)],
         None,
+        &domain,
     );
     let cache = NamedPropertyCache::default();
 
@@ -218,18 +221,24 @@ fn named_property_cache_reuses_literal_shape_across_objects() {
     );
     assert_eq!(cache.get(&second), None);
 
-    let third = ObjectRef::with_literal_pair(shape, [Value::Number(6.0), Value::Number(7.0)], None);
+    let third = ObjectRef::with_literal_pair(
+        shape,
+        [Value::Number(6.0), Value::Number(7.0)],
+        None,
+        &domain,
+    );
     assert_eq!(cache.get(&third), Some(Value::Number(6.0)));
 }
 
 #[test]
 fn named_property_cache_remembers_two_alternating_receivers() {
+    let domain = crate::property::atom::AtomDomain::new();
     // A call site whose receiver alternates between exactly two distinct
     // objects (for example `a.f()`/`b.f()` behind a ternary) must not
     // thrash a single-entry cache: both identities should stay cached
     // rather than evicting each other on every access.
-    let first = ObjectRef::new(HashMap::from([("value".to_owned(), Value::Number(1.0))]));
-    let second = ObjectRef::new(HashMap::from([("value".to_owned(), Value::Number(2.0))]));
+    let first = ObjectRef::new_ordered(vec![("value".to_owned(), Value::Number(1.0))], &domain);
+    let second = ObjectRef::new_ordered(vec![("value".to_owned(), Value::Number(2.0))], &domain);
     let cache = NamedPropertyCache::default();
 
     cache.update(&first, "value", &Value::Number(1.0));
@@ -240,7 +249,7 @@ fn named_property_cache_remembers_two_alternating_receivers() {
 
     // A third distinct receiver evicts the oldest slot (round robin),
     // not the most recently used one.
-    let third = ObjectRef::new(HashMap::from([("value".to_owned(), Value::Number(3.0))]));
+    let third = ObjectRef::new_ordered(vec![("value".to_owned(), Value::Number(3.0))], &domain);
     cache.update(&third, "value", &Value::Number(3.0));
     assert_eq!(cache.get(&second), Some(Value::Number(2.0)));
     assert_eq!(cache.get(&third), Some(Value::Number(3.0)));
@@ -248,12 +257,13 @@ fn named_property_cache_remembers_two_alternating_receivers() {
 
 #[test]
 fn named_property_cache_weakly_caches_object_values() {
-    let child = ObjectRef::new(HashMap::new());
+    let domain = crate::property::atom::AtomDomain::new();
+    let child = ObjectRef::new(HashMap::new(), &domain);
     let child_weak = child.downgrade();
-    let receiver = ObjectRef::new(HashMap::from([(
-        "child".to_owned(),
-        Value::Object(child.clone()),
-    )]));
+    let receiver = ObjectRef::new_ordered(
+        vec![("child".to_owned(), Value::Object(child.clone()))],
+        &domain,
+    );
     let cache = NamedPropertyCache::default();
 
     cache.update(&receiver, "child", &Value::Object(child.clone()));

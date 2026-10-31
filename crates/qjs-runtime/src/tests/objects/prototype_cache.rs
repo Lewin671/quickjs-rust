@@ -175,7 +175,7 @@ fn dynamic_prototype_slots_revalidate_at_the_same_read_site() {
 
 #[test]
 fn literal_prototype_slots_revalidate_at_the_same_read_site_in_both_executors() {
-    // Two keys use ShapedPair, larger literals use Shaped. Direct eval forces
+    // Exercise several shared-layout widths. Direct eval forces
     // the general VM; the plain read body can use the compact executor.
     for fields in [2, 4, 20] {
         let padding = (1..fields)

@@ -1,11 +1,11 @@
 # T077: In-place core rebuild
 
-- Status: active; S3a accepted and integrated (lead 2026-10-30); S1+S2 land together, S2 repair round in progress.
-- Implementation: S3a direct native entries/borrowed slices on main; S1/S2 on owner branches (`agent/t077-s1-property-authority/codex`, `agent/t077-s2-named-stores/codex`); S3b frozen design only, no runtime implementation.
-- Verified at: S3a runtime `03c8680c` (branch tip `3872d617`): full check, 257 NG fixtures, 42,672/42,672 exact; formal/held-out/RSS in [S3a acceptance](diagnostics/T077-s3a-acceptance.md). S3b design audit base `71294a20`: context/staged documentation gates pass.
-- Evidence: [target](../docs/design/core-rebuild.md), [baseline](diagnostics/T077-baseline.md), [S1 brief](proposals/T077-s1-property-authority.md), [S3 plan](proposals/T077-s3-plan.md), [S3 counts](diagnostics/T077-s3-counts.md), [S3b frozen brief](proposals/T077-s3b-brief.md).
-- Unresolved: S1+S2 payoff (S2 v1 regressed every aggregate; repair round adds prototype-in-layout and validity cells); pre-existing deep Rust-stack exhaustion is S3d-owned.
-- Next action: lead measures/integrates S1+S2, pins accepted base/API/measurement endpoints and adopts the frozen S3b cuts; implement S3b only then (six T074 decisions approved). Do not queue another baseline or revive closed unit gates.
+- Status: active; frozen-source exact qualification complete; lead acceptance pending; S3a is accepted on main, S1+S2 acceptance remains open.
+- Implementation: coherent S1+S2 repair at a8e7709f: one named authority, shared/owned shape ICs, construction recipes, typed private payloads, 56-byte arrays with lazy named storage and own dense overwrites. The 6e8f7d99 typed-write proposal remains unimplemented. Round4 step1 adds weak cell-protected inherited constants, a four-overwrite instability transition and one store write barrier; own slots stay live. No new dependency, unsafe, binding snapshot or legacy named authority.
+- Verified at: fc3deef7 complete cached/off exact scans pass all 42,672 configured cases each with zero failures/timeouts/not-run cases and zero gaps; burndown rows fc3deef7/cached and doc-only equivalent 4a6cbab8/off, same pinned release agents CLI and identical 53,572-row case hashes. dc710e4b passes full gate/5,170 curated cases, 2,542 IC-verified tests on arm64/x86, 268 NG fixtures in default/off/debug-verify and 300+50 differential seeds. Ordered candidate 4098ee67 has the strict linked-layout audit; tracked runtime/build/harness files remain identical to fc3deef7; temporary corpus-path routing is recorded.
+- Evidence: [freeze qualification](diagnostics/T077-s2-freeze-qualification.md), [round4 handoff/classification](diagnostics/T077-s2-r4-handoff.md), [final public86](diagnostics/T077-s2-r4-final-public86.json), [checks/pins](diagnostics/T077-s2-r4-final-checks.json), [counters](diagnostics/T077-s2-r4-final-counters.json), [ordered static sizes](diagnostics/T077-s2-r4-final-ordered-static.json), [checkpoint history](diagnostics/T077-s2-r4-checkpoints.md), [original profiles](diagnostics/T077-s2-r3-root-pass.md).
+- Unresolved: final 4098ee67 versus dcee3c56 wall ratios: development .928813, external 1.001593, broad .982888, sentinel .941874, all86 .983194. Lead treats external 1.0016 as triage noise and is measuring formal acceptance; typed VM/Wide sizes 3,649/3,651 miss base 3,024/3,006, while wide dispatcher 5,316 meets base 5,372. Complete exact qualification is now green; lead formal/held-out/RSS acceptance remains open. Corpus tracked pointer is unchanged; transient files are unstaged.
+- Next action: owner qualification and ledger recording are complete; report results for frozen fc3deef7 and await the lead's independent formal 30-block, held-out and RSS acceptance decision. No runtime changes or iMac job submissions. Never push or merge.
 
 ## Authority and scope
 
@@ -15,11 +15,7 @@ Route: in-place staged replacement inside qjs-runtime on main; no second engine,
 tracing GC, FFI, Rust async, benchmark-specific recognizers or old-path fallback.
 Keep slot/shared-cell identity. Delete replaced code within its replacement stage.
 
-Target design: `agent/core-rebuild-design/codex`, base `6663738f`; S3 inventory:
-`agent/t077-s3-inventory/codex`, base `dd0905b2`. Documents/diagnostic evidence
-only; no retained runtime/tool edits, push, merge, frozen-evidence edits or iMac jobs.
-Later implementations use isolated owner branches from one recorded main base;
-the lead integrates sequentially. Global/shared API changes have one owner.
+The [target design](../docs/design/core-rebuild.md) owns architecture. The lead owns integration/formal timing; this owner may merge main into its branch only when directed. Global/shared API changes have one owner.
 
 ## Stage acceptance (overrides ordinary unit gates for T077 only)
 
@@ -74,6 +70,19 @@ plus aggregate improvement is progress, not proof of that campaign target.
 - Risk/fallback: layout growth, atom retention, compiler layout drift; bound caches,
   measure full portfolio; revert this stage if authority/neutrality cannot hold.
 
+Foundation inventory, sizes and verification: [milestone evidence](archive/T077-s1-foundation.md).
+
+### S1 design corrections
+
+The [lead decision](proposals/T077-s1-fallibility.md) replaces monotonic keys
+with lease-safe recycling and allocation-error abort. [Object invariants](../docs/design/core-rebuild-objects.md)
+record prototype-sensitive identities, dictionary versions and incremental data-write checks. [Cutover evidence](archive/T077-s1-cutover.md) records reasons;
+no error ABI, fallback store or correctness waiver was introduced.
+Array.prototype needs array length/index [[DefineOwnProperty]] before NamedStore: the previous raw length/index setter and cache writes could
+bypass validation/shrink semantics. The correction routes interpreter, compact,
+Reflect and descriptor writes through one hook; creation/slot-write caches decline
+this receiver. No second index store or array snapshot.
+
 ## S2 — All named stores and shape ICs
 
 - Scope: `function/value*`, `value/array*`, `property/`, property builtin call
@@ -82,18 +91,19 @@ plus aggregate improvement is progress, not proof of that campaign target.
 - Delete: function/array text/symbol named tables, payload indexes and old
   exact-value/receiver cache forms; wrappers/exotics use the same NamedStore.
 - Preconditions: S1 accepted; layout/key API fixed. Exotics keep index/length hooks.
-- Correctness: IC-off complete run, debug cached-vs-generic data probes; inherited
-  invalidation, setters/Proxy/super, lazy properties, namespaces, detach/resize.
+- Correctness: IC-off complete run; debug cached-vs-generic data probes; inherited invalidation, setters/Proxy/super, lazy properties, namespaces, detach/resize.
 - Payoff: shape-ID/live-slot hits remove repeated storage/descriptor routing over
   all receiver families. T065 non-Object frequency and T068 14.19% envelope
   motivate reach, not a forecast; text-elision oracle alone was nearly flat.
-- Exit: no named-store bypass, stale-value cache or strong receiver pin; bounded
-  mono/four-way ICs/prototype dependencies; all four aggregates improve.
+- Exit: no named-store bypass, stale-value cache or strong receiver pin; bounded mono/four-way ICs/prototype dependencies; all four aggregates improve.
 - Size: **4–7 weeks**. Parallel: array owner `value/array*` + `property/array.rs`;
   function owner `function/value*` + `property/function.rs`; lead cache/property
   integration and shared APIs. Each consumes S1 NamedStore, returns semantic hooks.
 - Risk/fallback: lazy/exotic order and invalidation omissions; source-revert S2,
   then repair with uncached shape lookup in the same core, never old storage.
+### S2 design corrections
+
+The [round-1 correction](proposals/T077-s2-prototype-layout.md) replaces shared-layout subscriptions and implicit prototypes: layouts include prototype identity, shared shapes have no epochs, and private prototype states own uncapped weak user graphs with cascading validity generations. Arrays/functions retain explicit realm intrinsics and lazy storage; missing/accessor outcomes cache pure proofs. [Object contract](../docs/design/core-rebuild-objects.md#inline-caches) owns implemented invariants.
 
 ## S3 — Universal bytecode, frames, calls and native ABI
 
@@ -199,9 +209,7 @@ S3a preserves base depth behavior and adds no limit. Its rejected per-realm guar
 
 ## Throughput and verification
 
-Total **44–72 engineer-weeks**, roughly **55–90 with 25% contingency**, one
-experienced owner; ranges are planning estimates, not measured throughput. Extra
-owners shorten family ports after APIs freeze, not shared architecture. Re-estimate after S2 and S3 inventory; sizes imply no T022 attempt budget.
+Stage estimates remain planning ranges, not measured throughput; re-estimate after S2/S3. No T022 attempt budget governs these rebuild stages.
 
 Lead serializes iMac timing (~9 min triage/~25 min 30-block comparison); retain
 K=6, complete formal precision/health evidence, held-out 30 pairs and RSS >=15
@@ -210,11 +218,3 @@ measuring, implementers run correctness and design the next stage on isolated
 branches; no source/result drift, host timing overlap or cancellation of others.
 Every stage receipt records hashes, both relative baselines, deletions, counters,
 all local regressions, aggregate results and the lead decision in the repository.
-
-Documentation-tree verification, 2026-10-29: `git diff --check`, context and
-`PYTHONDONTWRITEBYTECODE=1 ./scripts/check-touched.sh --staged --explain` pass.
-Fast gate reports `docs-only change; skipping Rust and Test262 checks`. All
-changes are Markdown; no runtime/Cargo/scripts/executable examples changed,
-so no semantic slice/full runtime gate applies. No new conformance/performance
-standing, iMac job, push or merge. Existing frozen evidence is untouched;
-current diagnostic navigation only retargets links to the moved task files.

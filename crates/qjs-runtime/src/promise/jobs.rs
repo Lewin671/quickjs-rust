@@ -18,7 +18,7 @@ pub(super) fn enqueue_promise_reaction_job(
     reaction: &ObjectRef,
     argument: Value,
 ) {
-    let job = ObjectRef::new(HashMap::new());
+    let job = ObjectRef::new(HashMap::new(), env.realm().atoms());
     if let Some(handler) = reaction
         .own_property(PROMISE_HANDLER)
         .map(|property| property.value)
@@ -58,7 +58,7 @@ pub(super) fn enqueue_promise_thenable_job(
     thenable: Value,
     then: Value,
 ) {
-    let job = ObjectRef::new(HashMap::new());
+    let job = ObjectRef::new(HashMap::new(), env.realm().atoms());
     job.define_non_enumerable(
         PROMISE_THENABLE_CAPABILITY.to_owned(),
         Value::Object(promise),
@@ -81,7 +81,7 @@ pub(super) fn enqueue_dynamic_import_job(
     specifier: String,
     module_type: Option<String>,
 ) {
-    let job = ObjectRef::new(HashMap::new());
+    let job = ObjectRef::new(HashMap::new(), env.realm().atoms());
     job.define_non_enumerable(PROMISE_IMPORT_RESOLVE.to_owned(), resolve);
     job.define_non_enumerable(PROMISE_IMPORT_REJECT.to_owned(), reject);
     job.define_non_enumerable(
@@ -103,7 +103,7 @@ pub(crate) fn enqueue_async_dispose_settle_job(
     result_promise: ObjectRef,
     rejection: Option<Value>,
 ) {
-    let job = ObjectRef::new(HashMap::new());
+    let job = ObjectRef::new(HashMap::new(), env.realm().atoms());
     job.define_non_enumerable(
         PROMISE_ASYNC_DISPOSE_RESULT.to_owned(),
         Value::Object(result_promise),
@@ -336,7 +336,11 @@ fn run_promise_thenable_job(job: &ObjectRef, env: &mut CallEnv) -> Result<(), Ru
         .own_property(PROMISE_THEN)
         .map_or(Value::Undefined, |property| property.value);
     // resolve/reject share one alreadyResolved guard (CreateResolvingFunctions).
-    let (resolve, reject) = resolving_function_pair(Value::Object(capability.clone()));
+    let (resolve, reject) = resolving_function_pair(
+        env.realm(),
+        Value::Object(capability.clone()),
+        env.realm().atoms(),
+    );
     if let Err(error) = call_function(then, thenable, vec![resolve, reject.clone()], env, false) {
         // A throw from `then` rejects through the reject function so its
         // alreadyResolved guard suppresses the rejection if the thenable already
@@ -351,7 +355,7 @@ fn promise_jobs(env: &mut CallEnv) -> ArrayRef {
     let global_this = match env.get(GLOBAL_THIS_BINDING) {
         Some(Value::Object(global_this)) => global_this,
         _ => {
-            let global_this = ObjectRef::new(HashMap::new());
+            let global_this = ObjectRef::new(HashMap::new(), env.realm().atoms());
             env.insert_realm(
                 GLOBAL_THIS_BINDING.to_owned(),
                 Value::Object(global_this.clone()),
@@ -365,7 +369,7 @@ fn promise_jobs(env: &mut CallEnv) -> ArrayRef {
     {
         Some(Value::Array(jobs)) => jobs,
         _ => {
-            let jobs = ArrayRef::new(Vec::new());
+            let jobs = ArrayRef::new(env.realm(), Vec::new());
             global_this.define_non_enumerable(PROMISE_JOBS.to_owned(), Value::Array(jobs.clone()));
             jobs
         }

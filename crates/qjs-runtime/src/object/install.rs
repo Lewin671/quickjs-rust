@@ -4,70 +4,93 @@ use std::collections::HashMap;
 use crate::{Function, NativeFunction, ObjectRef, Property, Value};
 
 pub(crate) fn install_object(env: &mut CallEnv, global_this: &Value) -> ObjectRef {
-    let object_prototype = ObjectRef::new(HashMap::new());
+    let object_prototype = ObjectRef::new(HashMap::new(), env.realm().atoms());
     object_prototype.mark_immutable_prototype_exotic();
     env.realm()
         .initialize_object_prototype(object_prototype.clone());
-    let object_function = Function::new_native(Some("Object"), 1, NativeFunction::Object, true);
+    let function_prototype = Function::new_native(
+        Some(""),
+        0,
+        NativeFunction::FunctionPrototype,
+        false,
+        env.realm(),
+    );
+    function_prototype
+        .set_internal_prototype_slot(Some(crate::Prototype::Object(object_prototype.clone())))
+        .expect("bootstrap prototype");
+    env.realm()
+        .initialize_function_prototype(crate::Prototype::Function(function_prototype));
+    let object_function =
+        Function::new_native(Some("Object"), 1, NativeFunction::Object, true, env.realm());
     object_prototype.define_non_enumerable(
         "constructor".to_owned(),
         Value::Function(object_function.clone()),
     );
     define_object_prototype_function(
+        env.realm(),
         &object_prototype,
         "hasOwnProperty",
         1,
         NativeFunction::ObjectPrototypeHasOwnProperty,
     );
     define_object_prototype_function(
+        env.realm(),
         &object_prototype,
         "isPrototypeOf",
         1,
         NativeFunction::ObjectPrototypeIsPrototypeOf,
     );
     define_object_prototype_function(
+        env.realm(),
         &object_prototype,
         "propertyIsEnumerable",
         1,
         NativeFunction::ObjectPrototypePropertyIsEnumerable,
     );
     define_object_prototype_function(
+        env.realm(),
         &object_prototype,
         "toLocaleString",
         0,
         NativeFunction::ObjectPrototypeToLocaleString,
     );
     define_object_prototype_function(
+        env.realm(),
         &object_prototype,
         "toString",
         0,
         NativeFunction::ObjectPrototypeToString,
     );
     define_object_prototype_function(
+        env.realm(),
         &object_prototype,
         "valueOf",
         0,
         NativeFunction::ObjectPrototypeValueOf,
     );
     define_object_prototype_function(
+        env.realm(),
         &object_prototype,
         "__defineGetter__",
         2,
         NativeFunction::ObjectPrototypeDefineGetter,
     );
     define_object_prototype_function(
+        env.realm(),
         &object_prototype,
         "__defineSetter__",
         2,
         NativeFunction::ObjectPrototypeDefineSetter,
     );
     define_object_prototype_function(
+        env.realm(),
         &object_prototype,
         "__lookupGetter__",
         1,
         NativeFunction::ObjectPrototypeLookupGetter,
     );
     define_object_prototype_function(
+        env.realm(),
         &object_prototype,
         "__lookupSetter__",
         1,
@@ -81,18 +104,20 @@ pub(crate) fn install_object(env: &mut CallEnv, global_this: &Value) -> ObjectRe
                 0,
                 NativeFunction::ObjectPrototypeGetProto,
                 false,
+                env.realm(),
             ))),
             Some(Value::Function(Function::new_native(
                 Some("set __proto__"),
                 1,
                 NativeFunction::ObjectPrototypeSetProto,
                 false,
+                env.realm(),
             ))),
             false,
             true,
         ),
     );
-    object_function.properties.borrow_mut().insert(
+    object_function.define_property(
         "prototype".to_owned(),
         Property::fixed_non_enumerable(Value::Object(object_prototype.clone())),
     );
@@ -205,24 +230,26 @@ pub(crate) fn install_object(env: &mut CallEnv, global_this: &Value) -> ObjectRe
 }
 
 fn define_object_prototype_function(
+    realm: &crate::function::Realm,
     prototype: &ObjectRef,
     key: &str,
     length: usize,
     native: NativeFunction,
 ) -> Function {
-    let function = Function::new_native(Some(key), length, native, false);
+    let function = Function::new_native(Some(key), length, native, false, realm);
     prototype.define_non_enumerable(key.to_owned(), Value::Function(function.clone()));
     function
 }
 
 fn define_object_function(function: &Function, key: &str, length: usize, native: NativeFunction) {
-    function.properties.borrow_mut().insert(
+    function.define_property(
         key.to_owned(),
         Property::non_enumerable(Value::Function(Function::new_native(
             Some(key),
             length,
             native,
             false,
+            function.creation_realm(),
         ))),
     );
 }

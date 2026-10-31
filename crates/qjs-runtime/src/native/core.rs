@@ -105,11 +105,11 @@ pub(super) fn test262_build_string(
 }
 
 pub(super) fn test262_to_numbers(
-    _env: &mut CallEnv,
+    env: &mut CallEnv,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
-    global::native_test262_to_numbers(argument_values)
+    global::native_test262_to_numbers(env.realm(), argument_values)
 }
 
 pub(super) fn test262_compare_array(
@@ -129,11 +129,11 @@ pub(super) fn test262_assert_iterator_result(
 }
 
 pub(super) fn test262_assert_packed_array(
-    _env: &mut CallEnv,
+    env: &mut CallEnv,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
-    global::native_test262_assert_packed_array(argument_values)
+    global::native_test262_assert_packed_array(argument_values, env)
 }
 
 pub(super) fn test262_assert_null_proto_mutable_object(
@@ -289,11 +289,11 @@ pub(super) fn proxy(
 }
 
 pub(super) fn proxy_revocable(
-    _env: &mut CallEnv,
+    env: &mut CallEnv,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
-    crate::proxy::native_proxy_revocable(argument_values)
+    crate::proxy::native_proxy_revocable(env.realm(), argument_values, env.realm().atoms())
 }
 
 pub(super) fn proxy_revoke(

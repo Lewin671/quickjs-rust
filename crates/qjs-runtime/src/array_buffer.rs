@@ -36,11 +36,17 @@ pub(crate) fn install_array_buffer(
     global_this: &Value,
     object_prototype: ObjectRef,
 ) {
-    let array_buffer_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
+    let array_buffer_prototype =
+        ObjectRef::with_prototype(HashMap::new(), Some(object_prototype), env.realm().atoms());
     array_buffer_prototype.set_to_string_tag("ArrayBuffer");
     symbol::define_well_known_to_string_tag(env, &array_buffer_prototype, "ArrayBuffer");
-    let array_buffer_function =
-        Function::new_native(Some("ArrayBuffer"), 1, NativeFunction::ArrayBuffer, true);
+    let array_buffer_function = Function::new_native(
+        Some("ArrayBuffer"),
+        1,
+        NativeFunction::ArrayBuffer,
+        true,
+        env.realm(),
+    );
     array_buffer_prototype.define_non_enumerable(
         "constructor".to_owned(),
         Value::Function(array_buffer_function.clone()),
@@ -53,6 +59,7 @@ pub(crate) fn install_array_buffer(
                 0,
                 NativeFunction::ArrayBufferPrototypeByteLength,
                 false,
+                env.realm(),
             ))),
             None,
             false,
@@ -76,6 +83,7 @@ pub(crate) fn install_array_buffer(
                     0,
                     native,
                     false,
+                    env.realm(),
                 ))),
                 None,
                 false,
@@ -90,6 +98,7 @@ pub(crate) fn install_array_buffer(
             1,
             NativeFunction::ArrayBufferPrototypeResize,
             false,
+            env.realm(),
         )),
     );
     array_buffer_prototype.define_non_enumerable(
@@ -99,6 +108,7 @@ pub(crate) fn install_array_buffer(
             2,
             NativeFunction::ArrayBufferPrototypeSlice,
             false,
+            env.realm(),
         )),
     );
     array_buffer_prototype.define_non_enumerable(
@@ -108,6 +118,7 @@ pub(crate) fn install_array_buffer(
             2,
             NativeFunction::ArrayBufferPrototypeSliceToImmutable,
             false,
+            env.realm(),
         )),
     );
     array_buffer_prototype.define_non_enumerable(
@@ -117,6 +128,7 @@ pub(crate) fn install_array_buffer(
             0,
             NativeFunction::ArrayBufferPrototypeTransfer,
             false,
+            env.realm(),
         )),
     );
     array_buffer_prototype.define_non_enumerable(
@@ -126,6 +138,7 @@ pub(crate) fn install_array_buffer(
             0,
             NativeFunction::ArrayBufferPrototypeTransferToFixedLength,
             false,
+            env.realm(),
         )),
     );
     array_buffer_prototype.define_non_enumerable(
@@ -135,19 +148,21 @@ pub(crate) fn install_array_buffer(
             0,
             NativeFunction::ArrayBufferPrototypeTransferToImmutable,
             false,
+            env.realm(),
         )),
     );
-    array_buffer_function.properties.borrow_mut().insert(
+    array_buffer_function.define_property(
         "prototype".to_owned(),
         Property::fixed_non_enumerable(Value::Object(array_buffer_prototype)),
     );
-    array_buffer_function.properties.borrow_mut().insert(
+    array_buffer_function.define_property(
         "isView".to_owned(),
         Property::non_enumerable(Value::Function(Function::new_native(
             Some("isView"),
             1,
             NativeFunction::ArrayBufferIsView,
             false,
+            env.realm(),
         ))),
     );
     symbol::define_species_accessor(env, &array_buffer_function);
@@ -188,6 +203,7 @@ pub(crate) fn native_array_buffer(
         _ => ObjectRef::with_prototype_slot(
             HashMap::new(),
             crate::native_construct_prototype_slot(function, env)?,
+            env.realm().atoms(),
         ),
     };
     ensure_array_buffer_allocation_length(length)?;
@@ -404,7 +420,7 @@ pub(crate) fn native_array_buffer_prototype_slice_to_immutable(
 
     let constructor = env.get("ArrayBuffer").unwrap_or(Value::Undefined);
     let prototype = crate::constructor_prototype(&constructor, env);
-    let result = ObjectRef::with_prototype_slot(HashMap::new(), prototype);
+    let result = ObjectRef::with_prototype_slot(HashMap::new(), prototype, env.realm().atoms());
     define_array_buffer_data(&result, slice);
     define_array_buffer_immutable(&result);
     Ok(Value::Object(result))
@@ -472,7 +488,7 @@ fn array_buffer_copy_and_detach(
 
     let constructor = env.get("ArrayBuffer").unwrap_or(Value::Undefined);
     let prototype = crate::constructor_prototype(&constructor, env);
-    let result = ObjectRef::with_prototype_slot(HashMap::new(), prototype);
+    let result = ObjectRef::with_prototype_slot(HashMap::new(), prototype, env.realm().atoms());
     define_array_buffer_data(&result, bytes);
     match kind {
         TransferKind::PreserveResizable => {
@@ -708,7 +724,7 @@ pub(crate) fn try_borrow_fixed_array_buffer_bytes_mut(
 pub(crate) fn new_array_buffer(env: &CallEnv, length: usize) -> ObjectRef {
     let constructor = env.get("ArrayBuffer").unwrap_or(Value::Undefined);
     let prototype = crate::constructor_prototype(&constructor, env);
-    let object = ObjectRef::with_prototype_slot(HashMap::new(), prototype);
+    let object = ObjectRef::with_prototype_slot(HashMap::new(), prototype, env.realm().atoms());
     define_array_buffer_data(&object, vec![0; length]);
     object
 }

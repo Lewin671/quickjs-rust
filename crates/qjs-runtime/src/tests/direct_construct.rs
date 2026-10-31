@@ -263,3 +263,19 @@ fn class_methods_that_only_read_their_class_name_take_the_direct_leaf_path() {
         Value::Boolean(true)
     );
 }
+
+#[test]
+fn warmed_constructor_prototype_slots_load_replacements_and_function_edges() {
+    assert_eq!(
+        crate::eval(
+            "function C(v){this.v=v;}for(let i=0;i<20;i++)new C(i);let parent={marker:2};C.prototype=parent;let a=new C(7);let seen=0;Object.defineProperty(parent,'v',{set(v){seen=v;},configurable:true});let b=new C(8);Object.getPrototypeOf(a)===parent && Object.getPrototypeOf(b)===parent && a.v===7 && !Object.prototype.hasOwnProperty.call(b,'v') && seen===8;"
+        ),
+        Ok(crate::Value::Boolean(true))
+    );
+    assert_eq!(
+        crate::eval(
+            "function C(v){this.v=v;}for(let i=0;i<20;i++)new C(i);let p=function P(){};C.prototype=p;let a=new C(7);C.prototype=C;let b=new C(8);C.prototype=C;let b2=new C(8);let b3=new C(8);C.prototype=NaN;let c=new C(9);let c2=new C(9);C.prototype=-0;let d=new C(10);Object.getPrototypeOf(a)===p && Object.getPrototypeOf(b)===C && Object.getPrototypeOf(b2)===C && Object.getPrototypeOf(b3)===C && Object.getPrototypeOf(c)===Object.prototype && Object.getPrototypeOf(c2)===Object.prototype && Object.getPrototypeOf(d)===Object.prototype && [a.v,b.v,c.v,d.v].join(',')==='7,8,9,10';"
+        ),
+        Ok(crate::Value::Boolean(true))
+    );
+}

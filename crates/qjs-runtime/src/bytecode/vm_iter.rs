@@ -146,7 +146,7 @@ impl Vm<'_> {
         let next = self.pop()?;
         let iterator = self.pop()?;
         if matches!(self.load_local(done_slot)?, Value::Boolean(true)) {
-            self.push_array_literal(ArrayRef::new(Vec::new()));
+            self.push_array_literal(ArrayRef::new(self.env.realm(), Vec::new()));
             return Ok(());
         }
         self.store_local(done_slot, Value::Boolean(true))?;
@@ -154,7 +154,7 @@ impl Vm<'_> {
         let result = iterator_rest_values(&iterator, &next, &mut env);
         self.apply_env(env);
         if let Some(values) = self.handle_runtime_result(result)? {
-            self.push_array_literal(ArrayRef::new(values));
+            self.push_array_literal(ArrayRef::new(self.env.realm(), values));
         }
         Ok(())
     }
@@ -197,7 +197,7 @@ impl Vm<'_> {
             return Ok(());
         };
         let prototype = self.cached_object_prototype();
-        let rest = ObjectRef::with_prototype(HashMap::new(), prototype);
+        let rest = ObjectRef::with_prototype(HashMap::new(), prototype, self.env.realm().atoms());
         for (key, value) in entries {
             match key {
                 PropertyKey::String(key) => rest.set(key, value),
@@ -463,7 +463,10 @@ impl Vm<'_> {
             if !done {
                 let env = self.callee_env();
                 return Ok(Some(InnerStep::Suspend(iterator_result(
-                    value, false, &env,
+                    value,
+                    false,
+                    &env,
+                    env.realm().atoms(),
                 ))));
             }
             Ok(Some(InnerStep::Done(value)))
@@ -491,8 +494,13 @@ impl Vm<'_> {
     }
 }
 
-fn iterator_result(value: Value, done: bool, env: &CallEnv) -> Value {
-    let object = ObjectRef::with_prototype(HashMap::new(), object_prototype(env));
+fn iterator_result(
+    value: Value,
+    done: bool,
+    env: &CallEnv,
+    domain: &crate::property::atom::AtomDomain,
+) -> Value {
+    let object = ObjectRef::with_prototype(HashMap::new(), object_prototype(env), domain);
     object.define_property("value".to_owned(), Property::enumerable(value));
     object.define_property(
         "done".to_owned(),

@@ -173,6 +173,7 @@ mod tests {
 
     #[test]
     fn views_add_no_size_or_owner() {
+        let domain = crate::property::atom::AtomDomain::new();
         assert_eq!(std::mem::size_of::<Value>(), 16);
         assert_eq!(std::mem::size_of::<ValueKind>(), 1);
         assert_eq!(std::mem::size_of::<Option<&JsString>>(), 8);
@@ -181,7 +182,7 @@ mod tests {
         // Borrowing the payload took no second owner.
         assert!(view.is_unique());
         assert_eq!(string.kind(), ValueKind::String);
-        let object = ObjectRef::new(HashMap::new());
+        let object = ObjectRef::new(HashMap::new(), &domain);
         let value = Value::Object(object.clone());
         let view = value.as_ordinary_object().expect("an object");
         // The view is the value's own handle, not a clone of it.

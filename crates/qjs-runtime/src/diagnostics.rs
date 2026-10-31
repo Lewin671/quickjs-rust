@@ -25,7 +25,7 @@
 /// order, and the thread-local storage cannot drift apart as fields are added.
 macro_rules! declare_counters {
     ($($(#[$doc:meta])* $field:ident,)+) => {
-        /// One monotonic count per diagnosed execution event.
+        /// Execution event counts and explicitly documented current-size gauges.
         #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
         pub struct Counters {
             $($(#[$doc])* pub $field: u64,)+
@@ -49,6 +49,15 @@ macro_rules! declare_counters {
 }
 
 declare_counters! {
+    property_array_seed_headers,
+    property_array_seed_releases,
+    property_array_cold_stores,
+    property_array_named_materializations,
+    property_constructor_prototype_hits,
+    property_constructor_prototype_misses,
+    property_arguments_template_hits,
+    property_arguments_template_misses,
+    property_arguments_templates_inserted,
     /// Calls a VM call opcode dispatched to a user function with a bytecode
     /// body, before any tier decides how to run it. A workload that claims N
     /// calls must report about N here, or the workload is not measuring calls.
@@ -75,9 +84,65 @@ declare_counters! {
     /// Statically named property reads and writes.
     named_property_reads,
     named_property_writes,
+    /// Shape IC results, generic own probes (including hook declines), and text-index queries by receiver family.
+    ic_object_hits,
+    ic_object_misses,
+    ic_object_probes,
+    ic_object_hashes,
+    ic_typed_array_hits,
+    ic_typed_array_misses,
+    ic_typed_array_probes,
+    ic_typed_array_hashes,
+    ic_array_prototype_hits,
+    ic_array_prototype_misses,
+    ic_array_prototype_probes,
+    ic_array_prototype_hashes,
+    ic_string_wrapper_hits,
+    ic_string_wrapper_misses,
+    ic_string_wrapper_probes,
+    ic_string_wrapper_hashes,
+    ic_array_hits,
+    ic_array_misses,
+    ic_array_probes,
+    ic_array_hashes,
+    ic_function_hits,
+    ic_function_misses,
+    ic_function_probes,
+    ic_function_hashes,
+    ic_map_hits,
+    ic_map_misses,
+    ic_map_probes,
+    ic_map_hashes,
+    ic_set_hits,
+    ic_set_misses,
+    ic_set_probes,
+    ic_set_hashes,
+    ic_exotic_hits,
+    ic_exotic_misses,
+    ic_exotic_probes,
+    ic_exotic_hashes,
     /// Property-name atoms created by an interning domain. Steady-state
     /// named access must add none: linked code reuses its atoms.
     property_atoms_created,
+    /// Calls to string or symbol interning, including existing-key hits.
+    property_key_interns,
+    /// Content/identity index searches at host key boundaries, including finds.
+    property_text_probes,
+    property_symbol_probes,
+    /// ID lookup probes performed by the named-store authority.
+    property_id_probes,
+    /// Cold ID-index reconstruction work, separate from operation lookup probes.
+    property_id_index_rebuilds,
+    property_id_index_rebuilt_entries,
+    /// Shape transition hits and misses; hits copy no fields.
+    property_transition_hits,
+    property_transition_misses,
+    property_shape_field_copies,
+    /// Append nodes created on transition misses (private edits/root excluded).
+    property_shape_nodes_created,
+    /// Gauge: shape nodes retained by live domain owners, including roots.
+    /// Live uncached layouts are excluded; this returns to zero on owner drop.
+    property_cached_shape_nodes,
     /// Bodies whose named operands were linked to an atom domain. One per
     /// body and domain; a count that grows with executed operations means
     /// linking is not cached.

@@ -1,14 +1,12 @@
-use std::num::NonZeroU32;
-
 use super::{AtomDomain, AtomDomainExhausted, canonical_property_text};
 use crate::string::{string_code_units, string_from_code_units};
 
 #[test]
 fn equal_keys_share_one_atom_and_distinct_keys_do_not() {
     let domain = AtomDomain::new();
-    let first = domain.intern("length").expect("intern");
-    let again = domain.intern("length").expect("intern");
-    let other = domain.intern("lengths").expect("intern");
+    let first = domain.intern("length");
+    let again = domain.intern("length");
+    let other = domain.intern("lengths");
     assert_eq!(first, again);
     assert_eq!(first.id(), again.id());
     assert_ne!(first, other);
@@ -19,11 +17,11 @@ fn equal_keys_share_one_atom_and_distinct_keys_do_not() {
 #[test]
 fn numeric_strings_keep_their_spelling() {
     let domain = AtomDomain::new();
-    let one = domain.intern("1").expect("intern");
-    let padded = domain.intern("01").expect("intern");
-    let max = domain.intern("4294967295").expect("intern");
-    let below_max = domain.intern("4294967294").expect("intern");
-    let negative = domain.intern("-0").expect("intern");
+    let one = domain.intern("1");
+    let padded = domain.intern("01");
+    let max = domain.intern("4294967295");
+    let below_max = domain.intern("4294967294");
+    let negative = domain.intern("-0");
     assert_ne!(one, padded);
     assert_eq!(one.array_index(), Some(1));
     assert_eq!(padded.array_index(), None);
@@ -39,9 +37,9 @@ fn lone_surrogates_are_exact_keys() {
     let domain = AtomDomain::new();
     let high = string_from_code_units(&[0xD83D]);
     let low = string_from_code_units(&[0xDE00]);
-    let lone_high = domain.intern(&high).expect("intern");
-    let lone_low = domain.intern(&low).expect("intern");
-    let replacement = domain.intern("\u{FFFD}").expect("intern");
+    let lone_high = domain.intern(&high);
+    let lone_low = domain.intern(&low);
+    let replacement = domain.intern("\u{FFFD}");
     assert_ne!(lone_high, lone_low);
     assert_ne!(lone_high, replacement);
     assert_eq!(string_code_units(lone_high.as_str()), vec![0xD83D]);
@@ -58,14 +56,12 @@ fn a_pair_stored_as_escaped_halves_is_the_whole_pair() {
         string_from_code_units(&[0xDE00])
     );
     assert_ne!(halves, "\u{1F600}");
-    let from_halves = domain.intern(&halves).expect("intern");
-    let from_scalar = domain.intern("\u{1F600}").expect("intern");
+    let from_halves = domain.intern(&halves);
+    let from_scalar = domain.intern("\u{1F600}");
     assert_eq!(from_halves, from_scalar);
     assert_eq!(from_halves.as_str(), "\u{1F600}");
     // Reversed halves are not a pair and stay distinct.
-    let reversed = domain
-        .intern(&string_from_code_units(&[0xDE00, 0xD83D]))
-        .expect("intern");
+    let reversed = domain.intern(&string_from_code_units(&[0xDE00, 0xD83D]));
     assert_ne!(reversed, from_scalar);
 }
 
@@ -74,8 +70,8 @@ fn sentinel_range_scalars_stay_distinct_from_lone_surrogates() {
     let domain = AtomDomain::new();
     let scalar = crate::string::string_from_utf8_scalars("\u{F0000}");
     let lone = string_from_code_units(&[0xD800]);
-    let scalar_atom = domain.intern(&scalar).expect("intern");
-    let lone_atom = domain.intern(&lone).expect("intern");
+    let scalar_atom = domain.intern(&scalar);
+    let lone_atom = domain.intern(&lone);
     assert_ne!(scalar_atom, lone_atom);
     assert_eq!(
         string_code_units(scalar_atom.as_str()),
@@ -91,8 +87,8 @@ fn sentinel_range_scalars_stay_distinct_from_lone_surrogates() {
 fn domains_do_not_share_identity() {
     let first = AtomDomain::new();
     let second = AtomDomain::new();
-    let a = first.intern("x").expect("intern");
-    let b = second.intern("x").expect("intern");
+    let a = first.intern("x");
+    let b = second.intern("x");
     assert_ne!(a, b);
     assert!(a.belongs_to(&first));
     assert!(!a.belongs_to(&second));
@@ -103,20 +99,20 @@ fn domains_do_not_share_identity() {
 }
 
 #[test]
-fn reclaimed_atoms_get_fresh_ids() {
+fn reclaimed_atoms_reuse_dead_ids() {
     let domain = AtomDomain::new();
-    let first_id = domain.intern("transient").expect("intern").id();
+    let first_id = domain.intern("transient").id();
     assert_eq!(domain.live_count(), 0);
-    let second_id = domain.intern("transient").expect("intern").id();
-    assert!(second_id > first_id, "ids must never be reused");
+    let second_id = domain.intern("transient").id();
+    assert_eq!(second_id, first_id);
 }
 
 #[test]
 fn key_churn_retention_is_bounded_by_live_atoms() {
     let domain = AtomDomain::new();
-    let kept = domain.intern("kept").expect("intern");
+    let kept = domain.intern("kept");
     for index in 0..10_000 {
-        let atom = domain.intern(&format!("churn{index}")).expect("intern");
+        let atom = domain.intern(&format!("churn{index}"));
         drop(atom);
     }
     assert_eq!(domain.live_count(), 1);
@@ -125,17 +121,58 @@ fn key_churn_retention_is_bounded_by_live_atoms() {
         "{}",
         domain.table_len()
     );
-    assert_eq!(domain.intern("kept").expect("intern"), kept);
+    assert_eq!(domain.intern("kept"), kept);
 }
 
 #[test]
-fn exhaustion_fails_instead_of_wrapping() {
-    let domain = AtomDomain::starting_at(NonZeroU32::new(u32::MAX - 1).expect("nonzero"));
-    let penultimate = domain.intern("a").expect("intern");
-    let last = domain.intern("b").expect("intern");
-    assert_eq!(penultimate.id().get(), u32::MAX - 1);
-    assert_eq!(last.id().get(), u32::MAX);
-    assert_eq!(domain.intern("c"), Err(AtomDomainExhausted));
-    // Existing atoms are still found after exhaustion.
-    assert_eq!(domain.intern("a").expect("intern"), penultimate);
+fn symbols_share_the_namespace_but_only_alias_by_identity() {
+    let domain = AtomDomain::new();
+    let first = crate::ObjectRef::new(std::collections::HashMap::new(), &domain);
+    let second = crate::ObjectRef::new(std::collections::HashMap::new(), &domain);
+    let text = domain.intern("same description");
+    let a = domain.intern_symbol(&first);
+    let again = domain.intern_symbol(&first);
+    let b = domain.intern_symbol(&second);
+    assert_eq!(a, again);
+    assert_ne!(a, b);
+    assert_ne!(a.id(), text.id());
+    assert_ne!(b.id(), text.id());
+    assert!(a.symbol().unwrap().ptr_eq(&first));
+    assert_eq!(a.string_text(), None);
+    assert_eq!(a.array_index(), None);
+    assert_eq!(domain.lease(a.id()), Some(a.clone()));
+    let id = a.id();
+    drop(a);
+    drop(again);
+    assert!(domain.lease(id).is_none());
+}
+
+#[test]
+fn symbol_and_directory_churn_is_swept_with_text_indices() {
+    let domain = AtomDomain::new();
+    for _ in 0..1000 {
+        let symbol = crate::ObjectRef::new(std::collections::HashMap::new(), &domain);
+        let lease = domain.intern_symbol(&symbol);
+        assert!(domain.lease(lease.id()).is_some());
+    }
+    assert_eq!(domain.live_count(), 0);
+    assert!(domain.table_len() <= super::MIN_SWEEP_LEN);
+    let table = domain.0.table.borrow();
+    assert!(table.symbols.len() <= super::MIN_SWEEP_LEN);
+}
+
+#[test]
+fn test_cap_counts_simultaneously_live_records_and_reuses_both_kinds() {
+    let domain = AtomDomain::with_limit(2);
+    let symbol = crate::ObjectRef::new(std::collections::HashMap::new(), &domain);
+    let a = domain.try_intern("a").unwrap();
+    let b = domain.try_intern_symbol(&symbol).unwrap();
+    assert_eq!(domain.try_intern("full"), Err(AtomDomainExhausted));
+    assert_eq!(domain.find("a"), Some(a.clone()));
+    let id = a.id();
+    drop(a);
+    let new = domain.try_intern("reused").unwrap();
+    assert_eq!(new.id(), id);
+    drop(b);
+    assert!(domain.try_intern_symbol(&symbol).is_ok());
 }

@@ -102,7 +102,7 @@ fn splice_plain_dense(
             })
         },
     )??;
-    Some(Value::Array(crate::ArrayRef::new(removed)))
+    Some(Value::Array(crate::ArrayRef::new(env.realm(), removed)))
 }
 
 pub(super) fn splice_start_with_env(

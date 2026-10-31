@@ -19,7 +19,7 @@ pub(crate) fn native_object_group_by(
         });
     }
 
-    let result = ObjectRef::with_prototype(HashMap::new(), None);
+    let result = ObjectRef::with_prototype(HashMap::new(), None, env.realm().atoms());
     for (index, value) in iterable_values_with_env(items, "Object.groupBy", env)?
         .into_iter()
         .enumerate()
@@ -31,18 +31,27 @@ pub(crate) fn native_object_group_by(
             env,
             false,
         )?;
-        append_group(&result, to_property_key_value(key, env)?, value);
+        let key = to_property_key_value(key, env)?;
+        append_group(env.realm(), &result, key, value);
     }
 
     Ok(Value::Object(result))
 }
 
-fn append_group(result: &ObjectRef, key: PropertyKey, value: Value) {
+fn append_group(
+    realm: &crate::function::Realm,
+    result: &ObjectRef,
+    key: PropertyKey,
+    value: Value,
+) {
     match key {
         PropertyKey::String(key) => {
             match result.own_property(&key).map(|property| property.value) {
                 Some(Value::Array(group)) => group.set(group.len(), value),
-                _ => result.define_property(key, Property::enumerable(group_array(value))),
+                _ => result.define_property(
+                    key,
+                    Property::enumerable(group_array(realm, value, &result.domain())),
+                ),
             }
         }
         PropertyKey::Symbol(symbol) => {
@@ -51,14 +60,19 @@ fn append_group(result: &ObjectRef, key: PropertyKey, value: Value) {
                 .map(|property| property.value)
             {
                 Some(Value::Array(group)) => group.set(group.len(), value),
-                _ => {
-                    result.define_symbol_property(symbol, Property::enumerable(group_array(value)))
-                }
+                _ => result.define_symbol_property(
+                    symbol,
+                    Property::enumerable(group_array(realm, value, &result.domain())),
+                ),
             }
         }
     }
 }
 
-fn group_array(value: Value) -> Value {
-    Value::Array(ArrayRef::new(vec![value]))
+fn group_array(
+    realm: &crate::function::Realm,
+    value: Value,
+    _domain: &crate::property::atom::AtomDomain,
+) -> Value {
+    Value::Array(ArrayRef::new(realm, vec![value]))
 }

@@ -21,7 +21,6 @@ use crate::{
 use super::vm::Vm;
 
 use super::ir::NamedPropertyCache;
-use super::named_property_cache::CacheProbe;
 use super::vm_set::property_set_uses_setter;
 use crate::CallEnv;
 use std::rc::Rc;
@@ -31,25 +30,42 @@ impl Vm<'_> {
     /// after it has proved an ordinary own data-property slot.
     pub(super) fn set_named_prop(
         &mut self,
-        key: &Rc<str>,
+        key: &crate::property::atom::Atom,
         cache: Option<&NamedPropertyCache>,
         is_strict: bool,
     ) -> Result<(), RuntimeError> {
         let value = self.pop()?;
         let object = self.pop()?;
         if !self.is_global_object(&object)
-            && let Some(object_ref) = object.as_ordinary_object()
+            && let Some(receiver) = object.as_ordinary_object()
         {
-            let cached = cache.and_then(|cache| cache.write(object_ref, key, &value));
-            let cached_hit = cached.is_some();
-            let write =
-                cached.unwrap_or_else(|| object_ref.write_existing_own_data_property(key, &value));
-            match write {
-                OwnDataPropertyWrite::Written => {
-                    if !cached_hit {
-                        if let Some(cache) = cache {
-                            cache.record_write(object_ref, key);
+            if let Some(result) =
+                cache.and_then(|cache| cache.write(receiver, key.as_str(), &value))
+            {
+                match result {
+                    OwnDataPropertyWrite::Written => {
+                        self.stack.push(value);
+                        return Ok(());
+                    }
+                    OwnDataPropertyWrite::ReadOnly => {
+                        if is_strict {
+                            return Err(RuntimeError {
+                                thrown: None,
+                                message: "TypeError: cannot set property".to_owned(),
+                            });
                         }
+                        self.stack.push(value);
+                        return Ok(());
+                    }
+                    OwnDataPropertyWrite::NeedsSlowPath => {}
+                }
+            }
+            let before = cache.map(|_| receiver.with_named(|s| s.version()));
+            let write = receiver.write_or_create_data_key(key, &value, false);
+            match write.result {
+                OwnDataPropertyWrite::Written => {
+                    if let (Some(cache), Some(slot)) = (cache, write.cache_slot) {
+                        cache.record_data_slot(receiver, key, slot, before, write.created);
                     }
                     self.stack.push(value);
                     return Ok(());
@@ -64,24 +80,12 @@ impl Vm<'_> {
                     self.stack.push(value);
                     return Ok(());
                 }
-                OwnDataPropertyWrite::NeedsSlowPath => {
-                    if self.try_create_ordinary_own_data_property(
-                        object_ref,
-                        Rc::clone(key),
-                        &value,
-                    ) {
-                        if let Some(cache) = cache {
-                            cache.record_write(object_ref, key);
-                        }
-                        self.stack.push(value);
-                        return Ok(());
-                    }
-                }
+                OwnDataPropertyWrite::NeedsSlowPath => {}
             }
         }
         self.set_property_value(
             object,
-            PropertyKey::String(key.to_string()),
+            PropertyKey::String(key.as_str().to_owned()),
             value,
             is_strict,
         )
@@ -183,9 +187,6 @@ impl Vm<'_> {
     /// the implicit literal-array slot or the explicit slot installed by the
     /// intrinsic `new Array(...)` constructor.
     pub(super) fn array_uses_realm_prototype(&mut self, array: &crate::ArrayRef) -> bool {
-        if array.uses_default_prototype() {
-            return true;
-        }
         if self.array_prototype_cache.is_none() {
             self.array_prototype_cache = array_prototype(&self.env);
         }
@@ -353,6 +354,26 @@ impl Vm<'_> {
                         | crate::Prototype::Proxy(_),
                     ) => None,
                     None => Some(Value::Undefined),
+
+                    Some(crate::Prototype::Map(_carrier)) => {
+                        let prototype = _carrier.object();
+
+                        match ordinary_chain_data_value(&prototype, key) {
+                            Err(ProxyInChain) | Ok(DirectPropertyRead::NeedsSlowPath) => None,
+                            Ok(DirectPropertyRead::Data(value)) => Some(value),
+                            Ok(DirectPropertyRead::Missing) => Some(Value::Undefined),
+                        }
+                    }
+
+                    Some(crate::Prototype::Set(_carrier)) => {
+                        let prototype = _carrier.object();
+
+                        match ordinary_chain_data_value(&prototype, key) {
+                            Err(ProxyInChain) | Ok(DirectPropertyRead::NeedsSlowPath) => None,
+                            Ok(DirectPropertyRead::Data(value)) => Some(value),
+                            Ok(DirectPropertyRead::Missing) => Some(Value::Undefined),
+                        }
+                    }
                 }
             }
             Value::Function(function) => {
@@ -447,118 +468,57 @@ impl Vm<'_> {
         )
     }
 
-    pub(super) fn try_cached_get_string(
+    #[inline(always)]
+    pub(super) fn try_cached_get_named(
         &self,
         object: &Value,
-        key: &str,
+        name: &crate::property::atom::Atom,
         cache: &NamedPropertyCache,
     ) -> Option<Value> {
-        let Value::Object(object_ref) = object else {
-            cache.clear();
-            return self.try_direct_get_string(object, key);
-        };
-        if symbol::is_symbol_primitive(object_ref)
-            || crate::typed_array::is_typed_array_object(object_ref)
-            || object_ref.is_module_namespace_exotic()
+        if let Some(value) = object.unconditional_named_hook(name.as_str()) {
+            return Some(value);
+        }
+        if let Value::Object(receiver) = object
+            && receiver.is_typed_array_exotic()
+            && name.as_str() == "length"
         {
-            cache.clear();
-            return self.try_direct_get_string(object, key);
+            return self.cached_typed_array_length(object, receiver, cache);
         }
-        if let Some(value) = cache.probe_hot(object_ref) {
-            return Some(value);
-        }
-        let probe = cache.probe(object_ref);
-        if let CacheProbe::Own(value) = probe {
-            return Some(value);
-        }
-        match object_ref.own_data_property_read(key) {
-            OwnDataPropertyRead::Data(value) => {
-                cache.update(object_ref, key, &value);
-                Some(value)
+        cache
+            .get_value(object, Some(&self.env))
+            .or_else(|| self.cached_get_named_miss(object, name, cache))
+    }
+    /// The IC proves the current accessor before this side-effect-free builtin
+    /// shortcut; custom accessors still execute through the ordinary call path.
+    #[inline(never)]
+    fn cached_typed_array_length(
+        &self,
+        value: &Value,
+        object: &ObjectRef,
+        cache: &NamedPropertyCache,
+    ) -> Option<Value> {
+        use super::named_property_cache::ReadOutcome;
+        match cache.read_outcome(value, "length")? {
+            ReadOutcome::Value(value) => Some(value),
+            ReadOutcome::Accessor(property) if matches!(property.getter(), Some(Value::Function(getter)) if getter.native_kind() == Some(NativeFunction::TypedArrayPrototypeLength)) => {
+                Some(Value::Number(
+                    crate::typed_array::typed_array_length(object) as f64,
+                ))
             }
-            // The receiver has no own property of this name, so the read
-            // resolves on the prototype chain -- the shape of every method
-            // call, and the one answer this site used to respond to by
-            // clearing itself and walking the chain again next time.
-            //
-            // The receiver miss proven just above is exactly the precondition
-            // a prototype entry needs, which is why the candidate from the
-            // probe may only be used here.
-            OwnDataPropertyRead::Missing => {
-                if let CacheProbe::PrototypeCandidate { holder, slot } = probe
-                    && let Some(value) = holder.prototype_data_slot_value(slot)
-                {
-                    return Some(value);
-                }
-                let value = self.try_direct_get_string(object, key)?;
-                cache.update_from_prototype(object_ref, key);
-                Some(value)
-            }
-            OwnDataPropertyRead::NeedsSlowPath => {
-                cache.clear();
-                self.try_direct_get_string(object, key)
-            }
+            ReadOutcome::Accessor(_) => None,
         }
     }
-
-    /// Creates a missing ordinary own string data property without cloning the
-    /// call environment when the complete [[Set]] result is already known.
-    /// Observable exotic behavior (accessors, Proxies, typed arrays, module
-    /// namespaces, or non-extensible receivers) remains on the generic path.
-    pub(super) fn try_create_ordinary_own_data_property(
+    #[cold]
+    #[inline(never)]
+    fn cached_get_named_miss(
         &self,
-        object: &ObjectRef,
-        key: Rc<str>,
-        value: &Value,
-    ) -> bool {
-        if symbol::is_symbol_primitive(object)
-            || crate::typed_array::is_typed_array_object(object)
-            || object.is_module_namespace_exotic()
-            || !object.is_extensible()
-            || !matches!(
-                object.own_data_property_read(&key),
-                OwnDataPropertyRead::Missing
-            )
-        {
-            return false;
-        }
-
-        let mut current = object.prototype_slot();
-        loop {
-            match current {
-                Some(crate::Prototype::Object(prototype)) => {
-                    if symbol::is_symbol_primitive(&prototype)
-                        || crate::typed_array::is_typed_array_object(&prototype)
-                        || prototype.is_module_namespace_exotic()
-                    {
-                        return false;
-                    }
-                    if let Some(property) = prototype.own_property(&key) {
-                        if property.is_accessor() || !property.writable {
-                            return false;
-                        }
-                        if !object.create_absent_own_data_property(key.clone(), value.clone()) {
-                            object.set_shared_key(key, value.clone());
-                        }
-                        return true;
-                    }
-                    current = prototype.prototype_slot();
-                }
-                Some(
-                    crate::Prototype::Array(_)
-                    | crate::Prototype::Function(_)
-                    | crate::Prototype::Proxy(_),
-                ) => {
-                    return false;
-                }
-                None => {
-                    if !object.create_absent_own_data_property(key.clone(), value.clone()) {
-                        object.set_shared_key(key, value.clone());
-                    }
-                    return true;
-                }
-            }
-        }
+        object: &Value,
+        name: &crate::property::atom::Atom,
+        cache: &NamedPropertyCache,
+    ) -> Option<Value> {
+        cache
+            .read_value(object, name, Some(&self.env))
+            .or_else(|| self.try_direct_get_string(object, name.as_str()))
     }
 
     fn try_direct_get_symbol(&self, object: &Value, symbol: &ObjectRef) -> Option<Value> {
@@ -592,6 +552,24 @@ impl Vm<'_> {
                         | crate::Prototype::Proxy(_),
                     ) => None,
                     None => Some(Value::Undefined),
+
+                    Some(crate::Prototype::Map(_carrier)) => {
+                        let prototype = _carrier.object();
+
+                        match ordinary_chain_symbol_property(&prototype, symbol) {
+                            Err(ProxyInChain) => None,
+                            Ok(property) => data_property_value(property),
+                        }
+                    }
+
+                    Some(crate::Prototype::Set(_carrier)) => {
+                        let prototype = _carrier.object();
+
+                        match ordinary_chain_symbol_property(&prototype, symbol) {
+                            Err(ProxyInChain) => None,
+                            Ok(property) => data_property_value(property),
+                        }
+                    }
                 }
             }
             // Function symbol lookup and the primitive wrappers go through the
@@ -906,14 +884,6 @@ pub(super) enum DirectPropertyRead {
     NeedsSlowPath,
 }
 
-fn direct_property_read(property: Property) -> DirectPropertyRead {
-    if property.is_accessor() {
-        DirectPropertyRead::NeedsSlowPath
-    } else {
-        DirectPropertyRead::Data(property.value)
-    }
-}
-
 /// Walks an ordinary object's string-keyed prototype chain for the VM get fast
 /// path. Ordinary data properties copy only their value from the HashMap;
 /// accessors and other observable special cases signal a slow-path fallback.
@@ -923,11 +893,14 @@ pub(super) fn ordinary_chain_data_value(
 ) -> Result<DirectPropertyRead, ProxyInChain> {
     let mut current = object.clone();
     loop {
-        if crate::typed_array::is_typed_array_object(&current)
-            && let Some(property) =
-                crate::typed_array::typed_array_own_property_descriptor(&current, key)
-        {
-            return Ok(direct_property_read(property));
+        if current.is_typed_array_exotic() {
+            match crate::typed_array::indexed_element_value(&current, key) {
+                crate::typed_array::IndexedRead::Present(v) => {
+                    return Ok(DirectPropertyRead::Data(*v));
+                }
+                crate::typed_array::IndexedRead::Missing => return Ok(DirectPropertyRead::Missing),
+                crate::typed_array::IndexedRead::NotIndexed => {}
+            }
         }
         match current.own_data_property_read(key) {
             OwnDataPropertyRead::Data(value) => return Ok(DirectPropertyRead::Data(value)),
@@ -946,6 +919,16 @@ pub(super) fn ordinary_chain_data_value(
             }
             Some(crate::Prototype::Proxy(_)) => return Err(ProxyInChain),
             None => return Ok(DirectPropertyRead::Missing),
+
+            Some(crate::Prototype::Map(_carrier)) => {
+                let next = _carrier.object();
+                current = next
+            }
+
+            Some(crate::Prototype::Set(_carrier)) => {
+                let next = _carrier.object();
+                current = next
+            }
         }
     }
 }
@@ -1014,11 +997,12 @@ fn prototype_chain_property(
                 if object.is_module_namespace_exotic() {
                     return Err(ProxyInChain);
                 }
-                if crate::typed_array::is_typed_array_object(&object)
-                    && let Some(property) =
-                        crate::typed_array::typed_array_own_property_descriptor(&object, key)
+                if object.is_typed_array_exotic()
+                    && crate::typed_array::canonical_numeric_index(key).is_some()
                 {
-                    return Ok(Some(property));
+                    return Ok(crate::typed_array::typed_array_own_property_descriptor(
+                        &object, key,
+                    ));
                 }
                 if let Some(property) = object.own_property(key) {
                     return Ok(Some(property));
@@ -1051,6 +1035,50 @@ fn prototype_chain_property(
             }
             Some(crate::Prototype::Proxy(_)) => return Err(ProxyInChain),
             None => return Ok(None),
+
+            Some(crate::Prototype::Map(_carrier)) => {
+                let object = _carrier.object();
+
+                // Namespace descriptors are virtual: their value is live and
+                // their reported writable attribute differs from the backing
+                // descriptor. Keep them on the observable path.
+                if object.is_module_namespace_exotic() {
+                    return Err(ProxyInChain);
+                }
+                if object.is_typed_array_exotic()
+                    && crate::typed_array::canonical_numeric_index(key).is_some()
+                {
+                    return Ok(crate::typed_array::typed_array_own_property_descriptor(
+                        &object, key,
+                    ));
+                }
+                if let Some(property) = object.own_property(key) {
+                    return Ok(Some(property));
+                }
+                current = object.prototype_slot();
+            }
+
+            Some(crate::Prototype::Set(_carrier)) => {
+                let object = _carrier.object();
+
+                // Namespace descriptors are virtual: their value is live and
+                // their reported writable attribute differs from the backing
+                // descriptor. Keep them on the observable path.
+                if object.is_module_namespace_exotic() {
+                    return Err(ProxyInChain);
+                }
+                if object.is_typed_array_exotic()
+                    && crate::typed_array::canonical_numeric_index(key).is_some()
+                {
+                    return Ok(crate::typed_array::typed_array_own_property_descriptor(
+                        &object, key,
+                    ));
+                }
+                if let Some(property) = object.own_property(key) {
+                    return Ok(Some(property));
+                }
+                current = object.prototype_slot();
+            }
         }
     }
 }
@@ -1070,6 +1098,16 @@ pub(super) fn prototype_chain_has_proxy(slot: Option<crate::Prototype>) -> bool 
                 current = function.effective_internal_prototype();
             }
             None => return false,
+
+            Some(crate::Prototype::Map(_carrier)) => {
+                let object = _carrier.object();
+                current = object.prototype_slot()
+            }
+
+            Some(crate::Prototype::Set(_carrier)) => {
+                let object = _carrier.object();
+                current = object.prototype_slot()
+            }
         }
     }
 }
@@ -1092,6 +1130,24 @@ pub(super) fn prototype_chain_needs_recursive_set(slot: Option<crate::Prototype>
                 current = function.effective_internal_prototype();
             }
             None => return false,
+
+            Some(crate::Prototype::Map(_carrier)) => {
+                let object = _carrier.object();
+
+                if object.is_module_namespace_exotic() {
+                    return true;
+                }
+                current = object.prototype_slot();
+            }
+
+            Some(crate::Prototype::Set(_carrier)) => {
+                let object = _carrier.object();
+
+                if object.is_module_namespace_exotic() {
+                    return true;
+                }
+                current = object.prototype_slot();
+            }
         }
     }
 }
@@ -1115,6 +1171,30 @@ pub(super) fn prototype_chain_has_index_hazard(slot: Option<crate::Prototype>) -
             Some(crate::Prototype::Array(_)) => return true,
             Some(crate::Prototype::Function(_) | crate::Prototype::Proxy(_)) => return true,
             None => return false,
+
+            Some(crate::Prototype::Map(_carrier)) => {
+                let object = _carrier.object();
+
+                if object.is_module_namespace_exotic()
+                    || object.has_own_index_property()
+                    || crate::typed_array::is_typed_array_object(&object)
+                {
+                    return true;
+                }
+                current = object.prototype_slot();
+            }
+
+            Some(crate::Prototype::Set(_carrier)) => {
+                let object = _carrier.object();
+
+                if object.is_module_namespace_exotic()
+                    || object.has_own_index_property()
+                    || crate::typed_array::is_typed_array_object(&object)
+                {
+                    return true;
+                }
+                current = object.prototype_slot();
+            }
         }
     }
 }
@@ -1140,6 +1220,24 @@ pub(super) fn prototype_chain_has_typed_array(slot: Option<crate::Prototype>) ->
                 current = function.effective_internal_prototype();
             }
             Some(crate::Prototype::Proxy(_)) | None => return false,
+
+            Some(crate::Prototype::Map(_carrier)) => {
+                let object = _carrier.object();
+
+                if crate::typed_array::is_typed_array_object(&object) {
+                    return true;
+                }
+                current = object.prototype_slot();
+            }
+
+            Some(crate::Prototype::Set(_carrier)) => {
+                let object = _carrier.object();
+
+                if crate::typed_array::is_typed_array_object(&object) {
+                    return true;
+                }
+                current = object.prototype_slot();
+            }
         }
     }
 }
@@ -1178,6 +1276,36 @@ pub(super) fn ordinary_chain_symbol_property(
             }
             Some(crate::Prototype::Proxy(_)) => return Err(ProxyInChain),
             None => return Ok(None),
+
+            Some(crate::Prototype::Map(_carrier)) => {
+                let object = _carrier.object();
+
+                // Module namespace [[Set]] rejects every property key, even an
+                // absent Symbol. Descriptor flattening would lose that exotic
+                // behavior and incorrectly create a property on the receiver.
+                if object.is_module_namespace_exotic() {
+                    return Err(ProxyInChain);
+                }
+                if let Some(property) = object.own_symbol_property(symbol) {
+                    return Ok(Some(property));
+                }
+                current = object.prototype_slot();
+            }
+
+            Some(crate::Prototype::Set(_carrier)) => {
+                let object = _carrier.object();
+
+                // Module namespace [[Set]] rejects every property key, even an
+                // absent Symbol. Descriptor flattening would lose that exotic
+                // behavior and incorrectly create a property on the receiver.
+                if object.is_module_namespace_exotic() {
+                    return Err(ProxyInChain);
+                }
+                if let Some(property) = object.own_symbol_property(symbol) {
+                    return Ok(Some(property));
+                }
+                current = object.prototype_slot();
+            }
         }
     }
 }

@@ -45,7 +45,11 @@ pub(crate) fn new_promise_capability(
 
     if is_native_promise_constructor(c, env) {
         let promise = new_pending_promise(env);
-        let (resolve, reject) = resolving_function_pair(Value::Object(promise.clone()));
+        let (resolve, reject) = resolving_function_pair(
+            env.realm(),
+            Value::Object(promise.clone()),
+            env.realm().atoms(),
+        );
         return Ok(PromiseCapability {
             promise: Value::Object(promise),
             resolve,
@@ -55,12 +59,13 @@ pub(crate) fn new_promise_capability(
 
     // Generic path: the executor stashes resolve/reject into a shared record
     // object that we read after Construct(C, «executor»).
-    let record = ObjectRef::new(HashMap::new());
+    let record = ObjectRef::new(HashMap::new(), env.realm().atoms());
     let mut executor = Function::new_native(
         None,
         2,
         NativeFunction::PromiseGetCapabilitiesExecutor,
         false,
+        env.realm(),
     );
     executor.insert_native_context(CAPABILITY_RECORD.to_owned(), Value::Object(record.clone()));
 

@@ -13,10 +13,11 @@ use super::Value;
 /// object or array, whose own children would otherwise be dropped from
 /// inside this drop. Anything else stays for the ordinary drop.
 #[inline]
-pub(super) fn defer_if_last(value: &mut Value, pending: &mut Vec<Value>) {
+pub(crate) fn defer_if_last(value: &mut Value, pending: &mut Vec<Value>) {
     let last = match value {
         Value::Object(object) => object.is_last_reference(),
         Value::Array(array) => array.is_last_reference(),
+        Value::Function(function) => function.is_last_reference(),
         _ => false,
     };
     if last {
@@ -28,11 +29,12 @@ pub(super) fn defer_if_last(value: &mut Value, pending: &mut Vec<Value>) {
 /// list, so the depth of the chain never reaches the native stack.
 #[cold]
 #[inline(never)]
-pub(super) fn release(mut pending: Vec<Value>) {
+pub(crate) fn release(mut pending: Vec<Value>) {
     while let Some(value) = pending.pop() {
         match value {
             Value::Object(object) => object.release_into(&mut pending),
             Value::Array(array) => array.release_into(&mut pending),
+            Value::Function(function) => function.release_into(&mut pending),
             _ => {}
         }
     }

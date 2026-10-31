@@ -6,10 +6,12 @@ use super::NUMBER_DATA_PROPERTY;
 use crate::CallEnv;
 
 pub(crate) fn install_number(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
-    let number_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
+    let number_prototype =
+        ObjectRef::with_prototype(HashMap::new(), Some(object_prototype), env.realm().atoms());
     env.realm()
         .initialize_number_prototype(number_prototype.clone());
-    let number_function = Function::new_native(Some("Number"), 1, NativeFunction::Number, true);
+    let number_function =
+        Function::new_native(Some("Number"), 1, NativeFunction::Number, true, env.realm());
     number_prototype.define_non_enumerable(NUMBER_DATA_PROPERTY.to_owned(), Value::Number(0.0));
     number_prototype.define_non_enumerable(
         "constructor".to_owned(),
@@ -22,6 +24,7 @@ pub(crate) fn install_number(env: &mut CallEnv, global_this: &Value, object_prot
             1,
             NativeFunction::NumberPrototypeToExponential,
             false,
+            env.realm(),
         )),
     );
     number_prototype.define_non_enumerable(
@@ -31,6 +34,7 @@ pub(crate) fn install_number(env: &mut CallEnv, global_this: &Value, object_prot
             1,
             NativeFunction::NumberPrototypeToFixed,
             false,
+            env.realm(),
         )),
     );
     number_prototype.define_non_enumerable(
@@ -40,6 +44,7 @@ pub(crate) fn install_number(env: &mut CallEnv, global_this: &Value, object_prot
             1,
             NativeFunction::NumberPrototypeToPrecision,
             false,
+            env.realm(),
         )),
     );
     number_prototype.define_non_enumerable(
@@ -49,6 +54,7 @@ pub(crate) fn install_number(env: &mut CallEnv, global_this: &Value, object_prot
             1,
             NativeFunction::NumberPrototypeToString,
             false,
+            env.realm(),
         )),
     );
     number_prototype.define_non_enumerable(
@@ -58,6 +64,7 @@ pub(crate) fn install_number(env: &mut CallEnv, global_this: &Value, object_prot
             0,
             NativeFunction::NumberPrototypeToLocaleString,
             false,
+            env.realm(),
         )),
     );
     number_prototype.define_non_enumerable(
@@ -67,9 +74,10 @@ pub(crate) fn install_number(env: &mut CallEnv, global_this: &Value, object_prot
             0,
             NativeFunction::NumberPrototypeValueOf,
             false,
+            env.realm(),
         )),
     );
-    number_function.properties.borrow_mut().insert(
+    number_function.define_property(
         "prototype".to_owned(),
         Property::fixed_non_enumerable(Value::Object(number_prototype)),
     );
@@ -113,18 +121,20 @@ pub(crate) fn install_number(env: &mut CallEnv, global_this: &Value, object_prot
         1,
         NativeFunction::ParseFloat,
         false,
+        env.realm(),
     ));
     let parse_int_value = Value::Function(Function::new_native(
         Some("parseInt"),
         2,
         NativeFunction::ParseInt,
         false,
+        env.realm(),
     ));
-    number_function.properties.borrow_mut().insert(
+    number_function.define_property(
         "parseFloat".to_owned(),
         Property::non_enumerable(parse_float_value.clone()),
     );
-    number_function.properties.borrow_mut().insert(
+    number_function.define_property(
         "parseInt".to_owned(),
         Property::non_enumerable(parse_int_value.clone()),
     );
@@ -146,20 +156,21 @@ pub(crate) fn install_number(env: &mut CallEnv, global_this: &Value, object_prot
 }
 
 fn define_number_constant(function: &Function, key: &str, value: f64) {
-    function.properties.borrow_mut().insert(
+    function.define_property(
         key.to_owned(),
         Property::data(Value::Number(value), false, false, false),
     );
 }
 
 fn define_function_property(function: &Function, key: &str, length: usize, native: NativeFunction) {
-    function.properties.borrow_mut().insert(
+    function.define_property(
         key.to_owned(),
         Property::non_enumerable(Value::Function(Function::new_native(
             Some(key),
             length,
             native,
             false,
+            function.creation_realm(),
         ))),
     );
 }

@@ -159,12 +159,16 @@ mod tests {
 
     #[test]
     fn static_closures_preserve_marked_realm_views_even_when_disabled() {
+        let domain = crate::property::atom::AtomDomain::new();
         let script =
             qjs_parser::parse_script("const callback = function () { return 1; };").unwrap();
         let code = compile_script(&script).unwrap();
         let mut vm = Vm::new(&code).unwrap();
         for marker in [
-            Value::Object(crate::ObjectRef::new(std::collections::HashMap::new())),
+            Value::Object(crate::ObjectRef::new(
+                std::collections::HashMap::new(),
+                &domain,
+            )),
             Value::Boolean(false),
         ] {
             vm.env.insert(

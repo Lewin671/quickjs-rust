@@ -90,8 +90,7 @@ impl PropertyNamePool {
             .0
             .iter()
             .map(|name| domain.intern(name))
-            .collect::<Result<Box<[Atom]>, _>>()
-            .map_err(|exhausted| exhausted.into_runtime_error())?;
+            .collect::<Box<[Atom]>>();
         Ok(LinkedCode {
             domain: domain.downgrade(),
             atoms,

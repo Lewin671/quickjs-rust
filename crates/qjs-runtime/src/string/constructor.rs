@@ -30,7 +30,11 @@ pub(crate) fn native_string(
 
     let object = match this_value {
         Value::Object(object) => object,
-        _ => ObjectRef::with_prototype(HashMap::new(), function_prototype(function)),
+        _ => ObjectRef::with_prototype(
+            HashMap::new(),
+            function_prototype(function),
+            env.realm().atoms(),
+        ),
     };
     define_string_data(&object, &crate::JsString::from(value), env);
     Ok(Value::Object(object))
@@ -49,16 +53,11 @@ pub(crate) fn construct_string_wrapper(
         Value::Number(number) => crate::JsString::from(crate::number::number_to_js_string(*number)),
         _ => return None,
     };
-    let keys = env.realm().string_object_keys();
-    let mut builder = crate::value::OrderedDataPropertyBuilder::with_capacity(2);
     let length = crate::string::js_string_code_unit_len(&text) as f64;
-    builder.insert_property(keys.data(), Property::non_enumerable(Value::String(text)));
-    builder.insert_property(
-        keys.length(),
-        Property::data(Value::Number(length), false, false, false),
-    );
-    let object = builder.finish(function_prototype(function));
-    object.defer_string_indices();
+    let properties = env
+        .realm()
+        .string_wrapper_store(function_prototype(function), length);
+    let object = ObjectRef::from_string_named(properties, text);
     Some(Value::Object(object))
 }
 
@@ -181,10 +180,8 @@ fn require_object_coercible(value: Value, context: &str) -> Result<Value, Runtim
 /// its property table is first read (`ObjectRef::properties`).
 pub(crate) fn define_string_data(object: &ObjectRef, value: &crate::JsString, env: &CallEnv) {
     let keys = env.realm().string_object_keys();
-    object.define_shared_property(
-        keys.data(),
-        Property::non_enumerable(Value::String(value.clone())),
-    );
+    object.set_string_data(value.clone());
+    object.defer_string_indices();
     object.define_shared_property(
         keys.length(),
         Property::data(
@@ -194,9 +191,7 @@ pub(crate) fn define_string_data(object: &ObjectRef, value: &crate::JsString, en
             false,
         ),
     );
-    // The index properties are defined when the wrapper's property table
-    // is first read; a wrapper made only to call a method never needs them.
-    object.defer_string_indices();
+    // Virtual indices remain deferred; no indexed properties were installed.
 }
 
 pub(crate) fn string_object_value(object: &ObjectRef) -> Option<String> {

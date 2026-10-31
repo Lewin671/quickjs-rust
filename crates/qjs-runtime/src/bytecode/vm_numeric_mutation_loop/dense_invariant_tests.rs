@@ -358,8 +358,14 @@ fn writable_dense_sparse_source_replays_prototype_getter_once() {
 
 #[test]
 fn distinct_dense_writable_lease_releases_prefix_on_real_borrow_conflict() {
-    let first = ArrayRef::new(vec![Value::Number(1.0)]);
-    let second = ArrayRef::new(vec![Value::Number(2.0)]);
+    let first = ArrayRef::new_in_domain(
+        &crate::property::atom::AtomDomain::new(),
+        vec![Value::Number(1.0)],
+    );
+    let second = ArrayRef::new_in_domain(
+        &crate::property::atom::AtomDomain::new(),
+        vec![Value::Number(2.0)],
+    );
     let arrays = [first.clone(), second.clone()];
     let mut mutation_ran = false;
 

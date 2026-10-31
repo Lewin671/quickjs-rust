@@ -3,9 +3,17 @@ use std::rc::Rc;
 use super::Value;
 
 #[derive(Clone, Debug)]
-struct AccessorState {
+pub(in crate::value) struct AccessorState {
     get: Option<Value>,
     set: Option<Value>,
+}
+
+impl AccessorState {
+    pub(in crate::value) fn defer_children(&mut self, pending: &mut Vec<Value>) {
+        for value in [&mut self.get, &mut self.set].into_iter().flatten() {
+            super::teardown::defer_if_last(value, pending);
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -19,7 +27,42 @@ pub(crate) struct Property {
     pub(crate) configurable: bool,
 }
 
+/// A constant IC observes the existing accessor pair without owning its closures.
+#[derive(Clone, Debug)]
+pub(crate) struct WeakAccessorState(std::rc::Weak<AccessorState>);
+impl WeakAccessorState {
+    pub(crate) fn upgrade(&self, enumerable: bool, configurable: bool) -> Option<Property> {
+        Some(Property::from_shared_accessors(
+            self.0.upgrade()?,
+            enumerable,
+            configurable,
+        ))
+    }
+}
+
 impl Property {
+    pub(crate) fn weak_accessors(&self) -> Option<WeakAccessorState> {
+        self.accessors
+            .as_ref()
+            .map(|pair| WeakAccessorState(Rc::downgrade(pair)))
+    }
+    pub(in crate::value) fn shared_accessors(&self) -> Option<Rc<AccessorState>> {
+        self.accessors.clone()
+    }
+    pub(in crate::value) fn from_shared_accessors(
+        accessors: Rc<AccessorState>,
+        enumerable: bool,
+        configurable: bool,
+    ) -> Self {
+        Self {
+            value: Value::Undefined,
+            accessors: Some(accessors),
+            enumerable,
+            writable: false,
+            configurable,
+        }
+    }
+
     pub(crate) fn data(value: Value, enumerable: bool, writable: bool, configurable: bool) -> Self {
         Self {
             value,
@@ -134,19 +177,6 @@ impl Property {
         )
         .set = set;
     }
-
-    pub(crate) fn make_non_configurable(&mut self) {
-        self.configurable = false;
-    }
-
-    pub(crate) fn make_non_writable(&mut self) {
-        self.writable = false;
-    }
-
-    pub(crate) fn freeze_data(&mut self) {
-        self.make_non_configurable();
-        self.make_non_writable();
-    }
 }
 
 #[cfg(test)]
@@ -155,6 +185,20 @@ mod tests {
 
     use super::Property;
     use crate::Value;
+
+    #[test]
+    fn weak_accessor_upgrade_reuses_the_pair_without_pinning_it() {
+        let property = Property::accessor(Some(Value::Undefined), None, true, true);
+        let weak = property.weak_accessors().unwrap();
+        let hit = weak.upgrade(true, true).unwrap();
+        assert!(Rc::ptr_eq(
+            property.accessors.as_ref().unwrap(),
+            hit.accessors.as_ref().unwrap()
+        ));
+        drop(hit);
+        drop(property);
+        assert!(weak.upgrade(true, true).is_none());
+    }
 
     #[test]
     #[cfg(target_pointer_width = "64")]

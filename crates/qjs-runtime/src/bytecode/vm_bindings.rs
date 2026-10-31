@@ -35,7 +35,7 @@ pub(super) struct TypedLoopSloppyGlobalWrite {
     /// straight to the slot instead of hashing the name into the global
     /// object's table. `None` for a name whose store has a side effect of
     /// its own.
-    property_slot: Option<(usize, u64)>,
+    property_slot: Option<(usize, crate::value::layout::LayoutVersion)>,
 }
 
 impl Vm<'_> {
@@ -623,7 +623,9 @@ impl Vm<'_> {
         // `globalThis` itself and the dynamic-function realm marker have
         // effects beyond the value (`write_existing_own_data_property`,
         // `replace_existing_realm_with_cell`); they keep the named path.
-        let property_slot = (name != "globalThis" && name != "__quickjsRustDynamicFunctionRealm")
+        let property_slot = (name != "globalThis"
+            && name != "__quickjsRustDynamicFunctionRealm"
+            && self.env.realm().atoms().ic_policy().enabled)
             .then(|| global_this.any_storage_data_slot(name))
             .flatten()
             .map(|slot| (slot, global_this.layout_revision()));
@@ -640,25 +642,33 @@ impl Vm<'_> {
     /// code can run in an admitted region, so the entry proof stays valid until
     /// the loop yields; if the data-property write nevertheless declines, the
     /// caller deoptimizes before the bytecode store and replays it normally.
+    #[inline(always)]
     pub(super) fn write_typed_loop_sloppy_global(
         &mut self,
         target: &TypedLoopSloppyGlobalWrite,
         value: Value,
     ) -> bool {
-        if let Some((slot, layout)) = target.property_slot
-            && target.global_this.layout_revision() == layout
+        if let Some((slot, layout)) = target.property_slot.as_ref()
+            && target.global_this.with_named_mut(|store| {
+                // Admission proved an own writable data slot. Guard and publish
+                // under one borrow; no descriptor reprobe or callback intervenes.
+                store.matches_version(layout) && store.overwrite_guarded_data(*slot, value.clone())
+            })
         {
-            if !matches!(
-                target.global_this.any_storage_data_slot_write(slot, &value),
-                Some(OwnDataPropertyWrite::Written)
-            ) {
-                return false;
-            }
             debug_assert!(self.env.is_realm_binding_cell(&target.name, &target.cell));
             target.cell.set(value.clone());
             self.locals[target.slot] = Some(value);
             return true;
         }
+        self.write_typed_loop_sloppy_global_slow(target, value)
+    }
+    #[cold]
+    #[inline(never)]
+    fn write_typed_loop_sloppy_global_slow(
+        &mut self,
+        target: &TypedLoopSloppyGlobalWrite,
+        value: Value,
+    ) -> bool {
         if !matches!(
             target
                 .global_this

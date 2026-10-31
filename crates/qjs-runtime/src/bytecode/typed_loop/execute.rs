@@ -131,20 +131,35 @@ fn run<F: LoopFrame>(vm: &mut F, program: &TypedLoopProgram) -> Outcome {
     // deoptimizing on every iteration.
     if !program.helper_sites.is_empty() {
         let Some(graphs) = super::helper_graph::Preparation::prepare(vm, program) else {
-            return Outcome::Declined;
+            return program
+                .unhoisted
+                .as_deref()
+                .map_or(Outcome::Declined, |p| run(vm, p));
         };
         *program.helper_graphs.borrow_mut() = graphs;
     }
     let mut scratch = program.take_scratch();
-    let outcome = seed_registers(vm, program, &mut scratch)
+    let admitted = seed_registers(vm, program, &mut scratch)
         .and_then(|()| {
             if program.hoisted_reads.is_empty() {
                 return Some(());
             }
             perform_hoisted_reads(vm, program, &mut scratch.registers, &mut scratch.boxed)
         })
-        .map(|()| execute(vm, program, &mut scratch))
-        .unwrap_or(Outcome::Declined);
+        .filter(|()| {
+            program
+                .native_call_guards
+                .iter()
+                .all(|guard| guard.holds(&scratch.boxed))
+        });
+    if admitted.is_none() {
+        program.recycle_scratch(scratch);
+        return program
+            .unhoisted
+            .as_deref()
+            .map_or(Outcome::Declined, |p| run(vm, p));
+    }
+    let outcome = execute(vm, program, &mut scratch);
     if program.deferred_global_publication && !matches!(outcome, Outcome::Declined) {
         publish_deferred_globals(vm, program, &scratch);
     }
@@ -358,6 +373,15 @@ fn execute<F: LoopFrame>(
                 name,
                 cache,
             } => {
+                if let Some(value) = boxed[object as usize]
+                    .unconditional_named_hook(&program.names[name as usize])
+                    .or_else(|| {
+                        shape_caches[cache as usize].get_value(&boxed[object as usize], None)
+                    })
+                {
+                    boxed[dst as usize] = value;
+                    continue;
+                }
                 let Some(value) = get_named(
                     &boxed[object as usize],
                     &program.names[name as usize],
@@ -380,6 +404,7 @@ fn execute<F: LoopFrame>(
                     &program.names[name as usize],
                     &boxed[value as usize],
                     &mut shape_caches[cache as usize],
+                    vm.loop_env(),
                 ) {
                     deopt_here!(op);
                 }
@@ -396,9 +421,7 @@ fn execute<F: LoopFrame>(
                 // straight to the rest of `get_named`, whose first step this is.
                 if let Value::Object(receiver) = &boxed[object as usize] {
                     let shapes = &mut shape_caches[cache as usize];
-                    if let Some((key, slot)) = shapes.slot.as_ref()
-                        && let Some(number) = receiver.shared_data_slot_number(key, *slot)
-                    {
+                    if let Some(number) = shapes.get_number(receiver) {
                         registers[reg(dst)] = Typed::Number(number);
                         continue;
                     }
@@ -435,16 +458,17 @@ fn execute<F: LoopFrame>(
                 // inline numeric read.
                 if let (Value::Object(receiver), Typed::Number(number)) =
                     (&boxed[object as usize], registers[reg(value)])
-                    && let Some((key, slot)) = shape_caches[cache as usize].slot.as_ref()
-                    && receiver.shared_data_slot_write_number(key, *slot, number)
+                    && !vm.loop_env().is_realm_global_object(receiver)
+                    && shape_caches[cache as usize].write_number(receiver, number)
                 {
                     continue;
                 }
-                if !set_named(
+                if !set_named_typed_miss(
                     &boxed[object as usize],
                     &program.names[name as usize],
                     &registers[reg(value)].to_value(),
                     &mut shape_caches[cache as usize],
+                    vm.loop_env(),
                 ) {
                     deopt_here!(op);
                 }
@@ -491,21 +515,19 @@ fn execute<F: LoopFrame>(
                 let written = match (&boxed[receiver as usize], &boxed[key as usize]) {
                     (Value::Object(object), Value::String(name)) => {
                         let value = &boxed[value as usize];
-                        match object.write_existing_own_data_property(name.as_str(), value) {
-                            crate::value::OwnDataPropertyWrite::Written => true,
-                            // The property does not exist yet. A dictionary
-                            // loop creates each key exactly once, so refusing
-                            // here would deoptimize on the first iteration and
-                            // never re-enter -- the whole loop would be lost to
-                            // its own first write. The creation path re-checks
-                            // extensibility, exotics, and the prototype chain
-                            // itself, so anything it will not do still declines.
-                            _ => vm.try_create_ordinary_own_data_property(
-                                object,
-                                Rc::from(name.as_str()),
-                                value,
-                            ),
+                        if vm.loop_env().is_realm_global_object(object) {
+                            deopt_here!(op);
                         }
+                        let domain = vm.loop_env().realm().atoms();
+                        let lease = name
+                            .property_key_lease(domain)
+                            .unwrap_or_else(|| domain.intern(name.as_str()));
+                        matches!(
+                            object
+                                .write_or_create_computed_data_key(&lease, value)
+                                .result,
+                            crate::value::OwnDataPropertyWrite::Written
+                        )
                     }
                     // A boxed key is not automatically a string, exactly as
                     // for `computed_read`: `s[r][c] = v` writes through an
@@ -767,7 +789,7 @@ fn seed_registers<F: LoopFrame>(
     program
         .shape_caches
         .borrow_mut()
-        .resize_with(program.cache_count, super::ShapeWays::default);
+        .resize_with(program.cache_count, super::ShapeWays::local_site);
     Some(())
 }
 
@@ -1184,18 +1206,11 @@ fn prototype_method(
     name: &Rc<str>,
     shapes: &mut super::ShapeWays,
 ) -> Option<Value> {
-    if let Some(exact) = shapes.exact()
-        && let Some(value) = exact.read(prototype)
-    {
-        return Some(value);
-    }
-    if let crate::value::OwnDataPropertyRead::Data(value) = prototype.own_data_property_read(name) {
-        shapes.record_exact(prototype, value.clone());
-        return Some(value);
-    }
-    None
+    shapes.read_object(prototype, name)
 }
 
+#[cold]
+#[inline(never)]
 fn get_named(
     receiver: &Value,
     name: &Rc<str>,
@@ -1203,6 +1218,38 @@ fn get_named(
     intrinsics: &Intrinsics,
     env: Option<&crate::function::CallEnv>,
 ) -> Option<Value> {
+    // Unconditional own exotic lengths do not consult ordinary named storage.
+    if name.as_ref() == "length" {
+        match receiver {
+            Value::Array(array) => return Some(Value::Number(array.len() as f64)),
+            Value::String(text) => {
+                return Some(Value::Number(
+                    crate::string::js_string_code_unit_len(text) as f64
+                ));
+            }
+            _ => {}
+        }
+    }
+    // A string's `length` is its code-unit count; `for (i < text.length)`
+    // is the header test of every string scan. Any other non-index name is a
+    // method on the realm's `String.prototype`.
+    if let Value::String(text) = receiver {
+        if name.as_ref() == "length" {
+            return Some(Value::Number(
+                crate::string::js_string_code_unit_len(text) as f64
+            ));
+        }
+        if name.bytes().all(|byte| byte.is_ascii_digit()) {
+            return None;
+        }
+        return prototype_method(intrinsics.string_prototype(env)?, name, shapes);
+    }
+
+    if let Some(env) = env
+        && let Some(value) = shapes.read_string(receiver, name, env)
+    {
+        return Some(value);
+    }
     // An array's `length` is an own data property whose value is the element
     // count, and `try_direct_get_string` answers it exactly this way, without
     // consulting any descriptor. `for (i = 0; i < a.length; i++)` puts that read
@@ -1219,128 +1266,25 @@ fn get_named(
         // with its own prototype or with own named properties keeps the
         // interpreter's resolution.
         let prototype = intrinsics.array_prototype(env)?;
-        if !(elements.uses_default_prototype() || elements.uses_prototype_object(prototype))
-            || !elements.has_no_own_named_properties()
-        {
+        if !(elements.uses_prototype_object(prototype)) || !elements.has_no_own_named_properties() {
             return None;
         }
         return prototype_method(prototype, name, shapes);
     }
-    // A string's `length` is its code-unit count; `for (i < text.length)`
-    // is the header test of every string scan. Any other non-index name is a
-    // method on the realm's `String.prototype`.
-    if let Value::String(text) = receiver {
-        if name.as_ref() == "length" {
-            return Some(Value::Number(
-                crate::string::js_string_code_unit_len(text) as f64
-            ));
-        }
-        if name.bytes().all(|byte| byte.is_ascii_digit()) {
-            return None;
-        }
-        return prototype_method(intrinsics.string_prototype(env)?, name, shapes);
-    }
     let Value::Object(object) = receiver else {
         return None;
     };
-    if let Some((key, slot)) = shapes.slot.as_ref()
-        && let Some(value) = object.shared_data_slot_value(key, *slot)
-    {
-        return Some(value);
-    }
     get_named_object(object, name, shapes)
 }
 
-/// `get_named` of an ordinary object once the site's shared slot has
-/// missed: the executor's numeric field read checks that slot itself.
+#[cold]
 #[inline(never)]
 fn get_named_object(
     object: &crate::ObjectRef,
     name: &Rc<str>,
     shapes: &mut super::ShapeWays,
 ) -> Option<Value> {
-    // Shape identity is an `Rc` pointer comparison, so scanning the remembered
-    // shapes is cheaper than resolving the name even when the site is
-    // polymorphic. `literal_data_slot_value` re-checks the revision, so a
-    // mutated receiver misses rather than reading a stale slot.
-    for (shape, slot) in shapes.entries() {
-        if let Some(value) = object.literal_data_slot_value(shape, *slot) {
-            return Some(value);
-        }
-    }
-    // The executor's inline read only takes a number from small storage: a
-    // dynamic-storage receiver (a constructor's twelfth property on) arrives
-    // here with the site's slot still valid, and re-resolving the name each
-    // time would be a hash lookup per read. Checked after the shapes: checked
-    // first, a polymorphic site's small-storage misses would pay for it.
-    if let Some((key, slot)) = shapes.slot.as_ref()
-        && let Some(value) = object.shared_dynamic_slot_value(key, *slot)
-    {
-        return Some(value);
-    }
-    // A method call site that resolved on the prototype before: one own
-    // lookup proves the receiver still does not shadow it, where the
-    // resolutions below scanned its properties three times for the same
-    // miss (prototype_method_call).
-    if let Some(inherited) = shapes.inherited()
-        && let crate::value::OwnDataPropertyRead::Missing = object.own_data_property_read(name)
-        && let Some(value) = inherited.read(object)
-    {
-        return Some(value);
-    }
-    if let Some((key, slot)) = object.shared_data_slot(name)
-        && let Some(value) = object.shared_data_slot_value(&key, slot)
-    {
-        shapes.slot = Some((key, slot));
-        return Some(value);
-    }
-    if let Some((shape, slot)) = object.literal_data_slot(name)
-        && let Some(value) = object.literal_data_slot_value(&shape, slot)
-    {
-        shapes.record(shape, slot);
-        return Some(value);
-    }
-    if let Some(exact) = shapes.exact()
-        && let Some(value) = exact.read(object)
-    {
-        return Some(value);
-    }
-    // Dynamic own storage has no slot to remember, so remember the value
-    // against this exact receiver and its revision instead.
-    match object.own_data_property_read(name) {
-        crate::value::OwnDataPropertyRead::Data(value) => {
-            shapes.record_exact(object, value.clone());
-            return Some(value);
-        }
-        // An own accessor (or exotic storage) shadows whatever the prototype
-        // holds; reading the remembered inherited value past it was wrong.
-        crate::value::OwnDataPropertyRead::NeedsSlowPath => return None,
-        crate::value::OwnDataPropertyRead::Missing => {}
-    }
-    // The name is not an own property. A method call site reads its callee
-    // from the prototype every iteration, so remember where it resolved:
-    // revisiting is then a pointer comparison and a slot read instead of a
-    // hash lookup per level of the chain.
-    //
-    // The own lookups above are what keep this sound -- they run first on
-    // every read, so a property that later appears on the receiver shadows the
-    // remembered one rather than being masked by it.
-    if let Some(inherited) = shapes.inherited()
-        && let Some(value) = inherited.read(object)
-    {
-        return Some(value);
-    }
-    if let crate::value::Prototype::Object(prototype) = object.prototype_slot()?
-        && let Some(slot) = prototype.own_data_slot(name)
-        && let Some(value) = prototype.own_data_slot_value(slot)
-    {
-        shapes.record_inherited(prototype.clone(), prototype.property_revision(), slot);
-        return Some(value);
-    }
-    // Storage the slot cache cannot address — a builtin's dynamic map, say — and
-    // inherited data properties still read without observable behaviour, they
-    // just resolve the name every time.
-    ordinary_data_property(object, name)
+    shapes.read_object(object, name)
 }
 
 /// Reads `name` as a plain data property of `object` or of its prototype chain,
@@ -1377,37 +1321,65 @@ pub(super) fn ordinary_data_property(object: &crate::ObjectRef, name: &str) -> O
 /// built by the same code site takes the cached slot without a name scan. A
 /// numeric field update per iteration otherwise paid a linear string
 /// comparison over the object's properties.
+#[inline(always)]
 fn set_named(
     receiver: &Value,
     name: &Rc<str>,
     value: &Value,
     shapes: &mut super::ShapeWays,
+    env: &crate::CallEnv,
 ) -> bool {
     use crate::value::OwnDataPropertyWrite;
 
     let Value::Object(object) = receiver else {
         return false;
     };
-    if let Some((key, slot)) = shapes.slot.as_ref()
-        && let Some(OwnDataPropertyWrite::Written) =
-            object.shared_data_slot_write(key, *slot, value)
-    {
+    // The generic store synchronizes global-var cells and frame bindings.
+    // Deopt before any effect rather than publishing only half of that store.
+    if env.is_realm_global_object(object) {
+        return false;
+    }
+    if matches!(
+        shapes.write_hot(object, value),
+        Some(OwnDataPropertyWrite::Written)
+    ) {
         return true;
     }
-    // `globalThis` as an own name establishes realm identity on the slow
-    // path, so it is never cached.
-    if name.as_ref() != "globalThis"
-        && let Some((key, slot)) = object.shared_data_slot(name)
-        && let Some(OwnDataPropertyWrite::Written) =
-            object.shared_data_slot_write(&key, slot, value)
-    {
-        shapes.slot = Some((key, slot));
-        return true;
+    set_named_slow(object, name, value, shapes)
+}
+#[cold]
+#[inline(never)]
+fn set_named_slow(
+    object: &crate::ObjectRef,
+    name: &Rc<str>,
+    value: &Value,
+    shapes: &mut super::ShapeWays,
+) -> bool {
+    use crate::value::OwnDataPropertyWrite;
+    if name.as_ref() == "globalThis" {
+        return false;
     }
-    matches!(
+    if matches!(
         object.write_existing_own_data_property(name, value),
         OwnDataPropertyWrite::Written
-    )
+    ) {
+        shapes.update(object, name, value);
+        return true;
+    }
+    false
+}
+
+// A numeric-store miss must not inline the boxed-store frame into its arm.
+#[cold]
+#[inline(never)]
+fn set_named_typed_miss(
+    receiver: &Value,
+    name: &Rc<str>,
+    value: &Value,
+    shapes: &mut super::ShapeWays,
+    env: &crate::CallEnv,
+) -> bool {
+    set_named(receiver, name, value, shapes, env)
 }
 
 /// Reads `receiver[key]` for a boxed key, discriminating on what the receiver
@@ -1415,7 +1387,13 @@ fn set_named(
 fn computed_read(receiver: &Value, key: &Value) -> Option<Value> {
     match (receiver, key) {
         (Value::Object(object), Value::String(name)) => {
-            ordinary_data_property(object, name.as_str())
+            match object.own_data_property_read_string(name) {
+                crate::value::OwnDataPropertyRead::Data(v) => Some(v),
+                crate::value::OwnDataPropertyRead::NeedsSlowPath => None,
+                crate::value::OwnDataPropertyRead::Missing => {
+                    ordinary_data_property(object, name.as_str())
+                }
+            }
         }
         // A boxed key is not automatically a string: the same site carries an
         // array index once a discovery forces its producer boxed. Answering
@@ -1757,17 +1735,19 @@ mod tests {
 
     #[test]
     fn an_array_answers_length_from_its_element_count() {
-        let array = Value::Array(ArrayRef::new(vec![
-            Value::Number(1.0),
-            Value::Number(2.0),
-            Value::Number(3.0),
-        ]));
+        let array = Value::Array(ArrayRef::new_in_domain(
+            &crate::property::atom::AtomDomain::new(),
+            vec![Value::Number(1.0), Value::Number(2.0), Value::Number(3.0)],
+        ));
         assert_eq!(read(&array, "length"), Some(Value::Number(3.0)));
     }
 
     #[test]
     fn an_array_declines_every_name_except_length() {
-        let array = Value::Array(ArrayRef::new(vec![Value::Number(1.0)]));
+        let array = Value::Array(ArrayRef::new_in_domain(
+            &crate::property::atom::AtomDomain::new(),
+            vec![Value::Number(1.0)],
+        ));
         assert_eq!(read(&array, "push"), None);
         assert_eq!(read(&array, "0"), None);
     }

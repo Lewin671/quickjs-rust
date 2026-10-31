@@ -12,8 +12,14 @@ fn empty_env() -> CallEnv {
 #[test]
 fn retained_native_arguments_outlive_the_host_slice() {
     let mut env = empty_env();
-    let object = crate::ObjectRef::new(HashMap::new());
-    let native = Value::Function(Function::new_native(None, 1, NativeFunction::Array, true));
+    let object = crate::ObjectRef::new(HashMap::new(), env.realm().atoms());
+    let native = Value::Function(Function::new_native(
+        None,
+        1,
+        NativeFunction::Array,
+        true,
+        env.realm(),
+    ));
     let result = {
         let arguments = [Value::Object(object.clone()), Value::Boolean(true)];
         call_function_slice(&native, Value::Undefined, &arguments, &mut env).unwrap()
@@ -33,12 +39,14 @@ fn native_bound_arguments_retain_values_after_the_host_list_drops() {
         1,
         NativeFunction::FunctionPrototypeBind,
         false,
+        env.realm(),
     ));
     let max = Value::Function(Function::new_native(
         None,
         2,
         NativeFunction::MathMax,
         false,
+        env.realm(),
     ));
     let bound = {
         let arguments = [Value::Undefined, Value::Number(17.0)];
@@ -114,11 +122,20 @@ fn retained_async_reaction_arguments_survive_native_reentry() {
 fn native_constructor_slice_preserves_a_cross_realm_new_target() {
     let mut env = empty_env();
     let mut foreign_env = empty_env();
-    let foreign_global = Value::Object(crate::ObjectRef::new(HashMap::new()));
+    let foreign_global = Value::Object(crate::ObjectRef::new(
+        HashMap::new(),
+        foreign_env.realm().atoms(),
+    ));
     crate::builtins::initialize_builtins(&mut foreign_env, &foreign_global);
     let target = foreign_env.get("Boolean").unwrap();
     let new_target = foreign_env.get("Object").unwrap();
-    let previous = Value::Function(Function::new_native(None, 0, NativeFunction::Array, true));
+    let previous = Value::Function(Function::new_native(
+        None,
+        0,
+        NativeFunction::Array,
+        true,
+        env.realm(),
+    ));
     env.set_new_target(Some(previous.clone()));
     let result = construct_function_slice(
         target,

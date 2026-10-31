@@ -1,76 +1,64 @@
 # Core rebuild: keys, shapes, slots and ICs
 
-Target contract for [core rebuild](core-rebuild.md); S1 ordinary storage, S2 all
-named stores and caches. Paths below are under `crates/qjs-runtime/src/`.
+Target contract for [core rebuild](core-rebuild.md); S1 ordinary storage, S2 named stores/caches. Paths below are under `crates/qjs-runtime/src/`.
 
 ## Keys and lifetime
 
 Extend `property/atom.rs::AtomDomain`, not a parallel interner. One runtime group
 owns the domain; communicating realms share it. `KeyId(NonZeroU32)` is 4 bytes,
-monotonic and never reused: strings intern exact UTF-16, symbols intern identity
-in the same ID namespace. Private names remain separate internal identities.
+recycled only after the last lease dies. Strings intern exact UTF-16; symbols
+intern identity in the same namespace. Private names remain separate internal identities.
 `KeyRecord` contains kind, text or strong symbol handle, cached canonical array
 index and a domain identity. It never folds `"01"` into `"1"`.
 
 `KeyLease(Rc<KeyRecord>)` is an 8-byte owner. Shapes, dictionaries and linked code
 retain leases; an operation's borrowed ID is valid while its lease/domain live.
-The domain's content index and ID directory are weak, swept with the existing
-live-size rule. Numeric IDs alone must not pin every historically interned key.
+The domain's string/symbol content indices are weak and swept with the live-size
+rule. The ID directory exists only in tests; production sweep sizing uses the
+content indices. Symbol identities use the engine's NameHasher. Numeric IDs alone must not pin every historically interned key.
 Escaping objects retain the domain through their layouts. Shape roots live on
 runtime/realm owners outside the domain: no domain→root→shape→domain RC cycle.
-Exhaustion reports an engine limit, never wraps. Foreign compiled names relink
-once by units; existing cross-realm values share the original domain. A foreign
+A free list recycles dead IDs before minting new ones. Bare IDs never outlive their borrowed leases; live shapes, dictionaries,
+linked code and lease-owning caches prevent reuse. Layout identities/versions
+remain non-reused. Production u32 exhaustion requires more than 2^32 live key
+records and follows allocation-failure abort, not a JS exception; an internal
+try_intern supports test-only capped domains (lead decision 2026-10-30). Foreign
+compiled names relink once by units; existing cross-realm values share the original domain. A foreign
 domain cannot validate an IC by integer equality; host ingress must normalize
 keys or report an explicit domain error, never reinterpret IDs.
 
 `to_key(&mut Context, Value) -> Result<KeyLease>` performs observable ToPrimitive
 once, then interns; named bytecode operands use prelinked leases. Host `&str`
 entry points convert once; internal slot access never formats or hashes text.
+Compact/typed static-name misses use domain-checked weak lease links; dead keys
+remain recyclable. Computed JsString keys memoize one live lease in metadata;
+reads never intern, and mutation/COW clears the memo. The production string-value
+header is 72 bytes: the matcher mode occupies scalar padding and the cached
+slice/key lease share a 24-byte payload, with no extra allocation. No receiver/domain is pinned.
 
-## Physical layout (proposed 64-bit budgets, not current measurements)
+## Physical layout (S2 assertions)
 
 | Type | Fields / size |
 | --- | --- |
 | `ShapeEntry` | `key:u32, slot:u32, order:u32, attrs:u16, reserved:u16` = 16 bytes |
-| `NamedStore` | `layout:Rc<Layout>` 8, `values:Vec<Value>` 24, `accessors:Option<Box<AccessorSlots>>` 8, `epoch:u64` 8 = 48 bytes; `RefCell` wrapper 56 |
-| Ordinary hot payload | `named:RefCell<NamedStore>` 56, `prototype:RefCell<Option<Prototype>>` 24, cold pointer 8, index count 4, packed flags/edit count/padding 4 = 96 bytes, excluding RC header |
+| `NamedStore` | `layout:Rc<Layout>` 8, `values:ValueSlots` 32, `accessors:Option<Box<AccessorSlots>>` 8, `epoch:u64` 8, strong prototype owner 8 = 64 bytes; `RefCell` wrapper 72 |
+| Ordinary hot payload | `named:RefCell<NamedStore>` 72, tagged cold pointer 16, index count 4, packed flags/edit count/padding 4 = 96 bytes, excluding RC header |
+| Array hot/cold payload | 56-byte header: dense Vec RefCell 32, packed length/flags 8, scoped seed owner 8, cold pointer 8. Optional hole payload 40: holes RefCell 32 and lazy named pointer 8; a separate NamedStore RefCell 72 is created only on named/prototype mutation. Realm shares the default empty seed; probes allocate nothing. |
 | `Slot` | One owning `Value`: initially 16 bytes, S5 target 8; TDZ/hole state separate from ordinary data |
 | `Layout` | Immutable shape or unique dictionary; ID/domain, owned entries/key leases and one key-ID lookup index; transition cache is cold |
 | `Dictionary` | Private identity + `u64` structural version; key-ID index, attributes/order and slot allocation are its sole authority |
 
-Assert sizes on both production targets before adopting them; a Rust layout
-estimate is no ABI proof. Do not add two inline Values in every object: the
-existing ShapedPair benefit must be repriced against object/header growth.
+Compile-time assertions verify these sizes on aarch64/x86_64 macOS; a layout
+estimate alone is no ABI proof. Values remain keyless: zero/one/two slots are inline; larger stores use one
+heap vector. Direct pair literals allocate no temporary slot buffer.
 Slot storage may pool capacity, never keys. Accessor slots hold `undefined` in
 the value vector and their getter/setter pair in the cold slot-indexed table;
 the shape decides descriptor kind. Bulk descriptor APIs construct `Property`
-only on demand. Symbol descriptors join this authority, not a second cold table.
+only on demand. Symbol descriptors join this authority, not a second cold table. Nonempty host
+ObjectRef construction requires an ordered vector; legacy HashMap constructor
+entry points accept only empty input, keeping S2 empty creation sites compatible.
 
-## Shapes and edits
-
-Transition label is `(KeyId, attributes, descriptor kind)`; a hit allocates no
-shape, interns no key and copies no field list. A miss may copy immutable fields
-once and build the ID index once. Shared shapes apply equally to literals,
-constructor stores, class fields, JSON and host creation. No whole-vector hash
-or comparison on a hit. Duplicate keys preserve first insertion order and last
-definition semantics. Class/JSON builders execute each observable step in order.
-
-Bound each shape's retained transitions to 16 and domain cached shape nodes to
-4096; eviction removes cache ownership, not live object ownership. Live shapes
-may exceed that cache bound. Misses over budget create uncached shapes or use
-dictionary mode; repeated fixed-key construction below the bound reuses edges
-even after its last object dies. These are initial deterministic bounds, not
-performance-tuned thresholds. Delete/reconfigure churn after 32 edits or width
-over 128 entries uses dictionary mode. A dictionary never records transitions;
-compact order tombstones when they exceed live entries plus a fixed reserve.
-
-Delete/re-add appends a new order position; array-index keys enumerate in numeric
-order, then other strings, then symbols in insertion order. Reconfiguration,
-seal/freeze and preventExtensions preserve data/accessor semantics. A structural
-mutation prepares storage first, publishes layout+slots together, then bumps
-validity; slot reuse never occurs under an unchanged dictionary version.
-Value writes touch no shape/version. Existing property_revision consumers must
-be migrated individually: cached values cannot borrow slot-cache validity.
+The [shape contract](core-rebuild-shapes.md) owns transitions, metadata retention, dictionary edits and integrity transitions.
 
 ## Shared semantic API
 
@@ -86,33 +74,87 @@ Arrays, functions, wrappers, Map/Set and ordinary objects embed the same NamedSt
 Dense/sparse indices, array length and mapped arguments stay exotic; typed-array
 canonical numeric indices and detachment use their own algorithms. String virtual
 indices, function lazy name/length/prototype, namespace live exports and private
-slots retain semantic hooks. Hooks materialize into the same store when required.
+slots retain semantic hooks. StringData and DateValue use small typed payloads with lazy stable general extensions, never named keys. Boxed String length is ordinary readonly data; indices keep their hooks. An intrinsic realm template constructs the final String layout with live per-object text/length. Hooks materialize into the same store when required.
+S1's intrinsic Array.prototype is an ObjectRef: its length/index definitions run
+array validation/shrink hooks before NamedStore; ordinary creation and slot-write
+caches decline that receiver.
 No symbol/text property table survives outside it. Prototype slots retain live
-array/function identity (`value/object.rs::Prototype`), never copied descriptors.
+array/function/Map/Set identity (`value/object.rs::Prototype`), never copied descriptors. Named values and owning prototype edges participate in iterative object/array/function teardown.
 
 ## Inline caches
 
-One cache per named site, mono first, bounded four-way poly then megamorphic
-generic lookup. Own-data guard: domain + kind + shape ID (dictionary ID/version)
+One cache per named site, mono first, bounded four-way poly then megamorphic lookup.
+Only guards/hits inline into dispatch; miss, update, poly/mega and verification
+functions are cold and never inlined. Own-data guard: domain + kind + shape ID (dictionary ID/version)
 + descriptor bits + slot. It does not guard the property's value or receiver
-address. Entries hold weak layout tokens, not a strong receiver or cached Value.
-An initial entry budget is 32 bytes: layout token 8, validity token 8, slot 4,
-kind/flags 4, epoch/version 8; four-way storage is allocated only when needed.
+address. Entries hold weak layout tokens, never a strong receiver. Own-data hits always load live; inherited data/accessors may cache cell-protected constants with weak RC payloads.
+The first mono entry is immutable after publication; its hot guard reads no
+mutable IC metadata. Replacement disables it before using cold mono/four-way
+state. One inactive weak token may remain until site destruction, with no fifth
+active way or owning value/receiver pin. Clear/reuse never reactivates that token.
+Shared bytecode handles are 8 bytes; loop-owned sites embed the same 96-byte data in their program vector. The implemented entry is 32 bytes: weak layout/version 16, slot 4, kind and padding 4, optional cold chain pointer
+8; four-way storage is allocated only when a second guard is admitted. A fifth
+independent live guard makes the site permanently megamorphic. Shared-own poly
+hits compare four identities in parallel; numeric consumers load a live f64
+with a value-kind check, without constructing an owning Value. Number/function
+owning loads copy the current slot inline; other values keep ordinary cloning.
+Typed numeric stores guard the same own writable slot and update numeric
+payloads directly, with normal replacement/drop when the old type differs.
+Array prototype identity checks borrow the edge without cloning an owner.
+Constructor prototype links use the same weak layout/version and live own-slot
+read. Lazy/accessor misses retain full Get; virtual properties never become constants.
+A cold store-add plan uses the prefix/prototype guards described in the
+[shape contract](core-rebuild-shapes.md). Typed-loop stores explicitly exclude
+additions, preserving their invariant-read hoisting proof.
 
-Inherited entries additionally have a cold chain record: weak first-prototype
-and holder identities, weak dependencies and a validity cell (outside the 32-byte
-own-entry budget). Every hit guards the **current receiver's first prototype**
-as well as its own layout; equal shapes alone do not imply equal prototypes.
-Each prototype node registers layout/prototype dependencies; mutation invalidates
-dependents before publication and removes dead subscriptions. Hit checks the live
-token and reads the holder's current slot. Receiver prototype edits miss the
-explicit edge guard; value overwrites preserve validity. Proxy/unmodeled exotic
-chains remain uncached. Overflowed versions allocate new identities, never wrap.
-Enumerate-keys caches use the same structural dependencies, never value epochs.
+Layouts include prototype identity and semantic hook flavor. Shared guards compare
+weak allocation identity only; dictionary guards additionally compare versions.
+A receiver owns its explicit prototype edge; layouts retain weak identities so
+retained shapes cannot pin JavaScript values or realms. Roots and transition
+trees are canonical per prototype/flavor. Prototype mutation re-roots the layout. Unconditional array/string length hooks
+precede IC lookup. The interpreter may evaluate a cell-proven native typed-array
+length getter directly; custom accessors retain the ordinary call path.
 
-S2 deletes `NamedPropertyCacheEntry`'s exact-value/receiver variants and repeated
-Small/Dynamic/literal probe paths. In debug mode compare every IC result with
+Prototype-mode objects use private dictionaries and one validity state. Their
+weak user graph links prototype-mode children, never IC sites. Structural
+mutation replaces its validity generation and cascades iteratively. The single
+NamedStore write barrier also invalidates on prototype value/accessor writes.
+After four value-write invalidations a holder becomes permanently value-unstable: the
+transition invalidates once, future entries load live slots and value writes stop
+invalidating. Structural edits always invalidate; additions do not spend the
+overwrite budget. There is no subscriber cap. Inherited entries hold the first
+prototype's generation, weak holder/slot and optional stable-holder constant;
+the receiver layout already implies its first prototype. Numbers/booleans/null/undefined are copied; RC values and existing accessor pairs
+use weak handles (no hit-time pair allocation), and a failed upgrade misses.
+Missing and accessor outcomes use the same proof. Accessors execute once after all borrows end. Array prototype identity is the live array payload, with no contextual wrapper.
+Proxy/unmodeled exotic chains remain uncached. Expired layouts/generations are
+stale entries and can be replaced without consuming another polymorphic way.
+Enumeration and creation proofs use the same shared generations and layout roots.
+
+S2 deletes the old unguarded exact-value/receiver variants and repeated probe
+paths. In debug mode compare every IC result with
 uncached semantic lookup without replaying accessors; disable ICs entirely for
 a full correctness run. Count hits/misses by receiver family, hashing, transitions,
 key interning, allocations and bounded retained nodes; do not claim a 90% hit
 rate independent of the operations/programs measured.
+
+## S2 semantic ports and verification
+
+Arrays share a realm-owned empty authority and explicit prototype; mutation
+forks the same NamedStore into cold storage. Array headers are 56 bytes, cold
+holes data 40 with a separate lazy 72-byte named payload; functions embed a 32-byte lazy authority and have
+304-byte headers, excluding RC headers. Named probes allocate no array cold data.
+Original lazy property order is reserved before later keys. Function virtual
+state is part of layout flavor; hooks publish into the authority when observed.
+Every production constructor receives the realm/prototype explicitly. Realm
+intrinsics are stable creation inputs even when bindings are overwritten; an
+AtomDomain can serve several realms and is never an intrinsic identity.
+
+`value/named.rs` is the borrowed receiver facade for all cache consumers.
+Interpreter, compact/wide, typed loops and leaf readers share one shape IC;
+Proxy, namespace live exports and unmodeled exotic keys use their semantic hooks.
+`QJS_DISABLE_IC=1` disables named/enumeration IC admission and hits.
+`QJS_VERIFY_IC=1` in debug builds compares hits with complete pure uncached outcomes,
+without replaying accessors, key coercion or Proxy traps. These modes are captured
+once per AtomDomain/runtime group. Creation-miss proofs share prototype generations and prototype-sensitive roots; IC-off disables these and global-object slot memos. Perf counters partition IC hits/misses, generic own probes and
+text-index linking queries by receiver family; they compile out of production timing builds.

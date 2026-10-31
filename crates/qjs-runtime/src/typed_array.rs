@@ -122,14 +122,22 @@ pub(crate) fn install_typed_arrays(
 ) {
     // %TypedArray% intrinsic: the shared [[Prototype]] of every concrete
     // constructor, and the holder of %TypedArray.prototype%.
-    let typed_array_prototype =
-        ObjectRef::with_prototype(HashMap::new(), Some(object_prototype.clone()));
+    let typed_array_prototype = ObjectRef::with_prototype(
+        HashMap::new(),
+        Some(object_prototype.clone()),
+        env.realm().atoms(),
+    );
     install_typed_array_prototype_accessors(env, &typed_array_prototype);
     install_typed_array_prototype_methods(env, &typed_array_prototype);
 
-    let typed_array_intrinsic =
-        Function::new_native(Some("TypedArray"), 0, NativeFunction::TypedArray, true);
-    typed_array_intrinsic.properties.borrow_mut().insert(
+    let typed_array_intrinsic = Function::new_native(
+        Some("TypedArray"),
+        0,
+        NativeFunction::TypedArray,
+        true,
+        env.realm(),
+    );
+    typed_array_intrinsic.define_property(
         "prototype".to_owned(),
         Property::fixed_non_enumerable(Value::Object(typed_array_prototype.clone())),
     );
@@ -178,7 +186,7 @@ pub(crate) fn alias_array_prototype_to_string(env: &mut CallEnv) {
         Some(Some(Prototype::Function(function))) => function,
         _ => return,
     };
-    let typed_array_prototype = match typed_array_intrinsic.properties.borrow().get("prototype") {
+    let typed_array_prototype = match typed_array_intrinsic.own_property("prototype") {
         Some(Property {
             value: Value::Object(object),
             ..
@@ -196,13 +204,14 @@ fn install_typed_array_static_methods(intrinsic: &Function) {
         ("from", 1, NativeFunction::TypedArrayFrom),
         ("of", 0, NativeFunction::TypedArrayOf),
     ] {
-        intrinsic.properties.borrow_mut().insert(
+        intrinsic.define_property(
             name.to_owned(),
             Property::non_enumerable(Value::Function(Function::new_native(
                 Some(name),
                 length,
                 native,
                 false,
+                intrinsic.creation_realm(),
             ))),
         );
     }
@@ -225,6 +234,7 @@ fn install_typed_array_prototype_accessors(env: &CallEnv, prototype: &ObjectRef)
                     0,
                     native,
                     false,
+                    env.realm(),
                 ))),
                 None,
                 false,
@@ -243,6 +253,7 @@ fn install_typed_array_prototype_accessors(env: &CallEnv, prototype: &ObjectRef)
                     0,
                     NativeFunction::TypedArrayPrototypeToStringTag,
                     false,
+                    env.realm(),
                 ))),
                 None,
                 false,
@@ -312,7 +323,7 @@ fn install_typed_array_prototype_methods(env: &CallEnv, prototype: &ObjectRef) {
         ("toSorted", 1, NativeFunction::TypedArrayPrototypeToSorted),
         ("with", 2, NativeFunction::TypedArrayPrototypeWith),
     ] {
-        define_prototype_method(prototype, name, length, native);
+        define_prototype_method(env.realm(), prototype, name, length, native);
     }
     // %TypedArray.prototype%[Symbol.iterator] is the same function object as
     // `values`.
@@ -320,6 +331,7 @@ fn install_typed_array_prototype_methods(env: &CallEnv, prototype: &ObjectRef) {
 }
 
 fn define_prototype_method(
+    realm: &crate::function::Realm,
     prototype: &ObjectRef,
     name: &str,
     length: usize,
@@ -327,7 +339,13 @@ fn define_prototype_method(
 ) {
     prototype.define_non_enumerable(
         name.to_owned(),
-        Value::Function(Function::new_native(Some(name), length, native, false)),
+        Value::Function(Function::new_native(
+            Some(name),
+            length,
+            native,
+            false,
+            realm,
+        )),
     );
 }
 
@@ -340,20 +358,24 @@ fn install_typed_array_constructor(
     native: NativeFunction,
 ) {
     // Each concrete prototype inherits from %TypedArray.prototype%.
-    let prototype = ObjectRef::with_prototype(HashMap::new(), Some(typed_array_prototype));
+    let prototype = ObjectRef::with_prototype(
+        HashMap::new(),
+        Some(typed_array_prototype),
+        env.realm().atoms(),
+    );
     let bytes = bytes_per_element(native) as f64;
     if native == NativeFunction::Uint8Array {
-        install_uint8_array_prototype_methods(&prototype);
+        install_uint8_array_prototype_methods(env.realm(), &prototype);
     }
 
-    let constructor = Function::new_native(Some(name), 3, native, true);
+    let constructor = Function::new_native(Some(name), 3, native, true, env.realm());
     if native == NativeFunction::Uint8Array {
         install_uint8_array_static_methods(&constructor);
     }
     // Concrete constructors inherit from %TypedArray% (a function prototype).
     let _ = constructor
         .set_internal_prototype_slot(Some(Prototype::Function(typed_array_intrinsic.clone())));
-    constructor.properties.borrow_mut().insert(
+    constructor.define_property(
         "BYTES_PER_ELEMENT".to_owned(),
         Property::fixed_non_enumerable(Value::Number(bytes)),
     );
@@ -365,7 +387,7 @@ fn install_typed_array_constructor(
         "BYTES_PER_ELEMENT".to_owned(),
         Property::fixed_non_enumerable(Value::Number(bytes)),
     );
-    constructor.properties.borrow_mut().insert(
+    constructor.define_property(
         "prototype".to_owned(),
         Property::fixed_non_enumerable(Value::Object(prototype)),
     );
@@ -377,26 +399,30 @@ fn install_typed_array_constructor(
     }
 }
 
-fn install_uint8_array_prototype_methods(prototype: &ObjectRef) {
+fn install_uint8_array_prototype_methods(realm: &crate::function::Realm, prototype: &ObjectRef) {
     define_prototype_method(
+        realm,
         prototype,
         "toBase64",
         0,
         NativeFunction::Uint8ArrayPrototypeToBase64,
     );
     define_prototype_method(
+        realm,
         prototype,
         "setFromBase64",
         1,
         NativeFunction::Uint8ArrayPrototypeSetFromBase64,
     );
     define_prototype_method(
+        realm,
         prototype,
         "toHex",
         0,
         NativeFunction::Uint8ArrayPrototypeToHex,
     );
     define_prototype_method(
+        realm,
         prototype,
         "setFromHex",
         1,
@@ -405,23 +431,24 @@ fn install_uint8_array_prototype_methods(prototype: &ObjectRef) {
 }
 
 fn install_uint8_array_static_methods(constructor: &Function) {
-    let mut properties = constructor.properties.borrow_mut();
-    properties.insert(
+    constructor.define_property(
         "fromBase64".to_owned(),
         Property::non_enumerable(Value::Function(Function::new_native(
             Some("fromBase64"),
             1,
             NativeFunction::Uint8ArrayFromBase64,
             false,
+            constructor.creation_realm(),
         ))),
     );
-    properties.insert(
+    constructor.define_property(
         "fromHex".to_owned(),
         Property::non_enumerable(Value::Function(Function::new_native(
             Some("fromHex"),
             1,
             NativeFunction::Uint8ArrayFromHex,
             false,
+            constructor.creation_realm(),
         ))),
     );
 }

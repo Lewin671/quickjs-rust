@@ -198,7 +198,8 @@ pub(in crate::bytecode) fn enumerate_keys_cached(
     if let Some(keys) = enumerate_keys_from_cache(value, cache) {
         return Ok(keys);
     }
-    let keys = ArrayRef::new(enumerable_keys(value.clone(), env)?);
+    let values = enumerable_keys(value.clone(), env)?;
+    let keys = ArrayRef::new(env.realm(), values);
     cache.record(value, keys.clone());
     Ok(keys)
 }
@@ -209,7 +210,7 @@ pub(in crate::bytecode) fn enumerate_keys_from_cache(
     value: &Value,
     cache: &EnumerateKeysCache,
 ) -> Option<ArrayRef> {
-    cache.get(value).or_else(|| cache.get_by_prototypes(value))
+    cache.get(value)
 }
 
 /// `for_in_property_is_enumerable` for an object whose chain, up to the

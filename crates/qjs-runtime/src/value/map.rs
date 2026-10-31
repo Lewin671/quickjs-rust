@@ -12,6 +12,22 @@ pub struct MapRef(Rc<MapData>);
 /// a deleted entry becomes a hole rather than shifting every later index. The
 /// index answers `get`/`has`/`set`/`delete` in constant time — the vector alone
 /// made every operation a scan, so filling a map was quadratic.
+#[derive(Clone)]
+pub(crate) struct MapWeakRef(std::rc::Weak<MapData>);
+impl MapWeakRef {
+    pub(crate) fn upgrade(&self) -> Option<MapRef> {
+        self.0.upgrade().map(MapRef)
+    }
+    pub(crate) fn address(&self) -> usize {
+        self.0.as_ptr() as usize
+    }
+}
+impl std::fmt::Debug for MapWeakRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("MapWeakRef(..)")
+    }
+}
+
 struct MapData {
     entries: RefCell<Vec<Option<(Value, Value)>>>,
     index: RefCell<HashMap<CollectionKey, usize>>,
@@ -20,12 +36,18 @@ struct MapData {
 }
 
 impl MapRef {
-    pub(crate) fn new(prototype: Option<ObjectRef>) -> Self {
-        Self::with_prototype_slot(prototype.map(Prototype::Object))
+    pub(crate) fn new(
+        prototype: Option<ObjectRef>,
+        domain: &crate::property::atom::AtomDomain,
+    ) -> Self {
+        Self::with_prototype_slot(prototype.map(Prototype::Object), domain)
     }
 
-    pub(crate) fn with_prototype_slot(prototype: Option<Prototype>) -> Self {
-        let object = ObjectRef::with_prototype_slot(HashMap::new(), prototype);
+    pub(crate) fn with_prototype_slot(
+        prototype: Option<Prototype>,
+        domain: &crate::property::atom::AtomDomain,
+    ) -> Self {
+        let object = ObjectRef::with_prototype_slot(HashMap::new(), prototype, domain);
         object.set_to_string_tag("Map");
         Self(Rc::new(MapData {
             entries: RefCell::new(Vec::new()),
@@ -35,6 +57,9 @@ impl MapRef {
         }))
     }
 
+    pub(crate) fn downgrade(&self) -> MapWeakRef {
+        MapWeakRef(Rc::downgrade(&self.0))
+    }
     pub(crate) fn ptr_eq(&self, other: &Self) -> bool {
         Rc::ptr_eq(&self.0, &other.0)
     }
@@ -42,6 +67,11 @@ impl MapRef {
     /// Identity of the shared storage, for hashing this reference as a key.
     pub(crate) fn address(&self) -> usize {
         Rc::as_ptr(&self.0) as usize
+    }
+
+    /// Borrow the ordinary named-property carrier without cloning its handle.
+    pub(crate) fn object_ref(&self) -> &ObjectRef {
+        &self.0.object
     }
 
     pub(crate) fn object(&self) -> ObjectRef {

@@ -147,6 +147,9 @@ pub(crate) fn define_property_descriptor_on_value_key(
     };
     match &target {
         Value::Object(object) => {
+            if object.is_array_prototype_exotic() {
+                return super::define_array_prototype_property(object, &key, descriptor, env);
+            }
             if crate::typed_array::is_typed_array_object(object) {
                 match crate::typed_array::define_indexed_property_descriptor(
                     object,
@@ -488,7 +491,7 @@ fn array_length_property(elements: &crate::ArrayRef) -> Property {
     )
 }
 
-fn array_length_from_array_set_length_value(
+pub(super) fn array_length_from_array_set_length_value(
     value: Value,
     env: &mut CallEnv,
 ) -> Result<usize, RuntimeError> {
@@ -917,7 +920,8 @@ mod tests {
 
     #[test]
     fn default_array_index_definitions_use_dense_storage() {
-        let array = ArrayRef::new_with_length(2);
+        let array =
+            ArrayRef::new_with_length_in_domain(&crate::property::atom::AtomDomain::new(), 2);
         let mut env = CallEnv::new(new_realm(HashMap::new()));
 
         for (index, value) in [3.0, 5.0].into_iter().enumerate() {

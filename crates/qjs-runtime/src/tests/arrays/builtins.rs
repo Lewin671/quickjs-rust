@@ -261,3 +261,42 @@ fn array_prototype_to_string_reads_join_before_length() {
         Ok(Value::String("join".to_owned().into()))
     );
 }
+
+#[test]
+fn array_prototype_length_hooks_preserve_receiver_and_shrink_failure() {
+    assert_eq!(
+        eval(include_str!(
+            "../../../../../tests/fixtures/compare-qjs/array-prototype-length-hooks.js"
+        )),
+        Ok(Value::String(
+            "true:true:-1:5:false:3:false:true:true:false:0:false:2:false".into()
+        ))
+    );
+}
+
+#[test]
+fn array_prototype_length_coercion_observes_reentrant_descriptor_changes() {
+    assert_eq!(
+        eval(
+            "let a = Array.prototype; a[2] = 7; let calls = 0; \
+              let v = { valueOf() { calls++; Object.defineProperty(a, 'length', {writable: false}); return 0; } }; \
+              let ok = Reflect.defineProperty(a, 'length', {value: v}); \
+              ok + ':' + calls + ':' + a.length + ':' + a[2];"
+        ),
+        Ok(Value::String("false:2:3:7".into()))
+    );
+}
+
+#[test]
+fn array_prototype_readonly_assignment_skips_coercion_and_new_indices_are_data_properties() {
+    assert_eq!(
+        eval(
+            "let a = Array.prototype; a[2] = 7; let d = Object.getOwnPropertyDescriptor(a, '2'); \
+              a.length = 1; let deleted = !a.hasOwnProperty('2'); \
+              Object.defineProperty(a, 'length', {writable: false}); let calls = 0; \
+              let ok = Reflect.set(a, 'length', {valueOf() {calls++; return 1;}}); \
+              d.writable + ':' + d.enumerable + ':' + d.configurable + ':' + deleted + ':' + ok + ':' + calls;"
+        ),
+        Ok(Value::String("true:true:true:true:false:0".into()))
+    );
+}

@@ -1,184 +1,111 @@
-use std::{
-    cell::{Cell, OnceCell, RefCell},
-    rc::Rc,
-};
+//! Ordered construction through the common named-store transitions.
+use super::{ObjectRef, Prototype};
+use crate::property::atom::AtomDomain;
+use crate::value::layout::NamedStore;
+use crate::{Property, Value};
+use std::rc::Rc;
 
-use crate::value::{Property, Value};
-
-use super::{ObjectData, ObjectRef, PropertyStorage, Prototype, SymbolBrand, is_array_index_key};
-
-/// Incrementally builds a fresh ordinary object from source-ordered data
-/// properties. Duplicate keys update their existing slot, so storage grows
-/// with the number of unique keys rather than the number of source members.
 pub(crate) struct OrderedDataPropertyBuilder {
-    properties: PropertyStorage,
+    properties: NamedStore,
     index_property_count: usize,
 }
-
 impl OrderedDataPropertyBuilder {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn finish_sequence(
+        sequence: crate::value::layout::DataSequence,
+    ) -> (ObjectRef, Option<Rc<crate::value::layout::Layout>>) {
+        let (properties, prediction, indices) = sequence.finish();
+        (ObjectRef::from_ready_named(properties, indices), prediction)
+    }
+    pub(crate) fn finish_unobserved(sequence: crate::value::layout::DataSequence) -> ObjectRef {
+        let (properties, indices) = sequence.finish_store();
+        ObjectRef::from_ready_named(properties, indices)
+    }
+    pub(crate) fn new(domain: &AtomDomain) -> Self {
         Self {
-            properties: PropertyStorage::Small {
-                entries: Vec::new(),
-            },
+            properties: NamedStore::empty(domain),
             index_property_count: 0,
         }
     }
-
-    /// A builder whose storage has room for `capacity` properties.
-    pub(crate) fn with_capacity(capacity: usize) -> Self {
+    pub(crate) fn with_capacity(capacity: usize, domain: &AtomDomain) -> Self {
+        let mut b = Self::new(domain);
+        b.properties.reserve(capacity);
+        b
+    }
+    pub(crate) fn with_prototype(
+        capacity: usize,
+        domain: &AtomDomain,
+        prototype: Option<Prototype>,
+    ) -> Self {
+        let mut properties = NamedStore::empty_with_prototype(domain, prototype, 0);
+        properties.reserve(capacity);
         Self {
-            properties: PropertyStorage::Small {
-                entries: Vec::with_capacity(capacity),
-            },
+            properties,
             index_property_count: 0,
         }
     }
-
-    /// Defines `key` with an arbitrary descriptor, as `insert` does for an
-    /// enumerable data property.
     pub(crate) fn insert_property(&mut self, key: Rc<str>, property: Property) {
-        let classify_key = Rc::clone(&key);
-        if self.properties.insert(key, property).is_none() && is_array_index_key(&classify_key) {
+        if self.properties.insert_text(&key, property) && super::is_array_index_key(&key) {
             self.index_property_count += 1;
         }
     }
-
-    /// Applies one CreateDataProperty-style update. The generic storage insert
-    /// path overwrites duplicates in place and promotes only when a unique key
-    /// exceeds the compact-storage limit. Array-index classification happens
-    /// only after the insert reports a new key, keeping duplicate updates
-    /// allocation-free.
     pub(crate) fn insert(&mut self, key: Rc<str>, value: Value) {
-        let classify_key = Rc::clone(&key);
-        let inserted = self
-            .properties
-            .insert(key, Property::enumerable(value))
-            .is_none();
-        if inserted && is_array_index_key(&classify_key) {
-            self.index_property_count += 1;
-        }
+        self.insert_property(key, Property::enumerable(value));
     }
-
     pub(crate) fn finish(self, prototype: Option<ObjectRef>) -> ObjectRef {
-        ObjectRef(Rc::new(ObjectData {
-            properties: RefCell::new(self.properties),
-            property_revision: Cell::new(0),
-            layout_revision: Cell::new(0),
-            index_property_count: Cell::new(self.index_property_count),
-            extensible: Cell::new(true),
-            prototype: RefCell::new(prototype.map(Prototype::Object)),
-            raw_json: Cell::new(false),
-            array_prototype_exotic: Cell::new(false),
-            typed_array_exotic: Cell::new(false),
-            symbol_brand: Cell::new(SymbolBrand::None),
-            immutable_prototype_exotic: Cell::new(false),
-            module_namespace_exotic: Cell::new(false),
-            string_indices_pending: Cell::new(false),
-            cold: OnceCell::new(),
-        }))
+        self.finish_slot(prototype.map(Prototype::Object))
+    }
+    pub(super) fn finish_slot(self, prototype: Option<Prototype>) -> ObjectRef {
+        ObjectRef::from_named(self.properties, prototype, self.index_property_count)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, rc::Rc};
-
-    use super::{ObjectRef, OrderedDataPropertyBuilder, PropertyStorage};
-    use crate::Value;
-
+    use super::*;
+    use crate::property::atom::AtomDomain;
+    use crate::value::layout::PropertyOwner;
+    use std::collections::HashMap;
     #[test]
-    fn duplicate_heavy_builder_stays_small_and_bounded_by_unique_keys() {
-        let mut builder = OrderedDataPropertyBuilder::new();
-        for value in 0..256 {
-            builder.insert(
-                Rc::from(format!("field{}", value % 8)),
-                Value::Number(value as f64),
-            );
-        }
-
-        assert!(matches!(
-            &builder.properties,
-            PropertyStorage::Small { entries }
-                if entries.len() == 8 && entries.capacity() <= PropertyStorage::SMALL_LIMIT
-        ));
-        assert_eq!(builder.index_property_count, 0);
-
-        let object = builder.finish(None);
-        assert_eq!(
-            object.own_property_names(),
-            (0..8)
-                .map(|index| format!("field{index}"))
-                .collect::<Vec<_>>()
-        );
-        for index in 0..8 {
+    fn duplicate_heavy_input_keeps_first_order_and_last_values() {
+        let owner = PropertyOwner::new(AtomDomain::new());
+        for width in [8, 140] {
+            let mut builder = OrderedDataPropertyBuilder::new(owner.domain());
+            for n in 0..width * 30 {
+                builder.insert(
+                    Rc::from(format!("field{}", n % width)),
+                    Value::Number(n as f64),
+                );
+            }
+            assert_eq!(builder.properties.len(), width);
+            let object = builder.finish(None);
             assert_eq!(
-                object.get(&format!("field{index}")),
-                Some(Value::Number((248 + index) as f64))
+                object.own_property_names(),
+                (0..width).map(|n| format!("field{n}")).collect::<Vec<_>>()
             );
-        }
-    }
-
-    #[test]
-    fn duplicate_heavy_dynamic_builder_retains_only_unique_properties() {
-        let mut builder = OrderedDataPropertyBuilder::new();
-        let unique_count = PropertyStorage::SMALL_LIMIT + 2;
-        let value_count = unique_count * 30;
-        for value in 0..value_count {
-            builder.insert(
-                Rc::from(format!("field{}", value % unique_count)),
-                Value::Number(value as f64),
-            );
-        }
-
-        assert!(matches!(
-            &builder.properties,
-            PropertyStorage::Dynamic(dynamic)
-                if dynamic.entries.len() == unique_count
-                    && dynamic.order.len() == unique_count
-                    && dynamic.entries.capacity() <= PropertyStorage::SMALL_LIMIT * 4
-                    && dynamic.order.capacity() <= PropertyStorage::SMALL_LIMIT * 4
-        ));
-        assert_eq!(builder.index_property_count, 0);
-
-        let object = builder.finish(None);
-        assert_eq!(
-            object.own_property_names(),
-            (0..unique_count)
-                .map(|index| format!("field{index}"))
-                .collect::<Vec<_>>()
-        );
-        for index in 0..unique_count {
-            assert_eq!(
-                object.get(&format!("field{index}")),
-                Some(Value::Number((value_count - unique_count + index) as f64))
-            );
-        }
-    }
-
-    #[test]
-    fn duplicate_heavy_numeric_keys_release_replaced_values_during_build() {
-        let mut builder = OrderedDataPropertyBuilder::new();
-        let mut previous = None;
-
-        for _ in 0..256 {
-            let value = ObjectRef::new(HashMap::new());
-            let current = value.downgrade();
-            builder.insert(Rc::from("123"), Value::Object(value));
-            if let Some(replaced) = previous.replace(current) {
-                assert!(replaced.upgrade().is_none());
+            for n in 0..width {
+                assert_eq!(
+                    object.get(&format!("field{n}")),
+                    Some(Value::Number((width * 29 + n) as f64))
+                );
             }
         }
-
-        assert!(matches!(
-            &builder.properties,
-            PropertyStorage::Small { entries }
-                if entries.len() == 1 && entries.capacity() <= PropertyStorage::SMALL_LIMIT
-        ));
+    }
+    #[test]
+    fn overwritten_values_are_released_during_construction() {
+        let owner = PropertyOwner::new(AtomDomain::new());
+        let mut builder = OrderedDataPropertyBuilder::new(owner.domain());
+        let mut previous: Option<super::super::ObjectWeakRef> = None;
+        for _ in 0..256 {
+            let child = ObjectRef::new(HashMap::new(), owner.domain());
+            let weak = child.downgrade();
+            builder.insert(Rc::from("123"), Value::Object(child));
+            if let Some(old) = previous.replace(weak) {
+                assert!(old.upgrade().is_none());
+            }
+        }
         assert_eq!(builder.index_property_count, 1);
-        let retained = previous.expect("last property value must have a weak handle");
-        assert!(retained.upgrade().is_some());
+        let weak = previous.unwrap();
         drop(builder);
-        assert!(retained.upgrade().is_none());
+        assert!(weak.upgrade().is_none());
     }
 }

@@ -3,18 +3,18 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crate::{
     ObjectRef, RuntimeError, Value,
     date::{
-        DATE_VALUE_PROPERTY, MS_PER_DAY, MS_PER_HOUR, MS_PER_MINUTE, MS_PER_SECOND,
+        MS_PER_DAY, MS_PER_HOUR, MS_PER_MINUTE, MS_PER_SECOND,
         iso::{days_from_civil, parse_formatted_string, parse_iso_string},
         legacy::parse_legacy_string,
     },
 };
 
 pub(super) fn define_date_value(object: &ObjectRef, value: f64) {
-    object.set_internal_non_enumerable(DATE_VALUE_PROPERTY, Value::Number(value));
+    object.set_date_value(value);
 }
 
 pub(crate) fn is_date_object(object: &ObjectRef) -> bool {
-    matches!(object.get(DATE_VALUE_PROPERTY), Some(Value::Number(_)))
+    object.date_value().is_some()
 }
 
 pub(super) fn parse_date_string(source: &str) -> f64 {
@@ -37,8 +37,8 @@ pub(super) fn date_value(this_value: Value) -> Result<f64, RuntimeError> {
 }
 
 pub(super) fn date_value_from_object(object: &ObjectRef) -> Result<f64, RuntimeError> {
-    match object.get(DATE_VALUE_PROPERTY) {
-        Some(Value::Number(value)) => Ok(value),
+    match object.date_value() {
+        Some(value) => Ok(value),
         _ => Err(RuntimeError {
             thrown: None,
             message: "Date method receiver is not a Date object".to_owned(),

@@ -971,9 +971,10 @@ impl<'a> Vm<'a> {
 
     fn get_named_prop(
         &mut self,
-        key: &str,
+        name: &crate::property::atom::Atom,
         cache: &NamedPropertyCache,
     ) -> Result<(), RuntimeError> {
+        let key = name.as_str();
         let object = if let Some(slot) = cache.local_slot() {
             let direct_eval_lookup =
                 self.direct_eval_with_stack && self.bytecode.local_is_from_env(slot);
@@ -984,7 +985,7 @@ impl<'a> Vm<'a> {
                     object,
                     Value::Function(function) if function.is_uninitialized_lexical_marker()
                 )
-                && let Some(value) = self.try_cached_get_string(object, key, cache)
+                && let Some(value) = self.try_cached_get_named(object, name, cache)
             {
                 self.stack.push(value);
                 return Ok(());
@@ -1006,7 +1007,13 @@ impl<'a> Vm<'a> {
                 ),
             });
         }
-        let value = if let Some(value) = self.try_cached_get_string(&object, key, cache) {
+        let value = if let Some(value) = self.try_cached_get_named(&object, name, cache) {
+            value
+        } else if let Some(property) = cache.accessor(&object) {
+            let mut env = self.callee_env();
+            let value =
+                crate::property::property_descriptor_value(Some(property), object, &mut env)?;
+            self.apply_env(env);
             value
         } else if let Some(result) = self.try_direct_leaf_getter(&object, key) {
             result?
@@ -1101,6 +1108,14 @@ impl<'a> Vm<'a> {
         };
         if let Some(index) = array_index
             && let Some(Value::Array(elements)) = self.stack.last()
+            && elements.try_overwrite_dense_index(index, &value)
+        {
+            self.pop()?;
+            self.stack.push(value);
+            return Ok(());
+        }
+        if let Some(index) = array_index
+            && let Some(Value::Array(elements)) = self.stack.last()
             && elements.dense_index_store_eligible(index)
         {
             let elements = elements.clone();
@@ -1159,6 +1174,12 @@ impl<'a> Vm<'a> {
         let value = self.pop()?;
         let object = self.pop()?;
 
+        if let Value::Array(elements) = &object
+            && elements.try_overwrite_dense_index(index, &value)
+        {
+            self.stack.push(value);
+            return Ok(());
+        }
         if let Value::Array(elements) = &object
             && elements.dense_index_store_eligible(index)
         {
@@ -1251,7 +1272,12 @@ impl<'a> Vm<'a> {
         if !updates_global_binding
             && let (Value::Object(object), PropertyKey::String(key)) = (&object, &key)
         {
-            match object.write_existing_own_data_property(key, &value) {
+            let domain = self.env.realm().atoms();
+            let lease = domain.find(key).unwrap_or_else(|| domain.intern(key));
+            match object
+                .write_or_create_computed_data_key(&lease, &value)
+                .result
+            {
                 OwnDataPropertyWrite::Written => {
                     self.stack.push(value);
                     return Ok(());
@@ -1266,16 +1292,7 @@ impl<'a> Vm<'a> {
                     self.stack.push(value);
                     return Ok(());
                 }
-                OwnDataPropertyWrite::NeedsSlowPath => {
-                    if self.try_create_ordinary_own_data_property(
-                        object,
-                        Rc::from(key.as_str()),
-                        &value,
-                    ) {
-                        self.stack.push(value);
-                        return Ok(());
-                    }
-                }
+                OwnDataPropertyWrite::NeedsSlowPath => {}
             }
         }
         let mut env = self.callee_env();

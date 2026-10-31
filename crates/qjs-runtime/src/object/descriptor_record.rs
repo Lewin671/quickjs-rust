@@ -171,7 +171,8 @@ pub(crate) fn property_descriptor_record_object(
     descriptor: &PropertyDescriptor,
     env: &CallEnv,
 ) -> ObjectRef {
-    let result = ObjectRef::with_prototype(HashMap::new(), object_prototype(env));
+    let result =
+        ObjectRef::with_prototype(HashMap::new(), object_prototype(env), env.realm().atoms());
     if let Some(value) = &descriptor.value {
         result.define_property("value".to_owned(), Property::enumerable(value.clone()));
     }
@@ -441,8 +442,9 @@ fn accessor_function(value: Value, name: &str) -> Result<Option<Value>, RuntimeE
 pub(crate) fn property_descriptor_object(
     property: Property,
     prototype: Option<ObjectRef>,
+    domain: &crate::property::atom::AtomDomain,
 ) -> ObjectRef {
-    let result = ObjectRef::with_prototype(HashMap::new(), prototype);
+    let result = ObjectRef::with_prototype(HashMap::new(), prototype, domain);
     if property.is_accessor() {
         let enumerable = property.enumerable;
         let configurable = property.configurable;

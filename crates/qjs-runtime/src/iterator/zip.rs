@@ -402,7 +402,11 @@ fn zip_helper(
     result_kind: ZipResultKind,
     env: &CallEnv,
 ) -> ObjectRef {
-    let helper = ObjectRef::with_prototype(HashMap::new(), super::iterator_helper_prototype(env));
+    let helper = ObjectRef::with_prototype(
+        HashMap::new(),
+        super::iterator_helper_prototype(env),
+        env.realm().atoms(),
+    );
     helper.define_non_enumerable(
         HELPER_KIND.to_owned(),
         Value::String("zip".to_owned().into()),
@@ -575,7 +579,13 @@ fn advance_zip_state(
     if mode == ZipMode::Longest && !produced_value {
         return Ok(None);
     }
-    Ok(Some(zip_result(state.result_kind, &state.keys, values)))
+    Ok(Some(zip_result(
+        env.realm(),
+        state.result_kind,
+        &state.keys,
+        values,
+        env.realm().atoms(),
+    )))
 }
 
 fn zip_record_step_value(
@@ -616,12 +626,18 @@ fn zip_padding_value(state: &ZipState, index: usize) -> Value {
         .unwrap_or(Value::Undefined)
 }
 
-fn zip_result(result_kind: ZipResultKind, keys: &[PropertyKey], values: Vec<Value>) -> Value {
+fn zip_result(
+    realm: &crate::function::Realm,
+    result_kind: ZipResultKind,
+    keys: &[PropertyKey],
+    values: Vec<Value>,
+    domain: &crate::property::atom::AtomDomain,
+) -> Value {
     if result_kind == ZipResultKind::Array {
-        return Value::Array(ArrayRef::new(values));
+        return Value::Array(ArrayRef::new(realm, values));
     }
 
-    let result = ObjectRef::with_prototype(HashMap::new(), None);
+    let result = ObjectRef::with_prototype(HashMap::new(), None, domain);
     for (index, value) in values.into_iter().enumerate() {
         let Some(key) = keys.get(index).cloned() else {
             continue;

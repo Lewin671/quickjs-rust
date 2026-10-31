@@ -12,26 +12,31 @@ use crate::{
 pub(crate) const BIGINT_DATA_PROPERTY: &str = "\0BigIntData";
 
 pub(crate) fn install_bigint(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
-    let bigint_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
-    let bigint_function = Function::new_native(Some("BigInt"), 1, NativeFunction::BigInt, true);
+    let bigint_prototype =
+        ObjectRef::with_prototype(HashMap::new(), Some(object_prototype), env.realm().atoms());
+    let bigint_function =
+        Function::new_native(Some("BigInt"), 1, NativeFunction::BigInt, true, env.realm());
     bigint_prototype.set_to_string_tag("BigInt");
     bigint_prototype.define_non_enumerable(
         "constructor".to_owned(),
         Value::Function(bigint_function.clone()),
     );
     define_prototype_native(
+        env.realm(),
         &bigint_prototype,
         "toLocaleString",
         0,
         NativeFunction::BigIntPrototypeToLocaleString,
     );
     define_prototype_native(
+        env.realm(),
         &bigint_prototype,
         "toString",
         0,
         NativeFunction::BigIntPrototypeToString,
     );
     define_prototype_native(
+        env.realm(),
         &bigint_prototype,
         "valueOf",
         0,
@@ -44,7 +49,7 @@ pub(crate) fn install_bigint(env: &mut CallEnv, global_this: &Value, object_prot
         2,
         NativeFunction::BigIntAsUintN,
     );
-    bigint_function.properties.borrow_mut().insert(
+    bigint_function.define_property(
         "prototype".to_owned(),
         Property::fixed_non_enumerable(Value::Object(bigint_prototype)),
     );
@@ -63,6 +68,7 @@ pub(crate) fn install_bigint_well_known_symbols(env: &CallEnv) {
 }
 
 fn define_prototype_native(
+    realm: &crate::function::Realm,
     prototype: &ObjectRef,
     key: &str,
     length: usize,
@@ -70,18 +76,25 @@ fn define_prototype_native(
 ) {
     prototype.define_non_enumerable(
         key.to_owned(),
-        Value::Function(Function::new_native(Some(key), length, native, false)),
+        Value::Function(Function::new_native(
+            Some(key),
+            length,
+            native,
+            false,
+            realm,
+        )),
     );
 }
 
 fn define_static_native(function: &Function, key: &str, length: usize, native: NativeFunction) {
-    function.properties.borrow_mut().insert(
+    function.define_property(
         key.to_owned(),
         Property::non_enumerable(Value::Function(Function::new_native(
             Some(key),
             length,
             native,
             false,
+            function.creation_realm(),
         ))),
     );
 }

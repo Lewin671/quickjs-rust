@@ -38,17 +38,20 @@ const REGEXP_FLAGS_PROPERTY: &str = "\0RegExpFlags";
 const REGEXP_PROTOTYPE_BINDING: &str = "\0RegExpPrototype";
 
 pub(crate) fn install_regexp(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
-    let regexp_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
+    let regexp_prototype =
+        ObjectRef::with_prototype(HashMap::new(), Some(object_prototype), env.realm().atoms());
     regexp_prototype.set_to_string_tag("RegExp");
 
-    let regexp_function = Function::new_native(Some("RegExp"), 2, NativeFunction::RegExp, true);
-    regexp_function.properties.borrow_mut().insert(
+    let regexp_function =
+        Function::new_native(Some("RegExp"), 2, NativeFunction::RegExp, true, env.realm());
+    regexp_function.define_property(
         "escape".to_owned(),
         Property::non_enumerable(Value::Function(Function::new_native(
             Some("escape"),
             1,
             NativeFunction::RegExpEscape,
             false,
+            env.realm(),
         ))),
     );
     regexp_prototype.define_non_enumerable(
@@ -66,6 +69,7 @@ pub(crate) fn install_regexp(env: &mut CallEnv, global_this: &Value, object_prot
             0,
             NativeFunction::RegExpPrototypeToString,
             false,
+            env.realm(),
         )),
     );
     regexp_prototype.define_non_enumerable(
@@ -75,6 +79,7 @@ pub(crate) fn install_regexp(env: &mut CallEnv, global_this: &Value, object_prot
             2,
             NativeFunction::RegExpPrototypeCompile,
             false,
+            env.realm(),
         )),
     );
     regexp_prototype.define_non_enumerable(
@@ -84,6 +89,7 @@ pub(crate) fn install_regexp(env: &mut CallEnv, global_this: &Value, object_prot
             1,
             NativeFunction::RegExpPrototypeExec,
             false,
+            env.realm(),
         )),
     );
     regexp_prototype.define_non_enumerable(
@@ -93,6 +99,7 @@ pub(crate) fn install_regexp(env: &mut CallEnv, global_this: &Value, object_prot
             1,
             NativeFunction::RegExpPrototypeTest,
             false,
+            env.realm(),
         )),
     );
     if let Some(symbol) = symbol::search_symbol(env) {
@@ -103,6 +110,7 @@ pub(crate) fn install_regexp(env: &mut CallEnv, global_this: &Value, object_prot
                 1,
                 NativeFunction::RegExpPrototypeSearch,
                 false,
+                env.realm(),
             ))),
         );
     }
@@ -111,66 +119,76 @@ pub(crate) fn install_regexp(env: &mut CallEnv, global_this: &Value, object_prot
     symbol_replace::install_regexp_prototype_replace(env, &regexp_prototype);
     symbol_split::install_regexp_prototype_split(env, &regexp_prototype);
     define_regexp_accessor(
+        env.realm(),
         global_this,
         &regexp_prototype,
         "source",
         NativeFunction::RegExpPrototypeSource,
     );
     define_regexp_accessor(
+        env.realm(),
         global_this,
         &regexp_prototype,
         "flags",
         NativeFunction::RegExpPrototypeFlags,
     );
     define_regexp_accessor(
+        env.realm(),
         global_this,
         &regexp_prototype,
         "global",
         NativeFunction::RegExpPrototypeGlobal,
     );
     define_regexp_accessor(
+        env.realm(),
         global_this,
         &regexp_prototype,
         "dotAll",
         NativeFunction::RegExpPrototypeDotAll,
     );
     define_regexp_accessor(
+        env.realm(),
         global_this,
         &regexp_prototype,
         "ignoreCase",
         NativeFunction::RegExpPrototypeIgnoreCase,
     );
     define_regexp_accessor(
+        env.realm(),
         global_this,
         &regexp_prototype,
         "multiline",
         NativeFunction::RegExpPrototypeMultiline,
     );
     define_regexp_accessor(
+        env.realm(),
         global_this,
         &regexp_prototype,
         "sticky",
         NativeFunction::RegExpPrototypeSticky,
     );
     define_regexp_accessor(
+        env.realm(),
         global_this,
         &regexp_prototype,
         "unicode",
         NativeFunction::RegExpPrototypeUnicode,
     );
     define_regexp_accessor(
+        env.realm(),
         global_this,
         &regexp_prototype,
         "hasIndices",
         NativeFunction::RegExpPrototypeHasIndices,
     );
     define_regexp_accessor(
+        env.realm(),
         global_this,
         &regexp_prototype,
         "unicodeSets",
         NativeFunction::RegExpPrototypeUnicodeSets,
     );
-    regexp_function.properties.borrow_mut().insert(
+    regexp_function.define_property(
         "prototype".to_owned(),
         Property::fixed_non_enumerable(Value::Object(regexp_prototype)),
     );
@@ -184,12 +202,13 @@ pub(crate) fn install_regexp(env: &mut CallEnv, global_this: &Value, object_prot
 }
 
 fn define_regexp_accessor(
+    realm: &crate::function::Realm,
     global_this: &Value,
     prototype: &ObjectRef,
     name: &str,
     native: NativeFunction,
 ) {
-    let mut getter = Function::new_native(Some(&format!("get {name}")), 0, native, false);
+    let mut getter = Function::new_native(Some(&format!("get {name}")), 0, native, false, realm);
     getter.insert_native_context(
         REGEXP_PROTOTYPE_BINDING.to_owned(),
         Value::Object(prototype.clone()),
@@ -223,7 +242,11 @@ pub(crate) fn native_regexp(
     validate_regexp_init_cached(&source, &flags, env)?;
 
     if !is_construct {
-        let object = ObjectRef::with_prototype(HashMap::new(), function_prototype(function));
+        let object = ObjectRef::with_prototype(
+            HashMap::new(),
+            function_prototype(function),
+            env.realm().atoms(),
+        );
         define_regexp_data(&object, &source, &flags);
         return Ok(Value::Object(object));
     }
@@ -274,7 +297,8 @@ pub(crate) fn construct_regexp_from_strings(
     if !validated && let Err(error) = validate_regexp_init_cached(source, &flags, env) {
         return Some(Err(error));
     }
-    let mut builder = crate::value::OrderedDataPropertyBuilder::with_capacity(3);
+    let mut builder =
+        crate::value::OrderedDataPropertyBuilder::with_capacity(3, env.realm().atoms());
     REGEXP_OBJECT_KEYS.with(|[source_key, flags_key, last_index_key]| {
         builder.insert_property(
             source_key.clone(),
@@ -304,7 +328,7 @@ pub(crate) fn regexp_literal_value(
         Some(Value::Object(prototype)) => Some(prototype),
         _ => None,
     };
-    let object = ObjectRef::with_prototype(HashMap::new(), prototype);
+    let object = ObjectRef::with_prototype(HashMap::new(), prototype, env.realm().atoms());
     define_regexp_data(&object, source, flags);
     Ok(Value::Object(object))
 }
@@ -427,11 +451,13 @@ pub(crate) fn native_regexp_prototype_exec(
     }
     let group_names = matcher::regexp_group_names(&source);
     Ok(regexp_match_array(
+        env.realm(),
         &input,
         match_result,
         unicode,
         &group_names,
         has_indices,
+        env.realm().atoms(),
     ))
 }
 
@@ -670,7 +696,10 @@ fn regexp_receiver_error_value(function: &Function, message: &str) -> Option<Val
     let Value::Function(constructor) = constructor? else {
         return None;
     };
-    let mut env = CallEnv::from_map(function.native_context.clone_map());
+    let mut env = CallEnv::new(crate::function::new_realm_sharing_atoms(
+        function.native_context.clone_map(),
+        function.property_domain().clone(),
+    ));
     error::native_error(
         &constructor,
         Value::Undefined,
@@ -824,7 +853,7 @@ pub(crate) fn native_regexp_global_match(
     if matches.is_empty() {
         Ok(Value::Null)
     } else {
-        Ok(Value::Array(ArrayRef::new(matches)))
+        Ok(Value::Array(ArrayRef::new(env.realm(), matches)))
     }
 }
 
@@ -946,11 +975,13 @@ fn regexp_set_last_index_object(
 }
 
 fn regexp_match_array(
+    realm: &crate::function::Realm,
     input: &JsString,
     match_result: matcher::RegexpMatch,
     unicode: bool,
     group_names: &[Option<String>],
     has_indices: bool,
+    domain: &crate::property::atom::AtomDomain,
 ) -> Value {
     let captures = match_result.captures.clone();
     let mut values = Vec::with_capacity(1 + captures.len());
@@ -962,7 +993,7 @@ fn regexp_match_array(
             .map(|(start, end)| Value::String(input_slice(input, start, end, unicode).into()))
             .unwrap_or(Value::Undefined)
     }));
-    let result = ArrayRef::new(values);
+    let result = ArrayRef::new(realm, values);
     let index = if unicode {
         code_unit_index_for_char_index(input, match_result.start)
     } else {
@@ -972,17 +1003,19 @@ fn regexp_match_array(
     result.set_property("input".to_owned(), Value::String(input.clone()));
     result.set_property(
         "groups".to_owned(),
-        regexp_groups_object(input, &captures, unicode, group_names),
+        regexp_groups_object(input, &captures, unicode, group_names, domain),
     );
     if has_indices {
         result.set_property(
             "indices".to_owned(),
             regexp_indices_array(
+                realm,
                 input,
                 (match_result.start, match_result.end),
                 &captures,
                 unicode,
                 group_names,
+                domain,
             ),
         );
     }
@@ -993,31 +1026,35 @@ fn regexp_match_array(
 /// `[startCodeUnit, endCodeUnit]` pairs (or `undefined` for unmatched groups),
 /// with a `groups` property mirroring the named captures.
 fn regexp_indices_array(
+    realm: &crate::function::Realm,
     input: &str,
     whole: (usize, usize),
     captures: &[Option<(usize, usize)>],
     unicode: bool,
     group_names: &[Option<String>],
+    domain: &crate::property::atom::AtomDomain,
 ) -> Value {
     let mut entries = Vec::with_capacity(1 + captures.len());
-    entries.push(index_pair_value(input, Some(whole), unicode));
+    entries.push(index_pair_value(realm, input, Some(whole), unicode, domain));
     entries.extend(
         captures
             .iter()
-            .map(|capture| index_pair_value(input, *capture, unicode)),
+            .map(|capture| index_pair_value(realm, input, *capture, unicode, domain)),
     );
-    let indices = ArrayRef::new(entries);
+    let indices = ArrayRef::new(realm, entries);
 
     let groups = if group_names.is_empty() {
         Value::Undefined
     } else {
-        let object = ObjectRef::with_prototype(HashMap::new(), None);
+        let object = ObjectRef::with_prototype(HashMap::new(), None, domain);
         for (capture_index, name) in group_names.iter().enumerate() {
             let Some(name) = name else { continue };
             let value = index_pair_value(
+                realm,
                 input,
                 captures.get(capture_index).copied().flatten(),
                 unicode,
+                domain,
             );
             object.set(name.clone(), value);
         }
@@ -1029,7 +1066,13 @@ fn regexp_indices_array(
 
 /// Convert a char-index range into a `[start, end]` array of code-unit
 /// positions, or `undefined` when the range is absent.
-fn index_pair_value(input: &str, range: Option<(usize, usize)>, unicode: bool) -> Value {
+fn index_pair_value(
+    realm: &crate::function::Realm,
+    input: &str,
+    range: Option<(usize, usize)>,
+    unicode: bool,
+    _domain: &crate::property::atom::AtomDomain,
+) -> Value {
     let Some((start, end)) = range else {
         return Value::Undefined;
     };
@@ -1040,10 +1083,10 @@ fn index_pair_value(input: &str, range: Option<(usize, usize)>, unicode: bool) -
             char_index as f64
         }
     };
-    Value::Array(ArrayRef::new(vec![
-        Value::Number(to_units(start)),
-        Value::Number(to_units(end)),
-    ]))
+    Value::Array(ArrayRef::new(
+        realm,
+        vec![Value::Number(to_units(start)), Value::Number(to_units(end))],
+    ))
 }
 
 /// Build the `groups` property for a match result: `undefined` when the pattern
@@ -1054,29 +1097,40 @@ fn regexp_groups_object(
     captures: &[Option<(usize, usize)>],
     unicode: bool,
     group_names: &[Option<String>],
+    domain: &crate::property::atom::AtomDomain,
 ) -> Value {
-    regexp_groups_object_with(captures, group_names, |start, end| {
-        input_slice(input, start, end, unicode)
-    })
+    regexp_groups_object_with(
+        captures,
+        group_names,
+        |start, end| input_slice(input, start, end, unicode),
+        domain,
+    )
 }
 
 fn regexp_groups_object_prepared(
     input: &matcher::PreparedInput,
     captures: &[Option<(usize, usize)>],
     group_names: &[Option<String>],
+    domain: &crate::property::atom::AtomDomain,
 ) -> Value {
-    regexp_groups_object_with(captures, group_names, |start, end| input.slice(start, end))
+    regexp_groups_object_with(
+        captures,
+        group_names,
+        |start, end| input.slice(start, end),
+        domain,
+    )
 }
 
 fn regexp_groups_object_with(
     captures: &[Option<(usize, usize)>],
     group_names: &[Option<String>],
     mut input_slice: impl FnMut(usize, usize) -> String,
+    domain: &crate::property::atom::AtomDomain,
 ) -> Value {
     if group_names.is_empty() {
         return Value::Undefined;
     }
-    let groups = ObjectRef::with_prototype(HashMap::new(), None);
+    let groups = ObjectRef::with_prototype(HashMap::new(), None, domain);
     for (capture_index, name) in group_names.iter().enumerate() {
         let Some(name) = name else { continue };
         let value = captures

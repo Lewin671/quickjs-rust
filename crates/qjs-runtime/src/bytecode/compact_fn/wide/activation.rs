@@ -529,19 +529,7 @@ fn inline_constructor(
         return None;
     }
     let (inline, class) = inline_entry(callee, env)?;
-    let prototype = match function.own_property("prototype") {
-        Some(property) if !property.is_accessor() => match property.value {
-            Value::Object(prototype) if !crate::symbol::is_symbol_primitive(&prototype) => {
-                prototype
-            }
-            _ => return None,
-        },
-        _ => return None,
-    };
-    let receiver = crate::ObjectRef::with_prototype_slot(
-        std::collections::HashMap::new(),
-        Some(crate::Prototype::Object(prototype)),
-    );
+    let receiver = function.wide_instance_receiver(env.realm().atoms())?;
     Some((inline, receiver, class))
 }
 
@@ -818,7 +806,9 @@ fn run_frames(
                         ) else {
                             break Err(execute::uninitialized_local());
                         };
-                        if let Some(value) = property::get_prop_named_hot(receiver, &site.cache) {
+                        if let Some(value) =
+                            property::get_prop_named_hot(receiver, &site.key, &site.cache)
+                        {
                             execute::store(&mut window[dst as usize], value);
                             continue;
                         }
@@ -833,9 +823,11 @@ fn run_frames(
                         };
                         // The receiver is borrowed: a fused site peeks its
                         // local, and the plain form's result replaces it.
-                        if let Some(value) =
-                            property::get_prop_named_hot(&window[obj as usize], &site.cache)
-                        {
+                        if let Some(value) = property::get_prop_named_hot(
+                            &window[obj as usize],
+                            &site.key,
+                            &site.cache,
+                        ) {
                             execute::store(&mut window[dst as usize], value);
                             continue;
                         }
@@ -1044,6 +1036,13 @@ fn run_frames(
                             execute::store(&mut window[dst as usize], value);
                             continue;
                         }
+                        if let Some(value) = property::get_prop_string_own(
+                            &window[obj as usize],
+                            &window[key as usize],
+                        ) {
+                            execute::store(&mut window[dst as usize], value);
+                            continue;
+                        }
                         let key = take_operand(window, key, dst, program.local_registers);
                         // A forwarded local receiver is read, not consumed.
                         let result = if obj != dst && obj < program.local_registers {
@@ -1090,7 +1089,7 @@ fn run_frames(
                             .collect();
                         execute::store(
                             &mut window[dst as usize],
-                            Value::Array(crate::ArrayRef::new(values)),
+                            Value::Array(crate::ArrayRef::new(env.realm(), values)),
                         );
                     }
                     WideOp::ClearLocal { slot } => {
@@ -1567,9 +1566,9 @@ fn construct_plain_array(env: &CallEnv, callee: &Value, arguments: &[Value]) -> 
             if !valid {
                 return None;
             }
-            crate::ArrayRef::new_with_length(*length as usize)
+            crate::ArrayRef::new_with_length(env.realm(), *length as usize)
         }
-        values => crate::ArrayRef::new(values.to_vec()),
+        values => crate::ArrayRef::new(env.realm(), values.to_vec()),
     };
     Some(Value::Array(array))
 }

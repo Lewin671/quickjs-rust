@@ -7,6 +7,7 @@ use std::{collections::HashMap, rc::Rc};
 
 #[test]
 fn derived_this_forks_share_only_the_implicit_cell() {
+    let domain = crate::property::atom::AtomDomain::new();
     let mut env = CallEnv::detached();
     let this = Upvalue::new(Value::Function(
         crate::Function::uninitialized_lexical_marker(),
@@ -23,7 +24,7 @@ fn derived_this_forks_share_only_the_implicit_cell() {
     assert!(this.ptr_eq(&clone.derived_this_cell().unwrap()));
     assert!(this.ptr_eq(&fork.derived_this_cell().unwrap()));
     assert!(!local.ptr_eq(&fork.frame_binding_cell("local").unwrap()));
-    this.set(Value::Object(ObjectRef::new(HashMap::new())));
+    this.set(Value::Object(ObjectRef::new(HashMap::new(), &domain)));
     assert_eq!(env.get_local("this"), fork.get_local("this"));
     local.set(Value::Number(2.0));
     assert_eq!(fork.get_local("local"), Some(Value::Number(1.0)));
@@ -42,6 +43,7 @@ fn ordinary_undefined_this_is_not_a_derived_cell() {
 
 #[test]
 fn derived_this_insert_does_not_write_an_inherited_activations_cell() {
+    let domain = crate::property::atom::AtomDomain::new();
     let mut env = CallEnv::detached();
     let this = Upvalue::new(Value::Function(
         crate::Function::uninitialized_lexical_marker(),
@@ -57,7 +59,7 @@ fn derived_this_insert_does_not_write_an_inherited_activations_cell() {
         Value::Undefined,
     );
     env.insert_frame_cell("this".to_owned(), this.clone());
-    let receiver = Value::Object(ObjectRef::new(HashMap::new()));
+    let receiver = Value::Object(ObjectRef::new(HashMap::new(), &domain));
     env.insert("this".to_owned(), receiver.clone());
     assert_eq!(this.get(), receiver);
     assert!(other.with_value(Value::is_uninitialized_lexical_marker));
@@ -212,7 +214,8 @@ fn module_import_routes_share_until_environment_mutation() {
 
 #[test]
 fn dynamic_function_realm_cache_tracks_bulk_and_incremental_mutations() {
-    let first = ObjectRef::new(HashMap::new());
+    let domain = crate::property::atom::AtomDomain::new();
+    let first = ObjectRef::new(HashMap::new(), &domain);
     let mut bindings = HashMap::new();
     bindings.insert(
         DYNAMIC_FUNCTION_REALM_GLOBAL.to_owned(),
@@ -229,7 +232,7 @@ fn dynamic_function_realm_cache_tracks_bulk_and_incremental_mutations() {
     realm.refresh_dynamic_function_realm_global();
     assert!(realm.dynamic_function_realm_global().is_none());
 
-    let second = ObjectRef::new(HashMap::new());
+    let second = ObjectRef::new(HashMap::new(), &domain);
     let env = CallEnv::new(Rc::clone(&realm));
     env.insert_realm(
         DYNAMIC_FUNCTION_REALM_GLOBAL.to_owned(),

@@ -14,51 +14,64 @@ pub(crate) fn install_weak_map(
     global_this: &Value,
     object_prototype: ObjectRef,
 ) {
-    let weak_map_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
+    let weak_map_prototype =
+        ObjectRef::with_prototype(HashMap::new(), Some(object_prototype), env.realm().atoms());
     weak_map_prototype.set_to_string_tag("WeakMap");
     symbol::define_well_known_to_string_tag(env, &weak_map_prototype, "WeakMap");
-    let weak_map_function = Function::new_native(Some("WeakMap"), 0, NativeFunction::WeakMap, true);
+    let weak_map_function = Function::new_native(
+        Some("WeakMap"),
+        0,
+        NativeFunction::WeakMap,
+        true,
+        env.realm(),
+    );
     weak_map_prototype.define_non_enumerable(
         "constructor".to_owned(),
         Value::Function(weak_map_function.clone()),
     );
     define_weak_map_prototype_function(
+        env.realm(),
         &weak_map_prototype,
         "delete",
         1,
         NativeFunction::WeakMapPrototypeDelete,
     );
     define_weak_map_prototype_function(
+        env.realm(),
         &weak_map_prototype,
         "get",
         1,
         NativeFunction::WeakMapPrototypeGet,
     );
     define_weak_map_prototype_function(
+        env.realm(),
         &weak_map_prototype,
         "getOrInsert",
         2,
         NativeFunction::WeakMapPrototypeGetOrInsert,
     );
     define_weak_map_prototype_function(
+        env.realm(),
         &weak_map_prototype,
         "getOrInsertComputed",
         2,
         NativeFunction::WeakMapPrototypeGetOrInsertComputed,
     );
     define_weak_map_prototype_function(
+        env.realm(),
         &weak_map_prototype,
         "has",
         1,
         NativeFunction::WeakMapPrototypeHas,
     );
     define_weak_map_prototype_function(
+        env.realm(),
         &weak_map_prototype,
         "set",
         2,
         NativeFunction::WeakMapPrototypeSet,
     );
-    weak_map_function.properties.borrow_mut().insert(
+    weak_map_function.define_property(
         "prototype".to_owned(),
         crate::Property::fixed_non_enumerable(Value::Object(weak_map_prototype)),
     );
@@ -86,6 +99,7 @@ pub(crate) fn native_weak_map(
     let object = ObjectRef::with_prototype_slot(
         HashMap::new(),
         crate::native_construct_prototype_slot(function, env)?,
+        env.realm().atoms(),
     );
     object.set_to_string_tag("WeakMap");
     object.define_non_enumerable(WEAK_MAP_BRAND.to_owned(), Value::Boolean(true));
@@ -93,7 +107,7 @@ pub(crate) fn native_weak_map(
     // is a hash probe instead of a scan over a copy of every pair.
     object.define_non_enumerable(
         WEAK_MAP_ENTRIES.to_owned(),
-        Value::Map(crate::MapRef::new(None)),
+        Value::Map(crate::MapRef::new(None, env.realm().atoms())),
     );
     let weak_map = Value::Object(object);
 
@@ -332,6 +346,7 @@ fn incompatible_receiver() -> RuntimeError {
 }
 
 fn define_weak_map_prototype_function(
+    realm: &crate::function::Realm,
     prototype: &ObjectRef,
     key: &str,
     length: usize,
@@ -339,6 +354,12 @@ fn define_weak_map_prototype_function(
 ) {
     prototype.define_non_enumerable(
         key.to_owned(),
-        Value::Function(Function::new_native(Some(key), length, native, false)),
+        Value::Function(Function::new_native(
+            Some(key),
+            length,
+            native,
+            false,
+            realm,
+        )),
     );
 }

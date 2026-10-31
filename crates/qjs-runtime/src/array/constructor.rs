@@ -37,13 +37,13 @@ pub(crate) fn native_array(
     if let [Value::Number(length)] = argument_values {
         let length = array_length_from_descriptor_value(Value::Number(*length), env)?;
         return Ok(Value::Array(array_with_prototype(
-            ArrayRef::new_with_length(length),
+            ArrayRef::new_with_length(env.realm(), length),
             prototype,
         )));
     }
 
     Ok(Value::Array(array_with_prototype(
-        ArrayRef::new(argument_values.to_vec()),
+        ArrayRef::new(env.realm(), argument_values.to_vec()),
         prototype,
     )))
 }
@@ -147,7 +147,7 @@ fn array_from_values(
             if let Value::Array(array) = &items
                 && let Some(values) = array.dense_argument_values(env)
             {
-                return Ok(Value::Array(ArrayRef::new(values)));
+                return Ok(Value::Array(ArrayRef::new(env.realm(), values)));
             }
             array_from_iterable_result(items, iterator_method, mapping, this_arg, constructor, env)
         }
@@ -175,7 +175,7 @@ fn array_from_array_like_result(
 ) -> Result<Value, RuntimeError> {
     let length = elements.values.len();
     let Some(constructor) = constructor else {
-        return Ok(Value::Array(ArrayRef::new(elements.values)));
+        return Ok(Value::Array(ArrayRef::new(env.realm(), elements.values)));
     };
 
     let arguments = elements
@@ -198,7 +198,7 @@ fn array_from_async_start(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let capability = crate::promise::new_pending_promise(env);
-    let state = ObjectRef::new(HashMap::new());
+    let state = ObjectRef::new(HashMap::new(), env.realm().atoms());
     state.define_non_enumerable(
         ARRAY_FROM_ASYNC_CAPABILITY.to_owned(),
         Value::Object(capability.clone()),
@@ -233,7 +233,7 @@ fn array_from_async_start_result(
             Some(constructor) => {
                 construct_function(constructor.clone(), constructor, Vec::new(), env)?
             }
-            None => Value::Array(ArrayRef::new(Vec::new())),
+            None => Value::Array(ArrayRef::new(env.realm(), Vec::new())),
         };
         let next = property_value(iterator.clone(), "next", env)?;
         if !matches!(next, Value::Function(_)) {
@@ -265,7 +265,7 @@ fn array_from_async_start_result(
             vec![Value::Number(source.length as f64)],
             env,
         )?,
-        None => Value::Array(ArrayRef::new(Vec::new())),
+        None => Value::Array(ArrayRef::new(env.realm(), Vec::new())),
     };
     state.define_non_enumerable(ARRAY_FROM_ASYNC_TARGET.to_owned(), target);
     state.define_non_enumerable(ARRAY_FROM_ASYNC_RECEIVER.to_owned(), source.receiver);
@@ -360,9 +360,13 @@ fn array_from_async_continue_array_like(state: &ObjectRef, env: &mut CallEnv) {
             return;
         }
     };
-    let on_fulfilled =
-        array_from_async_reaction(NativeFunction::ArrayFromAsyncArrayLikeValueFulfilled, state);
-    let on_rejected = array_from_async_reaction(NativeFunction::ArrayFromAsyncRejected, state);
+    let on_fulfilled = array_from_async_reaction(
+        env.realm(),
+        NativeFunction::ArrayFromAsyncArrayLikeValueFulfilled,
+        state,
+    );
+    let on_rejected =
+        array_from_async_reaction(env.realm(), NativeFunction::ArrayFromAsyncRejected, state);
     crate::promise::perform_await(value, on_fulfilled, on_rejected, env);
 }
 
@@ -384,11 +388,15 @@ pub(crate) fn native_array_from_async_array_like_value_fulfilled(
         match mapped {
             Ok(mapped) => {
                 let on_fulfilled = array_from_async_reaction(
+                    env.realm(),
                     NativeFunction::ArrayFromAsyncArrayLikeMappedFulfilled,
                     &state,
                 );
-                let on_rejected =
-                    array_from_async_reaction(NativeFunction::ArrayFromAsyncRejected, &state);
+                let on_rejected = array_from_async_reaction(
+                    env.realm(),
+                    NativeFunction::ArrayFromAsyncRejected,
+                    &state,
+                );
                 crate::promise::perform_await(mapped, on_fulfilled, on_rejected, env);
             }
             Err(error) => array_from_async_reject_error(&state, error, env),
@@ -436,10 +444,16 @@ fn array_from_async_continue_iterator(state: &ObjectRef, env: &mut CallEnv) {
             return;
         }
     };
-    let on_fulfilled =
-        array_from_async_reaction(NativeFunction::ArrayFromAsyncIteratorStepFulfilled, state);
-    let on_rejected =
-        array_from_async_reaction(NativeFunction::ArrayFromAsyncIteratorRejected, state);
+    let on_fulfilled = array_from_async_reaction(
+        env.realm(),
+        NativeFunction::ArrayFromAsyncIteratorStepFulfilled,
+        state,
+    );
+    let on_rejected = array_from_async_reaction(
+        env.realm(),
+        NativeFunction::ArrayFromAsyncIteratorRejected,
+        state,
+    );
     crate::promise::perform_await(step, on_fulfilled, on_rejected, env);
 }
 
@@ -474,10 +488,12 @@ pub(crate) fn native_array_from_async_iterator_step_fulfilled(
         match mapped {
             Ok(mapped) => {
                 let on_fulfilled = array_from_async_reaction(
+                    env.realm(),
                     NativeFunction::ArrayFromAsyncIteratorMappedFulfilled,
                     &state,
                 );
                 let on_rejected = array_from_async_reaction(
+                    env.realm(),
                     NativeFunction::ArrayFromAsyncIteratorRejected,
                     &state,
                 );
@@ -623,8 +639,12 @@ fn array_from_async_reject_value(state: &ObjectRef, reason: Value, env: &mut Cal
     }
 }
 
-fn array_from_async_reaction(native: NativeFunction, state: &ObjectRef) -> Value {
-    let mut function = Function::new_native(None, 1, native, false);
+fn array_from_async_reaction(
+    realm: &crate::function::Realm,
+    native: NativeFunction,
+    state: &ObjectRef,
+) -> Value {
+    let mut function = Function::new_native(None, 1, native, false, realm);
     function.insert_native_context(
         ARRAY_FROM_ASYNC_STATE.to_owned(),
         Value::Object(state.clone()),
@@ -751,7 +771,7 @@ fn array_from_iterable_result(
 ) -> Result<Value, RuntimeError> {
     let target = match constructor {
         Some(constructor) => construct_function(constructor.clone(), constructor, Vec::new(), env)?,
-        None => Value::Array(ArrayRef::new(Vec::new())),
+        None => Value::Array(ArrayRef::new(env.realm(), Vec::new())),
     };
     let iterator = call_function(iterator_method, items, Vec::new(), env, false)?;
     let next = property_value(iterator.clone(), "next", env)?;
@@ -883,7 +903,7 @@ pub(crate) fn native_array_of(
             env,
         )?
     } else {
-        Value::Array(ArrayRef::new(Vec::new()))
+        Value::Array(ArrayRef::new(env.realm(), Vec::new()))
     };
     for (index, value) in argument_values.iter().enumerate() {
         create_array_of_data_property(&result, index.to_string(), value.clone(), env)?;

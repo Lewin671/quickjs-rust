@@ -21,6 +21,7 @@ pub(crate) fn native_object_keys(
 
     let keys = enumerable_property_keys(target, env)?;
     Ok(Value::Array(ArrayRef::new(
+        env.realm(),
         keys.into_iter().map(|s| Value::String(s.into())).collect(),
     )))
 }
@@ -37,11 +38,10 @@ pub(crate) fn native_object_values(
         });
     }
 
+    let entries = enumerable_property_entries(target, env)?;
     Ok(Value::Array(ArrayRef::new(
-        enumerable_property_entries(target, env)?
-            .into_iter()
-            .map(|(_, value)| value)
-            .collect(),
+        env.realm(),
+        entries.into_iter().map(|(_, value)| value).collect(),
     )))
 }
 
@@ -57,10 +57,17 @@ pub(crate) fn native_object_entries(
         });
     }
 
+    let entries = enumerable_property_entries(target, env)?;
     Ok(Value::Array(ArrayRef::new(
-        enumerable_property_entries(target, env)?
+        env.realm(),
+        entries
             .into_iter()
-            .map(|(key, value)| Value::Array(ArrayRef::new(vec![Value::String(key.into()), value])))
+            .map(|(key, value)| {
+                Value::Array(ArrayRef::new(
+                    env.realm(),
+                    vec![Value::String(key.into()), value],
+                ))
+            })
             .collect(),
     )))
 }
@@ -92,7 +99,7 @@ pub(crate) fn native_object_get_own_property_names(
             .map(|s| Value::String(s.into()))
             .collect()
     };
-    Ok(Value::Array(ArrayRef::new(names)))
+    Ok(Value::Array(ArrayRef::new(env.realm(), names)))
 }
 
 pub(crate) fn native_object_get_own_property_symbols(
@@ -120,7 +127,7 @@ pub(crate) fn native_object_get_own_property_symbols(
             .map(Value::Object)
             .collect()
     };
-    Ok(Value::Array(ArrayRef::new(symbols)))
+    Ok(Value::Array(ArrayRef::new(env.realm(), symbols)))
 }
 
 pub(crate) fn native_object_has_own(

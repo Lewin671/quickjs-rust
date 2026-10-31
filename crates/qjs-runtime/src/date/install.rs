@@ -4,254 +4,297 @@ use std::collections::HashMap;
 use crate::{Function, NativeFunction, ObjectRef, Property, Value, symbol};
 
 pub(crate) fn install_date(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
-    let date_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
+    let date_prototype =
+        ObjectRef::with_prototype(HashMap::new(), Some(object_prototype), env.realm().atoms());
 
-    let date_function = Function::new_native(Some("Date"), 7, NativeFunction::Date, true);
+    let date_function =
+        Function::new_native(Some("Date"), 7, NativeFunction::Date, true, env.realm());
     date_prototype.define_non_enumerable(
         "constructor".to_owned(),
         Value::Function(date_function.clone()),
     );
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "getTime",
         0,
         NativeFunction::DatePrototypeGetTime,
     );
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "getTimezoneOffset",
         0,
         NativeFunction::DatePrototypeGetTimezoneOffset,
     );
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "getYear",
         0,
         NativeFunction::DatePrototypeGetYear,
     );
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "getFullYear",
         0,
         NativeFunction::DatePrototypeGetUtcFullYear,
     );
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "getMonth",
         0,
         NativeFunction::DatePrototypeGetUtcMonth,
     );
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "getDate",
         0,
         NativeFunction::DatePrototypeGetUtcDate,
     );
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "getDay",
         0,
         NativeFunction::DatePrototypeGetUtcDay,
     );
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "getHours",
         0,
         NativeFunction::DatePrototypeGetUtcHours,
     );
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "getMinutes",
         0,
         NativeFunction::DatePrototypeGetUtcMinutes,
     );
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "getSeconds",
         0,
         NativeFunction::DatePrototypeGetUtcSeconds,
     );
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "getMilliseconds",
         0,
         NativeFunction::DatePrototypeGetUtcMilliseconds,
     );
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "setYear",
         1,
         NativeFunction::DatePrototypeSetYear,
     );
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "getUTCDate",
         0,
         NativeFunction::DatePrototypeGetUtcDate,
     );
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "getUTCDay",
         0,
         NativeFunction::DatePrototypeGetUtcDay,
     );
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "getUTCFullYear",
         0,
         NativeFunction::DatePrototypeGetUtcFullYear,
     );
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "getUTCHours",
         0,
         NativeFunction::DatePrototypeGetUtcHours,
     );
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "getUTCMilliseconds",
         0,
         NativeFunction::DatePrototypeGetUtcMilliseconds,
     );
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "getUTCMinutes",
         0,
         NativeFunction::DatePrototypeGetUtcMinutes,
     );
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "getUTCMonth",
         0,
         NativeFunction::DatePrototypeGetUtcMonth,
     );
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "getUTCSeconds",
         0,
         NativeFunction::DatePrototypeGetUtcSeconds,
     );
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "setTime",
         1,
         NativeFunction::DatePrototypeSetTime,
     );
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "setFullYear",
         3,
         NativeFunction::DatePrototypeSetUtcFullYear,
     );
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "setMonth",
         2,
         NativeFunction::DatePrototypeSetUtcMonth,
     );
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "setDate",
         1,
         NativeFunction::DatePrototypeSetUtcDate,
     );
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "setHours",
         4,
         NativeFunction::DatePrototypeSetUtcHours,
     );
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "setMinutes",
         3,
         NativeFunction::DatePrototypeSetUtcMinutes,
     );
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "setSeconds",
         2,
         NativeFunction::DatePrototypeSetUtcSeconds,
     );
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "setMilliseconds",
         1,
         NativeFunction::DatePrototypeSetUtcMilliseconds,
     );
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "setUTCDate",
         1,
         NativeFunction::DatePrototypeSetUtcDate,
     );
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "setUTCFullYear",
         3,
         NativeFunction::DatePrototypeSetUtcFullYear,
     );
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "setUTCHours",
         4,
         NativeFunction::DatePrototypeSetUtcHours,
     );
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "setUTCMilliseconds",
         1,
         NativeFunction::DatePrototypeSetUtcMilliseconds,
     );
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "setUTCMinutes",
         3,
         NativeFunction::DatePrototypeSetUtcMinutes,
     );
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "setUTCMonth",
         2,
         NativeFunction::DatePrototypeSetUtcMonth,
     );
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "setUTCSeconds",
         2,
         NativeFunction::DatePrototypeSetUtcSeconds,
     );
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "toDateString",
         0,
         NativeFunction::DatePrototypeToDateString,
     );
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "toLocaleString",
         0,
         NativeFunction::DatePrototypeToString,
     );
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "toLocaleDateString",
         0,
         NativeFunction::DatePrototypeToDateString,
     );
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "toLocaleTimeString",
         0,
         NativeFunction::DatePrototypeToTimeString,
     );
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "toISOString",
         0,
         NativeFunction::DatePrototypeToISOString,
     );
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "toJSON",
         1,
@@ -266,6 +309,7 @@ pub(crate) fn install_date(env: &mut CallEnv, global_this: &Value, object_protot
                     1,
                     NativeFunction::DatePrototypeToPrimitive,
                     false,
+                    env.realm(),
                 )),
                 false,
                 false,
@@ -274,12 +318,14 @@ pub(crate) fn install_date(env: &mut CallEnv, global_this: &Value, object_protot
         );
     }
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "toString",
         0,
         NativeFunction::DatePrototypeToString,
     );
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "toTimeString",
         0,
@@ -290,17 +336,19 @@ pub(crate) fn install_date(env: &mut CallEnv, global_this: &Value, object_protot
         0,
         NativeFunction::DatePrototypeToUtcString,
         false,
+        env.realm(),
     ));
     date_prototype.define_non_enumerable("toUTCString".to_owned(), to_utc_string.clone());
     date_prototype.define_non_enumerable("toGMTString".to_owned(), to_utc_string);
     define_date_prototype_function(
+        env.realm(),
         &date_prototype,
         "valueOf",
         0,
         NativeFunction::DatePrototypeValueOf,
     );
 
-    date_function.properties.borrow_mut().insert(
+    date_function.define_property(
         "prototype".to_owned(),
         Property::fixed_non_enumerable(Value::Object(date_prototype)),
     );
@@ -316,18 +364,20 @@ pub(crate) fn install_date(env: &mut CallEnv, global_this: &Value, object_protot
 }
 
 fn define_date_function(function: &Function, key: &str, length: usize, native: NativeFunction) {
-    function.properties.borrow_mut().insert(
+    function.define_property(
         key.to_owned(),
         Property::non_enumerable(Value::Function(Function::new_native(
             Some(key),
             length,
             native,
             false,
+            function.creation_realm(),
         ))),
     );
 }
 
 fn define_date_prototype_function(
+    realm: &crate::function::Realm,
     prototype: &ObjectRef,
     key: &str,
     length: usize,
@@ -335,6 +385,12 @@ fn define_date_prototype_function(
 ) {
     prototype.define_non_enumerable(
         key.to_owned(),
-        Value::Function(Function::new_native(Some(key), length, native, false)),
+        Value::Function(Function::new_native(
+            Some(key),
+            length,
+            native,
+            false,
+            realm,
+        )),
     );
 }

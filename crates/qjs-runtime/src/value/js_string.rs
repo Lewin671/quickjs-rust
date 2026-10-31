@@ -26,6 +26,12 @@ const ASCII_NO: u8 = 2;
 
 const UTF16_LEN_UNKNOWN: usize = usize::MAX;
 
+#[derive(Debug, Default)]
+struct StringCache {
+    matcher_view: Option<Rc<[char]>>,
+    key: Option<crate::property::atom::KeyLease>,
+}
+
 #[derive(Debug)]
 struct StringData {
     text: String,
@@ -34,11 +40,13 @@ struct StringData {
     /// A copy, or a buffer mutated in place, is never an atom.
     atom: Cell<bool>,
     ascii: Cell<u8>,
+    /// Mode for the cached matcher slice; fits existing scalar-header padding.
+    matcher_unicode: Cell<bool>,
     utf16_len: Cell<usize>,
     /// The matcher-indexed character view and the Unicode mode it was built
     /// for. A RegExp scan re-executes against the same subject once per match,
     /// and rebuilding this view every time made scanning quadratic.
-    matcher_view: RefCell<Option<(bool, Rc<[char]>)>>,
+    cache: RefCell<StringCache>,
     /// Test-only work count: how many times this buffer was scanned to
     /// classify it as ASCII.
     #[cfg(test)]
@@ -51,8 +59,9 @@ impl StringData {
             text,
             atom: Cell::new(false),
             ascii: Cell::new(ASCII_UNKNOWN),
+            matcher_unicode: Cell::new(false),
             utf16_len: Cell::new(UTF16_LEN_UNKNOWN),
-            matcher_view: RefCell::new(None),
+            cache: RefCell::default(),
             #[cfg(test)]
             ascii_scans: Cell::new(0),
         }
@@ -61,8 +70,9 @@ impl StringData {
     fn invalidate(&mut self) {
         self.atom.set(false);
         self.ascii.set(ASCII_UNKNOWN);
+        self.matcher_unicode.set(false);
         self.utf16_len.set(UTF16_LEN_UNKNOWN);
-        *self.matcher_view.borrow_mut() = None;
+        *self.cache.get_mut() = StringCache::default();
     }
 }
 
@@ -72,8 +82,12 @@ impl Clone for StringData {
             text: self.text.clone(),
             atom: Cell::new(false),
             ascii: Cell::new(self.ascii.get()),
+            matcher_unicode: Cell::new(self.matcher_unicode.get()),
             utf16_len: Cell::new(self.utf16_len.get()),
-            matcher_view: RefCell::new(self.matcher_view.borrow().clone()),
+            cache: RefCell::new(StringCache {
+                matcher_view: self.cache.borrow().matcher_view.clone(),
+                key: None,
+            }),
             #[cfg(test)]
             ascii_scans: Cell::new(0),
         }
@@ -89,7 +103,19 @@ impl Clone for StringData {
 #[derive(Clone, Debug)]
 pub struct JsString(Rc<StringData>);
 
+/// Non-owning IC constant; upgrading never reconstructs a dead string.
+#[derive(Clone, Debug)]
+pub(crate) struct WeakJsString(std::rc::Weak<StringData>);
+impl WeakJsString {
+    pub(crate) fn upgrade(&self) -> Option<JsString> {
+        self.0.upgrade().map(JsString)
+    }
+}
+
 impl JsString {
+    pub(crate) fn downgrade(&self) -> WeakJsString {
+        WeakJsString(Rc::downgrade(&self.0))
+    }
     /// Wraps an owned buffer that already uses the runtime's canonical WTF-16
     /// sentinel representation.
     pub fn new(text: String) -> Self {
@@ -172,13 +198,15 @@ impl JsString {
         // In ASCII text a code unit, a scalar value, and a byte all coincide,
         // so one view serves both modes.
         let ascii = self.is_ascii();
-        if let Some((cached_unicode, view)) = self.0.matcher_view.borrow().as_ref()
-            && (ascii || *cached_unicode == unicode)
+        if let Some(view) = self.0.cache.borrow().matcher_view.as_ref()
+            && (ascii || self.0.matcher_unicode.get() == unicode)
         {
             return Rc::clone(view);
         }
         let view: Rc<[char]> = build(&self.0.text).into();
-        *self.0.matcher_view.borrow_mut() = Some((unicode, Rc::clone(&view)));
+        let mut cache = self.0.cache.borrow_mut();
+        self.0.matcher_unicode.set(unicode);
+        cache.matcher_view = Some(Rc::clone(&view));
         view
     }
 
@@ -189,6 +217,23 @@ impl JsString {
         let data = Rc::make_mut(&mut self.0);
         data.invalidate();
         &mut data.text
+    }
+
+    /// A memoized live lease for a computed string key. Reads never intern;
+    /// COW/string mutation clears this metadata and foreign domains cannot hit.
+    #[inline]
+    pub(crate) fn property_key_lease(
+        &self,
+        domain: &crate::property::atom::AtomDomain,
+    ) -> Option<crate::property::atom::KeyLease> {
+        if let Some(key) = &self.0.cache.borrow().key
+            && key.belongs_to(domain)
+        {
+            return Some(key.clone());
+        }
+        let key = domain.find(self.as_str())?;
+        self.0.cache.borrow_mut().key = Some(key.clone());
+        Some(key)
     }
 
     /// Reports whether two values share one buffer.
@@ -384,5 +429,85 @@ mod tests {
         assert_eq!(value.utf16_len_with(&mut measure), 2);
         assert_eq!(value.utf16_len_with(&mut measure), 2);
         assert_eq!(calls, 1);
+    }
+}
+
+#[cfg(test)]
+mod property_key_tests {
+    use super::*;
+    use crate::property::atom::AtomDomain;
+
+    #[test]
+    fn property_key_memo_is_find_only_domain_checked_and_cleared_on_mutation() {
+        let a = AtomDomain::new();
+        let b = AtomDomain::new();
+        let mut text = JsString::from("key");
+        assert!(text.property_key_lease(&a).is_none());
+        assert!(a.find("key").is_none());
+        let ak = a.intern("key");
+        let bk = b.intern("key");
+        assert_eq!(text.property_key_lease(&a), Some(ak.clone()));
+        assert_eq!(text.property_key_lease(&b), Some(bk));
+        let alias = text.clone();
+        text.make_mut().push('2');
+        assert!(text.property_key_lease(&a).is_none());
+        assert_eq!(alias.property_key_lease(&a), Some(ak));
+        drop(alias);
+        text.make_mut().clear();
+        assert!(text.0.cache.borrow().key.is_none());
+    }
+}
+
+#[cfg(all(target_pointer_width = "64", not(test)))]
+const _: () = {
+    assert!(std::mem::size_of::<StringCache>() == 24);
+    assert!(std::mem::size_of::<StringData>() == 72);
+};
+
+#[cfg(test)]
+mod matcher_mode_tests {
+    use super::*;
+    #[test]
+    fn matcher_modes_and_key_memo_coexist_across_cow_and_invalidation() {
+        let domain = crate::property::atom::AtomDomain::new();
+        let key = domain.intern("😀");
+        let original = JsString::from("😀");
+        assert_eq!(original.property_key_lease(&domain), Some(key.clone()));
+        let unicode = original.matcher_view_with(true, |text| text.chars().collect());
+        assert_eq!(&*unicode, &['😀']);
+        assert!(Rc::ptr_eq(
+            &unicode,
+            &original.matcher_view_with(true, |_| panic!("cached"))
+        ));
+        let units = original.matcher_view_with(false, |text| {
+            crate::string::string_code_units(text)
+                .into_iter()
+                .map(crate::string::char_from_code_unit)
+                .collect()
+        });
+        assert_eq!(units.len(), 2);
+        assert!(Rc::ptr_eq(
+            &units,
+            &original.matcher_view_with(false, |_| panic!("cached"))
+        ));
+        assert_eq!(original.property_key_lease(&domain), Some(key));
+        let mut copy = original.clone();
+        copy.make_mut().push('x');
+        assert!(copy.property_key_lease(&domain).is_none());
+        assert_eq!(
+            copy.matcher_view_with(true, |text| text.chars().collect())
+                .len(),
+            2
+        );
+        assert!(Rc::ptr_eq(
+            &units,
+            &original.matcher_view_with(false, |_| panic!("COW alias"))
+        ));
+        assert_eq!(
+            original
+                .matcher_view_with(true, |text| text.chars().collect())
+                .len(),
+            1
+        );
     }
 }

@@ -1,0 +1,38 @@
+{
+  "revision": "b2cd575c",
+  "binary_sha256": "e1bf9c646a21266595b818973039efbe53445647563ce2bf79122e673fc9015c",
+  "tool": "local otool -tvV on the canonical x86_64 image; no execution/timing",
+  "full_mask_occurrences": 104,
+  "selected": [
+    {
+      "symbol": "__RNvNtNtNtCs93CNxA9ZQ5c_11qjs_runtime8bytecode10typed_loop7execute9get_named:",
+      "context": [
+        "00000001001dc423\tcmpb\t$0xc, %al",
+        "00000001001dc425\tje\t0x1001dc335",
+        "00000001001dc42b\tjmp\t0x1001dc75a",
+        "00000001001dc430\tmovq\t0x8(%rsi), %rax",
+        "00000001001dc434\tmovabsq\t$0xfffffffffffffff, %rcx        ## imm = 0xFFFFFFFFFFFFFFF"
+      ]
+    },
+    {
+      "symbol": "__RNvMs5_NtNtCs93CNxA9ZQ5c_11qjs_runtime5value5arrayNtB5_8ArrayRef24direct_dense_index_value:",
+      "context": [
+        "00000001004ad6f4\tpushq\t%r15",
+        "00000001004ad6f6\tpushq\t%r14",
+        "00000001004ad6f8\tpushq\t%r12",
+        "00000001004ad6fa\tpushq\t%rbx",
+        "00000001004ad6fb\tmovabsq\t$0xfffffffffffffff, %rax        ## imm = 0xFFFFFFFFFFFFFFF"
+      ]
+    },
+    {
+      "symbol": "__RNvMs5_NtNtCs93CNxA9ZQ5c_11qjs_runtime5value5arrayNtB5_8ArrayRef26dense_index_store_eligible:",
+      "context": [
+        "00000001004adca6\tja\t0x1004adcce",
+        "00000001004adca8\tmovq\t0x38(%rdi), %rax",
+        "00000001004adcac\ttestq\t%rax, %rax",
+        "00000001004adcaf\tjs\t0x1004adcce",
+        "00000001004adcb1\tmovabsq\t$0xfffffffffffffff, %rcx        ## imm = 0xFFFFFFFFFFFFFFF"
+      ]
+    }
+  ]
+}

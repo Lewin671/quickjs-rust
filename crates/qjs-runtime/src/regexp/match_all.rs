@@ -22,6 +22,7 @@ pub(crate) fn install_regexp_prototype_match_all(env: &CallEnv, prototype: &Obje
                 1,
                 NativeFunction::RegExpPrototypeMatchAll,
                 false,
+                env.realm(),
             ))),
         );
     }
@@ -66,7 +67,7 @@ pub(crate) fn native_regexp_prototype_match_all(
         env,
         crate::iterator::BuiltinIteratorKind::RegExpString,
     );
-    let iterator = ObjectRef::with_prototype(HashMap::new(), prototype);
+    let iterator = ObjectRef::with_prototype(HashMap::new(), prototype, env.realm().atoms());
     iterator.define_non_enumerable(REGEXP_STRING_ITERATOR_REGEXP.to_owned(), matcher);
     iterator.define_non_enumerable(
         REGEXP_STRING_ITERATOR_STRING.to_owned(),
@@ -98,7 +99,7 @@ pub(crate) fn native_regexp_string_iterator_next(
         });
     };
     if iterator_done(&iterator) {
-        return Ok(iterator_result(Value::Undefined, true));
+        return Ok(iterator_result(Value::Undefined, true, env.realm().atoms()));
     }
 
     let regexp = iterator_slot(&iterator, REGEXP_STRING_ITERATOR_REGEXP)?;
@@ -107,14 +108,14 @@ pub(crate) fn native_regexp_string_iterator_next(
     if matches!(result, Value::Null) {
         iterator
             .define_non_enumerable(REGEXP_STRING_ITERATOR_DONE.to_owned(), Value::Boolean(true));
-        return Ok(iterator_result(Value::Undefined, true));
+        return Ok(iterator_result(Value::Undefined, true, env.realm().atoms()));
     }
 
     let match_result = ensure_exec_result_object(result)?;
     if !iterator_boolean(&iterator, REGEXP_STRING_ITERATOR_GLOBAL)? {
         iterator
             .define_non_enumerable(REGEXP_STRING_ITERATOR_DONE.to_owned(), Value::Boolean(true));
-        return Ok(iterator_result(match_result, false));
+        return Ok(iterator_result(match_result, false, env.realm().atoms()));
     }
 
     let match_string = match_result_value(match_result.clone(), env)?;
@@ -128,7 +129,7 @@ pub(crate) fn native_regexp_string_iterator_next(
         );
         set_last_index(regexp, Value::Number(next_index as f64), env)?;
     }
-    Ok(iterator_result(match_result, false))
+    Ok(iterator_result(match_result, false, env.realm().atoms()))
 }
 
 fn regexp_exec(regexp: Value, input: &JsString, env: &mut CallEnv) -> Result<Value, RuntimeError> {
@@ -216,11 +217,12 @@ fn iterator_slot(iterator: &ObjectRef, key: &str) -> Result<Value, RuntimeError>
         })
 }
 
-fn iterator_result(value: Value, done: bool) -> Value {
-    let mut properties = HashMap::new();
-    properties.insert("value".to_owned(), value);
-    properties.insert("done".to_owned(), Value::Boolean(done));
-    Value::Object(ObjectRef::new(properties))
+fn iterator_result(value: Value, done: bool, domain: &crate::property::atom::AtomDomain) -> Value {
+    let properties = vec![
+        ("value".to_owned(), value),
+        ("done".to_owned(), Value::Boolean(done)),
+    ];
+    Value::Object(ObjectRef::new_ordered(properties, domain))
 }
 
 fn is_object_value(value: &Value) -> bool {

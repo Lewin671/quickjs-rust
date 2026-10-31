@@ -18,7 +18,7 @@ Target for [core rebuild](core-rebuild.md). All paths below are under
 | Typed loop | `typed_loop/`, `vm_loop_dispatch.rs`, decline masks | S4 retain general type/data-flow analysis as compiler passes; delete region driver, standalone scalar banks, admissions and deopt-to-old-VM path. |
 | Virtual object stream | `virtual_object/`, `vm_virtual_object.rs`, `FrameState::virtual_values` | S3 lowers its semantics into the single register Code, deleting parallel executable streams/selector and old handlers; S4 consolidates escape/materialization analysis into the common optimizer. |
 | Unique string append | `vm_string_append.rs`, JsString COW | Retain as one semantic string operation, port to owning word S5 and unit storage S7. Evidence: changing ownership must preserve uniqueness; no independent executor or caller admission. |
-| Named/enumeration caches | `named_property_cache.rs`, `enumerate_keys_cache.rs` | S2 replace with shape/validity slot caches; enumeration uses same structural dependencies. Retain no cached-value variant. |
+| Named/enumeration caches | `named_property_cache.rs`, `enumerate_keys_cache.rs` | S2 replace with shape/validity slot caches; enumeration uses same structural dependencies. Retain no legacy exact-value variant; weak prototype constants obey the [IC contract](core-rebuild-objects.md#inline-caches). |
 | Native entry service | `native.rs`, `native/entry.rs` | S3a replaces family probing/cache with installed operation entries and borrowed arguments; S3b replaces their CallEnv service parameter with Context. Builtins retain object-family source boundaries. |
 
 The existing compact driver really does share its own explicit stack; the general

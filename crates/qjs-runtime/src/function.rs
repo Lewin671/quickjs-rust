@@ -59,7 +59,10 @@ pub(crate) fn is_call_frame_binding(name: &str) -> bool {
     )
 }
 #[allow(unused_imports)]
-pub(crate) use env::{CallEnv, DynamicBindings, ModuleImports, Realm, new_realm};
+#[cfg(test)]
+pub(crate) use env::new_realm;
+pub(crate) use env::new_realm_sharing_atoms;
+pub(crate) use env::{CallEnv, DynamicBindings, ModuleImports, Realm};
 pub(crate) use install::install_function;
 pub(crate) use local_names::{
     collect_function_local_names, parameter_argument_binding_name, parameter_binding_name,
@@ -78,5 +81,5 @@ pub(crate) use strict::is_strict_function_body;
 pub(crate) use upvalue::Upvalue;
 pub(crate) use value::{
     CompiledUserFunction, Function, FunctionWeakRef, InstanceElementInitializer,
-    InstanceFieldInitializer, InstancePrivateElement, PrivateFieldInit,
+    InstanceFieldInitializer, InstancePrivateElement, NativeContextData, PrivateFieldInit,
 };

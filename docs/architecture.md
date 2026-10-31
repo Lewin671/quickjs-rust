@@ -38,21 +38,17 @@ source text -> qjs-lexer (tokens with spans) -> qjs-parser (qjs-ast)
 `third_party/quickjs-ng` (behavioural oracle and reference) and
 `third_party/test262` (conformance input) are pinned submodules outside the
 Cargo workspace. They are read-only and never a build dependency.
-`scripts/bootstrap.sh` initialises only these two top-level submodules;
-QuickJS-NG's own nested `test262` is not used.
 
 ## Execution
 
-Paths below are relative to `crates/qjs-runtime/src/`. The source-local map of
-the executors is the module header of `bytecode/mod.rs`; each module's header
-states its admission rule and why its fallback is unobservable.
+Paths are relative to `crates/qjs-runtime/src/`; `bytecode/mod.rs` and executor
+headers own their source maps, admission rules and fallback invariants.
 
 **Pipeline.** `bytecode/compiler*.rs` lower a parsed script or function to a
 `Bytecode` (`bytecode/ir.rs`): a stack-machine instruction stream plus the
 slot table for its locals. `Vm` (`bytecode/vm.rs`) interprets one `FrameState`
 at a time. Everything below is an optional faster route to the same
-semantics. Each one decides admission before any observable step, and
-otherwise leaves the work to the interpreter.
+semantics. Admission precedes observable work; declined paths use the interpreter.
 
 **Native entries.** `native/entry.rs` binds each operation at installation. `CallInfo`
 borrows callee/receiver and records construct mode; CallEnv supplies lazy realm/
@@ -131,17 +127,22 @@ interpreter drops its own extra references to the target, so a uniquely held
 buffer is extended in place; a real JavaScript alias keeps the buffer shared
 and immutable (`bytecode/vm_string_append.rs`).
 
-**Named operands.** A named property opcode indexes its body's name pool;
-the interpreter resolves it to an atom of the frame realm's `AtomDomain`
-(`property/atom.rs`), linking each body once per domain
-(`bytecode/linked_code.rs`). Stores still key by text; the atom-keyed shape/slot
-authority is the target in [core rebuild objects](design/core-rebuild-objects.md).
+**Named operands.** A named opcode indexes its body's pool and links it once
+per `AtomDomain` (`bytecode/linked_code.rs`). Ordinary operations use KeyLease
+IDs; host text boundaries resolve leases once. Strings and symbol identities
+share recyclable IDs; live leases prevent reuse. Domain indices are weak.
+
+**Creation inputs.** Realm-aware constructors receive stable intrinsic prototypes;
+low-level builders receive explicit prototype/domain inputs, including null.
+Realm roots own PropertyOwner outside the domain; layouts retain the domain.
+Native functions share empty native state per domain and copy it on mutation.
 
 **Per-site caches.** `bytecode/named_property_cache.rs` caches named property
 reads and writes per instruction site, keyed by receiver layout.
-`bytecode/enumerate_keys_cache.rs` caches a `for-in` key list while the whole
-prototype chain keeps its identities and layouts. Both validate against the
-object revisions described below.
+Layouts include prototype identity; shared guards use allocation identity,
+dictionaries also use versions. Inherited, missing, accessor, enumeration and
+creation proofs share per-prototype validity generations with a weak user graph.
+The [object contract](design/core-rebuild-objects.md) owns these invariants.
 
 ## State
 
@@ -167,20 +168,19 @@ Defined in `value/mod.rs`, `value/object.rs`, `value/property.rs` and
   is pointer identity. Caches hold `ObjectWeakRef`/`ArrayWeakRef`, never a
   strong reference. There is no tracing collector: a reference cycle is
   never freed.
-- `ObjectData` holds the fields every object needs inline. Rare state
-  (symbol-keyed properties, generator state, private names, ArrayBuffer and
-  TypedArray slots) sits behind a lazily allocated `ObjectColdData` box.
-- String-keyed properties use one of four `PropertyStorage` forms: `Small`
-  (an insertion-ordered vector, up to 12 properties), `Dynamic` (a boxed
-  slot vector with a name index and an order list), and `Shaped` or
-  `ShapedPair` for object literals, which share one `ObjectLiteralShape` key
-  layout and store only values or descriptors per object.
-- `Property` is 32 bytes: value and flags inline, the accessor pair behind an
-  optional shared `Rc`.
-- Each object has two counters. `property_revision` advances on any own
-  string property change. `layout_revision` advances only when a slot index
-  could change (insert, delete, descriptor replacement), so a slot-keyed
-  cache survives ordinary field assignment.
+- `ObjectData` owns NamedStore, a cold pointer, index count and packed flags;
+  NamedStore owns the live prototype. Buffer, namespace, generator and private
+  state remain cold. Sizes are asserted in the object contract.
+- Ordinary string and symbol properties share one `NamedStore`
+  (`value/layout/`): immutable shared shapes or a private dictionary, one ID
+  index, keyless values and cold shared accessor pairs. Property is a 32-byte
+  descriptor API result. No literal-specific payload or ordinary symbol table.
+- Literal input-slot metadata is compiler-owned; its per-domain layout links
+  feed the same transition tree as constructors, class fields, JSON and hosts.
+  String virtual indices remain exotic and do not materialize/intern on reads.
+- Arrays/functions embed a lazy named authority with explicit prototypes and
+  canonical empty layouts; probes allocate no payload or unrelated defaults.
+  Materialized descriptors and order live in the same NamedStore.
 - An array stores its elements in a `Vec<Value>`; holes are recorded in a
   lazily allocated side set.
 

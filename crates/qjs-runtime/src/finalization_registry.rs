@@ -11,7 +11,8 @@ pub(crate) fn install_finalization_registry(
     global_this: &Value,
     object_prototype: ObjectRef,
 ) {
-    let prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
+    let prototype =
+        ObjectRef::with_prototype(HashMap::new(), Some(object_prototype), env.realm().atoms());
     prototype.set_to_string_tag("FinalizationRegistry");
     symbol::define_well_known_to_string_tag(env, &prototype, "FinalizationRegistry");
     let function = Function::new_native(
@@ -19,21 +20,24 @@ pub(crate) fn install_finalization_registry(
         1,
         NativeFunction::FinalizationRegistry,
         true,
+        env.realm(),
     );
     prototype.define_non_enumerable("constructor".to_owned(), Value::Function(function.clone()));
     define_finalization_registry_prototype_function(
+        env.realm(),
         &prototype,
         "register",
         2,
         NativeFunction::FinalizationRegistryPrototypeRegister,
     );
     define_finalization_registry_prototype_function(
+        env.realm(),
         &prototype,
         "unregister",
         1,
         NativeFunction::FinalizationRegistryPrototypeUnregister,
     );
-    function.properties.borrow_mut().insert(
+    function.define_property(
         "prototype".to_owned(),
         Property::fixed_non_enumerable(Value::Object(prototype)),
     );
@@ -67,11 +71,12 @@ pub(crate) fn native_finalization_registry(
     let object = ObjectRef::with_prototype_slot(
         HashMap::new(),
         crate::native_construct_prototype_slot(function, env)?,
+        env.realm().atoms(),
     );
     object.set_to_string_tag("FinalizationRegistry");
     object.define_property(
         FINALIZATION_REGISTRY_CELLS.to_owned(),
-        Property::non_enumerable(Value::Array(ArrayRef::new(Vec::new()))),
+        Property::non_enumerable(Value::Array(ArrayRef::new(env.realm(), Vec::new()))),
     );
     Ok(Value::Object(object))
 }
@@ -108,7 +113,7 @@ pub(crate) fn native_finalization_registry_prototype_register(
         });
     }
 
-    finalization_registry_register(object, target, holdings, unregister_token)?;
+    finalization_registry_register(env.realm(), object, target, holdings, unregister_token)?;
     Ok(Value::Undefined)
 }
 
@@ -159,6 +164,7 @@ fn finalization_registry_cells(object: &ObjectRef) -> Result<ArrayRef, RuntimeEr
 }
 
 fn finalization_registry_register(
+    realm: &crate::function::Realm,
     object: ObjectRef,
     target: Value,
     holdings: Value,
@@ -166,11 +172,10 @@ fn finalization_registry_register(
 ) -> Result<(), RuntimeError> {
     let cells = finalization_registry_cells(&object)?;
     let mut values = cells.to_vec();
-    values.push(Value::Array(ArrayRef::new(vec![
-        target,
-        holdings,
-        unregister_token,
-    ])));
+    values.push(Value::Array(ArrayRef::new(
+        realm,
+        vec![target, holdings, unregister_token],
+    )));
     cells.replace_with(values);
     Ok(())
 }
@@ -224,6 +229,7 @@ fn incompatible_receiver() -> RuntimeError {
 }
 
 fn define_finalization_registry_prototype_function(
+    realm: &crate::function::Realm,
     prototype: &ObjectRef,
     key: &str,
     length: usize,
@@ -231,6 +237,12 @@ fn define_finalization_registry_prototype_function(
 ) {
     prototype.define_non_enumerable(
         key.to_owned(),
-        Value::Function(Function::new_native(Some(key), length, native, false)),
+        Value::Function(Function::new_native(
+            Some(key),
+            length,
+            native,
+            false,
+            realm,
+        )),
     );
 }

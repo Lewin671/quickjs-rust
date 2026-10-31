@@ -51,3 +51,14 @@ fn releasing_a_chain_keeps_links_still_referenced_elsewhere() {
         Ok(Value::Number(500.0))
     );
 }
+
+#[test]
+fn releases_two_hundred_thousand_array_and_function_named_links() {
+    assert_eq!(
+        eval(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/compare-qjs/named-property-iterative-release.js"
+        ))),
+        Ok(Value::Boolean(true))
+    );
+}

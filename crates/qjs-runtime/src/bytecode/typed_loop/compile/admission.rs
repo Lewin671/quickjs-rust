@@ -112,3 +112,23 @@ pub(super) fn cannot_observe_a_binding(op: &Op) -> bool {
             | Op::CompareLocalsJumpFalse { .. }
     )
 }
+
+pub(super) fn writes_slot(op: &Op, slot: usize) -> bool {
+    match op {
+        Op::StoreLocal(candidate)
+        | Op::AssignLocal(candidate)
+        | Op::ClearLocal(candidate)
+        | Op::StoreGlobalSloppy {
+            slot: candidate, ..
+        }
+        | Op::StoreLocalOrGlobalSloppy {
+            slot: candidate, ..
+        }
+        | Op::IncrementLocal {
+            slot: candidate, ..
+        }
+        | Op::CopyLocal { to: candidate, .. } => *candidate == slot,
+        Op::BinaryAssignLocals { target, stores, .. } => *target == slot || stores.contains(&slot),
+        _ => false,
+    }
+}

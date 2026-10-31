@@ -13,12 +13,12 @@ pub(super) fn array_species_create(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if !is_array_species_receiver(&receiver)? {
-        return default_array_species_create(length);
+        return default_array_species_create(length, env);
     }
     if let Value::Array(array) = &receiver
         && species_is_intrinsic_array(array, env)
     {
-        return default_array_species_create(length);
+        return default_array_species_create(length, env);
     }
 
     let mut constructor = property_value(receiver, "constructor", env)?;
@@ -34,7 +34,7 @@ pub(super) fn array_species_create(
         }
     }
     if matches!(constructor, Value::Undefined) {
-        return default_array_species_create(length);
+        return default_array_species_create(length, env);
     }
     ensure_constructor(&constructor).map_err(|_| RuntimeError {
         thrown: None,
@@ -64,7 +64,7 @@ pub(super) fn species_is_intrinsic_array(array: &ArrayRef, env: &CallEnv) -> boo
     let Some(prototype) = env.realm().array_prototype() else {
         return false;
     };
-    if !(array.uses_default_prototype() || array.uses_prototype_object(&prototype)) {
+    if !(array.uses_prototype_object(&prototype)) {
         return false;
     }
     let crate::value::OwnDataPropertyRead::Data(Value::Function(constructor)) =
@@ -89,14 +89,14 @@ pub(super) fn species_is_intrinsic_array(array: &ArrayRef, env: &CallEnv) -> boo
         })
 }
 
-fn default_array_species_create(length: usize) -> Result<Value, RuntimeError> {
+fn default_array_species_create(length: usize, env: &CallEnv) -> Result<Value, RuntimeError> {
     if length > MAX_ARRAY_LENGTH {
         return Err(RuntimeError {
             thrown: None,
             message: "RangeError: invalid array length".to_owned(),
         });
     }
-    Ok(Value::Array(ArrayRef::new_with_length(length)))
+    Ok(Value::Array(ArrayRef::new_with_length(env.realm(), length)))
 }
 
 pub(super) fn validate_array_species_constructor(

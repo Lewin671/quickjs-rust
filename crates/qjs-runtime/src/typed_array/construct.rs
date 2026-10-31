@@ -93,6 +93,7 @@ fn typed_array_allocation_object(
         _ => Ok(ObjectRef::with_prototype_slot(
             HashMap::new(),
             crate::native_construct_prototype_slot(function, env)?,
+            env.realm().atoms(),
         )),
     }
 }
@@ -276,7 +277,7 @@ pub(crate) fn create_with_values(
     env: &CallEnv,
 ) -> ObjectRef {
     let prototype = concrete_prototype(native, env);
-    let object = ObjectRef::with_prototype(HashMap::new(), prototype);
+    let object = ObjectRef::with_prototype(HashMap::new(), prototype, env.realm().atoms());
     let length = values.len();
     let buffer = array_buffer_for(length * bytes_per_element(native), env);
     install_view(&object, native, buffer, 0, length, false, values);

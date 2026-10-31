@@ -1,0 +1,95 @@
+{
+  "candidate": "fc3deef7f899b519db82848a531cc09011b8a2cf",
+  "off_documentation_revision": "4a6cbab84869cbc17d5b16abfa1a79ef7c6a8498",
+  "identity_proof": "git diff --quiet fc3deef7 4a6cbab8 -- crates scripts Cargo.toml Cargo.lock .cargo rust-toolchain.toml: exit 0",
+  "cli": {
+    "path": "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s2/target/t077-s2-freeze/pinned-fc3deef7/release-qjs",
+    "sha256": "f8dbeab935c0376b12f0a26cc954911226ba9d5c6329fca6aa9b771e2dd9aeab",
+    "profile": "release",
+    "features": "agents (CLI feature)",
+    "agent_smoke": "agent-ready\n"
+  },
+  "test262_dir": "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/third_party/test262",
+  "timeout_seconds": 20,
+  "jobs_per_mode": 4,
+  "cached_environment": {
+    "QJS_DISABLE_IC": "unset",
+    "QJS_VERIFY_IC": "unset",
+    "QJS_AGENTS": "1"
+  },
+  "off_environment": {
+    "QJS_DISABLE_IC": "1",
+    "QJS_VERIFY_IC": "unset",
+    "QJS_AGENTS": "1"
+  },
+  "routing": "temporary path-only script copies; frozen tracked harness unchanged",
+  "rustc": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: aarch64-apple-darwin\nrelease: 1.95.0\nLLVM version: 22.1.2\n",
+  "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+  "host": {
+    "system": "Darwin",
+    "release": "25.6.0",
+    "machine": "arm64"
+  },
+  "preflight": {
+    "note": "one both-engine Atomics/add preflight; summary below is authoritative",
+    "summary": {
+      "engine": "both",
+      "filter": "test/built-ins/Atomics/add",
+      "limit": "1",
+      "shard": {
+        "index": 1,
+        "total": 1
+      },
+      "total": 16,
+      "configured": 16,
+      "eligible": 16,
+      "run": 1,
+      "skipped": {
+        "total": 0,
+        "async": 0,
+        "features": 0,
+        "fixture": 0,
+        "includes": 0,
+        "intl402": 0,
+        "module": 0,
+        "negative": 0,
+        "raw": 0,
+        "syntax": 0
+      },
+      "rust_not_run": 0,
+      "quickjs_rust": {
+        "pass": 1,
+        "fail": 0,
+        "timeout": 0,
+        "skipped": 0
+      },
+      "quickjs_ng": {
+        "pass": 1,
+        "fail": 0,
+        "timeout": 0,
+        "skipped": 0
+      },
+      "comparison": {
+        "both_pass": 1,
+        "quickjs_ng_pass_rust_nonpass": 0,
+        "quickjs_ng_pass_rust_not_run": 0,
+        "quickjs_ng_pass_rust_fail": 0,
+        "quickjs_ng_pass_rust_timeout": 0,
+        "rust_pass_quickjs_ng_nonpass": 0,
+        "both_nonpass": 0,
+        "both_fail_or_timeout": 0
+      }
+    },
+    "case_results": [
+      {
+        "path": "test/built-ins/Atomics/add/bad-range.js",
+        "rust": "pass",
+        "rust_result": "pass",
+        "rust_skip": "",
+        "quickjs_ng": "pass",
+        "quickjs_ng_result": "pass",
+        "quickjs_ng_skip": ""
+      }
+    ]
+  }
+}

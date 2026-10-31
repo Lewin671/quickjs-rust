@@ -7,7 +7,7 @@ use std::{collections::HashMap, rc::Rc};
 use crate::{
     Function, ObjectRef, Property, PropertyKey, RuntimeError, Value, array_as_prototype_slot,
     function::{CompiledUserFunction, InstanceFieldInitializer, Upvalue},
-    function_prototype, object, property_value,
+    object, property_value,
     symbol::symbol_function_name_description,
     to_property_key_value,
 };
@@ -168,7 +168,11 @@ impl Vm<'_> {
             let _ = constructor_function.set_internal_prototype_slot(Some(parent_slot));
         }
 
-        let prototype = ObjectRef::with_prototype_slot(HashMap::new(), prototype_parent);
+        let prototype = ObjectRef::with_prototype_slot(
+            HashMap::new(),
+            prototype_parent,
+            self.env.realm().atoms(),
+        );
         constructor_function.install_class_prototype(prototype.clone());
 
         // The constructor's home object is its prototype; static `super.x`
@@ -844,10 +848,7 @@ struct ClassHeritageParent {
 }
 
 fn function_prototype_value(env: &CallEnv) -> Option<Value> {
-    let Some(Value::Function(function_constructor)) = env.get("Function") else {
-        return None;
-    };
-    function_prototype(&function_constructor).map(Value::Object)
+    env.realm().function_prototype().map(|p| p.to_value())
 }
 
 impl ClassHeritage {

@@ -84,11 +84,13 @@ fn default_array_prototype_is_stable_after_global_rebinding() {
 }
 
 #[test]
-fn ordinary_array_literal_keeps_implicit_default_prototype_slot() {
+fn ordinary_array_literal_stores_its_explicit_intrinsic_prototype() {
     let Ok(Value::Array(array)) = eval("[]") else {
         panic!("array literal did not evaluate to an array");
     };
-    assert!(array.uses_default_prototype());
+    assert!(
+        matches!(array.prototype_slot(),Some(crate::Prototype::Object(p)) if p.is_array_prototype_exotic())
+    );
 }
 
 #[test]

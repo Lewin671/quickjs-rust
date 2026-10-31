@@ -105,7 +105,7 @@ fn array_iterator_from_receiver(receiver: Value, env: &mut CallEnv, kind: &str) 
         env,
         crate::iterator::BuiltinIteratorKind::Array,
     );
-    let iterator = ObjectRef::with_prototype(HashMap::new(), prototype);
+    let iterator = ObjectRef::with_prototype(HashMap::new(), prototype, env.realm().atoms());
     iterator.define_non_enumerable(ITERATED_OBJECT.to_owned(), receiver);
     iterator.define_non_enumerable(ITERATOR_NEXT_INDEX.to_owned(), Value::Number(0.0));
     iterator.define_non_enumerable(ITERATOR_DONE.to_owned(), Value::Boolean(false));
@@ -127,7 +127,7 @@ pub(crate) fn native_array_iterator_next(
         });
     };
     if iterator_done(&iterator) {
-        return Ok(iterator_result(Value::Undefined, true));
+        return Ok(iterator_result(Value::Undefined, true, env.realm().atoms()));
     }
 
     let target = iterator_slot(&iterator, ITERATED_OBJECT)?;
@@ -148,7 +148,7 @@ pub(crate) fn native_array_iterator_next(
     let length = to_length_with_env(property_value(target.clone(), "length", env)?, env)?;
     if index >= length {
         iterator.define_non_enumerable(ITERATOR_DONE.to_owned(), Value::Boolean(true));
-        return Ok(iterator_result(Value::Undefined, true));
+        return Ok(iterator_result(Value::Undefined, true, env.realm().atoms()));
     }
 
     iterator.define_non_enumerable(
@@ -159,10 +159,10 @@ pub(crate) fn native_array_iterator_next(
     let value = match iterator_kind(&iterator)?.as_str() {
         ITERATOR_KIND_KEY => key,
         ITERATOR_KIND_VALUE => property_value(target, &index.to_string(), env)?,
-        ITERATOR_KIND_KEY_VALUE => Value::Array(ArrayRef::new(vec![
-            key,
-            property_value(target, &index.to_string(), env)?,
-        ])),
+        ITERATOR_KIND_KEY_VALUE => {
+            let value = property_value(target, &index.to_string(), env)?;
+            Value::Array(ArrayRef::new(env.realm(), vec![key, value]))
+        }
         _ => {
             return Err(RuntimeError {
                 thrown: None,
@@ -170,7 +170,7 @@ pub(crate) fn native_array_iterator_next(
             });
         }
     };
-    Ok(iterator_result(value, false))
+    Ok(iterator_result(value, false, env.realm().atoms()))
 }
 
 fn iterator_done(iterator: &ObjectRef) -> bool {
@@ -212,9 +212,10 @@ fn iterator_kind(iterator: &ObjectRef) -> Result<String, RuntimeError> {
     }
 }
 
-fn iterator_result(value: Value, done: bool) -> Value {
-    let mut properties = HashMap::new();
-    properties.insert("value".to_owned(), value);
-    properties.insert("done".to_owned(), Value::Boolean(done));
-    Value::Object(ObjectRef::new(properties))
+fn iterator_result(value: Value, done: bool, domain: &crate::property::atom::AtomDomain) -> Value {
+    let properties = vec![
+        ("value".to_owned(), value),
+        ("done".to_owned(), Value::Boolean(done)),
+    ];
+    Value::Object(ObjectRef::new_ordered(properties, domain))
 }

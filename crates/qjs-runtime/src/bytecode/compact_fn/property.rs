@@ -12,7 +12,7 @@
 
 use std::rc::Rc;
 
-use crate::bytecode::named_property_cache::{CacheProbe, NamedPropertyCache};
+use crate::bytecode::named_property_cache::NamedPropertyCache;
 use crate::function::CallEnv;
 use crate::value::{OwnDataPropertyRead, OwnDataPropertyWrite};
 use crate::{PropertyKey, RuntimeError, Value};
@@ -21,17 +21,14 @@ use crate::{PropertyKey, RuntimeError, Value};
 /// ordinary object the site's hot cache entry answers (`probe_hot`). Paying
 /// `get_prop_named`'s whole frame for that was a third of a read's cost.
 #[inline(always)]
-pub(super) fn get_prop_named_hot(object: &Value, cache: &NamedPropertyCache) -> Option<Value> {
-    let Value::Object(object_ref) = object else {
-        return None;
-    };
-    if crate::symbol::is_symbol_primitive(object_ref)
-        || crate::typed_array::is_typed_array_object(object_ref)
-        || object_ref.is_module_namespace_exotic()
-    {
-        return None;
-    }
-    cache.probe_hot(object_ref)
+pub(super) fn get_prop_named_hot(
+    object: &Value,
+    key: &str,
+    cache: &NamedPropertyCache,
+) -> Option<Value> {
+    object
+        .unconditional_named_hook(key)
+        .or_else(|| cache.get_value(object, None))
 }
 
 /// Reads the statically named property `key` of `object`, consulting `cache`
@@ -44,63 +41,39 @@ pub(super) fn get_prop_named(
     cache: &NamedPropertyCache,
     env: &CallEnv,
 ) -> Result<Value, RuntimeError> {
-    if let Value::Object(object_ref) = object
-        && !crate::symbol::is_symbol_primitive(object_ref)
-        && !crate::typed_array::is_typed_array_object(object_ref)
-        && !object_ref.is_module_namespace_exotic()
-    {
-        if let Some(value) = cache.probe_hot(object_ref) {
-            return Ok(value);
-        }
-        let probe = cache.probe(object_ref);
-        if let CacheProbe::Own(value) = probe {
-            return Ok(value);
-        }
-        if let CacheProbe::PrototypeCandidate { holder, slot } = &probe
-            && cache.receiver_miss_proven(object_ref)
-            && let Some(value) = holder.prototype_data_slot_value(*slot)
-        {
-            return Ok(value);
-        }
-        match object_ref.own_data_property_read(key) {
-            OwnDataPropertyRead::Data(value) => {
-                cache.update(object_ref, key, &value);
-                return Ok(value);
+    if key.as_ref() == "length" {
+        match object {
+            Value::Array(array) => return Ok(Value::Number(array.len() as f64)),
+            Value::String(text) => {
+                return Ok(Value::Number(
+                    crate::string::js_string_code_unit_len(text) as f64
+                ));
             }
-            // The receiver has no own property of this name; the candidate the
-            // probe retained is the same prototype answer the interpreter uses
-            // once that receiver miss is proven.
-            OwnDataPropertyRead::Missing => {
-                if let CacheProbe::PrototypeCandidate { holder, slot } = probe
-                    && let Some(value) = holder.prototype_data_slot_value(slot)
-                {
-                    cache.remember_receiver_miss(object_ref);
-                    return Ok(value);
-                }
-                // An inherited getter the interpreter would call directly.
-                if let Some(result) = crate::bytecode::vm_props::direct_leaf_getter(
-                    object,
-                    key,
-                    env,
-                    env.module_host(),
-                    #[cfg(feature = "agents")]
-                    env.agent_context(),
-                ) {
-                    return result;
-                }
+            _ => {}
+        }
+    }
+    if let Some(outcome) = cache.read_outcome(object, key) {
+        return match outcome {
+            crate::bytecode::named_property_cache::ReadOutcome::Value(v) => Ok(v),
+            crate::bytecode::named_property_cache::ReadOutcome::Accessor(p) => {
                 let mut call_env = env.empty_frame();
-                let value =
-                    crate::bytecode::vm_props::get_property(object.clone(), key, &mut call_env)?;
-                cache.update_from_prototype(object_ref, key);
-                return Ok(value);
+                crate::property::property_descriptor_value(Some(p), object.clone(), &mut call_env)
             }
-            OwnDataPropertyRead::NeedsSlowPath => {}
-        }
+        };
     }
     if let Some(value) = prototype_receiver_named_value(object, key, cache, env) {
         return Ok(value);
     }
-    cache.clear();
+    if let Some(result) = crate::bytecode::vm_props::direct_leaf_getter(
+        object,
+        key,
+        env,
+        env.module_host(),
+        #[cfg(feature = "agents")]
+        env.agent_context(),
+    ) {
+        return result;
+    }
     let mut call_env = env.empty_frame();
     crate::bytecode::vm_props::get_property(object.clone(), key, &mut call_env)
 }
@@ -164,22 +137,7 @@ fn prototype_receiver_named_value(
         }
         _ => return None,
     };
-    if let CacheProbe::Own(value) = cache.probe(&prototype) {
-        return Some(value);
-    }
-    use crate::bytecode::vm_props::{DirectPropertyRead, ordinary_chain_data_value};
-    match prototype.own_data_property_read(key) {
-        OwnDataPropertyRead::Data(value) => {
-            cache.update(&prototype, key, &value);
-            Some(value)
-        }
-        OwnDataPropertyRead::Missing => match ordinary_chain_data_value(&prototype, key) {
-            Ok(DirectPropertyRead::Data(value)) => Some(value),
-            Ok(DirectPropertyRead::Missing) => Some(Value::Undefined),
-            Ok(DirectPropertyRead::NeedsSlowPath) | Err(_) => None,
-        },
-        OwnDataPropertyRead::NeedsSlowPath => None,
-    }
+    cache.read_object(&prototype, key)
 }
 
 /// The hit path of `set_prop_named`, inlined into the driver's arms: an
@@ -193,15 +151,15 @@ pub(super) fn set_prop_named_hot(
     value: &Value,
     env: &CallEnv,
 ) -> bool {
-    let (Value::Object(object_ref), Some(cache)) = (object, cache) else {
+    if is_global_object(env, object) {
         return false;
-    };
-    !crate::symbol::is_symbol_primitive(object_ref)
-        && !env.is_realm_global_object(object_ref)
-        && matches!(
-            cache.write_hot(object_ref, value),
+    }
+    cache.is_some_and(|cache| {
+        matches!(
+            cache.write_value(object, value),
             Some(OwnDataPropertyWrite::Written)
         )
+    })
 }
 
 /// Writes `value` to the statically named property `key` of `object`, honoring
@@ -223,14 +181,36 @@ pub(super) fn set_prop_named(
         && let Value::Object(object_ref) = object
         && !crate::symbol::is_symbol_primitive(object_ref)
     {
-        let cached = cache.and_then(|cache| cache.write(object_ref, key, &value));
-        let cached_hit = cached.is_some();
-        let write =
-            cached.unwrap_or_else(|| object_ref.write_existing_own_data_property(key, &value));
-        match write {
+        if let Some(result) = cache.and_then(|cache| cache.write(object_ref, key, &value)) {
+            match result {
+                OwnDataPropertyWrite::Written => return Ok(value),
+                OwnDataPropertyWrite::ReadOnly => {
+                    if is_strict {
+                        return Err(read_only_set_error());
+                    }
+                    return Ok(value);
+                }
+                OwnDataPropertyWrite::NeedsSlowPath => {}
+            }
+        }
+        let lease = env
+            .realm()
+            .atoms()
+            .find(key)
+            .unwrap_or_else(|| env.realm().atoms().intern(key));
+        let proven = creation.is_some_and(|creation| creation.permits(object_ref));
+        let before = cache.map(|_| object_ref.with_named(|s| s.version()));
+        let write = object_ref.write_or_create_data_key(&lease, &value, proven);
+        match write.result {
             OwnDataPropertyWrite::Written => {
-                if !cached_hit && let Some(cache) = cache {
-                    cache.record_write(object_ref, key);
+                if write.created
+                    && !proven
+                    && let Some(creation) = creation
+                {
+                    creation.record(object_ref, key);
+                }
+                if let (Some(cache), Some(slot)) = (cache, write.cache_slot) {
+                    cache.record_data_slot(object_ref, &lease, slot, before, write.created);
                 }
                 return Ok(value);
             }
@@ -240,22 +220,7 @@ pub(super) fn set_prop_named(
                 }
                 return Ok(value);
             }
-            OwnDataPropertyWrite::NeedsSlowPath => {
-                // A constructor's `this.x = x` creates the property on every
-                // instance; the site's proof skips the prototype walk.
-                if creation.is_some_and(|creation| creation.try_create(object_ref, key, &value)) {
-                    return Ok(value);
-                }
-                if try_create_ordinary_own_data_property(object_ref, Rc::clone(key), &value) {
-                    if let Some(creation) = creation {
-                        creation.record(object_ref, key);
-                    }
-                    if let Some(cache) = cache {
-                        cache.record_write(object_ref, key);
-                    }
-                    return Ok(value);
-                }
-            }
+            OwnDataPropertyWrite::NeedsSlowPath => {}
         }
     }
     // The general fallback mirrors `Vm::set_property_value`: the named key is
@@ -285,61 +250,6 @@ fn is_global_object(env: &CallEnv, object: &Value) -> bool {
 
 /// Creates a missing ordinary own string data property without cloning the
 /// call environment when the complete [[Set]] result is already known.
-/// Mirrors `Vm::try_create_ordinary_own_data_property`.
-pub(in crate::bytecode) fn try_create_ordinary_own_data_property(
-    object: &crate::ObjectRef,
-    key: Rc<str>,
-    value: &Value,
-) -> bool {
-    if crate::symbol::is_symbol_primitive(object)
-        || crate::typed_array::is_typed_array_object(object)
-        || object.is_module_namespace_exotic()
-        || !object.is_extensible()
-        || !matches!(
-            object.own_data_property_read(&key),
-            OwnDataPropertyRead::Missing
-        )
-    {
-        return false;
-    }
-    let mut current = object.prototype_slot();
-    loop {
-        match current {
-            Some(crate::Prototype::Object(prototype)) => {
-                if crate::symbol::is_symbol_primitive(&prototype)
-                    || crate::typed_array::is_typed_array_object(&prototype)
-                    || prototype.is_module_namespace_exotic()
-                {
-                    return false;
-                }
-                if let Some(property) = prototype.own_property(&key) {
-                    if property.is_accessor() || !property.writable {
-                        return false;
-                    }
-                    if !object.create_absent_own_data_property(key.clone(), value.clone()) {
-                        object.set_shared_key(key, value.clone());
-                    }
-                    return true;
-                }
-                current = prototype.prototype_slot();
-            }
-            Some(
-                crate::Prototype::Array(_)
-                | crate::Prototype::Function(_)
-                | crate::Prototype::Proxy(_),
-            ) => {
-                return false;
-            }
-            None => {
-                if !object.create_absent_own_data_property(key.clone(), value.clone()) {
-                    object.set_shared_key(key, value.clone());
-                }
-                return true;
-            }
-        }
-    }
-}
-
 /// `registers[obj][registers[key]] = registers[value]` when the store is
 /// plain, leaving the value in `obj`'s register as `Op::SetProp` leaves it on
 /// the stack: a dense index of an array whose prototype chain is the realm's
@@ -372,6 +282,7 @@ pub(super) fn try_plain_set_prop(
                 _ => None,
             };
             match index {
+                Some(index) if elements.try_overwrite_dense_index(index, value) => true,
                 Some(index)
                     if elements.dense_index_store_eligible(index)
                         && array_access_is_plain(elements, env) =>
@@ -384,15 +295,16 @@ pub(super) fn try_plain_set_prop(
         }
         Value::Object(object_ref) => match key {
             Value::String(name) if !is_global_object(env, object) => {
-                match object_ref.write_existing_own_data_property(name.as_str(), value) {
-                    OwnDataPropertyWrite::Written => true,
-                    OwnDataPropertyWrite::ReadOnly => false,
-                    OwnDataPropertyWrite::NeedsSlowPath => try_create_ordinary_own_data_property(
-                        object_ref,
-                        Rc::from(name.as_str()),
-                        value,
-                    ),
-                }
+                let domain = env.realm().atoms();
+                let lease = name
+                    .property_key_lease(domain)
+                    .unwrap_or_else(|| domain.intern(name.as_str()));
+                matches!(
+                    object_ref
+                        .write_or_create_computed_data_key(&lease, value)
+                        .result,
+                    OwnDataPropertyWrite::Written
+                )
             }
             _ => false,
         },
@@ -422,10 +334,13 @@ pub(super) fn try_plain_set_index(
     let (obj, value_register) = (obj as usize, value as usize);
     let stored = match (&registers[obj], &registers[value_register]) {
         (Value::Array(elements), value) => {
-            elements.dense_index_store_eligible(index) && array_access_is_plain(elements, env) && {
-                elements.set(index, value.clone());
-                true
-            }
+            elements.try_overwrite_dense_index(index, value)
+                || (elements.dense_index_store_eligible(index)
+                    && array_access_is_plain(elements, env)
+                    && {
+                        elements.set(index, value.clone());
+                        true
+                    })
         }
         (Value::Object(object), value) if crate::typed_array::is_typed_array_object(object) => {
             crate::typed_array::try_set_integer_indexed_primitive_element(object, index, value)
@@ -446,7 +361,7 @@ pub(in crate::bytecode) fn array_access_is_plain(array: &crate::ArrayRef, env: &
     let Some(array_prototype) = crate::property::array_prototype(env) else {
         return false;
     };
-    (array.uses_default_prototype() || array.uses_prototype_object(&array_prototype))
+    (array.uses_prototype_object(&array_prototype))
         && !crate::bytecode::vm_props::prototype_chain_has_index_hazard(Some(
             crate::Prototype::Object(array_prototype),
         ))
@@ -481,9 +396,15 @@ pub(super) fn object_data_literal(
             Rc::clone(shape),
             [first.clone(), second.clone()],
             prototype,
+            env.realm().atoms(),
         )
     } else {
-        crate::ObjectRef::with_literal_properties(Rc::clone(shape), values, prototype)
+        crate::ObjectRef::with_literal_properties(
+            Rc::clone(shape),
+            values,
+            prototype,
+            env.realm().atoms(),
+        )
     };
     for function in home_functions {
         function.set_home_object(Value::Object(object.clone()));
@@ -516,6 +437,20 @@ pub(super) fn get_prop_element(
         return Ok(value);
     }
     get_prop_computed(std::mem::replace(object, Value::Undefined), key, env)
+}
+
+/// Pure own string-key read with a borrowed receiver/key. Slot/descriptor
+/// semantics remain in the common authority; hooks stay on the general path.
+#[inline(always)]
+pub(super) fn get_prop_string_own(object: &Value, key: &Value) -> Option<Value> {
+    if let (Value::Object(object), Value::String(key)) = (object, key)
+        && !object.is_symbol_primitive()
+        && !object.is_typed_array_exotic()
+        && let OwnDataPropertyRead::Data(value) = object.own_data_property_read_string(key)
+    {
+        return Some(value);
+    }
+    None
 }
 
 /// `get_prop_element` of a receiver that stays where it is.
@@ -641,6 +576,9 @@ pub(super) fn get_prop_computed(
         && !object_ref.is_module_namespace_exotic()
     {
         use crate::bytecode::vm_props::{DirectPropertyRead, ordinary_chain_data_value};
+        if let OwnDataPropertyRead::Data(value) = object_ref.own_data_property_read_string(name) {
+            return Ok(value);
+        }
         match ordinary_chain_data_value(object_ref, name.as_str()) {
             Ok(DirectPropertyRead::Data(value)) => return Ok(value),
             Ok(DirectPropertyRead::Missing) => return Ok(Value::Undefined),

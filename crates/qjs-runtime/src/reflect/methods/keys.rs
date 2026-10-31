@@ -13,6 +13,7 @@ pub(crate) fn native_reflect_own_keys(
     if let Value::Proxy(proxy) = &target {
         let keys = crate::proxy::proxy_own_keys(proxy.clone(), env)?;
         return Ok(Value::Array(crate::ArrayRef::new(
+            env.realm(),
             keys.into_iter()
                 .map(|key| match key {
                     PropertyKey::String(name) => Value::String(name.into()),
@@ -59,6 +60,7 @@ pub(crate) fn native_reflect_own_keys(
     };
 
     Ok(Value::Array(crate::ArrayRef::new(
+        env.realm(),
         names
             .into_iter()
             .map(|s| Value::String(s.into()))

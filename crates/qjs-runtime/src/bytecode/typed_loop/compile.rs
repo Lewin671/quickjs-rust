@@ -45,6 +45,23 @@ pub(crate) fn compile_all(bytecode: &Bytecode) -> Vec<TypedLoopProgram> {
 }
 
 fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedLoopProgram> {
+    let Some(mut program) = compile_variant(bytecode, header, backedge, true) else {
+        return compile_variant(bytecode, header, backedge, false);
+    };
+    if !program.native_call_guards.is_empty() {
+        program.unhoisted = Some(Box::new(compile_variant(
+            bytecode, header, backedge, false,
+        )?));
+    }
+    Some(program)
+}
+
+fn compile_variant(
+    bytecode: &Bytecode,
+    header: usize,
+    backedge: usize,
+    allow_native_calls: bool,
+) -> Option<TypedLoopProgram> {
     let code = &bytecode.code;
     if backedge.checked_sub(header)? > MAX_REGION_OPS {
         return None;
@@ -188,16 +205,28 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
     let (mut register_count, mut boxed_count) = (register_count, boxed_count);
     let invariant = boxed_locals.iter().map(|&(register, _)| register);
     let invariant = invariant.chain(boxed_global_reads.iter().map(|(register, _)| *register));
+    let invariant = invariant.chain(boxed_constants.iter().map(|(register, _)| *register));
     let invariant: Vec<u16> = invariant
         .filter(|register| !written_boxed_locals.contains(register))
         .collect();
     let hoisted_reads = super::hoist::hoist_invariant_reads(
         &mut ops,
         &names,
-        invariant,
+        invariant.iter().copied(),
         &mut register_count,
         &mut boxed_count,
+        allow_native_calls,
     );
+    let native_call_guards = if allow_native_calls
+        && !hoisted_reads.is_empty()
+        && ops
+            .iter()
+            .any(|op| matches!(op, TypedOp::CallClosedFormLeaf { .. }))
+    {
+        super::pure_calls::guards(&ops, &invariant, &hoisted_reads)?
+    } else {
+        Vec::new()
+    };
     debug_assert!(matches!(
         code.get(backedge.min(code.len() - 1)),
         Some(Op::Jump(_) | Op::IncrementLocal { .. } | Op::Pop | Op::LoadConst(_))
@@ -283,28 +312,10 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
         boxed_constant_registers: boxed_constants,
         cache_count,
         hoisted_reads,
+        native_call_guards,
+        unhoisted: None,
         scratch_pool: OnceCell::new(),
     })
-}
-
-fn writes_slot(op: &Op, slot: usize) -> bool {
-    match op {
-        Op::StoreLocal(candidate)
-        | Op::AssignLocal(candidate)
-        | Op::ClearLocal(candidate)
-        | Op::StoreGlobalSloppy {
-            slot: candidate, ..
-        }
-        | Op::StoreLocalOrGlobalSloppy {
-            slot: candidate, ..
-        }
-        | Op::IncrementLocal {
-            slot: candidate, ..
-        }
-        | Op::CopyLocal { to: candidate, .. } => *candidate == slot,
-        Op::BinaryAssignLocals { target, stores, .. } => *target == slot || stores.contains(&slot),
-        _ => false,
-    }
 }
 
 /// result must remain boxed for a nested access.
@@ -396,6 +407,7 @@ struct Builder<'a> {
 }
 
 mod admission;
+use admission::writes_slot;
 mod element;
 mod globals;
 

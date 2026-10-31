@@ -18,18 +18,20 @@ mod access;
 mod array;
 mod collection_key;
 mod js_string;
+pub(crate) mod layout;
 mod map;
 pub(crate) mod name_hash;
 mod object;
 mod property;
 mod set;
-mod teardown;
+pub(crate) mod teardown;
 
 pub use access::ValueKind;
 pub use array::ArrayRef;
 pub(crate) use array::{ArrayWeakRef, MAX_DENSE_STORAGE_LENGTH, array_index_property_key};
 pub(crate) use collection_key::CollectionKey;
 pub use js_string::JsString;
+pub(crate) use js_string::WeakJsString;
 pub use map::MapRef;
 pub use object::ObjectRef;
 pub(crate) use object::Prototype;
@@ -37,7 +39,7 @@ pub(crate) use object::{
     ModuleNamespaceBindings, ObjectWeakRef, OwnDataPropertyRead, OwnDataPropertyWrite,
 };
 pub(crate) use object::{ObjectLiteralShape, OrderedDataPropertyBuilder};
-pub(crate) use property::Property;
+pub(crate) use property::{Property, WeakAccessorState};
 pub use set::SetRef;
 
 use crate::{Function, proxy::ProxyRef, string};
@@ -193,3 +195,5 @@ mod layout_tests {
         assert_eq!(string_code_units(&value), vec![0xDB80, 0xDC00]);
     }
 }
+
+pub(crate) mod named;

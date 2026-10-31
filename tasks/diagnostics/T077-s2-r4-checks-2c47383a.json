@@ -1,0 +1,86 @@
+{
+  "runtime_revision": "2c47383a",
+  "documentation_revision": "4483b60c",
+  "checks": {
+    "full-check": {
+      "exit": 0,
+      "log_sha256": "57455166d4a48fb7b540c5869df916cd62b5f3512677e05f5755eebdd584fa7c",
+      "stages": [
+        "check: ok format (1s)",
+        "check: ok clippy (0s)",
+        "check: ok clippy (agents) (11s)",
+        "check: ok agents feature tests (21s)",
+        "check: ok clippy (perf-counters) (13s)",
+        "check: ok perf-counters feature tests (17s)",
+        "check: ok workspace tests (25s)",
+        "check: ok benchmark tool tests (118s)",
+        "check: ok performance unit plans (8s)",
+        "check: ok agent context (0s)",
+        "check: ok script tests (1s)",
+        "check: ok git hook worktree isolation (2s)",
+        "check: ok benchmark shell syntax (0s)",
+        "check: ok file-size guard (0s)",
+        "check: ok Test262 subset (54s)"
+      ]
+    },
+    "ng-on": {
+      "exit": 0,
+      "log_sha256": "9d72b3376d91e7701c9f6ae133cc10193ef5e51bef3fd6f25d62812bd442620f",
+      "fixtures": 268
+    },
+    "ng-off": {
+      "exit": 0,
+      "log_sha256": "9d72b3376d91e7701c9f6ae133cc10193ef5e51bef3fd6f25d62812bd442620f",
+      "fixtures": 268
+    },
+    "ng-verify": {
+      "exit": 0,
+      "log_sha256": "9d72b3376d91e7701c9f6ae133cc10193ef5e51bef3fd6f25d62812bd442620f",
+      "fixtures": 268
+    },
+    "fuzz-original": {
+      "exit": 0,
+      "log_sha256": "e877bfdfc00bdc09d0fe50fb6a5ed62b2493be4b47460c004f73fbd71ee02891",
+      "seeds": 300,
+      "same": 300,
+      "modes": [
+        "on",
+        "off",
+        "verify"
+      ],
+      "records_sha256": "0d35b11d96299c9222d266ff3e8c2bfc9e28d2b6b574d1128023d75565d6c9b1",
+      "template_sha256": "1e87e9916216b5fb797b57b436a5b86905a00a0c2b95d7375955ad52c5b485fd"
+    },
+    "fuzz-warmed": {
+      "exit": 0,
+      "log_sha256": "40cb5cf7d7c20f3fb223e6eaefef5e5af4d6773a1a10f0073d2226c6bea973b3",
+      "seeds": 50,
+      "same": 50,
+      "modes": [
+        "on",
+        "off",
+        "verify"
+      ],
+      "records_sha256": "ca89be2f9582ed3629cfa6f193c42dad496dc2dacafbc442816d80c851b12d6b",
+      "template_sha256": "1e87e9916216b5fb797b57b436a5b86905a00a0c2b95d7375955ad52c5b485fd"
+    }
+  },
+  "pins": {
+    "release": {
+      "sha256": "db7ff2a1f7b79f6d8692d9b11ae4a71c38d23d2778826890feccca0014c124f1",
+      "build_features": "agents (CLI feature forwards runtime agents)",
+      "agent_smoke": "agent-ready",
+      "profile": "release"
+    },
+    "debug": {
+      "sha256": "57312df6d649ef84a1cfca28fe9e96582dbed0cf3b5c98c7e8b64c7351951cfe",
+      "build_features": "agents (CLI feature forwards runtime agents)",
+      "agent_smoke": "agent-ready",
+      "profile": "debug"
+    }
+  },
+  "verified_runtime_tests": {
+    "arm64": 2542,
+    "mode": "QJS_VERIFY_IC=1 cargo test -p qjs-runtime --lib --features agents,perf-counters"
+  }
+}

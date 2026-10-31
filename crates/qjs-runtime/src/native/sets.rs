@@ -132,9 +132,9 @@ pub(super) fn set_prototype_values(
 }
 
 pub(super) fn set_iterator_prototype_next(
-    _env: &mut CallEnv,
+    env: &mut CallEnv,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
-    set::native_set_iterator_next(info.this_value.clone())
+    set::native_set_iterator_next(env.realm(), info.this_value.clone())
 }

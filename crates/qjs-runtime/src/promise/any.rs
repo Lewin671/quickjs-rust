@@ -25,8 +25,8 @@ pub(crate) fn native_promise_any(
         .get(PROMISE_AGGREGATE_ERROR)
         .cloned();
     let handler = AnyHandler {
-        errors: ArrayRef::new(Vec::new()),
-        remaining: perform::new_remaining(1),
+        errors: ArrayRef::new(env.realm(), Vec::new()),
+        remaining: perform::new_remaining(1, env.realm().atoms()),
         aggregate_error,
     };
     perform::run_combinator(this_value, iterable, "Promise.any", handler, env)
@@ -48,9 +48,14 @@ impl ElementHandler for AnyHandler {
         self.errors.set(index, Value::Undefined);
         perform::increment_remaining(&self.remaining);
 
-        let already_called = ObjectRef::new(HashMap::new());
-        let mut on_rejected =
-            Function::new_native(None, 1, NativeFunction::PromiseAnyRejectElement, false);
+        let already_called = ObjectRef::new(HashMap::new(), _env.realm().atoms());
+        let mut on_rejected = Function::new_native(
+            None,
+            1,
+            NativeFunction::PromiseAnyRejectElement,
+            false,
+            _env.realm(),
+        );
         on_rejected
             .insert_native_context(PROMISE_ALL_INDEX.to_owned(), Value::Number(index as f64));
         on_rejected.insert_native_context(
@@ -168,13 +173,16 @@ fn build_aggregate_error(
         }
     }
 
-    let object = ObjectRef::new(HashMap::from([
-        (
-            "name".to_owned(),
-            Value::String("AggregateError".to_owned().into()),
-        ),
-        ("message".to_owned(), message),
-        ("errors".to_owned(), errors_value),
-    ]));
+    let object = ObjectRef::new_ordered(
+        vec![
+            (
+                "name".to_owned(),
+                Value::String("AggregateError".to_owned().into()),
+            ),
+            ("message".to_owned(), message),
+            ("errors".to_owned(), errors_value),
+        ],
+        env.realm().atoms(),
+    );
     Value::Object(object)
 }
