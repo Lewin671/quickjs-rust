@@ -927,3 +927,16 @@ caller-environment substitution counter description is corrected. Clean accepted
 S2 and final candidate ten-program maps are collected separately, twice each;
 no timing is inferred from counter builds. Fresh **2,655 feature tests** and the
 staged gate (**2,601 default tests + 52 Test262 cases**) pass.
+
+
+## First freeze rejected at the depth/counter audit
+
+Runtime `0b659b89` passes the full check, but does not meet the depth matrix.
+The immutable [round-one receipt](T077-s3b-round1/README.md) owns its complete
+base/candidate maps, depth traces, prologue evidence and canceled public86 job.
+It establishes zero old environment events, not final payoff or acceptance.
+Current uncommitted repairs keep interpreter fallback and inline-entry move
+temporaries outside retained driver frames, borrow the actual prepared callee,
+and avoid fixed-name lease propagation without compiled free-name demand.
+No resource limit, caller-context substitution or benchmark recognizer is added.
+Fresh gates and a new source freeze are required.

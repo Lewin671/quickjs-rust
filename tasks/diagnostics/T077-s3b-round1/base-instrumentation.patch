@@ -1,0 +1,135 @@
+--- a/crates/qjs-runtime/src/diagnostics.rs
++++ b/crates/qjs-runtime/src/diagnostics.rs
+@@ -62,6 +62,17 @@
+     /// body, before any tier decides how to run it. A workload that claims N
+     /// calls must report about N here, or the workload is not measuring calls.
+     ordinary_call_attempts,
++    call_env_constructions,
++    call_env_clones,
++    call_env_equality_proofs,
++    legacy_binding_snapshot_calls,
++    legacy_frame_fork_calls,
++    legacy_applyback_calls,
++    ordinary_call_forwardings,
++    argument_vec_native_pop,
++    native_family_probes,
++    native_family_declines,
++
+     /// Calls answered by a closed-form leaf evaluator without building any
+     /// frame. This is the tier that makes a foldable benchmark look free.
+     closed_form_leaf_evaluations,
+--- a/crates/qjs-runtime/src/function/env.rs
++++ b/crates/qjs-runtime/src/function/env.rs
+@@ -907,6 +907,7 @@
+ 
+ impl Clone for CallEnv {
+     fn clone(&self) -> Self {
++        crate::diagnostics::count!(call_env_clones);
+         Self {
+             scope: Rc::clone(&self.scope),
+             expose_global_lexical_values: self.expose_global_lexical_values,
+@@ -966,6 +967,7 @@
+ impl CallEnv {
+     /// Builds an environment over `realm` with empty locals.
+     pub(crate) fn new(realm: Realm) -> Self {
++        crate::diagnostics::count!(call_env_constructions);
+         Self {
+             scope: Rc::new(RealmScope {
+                 realm,
+@@ -1089,6 +1091,7 @@
+     /// `parse_json_text`) that run without a live VM; intrinsic lookups simply
+     /// return `None`, matching the prior empty-`HashMap` behavior.
+     pub(crate) fn detached() -> Self {
++        crate::diagnostics::count!(call_env_constructions);
+         Self {
+             scope: Rc::new(RealmScope {
+                 realm: new_realm(HashMap::new()),
+@@ -1117,6 +1120,7 @@
+     /// Used by native/dynamic compatibility entry points that receive an owned
+     /// map rather than a live VM realm.
+     pub(crate) fn from_map(map: HashMap<String, Value>) -> Self {
++        crate::diagnostics::count!(call_env_constructions);
+         Self {
+             scope: Rc::new(RealmScope {
+                 realm: new_realm(map),
+@@ -1143,6 +1147,7 @@
+ 
+     /// Builds an environment over `realm` with the given frame locals.
+     pub(crate) fn with_locals(realm: Realm, locals: HashMap<String, Value>) -> Self {
++        crate::diagnostics::count!(call_env_constructions);
+         Self {
+             scope: Rc::new(RealmScope {
+                 realm,
+@@ -1192,6 +1197,7 @@
+     /// Builds a function frame with room for the bindings its call prologue
+     /// will materialize, avoiding repeated small-vector growth on hot calls.
+     pub(crate) fn new_function_frame_with_capacity(&self, capacity: usize) -> Self {
++        crate::diagnostics::count!(call_env_constructions);
+         Self {
+             scope: Rc::clone(&self.scope),
+             expose_global_lexical_values: false,
+@@ -1217,6 +1223,7 @@
+     /// state is installed by the caller, so copying the caller's transient maps
+     /// here would only allocate them before immediately replacing them.
+     pub(crate) fn new_direct_leaf_function_frame(&self, module_imports: ModuleImports) -> Self {
++        crate::diagnostics::count!(call_env_constructions);
+         Self {
+             scope: Rc::clone(&self.scope),
+             expose_global_lexical_values: false,
+@@ -1332,6 +1339,7 @@
+ 
+     /// Owned compatibility snapshot for the few dynamic-name consumers.
+     pub(crate) fn binding_snapshot(&self) -> BindingSnapshot {
++        crate::diagnostics::count!(legacy_binding_snapshot_calls);
+         BindingSnapshot(self.snapshot_locals())
+     }
+ 
+@@ -1852,6 +1860,8 @@
+     /// name-keyed intermediate map. Explicit direct-eval/with cells are added
+     /// by the VM after it overlays live slot values.
+     pub(crate) fn fork_current_frame_values(&self) -> Self {
++        crate::diagnostics::count!(legacy_frame_fork_calls);
++        crate::diagnostics::count!(call_env_constructions);
+         Self {
+             scope: Rc::clone(&self.scope),
+             expose_global_lexical_values: false,
+--- a/crates/qjs-runtime/src/bytecode/compact_fn/activation.rs
++++ b/crates/qjs-runtime/src/bytecode/compact_fn/activation.rs
+@@ -165,6 +165,7 @@
+ /// module imports, which the caller's environment is already known to have --
+ /// leaves the two environments indistinguishable.
+ fn shares_caller_environment(function: &Function, bytecode: &Bytecode, env: &CallEnv) -> bool {
++    crate::diagnostics::count!(call_env_equality_proofs);
+     // `direct_leaf_function_env` installs the callee's own module host over
+     // the one the frame inherited from its parent. When they are the same
+     // handle -- which is the ordinary case, since a script's functions all
+--- a/crates/qjs-runtime/src/bytecode/compact_fn/wide/activation.rs
++++ b/crates/qjs-runtime/src/bytecode/compact_fn/wide/activation.rs
+@@ -247,6 +247,7 @@
+ /// Only a lexical-`this` arrow inherits `this` from its enclosing environment
+ /// and cannot be seeded from a receiver.
+ fn shares_caller_environment(function: &Function, env: &CallEnv) -> bool {
++    crate::diagnostics::count!(call_env_equality_proofs);
+     let host_agrees = match (&function.module_host, env.module_host_ref()) {
+         (None, _) => true,
+         (Some(callee), Some(caller)) => std::rc::Rc::ptr_eq(callee, caller),
+--- a/crates/qjs-runtime/src/bytecode/vm_bindings.rs
++++ b/crates/qjs-runtime/src/bytecode/vm_bindings.rs
+@@ -1250,6 +1250,7 @@
+     }
+ 
+     pub(super) fn apply_env(&mut self, env: CallEnv) {
++        crate::diagnostics::count!(legacy_applyback_calls);
+         // A realm-only environment carries no frame binding to write back, and
+         // the write-back path allocates a name vector and a conflict set before
+         // discovering that. Ordinary frames hand builtins, accessors, coercion
+--- a/crates/qjs-runtime/src/function/call.rs
++++ b/crates/qjs-runtime/src/function/call.rs
+@@ -222,6 +222,7 @@
+         // below built a compatibility frame for every such call, which was
+         // most of a small callback's cost.
+         if !is_construct && is_direct_leaf_function(callee) {
++            crate::diagnostics::count!(ordinary_call_forwardings);
+             return call_direct_leaf_function(
+                 callee.clone(),
+                 this_value,

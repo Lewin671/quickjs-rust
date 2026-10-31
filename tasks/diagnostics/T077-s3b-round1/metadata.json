@@ -1,0 +1,24 @@
+{
+  "runtime_revision": "0b659b8926a02a8c52e1e30fcdc05ac9ca9ec967",
+  "base_revision": "1e6e2a2b8ccdb590d735e5b6e969105cb1344c72",
+  "status": "rejected: depth parity failed; public86 canceled before measurements",
+  "host": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+  "rustc": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: aarch64-apple-darwin\nrelease: 1.95.0\nLLVM version: 22.1.2\n",
+  "counter_features": "perf-counters",
+  "counter_repeats": 2,
+  "timing": false,
+  "full_check_exit": 0,
+  "test262_subset": 5171,
+  "complete_exact_scan": false,
+  "public86_job": "20261031T215437Z-t077-s3b-public86",
+  "public86_status": "done 130 (cancelled while queued; no timing result)",
+  "files": {
+    "base-instrumentation.patch": "75dfd736bc32991c7fefac363877bb716b4de871345915cfd768b796006c4b5b",
+    "public86-command.sh": "fa75b8aed9da295d330063ca2b6b4838b7473cf6ffd25b20d8b0dc1c4c5598a4",
+    "base-depth.json": "0080e2391945989a63d59bd6b8e8d444bc82d4f1305fc19e9c551fd91d5eb534",
+    "candidate-counts.json": "59250ae19082ea6545c7f4249d9aaa90f79003c92d9bfe523940c466103eb65e",
+    "candidate-depth.json": "0ff2a47b0b18727d9503f9fd0b28855279ef23d0ce8a2e74a19de91b5d6b2390",
+    "base-counts.json": "512eebedd8f4f8b82b1cf6903080be5693a67a3d712d0e85757550a4ab64fcd3",
+    "stack-prologues.json": "4a896a5fb6cc0009ca3ffc6de28de806da34e41da99e537c5e7b250ee53badcf"
+  }
+}
