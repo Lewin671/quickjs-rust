@@ -1,11 +1,11 @@
 # S2 follow-up: prototype memory and complexity
 
-- Status: active; final runtime and local correctness/RSS qualification complete; iMac performance acceptance blocked by no-push.
+- Status: round-1 historical qualification; lead finds additional hot-path and owned-child memory costs; continue in [round 2](T077-s2fu-round2.md).
 - Implementation: present at `590edc60`; all five requested mechanisms, direct guards, lazy prototype state and shared compact edge boxes.
 - Verified at: `590edc60`, 2026-10-31: full check (5,170 curated), 268 NG fixtures cached/off/verify (verify at the default 10 seconds), eight x86_64 graph tests; fast gate runs 2,505 runtime tests.
 - Evidence: this record, [iterations](../archive/T077-s2-followup-iterations.md), [review programs/collector](t077-s2-followup/measure.py).
-- Unresolved: iMac x86 RSS/public86 and canonical order audit; mem5 wall regression is reported below. No aggregate-performance acceptance.
-- Next action: lead review, then an explicitly authorized runner-only transfer for the remaining iMac gates; no origin push or merge.
+- Unresolved: round-2 repairs and final acceptance; this record establishes round 1 only.
+- Next action: follow the ordered lead feedback in the round-2 record; runner-ref transfers are now explicitly authorized.
 
 ## Scope and source
 
@@ -110,11 +110,12 @@ The collector enforces a five-second quiet preflight and 0.5-second load checks.
 It excludes its own process tree and handles truncated non-UTF8 ps text with
 replacement decoding; the validated collector hash is in the receipt.
 
-## Remaining iMac boundary
+## Round-1 iMac boundary (superseded by lead feedback)
 
-No iMac job was submitted. The required wrapper invokes `git push` to transfer
+This owner submitted no iMac job in round 1. The required wrapper invokes `git push` to transfer
 runner refs, which conflicts with the explicit no-push instruction. Clarification
-was requested; no exception has been received. The queue was read successfully;
+was requested during round 1; round-2 feedback now explicitly allows runner-ref
+transfers. Lead measurements are recorded in the round-2 record. The queue was read successfully;
 its observed 2026-10-31 13:58 CST clock was outside 02:45–05:00. Recheck time and
 queue before a subsequently authorized `run --timing` submission.
 

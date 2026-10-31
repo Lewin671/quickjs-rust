@@ -242,7 +242,7 @@ impl<'a> NamedTarget<'a> {
     #[inline(always)]
     pub(crate) fn load_matched_data(self, v: &LayoutVersion, slot: u32) -> Option<Value> {
         self.with_store(|s| {
-            s.matches_version(v)
+            s.matches_own_version(v)
                 .then(|| s.load_guarded_data(slot as usize))
                 .flatten()
         })?
@@ -265,7 +265,7 @@ impl<'a> NamedTarget<'a> {
         value: &Value,
     ) -> Option<OwnDataPropertyWrite> {
         let write = |s: &mut NamedStore| {
-            if s.matches_version(v) && s.overwrite_guarded_data(slot as usize, value.clone()) {
+            if s.matches_own_version(v) && s.overwrite_guarded_data(slot as usize, value.clone()) {
                 Some(OwnDataPropertyWrite::Written)
             } else {
                 None

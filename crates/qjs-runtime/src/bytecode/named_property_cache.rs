@@ -533,7 +533,7 @@ impl CacheData {
                         .iter()
                         .find(|entry| {
                             entry.flags & (7 | OWN) == DATA | OWN
-                                && store.matches_version(&entry.version)
+                                && store.matches_own_version(&entry.version)
                         })
                         .and_then(|entry| {
                             #[cfg(debug_assertions)]
@@ -605,7 +605,7 @@ impl CacheData {
             && entry.flags & (7 | OWN) == DATA | OWN
         {
             let value = object.with_named(|store| {
-                if !store.matches_version(&entry.version) {
+                if !store.matches_own_version(&entry.version) {
                     return None;
                 }
                 store.load_guarded_number(entry.slot as usize)
@@ -634,7 +634,7 @@ impl CacheData {
             let entry = match &state.entries {
                 Entries::MonoFirst | Entries::Mono(_)
                     if state.entries.mono(&self.first).is_some_and(|e| {
-                        e.flags & (7 | OWN) == DATA | OWN && store.matches_version(&e.version)
+                        e.flags & (7 | OWN) == DATA | OWN && store.matches_own_version(&e.version)
                     }) =>
                 {
                     state.entries.mono(&self.first).expect("mono guard")
@@ -650,7 +650,7 @@ impl CacheData {
                     &ways[mask.trailing_zeros() as usize]
                 }
                 Entries::Poly(ways) => ways.iter().find(|e| {
-                    e.flags & (7 | OWN) == DATA | OWN && store.matches_version(&e.version)
+                    e.flags & (7 | OWN) == DATA | OWN && store.matches_own_version(&e.version)
                 })?,
                 _ => return None,
             };

@@ -26,7 +26,7 @@ impl AppendRecipe {
         self.index
     }
     pub(crate) fn apply(&self, store: &mut NamedStore, value: Value) -> bool {
-        if !store.matches_shared_identity(&self.before) || store.len() != self.slot {
+        if !store.matches_version(&self.before) || store.len() != self.slot {
             return false;
         }
         store.invalidate_dependencies();

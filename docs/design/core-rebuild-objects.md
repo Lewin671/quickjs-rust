@@ -41,7 +41,7 @@ slice/key lease share a 24-byte payload, with no extra allocation. No receiver/d
 | Type | Fields / size |
 | --- | --- |
 | `ShapeEntry` | `key:u32, slot:u32, order:u32, attrs:u16, reserved:u16` = 16 bytes |
-| `NamedStore` | `layout:Rc<Layout>` 8, `values:ValueSlots` 32, cold metadata pointer 8, inline strong prototype edge 16 = 64 bytes; `RefCell` wrapper 72; dictionary epoch is cold |
+| `NamedStore` | `layout:Rc<Layout>` 8, `values:ValueSlots` 32, cold metadata pointer 8, inline strong prototype edge 16 = 64 bytes; `RefCell` wrapper 72; dictionary epoch resides in its private Layout |
 | Ordinary hot payload | `named:RefCell<NamedStore>` 72, tagged cold pointer 16, index count 4, packed flags/edit count/padding 4 = 96 bytes, excluding RC header |
 | Array hot/cold payload | 56-byte header: dense Vec RefCell 32, packed length/flags 8, scoped seed owner 8, cold pointer 8. Optional hole payload 40: holes RefCell 32 and lazy named pointer 8; a separate NamedStore RefCell 72 is created only on named/prototype mutation. Realm shares the default empty seed; probes allocate nothing. |
 | `Slot` | One owning `Value`: initially 16 bytes, S5 target 8; TDZ/hole state separate from ordinary data |

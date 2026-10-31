@@ -208,3 +208,36 @@ fn compact_authorities_share_weak_edge_boxes_without_pinning_prototypes() {
     );
     assert_eq!(std::mem::size_of::<RefCell<NamedStorage>>(), 32);
 }
+
+#[test]
+fn empty_deferred_proofs_use_only_the_general_guard_until_published() {
+    let domain = AtomDomain::new();
+    let _owner = PropertyOwner::new(domain.clone());
+    let parent = object(&domain, None);
+    let mut receiver =
+        NamedStore::empty_with_prototype(&domain, Some(Prototype::Object(parent)), 0);
+    let proof = receiver.version();
+    assert!(receiver.matches_version(&proof));
+    assert!(!receiver.matches_shared_identity(&proof));
+    assert!(!receiver.matches_own_version(&proof));
+    receiver.materialize_layout();
+    assert!(receiver.matches_shared_identity(&proof));
+    assert!(receiver.matches_own_version(&proof));
+}
+
+#[test]
+fn dictionary_versions_do_not_allocate_receiver_cold_data() {
+    let domain = AtomDomain::new();
+    let owner = PropertyOwner::new(domain.clone());
+    let mut store = owner.empty_store();
+    for i in 0..140 {
+        store.insert_text(&format!("p{i}"), Property::enumerable(Value::Null));
+    }
+    assert!(store.is_dictionary());
+    assert!(store.cold.is_unallocated());
+    let proof = store.version();
+    assert!(store.matches_own_version(&proof));
+    store.insert_text("new", Property::enumerable(Value::Null));
+    assert!(!store.matches_own_version(&proof));
+    assert!(store.cold.is_unallocated());
+}

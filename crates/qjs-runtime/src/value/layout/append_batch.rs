@@ -16,7 +16,7 @@ impl AppendBatchRecipe {
     ) -> Option<usize> {
         if values.len() != self.width
             || store.len() != self.start
-            || !store.matches_shared_identity(&self.before)
+            || !store.matches_version(&self.before)
         {
             return None;
         }

@@ -109,6 +109,7 @@ pub(crate) struct Layout {
     parent: Option<Rc<Layout>>,
     incoming: Option<Transition>,
     dictionary: bool,
+    epoch: std::cell::Cell<u64>,
     deferred_seed: bool,
     edits: u8,
     next_order: u32,
@@ -163,6 +164,7 @@ impl PropertyOwner {
                 parent: None,
                 incoming: None,
                 dictionary: false,
+                epoch: std::cell::Cell::new(0),
                 deferred_seed: false,
                 edits: 0,
                 next_order: 0,
@@ -322,11 +324,12 @@ impl NamedStore {
         self.set_epoch(epoch);
     }
     pub(super) fn epoch(&self) -> u64 {
-        self.cold.epoch()
+        self.layout.epoch.get()
     }
     pub(super) fn set_epoch(&self, epoch: u64) {
-        if epoch != 0 || self.cold.epoch() != 0 {
-            self.cold.get().epoch.set(epoch);
+        debug_assert!(self.layout.dictionary || epoch == 0);
+        if self.layout.dictionary {
+            self.layout.epoch.set(epoch);
         }
     }
     #[cfg(test)]

@@ -49,20 +49,25 @@ impl NamedStore {
             },
         }
     }
-    /// The caller established an immutable shared-layout guard at admission.
+    /// Own shared entries cannot name an empty deferred receiver. This guard
+    /// intentionally compiles to one identity comparison, including poly masks.
     #[inline(always)]
     pub(crate) fn matches_shared_identity(&self, expected: &LayoutVersion) -> bool {
         expected.matches_identity(&self.layout)
+    }
+    /// A present own slot proves that its layout has already been published.
+    #[inline(always)]
+    pub(crate) fn matches_own_version(&self, expected: &LayoutVersion) -> bool {
+        expected.matches_layout(&self.layout, self.layout.epoch.get())
+    }
+    #[inline(always)]
+    pub(crate) fn matches_version(&self, expected: &LayoutVersion) -> bool {
+        self.matches_own_version(expected)
             || (self.layout.deferred_seed
                 && self
                     .cold
                     .guard()
-                    .is_some_and(|layout| expected.matches_identity(layout)))
-    }
-    #[inline(always)]
-    pub(crate) fn matches_version(&self, expected: &LayoutVersion) -> bool {
-        self.matches_shared_identity(expected)
-            && (expected.is_shared() || expected.epoch == self.epoch())
+                    .is_some_and(|layout| expected.matches_layout(layout, 0)))
     }
 }
 impl Clone for Layout {

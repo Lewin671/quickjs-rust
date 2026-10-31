@@ -56,7 +56,7 @@ impl CacheData {
         if let Some(entry) = self.hot_mono() {
             return object.with_named_mut(|store| {
                 entry.flags & (7 | OWN | WRITABLE | WRITE_FORBIDDEN) == DATA | OWN | WRITABLE
-                    && store.matches_version(&entry.version)
+                    && store.matches_own_version(&entry.version)
                     && store.overwrite_guarded_number(entry.slot as usize, number)
             });
         }
@@ -74,7 +74,7 @@ impl CacheData {
                 Entries::Poly(entries) | Entries::SharedOwnPoly(entries) => {
                     let Some(entry) = entries
                         .iter()
-                        .find(|entry| store.matches_version(&entry.version))
+                        .find(|entry| store.matches_own_version(&entry.version))
                     else {
                         return false;
                     };
@@ -83,7 +83,7 @@ impl CacheData {
                 _ => return false,
             };
             entry.flags & (7 | OWN | WRITABLE | WRITE_FORBIDDEN) == DATA | OWN | WRITABLE
-                && store.matches_version(&entry.version)
+                && store.matches_own_version(&entry.version)
                 && store.overwrite_guarded_number(entry.slot as usize, number)
         })
     }
@@ -118,13 +118,13 @@ impl CacheData {
                 let entry = match &state.entries {
                     Entries::MonoFirst | Entries::Mono(_) => state.entries.mono(&self.first),
                     Entries::Poly(es) | Entries::SharedOwnPoly(es) => {
-                        es.iter().find(|e| store.matches_version(&e.version))
+                        es.iter().find(|e| store.matches_own_version(&e.version))
                     }
                     _ => None,
                 };
                 if let Some(e) = entry
                     && e.flags & (7 | OWN | WRITE_FORBIDDEN) == DATA | OWN
-                    && store.matches_version(&e.version)
+                    && store.matches_own_version(&e.version)
                 {
                     if e.flags & WRITABLE == 0 {
                         return Some(OwnDataPropertyWrite::ReadOnly);

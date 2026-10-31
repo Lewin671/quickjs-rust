@@ -74,7 +74,7 @@ impl Constant {
             })
         })?
     }
-    #[inline(never)]
+    #[inline(always)]
     pub(super) fn data(&self) -> Option<Value> {
         match self {
             Self::Data(value) => value.load(),

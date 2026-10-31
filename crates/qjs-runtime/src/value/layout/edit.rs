@@ -13,6 +13,11 @@ impl Layout {
             parent: None,
             incoming: None,
             dictionary,
+            epoch: std::cell::Cell::new(if dictionary {
+                self.epoch.get().max(1)
+            } else {
+                0
+            }),
             deferred_seed: false,
             edits: self.edits,
             next_order: self.next_order,
@@ -86,6 +91,7 @@ impl Layout {
             parent: Some(self.clone()),
             incoming: Some(label),
             dictionary: false,
+            epoch: std::cell::Cell::new(0),
             deferred_seed: false,
             edits: self.edits,
             next_order: self.len as u32 + 1,

@@ -7,16 +7,12 @@ pub(super) struct ColdStorage(OnceCell<Box<ColdData>>);
 #[derive(Default)]
 pub(super) struct ColdData {
     slots: Option<Box<AccessorSlots>>,
-    pub(super) epoch: std::cell::Cell<u64>,
     pub(super) mode: OnceCell<Rc<PrototypeState>>,
     pub(super) guard: OnceCell<Rc<Layout>>,
 }
 impl ColdStorage {
     pub(super) fn get(&self) -> &ColdData {
         self.0.get_or_init(|| Box::new(ColdData::default()))
-    }
-    pub(super) fn epoch(&self) -> u64 {
-        self.0.get().map_or(0, |cold| cold.epoch.get())
     }
     pub(super) fn mode(&self) -> Option<&Rc<PrototypeState>> {
         self.0.get()?.mode.get()

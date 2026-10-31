@@ -247,6 +247,7 @@ impl PropertyOwner {
             parent: None,
             incoming: None,
             dictionary: false,
+            epoch: std::cell::Cell::new(0),
             deferred_seed: false,
             edits: 0,
             next_order: 0,
