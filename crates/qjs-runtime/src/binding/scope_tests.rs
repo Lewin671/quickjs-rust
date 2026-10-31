@@ -140,3 +140,50 @@ fn self_scope_retains_its_cell_outside_the_call_variable_holder() {
         &other_scope.head.descriptor.owner
     ));
 }
+
+#[test]
+fn selected_holder_recreates_its_own_deleted_binding_without_selecting_a_parent() {
+    let outer = cursor(None, 1);
+    let parent = outer.declare_var("value");
+    parent.assign(Value::Number(1.0), false).unwrap();
+    let inner = cursor(Some(outer.head.clone()), 2);
+    let old = inner.declare_var("value");
+    old.assign(Value::Number(2.0), false).unwrap();
+    let mut services =
+        crate::CallEnv::new(crate::context::new_realm(std::collections::HashMap::new()));
+    let selected = inner.resolve("value", false, &mut services).unwrap();
+    assert!(selected.delete(&mut services).unwrap());
+    selected
+        .assign(Value::Number(9.0), false, &mut services)
+        .unwrap();
+    let current = inner.declare_var("value");
+    assert!(!current.ptr_eq(&old));
+    assert_eq!(current.read(), Ok(Value::Number(9.0)));
+    assert_eq!(old.read(), Ok(Value::Number(2.0)));
+    assert_eq!(parent.read(), Ok(Value::Number(1.0)));
+}
+
+#[test]
+fn selected_holder_uses_redeclared_own_binding_and_strict_missing_does_not_create() {
+    let scope = cursor(None, 1);
+    scope
+        .declare_var("value")
+        .assign(Value::Number(1.0), false)
+        .unwrap();
+    let mut services =
+        crate::CallEnv::new(crate::context::new_realm(std::collections::HashMap::new()));
+    let selected = scope.resolve("value", false, &mut services).unwrap();
+    assert!(selected.delete(&mut services).unwrap());
+    assert!(
+        selected
+            .assign(Value::Number(8.0), true, &mut services)
+            .is_err()
+    );
+    assert!(!scope.variable.own_vars.as_ref().unwrap().contains("value"));
+    let replacement = scope.declare_var("value");
+    selected
+        .assign(Value::Number(9.0), false, &mut services)
+        .unwrap();
+    assert_eq!(replacement.read(), Ok(Value::Number(9.0)));
+    assert_eq!(selected.read(&mut services), Ok(Value::Number(9.0)));
+}

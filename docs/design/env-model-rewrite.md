@@ -76,14 +76,14 @@ activation exposes a fresh own holder at its selected variable boundary. Parent
 links remain live: adding an outer declaration after child entry is visible;
 creating an inner declaration never selects an outer homonym. Existing own
 static bindings reuse their cells and attributes. Eval-added bindings are
-separately owned and deletable. Delete removes only the selected own entry,
-revealing the parent on subsequent lookup; a saved cell reference keeps its base.
+separately owned and deletable. Delete reveals the parent on fresh lookup. Saved
+holder references recreate only their own binding (sloppy) or throw (strict).
 Structural epochs change for add/delete/remap, never for cell-value writes.
 Tests: `binding/scope_tests.rs`, `direct_eval/s3b_bindings.rs`.
 
 The resolver walks descriptor/cells, own holder, with object and parent in lexical
 order. With uses HasProperty and unscopables, releasing every storage/cell borrow
-before hooks. The with-reference instructions save the selected cell/property
+before hooks. With-reference instructions save the selected cell/holder/property
 before RHS effects, and suspension retains that reference until consumption.
 
 Sloppy function eval declares in the caller's selected own holder after checking

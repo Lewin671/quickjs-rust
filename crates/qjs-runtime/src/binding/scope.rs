@@ -56,6 +56,9 @@ impl VarHolder {
     pub(crate) fn cell(&self, name: &str) -> Option<BindingCell> {
         self.entries.borrow().get(name).cloned()
     }
+    pub(crate) fn contains(&self, name: &str) -> bool {
+        self.entries.borrow().contains_key(name)
+    }
     pub(crate) fn insert_cell(&self, name: String, cell: BindingCell) {
         self.entries.borrow_mut().insert(name, cell);
         self.changed();
@@ -263,7 +266,9 @@ impl ScopeCursor {
 pub(crate) enum ResolvedReference {
     Cell {
         binding: CellReference,
-        holder: Option<Rc<VarHolder>>,
+    },
+    Holder {
+        holder: Rc<VarHolder>,
         name: String,
     },
     Property {
@@ -317,21 +322,13 @@ impl ScopeCursor {
                     }
                 }
             } else if let Some(binding) = lease.binding(name) {
-                return Ok(ResolvedReference::Cell {
-                    binding,
-                    holder: None,
-                    name: name.to_owned(),
-                });
+                return Ok(ResolvedReference::Cell { binding });
             }
             if let Some(holder) = &lease.own_vars
-                && let Some(cell) = holder.cell(name)
+                && holder.contains(name)
             {
-                return Ok(ResolvedReference::Cell {
-                    binding: CellReference {
-                        cell,
-                        access: AccessPolicy::Mutable,
-                    },
-                    holder: Some(holder.clone()),
+                return Ok(ResolvedReference::Holder {
+                    holder: holder.clone(),
                     name: name.to_owned(),
                 });
             }
@@ -344,7 +341,11 @@ impl ScopeCursor {
 impl ResolvedReference {
     pub(crate) fn read(&self, env: &mut crate::CallEnv) -> Result<Value, RuntimeError> {
         match self {
-            Self::Cell { binding, .. } => binding.read(),
+            Self::Cell { binding } => binding.read(),
+            Self::Holder { holder, name } => holder
+                .cell(name)
+                .ok_or_else(|| missing_binding(name))?
+                .read(),
             Self::Property {
                 base, name, strict, ..
             } => {
@@ -372,7 +373,15 @@ impl ResolvedReference {
         env: &mut crate::CallEnv,
     ) -> Result<(), RuntimeError> {
         match self {
-            Self::Cell { binding, .. } => binding.assign(value, strict),
+            Self::Cell { binding } => binding.assign(value, strict),
+            Self::Holder { holder, name } => {
+                let cell = match holder.cell(name) {
+                    Some(cell) => cell,
+                    None if strict => return Err(missing_binding(name)),
+                    None => holder.declare(name),
+                };
+                cell.assign(value, strict)
+            }
             Self::Property {
                 base, name, strict, ..
             } => {
@@ -403,11 +412,7 @@ impl ResolvedReference {
     }
     pub(crate) fn delete(&self, env: &mut crate::CallEnv) -> Result<bool, RuntimeError> {
         match self {
-            Self::Cell {
-                holder: Some(holder),
-                name,
-                ..
-            } => Ok(holder.delete(name)),
+            Self::Holder { holder, name } => Ok(holder.delete(name)),
             Self::Cell { .. } => Ok(false),
             Self::Property { base, name, .. } => crate::bytecode::delete_object_property(
                 base.clone(),
@@ -416,5 +421,12 @@ impl ResolvedReference {
             ),
             Self::Unresolvable => Ok(true),
         }
+    }
+}
+
+fn missing_binding(name: &str) -> RuntimeError {
+    RuntimeError {
+        thrown: None,
+        message: format!("ReferenceError: undefined identifier `{name}`"),
     }
 }

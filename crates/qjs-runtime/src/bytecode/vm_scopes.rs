@@ -150,8 +150,6 @@ impl Vm<'_> {
                             cell,
                             access: AccessPolicy::Mutable,
                         },
-                        holder: None,
-                        name: name.to_owned(),
                     }));
                 }
                 if let Some(base) = self.env.selected_global_this()

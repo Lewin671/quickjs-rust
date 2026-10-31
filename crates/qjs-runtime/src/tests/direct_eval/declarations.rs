@@ -85,3 +85,19 @@ fn eval_shadow_cells_survive_generator_suspension() {
         Ok(Value::String("5:5:1".into()))
     );
 }
+
+#[test]
+fn eval_initializer_keeps_the_selected_holder_after_delete_and_redeclaration() {
+    assert_eq!(
+        eval(include_str!(
+            "../../../../../tests/fixtures/compare-qjs/s3b-scope-selected-holder-redeclaration.js"
+        )),
+        Ok(Value::String("9:1".into()))
+    );
+    assert_eq!(
+        eval(
+            "(function(){eval('var value = 1'); function inner(){eval('var value = (delete value, 9)'); return value;} return inner()+':'+value;})()"
+        ),
+        Ok(Value::String("9:1".into()))
+    );
+}

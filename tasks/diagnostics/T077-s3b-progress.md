@@ -576,3 +576,36 @@ A complete rerun with COMPARE_QJS_JOBS=4 passes all **289** scripts without
 changing the timeout or expected results. Ordinary initialized cell reads keep
 the original single-borrow path; only lazy reads enter materialization.
 The final staged gate includes that common-path correction.
+
+
+## B3b1 saved variable-environment bases
+
+A saved extensible-holder reference now retains the holder/name, never a stale
+cell or a parent lookup route. After RHS deletion, sloppy SetMutableBinding
+recreates the own binding in that holder; strict missing assignment throws.
+After own redeclaration it writes the current own cell. Static CellReference
+identity remains unchanged, including the existing deleted-raw-cell test.
+New lowest-layer tests cover replacement identity, unchanged parent/old cell,
+strict missing/no creation and current-own reads. The permanent eval initializer
+fixture reproduces delete/redeclare during RHS: Rust previously returned 2:1,
+NG/Node return 9:1; the repair returns 9:1. A second spec test covers recreation
+without RHS redeclaration. All **2,581 runtime tests**, the staged gate (65 selected Test262 cases),
+agents/perf-counters compilation and **290 NG scripts** pass. The heavy teardown
+fixture passes isolated and in a complete COMPARE_QJS_JOBS=1 rerun with the
+unchanged 10-second timeout; a concurrent run timed out while another owner
+was scanning Test262. General reference capture before RHS remains next.
+
+Design correction: frozen wording that a selected reference keeps its old cell
+is correct for a raw static cell reference. An environment-record reference
+must keep its environment base. ES2025 Declarative SetMutableBinding step 1
+explicitly handles a missing binding after RHS deletion. Holder is now a distinct
+ResolvedReference variant, preserving this difference without snapshots or
+reselecting a parent. Reference:
+https://tc39.es/ecma262/2025/multipage/executable-code-and-execution-contexts.html#sec-declarative-environment-records-setmutablebinding-n-v-s
+
+Complete exact arguments-object slice at `3a4173b0` passes **263/263** in both
+engines, with zero skips/gaps/timeouts/not-run. Production agents binary SHA-256
+`4e7625bf0ade7aad806db9b92e600c3ce9526795670398749f3bfe7e2622432b`;
+summary `80d79e27758ae48f0102405e8a5e24c3a2bdc23d57d8f524486171ac27f410c6`;
+case map `d3f84fe67ea9972b020213203a59419f57a2108c438174a5cfc2b4a06cbb21f9`.
+This filtered scan creates no burndown or final S3b acceptance.
