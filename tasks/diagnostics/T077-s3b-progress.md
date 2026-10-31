@@ -778,3 +778,16 @@ s3b-context-imports `bb0199327236bb286b72263d3b5678affe852f0cb0fe2f392782e885333
 Source hashes/commands remain as recorded above; dependency module stdout is empty.
 Raw cell publisher retirement, default lazy promotion, stress/deletion/counter
 receipts and the final full/exact/public86 matrix remain before S3b exit.
+
+
+## B2c6 checked compound writes and canonical module publishers
+
+Over `027df1e5`, module writes use their canonical cell without a second
+name-routed export publication. Wide upvalue stores use checked Assign.
+String literal compound assignment now checks immutable policy after required
+ToPrimitive; global lexical string appends cannot bypass const through mutable
+cell access. The unchecked mutable cell callback API is removed. Sloppy named
+self assignment still returns the computed value without changing the binding.
+The feature suite passes **2,645 tests**, and all **295 serial NG scripts**
+pass. The fresh staged gate passes **2,592 default tests and 65 Test262 cases**.
+Final S3b remains open.

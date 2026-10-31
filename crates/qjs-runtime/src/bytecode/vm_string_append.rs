@@ -237,11 +237,23 @@ impl Vm<'_, '_> {
                 thrown: None,
                 message: "bytecode local index out of bounds".to_owned(),
             })?;
-        if !local_meta.mutable {
-            return Err(RuntimeError {
-                thrown: None,
-                message: "TypeError: assignment to constant variable".to_owned(),
-            });
+        if !local_meta.mutable
+            || self.env.has_module_import(&local_meta.name)
+            || self.env.is_immutable_lexical_binding(&local_meta.name)
+            || self.local_upvalue_cell(slot).is_some_and(|cell| {
+                cell.metadata().strict_write != crate::binding::WritePolicy::Mutable
+            })
+        {
+            let left = self.load_local(slot)?;
+            let mut context = self.context();
+            let result = operations::eval_binary(
+                left,
+                BinaryOp::Add,
+                Value::String(suffix.to_owned().into()),
+                &mut context,
+            )?;
+            self.assign_local(slot, result.clone())?;
+            return Ok(result);
         }
         // The append opcode mutates the local string in place as a fast path.
         // A received capture's authoritative value is its shared cell, not the
@@ -277,15 +289,15 @@ impl Vm<'_, '_> {
                 Value::String(suffix.to_owned().into()),
                 &mut env,
             )?;
-            self.store_local(slot, result.clone())?;
+            self.assign_local(slot, result.clone())?;
             return Ok(result);
         };
         crate::string::push_js_str(string.make_mut(), suffix);
         let result = Value::String(string.clone());
         if let Some(upvalue) = self.local_upvalues.get(slot).and_then(Option::as_ref) {
-            upvalue.set(result.clone());
+            upvalue.assign(result.clone(), self.execution_is_strict())?;
         }
-        self.write_through_module_live_binding(&local_meta.name, result.clone());
+
         let syncs_global_var = (local_meta.from_env && !local_meta.hoisted)
             || (self.bytecode.global_scope
                 && self.bytecode.local_is_body_hoist_only(slot)
@@ -324,15 +336,21 @@ impl Vm<'_, '_> {
             // in place needs no separate cell refresh afterward — unlike the
             // old two-map realm model, where `Rc::make_mut` on the raw map's
             // copy could detach the value from an already-captured cell.
-            let appended = self.realm.cell(name).and_then(|cell| {
-                cell.with_value_mut(|value| {
-                    let Value::String(string) = value else {
-                        return None;
-                    };
-                    crate::string::push_js_str(string.make_mut(), suffix);
-                    Some(value.clone())
-                })
-            });
+            let appended = if let Some(cell) = self.realm.cell(name) {
+                cell.try_assign_in_place(
+                    is_strict,
+                    |value| matches!(value, Value::String(_)),
+                    |value| {
+                        let Value::String(string) = value else {
+                            unreachable!("admitted string")
+                        };
+                        crate::string::push_js_str(string.make_mut(), suffix);
+                        value.clone()
+                    },
+                )?
+            } else {
+                None
+            };
             if let Some(result) = appended {
                 if let Some(global_this) = self.cached_global_this()
                     && global_this.has_own_property(name)
@@ -344,7 +362,7 @@ impl Vm<'_, '_> {
                             result.clone()
                         });
                 }
-                self.write_through_module_live_binding(name, result.clone());
+
                 return Ok(result);
             }
         }

@@ -923,3 +923,29 @@ fn mutable_parameter_capture_does_not_inherit_an_unrelated_global_const_policy()
         Ok(Value::String("9:10:1".into()))
     );
 }
+
+#[test]
+fn string_compound_assignment_checks_const_after_coercion() {
+    assert_eq!(
+        eval(
+            "(function() { let calls = 0; const value = { valueOf() { calls++; return 1; } }; try { value += 's'; } catch (error) { return error.name + ':' + calls; } })();"
+        ),
+        Ok(Value::String("TypeError:1".into()))
+    );
+    assert_eq!(
+        eval(
+            "const text = 'a'; let result = 'none'; try { Function(\"text += 'b'\")(); } catch (error) { result = error.name; } result + ':' + text;"
+        ),
+        Ok(Value::String("TypeError:a".into()))
+    );
+}
+
+#[test]
+fn sloppy_self_string_compound_assignment_preserves_expression_value() {
+    assert_eq!(
+        eval(
+            "(function named() { let calls = 0; named[Symbol.toPrimitive] = function() { calls++; return 'n'; }; const result = (named += 's'); return result + ':' + calls + ':' + typeof named; })();"
+        ),
+        Ok(Value::String("ns:1:function".into()))
+    );
+}

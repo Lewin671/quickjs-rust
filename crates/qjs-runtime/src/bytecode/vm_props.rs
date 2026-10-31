@@ -623,7 +623,7 @@ impl Vm<'_, '_> {
                     global_this.set(name.to_owned(), value.clone());
                 }
             }
-            self.write_through_module_live_binding(name, value);
+
             self.sync_marked_dynamic_global(name);
             return Ok(());
         }
@@ -648,7 +648,7 @@ impl Vm<'_, '_> {
             });
         }
         self.env.insert_realm(name.to_owned(), value.clone());
-        self.write_through_module_live_binding(name, value.clone());
+
         let global_this = self.cached_global_this();
         if let Some(global_this) = global_this
             && global_this.has_own_property(name)
@@ -745,7 +745,7 @@ impl Vm<'_, '_> {
                         global_this.set(name.to_owned(), value.clone());
                     }
                 }
-                self.write_through_module_live_binding(name, value);
+
                 self.sync_marked_dynamic_global(name);
                 return Ok(());
             }
@@ -762,7 +762,7 @@ impl Vm<'_, '_> {
         }
         if self.realm.contains(name) {
             self.env.insert_realm(name.to_owned(), value.clone());
-            self.write_through_module_live_binding(name, value.clone());
+
             let global_this = self.cached_global_this();
             if let Some(global_this) = global_this
                 && global_this.has_own_property(name)
@@ -777,7 +777,7 @@ impl Vm<'_, '_> {
             global_this.set(name.to_owned(), value.clone());
         }
         self.env.insert_realm(name.to_owned(), value.clone());
-        self.write_through_module_live_binding(name, value);
+
         self.sync_marked_dynamic_global(name);
         Ok(())
     }

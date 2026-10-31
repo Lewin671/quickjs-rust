@@ -121,30 +121,6 @@ impl Vm<'_, '_> {
         self.refresh_virtual_object_execution();
     }
 
-    /// Keeps a module's exported binding cell current for name-based writes.
-    pub(super) fn write_through_module_live_binding(&self, name: &str, value: Value) {
-        if let Some(binding) = self.env.module_live_binding_cell(name) {
-            binding.set(value);
-        }
-    }
-
-    /// Slot-addressed module live-binding update.
-    pub(super) fn write_through_module_live_binding_slot(&self, slot: usize, value: &Value) {
-        if let Some(name) = self.bytecode.locals.get(slot).map(|local| &local.name) {
-            // Check the cheap, almost-always-`None` live-binding lookup first:
-            // non-module scripts never pay for the `local_slot` name-table
-            // hash lookup below. Module live bindings describe the module's
-            // top-level declaration slot; a nested lexical may reuse the same
-            // source name but owns a distinct cell and must never update the
-            // export by coincidence.
-            if let Some(binding) = self.env.module_live_binding_cell(name)
-                && self.bytecode.local_slot(name) == Some(slot)
-            {
-                binding.set(value.clone());
-            }
-        }
-    }
-
     /// Own lexical/import/arguments routes precede the selected global object.
     pub(super) fn uses_selected_object_binding(&self, name: &str) -> bool {
         !(self.env.can_cache_realm_globals() || self.env.has_module_import(name))
@@ -364,7 +340,7 @@ impl Vm<'_, '_> {
         }
         if self.realm.contains(&name) {
             self.env.insert_realm(name.clone(), value.clone());
-            self.write_through_module_live_binding(&name, value.clone());
+
             let global_this = self.cached_global_this();
             if let Some(global_this) = global_this
                 && global_this.has_own_property(&name)
@@ -379,7 +355,7 @@ impl Vm<'_, '_> {
             global_this.set(name.clone(), value.clone());
         }
         self.env.insert_realm(name.clone(), value.clone());
-        self.write_through_module_live_binding(&name, value);
+
         self.sync_marked_dynamic_global(&name);
         Ok(())
     }
@@ -846,19 +822,6 @@ impl Vm<'_, '_> {
         } else {
             false
         };
-        if !uses_shared_cell {
-            // Binding classes not migrated to cells still use the coexistence
-            // snapshot/writeback path. A cell-backed lexical must not also write
-            // by name: same-named shadowed bindings are distinct slots/cells.
-            self.write_through_module_live_binding_slot(slot, &value);
-        } else if !from_env {
-            // A declaring frame still mirrors its own cell into the coexistence
-            // map for module live exports and not-yet-migrated consumers. A
-            // received upvalue must never take this name-keyed path: its parent
-            // binding is already updated through the shared cell, and a
-            // same-named outer binding can be a different cell.
-            self.write_through_module_live_binding_slot(slot, &value);
-        }
         // `shared_realm_cell` only matters through the first `syncs_global_var`
         // disjunct, which is unreachable when `hoisted` (its `!hoisted` term is
         // false) — skip the hash lookup entirely for the common hoisted-var
@@ -1167,7 +1130,7 @@ impl Vm<'_, '_> {
                 .unwrap_or(value);
             self.env.insert_realm(name.clone(), value.clone());
             self.clear_global_var_local(&name);
-            self.write_through_module_live_binding(&name, value);
+
             return Ok(());
         }
         global_this.define_property(
@@ -1176,7 +1139,7 @@ impl Vm<'_, '_> {
         );
         self.env.insert_realm(name.clone(), value.clone());
         self.clear_global_var_local(&name);
-        self.write_through_module_live_binding(&name, value);
+
         Ok(())
     }
 

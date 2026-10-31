@@ -231,24 +231,25 @@ impl BindingCell {
         }
     }
 
-    pub(crate) fn with_value_mut<R>(&self, mutate: impl FnOnce(&mut Value) -> R) -> R {
-        let mut state = self.0.state.borrow_mut();
-        match &mut *state {
-            BindingState::Initialized(value) => mutate(value),
-            BindingState::LazyArguments(_) => {
-                drop(state);
-                self.materialize_arguments();
-                self.with_value_mut(mutate)
-            }
-            BindingState::Uninitialized => {
-                let mut value = Value::Function(crate::Function::uninitialized_lexical_marker());
-                let result = mutate(&mut value);
-                if !value.is_uninitialized_lexical_marker() {
-                    *state = BindingState::Initialized(value);
-                }
-                result
-            }
+    /// Performs only callback-free mutations admitted by the current value.
+    /// Other states use the ordinary read/coerce/Assign sequence instead.
+    pub(crate) fn try_assign_in_place<R>(
+        &self,
+        strict: bool,
+        admits: impl FnOnce(&Value) -> bool,
+        mutate: impl FnOnce(&mut Value) -> R,
+    ) -> Result<Option<R>, RuntimeError> {
+        let admitted = matches!(&*self.0.state.borrow(),
+            BindingState::Initialized(value) if admits(value));
+        if !admitted || self.metadata().strict_write == WritePolicy::IgnoreSloppy && !strict {
+            return Ok(None);
         }
+        self.check_assignment(strict)?;
+        let mut state = self.0.state.borrow_mut();
+        let BindingState::Initialized(value) = &mut *state else {
+            unreachable!("callback-free mutation preserves initialized state")
+        };
+        Ok(Some(mutate(value)))
     }
 
     // Remaining raw VM/global publishers are retired in the final cell audit.

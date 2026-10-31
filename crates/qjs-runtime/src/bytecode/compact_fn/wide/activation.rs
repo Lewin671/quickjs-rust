@@ -773,16 +773,10 @@ fn run_frames(
                         let Some(cell) = activation.upvalue_cell(slot as usize) else {
                             break Err(execute::uninitialized_local());
                         };
-                        if cell.with_value(Value::is_uninitialized_lexical_marker) {
-                            match activation.uninitialized_upvalue(slot as usize) {
-                                Ok(_) => {}
-                                Err(error) => break Err(error),
-                            }
+                        let value = std::mem::replace(&mut window[src as usize], Value::Undefined);
+                        if let Err(error) = cell.assign(value, activation.env.caller().strict) {
+                            break Err(error);
                         }
-                        cell.set(std::mem::replace(
-                            &mut window[src as usize],
-                            Value::Undefined,
-                        ));
                     }
                     WideOp::LoadThis { dst } => {
                         // Admission required a seeded receiver, so this never
