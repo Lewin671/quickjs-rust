@@ -116,3 +116,11 @@ Order job 20261031T024025Z-t077-s2-r4-final-x86-order completed for 2c47383a,
 463 ranked symbols, SHA 121c0b31b27164cbbfa6948336507a53e6bb7ab1d18eb518e4be15e98c37d86c.
 It is superseded before final timing by the last cold-boundary correction; no
 performance result used it and no offset/address search occurred.
+
+
+Final runtime source is dc710e4b. Last correction only outlines shared constant
+payload loads and the numeric-store miss frame; source is frozen regardless of
+final payoff. Fresh source counters/statics/verified tests run in
+20261031T025457Z-t077-s2-r4-frozen-source-counters; default-set x86 order generation
+follows in the serialized queue. All post-freeze commits change evidence or the
+order file only. A final external loss ends this owner run without another fix.
