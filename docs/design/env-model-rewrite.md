@@ -55,8 +55,8 @@ parameter leaf bindings are parameters too; raw pattern inputs are not bindings.
    invalidates a data route and restores semantic Get, without inventing lexical
    TDZ. Tests: `global.rs`, `closure_state.rs`, `direct_eval/s3b_bindings.rs`.
 9. **Intrinsics are not mutable global bindings.** Set-once realm intrinsic fields
-   own Object/Array/Function and primitive prototypes, plus well-known symbols.
-   Rebinding a public constructor does not redefine those identities.
+   own Object/Array/Function, primitive/error prototypes and well-known symbols.
+   Internal errors use these identities without looking up public constructors.
 10. **Modules retain live cells.** Import routes attach exporting cells and reject
     writes through import access policy. Top-level slots, hoists and namespaces
     share cells established before linking; no settled import/export copies.

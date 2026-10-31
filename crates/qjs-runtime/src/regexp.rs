@@ -4,9 +4,9 @@ use crate::JsString;
 use crate::reflect::ordinary_set;
 use crate::string::string_code_units;
 use crate::{
-    ArrayRef, Function, GLOBAL_THIS_BINDING, NativeFunction, ObjectRef, Property, PropertyKey,
-    RuntimeError, Value, ensure_constructor, error, function_prototype, is_truthy, property_value,
-    property_value_key, symbol, to_js_string_with_env, to_length_with_env,
+    ArrayRef, Function, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value,
+    ensure_constructor, error, function_prototype, is_truthy, property_value, property_value_key,
+    symbol, to_js_string_with_env, to_length_with_env,
 };
 
 mod escape;
@@ -203,7 +203,7 @@ pub(crate) fn install_regexp(env: &mut CallEnv, global_this: &Value, object_prot
 
 fn define_regexp_accessor(
     realm: &crate::function::Realm,
-    global_this: &Value,
+    _global_this: &Value,
     prototype: &ObjectRef,
     name: &str,
     native: NativeFunction,
@@ -213,7 +213,6 @@ fn define_regexp_accessor(
         REGEXP_PROTOTYPE_BINDING.to_owned(),
         Value::Object(prototype.clone()),
     );
-    getter.insert_native_context(GLOBAL_THIS_BINDING.to_owned(), global_this.clone());
     prototype.define_property(
         name.to_owned(),
         Property::accessor(Some(Value::Function(getter)), None, false, true),
@@ -686,28 +685,11 @@ fn regexp_receiver_error(function: &Function) -> RuntimeError {
 }
 
 fn regexp_receiver_error_value(function: &Function, message: &str) -> Option<Value> {
-    let constructor = match function.native_context.get("TypeError").cloned() {
-        Some(value) => Some(value),
-        None => match function.native_context.get(GLOBAL_THIS_BINDING) {
-            Some(Value::Object(global_this)) => global_this.get("TypeError"),
-            _ => None,
-        },
-    };
-    let Value::Function(constructor) = constructor? else {
-        return None;
-    };
-    let mut env = CallEnv::new(crate::function::new_realm_sharing_atoms(
-        function.native_context.clone_map(),
-        function.property_domain().clone(),
-    ));
-    error::native_error(
-        &constructor,
-        Value::Undefined,
-        &[Value::String(message.to_owned().into())],
-        false,
-        &mut env,
+    error::intrinsic_error_from_creation(
+        function.creation_context(),
+        crate::context::ErrorKind::TypeError,
+        message,
     )
-    .ok()
 }
 
 fn define_regexp_data(object: &ObjectRef, source: &str, flags: &str) {

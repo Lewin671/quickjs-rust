@@ -69,6 +69,7 @@ pub(crate) struct IntrinsicOverrides {
     pub(crate) array: Option<ObjectRef>,
     pub(crate) function: Option<crate::Prototype>,
     pub(crate) primitive: [Option<ObjectRef>; 5],
+    pub(crate) errors: [Option<ObjectRef>; 9],
 }
 
 impl IntrinsicOverrides {
@@ -85,6 +86,11 @@ impl IntrinsicOverrides {
             super::PrimitiveIntrinsic::Symbol,
         ] {
             result.primitive[kind.index()] = global
+                .own_property(kind.name())
+                .and_then(|property| super::constructor_object_prototype(property.value));
+        }
+        for kind in super::ErrorKind::ALL {
+            result.errors[kind.index()] = global
                 .own_property(kind.name())
                 .and_then(|property| super::constructor_object_prototype(property.value));
         }

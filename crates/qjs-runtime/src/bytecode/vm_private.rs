@@ -1,8 +1,6 @@
 //! VM support for private class names: installing private elements when a class
 //! is built, and the `GetPrivate`/`SetPrivate`/`PrivateIn` operations.
 
-use std::collections::HashMap;
-
 use crate::CallEnv;
 
 use crate::{
@@ -137,10 +135,8 @@ impl Vm<'_> {
         if elements.is_empty() && enclosing.is_none() {
             return None;
         }
-        let environment = PrivateEnvironment::with_outer(
-            enclosing,
-            dynamic_realm_type_error_prototype(&self.env),
-        );
+        let environment =
+            PrivateEnvironment::with_outer(enclosing, private_error_prototype(&self.env));
         for element in elements {
             let name = match element {
                 ClassPrivateElementDef::Field { name, .. }
@@ -544,21 +540,21 @@ fn private_storage_of(value: &Value) -> Option<PrivateStorage> {
     instance_private_storage(value)
 }
 
-fn dynamic_realm_type_error_prototype(env: &CallEnv) -> Option<ObjectRef> {
-    let Value::Object(global) = env.dynamic_function_realm_value()? else {
-        return None;
-    };
-    let Value::Function(type_error) = global.get("TypeError")? else {
-        return None;
-    };
-    let crate::Property {
-        value: Value::Object(prototype),
-        ..
-    } = type_error.own_property("prototype")?
-    else {
-        return None;
-    };
-    Some(prototype)
+fn private_error_prototype(env: &CallEnv) -> Option<ObjectRef> {
+    let kind = crate::context::ErrorKind::TypeError;
+    env.creation_context_ref().intrinsics.errors[kind.index()]
+        .clone()
+        .or_else(|| {
+            env.dynamic_function_realm_global().and_then(|global| {
+                if env.realm().is_global_object(&global) {
+                    return None;
+                }
+                global
+                    .get(kind.name())
+                    .and_then(crate::context::constructor_object_prototype)
+            })
+        })
+        .or_else(|| env.realm().error_prototype(kind))
 }
 
 fn foreign_private_error(name: &str, type_error_prototype: Option<&ObjectRef>) -> RuntimeError {
@@ -567,10 +563,12 @@ fn foreign_private_error(name: &str, type_error_prototype: Option<&ObjectRef>) -
          declare it"
     );
     if let Some(prototype) = type_error_prototype {
-        let error =
-            ObjectRef::with_prototype(HashMap::new(), Some(prototype.clone()), &prototype.domain());
+        let error = crate::error::error_value_with_prototype(
+            prototype.clone(),
+            message.trim_start_matches("TypeError: "),
+        );
         return RuntimeError {
-            thrown: Some(Box::new(Value::Object(error))),
+            thrown: Some(Box::new(error)),
             message,
         };
     }

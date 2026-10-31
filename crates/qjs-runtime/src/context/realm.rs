@@ -46,6 +46,7 @@ pub(crate) struct RealmState {
     /// Stable `%Number.prototype%` identity used by primitive Number reads.
     number_prototype: OnceCell<ObjectRef>,
     other_primitive_prototypes: [OnceCell<ObjectRef>; 3],
+    errors: [OnceCell<super::intrinsics::ErrorIntrinsic>; 9],
     /// The realm's well-known symbols, in `symbol::WELL_KNOWN_SYMBOL_NAMES`
     /// order.
     well_known_symbols: OnceCell<Vec<ObjectRef>>,
@@ -143,6 +144,7 @@ impl RealmState {
             string_wrapper_layout: OnceCell::new(),
             number_prototype: OnceCell::new(),
             other_primitive_prototypes: std::array::from_fn(|_| OnceCell::new()),
+            errors: std::array::from_fn(|_| OnceCell::new()),
             well_known_symbols: OnceCell::new(),
             string_object_keys: crate::string::StringObjectKeys::default(),
             global_this,
@@ -151,6 +153,33 @@ impl RealmState {
             regexp_programs: RefCell::default(),
             property_owner: crate::value::layout::PropertyOwner::new(atoms.clone()),
         }
+    }
+
+    pub(crate) fn initialize_error_intrinsic(
+        &self,
+        kind: super::ErrorKind,
+        constructor: Function,
+        prototype: ObjectRef,
+    ) {
+        assert!(
+            self.errors[kind.index()]
+                .set(super::intrinsics::ErrorIntrinsic {
+                    constructor,
+                    prototype
+                })
+                .is_ok(),
+            "error intrinsic initialized twice"
+        );
+    }
+    pub(crate) fn error_prototype(&self, kind: super::ErrorKind) -> Option<ObjectRef> {
+        self.errors[kind.index()]
+            .get()
+            .map(|intrinsic| intrinsic.prototype.clone())
+    }
+    pub(crate) fn error_constructor(&self, kind: super::ErrorKind) -> Option<Function> {
+        self.errors[kind.index()]
+            .get()
+            .map(|intrinsic| intrinsic.constructor.clone())
     }
 
     pub(crate) fn string_object_keys(&self) -> &crate::string::StringObjectKeys {

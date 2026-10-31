@@ -350,13 +350,6 @@ impl NativeContext {
         Rc::make_mut(context).bindings.insert(key, value);
     }
 
-    pub(crate) fn clone_map(&self) -> HashMap<String, Value> {
-        self.0
-            .as_deref()
-            .map(|context| context.bindings.clone())
-            .unwrap_or_default()
-    }
-
     #[cfg(test)]
     fn is_allocated(&self) -> bool {
         self.0.is_some()

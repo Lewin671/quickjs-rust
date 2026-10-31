@@ -663,3 +663,47 @@ fn template_literal_tostring_errors_are_catchable() {
         Ok(Value::String("TypeError".to_owned().into()))
     );
 }
+
+#[test]
+fn internal_errors_use_stable_intrinsics_after_global_constructor_rebinding() {
+    assert_eq!(
+        eval(include_str!(
+            "../../../../tests/fixtures/compare-qjs/s3b-scope-error-intrinsics.js"
+        )),
+        Ok(Value::String("true:true:true:true:true:true:true:0".into()))
+    );
+}
+
+#[cfg(feature = "perf-counters")]
+#[test]
+fn internal_rejection_error_materialization_constructs_no_execution_context() {
+    let Value::Function(function) = eval("(function retained() {})").unwrap() else {
+        panic!("ordinary function");
+    };
+    let creation = function.creation_context();
+    let expected = creation
+        .realm
+        .error_prototype(crate::context::ErrorKind::TypeError)
+        .unwrap();
+    let env = crate::CallEnv::new(creation.realm.clone());
+    env.insert_realm("TypeError".into(), Value::Undefined);
+    crate::reset_counters();
+    let error = crate::RuntimeError {
+        thrown: None,
+        message: "TypeError: retained intrinsic".into(),
+    };
+    let Value::Object(value) = crate::error::runtime_error_to_value(error, &env) else {
+        panic!("intrinsic error object");
+    };
+    assert!(
+        matches!(value.prototype_slot(), Some(crate::Prototype::Object(prototype)) if prototype.ptr_eq(&expected))
+    );
+    assert_eq!(
+        value.own_property("message").unwrap().value,
+        Value::String("retained intrinsic".into())
+    );
+    assert!(crate::error::is_error_object(&value));
+    let counts = crate::counters().unwrap();
+    assert_eq!(counts.call_env_constructions, 0);
+    assert_eq!(counts.call_env_clones, 0);
+}

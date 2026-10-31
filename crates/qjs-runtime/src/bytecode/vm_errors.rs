@@ -1,4 +1,4 @@
-use crate::{GLOBAL_THIS_BINDING, RuntimeError, Value, error};
+use crate::{RuntimeError, Value, error};
 
 use super::vm::Vm;
 use super::vm_call::native_error_message;
@@ -75,33 +75,12 @@ impl Vm<'_> {
 
     fn native_error_value(&self, message: &str) -> Result<Value, RuntimeError> {
         let (constructor_name, message) = native_error_message(message);
-        let Value::Function(function) = self
-            .native_error_constructor(constructor_name)
+        let kind =
+            crate::context::ErrorKind::from_name(constructor_name).expect("native error kind");
+        error::intrinsic_error_from_creation(self.env.creation_context_ref(), kind, &message)
             .ok_or_else(|| RuntimeError {
                 thrown: None,
-                message: format!("{constructor_name} constructor is not available"),
-            })?
-        else {
-            return Err(RuntimeError {
-                thrown: None,
-                message: format!("{constructor_name} constructor is not callable"),
-            });
-        };
-        error::native_error(
-            &function,
-            Value::Undefined,
-            &[Value::String(message.into())],
-            false,
-            &mut self.realm_env(),
-        )
-    }
-
-    fn native_error_constructor(&self, name: &str) -> Option<Value> {
-        self.env.get(name).or_else(|| {
-            let Some(Value::Object(global_this)) = self.env.get(GLOBAL_THIS_BINDING) else {
-                return None;
-            };
-            global_this.get(name)
-        })
+                message: format!("{constructor_name} intrinsic is not available"),
+            })
     }
 }

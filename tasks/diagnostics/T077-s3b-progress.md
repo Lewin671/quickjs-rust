@@ -678,3 +678,29 @@ proves inherited, missing and lazy prototype descriptor reads construct/clone
 zero CallEnv instances. All 292 serial NG scripts and the staged gate (2,592
 default tests plus 52 Test262 cases) pass. This is a
 service-boundary deletion, not a new property cache or production timing claim.
+
+
+## B4e2 stable internal error materialization
+
+Over `37982ae9`, realm error constructors/prototypes have typed set-once slots.
+VM catches, internal rejection conversion and RegExp receiver errors construct
+from the selected intrinsic prototype, without public-constructor lookup,
+coercion, native entry or an empty service environment. SuppressedError's
+internal constructor selection is stable too. User-requested constructor calls
+retain their normal coercion/cause/construct behavior. RegExp no longer captures
+its entire global object for error construction, and NativeContext clone_map is
+removed now that no execution consumer needs it.
+
+Explicit synthetic marked globals preserve their protocol: function-level
+selection captures typed intrinsic identities together with GlobalSelection;
+private-brand metadata selects its defining error prototype before later marker
+changes. Ordinary public constructor rebinding cannot redefine the realm slots.
+The private error object's own message/ErrorData now use the same pure builder.
+
+All 2,593 default tests pass. The new NG fixture replaces TypeError, RangeError,
+ReferenceError, SyntaxError, URIError and SuppressedError, then checks engine
+errors keep their intrinsic prototypes and never invoke the replacements.
+A feature-counter test checks internal rejection conversion retains prototype,
+message and ErrorData with zero CallEnv construction/clone events. All **2,644
+agents/perf-counters tests**, **293 serial NG scripts**, and the staged gate
+(**2,593 default tests + 117 Test262 cases**) pass. Final S3b remains open.

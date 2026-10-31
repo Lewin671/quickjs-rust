@@ -8,7 +8,7 @@ pub(crate) use activation::{ActivationContext, ExecutionMode};
 pub(crate) use creation::{CreationContext, GlobalSelection, IntrinsicOverrides, ScriptOrModule};
 mod intrinsics;
 pub(crate) use intrinsics::{
-    PrimitiveIntrinsic, constructor_function_prototype, constructor_object_prototype,
+    ErrorKind, PrimitiveIntrinsic, constructor_function_prototype, constructor_object_prototype,
 };
 mod eval_cache;
 mod realm;

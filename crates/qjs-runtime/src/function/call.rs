@@ -1313,12 +1313,19 @@ fn selected_function_creation(function: &Function) -> Rc<crate::context::Creatio
         let value = function
             .own_property(DYNAMIC_FUNCTION_REALM_GLOBAL)
             .map_or(Value::Undefined, |property| property.value);
-        Rc::make_mut(&mut creation).global = crate::context::GlobalSelection::from_control(value);
+        let selected = Rc::make_mut(&mut creation);
+        selected.intrinsics = match &value {
+            Value::Object(global) => crate::context::IntrinsicOverrides::for_marked_global(global),
+            _ => Default::default(),
+        };
+        selected.global = crate::context::GlobalSelection::from_control(value);
     } else if function.has_dynamic_function_realm
         && matches!(creation.global, crate::context::GlobalSelection::Default)
         && let Some(global) = creation.realm.dynamic_function_realm_global()
     {
-        Rc::make_mut(&mut creation).global = crate::context::GlobalSelection::Override(global);
+        let selected = Rc::make_mut(&mut creation);
+        selected.intrinsics = crate::context::IntrinsicOverrides::for_marked_global(&global);
+        selected.global = crate::context::GlobalSelection::Override(global);
     }
     creation
 }
