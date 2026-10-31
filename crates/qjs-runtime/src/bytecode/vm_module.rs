@@ -37,12 +37,11 @@ pub(super) fn eval_prelude_script(bytecode: &Bytecode, realm: &Realm) -> Result<
 }
 
 /// Builds a fresh realm for a module graph: built-ins, a graph-private
-/// `globalThis`, and `this` = undefined (module top-level `this`).
+/// `globalThis`. Module entry separately initializes its undefined receiver.
 pub(super) fn new_module_realm() -> Realm {
     let mut globals = HashMap::new();
     let atoms = crate::property::atom::AtomDomain::new();
     let global_this = Value::Object(ObjectRef::new(HashMap::new(), &atoms));
-    globals.insert("this".to_owned(), Value::Undefined);
     globals.insert(GLOBAL_THIS_BINDING.to_owned(), global_this.clone());
     globals.insert("undefined".to_owned(), Value::Undefined);
     let realm: Realm = crate::function::new_realm_sharing_atoms(globals, atoms);
@@ -76,7 +75,10 @@ pub(super) fn eval_module_body(
     let mut env = CallEnv::new(Rc::clone(realm));
     // Module this is initialized undefined, including when an arrow captures
     // it into a positional cell before the first computed key runs.
-    env.insert("this".to_owned(), Value::Undefined);
+    env.set_call_owner(crate::context::CallOwner::root(
+        Value::Undefined,
+        crate::context::OwnerKind::Module,
+    ));
     // Wire the realm's dynamic-import host so an `import()` in this module body
     // (or in a closure it creates) can load further modules.
     if let Some(host) = host {
@@ -123,7 +125,10 @@ pub(super) fn eval_module_function_hoists(
     let mut env = CallEnv::new(Rc::clone(realm));
     // Module this is initialized undefined, including when an arrow captures
     // it into a positional cell before the first computed key runs.
-    env.insert("this".to_owned(), Value::Undefined);
+    env.set_call_owner(crate::context::CallOwner::root(
+        Value::Undefined,
+        crate::context::OwnerKind::Module,
+    ));
     if let Some(host) = host {
         env.set_module_host(host);
     }

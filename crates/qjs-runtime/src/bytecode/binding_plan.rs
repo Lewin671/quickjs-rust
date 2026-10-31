@@ -82,6 +82,7 @@ pub(super) struct BindingPlan {
     pub(super) parameters: ParameterInfo,
     pub(super) dynamic_scope_tree: bool,
     pub(super) needs_receiver: bool,
+    pub(super) needs_lexical_owner: bool,
     pub(super) reads_new_target: bool,
     pub(super) prologue_end: Option<usize>,
 }
@@ -191,8 +192,15 @@ impl BindingPlan {
                 ..ParameterInfo::default()
             },
             dynamic_scope_tree,
+            needs_lexical_owner: bytecode.uses_lexical_this()
+                || bytecode.contains_super_operation()
+                || bytecode.contains_direct_eval()
+                || bytecode.code.iter().any(|op| {
+                    matches!(op, Op::LoadNewTarget)
+                        || matches!(op, Op::NewFunction { lexical_this: true, bytecode, .. }
+                        if bytecode.needs_lexical_owner())
+                }),
             needs_receiver: bytecode.uses_lexical_this()
-                || bytecode.this_slot().is_some()
                 || bytecode.contains_super_operation()
                 || nested_receiver(bytecode)
                 || dynamic_scope_tree,

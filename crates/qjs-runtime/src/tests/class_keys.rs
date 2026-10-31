@@ -107,3 +107,32 @@ fn catch_cleanup_preserves_the_enclosing_arguments_cell() {
         Ok(Value::String("m:m".into()))
     );
 }
+
+#[test]
+fn field_and_static_restrictions_follow_arrows_but_stop_at_ordinary_functions() {
+    assert_eq!(
+        eval(
+            r#"let results = []; class C {
+        value = (() => { try { eval('arguments'); } catch(e) { results.push(e instanceof SyntaxError); }
+            return function () { return eval('typeof arguments'); }; })();
+        static { const read = () => { try { eval('arguments'); } catch(e) { return e instanceof SyntaxError; } };
+            results.push(read());
+            results.push((function () { return eval('typeof arguments'); })());
+            results.push(eval('new.target') === undefined);
+        }
+    } results.push(new C().value()); results.join(':');"#
+        ),
+        Ok(Value::String("true:object:true:true:object".into()))
+    );
+}
+
+#[test]
+fn public_property_named_this_cannot_replace_the_script_receiver() {
+    assert_eq!(
+        eval(
+            r#"globalThis.this = 8;
+        const read = () => this; (0, eval)('this === globalThis') + ':' + (read() === globalThis);"#
+        ),
+        Ok(Value::String("true:true".into()))
+    );
+}

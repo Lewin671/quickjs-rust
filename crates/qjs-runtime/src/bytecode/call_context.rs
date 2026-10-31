@@ -26,8 +26,12 @@ impl Bytecode {
             && !self.needs_arguments_object()
     }
 
-    /// Includes separately compiled keys and lexical arrows using this call's
+    /// Includes inline keys and lexical arrows using this call's
     /// receiver. Receiver-owning children are separate call-context boundaries.
+    pub(crate) fn needs_lexical_owner(&self) -> bool {
+        self.binding_plan.needs_lexical_owner
+    }
+
     pub(crate) fn needs_call_receiver(&self) -> bool {
         self.binding_plan.needs_receiver
     }

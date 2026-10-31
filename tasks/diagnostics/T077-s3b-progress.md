@@ -210,4 +210,36 @@ NG script fixture covers caller homonym writes, sloppy immutable writes and
 parameter shadowing where the independent oracle agrees. No Test262 exclusion
 or expected-failure change is made. Full runtime tests pass (2,546 before the
 last identity test); all five lowest-layer scope tests and 280 NG fixtures pass.
-Agents/perf-counters compilation and Clippy pass. Final staged gate pending.
+Agents/perf-counters compilation and Clippy pass. Staged gate passes at `e9c4e4e1`, including 117 selected Test262 cases.
+
+## B4b typed lexical call owners
+
+CallOwner/ThisBinding/LexicalCallContext now own receiver, lexical target,
+home/super, active constructor and script/module/function/field/static kind.
+Retention moves Inline into one shared Rc and redirects the original. Arrows
+retain that owner in Function cold state only when their compiled operations or
+lexical descendants demand it; parameter-only arrows allocate no lexical owner
+or cold lexical state. A generator-key identity test proves the same owner is
+retained by arrows before/after yield, with the original receiver. Snapshots
+retain the owner through their existing environment handle; no owner is reset
+on resume.
+
+Deleted: receiver capture-slot synthesis and forced-this capture scan, Bytecode
+this_slot and its initialization/super mirrors, receiver entries in root realm
+maps, derived-this-special value forks, captured new.target cells and the extra
+lexical-derived-this pair. Removed all receiver/home/super/active-constructor/
+field/function-context/new-target marker constants and their runtime consumers.
+The remaining keyword-shaped IR load selects the typed receiver directly.
+Native construct dispatch uses a separate typed pending target until B5's borrowed
+NativeSite; it cannot replace lexical new.target. Direct constructor shortcuts
+now initialize that owner at entry. Fields/static blocks set their own kind;
+eval restrictions follow arrows and stop at ordinary functions. Script root
+receiver selection uses the global object, preserving it when globalThis.this
+is written. Module entry initializes undefined, without an implicit binding cell.
+
+This is a B4 sub-cut, not the Context ABI switch: CreationContext/ActivationContext
+wrapping, generic binding reference selection and the final compatibility deletion
+remain. Verification on this working tree: 2,554 runtime tests, 282 NG script
+fixtures, Clippy/workspace/all-targets and agents/perf-counters compile pass.
+The recovered module still exits 0 and matches both output lines against NG with
+TZ=UTC. Staged gate pending. No S3b exit or performance standing is claimed.

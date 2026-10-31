@@ -14,6 +14,7 @@ mod binding;
 mod boolean;
 mod builtins;
 mod bytecode;
+mod context;
 mod conversion;
 mod data_view;
 mod date;
@@ -112,23 +113,6 @@ pub(crate) const DIRECT_EVAL_PARAMETER_VAR_BINDING_PREFIX: &str = "\0\0direct_ev
 /// a sloppy-global fallback local: later assignments in the function write
 /// that variable, not the global of the same name.
 pub(crate) const DIRECT_EVAL_FUNCTION_VAR_BINDING_PREFIX: &str = "\0\0direct_eval_function_var:";
-pub(crate) const DIRECT_EVAL_FUNCTION_CONTEXT_BINDING: &str = "\0\0direct_eval_function_context";
-/// Per-frame marker used by direct eval to apply class-field-initializer early
-/// errors.
-pub(crate) const FIELD_INITIALIZER_EVAL_BINDING: &str = "\0field_initializer_eval";
-/// Per-frame `[[HomeObject]]` for resolving `super.x`. Single-null prefixed so
-/// it never collides with user identifiers but is not treated as an internal
-/// destructuring binding (which use a double-null prefix).
-pub(crate) const HOME_OBJECT_BINDING: &str = "\0home_object";
-/// Per-frame `new.target`, propagated through `super(...)`.
-pub(crate) const NEW_TARGET_BINDING: &str = "\0new_target";
-/// Per-frame parent constructor invoked by `super(...)` in a derived
-/// constructor.
-pub(crate) const SUPER_CONSTRUCTOR_BINDING: &str = "\0super_constructor";
-/// Per-frame class constructor currently executing, used so a derived
-/// constructor can initialize its instance fields once `super(...)` binds
-/// `this`.
-pub(crate) const ACTIVE_CONSTRUCTOR_BINDING: &str = "\0active_constructor";
 /// Runtime error.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RuntimeError {

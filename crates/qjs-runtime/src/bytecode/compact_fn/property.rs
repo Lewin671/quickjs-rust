@@ -662,9 +662,7 @@ pub(in crate::bytecode) fn load_global_cached(
         }
     }
     let value = load_global(name, env)?;
-    if name != crate::NEW_TARGET_BINDING
-        && let Some(cell) = realm.cell(name)
-    {
+    if let Some(cell) = realm.cell(name) {
         *site.0.borrow_mut() = Some((realm.clone(), realm.generation(), cell));
     }
     Ok(value)

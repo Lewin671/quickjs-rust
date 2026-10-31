@@ -1,6 +1,6 @@
 use crate::{
-    ArrayRef, CallEnv, Function, NEW_TARGET_BINDING, Prototype, RuntimeError, Value,
-    array_prototype, property_value, symbol,
+    ArrayRef, CallEnv, Function, Prototype, RuntimeError, Value, array_prototype, property_value,
+    symbol,
 };
 
 const CROSS_REALM_ARRAY_PROTOTYPE: &str = "__quickjsRustRealmArrayPrototype";
@@ -21,7 +21,7 @@ pub(super) fn array_constructor_prototype_slot(
         return Ok(None);
     }
     let new_target = env
-        .get(NEW_TARGET_BINDING)
+        .construct_target()
         .unwrap_or_else(|| Value::Function(function.clone()));
     let prototype = property_value(new_target.clone(), "prototype", env)?;
     if let Some(prototype) = array_prototype_slot_from_value(prototype, env) {

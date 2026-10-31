@@ -29,7 +29,8 @@ never freed.
 ## What a suspended frame owns
 
 `GeneratorSnapshot` owns the `Rc<Bytecode>`, `ip`, operand stack, `locals`,
-`local_upvalues`, received `upvalues`, `CallEnv`, retained scope instances/holders,
+`local_upvalues`, received `upvalues`, `CallEnv` with its typed lexical owner,
+retained scope instances/holders,
 selected binding references, partial class-definition regions/private overlays,
 `with_stack`, the immutable
 function name, the try stack, disposable scopes, the pending

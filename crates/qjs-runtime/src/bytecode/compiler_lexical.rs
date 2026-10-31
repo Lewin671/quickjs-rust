@@ -235,27 +235,6 @@ impl Compiler {
                 });
             }
         }
-        // Lexical `this` and every `super` operation use the surrounding
-        // `this` binding implicitly, so they may have no identifier load/store
-        // for the ordinary name scan above to discover. Arrow functions omit
-        // `this` from `function_local_names`; force that outer slot into their
-        // received-upvalue plan. Ordinary methods/constructors retain their own
-        // `this` local and do not enter this branch.
-        if function_bytecode.needs_call_receiver()
-            && function_local_names
-                .binary_search_by(|local| local.as_str().cmp("this"))
-                .is_err()
-            && let Some(slot) = self.resolve_active_capture_slot("this", false)
-            && !captures
-                .iter()
-                .any(|capture: &LexicalCapture| capture.slot == slot)
-        {
-            captures.push(LexicalCapture {
-                name: "this".to_owned(),
-                storage_name: self.locals[slot].name.clone(),
-                slot,
-            });
-        }
         captures
     }
 

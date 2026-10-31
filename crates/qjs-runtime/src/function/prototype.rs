@@ -233,12 +233,12 @@ fn build_dynamic_function(
         is_strict,
         lexical_this: false,
         lexical_arguments: false,
-        lexical_new_target: None,
+        lexical_call: None,
         is_generator,
         is_async,
         is_class_constructor: false,
         is_derived_constructor: false,
-        is_field_initializer: false,
+        owner_kind: crate::context::OwnerKind::Function,
         home_object: None,
         super_constructor: None,
         lexical_scope: None,
@@ -272,7 +272,7 @@ fn construct_prototype_slot_with_realm_marker(
     env: &mut CallEnv,
     marker: &str,
 ) -> Result<Option<Prototype>, RuntimeError> {
-    if let Some(Value::Function(new_target)) = env.get(crate::NEW_TARGET_BINDING)
+    if let Some(Value::Function(new_target)) = env.construct_target()
         && let Some(Value::Object(realm_prototype)) = new_target
             .own_property(marker)
             .map(|property| property.value)
@@ -297,7 +297,7 @@ fn dynamic_function_construct_prototype_slot(
     constructor: &Function,
     env: &mut CallEnv,
 ) -> Result<Option<Prototype>, RuntimeError> {
-    if let Some(Value::Function(new_target)) = env.get(crate::NEW_TARGET_BINDING)
+    if let Some(Value::Function(new_target)) = env.construct_target()
         && let Some(realm_prototype) = new_target
             .own_property(FUNCTION_REALM_PROTOTYPE)
             .and_then(|property| dynamic_prototype_slot_from_value(property.value, env))

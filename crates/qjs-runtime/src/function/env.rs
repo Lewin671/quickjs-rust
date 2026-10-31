@@ -540,17 +540,13 @@ impl FrameBindings {
             .collect()
     }
 
-    fn fork_values(&self, preserve_derived_this: bool) -> Self {
+    fn fork_values(&self) -> Self {
         Self(RefCell::new(
             self.0
                 .borrow()
                 .iter()
                 .map(|(name, value)| {
-                    let forked = if preserve_derived_this && name == "this" {
-                        value.clone()
-                    } else {
-                        FrameBindingValue::Direct(value.get())
-                    };
+                    let forked = FrameBindingValue::Direct(value.get());
                     (name.clone(), forked)
                 })
                 .collect(),
@@ -845,13 +841,10 @@ impl IntoIterator for BindingSnapshot {
 pub(crate) struct CallEnv {
     scope: Realm,
     frame_bindings: FrameBindings,
-    /// `new.target` for this frame. It used to travel as a NUL-prefixed frame
-    /// binding, which cost a name allocation and a linear frame-binding scan on
-    /// entry and exit of every `new`, and left the caller's binding vector
-    /// non-empty for the duration. A dedicated slot removes all of that; the
-    /// name-keyed accessors below still answer for it so every reader is
-    /// unchanged.
-    new_target: Option<Value>,
+    /// Temporary construct-dispatch target, separate from lexical new.target.
+    /// B5 moves this borrowed target source into the native call facade.
+    construct_target: Option<Value>,
+    call: RefCell<crate::context::LexicalCallContext>,
     deopt_bindings: Option<DynamicBindings>,
     scope_cursor: Option<crate::binding::ScopeCursor>,
     global_binding_root: bool,
@@ -872,7 +865,7 @@ pub(crate) struct CallEnv {
     /// detach only when direct-eval setup rebuilds the active conflict names.
     direct_eval_var_conflicts: Option<Rc<HashSet<String>>>,
     /// The lexical private-name environment active for this frame. This is
-    /// separate from `\0home_object`: ordinary nested functions do not inherit
+    /// separate from the typed home object: ordinary nested functions do not inherit
     /// `super`, but they do retain access to private names declared by enclosing
     /// classes.
     private_environment: Option<PrivateEnvironment>,
@@ -911,7 +904,8 @@ impl Clone for CallEnv {
             // cells themselves are shared only when a direct-eval/with deopt
             // path explicitly requests that identity.
             frame_bindings: self.frame_bindings.clone(),
-            new_target: self.new_target.clone(),
+            construct_target: self.construct_target.clone(),
+            call: RefCell::new(self.call.borrow_mut().shared_view()),
             deopt_bindings: self.deopt_bindings.clone(),
             scope_cursor: self.scope_cursor.clone(),
             global_binding_root: self.global_binding_root,
@@ -949,12 +943,64 @@ impl std::fmt::Debug for CallEnv {
 
 #[allow(dead_code)]
 impl CallEnv {
+    pub(crate) fn set_call_owner(&mut self, owner: crate::context::CallOwner) {
+        *self.call.borrow_mut() = crate::context::LexicalCallContext::Inline(owner);
+    }
+    pub(crate) fn inherit_call_owner(&mut self, owner: Rc<crate::context::CallOwner>) {
+        *self.call.borrow_mut() = crate::context::LexicalCallContext::Shared(owner);
+    }
+    pub(crate) fn capture_call_owner(&self) -> Option<Rc<crate::context::CallOwner>> {
+        self.call.borrow_mut().capture()
+    }
+    fn this_compatibility_value(&self) -> Option<Value> {
+        self.call.borrow().owner().map(|owner| {
+            owner
+                .this
+                .read()
+                .unwrap_or_else(|_| Value::Function(Function::uninitialized_lexical_marker()))
+        })
+    }
+    pub(crate) fn this_value(&self) -> Result<Value, crate::RuntimeError> {
+        self.call
+            .borrow()
+            .owner()
+            .map_or(Ok(Value::Undefined), |owner| owner.this.read())
+    }
+    pub(crate) fn lexical_new_target(&self) -> Option<Value> {
+        self.call
+            .borrow()
+            .owner()
+            .and_then(|owner| owner.new_target.clone())
+    }
+    pub(crate) fn home_object(&self) -> Option<Value> {
+        self.call
+            .borrow()
+            .owner()
+            .and_then(|owner| owner.home.clone())
+    }
+    pub(crate) fn super_constructor(&self) -> Option<Value> {
+        self.call
+            .borrow()
+            .owner()
+            .and_then(|owner| owner.super_constructor.clone())
+    }
+    pub(crate) fn active_constructor(&self) -> Option<Value> {
+        self.call
+            .borrow()
+            .owner()
+            .and_then(|owner| owner.active_constructor.clone())
+    }
+    pub(crate) fn owner_kind(&self) -> Option<crate::context::OwnerKind> {
+        self.call.borrow().owner().map(|owner| owner.kind)
+    }
+
     /// Builds an environment over `realm` with empty locals.
     pub(crate) fn new(realm: Realm) -> Self {
         Self {
             scope: realm,
             frame_bindings: FrameBindings::default(),
-            new_target: None,
+            construct_target: None,
+            call: RefCell::default(),
             deopt_bindings: None,
             scope_cursor: None,
             global_binding_root: false,
@@ -1075,7 +1121,8 @@ impl CallEnv {
         Self {
             scope: new_realm(HashMap::new()),
             frame_bindings: FrameBindings::default(),
-            new_target: None,
+            construct_target: None,
+            call: RefCell::default(),
             deopt_bindings: None,
             scope_cursor: None,
             global_binding_root: false,
@@ -1101,7 +1148,8 @@ impl CallEnv {
         Self {
             scope: new_realm(map),
             frame_bindings: FrameBindings::default(),
-            new_target: None,
+            construct_target: None,
+            call: RefCell::default(),
             deopt_bindings: None,
             scope_cursor: None,
             global_binding_root: false,
@@ -1125,7 +1173,8 @@ impl CallEnv {
         Self {
             scope: realm,
             frame_bindings: FrameBindings::from_values(locals),
-            new_target: None,
+            construct_target: None,
+            call: RefCell::default(),
             deopt_bindings: None,
             scope_cursor: None,
             global_binding_root: false,
@@ -1172,7 +1221,8 @@ impl CallEnv {
         Self {
             scope: Rc::clone(&self.scope),
             frame_bindings: FrameBindings::with_capacity(capacity),
-            new_target: None,
+            construct_target: None,
+            call: RefCell::default(),
             deopt_bindings: None,
             scope_cursor: None,
             global_binding_root: false,
@@ -1200,7 +1250,8 @@ impl CallEnv {
         Self {
             scope: Rc::clone(&self.scope),
             frame_bindings: FrameBindings::default(),
-            new_target: None,
+            construct_target: None,
+            call: RefCell::default(),
             deopt_bindings: None,
             scope_cursor: None,
             global_binding_root: false,
@@ -1479,8 +1530,10 @@ impl CallEnv {
     /// an owned value because a value behind the realm `RefCell` cannot be
     /// handed out by reference.
     pub(crate) fn get(&self, name: &str) -> Option<Value> {
-        if name == crate::NEW_TARGET_BINDING {
-            return self.new_target.clone();
+        if name == "this"
+            && let Some(value) = self.this_compatibility_value()
+        {
+            return Some(value);
         }
         if let Some(value) = self.frame_bindings.get(name) {
             return Some(value);
@@ -1634,32 +1687,19 @@ impl CallEnv {
             || self.scope.contains(name)
     }
 
-    /// Inserts a frame-local binding (`this`, params, captures, caller-scope
-    /// bindings). The VM write-back routes these to real locals-or-globals via
-    /// `local_slot`. Realm/global definitions use [`CallEnv::insert_realm`].
-    /// Installs `new.target` for this frame, returning the previous value.
-    /// `construct_function` restores it on the way out, so the ordinary call
-    /// path never allocates a binding name for it.
-    pub(crate) fn set_new_target(&mut self, value: Option<Value>) -> Option<Value> {
+    /// Construct dispatch target only. The lexical new.target stays in the
+    /// call owner and cannot be overwritten by nested native calls.
+    pub(crate) fn construct_target(&self) -> Option<Value> {
+        self.construct_target.clone()
+    }
+    pub(crate) fn set_construct_target(&mut self, value: Option<Value>) -> Option<Value> {
         match value {
-            Some(value) => self.new_target.replace(value),
-            None => self.new_target.take(),
+            Some(value) => self.construct_target.replace(value),
+            None => self.construct_target.take(),
         }
     }
 
     pub(crate) fn insert(&mut self, name: String, value: Value) -> Option<Value> {
-        if name == crate::NEW_TARGET_BINDING {
-            return self.new_target.replace(value);
-        }
-        // An inherited dynamic scope can still carry another activation's
-        // `this`. The current implicit cell always wins over that named view.
-        if name == "this"
-            && let Some(cell) = self.derived_this_cell()
-        {
-            let previous = cell.get();
-            cell.set(value);
-            return Some(previous);
-        }
         if let Some(bindings) = &self.deopt_bindings
             && bindings.contains_key(&name)
         {
@@ -1785,9 +1825,6 @@ impl CallEnv {
 
     /// Removes a frame-local binding.
     pub(crate) fn remove(&mut self, name: &str) -> Option<Value> {
-        if name == crate::NEW_TARGET_BINDING {
-            return self.new_target.take();
-        }
         if let Some(bindings) = &self.deopt_bindings
             && bindings.contains_key(name)
         {
@@ -1798,6 +1835,9 @@ impl CallEnv {
 
     /// Mutates an existing frame-local binding in place, if present.
     pub(crate) fn get_local(&self, name: &str) -> Option<Value> {
+        if name == "this" {
+            return self.this_compatibility_value();
+        }
         self.frame_bindings.get(name).or_else(|| {
             self.deopt_bindings
                 .as_ref()
@@ -1806,10 +1846,16 @@ impl CallEnv {
     }
 
     pub(crate) fn has_frame_binding(&self, name: &str) -> bool {
+        if name == "this" {
+            return self.call.borrow().owner().is_some();
+        }
         self.frame_bindings.contains_key(name)
     }
 
     pub(crate) fn has_local_binding(&self, name: &str) -> bool {
+        if name == "this" {
+            return self.call.borrow().owner().is_some();
+        }
         self.frame_bindings.contains_key(name)
             || self
                 .deopt_bindings
@@ -1841,6 +1887,9 @@ impl CallEnv {
     }
 
     pub(crate) fn frame_binding_cell(&self, name: &str) -> Option<BindingCell> {
+        if name == "this" {
+            return self.derived_this_cell();
+        }
         self.frame_bindings.cell(name)
     }
 
@@ -1848,6 +1897,9 @@ impl CallEnv {
     /// dynamic environment, without falling through to the realm. Direct eval
     /// uses this to keep a same-named function local distinct from a global.
     pub(crate) fn local_binding_cell(&self, name: &str) -> Option<BindingCell> {
+        if name == "this" {
+            return self.derived_this_cell();
+        }
         self.frame_bindings.cell(name).or_else(|| {
             self.deopt_bindings
                 .as_ref()
@@ -1879,10 +1931,9 @@ impl CallEnv {
     pub(crate) fn fork_current_frame_values(&self) -> Self {
         Self {
             scope: Rc::clone(&self.scope),
-            frame_bindings: self
-                .frame_bindings
-                .fork_values(self.derived_this_cell().is_some()),
-            new_target: self.new_target.clone(),
+            frame_bindings: self.frame_bindings.fork_values(),
+            construct_target: self.construct_target.clone(),
+            call: RefCell::new(self.call.borrow_mut().shared_view()),
             deopt_bindings: None,
             scope_cursor: None,
             global_binding_root: self.global_binding_root,
@@ -1904,22 +1955,10 @@ impl CallEnv {
     /// The implicit binding of one derived activation, never a realm cell.
     /// Its marker denotes TDZ; forks and lexical arrows must retain identity.
     pub(crate) fn derived_this_cell(&self) -> Option<BindingCell> {
-        if !self
-            .frame_bindings
-            .contains_key(crate::ACTIVE_CONSTRUCTOR_BINDING)
-        {
-            return None;
-        }
-        self.frame_bindings
-            .0
+        self.call
             .borrow()
-            .iter()
-            .rev()
-            .find(|(name, _)| name == "this")
-            .and_then(|(_, value)| match value {
-                FrameBindingValue::Cell(cell) => Some(cell.clone()),
-                FrameBindingValue::Direct(_) => None,
-            })
+            .owner()
+            .and_then(|owner| owner.this.derived_cell())
     }
 }
 

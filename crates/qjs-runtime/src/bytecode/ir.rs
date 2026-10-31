@@ -691,7 +691,6 @@ pub struct Bytecode {
     /// The slot compiled for an own `this` local, if the body has one. Frame
     /// setup seeds the receiver here on every call, so it is resolved once
     /// rather than hashed per call.
-    this_slot: Option<usize>,
     /// `Some` when the whole body is `return <literal>`, the shape of a class
     /// field initializer like `x = 0` or `p = null`. A caller can use the value
     /// directly: such a body has no observable effect besides its result.
@@ -864,7 +863,6 @@ impl Bytecode {
         );
         let property_names = PropertyNamePool::assign(&mut code);
         let local_slots = collect_local_slots(&locals);
-        let this_slot = local_slots.get("this").copied();
         let constant_return = match code.as_slice() {
             [Op::LoadConst(index), Op::Return] => constants.get(*index).cloned(),
             _ => None,
@@ -872,7 +870,6 @@ impl Bytecode {
         let mut bytecode = Self {
             constants,
             local_slots,
-            this_slot,
             constant_return,
             parameter_slots,
             binding_plan: Box::default(),
@@ -1096,11 +1093,6 @@ impl Bytecode {
 
     pub(crate) fn local_slot(&self, name: &str) -> Option<usize> {
         self.local_slots.get(name).copied()
-    }
-
-    /// The slot of an own `this` local, precomputed at build time.
-    pub(crate) fn this_slot(&self) -> Option<usize> {
-        self.this_slot
     }
 
     /// The literal a `return <literal>` body produces, if that is the whole

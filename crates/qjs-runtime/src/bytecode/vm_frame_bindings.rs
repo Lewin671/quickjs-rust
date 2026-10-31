@@ -105,15 +105,6 @@ impl Vm<'_> {
                     local_upvalues[slot] = env.realm_binding_cell(&local.name);
                     continue;
                 }
-                if local.name == "this"
-                    && let Some(cell) = env.derived_this_cell()
-                {
-                    local_upvalues[slot] = Some(cell);
-                    if local.is_received_upvalue() {
-                        next_received += 1;
-                    }
-                    continue;
-                }
                 if let Some(upvalue) = env.module_import_cell(&local.name) {
                     local_upvalues[slot] = Some(upvalue);
                     if local.is_received_upvalue() {
@@ -198,11 +189,6 @@ impl Vm<'_> {
                 continue;
             }
             if local_upvalues[slot].is_some() {
-                continue;
-            }
-            if (local.name == "this" || bytecode.binding_plan.realm_lexical_slots[slot])
-                && local_upvalues[slot].is_some()
-            {
                 continue;
             }
             if local.is_received_upvalue() {

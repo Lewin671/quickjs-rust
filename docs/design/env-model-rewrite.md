@@ -112,17 +112,32 @@ that cell's TDZ. Tests: `direct_eval/self_binding.rs`, `binding/scope_tests.rs`.
 
 ## Lexical call context and remaining compatibility
 
-Derived constructor this uses one marker-initialized shared cell through the
-owner, declaring slot, eval and arrows. Super constructs Base before duplicate
-checking, binds before fields, preserves TDZ on Base failure and preserves binding
-on field failure. An object return may bypass an unbound this. Tests:
-`direct_eval/derived_this.rs` and the `derived-eval-*.js` comparison fixtures.
+`context/call_owner.rs` separates receiver, new.target, home/super, active
+constructor and field/static restrictions from declarative bindings. An ordinary
+activation owns this metadata inline. At lexical retention it moves into one Rc
+and the declaring activation redirects to that same owner. BindingPlan propagates
+owner demand through lexical arrows, including nested new.target/eval; parameter-only
+arrows retain no owner. Arguments remains a lexical binding.
+
+Derived this is one uninitialized BindingCell in the typed owner; no declaring
+slot or name-keyed mirror exists. Super constructs Base before duplicate checking,
+initializes the cell before fields, preserves TDZ on Base failure and preserves
+binding on field failure. An object return may bypass an unbound this. Root
+builders initialize script/module receivers explicitly; a public property named
+this cannot change them. Fields/static blocks establish their own receiver and
+restrictions, arrows inherit them, and ordinary nested calls establish new owners.
+Tests: `context/call_owner.rs`, `function/call_activation_tests.rs`,
+`direct_eval/derived_this.rs`, and `class_keys.rs`.
 
 `function/env.rs::CallEnv` still carries service/call metadata during the S3b
 migration. Its typed scope cursor/entry root selects canonical cells; compiler-owned
 cells are excluded from value apply-back so a stale native view cannot undo a
 callback. Remaining FrameBindings/deopt views, raw compatibility publishers and
-string call-context metadata are temporary and must disappear with Context.
+legacy eval/global-selection metadata are temporary and must disappear with Context.
+Receiver/home/super/constructor/field marker strings and synthetic this capture
+slots are deleted. The temporary typed construct-dispatch target is separate from
+lexical new.target; B5 moves its borrowed source into NativeSite.
+CreationContext/ActivationContext wrapping and the borrowed service ABI remain.
 Class keys execute inline between class-region operations. A cold continuation
 owns the partial class/private overlay across yield/await; handlers truncate
 regions to their entry depth. Heritage validation precedes keys, each method

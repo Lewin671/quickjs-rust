@@ -33,10 +33,9 @@ fn positional_entry_omits_parameter_names_and_static_eval_marker() {
                 assert!(!prepared.env.has_frame_binding(name), "{name}");
             }
             assert!(prepared.env.has_frame_binding("tail"));
-            assert!(
-                !prepared
-                    .env
-                    .has_frame_binding(crate::DIRECT_EVAL_FUNCTION_CONTEXT_BINDING)
+            assert_eq!(
+                prepared.env.owner_kind(),
+                Some(crate::context::OwnerKind::Function)
             );
         },
     );
@@ -335,4 +334,48 @@ fn static_coercion_hooks_update_the_shared_parameter_cell() {
         ),
         Ok(Value::String("7:1".to_owned().into()))
     );
+}
+
+#[test]
+fn class_key_arrows_retain_one_lexical_owner_across_resume() {
+    let value = eval(
+        r#"let first, second; const receiver = {};
+        function* g() { class C { #p;
+            [(first = () => this, #p in {}, yield 'key', second = () => this, 'm')]() {}
+        } }
+        const it = g.call(receiver); it.next(); it.next(); [first, second, receiver];"#,
+    )
+    .unwrap();
+    let Value::Array(values) = value else {
+        panic!("array result");
+    };
+    let values = values.to_vec();
+    let (Value::Function(first), Value::Function(second)) = (&values[0], &values[1]) else {
+        panic!("key closures");
+    };
+    let first = first.lexical_call().unwrap();
+    let second = second.lexical_call().unwrap();
+    assert!(std::rc::Rc::ptr_eq(&first, &second));
+    assert_eq!(first.this.read(), Ok(values[2].clone()));
+    assert_eq!(first.kind, crate::context::OwnerKind::Function);
+}
+
+#[test]
+fn parameter_only_arrow_does_not_retain_a_lexical_owner() {
+    let value = eval("(value => value + 1);").unwrap();
+    let Value::Function(function) = value else {
+        panic!("arrow");
+    };
+    assert!(function.lexical_call().is_none());
+    assert!(!function.has_cold_lexical_state());
+}
+
+#[test]
+fn nested_arrow_new_target_demand_retains_the_original_owner() {
+    let value = eval("function F() { return () => () => new.target; } new F();").unwrap();
+    let Value::Function(function) = value else {
+        panic!("outer arrow");
+    };
+    let owner = function.lexical_call().expect("nested new.target owner");
+    assert!(matches!(owner.new_target, Some(Value::Function(_))));
 }

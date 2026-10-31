@@ -1148,7 +1148,10 @@ fn indirect_eval_frame(env: &CallEnv) -> CallEnv {
         Value::Object(global.clone()),
     );
     eval_env.insert("globalThis".to_owned(), Value::Object(global.clone()));
-    eval_env.insert("this".to_owned(), Value::Object(global.clone()));
+    eval_env.set_call_owner(crate::context::CallOwner::root(
+        Value::Object(global.clone()),
+        crate::context::OwnerKind::Script,
+    ));
     for name in global.own_property_names() {
         if name.starts_with('\0') {
             continue;
@@ -1297,19 +1300,14 @@ pub(crate) fn direct_eval_parse_context(env: &CallEnv) -> EvalParseContext {
             env.get(crate::DIRECT_EVAL_STRICT_BINDING),
             Some(Value::Boolean(true))
         ),
-        in_function: matches!(
-            env.get(crate::DIRECT_EVAL_FUNCTION_CONTEXT_BINDING),
-            Some(Value::Boolean(true))
-        ) || matches!(
-            env.get(crate::FIELD_INITIALIZER_EVAL_BINDING),
-            Some(Value::Boolean(true))
-        ),
-        in_method: env.get_local(crate::HOME_OBJECT_BINDING).is_some(),
-        in_derived_constructor: env.get(crate::SUPER_CONSTRUCTOR_BINDING).is_some(),
-        in_field_initializer: matches!(
-            env.get(crate::FIELD_INITIALIZER_EVAL_BINDING),
-            Some(Value::Boolean(true))
-        ),
+        in_function: env
+            .owner_kind()
+            .is_some_and(crate::context::OwnerKind::in_function),
+        in_method: env.home_object().is_some(),
+        in_derived_constructor: env.super_constructor().is_some(),
+        in_field_initializer: env
+            .owner_kind()
+            .is_some_and(crate::context::OwnerKind::forbids_arguments),
         private_names: env
             .private_environment()
             .map_or_else(Vec::new, |environment| environment.visible_names()),
@@ -1508,9 +1506,12 @@ fn initialize_direct_eval_bindings(
     // An existing derived-this cell can hold the TDZ marker. Presence must
     // preserve it, including strict eval copies, rather than seed realm this.
     if !env.has_local_binding("this")
-        && let Some(value) = env.get("this")
+        && let Some(value) = env.selected_global_this().or_else(|| env.get("this"))
     {
-        env.insert("this".to_owned(), value);
+        env.set_call_owner(crate::context::CallOwner::root(
+            value,
+            crate::context::OwnerKind::Script,
+        ));
     }
     for name in bytecode.hoisted_local_names() {
         if !eval_strict
@@ -1557,9 +1558,12 @@ fn initialize_direct_eval_bindings(
 
 fn initialize_eval_script_bindings(bytecode: &crate::bytecode::Bytecode, env: &mut CallEnv) {
     if !env.has_local_binding("this")
-        && let Some(value) = env.get("this")
+        && let Some(value) = env.selected_global_this().or_else(|| env.get("this"))
     {
-        env.insert("this".to_owned(), value);
+        env.set_call_owner(crate::context::CallOwner::root(
+            value,
+            crate::context::OwnerKind::Script,
+        ));
     }
     for name in bytecode.hoisted_local_names() {
         let global_this = env.get(GLOBAL_THIS_BINDING).and_then(|value| match value {

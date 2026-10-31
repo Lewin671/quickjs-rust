@@ -24,7 +24,6 @@ impl<'a> Vm<'a> {
         let mut globals = HashMap::new();
         let atoms = crate::property::atom::AtomDomain::new();
         let global_this = Value::Object(ObjectRef::new(HashMap::new(), &atoms));
-        globals.insert("this".to_owned(), global_this.clone());
         globals.insert(GLOBAL_THIS_BINDING.to_owned(), global_this.clone());
         globals.insert("undefined".to_owned(), Value::Undefined);
         // The realm cell is live before builtin installation: every `install_*`
@@ -95,6 +94,22 @@ impl<'a> Vm<'a> {
     ) -> Self {
         crate::diagnostics::count!(nested_vm_constructions);
         let bytecode: &Bytecode = &handle;
+        if env.owner_kind().is_none() {
+            let kind = if bytecode.binding_plan.scopes[0].kind == crate::binding::ScopeKind::Module
+            {
+                crate::context::OwnerKind::Module
+            } else {
+                crate::context::OwnerKind::Script
+            };
+            let receiver = if kind == crate::context::OwnerKind::Module {
+                Value::Undefined
+            } else {
+                env.selected_global_this()
+                    .or_else(|| env.get("this"))
+                    .unwrap_or(Value::Undefined)
+            };
+            env.set_call_owner(crate::context::CallOwner::root(receiver, kind));
+        }
         if bytecode.global_scope {
             env.select_script_bindings();
         }
@@ -255,20 +270,11 @@ impl<'a> Vm<'a> {
     }
 
     pub(super) fn seed_direct_call_slots(
-        bytecode: &Bytecode,
+        _bytecode: &Bytecode,
         locals: &mut [Slot],
         direct_call_slots: DirectCallSlots<'_>,
     ) -> Option<Value> {
-        let direct_this = if let Some(this_value) = direct_call_slots.this_value {
-            if let Some(slot) = bytecode.this_slot() {
-                locals[slot] = Some(this_value);
-                None
-            } else {
-                Some(this_value)
-            }
-        } else {
-            None
-        };
+        let direct_this = direct_call_slots.this_value;
         Self::seed_positional_arguments(
             direct_call_slots.parameter_slots,
             locals,
@@ -313,7 +319,7 @@ impl<'a> Vm<'a> {
             }
             if let Some(value) = self.local_slot_value(index) {
                 let name = self.bytecode.locals[index].name.clone();
-                if name == "this" && env.derived_this_cell().is_some() {
+                if name == "this" {
                     continue;
                 }
                 // Slots are emitted in lexical declaration order. Inserting every
@@ -339,7 +345,7 @@ impl<'a> Vm<'a> {
             if self.locals.get(index).is_some_and(Option::is_some)
                 || self.bytecode.locals[index].is_received_upvalue()
             {
-                if self.bytecode.locals[index].name == "this" && env.derived_this_cell().is_some() {
+                if self.bytecode.locals[index].name == "this" {
                     continue;
                 }
                 env.insert_frame_cell(self.bytecode.locals[index].name.clone(), upvalue.clone());

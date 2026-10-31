@@ -18,9 +18,8 @@ use std::{collections::HashMap, rc::Rc};
 use qjs_ast::FunctionParams;
 
 use crate::{
-    ArrayRef, Bytecode, DIRECT_EVAL_ARGUMENTS_BINDING, DIRECT_EVAL_FUNCTION_CONTEXT_BINDING,
-    FIELD_INITIALIZER_EVAL_BINDING, Function, GLOBAL_THIS_BINDING, NativeFunction, ObjectRef,
-    RuntimeError, Value,
+    ArrayRef, Bytecode, DIRECT_EVAL_ARGUMENTS_BINDING, Function, GLOBAL_THIS_BINDING,
+    NativeFunction, ObjectRef, RuntimeError, Value,
     bytecode::{
         DirectCallSlots, DirectCallUpvalues, eval_call_bytecode, eval_direct_call_bytecode,
         eval_function_bytecode, try_eval_numeric_leaf, try_eval_this_property_leaf,
@@ -405,7 +404,7 @@ pub(crate) fn call_direct_leaf_function(
         env: mut call_env,
         direct_call_slots,
         ..
-    } = direct_leaf_function_env(function, bytecode, this_value, argument_values, env);
+    } = direct_leaf_function_env(function, bytecode, this_value, argument_values, env, None);
     if call_env.module_host_ref().is_none()
         && let Some(host) = module_host
     {
@@ -485,9 +484,8 @@ pub(crate) fn try_construct_direct_leaf_function(
         Value::Object(receiver.clone()),
         argument_values,
         env,
+        Some(callee.clone()),
     );
-    // `new.target` is the constructor itself for a direct `new` expression.
-    call_env.set_new_target(Some(callee.clone()));
     if call_env.module_host_ref().is_none()
         && let Some(host) = module_host
     {
@@ -965,7 +963,7 @@ pub(crate) fn construct_function_slice(
 
     // Make `new.target` visible to the constructor frame (and, via `super(...)`,
     // to ancestor constructors) so subclass instances get the right prototype.
-    let previous_new_target = env.set_new_target(Some(new_target.clone()));
+    let previous_new_target = env.set_construct_target(Some(new_target.clone()));
 
     // A derived constructor must create its `this` through `super(...)`, so it
     // receives no pre-built receiver. Some native constructors also need to run
@@ -1004,7 +1002,7 @@ pub(crate) fn construct_function_slice(
             _ => Ok(this_value),
         }
     })();
-    env.set_new_target(previous_new_target);
+    env.set_construct_target(previous_new_target);
     result
 }
 
@@ -1184,6 +1182,7 @@ fn direct_leaf_function_env<'a>(
     this_value: Value,
     argument_values: &'a [Value],
     env: &CallEnv,
+    new_target: Option<Value>,
 ) -> FunctionCallEnv<'a> {
     // Ordinary leaf calls and direct base class constructions both reach
     // this frame; the class-constructor TypeError is the caller's concern.
@@ -1200,6 +1199,16 @@ fn direct_leaf_function_env<'a>(
     } else {
         None
     };
+    if let Some(owner) = function.lexical_call() {
+        frame_env.inherit_call_owner(owner);
+    } else {
+        let mut owner = crate::context::CallOwner::root(
+            direct_this_value.clone().unwrap_or(Value::Undefined),
+            function.owner_kind,
+        );
+        owner.new_target = new_target;
+        frame_env.set_call_owner(owner);
+    }
     insert_marked_call_realm(function, &mut frame_env);
     if let Some(host) = function.module_host.clone() {
         frame_env.set_module_host(host);
@@ -1236,15 +1245,6 @@ fn function_env<'a>(
         && function.lexical_scope().is_none();
     let use_positional_arguments =
         !use_direct_call_slots && can_seed_positional_call(function, bytecode, env);
-    let lexical_this = received_upvalue_value(function, bytecode, "this");
-    let lexical_derived_this = if function.lexical_this {
-        function.lexical_derived_this()
-    } else {
-        None
-    };
-    let has_lexical_derived_this = lexical_derived_this.is_some();
-    let lexical_field_initializer =
-        received_upvalue_value(function, bytecode, FIELD_INITIALIZER_EVAL_BINDING);
     // Ordinary calls materialize `this`, each positional parameter, and a
     // small number of internal context bindings. Reserve that hot-path shape
     // up front instead of growing the frame binding vector several times.
@@ -1264,70 +1264,43 @@ fn function_env<'a>(
     // the function's creation realm.
     insert_marked_call_realm(function, &mut frame_env);
     let mut direct_this_value = None;
-    // A derived class constructor needs its own constructor value at hand so
-    // that `super(...)` can initialize the instance fields once `this` exists.
-    if function.is_class_constructor && function.is_derived_constructor && is_construct {
-        frame_env.insert(crate::ACTIVE_CONSTRUCTOR_BINDING.to_owned(), callee.clone());
-    } else if function.lexical_this
-        && let Some((_, constructor)) = &lexical_derived_this
-    {
-        frame_env.insert(
-            crate::ACTIVE_CONSTRUCTOR_BINDING.to_owned(),
-            Value::Function(constructor.clone()),
-        );
-    }
-    if function.is_field_initializer {
-        frame_env.insert(
-            FIELD_INITIALIZER_EVAL_BINDING.to_owned(),
-            Value::Boolean(true),
-        );
-    } else if function.lexical_this
-        && let Some(field_initializer) = lexical_field_initializer
-    {
-        frame_env.insert(FIELD_INITIALIZER_EVAL_BINDING.to_owned(), field_initializer);
-    }
-    insert_super_bindings(&mut frame_env, function, env, is_construct);
-    // A derived-class constructor leaves `this` uninitialized (a TDZ): reading
-    // `this` before `super(...)` is a ReferenceError, and `super(...)` binds
-    // it. Every other function gets its `this` here.
-    if function.is_derived_constructor && is_construct {
-        frame_env.insert_frame_cell(
-            "this".to_owned(),
-            super::BindingCell::new(Value::Function(Function::uninitialized_lexical_marker())),
-        );
-    } else if function.lexical_this {
-        if let Some((cell, _)) = lexical_derived_this {
-            frame_env.insert_frame_cell("this".to_owned(), cell);
-        } else {
-            let inherited_this = lexical_this
-                .or_else(|| env.get_local("this"))
-                .or_else(|| env.get("this"));
-            if let Some(this_value) = inherited_this {
-                frame_env.insert("this".to_owned(), this_value);
-            }
-        }
+    if let Some(owner) = function.lexical_call() {
+        frame_env.inherit_call_owner(owner);
     } else {
-        let needs_receiver = if use_direct_call_slots {
-            bytecode.uses_lexical_this()
-        } else {
-            !use_positional_arguments || bytecode.needs_call_receiver()
-        };
-        let call_this = if needs_receiver {
-            let this_env_storage = callee_this_realm_env(function, env);
-            let this_env = this_env_storage.as_ref().unwrap_or(env);
-            Some(function_call_this(
+        let needs_receiver = !use_positional_arguments || bytecode.needs_call_receiver();
+        let receiver = if needs_receiver {
+            let selected = callee_this_realm_env(function, env);
+            function_call_this(
                 Some(this_value),
-                this_env,
+                selected.as_ref().unwrap_or(env),
                 function.is_strict,
-            ))
+            )
         } else {
-            None
+            Value::Undefined
         };
         if use_direct_call_slots {
-            direct_this_value = call_this;
-        } else if let Some(call_this) = call_this {
-            frame_env.insert("this".to_owned(), call_this);
+            direct_this_value = Some(receiver.clone());
         }
+        let derived = function.is_derived_constructor && is_construct;
+        let this = if derived {
+            crate::context::ThisBinding::Derived(super::BindingCell::new(Value::Function(
+                Function::uninitialized_lexical_marker(),
+            )))
+        } else {
+            crate::context::ThisBinding::Initialized(receiver)
+        };
+        frame_env.set_call_owner(crate::context::CallOwner {
+            this,
+            new_target: if is_construct {
+                env.construct_target()
+            } else {
+                None
+            },
+            home: function.home_object(),
+            super_constructor: function.super_constructor(),
+            active_constructor: derived.then(|| callee.clone()),
+            kind: function.owner_kind,
+        });
     }
     if !use_direct_call_slots && !use_positional_arguments {
         for (index, name) in bytecode.positional_parameter_bindings().enumerate() {
@@ -1374,19 +1347,6 @@ fn function_env<'a>(
     if has_own_arguments_object || parameter_shadows_arguments {
         frame_env.insert(
             DIRECT_EVAL_ARGUMENTS_BINDING.to_owned(),
-            Value::Boolean(true),
-        );
-    }
-    // The marker is only observable to direct eval in this frame or to a
-    // lexically nested function (notably an arrow) that inherits its function
-    // context. Leaf functions without eval can avoid allocating the internal
-    // binding on every call.
-    if (!function.lexical_this || function.is_field_initializer || has_lexical_derived_this)
-        && (bytecode.contains_direct_eval()
-            || bytecode.creates_closures() && !use_positional_arguments)
-    {
-        frame_env.insert(
-            DIRECT_EVAL_FUNCTION_CONTEXT_BINDING.to_owned(),
             Value::Boolean(true),
         );
     }
@@ -1517,7 +1477,7 @@ fn can_seed_slot_backed_call(function: &Function, bytecode: &Bytecode) -> bool {
         // the assignment diagnostic, so a body that never assigns the name
         // can run without the binding.
         && (function.immutable_env_binding().is_none_or(|name| {
-            function.is_field_initializer || bytecode.reads_immutable_env_binding_through_cell(name)
+            function.owner_kind.forbids_arguments() || bytecode.reads_immutable_env_binding_through_cell(name)
         }))
         && function.dynamic_scope_bypassed()
         && function.with_stack.is_empty()
@@ -1606,48 +1566,6 @@ fn callee_this_realm_env(function: &Function, caller_env: &CallEnv) -> Option<Ca
         return None;
     }
     Some(CallEnv::new(Rc::clone(realm)))
-}
-
-/// Installs the per-frame `super` and `new.target` bindings. A method or
-/// constructor uses its own `[[HomeObject]]`, parent constructor, and (when
-/// constructing) `new.target`; an arrow inherits all three from the enclosing
-/// frame's environment so `super` and `new.target` work lexically inside it.
-fn insert_super_bindings(
-    frame_env: &mut CallEnv,
-    function: &Function,
-    caller_env: &CallEnv,
-    is_construct: bool,
-) {
-    use crate::{HOME_OBJECT_BINDING, NEW_TARGET_BINDING, SUPER_CONSTRUCTOR_BINDING};
-
-    // Methods/constructors use their own home object and parent constructor;
-    // arrows inherit both from the enclosing frame so `super` works lexically.
-    if let Some(home) = function.home_object() {
-        frame_env.insert(HOME_OBJECT_BINDING.to_owned(), home);
-    } else if function.lexical_this
-        && let Some(home) = caller_env.get_local(HOME_OBJECT_BINDING)
-    {
-        frame_env.insert(HOME_OBJECT_BINDING.to_owned(), home);
-    }
-
-    if let Some(super_constructor) = function.super_constructor() {
-        frame_env.insert(SUPER_CONSTRUCTOR_BINDING.to_owned(), super_constructor);
-    } else if function.lexical_this
-        && let Some(super_constructor) = caller_env.get(SUPER_CONSTRUCTOR_BINDING)
-    {
-        frame_env.insert(SUPER_CONSTRUCTOR_BINDING.to_owned(), super_constructor);
-    }
-
-    // `new.target` reaches a constructor frame from `construct_function` (which
-    // writes it into the call env). Arrows inherit it lexically; ordinary
-    // calls see `new.target` undefined.
-    if function.lexical_this {
-        if let Some(new_target) = &function.lexical_new_target {
-            frame_env.set_new_target(Some(new_target.get()));
-        }
-    } else if is_construct && let Some(new_target) = caller_env.get(NEW_TARGET_BINDING) {
-        frame_env.set_new_target(Some(new_target));
-    }
 }
 
 fn function_private_environment(function: &Function) -> Option<PrivateEnvironment> {

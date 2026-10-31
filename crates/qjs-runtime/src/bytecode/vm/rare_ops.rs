@@ -19,7 +19,7 @@ use crate::bytecode::vm_iter::DelegateStep;
 use crate::bytecode::vm_props::array_index_from_number;
 use crate::bytecode::vm_result::Completion;
 use crate::{
-    Function, HOME_OBJECT_BINDING, PropertyKey, RuntimeError, SUPER_CONSTRUCTOR_BINDING, Value,
+    Function, PropertyKey, RuntimeError, Value,
     function::{BindingCell, CompiledUserFunction},
     to_js_string_with_env,
 };
@@ -180,15 +180,10 @@ impl Vm<'_> {
                 is_async,
                 source_text,
             } => {
-                let (home_object, super_constructor) = if *lexical_this {
-                    let home_object = self.env.get_local(HOME_OBJECT_BINDING);
-                    let mut super_constructor = self.env.get(SUPER_CONSTRUCTOR_BINDING);
-                    if self.load_global("this").is_err() && super_constructor.is_none() {
-                        super_constructor = Some(Value::Undefined);
-                    }
-                    (home_object, super_constructor)
+                let lexical_call = if *lexical_this && bytecode.needs_lexical_owner() {
+                    self.env.capture_call_owner()
                 } else {
-                    (None, None)
+                    None
                 };
                 let upvalues = self.captured_upvalues_for_function(bytecode, lexical_captures);
                 let immutable_env_binding =
@@ -197,13 +192,6 @@ impl Vm<'_> {
                     .as_deref()
                     .and_then(|name| self.env.get(name))
                     .map(BindingCell::new);
-                let lexical_new_target = if *lexical_this {
-                    self.env
-                        .get(crate::NEW_TARGET_BINDING)
-                        .map(BindingCell::new)
-                } else {
-                    None
-                };
                 let deopt_bindings = self.frame_deopt_bindings_memoized();
                 let scope_use = deopt_bindings.as_ref().map(|bindings| {
                     self.closure_scope_use(bytecode, *lexical_this || *lexical_arguments, bindings)
@@ -235,32 +223,19 @@ impl Vm<'_> {
                     is_strict: *is_strict,
                     lexical_this: *lexical_this,
                     lexical_arguments: *lexical_arguments,
-                    lexical_new_target,
+                    lexical_call,
                     is_generator: *is_generator,
                     is_async: *is_async,
                     is_class_constructor: false,
                     is_derived_constructor: false,
-                    is_field_initializer: *lexical_this
-                        && matches!(
-                            self.env.get(crate::FIELD_INITIALIZER_EVAL_BINDING),
-                            Some(Value::Boolean(true))
-                        ),
-                    home_object,
-                    super_constructor,
+                    owner_kind: crate::context::OwnerKind::Function,
+                    home_object: None,
+                    super_constructor: None,
                     lexical_scope: self.closure_scope_cursor(bytecode),
                     deopt_bindings,
                     with_stack: self.with_stack().to_vec(),
                     upvalues,
                 });
-                // Eval-only and nested arrows need this context even when
-                // the compiler emitted no received `this` upvalue slot.
-                if *lexical_this
-                    && let Some(cell) = self.env.derived_this_cell()
-                    && let Some(Value::Function(constructor)) =
-                        self.env.get_local(crate::ACTIVE_CONSTRUCTOR_BINDING)
-                {
-                    function.set_lexical_derived_this(cell, constructor);
-                }
                 if let Some(bindings) = bypass_scope {
                     bindings.bypass(&function);
                 }

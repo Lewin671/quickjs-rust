@@ -136,7 +136,7 @@ fn native_constructor_slice_preserves_a_cross_realm_new_target() {
         true,
         env.realm(),
     ));
-    env.set_new_target(Some(previous.clone()));
+    env.set_construct_target(Some(previous.clone()));
     let result = construct_function_slice(
         target,
         new_target.clone(),
@@ -147,11 +147,7 @@ fn native_constructor_slice_preserves_a_cross_realm_new_target() {
     let prototype = crate::property_value(new_target, "prototype", &mut env).unwrap();
     let actual = crate::object::native_object_get_prototype_of(&[result], &mut env).unwrap();
     assert!(actual.same_value(&prototype));
-    assert!(
-        env.get(crate::NEW_TARGET_BINDING)
-            .unwrap()
-            .same_value(&previous)
-    );
+    assert!(env.construct_target().unwrap().same_value(&previous));
 }
 
 #[test]

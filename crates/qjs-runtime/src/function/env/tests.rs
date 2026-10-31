@@ -13,18 +13,18 @@ fn derived_this_forks_share_only_the_implicit_cell() {
         crate::Function::uninitialized_lexical_marker(),
     ));
     let local = BindingCell::new(Value::Number(1.0));
-    env.insert(
-        crate::ACTIVE_CONSTRUCTOR_BINDING.to_owned(),
-        Value::Undefined,
-    );
-    env.insert_frame_cell("this".to_owned(), this.clone());
+    let mut owner =
+        crate::context::CallOwner::root(Value::Undefined, crate::context::OwnerKind::Function);
+    owner.this = crate::context::ThisBinding::Derived(this.clone());
+    env.set_call_owner(owner);
     env.insert_frame_cell("local".to_owned(), local.clone());
     let clone = env.clone();
     let fork = env.fork_current_frame_values();
     assert!(this.ptr_eq(&clone.derived_this_cell().unwrap()));
     assert!(this.ptr_eq(&fork.derived_this_cell().unwrap()));
     assert!(!local.ptr_eq(&fork.frame_binding_cell("local").unwrap()));
-    this.set(Value::Object(ObjectRef::new(HashMap::new(), &domain)));
+    this.initialize(Value::Object(ObjectRef::new(HashMap::new(), &domain)))
+        .unwrap();
     assert_eq!(env.get_local("this"), fork.get_local("this"));
     local.set(Value::Number(2.0));
     assert_eq!(fork.get_local("local"), Some(Value::Number(1.0)));
@@ -32,13 +32,18 @@ fn derived_this_forks_share_only_the_implicit_cell() {
 
 #[test]
 fn ordinary_undefined_this_is_not_a_derived_cell() {
-    let env = CallEnv::detached();
-    let this = BindingCell::undefined();
-    env.insert_frame_cell("this".to_owned(), this.clone());
+    let mut env = CallEnv::detached();
+    env.set_call_owner(crate::context::CallOwner::root(
+        Value::Undefined,
+        crate::context::OwnerKind::Function,
+    ));
     assert!(env.derived_this_cell().is_none());
+    let first = env.capture_call_owner().unwrap();
     let fork = env.fork_current_frame_values();
-    assert!(!this.ptr_eq(&fork.frame_binding_cell("this").unwrap()));
-    assert_eq!(fork.get_local("this"), Some(Value::Undefined));
+    let retained = fork.capture_call_owner().unwrap();
+    assert!(Rc::ptr_eq(&first, &retained));
+    assert!(fork.frame_binding_cell("this").is_none());
+    assert_eq!(fork.this_value(), Ok(Value::Undefined));
 }
 
 #[test]
@@ -51,19 +56,21 @@ fn derived_this_insert_does_not_write_an_inherited_activations_cell() {
     let other = BindingCell::new(Value::Function(
         crate::Function::uninitialized_lexical_marker(),
     ));
-    let bindings = DynamicBindings::new();
-    bindings.insert_cell("this".to_owned(), other.clone());
-    env.set_deopt_bindings(bindings);
-    env.insert_frame(
-        crate::ACTIVE_CONSTRUCTOR_BINDING.to_owned(),
-        Value::Undefined,
-    );
-    env.insert_frame_cell("this".to_owned(), this.clone());
+    let mut owner =
+        crate::context::CallOwner::root(Value::Undefined, crate::context::OwnerKind::Function);
+    owner.this = crate::context::ThisBinding::Derived(this.clone());
+    env.set_call_owner(owner);
+    let mut child = env.new_function_frame();
+    let mut owner =
+        crate::context::CallOwner::root(Value::Undefined, crate::context::OwnerKind::Function);
+    owner.this = crate::context::ThisBinding::Derived(other.clone());
+    child.set_call_owner(owner);
     let receiver = Value::Object(ObjectRef::new(HashMap::new(), &domain));
-    env.insert("this".to_owned(), receiver.clone());
-    assert_eq!(this.get(), receiver);
-    assert!(other.with_value(Value::is_uninitialized_lexical_marker));
+    this.initialize(receiver.clone()).unwrap();
+    assert_eq!(env.this_value(), Ok(receiver));
+    assert!(child.this_value().is_err());
     assert!(this.ptr_eq(&env.derived_this_cell().unwrap()));
+    assert!(other.ptr_eq(&child.derived_this_cell().unwrap()));
 }
 
 #[test]
@@ -126,12 +133,16 @@ fn direct_leaf_frames_share_empty_metadata_until_mutation() {
 }
 
 #[test]
-fn unrelated_frame_binding_does_not_disable_an_authoritative_slot() {
+fn typed_call_metadata_does_not_disable_an_authoritative_slot() {
     let mut env = CallEnv::new(new_realm(HashMap::new()));
-    env.insert("this".to_owned(), Value::Undefined);
+    env.set_call_owner(crate::context::CallOwner::root(
+        Value::Undefined,
+        crate::context::OwnerKind::Function,
+    ));
 
     assert!(env.slot_is_authoritative("value"));
-    assert!(!env.slot_is_authoritative("this"));
+    assert!(env.frame_bindings.is_empty());
+    assert_eq!(env.this_value(), Ok(Value::Undefined));
 
     env.set_deopt_bindings(DynamicBindings::new());
     assert!(!env.slot_is_authoritative("value"));

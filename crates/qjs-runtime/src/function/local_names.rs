@@ -45,7 +45,6 @@ pub(crate) fn collect_function_local_names(
     has_own_arguments: bool,
 ) -> Vec<String> {
     let mut names = HashSet::new();
-    names.insert("this".to_owned());
     if has_own_arguments {
         names.insert("arguments".to_owned());
     }
@@ -162,16 +161,7 @@ mod tests {
 
         assert_eq!(
             collect_function_local_names(Some(name), params, body, true),
-            vec![
-                "a",
-                "arguments",
-                "caught",
-                "inner",
-                "outer",
-                "param",
-                "this",
-                "z"
-            ]
+            vec!["a", "arguments", "caught", "inner", "outer", "param", "z"]
         );
     }
 }

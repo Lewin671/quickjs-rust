@@ -47,12 +47,6 @@ pub(crate) fn is_call_frame_binding(name: &str) -> bool {
         crate::GLOBAL_THIS_BINDING
             | crate::DIRECT_EVAL_STRICT_BINDING
             | crate::DIRECT_EVAL_ARGUMENTS_BINDING
-            | crate::DIRECT_EVAL_FUNCTION_CONTEXT_BINDING
-            | crate::FIELD_INITIALIZER_EVAL_BINDING
-            | crate::HOME_OBJECT_BINDING
-            | crate::NEW_TARGET_BINDING
-            | crate::SUPER_CONSTRUCTOR_BINDING
-            | crate::ACTIVE_CONSTRUCTOR_BINDING
             | "this"
             | "arguments"
     )

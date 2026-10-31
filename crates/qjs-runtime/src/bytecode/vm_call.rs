@@ -323,7 +323,6 @@ impl Vm<'_> {
             Value::Object(global.clone()),
         );
         snapshot.insert("globalThis".to_owned(), Value::Object(global.clone()));
-        snapshot.insert("this".to_owned(), Value::Object(global.clone()));
         for name in global.own_property_names() {
             if name.starts_with('\0') {
                 continue;

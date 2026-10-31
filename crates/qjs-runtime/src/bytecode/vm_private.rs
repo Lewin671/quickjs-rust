@@ -196,12 +196,12 @@ impl Vm<'_> {
             is_strict: true,
             lexical_this: false,
             lexical_arguments: false,
-            lexical_new_target: None,
+            lexical_call: None,
             is_generator: def.is_generator,
             is_async: def.is_async,
             is_class_constructor: false,
             is_derived_constructor: false,
-            is_field_initializer: false,
+            owner_kind: crate::context::OwnerKind::Function,
             home_object: Some(home_object),
             super_constructor: None,
             lexical_scope: self.prepare_scope_cursor(),
@@ -256,12 +256,12 @@ impl Vm<'_> {
             is_strict: true,
             lexical_this: false,
             lexical_arguments: false,
-            lexical_new_target: None,
+            lexical_call: None,
             is_generator: false,
             is_async: false,
             is_class_constructor: false,
             is_derived_constructor: false,
-            is_field_initializer: true,
+            owner_kind: crate::context::OwnerKind::Field,
             home_object: Some(home_object),
             super_constructor: None,
             lexical_scope: self.prepare_scope_cursor(),
@@ -486,7 +486,7 @@ impl Vm<'_> {
         if let Some(environment) = self.env.private_environment() {
             return Some(environment);
         }
-        match self.env.get_local(crate::HOME_OBJECT_BINDING) {
+        match self.env.home_object() {
             Some(Value::Object(object)) => object.private_environment(),
             Some(Value::Function(function)) => function.private_environment(),
             _ => None,

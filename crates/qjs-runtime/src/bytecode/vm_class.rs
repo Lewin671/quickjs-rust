@@ -90,12 +90,12 @@ impl Vm<'_> {
             is_strict: true,
             lexical_this: false,
             lexical_arguments: false,
-            lexical_new_target: None,
+            lexical_call: None,
             is_generator: method.is_generator,
             is_async: method.is_async,
             is_class_constructor: false,
             is_derived_constructor: false,
-            is_field_initializer: false,
+            owner_kind: crate::context::OwnerKind::Function,
             home_object: Some(home_object.clone()),
             super_constructor: None,
             lexical_scope: self.prepare_scope_cursor(),
@@ -191,12 +191,12 @@ impl Vm<'_> {
             is_strict: true,
             lexical_this: false,
             lexical_arguments: false,
-            lexical_new_target: None,
+            lexical_call: None,
             is_generator: false,
             is_async: false,
             is_class_constructor: false,
             is_derived_constructor: false,
-            is_field_initializer: true,
+            owner_kind: crate::context::OwnerKind::Field,
             home_object: Some(home_object),
             super_constructor: None,
             lexical_scope: self.prepare_scope_cursor(),
@@ -242,12 +242,12 @@ impl Vm<'_> {
             is_strict: true,
             lexical_this: false,
             lexical_arguments: false,
-            lexical_new_target: None,
+            lexical_call: None,
             is_generator: false,
             is_async: false,
             is_class_constructor: false,
             is_derived_constructor: false,
-            is_field_initializer: false,
+            owner_kind: crate::context::OwnerKind::StaticBlock,
             home_object: Some(Value::Function(constructor_function.clone())),
             super_constructor: None,
             lexical_scope: self.prepare_scope_cursor(),
@@ -391,15 +391,8 @@ impl Vm<'_> {
         let result = self.super_call_inner(arguments);
         if let Some(this_value) = self.handle_runtime_result(result)? {
             if let Some(cell) = self.env.derived_this_cell() {
-                cell.set(this_value.clone());
-                if let Some(slot) = self.bytecode.this_slot() {
-                    self.locals[slot] = Some(this_value.clone());
-                }
-            } else if let Some(slot) = self.bytecode.local_slot("this") {
-                self.store_local(slot, this_value.clone())?;
+                cell.initialize(this_value.clone())?;
             }
-            self.env.insert("this".to_owned(), this_value.clone());
-            self.write_through_module_live_binding("this", this_value.clone());
             // The instance fields of the derived class initialize immediately
             // after `super(...)` binds `this`, before the rest of the body.
             let field_result = self.initialize_derived_instance_fields(&this_value);
@@ -417,8 +410,7 @@ impl Vm<'_> {
         &mut self,
         this_value: &Value,
     ) -> Result<Value, RuntimeError> {
-        let Some(Value::Function(constructor)) = self.env.get(crate::ACTIVE_CONSTRUCTOR_BINDING)
-        else {
+        let Some(Value::Function(constructor)) = self.env.active_constructor() else {
             return Ok(Value::Undefined);
         };
         let mut env = self.current_env();
@@ -438,7 +430,7 @@ impl Vm<'_> {
         };
         let new_target = self
             .env
-            .get(crate::NEW_TARGET_BINDING)
+            .lexical_new_target()
             .unwrap_or_else(|| super_constructor.clone());
 
         let mut env = self.current_env();
@@ -461,29 +453,22 @@ impl Vm<'_> {
     }
 
     fn current_super_constructor(&self) -> Result<Option<Value>, RuntimeError> {
-        if let Some(active_constructor) = self.env.get(crate::ACTIVE_CONSTRUCTOR_BINDING)
+        if let Some(active_constructor) = self.env.active_constructor()
             && let Some(prototype) = value_prototype_slot(active_constructor, &self.env)
         {
             return Ok(Some(prototype.to_value()));
         }
-        Ok(self.env.get(crate::SUPER_CONSTRUCTOR_BINDING))
+        Ok(self.env.super_constructor())
     }
 
     fn current_this(&mut self) -> Result<Value, RuntimeError> {
-        match self.env.get_local("this") {
-            Some(value) if !value.is_uninitialized_lexical_marker() => Ok(value),
-            _ => Err(RuntimeError {
-                thrown: None,
-                message: "ReferenceError: must call super constructor before accessing 'this'"
-                    .to_owned(),
-            }),
-        }
+        self.env.this_value()
     }
 
     /// Returns the lookup base for `super` property access: the [[Prototype]]
     /// of the current method's home object.
     fn super_lookup_base(&self) -> Result<Value, RuntimeError> {
-        let Some(home) = self.env.get_local(crate::HOME_OBJECT_BINDING) else {
+        let Some(home) = self.env.home_object() else {
             return Err(RuntimeError {
                 thrown: None,
                 message: "SyntaxError: 'super' keyword unexpected here".to_owned(),

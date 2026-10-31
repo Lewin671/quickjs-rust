@@ -670,7 +670,7 @@ fn native_iterator_constructor(is_construct: bool, env: &CallEnv) -> Result<Valu
             message: "TypeError: Iterator is not directly constructable".to_owned(),
         });
     }
-    let new_target = env.get(crate::NEW_TARGET_BINDING);
+    let new_target = env.construct_target();
     let directly = match (new_target, env.get("Iterator")) {
         (Some(Value::Function(target)), Some(Value::Function(iterator))) => {
             target.ptr_eq(&iterator)

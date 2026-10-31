@@ -236,51 +236,8 @@ impl Vm<'_> {
                 message: format!("ReferenceError: undefined identifier `{name}`"),
             });
         }
-        if name == "this"
-            && let Some(cell) = self.env.derived_this_cell()
-        {
-            let value = cell.get();
-            if value.is_uninitialized_lexical_marker() {
-                return Err(RuntimeError {
-                    thrown: None,
-                    message: "ReferenceError: must call super constructor before accessing `this`"
-                        .to_owned(),
-                });
-            }
-            return Ok(value);
-        }
-        // `this` belongs to the frame for function bodies (arrows inherit it
-        // through capture). Module bodies provide their `this` binding through
-        // the environment chain instead, while derived constructors without a
-        // completed `super(...)` stay in their `this` TDZ.
-        if name == "this" && !self.bytecode.global_scope {
-            if let Some(value) = &self.direct_this {
-                return Ok(value.clone());
-            }
-            if let Some(value) = self.env.get_local(name) {
-                if value.is_uninitialized_lexical_marker() {
-                    return Err(RuntimeError {
-                        thrown: None,
-                        message:
-                            "ReferenceError: must call super constructor before accessing `this`"
-                                .to_owned(),
-                    });
-                }
-                return Ok(value);
-            }
-            if !self.env.has_local_binding(crate::SUPER_CONSTRUCTOR_BINDING)
-                && !self
-                    .env
-                    .has_local_binding(crate::ACTIVE_CONSTRUCTOR_BINDING)
-                && let Some(value) = self.env.get(name)
-            {
-                return Ok(value);
-            }
-            return Err(RuntimeError {
-                thrown: None,
-                message: "ReferenceError: must call super constructor before accessing `this`"
-                    .to_owned(),
-            });
+        if name == "this" {
+            return self.env.this_value();
         }
         if self.env.is_immutable_function_name(name)
             && let Some(value) = self.env.get_local(name)
@@ -410,9 +367,7 @@ impl Vm<'_> {
     }
 
     pub(super) fn load_new_target(&self) -> Value {
-        self.env
-            .get(crate::NEW_TARGET_BINDING)
-            .unwrap_or(Value::Undefined)
+        self.env.lexical_new_target().unwrap_or(Value::Undefined)
     }
 
     /// Reads an own property of the realm's `globalThis` object, if any.
@@ -1720,12 +1675,6 @@ pub(super) fn is_call_frame_binding(name: &str) -> bool {
         crate::GLOBAL_THIS_BINDING
             | crate::DIRECT_EVAL_STRICT_BINDING
             | crate::DIRECT_EVAL_ARGUMENTS_BINDING
-            | crate::DIRECT_EVAL_FUNCTION_CONTEXT_BINDING
-            | crate::FIELD_INITIALIZER_EVAL_BINDING
-            | crate::HOME_OBJECT_BINDING
-            | crate::NEW_TARGET_BINDING
-            | crate::SUPER_CONSTRUCTOR_BINDING
-            | crate::ACTIVE_CONSTRUCTOR_BINDING
             | "this"
             | "arguments"
     )

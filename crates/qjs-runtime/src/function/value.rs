@@ -259,10 +259,6 @@ pub struct FunctionData {
     pub(crate) is_strict: bool,
     pub(crate) lexical_this: bool,
     pub(crate) lexical_arguments: bool,
-    /// `new.target` captured when an arrow is created. Unlike `this` and
-    /// `arguments`, bytecode reads this through a dedicated opcode, so it is
-    /// retained explicitly rather than as an ordinary received upvalue.
-    pub(crate) lexical_new_target: Option<BindingCell>,
     /// Whether this is a generator function (`function*` / `*m()`), which
     /// returns a generator object when called instead of running its body.
     pub(crate) is_generator: bool,
@@ -275,10 +271,8 @@ pub struct FunctionData {
     /// Whether this is a derived (extends) class constructor, whose `this` is
     /// uninitialized until `super(...)` runs.
     pub(crate) is_derived_constructor: bool,
-    /// Whether this function is the implicit thunk for a class field
-    /// initializer. Direct eval inside such a thunk gets initializer-specific
-    /// early errors.
-    pub(crate) is_field_initializer: bool,
+    /// Call-owner restrictions for an ordinary body, field or static block.
+    pub(crate) owner_kind: crate::context::OwnerKind,
     /// The method/constructor [[HomeObject]] used to resolve `super.x`. For an
     /// instance method this is the class prototype; for a static method it is
     /// the constructor; for a derived constructor it is the prototype.
@@ -315,8 +309,8 @@ struct FunctionColdState {
     receiver_layout: Option<Rc<crate::value::layout::Layout>>,
     constructor_prototype_slot: Option<(crate::value::layout::LayoutVersion, usize)>,
     home_object: Option<Value>,
-    /// An arrow's retained derived activation: binding authority and field owner.
-    lexical_derived_this: Option<(BindingCell, Function)>,
+    /// An arrow's lexical receiver, target, home and restriction owner.
+    lexical_call: Option<Rc<crate::context::CallOwner>>,
     /// For a derived constructor, the parent constructor invoked by `super()`.
     super_constructor: Option<Value>,
     /// For a class constructor, the instance-field initializers run when a new
@@ -439,7 +433,7 @@ impl FunctionColdState {
             home_object,
             receiver_layout: None,
             constructor_prototype_slot: None,
-            lexical_derived_this: None,
+            lexical_call: None,
             super_constructor,
             instance_elements: Rc::new(Vec::new()),
             private_state: crate::private::PrivateState::default(),
@@ -480,12 +474,12 @@ pub(crate) struct CompiledUserFunction {
     pub(crate) is_strict: bool,
     pub(crate) lexical_this: bool,
     pub(crate) lexical_arguments: bool,
-    pub(crate) lexical_new_target: Option<BindingCell>,
+    pub(crate) lexical_call: Option<Rc<crate::context::CallOwner>>,
     pub(crate) is_generator: bool,
     pub(crate) is_async: bool,
     pub(crate) is_class_constructor: bool,
     pub(crate) is_derived_constructor: bool,
-    pub(crate) is_field_initializer: bool,
+    pub(crate) owner_kind: crate::context::OwnerKind,
     pub(crate) home_object: Option<Value>,
     pub(crate) super_constructor: Option<Value>,
     pub(crate) lexical_scope: Option<crate::binding::ScopeCursor>,
@@ -668,12 +662,11 @@ impl Function {
             is_strict,
             lexical_this: lexical_bindings.this,
             lexical_arguments: lexical_bindings.arguments,
-            lexical_new_target: None,
             is_generator: false,
             is_async: false,
             is_class_constructor: false,
             is_derived_constructor: false,
-            is_field_initializer: false,
+            owner_kind: crate::context::OwnerKind::Function,
             auxiliary,
             bound: None,
             named: RefCell::new(crate::value::layout::NamedStorage::Sentinel),
@@ -718,12 +711,12 @@ impl Function {
             is_strict,
             lexical_this,
             lexical_arguments,
-            lexical_new_target,
+            lexical_call,
             is_generator,
             is_async,
             is_class_constructor,
             is_derived_constructor,
-            is_field_initializer,
+            owner_kind,
             home_object,
             super_constructor,
             lexical_scope,
@@ -796,12 +789,11 @@ impl Function {
             is_strict,
             lexical_this,
             lexical_arguments,
-            lexical_new_target,
             is_generator,
             is_async,
             is_class_constructor,
             is_derived_constructor,
-            is_field_initializer,
+            owner_kind,
             auxiliary,
             bound: None,
             named: RefCell::new(crate::value::layout::NamedStorage::Sentinel),
@@ -814,6 +806,11 @@ impl Function {
             function
                 .auxiliary
                 .with_cold_mut(|cold| cold.lexical_scope = Some(scope));
+        }
+        if let Some(owner) = lexical_call {
+            function
+                .auxiliary
+                .with_cold_mut(|cold| cold.lexical_call = Some(owner));
         }
         function.initialize_named();
         function.define_length_property();
@@ -987,12 +984,11 @@ impl Function {
             is_strict: false,
             lexical_this: false,
             lexical_arguments: false,
-            lexical_new_target: None,
             is_generator: false,
             is_async: false,
             is_class_constructor: false,
             is_derived_constructor: false,
-            is_field_initializer: false,
+            owner_kind: crate::context::OwnerKind::Function,
             auxiliary,
             bound: Some(Box::new(BoundFunction {
                 target,
@@ -1054,12 +1050,11 @@ impl Function {
             is_strict: false,
             lexical_this: false,
             lexical_arguments: false,
-            lexical_new_target: None,
             is_generator: false,
             is_async: false,
             is_class_constructor: false,
             is_derived_constructor: false,
-            is_field_initializer: false,
+            owner_kind: crate::context::OwnerKind::Function,
             auxiliary,
             bound: None,
             named: RefCell::new(crate::value::layout::NamedStorage::Sentinel),
@@ -1305,6 +1300,7 @@ impl Function {
                 cold.private_state.environment.is_some()
                     || cold.home_object.is_some()
                     || cold.lexical_scope.is_some()
+                    || cold.lexical_call.is_some()
             })
         })
     }
@@ -1324,14 +1320,9 @@ impl Function {
             .with_cold(|cold| cold.and_then(|cold| cold.super_constructor.clone()))
     }
 
-    pub(crate) fn lexical_derived_this(&self) -> Option<(BindingCell, Function)> {
+    pub(crate) fn lexical_call(&self) -> Option<Rc<crate::context::CallOwner>> {
         self.auxiliary
-            .with_cold(|cold| cold.and_then(|cold| cold.lexical_derived_this.clone()))
-    }
-
-    pub(crate) fn set_lexical_derived_this(&self, cell: BindingCell, constructor: Function) {
-        self.auxiliary
-            .with_cold_mut(|cold| cold.lexical_derived_this = Some((cell, constructor)));
+            .with_cold(|cold| cold.and_then(|cold| cold.lexical_call.clone()))
     }
 
     #[cfg(test)]

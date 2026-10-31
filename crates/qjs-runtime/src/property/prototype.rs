@@ -1,5 +1,5 @@
 use crate::{ArrayRef, Function, ObjectRef, Property, Value, symbol};
-use crate::{CallEnv, NEW_TARGET_BINDING, NativeFunction, RuntimeError};
+use crate::{CallEnv, NativeFunction, RuntimeError};
 
 const CROSS_REALM_MAP_PROTOTYPE: &str = "__quickjsRustRealmMapPrototype";
 const CROSS_REALM_OBJECT_PROTOTYPE: &str = "__quickjsRustRealmObjectPrototype";
@@ -16,7 +16,7 @@ pub(crate) fn native_construct_prototype_slot(
     env: &mut CallEnv,
 ) -> Result<Option<crate::Prototype>, RuntimeError> {
     let fallback = function_prototype(function).map(crate::Prototype::Object);
-    let Some(new_target) = env.get(NEW_TARGET_BINDING) else {
+    let Some(new_target) = env.construct_target() else {
         return Ok(fallback);
     };
     let prototype = prototype_value_to_slot(

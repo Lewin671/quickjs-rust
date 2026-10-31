@@ -58,7 +58,7 @@ pub(crate) fn native_object(
     // "%Object.prototype%") and ignore `value`. The receiver was already
     // allocated from NewTarget.prototype, so return it as-is.
     if is_construct
-        && let Some(Value::Function(new_target)) = env.get(crate::NEW_TARGET_BINDING)
+        && let Some(Value::Function(new_target)) = env.construct_target()
         && !new_target.ptr_eq(function)
     {
         return Ok(this_value);
