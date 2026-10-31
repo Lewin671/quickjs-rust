@@ -414,3 +414,24 @@ prints `7:undefined:undefined:undefined` then `9:9` in both engines under TZ=UTC
 The script runner requires expressions and flattens newlines; B2c1/c2 fixtures
 are corrected to IIFEs here (their runtime tests had already passed). This moves source-module compilation before linking;
 it preserves structured Syntax errors and retains the compiled body for reuse.
+
+
+## B3a2 effect boundaries without captured-value copies
+
+Removed conversion::to_primitive_method_env/sync_to_primitive_method_env and
+BindingSnapshot. Ordinary coercion methods use their function-owned creation
+and captured cells; no captured-name sorting, frame clone/scrub or binding
+apply-back runs around them. Indirect eval's marked-global view no longer copies
+any global own-property values; it retains the live selection. A regression
+checks repeated getter reads and deletion without touching the origin. All
+**2,571 runtime tests**, the staged gate (117 selected Test262 cases) and all
+287 NG scripts pass. The no-longer-consumed recursive write-name cache and native
+capture-key enumeration API are deleted with the coercion snapshot path.
+
+The complete module-code slice at committed `d7a0db74` passes **595/595**, NG
+589 pass / 6 known nonpasses, zero gaps/timeouts/not-run. Production agents binary
+SHA-256 `673e6bc39c537495f70b57fd8c97eccfac72b555105ba52a40c15bd161cb852d`;
+`--agent --raw -e "typeof __quickjsRustAgentStart"` returns `function`.
+Summary SHA-256 `592bafe4c02d38d9c10e1e72ff376275a406cd62bd64f042ff6d9981f028faff`.
+Case-map SHA-256 `55da6d79ae0db402cc12fdc9a5a75ae1e6168477b258f8439fd72dee12156a7a`.
+This is a complete filtered slice, not a full scan/burndown or S3b acceptance.

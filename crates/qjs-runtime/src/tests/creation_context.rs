@@ -53,3 +53,22 @@ fn dynamic_function_nested_source_text_retains_the_parsed_source() {
         ))
     );
 }
+
+#[test]
+fn indirect_eval_uses_live_selected_global_getters_and_deletion() {
+    assert_eq!(
+        eval(
+            r#"
+        const other = {}; let reads = 0;
+        Object.defineProperty(other, 'value', { get() { reads++; return reads; }, configurable: true });
+        globalThis.__quickjsRustDynamicFunctionRealm = other;
+        let result = (0, eval)('value') + ':' + (0, eval)('value');
+        delete other.value;
+        result += ':' + (0, eval)('typeof value');
+        delete globalThis.__quickjsRustDynamicFunctionRealm;
+        result + ':' + reads;
+    "#
+        ),
+        Ok(Value::String("1:2:undefined:2".into()))
+    );
+}

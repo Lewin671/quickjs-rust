@@ -1144,14 +1144,6 @@ fn indirect_eval_frame(env: &CallEnv) -> CallEnv {
         Value::Object(global.clone()),
         crate::context::OwnerKind::Script,
     ));
-    for name in global.own_property_names() {
-        if name.starts_with('\0') {
-            continue;
-        }
-        if let Some(property) = global.own_property(&name) {
-            eval_env.insert(name, property.value);
-        }
-    }
     eval_env
 }
 

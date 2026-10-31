@@ -35,10 +35,6 @@ fn compiler_temporaries_are_excluded_from_written_binding_caches() {
             !written.contains(&name),
             "temporary leaked into writeback: {name:?}"
         );
-        assert!(
-            !bytecode.writes_binding(&name),
-            "temporary leaked into recursive write set: {name:?}"
-        );
     }
 }
 

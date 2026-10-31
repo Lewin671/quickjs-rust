@@ -14,7 +14,7 @@
 
 use std::{
     cell::{OnceCell, RefCell},
-    collections::{BTreeSet, HashMap, HashSet},
+    collections::{BTreeSet, HashMap},
     rc::Rc,
 };
 
@@ -790,7 +790,6 @@ pub struct Bytecode {
     cached_closure_referenced_global_names: Vec<String>,
     cached_written_binding_names: Vec<String>,
     cached_closure_written_binding_names: Vec<String>,
-    cached_writes_binding_set: crate::value::name_hash::NameSet<String>,
     cached_creates_closures: bool,
     cached_creates_capturing_closures: bool,
     cached_needs_arguments_object: bool,
@@ -903,7 +902,6 @@ impl Bytecode {
             cached_closure_referenced_global_names: Vec::new(),
             cached_written_binding_names: Vec::new(),
             cached_closure_written_binding_names: Vec::new(),
-            cached_writes_binding_set: HashSet::default(),
             cached_creates_closures: false,
             cached_creates_capturing_closures: false,
             cached_needs_arguments_object: false,
@@ -925,7 +923,6 @@ impl Bytecode {
         bytecode.cached_written_binding_names = bytecode.compute_written_binding_names();
         bytecode.cached_closure_written_binding_names =
             bytecode.compute_closure_written_binding_names();
-        bytecode.cached_writes_binding_set = bytecode.compute_writes_binding_set();
         bytecode.cached_hoisted_slots = bytecode
             .locals
             .iter()
@@ -1483,44 +1480,6 @@ impl Bytecode {
         };
         self.code.iter().any(|op| op_touches_local_slot(op, slot))
     }
-
-    pub(crate) fn writes_binding(&self, binding_name: &str) -> bool {
-        self.cached_writes_binding_set.contains(binding_name)
-    }
-
-    /// Builds the set of every binding name written anywhere in this body,
-    /// including nested function and class bodies. `writes_binding(name)` is
-    /// then a `HashSet` membership test. The direct (this-level) store names are
-    /// exactly what `collect_written_binding_names_from_ops` gathers; nested
-    /// contributions come from already-cached child sets.
-    fn compute_writes_binding_set(&self) -> crate::value::name_hash::NameSet<String> {
-        let mut direct = BTreeSet::new();
-        collect_written_binding_names_from_ops(self, &self.code, &mut direct);
-        let mut set: crate::value::name_hash::NameSet<String> =
-            direct.into_iter().map(str::to_owned).collect();
-        for op in &self.code {
-            match op {
-                Op::NewFunction { bytecode, .. } => {
-                    set.extend(bytecode.cached_writes_binding_set.iter().cloned());
-                }
-                Op::NewClass { definition } => {
-                    set.extend(
-                        definition
-                            .constructor
-                            .bytecode
-                            .cached_writes_binding_set
-                            .iter()
-                            .cloned(),
-                    );
-                    for element in &definition.elements {
-                        collect_class_element_writes_binding(element, &mut set);
-                    }
-                }
-                _ => {}
-            }
-        }
-        set
-    }
 }
 
 fn collect_local_slots(locals: &[Local]) -> crate::value::name_hash::NameMap<String, usize> {
@@ -1529,56 +1488,6 @@ fn collect_local_slots(locals: &[Local]) -> crate::value::name_hash::NameMap<Str
         slots.entry(local.name.clone()).or_insert(slot);
     }
     slots
-}
-
-fn collect_class_element_writes_binding(
-    element: &ClassElementDef,
-    set: &mut crate::value::name_hash::NameSet<String>,
-) {
-    match element {
-        ClassElementDef::Method(def) => {
-            set.extend(def.bytecode.cached_writes_binding_set.iter().cloned());
-        }
-        ClassElementDef::Field(def) => {
-            if let Some(initializer) = def.initializer.as_ref() {
-                set.extend(
-                    initializer
-                        .bytecode
-                        .cached_writes_binding_set
-                        .iter()
-                        .cloned(),
-                );
-            }
-        }
-        ClassElementDef::Private(def) => collect_private_class_element_writes_binding(def, set),
-        ClassElementDef::StaticBlock(def) => {
-            set.extend(def.bytecode.cached_writes_binding_set.iter().cloned());
-        }
-    }
-}
-
-fn collect_private_class_element_writes_binding(
-    element: &ClassPrivateElementDef,
-    set: &mut crate::value::name_hash::NameSet<String>,
-) {
-    match element {
-        ClassPrivateElementDef::Field { initializer, .. } => {
-            if let Some(initializer) = initializer.as_ref() {
-                set.extend(
-                    initializer
-                        .bytecode
-                        .cached_writes_binding_set
-                        .iter()
-                        .cloned(),
-                );
-            }
-        }
-        ClassPrivateElementDef::Method { def, .. }
-        | ClassPrivateElementDef::Getter { def, .. }
-        | ClassPrivateElementDef::Setter { def, .. } => {
-            set.extend(def.bytecode.cached_writes_binding_set.iter().cloned());
-        }
-    }
 }
 
 /// Whether `op` names `slot` as a frame local it reads or writes.

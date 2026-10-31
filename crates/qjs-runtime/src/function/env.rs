@@ -7,7 +7,6 @@
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
-    ops::Deref,
     rc::Rc,
 };
 
@@ -407,28 +406,6 @@ impl DynamicBindings {
             .iter()
             .map(|(name, binding)| (name.clone(), binding.clone()))
             .collect()
-    }
-}
-
-/// Owned compatibility view for the few dynamic-name consumers that still
-/// need to enumerate a frame. The authoritative storage is a name-to-cell map;
-/// this value snapshot never participates in binding identity or write-back.
-pub(crate) struct BindingSnapshot(HashMap<String, Value>);
-
-impl Deref for BindingSnapshot {
-    type Target = HashMap<String, Value>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl IntoIterator for BindingSnapshot {
-    type Item = (String, Value);
-    type IntoIter = std::collections::hash_map::IntoIter<String, Value>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
     }
 }
 
@@ -928,11 +905,6 @@ impl CallEnv {
         self.direct_eval_var_conflicts
             .as_ref()
             .is_some_and(|conflicts| conflicts.contains(name))
-    }
-
-    /// Owned compatibility snapshot for the few dynamic-name consumers.
-    pub(crate) fn binding_snapshot(&self) -> BindingSnapshot {
-        BindingSnapshot(self.snapshot_locals())
     }
 
     /// Visits the currently visible bindings in the frame-local environment

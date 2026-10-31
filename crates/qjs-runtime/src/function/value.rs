@@ -350,10 +350,6 @@ impl NativeContext {
             .and_then(|context| context.bindings.get(key))
     }
 
-    pub(crate) fn keys(&self) -> impl Iterator<Item = &String> {
-        self.0.iter().flat_map(|context| context.bindings.keys())
-    }
-
     fn insert(&mut self, key: String, value: Value) {
         let context = self
             .0
