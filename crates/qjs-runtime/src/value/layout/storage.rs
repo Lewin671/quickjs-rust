@@ -156,6 +156,7 @@ impl Layout {
         proof.position = proof.position.filter(|&position| position < self.len);
         proof
     }
+    #[inline(always)]
     pub(super) fn entry_for_key(&self, key: KeyId) -> Option<ShapeEntry> {
         let data = self.data.borrow();
         crate::diagnostics::count!(property_id_probes);

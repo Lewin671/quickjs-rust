@@ -300,3 +300,12 @@ not the append-only buffer's physical width. Read narrow prefixes directly as
 ShapeEntry; wide layouts necessarily have an index and skip the generic mode
 branch. Both paths count exactly one probe and reject hidden shared-tail keys.
 The promotion/fork test now checks direct data reads in both paths as well.
+
+
+Visible-prefix `3b98d1e0`, job `20261031T131158Z-t077-s2fu-r2-visible-prefix`:
+dynamic read improves 1.040868 -> 1.017671. Default profiles still sample the
+entry_for_key call boundary. Next inline that adapter so read/write callers can
+discard unused ShapeEntry fields. In a separate source checkpoint, remove the
+redundant shared-epoch zero write only in from_slot_parts; dictionary copies
+still initialize to one. Shared constructors/copies already initialize zero.
+Measure both checkpoints independently before choosing the final source.
