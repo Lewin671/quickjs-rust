@@ -28,11 +28,15 @@ fn positional_entry_omits_parameter_names_and_static_eval_marker() {
         "(function ({x}, y = x + 1, ...tail) { return function () { return x + y + tail[0]; }; })",
         |prepared, code| {
             assert!(prepared.direct_call_slots.is_none());
-            assert!(prepared.positional_arguments.is_some());
-            for name in code.positional_parameter_bindings() {
+            assert!(prepared.call_inputs.is_some());
+            for name in code
+                .parameter_slots()
+                .iter()
+                .map(|&slot| code.local_name_at(slot).unwrap())
+            {
                 assert!(!prepared.env.has_frame_binding(name), "{name}");
             }
-            assert!(prepared.env.has_frame_binding("tail"));
+            assert!(!prepared.env.has_frame_binding("tail"));
             assert_eq!(
                 prepared.env.owner_kind(),
                 Some(crate::context::OwnerKind::Function)
@@ -42,7 +46,7 @@ fn positional_entry_omits_parameter_names_and_static_eval_marker() {
 }
 
 #[test]
-fn mapped_dynamic_and_suspended_parameters_keep_compatibility_bindings() {
+fn mapped_dynamic_and_suspended_parameters_use_positional_inputs() {
     for source in [
         "(function (value) { return arguments[0]; })",
         "(function (value) { return eval('value'); })",
@@ -55,13 +59,9 @@ fn mapped_dynamic_and_suspended_parameters_keep_compatibility_bindings() {
         "(async function (value) { return value; })",
     ] {
         inspect(source, |prepared, _| {
-            assert!(prepared.positional_arguments.is_none(), "{source}");
+            assert!(prepared.call_inputs.is_some(), "{source}");
             if prepared.direct_call_slots.is_none() {
-                assert_eq!(
-                    prepared.env.get_local("value"),
-                    Some(Value::Number(7.0)),
-                    "{source}"
-                );
+                assert_eq!(prepared.env.get_local("value"), None, "{source}");
             }
         });
     }

@@ -65,7 +65,7 @@ pub(super) fn eval_function_bytecode<'a>(
     with_stack: Vec<Value>,
     persist_global_lexicals: bool,
     direct_call_slots: Option<DirectCallSlots<'_>>,
-    positional_arguments: Option<&[Value]>,
+    call_inputs: Option<crate::function::CallInputs<'_>>,
 ) -> FunctionBytecodeResult<'a> {
     let direct_eval_with_stack = !env.direct_eval_with_stack().is_empty();
     let mut vm = Vm::with_frame_bytecode(
@@ -74,7 +74,7 @@ pub(super) fn eval_function_bytecode<'a>(
         upvalues,
         with_stack,
         direct_call_slots,
-        positional_arguments,
+        call_inputs,
     );
     vm.persist_global_lexicals = persist_global_lexicals;
     // Ordinary functions created inside `with` are compiled with explicit
@@ -110,7 +110,7 @@ pub(super) fn eval_call_bytecode(
     env: CallEnv,
     upvalues: Vec<BindingCell>,
     with_stack: Vec<Value>,
-    positional_arguments: Option<&[Value]>,
+    call_inputs: Option<crate::function::CallInputs<'_>>,
 ) -> Result<Value, RuntimeError> {
     let direct_eval_with_stack = !env.direct_eval_with_stack().is_empty();
     let mut vm = Vm::with_frame_bytecode(
@@ -119,7 +119,7 @@ pub(super) fn eval_call_bytecode(
         upvalues,
         with_stack,
         None,
-        positional_arguments,
+        call_inputs,
     );
     vm.persist_global_lexicals = true;
     vm.direct_eval_with_stack = direct_eval_with_stack;

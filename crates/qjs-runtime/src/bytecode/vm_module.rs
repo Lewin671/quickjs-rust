@@ -197,6 +197,7 @@ fn eval_async_module_body(
         Some(GeneratorState::SuspendedStart(Box::new(GeneratorStart {
             bytecode: Rc::new(bytecode.clone()),
             env: function_env,
+            inputs: None,
             upvalues: Vec::new(),
             with_stack: Vec::new(),
         })));

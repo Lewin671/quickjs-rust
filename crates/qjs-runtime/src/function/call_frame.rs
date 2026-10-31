@@ -58,9 +58,9 @@ pub(crate) struct PreparedBytecodeCall<'a> {
     /// The direct-leaf entry contract: receiver, parameters and received cells
     /// can use the compact tiers and the minimal frame initializer.
     pub(crate) slots: Option<DirectCallSlots<'a>>,
-    /// General synchronous entry seeds these before constructing capture cells.
+    /// General entry seeds these before constructing capture cells.
     /// Special call context remains owned by `env`; this is not a leaf contract.
-    pub(crate) positional_arguments: Option<&'a [Value]>,
+    pub(crate) call_inputs: Option<crate::function::CallInputs<'a>>,
     /// Only the general path needs these; a slot-seeded call carries its
     /// upvalues inside `slots`.
     pub(crate) upvalues: Vec<BindingCell>,

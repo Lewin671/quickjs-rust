@@ -29,7 +29,7 @@ impl Vm<'_> {
                 InitialSlot::Empty => None,
                 InitialSlot::Undefined => Some(Value::Undefined),
                 InitialSlot::Frame => env.get_local(name),
-                InitialSlot::Arguments => env.get_local("arguments"),
+                InitialSlot::Arguments => Some(Value::Undefined),
                 InitialSlot::FrameOrUndefined => {
                     Some(env.get_local(name).unwrap_or(Value::Undefined))
                 }
@@ -215,21 +215,6 @@ impl Vm<'_> {
                 && let Some(upvalue) = env.realm_binding_cell(&local.name)
             {
                 local_upvalues[slot] = Some(upvalue);
-                continue;
-            }
-            if local.parameter
-                && (bytecode.needs_arguments_object() || bytecode.has_dynamic_scope_tree())
-                && let Some(upvalue) = env.frame_binding_cell(&local.name)
-            {
-                let cell = if upvalue.has_compiler_metadata() {
-                    upvalue
-                } else {
-                    let meta = bytecode.binding_meta(slot).expect("parameter metadata");
-                    let cell = BindingCell::with_metadata(meta, Some(upvalue.get()));
-                    env.insert_frame_cell(local.name.clone(), cell.clone());
-                    cell
-                };
-                local_upvalues[slot] = Some(cell);
                 continue;
             }
             if bytecode.local_slot(&local.name) == Some(slot)

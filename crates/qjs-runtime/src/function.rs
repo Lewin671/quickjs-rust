@@ -1,4 +1,5 @@
 mod arguments;
+pub(crate) use arguments::{CallInputs, OwnedCallInputs, arguments_object};
 mod call;
 mod call_frame;
 mod env;

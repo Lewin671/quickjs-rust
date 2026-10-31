@@ -89,6 +89,7 @@ pub(crate) fn async_function_prototype(env: &CallEnv) -> Option<ObjectRef> {
 pub(crate) fn call_async_function(
     function: &Function,
     function_env: CallEnv,
+    inputs: Option<crate::function::CallInputs<'_>>,
     env: &mut CallEnv,
 ) -> Value {
     let bytecode = function
@@ -100,6 +101,7 @@ pub(crate) fn call_async_function(
         Some(GeneratorState::SuspendedStart(Box::new(GeneratorStart {
             bytecode,
             env: function_env,
+            inputs: inputs.map(crate::function::CallInputs::into_owned),
             upvalues: function.upvalues.clone(),
             with_stack: function.with_stack.clone(),
         })));

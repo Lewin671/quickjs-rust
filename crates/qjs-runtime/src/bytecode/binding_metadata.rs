@@ -134,6 +134,9 @@ impl Bytecode {
                 descriptor.lookup.insert(name.clone(), id);
             }
             if kind == BindingKind::Arguments {
+                self.binding_plan.arguments_slot = Some(slot);
+                self.binding_plan.cell_slots.push(slot);
+                self.binding_plan.dynamic_cell_slots.push(slot);
                 self.binding_plan.initial_slots[slot] = super::binding_plan::InitialSlot::Arguments;
             }
             if name == "arguments" && kind == BindingKind::Lexical {
@@ -160,6 +163,10 @@ impl Bytecode {
                 slot: LocalSlot(slot),
             });
         }
+        self.binding_plan.cell_slots.sort_unstable();
+        self.binding_plan.cell_slots.dedup();
+        self.binding_plan.dynamic_cell_slots.sort_unstable();
+        self.binding_plan.dynamic_cell_slots.dedup();
         self.binding_plan.bindings = std::rc::Rc::new(crate::binding::BindingMetadata(
             bindings.into_boxed_slice(),
             crate::binding::MetadataOrigin::Compiled,

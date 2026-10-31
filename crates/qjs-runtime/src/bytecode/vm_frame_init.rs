@@ -90,7 +90,7 @@ impl<'a> Vm<'a> {
         upvalues: Vec<BindingCell>,
         with_stack: Vec<Value>,
         direct_call_slots: Option<DirectCallSlots<'_>>,
-        positional_arguments: Option<&[Value]>,
+        call_inputs: Option<crate::function::CallInputs<'_>>,
     ) -> Self {
         crate::diagnostics::count!(nested_vm_constructions);
         let bytecode: &Bytecode = &handle;
@@ -164,8 +164,27 @@ impl<'a> Vm<'a> {
         } else {
             Self::initial_slots(bytecode, &env)
         };
-        if let Some(arguments) = positional_arguments {
-            Self::seed_positional_arguments(bytecode.parameter_slots(), &mut locals, arguments);
+        if let Some(inputs) = call_inputs {
+            Self::seed_call_inputs(bytecode.parameter_slots(), &mut locals, inputs.arguments);
+            if let Some(slot) = bytecode.binding_plan.parameters.rest_slot {
+                let array = crate::ArrayRef::new(
+                    env.realm(),
+                    inputs
+                        .arguments
+                        .iter()
+                        .skip(inputs.function.params.positional.len())
+                        .cloned()
+                        .collect(),
+                );
+                if env.has_dynamic_function_realm_global()
+                    && let Some(prototype) = crate::array_prototype(&env)
+                {
+                    array
+                        .set_prototype_slot(Some(crate::Prototype::Object(prototype)))
+                        .expect("fresh rest array accepts its realm prototype");
+                }
+                locals[slot] = Some(Value::Array(array));
+            }
         }
         let direct_upvalue_source = direct_call_slots
             .as_ref()
@@ -206,6 +225,21 @@ impl<'a> Vm<'a> {
                     None,
                 )
             };
+        if let Some(inputs) = call_inputs
+            && let Some(slot) = bytecode.binding_plan.arguments_slot
+        {
+            let value = crate::function::arguments_object(
+                inputs.function,
+                inputs.arguments,
+                &env,
+                &local_upvalues,
+            );
+            let cell = local_upvalues[slot].as_ref().expect("arguments cell route");
+            cell.assign(value.clone(), false)
+                .expect("implicit arguments is mutable");
+            locals[slot] = Some(value);
+            env.insert_frame_cell("arguments".to_owned(), cell.clone());
+        }
         if bytecode.has_dynamic_scope_tree() {
             for meta in bytecode
                 .binding_plan
@@ -282,7 +316,7 @@ impl<'a> Vm<'a> {
         direct_call_slots: DirectCallSlots<'_>,
     ) -> Option<Value> {
         let direct_this = direct_call_slots.this_value;
-        Self::seed_positional_arguments(
+        Self::seed_call_inputs(
             direct_call_slots.parameter_slots,
             locals,
             direct_call_slots.arguments,
@@ -290,11 +324,7 @@ impl<'a> Vm<'a> {
         direct_this
     }
 
-    fn seed_positional_arguments(
-        parameter_slots: &[usize],
-        locals: &mut [Slot],
-        arguments: &[Value],
-    ) {
+    fn seed_call_inputs(parameter_slots: &[usize], locals: &mut [Slot], arguments: &[Value]) {
         for (index, &slot) in parameter_slots.iter().enumerate() {
             let value = arguments.get(index).cloned().unwrap_or(Value::Undefined);
             locals[slot] = Some(value);

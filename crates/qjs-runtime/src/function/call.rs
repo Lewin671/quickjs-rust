@@ -9,17 +9,17 @@
 //! slot-seeded frame. Ordinary bindings do not travel through `CallEnv`
 //! (see `env.rs`): never add a per-call name-keyed copy of the caller's
 //! locals.
-//! General synchronous bodies without dynamic/arguments requirements also
-//! seed raw parameters by position, before shared cells are initialized. They
-//! retain an owned services environment and the special context they need.
+//! Every general entry seeds raw parameters/rest by position before shared
+//! cells and mapped arguments are initialized. Suspension retains positional
+//! inputs until frame construction; parameter names never carry call inputs.
 
 use std::{collections::HashMap, rc::Rc};
 
 use qjs_ast::FunctionParams;
 
 use crate::{
-    ArrayRef, Bytecode, DIRECT_EVAL_ARGUMENTS_BINDING, Function, NativeFunction, ObjectRef,
-    RuntimeError, Value,
+    Bytecode, DIRECT_EVAL_ARGUMENTS_BINDING, Function, NativeFunction, ObjectRef, RuntimeError,
+    Value,
     bytecode::{
         DirectCallSlots, DirectCallUpvalues, eval_call_bytecode, eval_direct_call_bytecode,
         eval_function_bytecode, try_eval_numeric_leaf, try_eval_this_property_leaf,
@@ -31,8 +31,7 @@ use crate::{
 
 use super::call_frame::{CallCompletionPolicy, PreparedBytecodeCall, missing_bytecode_body};
 use super::{
-    CROSS_REALM_TYPE_ERROR_PROTOTYPE, CallEnv, InstanceElementInitializer,
-    arguments::arguments_object, function_call_this,
+    CROSS_REALM_TYPE_ERROR_PROTOTYPE, CallEnv, InstanceElementInitializer, function_call_this,
 };
 
 const CROSS_REALM_OBJECT_PROTOTYPE: &str = "__quickjsRustRealmObjectPrototype";
@@ -149,6 +148,7 @@ fn call_with_arguments(
             return crate::async_generator::call_async_generator_function(
                 function,
                 function_env.env,
+                function_env.call_inputs,
                 env,
             );
         }
@@ -172,6 +172,7 @@ fn call_with_arguments(
                 crate::bytecode::GeneratorStart {
                     bytecode: bytecode.clone(),
                     env: function_env.env,
+                    inputs: function_env.call_inputs.map(super::CallInputs::into_owned),
                     upvalues: function.upvalues.clone(),
                     with_stack: function.with_stack.clone(),
                 },
@@ -196,6 +197,7 @@ fn call_with_arguments(
             return Ok(crate::async_function::call_async_function(
                 function,
                 function_env.env,
+                function_env.call_inputs,
                 env,
             ));
         }
@@ -278,7 +280,7 @@ fn prepare_bytecode_call<'a>(
     let FunctionCallEnv {
         env: call_env,
         direct_call_slots,
-        positional_arguments,
+        call_inputs,
     } = function_env(
         function,
         bytecode,
@@ -292,7 +294,7 @@ fn prepare_bytecode_call<'a>(
         bytecode: Rc::clone(bytecode),
         env: call_env,
         slots: direct_call_slots,
-        positional_arguments,
+        call_inputs,
         upvalues: function.upvalues.clone(),
         with_stack: function.with_stack.clone(),
         completion: CallCompletionPolicy::new(function.is_derived_constructor && is_construct),
@@ -306,7 +308,7 @@ fn run_prepared_bytecode_call(prepared: PreparedBytecodeCall<'_>) -> Result<Valu
         bytecode,
         env,
         slots,
-        positional_arguments,
+        call_inputs,
         upvalues,
         with_stack,
         completion,
@@ -317,17 +319,10 @@ fn run_prepared_bytecode_call(prepared: PreparedBytecodeCall<'_>) -> Result<Valu
         return result;
     }
     if !completion.finishes_derived_construct() {
-        let value = eval_call_bytecode(&bytecode, env, upvalues, with_stack, positional_arguments);
+        let value = eval_call_bytecode(&bytecode, env, upvalues, with_stack, call_inputs);
         return value;
     }
-    let result = eval_function_bytecode(
-        &bytecode,
-        env,
-        upvalues,
-        with_stack,
-        true,
-        positional_arguments,
-    );
+    let result = eval_function_bytecode(&bytecode, env, upvalues, with_stack, true, call_inputs);
     if completion.finishes_derived_construct() {
         return finish_derived_construct(result);
     }
@@ -1164,7 +1159,7 @@ fn not_constructor_error() -> RuntimeError {
 struct FunctionCallEnv<'a> {
     env: CallEnv,
     direct_call_slots: Option<DirectCallSlots<'a>>,
-    positional_arguments: Option<&'a [Value]>,
+    call_inputs: Option<crate::function::CallInputs<'a>>,
 }
 
 fn direct_leaf_function_env<'a>(
@@ -1194,7 +1189,7 @@ fn direct_leaf_function_env<'a>(
     }
     FunctionCallEnv {
         env: frame_env,
-        positional_arguments: None,
+        call_inputs: None,
         direct_call_slots: Some(DirectCallSlots {
             this_value: direct_this_value,
             parameter_slots: bytecode.parameter_slots(),
@@ -1217,20 +1212,13 @@ fn function_env<'a>(
     let use_direct_call_slots = (is_direct_leaf_function(callee)
         || (is_construct && can_seed_base_class_constructor_slots(function, bytecode)))
         && function.lexical_scope().is_none();
-    let use_positional_arguments =
-        !use_direct_call_slots && can_seed_positional_call(function, bytecode, env);
-    let capacity = if use_direct_call_slots || use_positional_arguments {
-        0
-    } else {
-        function.params.positional.len().saturating_add(2)
-    };
-    let mut frame_env = env.function_entry(selected_function_creation(function), capacity);
+    let mut frame_env = env.function_entry(selected_function_creation(function), 0);
     frame_env.set_scope_cursor(function.lexical_scope());
     let mut direct_this_value = None;
     if let Some(owner) = function.lexical_call() {
         frame_env.inherit_call_owner(owner);
     } else {
-        let needs_receiver = !use_positional_arguments || bytecode.needs_call_receiver();
+        let needs_receiver = bytecode.needs_call_receiver() || is_construct;
         let receiver = if needs_receiver {
             function_call_this(Some(this_value), &frame_env, function.is_strict)
         } else {
@@ -1260,48 +1248,10 @@ fn function_env<'a>(
             kind: function.owner_kind,
         });
     }
-    if !use_direct_call_slots && !use_positional_arguments {
-        for (index, name) in bytecode.positional_parameter_bindings().enumerate() {
-            let value = argument_values
-                .get(index)
-                .cloned()
-                .unwrap_or(Value::Undefined);
-            frame_env.insert(name.to_owned(), value);
-        }
-    }
-    let parameter_shadows_arguments =
-        !use_direct_call_slots && bytecode.parameters_shadow_arguments();
+    let parameter_shadows_arguments = bytecode.parameters_shadow_arguments();
     let has_own_arguments_object = !function.lexical_arguments
         && !parameter_shadows_arguments
         && bytecode.needs_arguments_object();
-    if has_own_arguments_object && !function.is_strict && function.params.is_simple() {
-        for &slot in bytecode.parameter_slots() {
-            let name = bytecode.local_name_at(slot).expect("parameter route");
-            if let Some(meta) = bytecode.binding_meta(slot) {
-                let value = frame_env.get_local(name).unwrap_or(Value::Undefined);
-                frame_env.insert_frame_cell(
-                    name.to_owned(),
-                    super::BindingCell::with_metadata(meta, Some(value)),
-                );
-            }
-        }
-    }
-    if has_own_arguments_object {
-        frame_env.insert(
-            "arguments".to_owned(),
-            arguments_object(function, argument_values, &frame_env),
-        );
-    }
-    if let Some(rest_name) = bytecode.rest_parameter_binding() {
-        let values = argument_values
-            .iter()
-            .skip(function.params.positional.len())
-            .cloned()
-            .collect();
-        let array = ArrayRef::new(env.realm(), values);
-        apply_marked_realm_array_prototype(&array, &frame_env);
-        frame_env.insert(rest_name.to_owned(), Value::Array(array));
-    }
     if has_own_arguments_object || parameter_shadows_arguments {
         frame_env.insert(
             DIRECT_EVAL_ARGUMENTS_BINDING.to_owned(),
@@ -1323,40 +1273,11 @@ fn function_env<'a>(
     FunctionCallEnv {
         env: frame_env,
         direct_call_slots,
-        positional_arguments: use_positional_arguments.then_some(argument_values),
+        call_inputs: (!use_direct_call_slots).then_some(super::CallInputs {
+            function,
+            arguments: argument_values,
+        }),
     }
-}
-
-fn apply_marked_realm_array_prototype(array: &ArrayRef, env: &CallEnv) {
-    if !env.has_dynamic_function_realm_global() {
-        return;
-    }
-    let Some(prototype) = crate::array_prototype(env) else {
-        return;
-    };
-    let initialized = array
-        .set_prototype_slot(Some(crate::Prototype::Object(prototype)))
-        .is_ok();
-    debug_assert!(
-        initialized,
-        "new rest parameter array rejected its realm prototype"
-    );
-}
-
-/// General synchronous entry keeps its own services and special bindings.
-/// Only raw parameter names and unobservable receiver/eval metadata are omitted.
-fn can_seed_positional_call(function: &Function, bytecode: &Bytecode, env: &CallEnv) -> bool {
-    !function.is_generator
-        && !function.is_async
-        && bytecode.supports_positional_entry()
-        && function.dynamic_scope_bypassed()
-        && function.with_stack.is_empty()
-        && !function.has_dynamic_function_realm
-        && !function.has_dynamic_function_realm_override.get()
-        && function
-            .realm()
-            .is_none_or(|realm| Rc::ptr_eq(realm, env.realm()))
-        && !function.has_module_imports()
 }
 
 fn can_seed_direct_leaf_call(function: &Function, bytecode: &Bytecode) -> bool {

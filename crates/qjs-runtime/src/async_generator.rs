@@ -1257,6 +1257,7 @@ fn async_from_sync_value_fulfilled(function: &Function, value: Value, env: &mut 
 pub(crate) fn call_async_generator_function(
     function: &Function,
     function_env: CallEnv,
+    inputs: Option<crate::function::CallInputs<'_>>,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let bytecode = function
@@ -1268,6 +1269,7 @@ pub(crate) fn call_async_generator_function(
         GeneratorStart {
             bytecode,
             env: function_env,
+            inputs: inputs.map(crate::function::CallInputs::into_owned),
             upvalues: function.upvalues.clone(),
             with_stack: function.with_stack.clone(),
         },

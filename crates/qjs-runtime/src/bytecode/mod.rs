@@ -223,7 +223,7 @@ pub(crate) fn eval_function_bytecode<'a>(
     upvalues: Vec<crate::function::BindingCell>,
     with_stack: Vec<Value>,
     persist_global_lexicals: bool,
-    positional_arguments: Option<&[Value]>,
+    call_inputs: Option<crate::function::CallInputs<'_>>,
 ) -> FunctionBytecodeResult<'a> {
     vm::eval_function_bytecode(
         bytecode,
@@ -232,7 +232,7 @@ pub(crate) fn eval_function_bytecode<'a>(
         with_stack,
         persist_global_lexicals,
         None,
-        positional_arguments,
+        call_inputs,
     )
 }
 
@@ -241,9 +241,9 @@ pub(crate) fn eval_call_bytecode(
     env: crate::CallEnv,
     upvalues: Vec<crate::function::BindingCell>,
     with_stack: Vec<Value>,
-    positional_arguments: Option<&[Value]>,
+    call_inputs: Option<crate::function::CallInputs<'_>>,
 ) -> Result<Value, RuntimeError> {
-    vm::eval_call_bytecode(bytecode, env, upvalues, with_stack, positional_arguments)
+    vm::eval_call_bytecode(bytecode, env, upvalues, with_stack, call_inputs)
 }
 
 /// The immutable source of received-upvalue cells for a slot-seeded call.

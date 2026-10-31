@@ -374,3 +374,20 @@ comes from its implicit Arguments declaration. No executable IR/source-shape
 recognizer is introduced. All **2,568 runtime tests**, Clippy and the staged gate including 117 selected
 Test262 cases pass. Lazy object recipes and
 positional inputs for suspend/eval paths remain upcoming work.
+
+
+## B2c3 positional inputs for every call kind
+
+CallInputs now borrows the function and actual slice on general synchronous
+entries. Generator/async entry owns positional actuals only until its initial
+frame is constructed; no parameter/rest name/value map is built. Parameter,
+pattern/rest and duplicate routes seed slots before cells. Mapped argument
+indices retain those exact cells by compiled slot; the old argument-name
+search/cell promotion and positional-admission exclusions are deleted. Rest
+arrays are created once in frame construction with the selected realm prototype.
+The existing direct-tier argument slice contract is unchanged. All **2,568 runtime
+tests** pass, including updated admission tests for dynamic/suspended inputs and
+mapped aliases across callbacks/storage reuse. Clippy and the staged gate with
+117 selected Test262 cases also pass. Implicit arguments is temporarily
+published as its canonical cell in the compatibility view; B3/B5 delete that
+view and B2's lazy recipe will avoid materializing unread objects.

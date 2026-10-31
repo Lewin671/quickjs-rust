@@ -80,6 +80,7 @@ pub(super) struct BindingPlan {
     pub(super) sloppy_global_slots: Vec<usize>,
     pub(super) module_live_candidates: Vec<usize>,
     pub(super) parameters: ParameterInfo,
+    pub(super) arguments_slot: Option<usize>,
     pub(super) dynamic_scope_tree: bool,
     pub(super) needs_receiver: bool,
     pub(super) needs_lexical_owner: bool,
@@ -188,6 +189,7 @@ impl BindingPlan {
                 .collect(),
             // Expression thunks (notably field initializers) have no parameter
             // AST. Their empty list still satisfies the existing leaf contract.
+            arguments_slot: None,
             parameters: ParameterInfo {
                 direct_seedable: bytecode.parameter_slots().is_empty(),
                 ..ParameterInfo::default()

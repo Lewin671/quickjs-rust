@@ -8,10 +8,11 @@ use super::{BindingCell, CallEnv};
 
 const CROSS_REALM_FUNCTION_PROTOTYPE: &str = "__quickjsRustRealmFunctionPrototype";
 
-pub(super) fn arguments_object(
+pub(crate) fn arguments_object(
     function: &Function,
     argument_values: &[Value],
     env: &CallEnv,
+    parameter_cells: &[Option<BindingCell>],
 ) -> Value {
     let prototype = object_prototype(env).map(Prototype::Object);
     let iterator = symbol::iterator_symbol(env);
@@ -31,10 +32,11 @@ pub(super) fn arguments_object(
         ),
     );
     for (index, value) in argument_values.iter().cloned().enumerate() {
-        if let Some(parameter_name) = mapped_argument_parameter(function, index) {
-            let parameter = env
-                .frame_binding_cell(parameter_name)
-                .unwrap_or_else(|| BindingCell::new(value.clone()));
+        if let Some(slot) = mapped_argument_parameter(function, index) {
+            let parameter = parameter_cells[slot]
+                .as_ref()
+                .expect("mapped parameter has a canonical cell")
+                .clone();
             sequence.insert_property(
                 &index.to_string(),
                 mapped_argument_property(env.realm(), parameter, env.realm().atoms()),
@@ -64,11 +66,11 @@ pub(super) fn arguments_object(
     Value::Object(object)
 }
 
-fn mapped_argument_parameter(function: &Function, index: usize) -> Option<&str> {
+fn mapped_argument_parameter(function: &Function, index: usize) -> Option<usize> {
     if function.is_strict || !function.params.is_simple() {
         return None;
     }
-    function.bytecode.as_ref()?.mapped_argument_parameter(index)
+    function.bytecode.as_ref()?.mapped_argument_slot(index)
 }
 
 fn mapped_argument_property(
@@ -248,4 +250,33 @@ pub(crate) fn native_mapped_argument_set(
         )?;
     }
     Ok(Value::Undefined)
+}
+
+/// Borrowed raw call inputs. The plan assigns slots; no name/value map exists.
+#[derive(Clone, Copy)]
+pub(crate) struct CallInputs<'a> {
+    pub(crate) function: &'a Function,
+    pub(crate) arguments: &'a [Value],
+}
+
+/// Suspension owns actual inputs only until the prologue builds its frame.
+pub(crate) struct OwnedCallInputs {
+    function: Function,
+    arguments: Vec<Value>,
+}
+impl CallInputs<'_> {
+    pub(crate) fn into_owned(self) -> OwnedCallInputs {
+        OwnedCallInputs {
+            function: self.function.clone(),
+            arguments: self.arguments.to_vec(),
+        }
+    }
+}
+impl OwnedCallInputs {
+    pub(crate) fn as_borrowed(&self) -> CallInputs<'_> {
+        CallInputs {
+            function: &self.function,
+            arguments: &self.arguments,
+        }
+    }
 }

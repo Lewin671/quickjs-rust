@@ -37,6 +37,7 @@ pub(crate) enum GeneratorState {
 pub(crate) struct GeneratorStart {
     pub(crate) bytecode: Rc<Bytecode>,
     pub(crate) env: CallEnv,
+    pub(crate) inputs: Option<crate::function::OwnedCallInputs>,
     pub(crate) upvalues: Vec<crate::function::BindingCell>,
     pub(crate) with_stack: Vec<Value>,
 }
@@ -165,10 +166,20 @@ pub(crate) fn start_suspended_at_body(
     let GeneratorStart {
         bytecode,
         env,
+        inputs,
         upvalues,
         with_stack,
     } = start;
-    let mut vm = Vm::new_with_globals_upvalues_and_with_stack(&bytecode, env, upvalues, with_stack);
+    let mut vm = Vm::with_frame_bytecode(
+        super::frame_program::FrameBytecode::Borrowed(&bytecode),
+        env,
+        upvalues,
+        with_stack,
+        None,
+        inputs
+            .as_ref()
+            .map(crate::function::OwnedCallInputs::as_borrowed),
+    );
     vm.stop_at_prologue = true;
     let result = vm.run_completion();
     match result {
@@ -197,10 +208,20 @@ fn run_from_start(
     let GeneratorStart {
         bytecode,
         env,
+        inputs,
         upvalues,
         with_stack,
     } = start;
-    let mut vm = Vm::new_with_globals_upvalues_and_with_stack(&bytecode, env, upvalues, with_stack);
+    let mut vm = Vm::with_frame_bytecode(
+        super::frame_program::FrameBytecode::Borrowed(&bytecode),
+        env,
+        upvalues,
+        with_stack,
+        None,
+        inputs
+            .as_ref()
+            .map(crate::function::OwnedCallInputs::as_borrowed),
+    );
     let result = vm.run_completion();
     drive(result, vm, &bytecode)
 }
