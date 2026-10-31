@@ -1,8 +1,8 @@
 # T077 S2 follow-up, lead feedback round 2
 
 - Status: active; B–D implemented, A performance repair still open; final qualification paused pending instruction acceptance.
-- Implementation: A–D present, with shared-epoch cleanup at `6bf1055b`; current repair stops retaining otherwise unused empty roots. Current x86 order regenerated from `3c6ce3d7` (job below).
-- Verified at: native full check on `362d1bf0` passes 2,519 runtime tests/5,170 curated cases; all 268 NG fixtures cached/off/verify; eight x86 cycle tests. Preliminary owned-child RSS meets <=1.25. Final exact/performance/resource results pending.
+- Implementation: A–D present with 80-byte bound nodes/shared tiny data, published reusable templates, allocation-free cycle checks, live-root reuse/dead-root sweeps, cached hash width and position-only read probes. A acceptance remains open.
+- Verified at: staged fast gate passes 2,520 runtime tests; `b731ea83` passes all 268 NG fixtures in cached/off/verify. `4e788129` native/x86 mem3 passes. Older full gates are revision-bound; final exact/performance/resource gates remain due.
 - Evidence: this record and the named job/artifact receipts below; [round 1](T077-s2-followup.md) is historical.
 - Unresolved: final per-lane instruction/wall limits, exact cached/off with burndown, complete native/x86 resource gates.
 - Next action: focused instruction replays on restored guard code; freeze a passing source before final full/exact/resource replays. No origin push or merge.
@@ -267,3 +267,15 @@ Layout/NamedStore sizes stay 80/64 bytes; LayoutData grows by eight bytes, and
 its existing size-based accounting includes that change. Run collision, growth,
 delete/reinsert and prefix tests via the fast gate, then focused instructions
 and original memory before any final qualification.
+
+
+Cached-width source `b731ea83`, focused job
+`20261031T124537Z-t077-s2fu-r2-hash-width`: dynamic read improves
+1.045807 -> 1.036185 and string churn 1.012467 -> 0.995199 versus 4e788129;
+NG cached/off/verify all pass 268 fixtures. Other residuals remain, including
+diff 1.002063 and JSON parse 1.008229. Next stage separates position-only
+reads from consumable insertion proofs: indexed reads skip vacancy tracking and
+return only Option<usize>; tiny reads remain linear. Exclusive writes keep
+IdProbe and one probe per insertion. Prefix bounds and probe counters stay
+unchanged. Existing collision/delete/reinsert/growth tests will exercise the
+read path as well as insertion proofs before another instruction replay.

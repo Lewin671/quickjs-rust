@@ -88,6 +88,16 @@ impl LayoutData {
         }
         IdProbe::linear(key, self.entries.iter().position(|entry| entry.key == key))
     }
+    pub(super) fn position(&self, key: KeyId, counted: bool) -> Option<usize> {
+        if counted {
+            crate::diagnostics::count!(property_id_probes);
+        }
+        if self.index.allocated() {
+            self.index.position(key)
+        } else {
+            self.entries.iter().position(|entry| entry.key == key)
+        }
+    }
     pub(super) fn append(&mut self, key: &KeyLease, attrs: Attributes, mut proof: IdProbe) {
         let before = self.bytes();
         if !self.index.allocated() && self.entries.len() >= 2 {
@@ -154,16 +164,21 @@ impl Layout {
         proof.position = proof.position.filter(|&position| position < self.len);
         proof
     }
+    pub(super) fn position(&self, key: KeyId) -> Option<usize> {
+        self.data
+            .borrow()
+            .position(key, true)
+            .filter(|&position| position < self.len)
+    }
     pub(super) fn entry_for_key(&self, key: KeyId) -> Option<ShapeEntry> {
         let data = self.data.borrow();
-        let position = data.probe(key, true).position?;
+        let position = data.position(key, true)?;
         (position < self.len).then(|| data.entries[position])
     }
     pub(super) fn verify_position(&self, key: KeyId) -> Option<usize> {
         self.data
             .borrow()
-            .probe(key, false)
-            .position
+            .position(key, false)
             .filter(|&position| position < self.len)
     }
     pub(super) fn private_data(&mut self) -> &mut LayoutData {
