@@ -23,7 +23,7 @@ fn unused_prototype_edges_allocate_no_roots_states_or_descriptor_copies() {
     });
     // The empty receiver retains its edge inline and shares the neutral seed.
     child.with_named(|s| {
-        assert!(s.layout.deferred_seed);
+        assert!(s.layout.publication.is_deferred());
         assert!(s.cold.is_unallocated());
     });
     drop(grandchild);
@@ -278,6 +278,28 @@ fn dictionary_versions_do_not_allocate_receiver_cold_data() {
 }
 
 #[test]
+fn unobserved_bound_dictionary_versions_guard_the_private_layout_directly() {
+    let domain = AtomDomain::new();
+    let _owner = PropertyOwner::new(domain.clone());
+    let mut store = NamedStore::empty_with_prototype(
+        &domain,
+        Some(Prototype::Object(object(&domain, None))),
+        0,
+    );
+    for i in 0..140 {
+        store.insert_text(&format!("p{i}"), Property::enumerable(Value::Null));
+    }
+    assert!(store.is_dictionary());
+    let guard = store.version();
+    assert!(store.matches_own_version(&guard));
+    let before = store.layout.clone();
+    store.materialize_layout();
+    assert!(Rc::ptr_eq(&before, &store.layout));
+    store.insert_text("new", Property::enumerable(Value::Null));
+    assert!(!store.matches_own_version(&guard));
+}
+
+#[test]
 fn a_missing_exclusive_probe_does_not_publish_a_deferred_root() {
     let domain = AtomDomain::new();
     let _owner = PropertyOwner::new(domain.clone());
@@ -304,7 +326,7 @@ fn unobserved_owned_chains_keep_one_small_binding_and_shared_fields() {
         let next = object(&domain, Some(head.clone()));
         next.set("v".into(), Value::Number(i as f64));
         next.with_named(|s| {
-            assert!(s.layout.transient);
+            assert!(s.layout.publication.is_transient());
             assert!(s.layout.links.get().is_none());
             assert!(s.cold.is_unallocated());
             assert!(!s.layout.data.borrow().index.allocated());
@@ -356,7 +378,7 @@ fn observing_equal_transient_bindings_publishes_the_canonical_path() {
     a.with_named(|s| {
         b.with_named(|t| {
             assert!(Rc::ptr_eq(&s.layout, &t.layout));
-            assert!(!s.layout.transient);
+            assert!(!s.layout.publication.is_transient());
         })
     });
     assert_eq!(a.get("x"), Some(Value::Number(2.0)));

@@ -320,3 +320,23 @@ writes without changing private initialization. Its default external/sentinel/
 broad order generation produces 467 symbols; apply it for strict relink audit
 and a full public86 before declaring A accepted. All 268 NG fixtures pass
 cached/off/verify on f9d6d86c; its native full check remains in progress.
+
+
+Ordered `70bedf7c` public86, job `20261031T133013Z-t077-s2fu-r2-slot-public86`:
+430 valid pairs, no invalid/heavy samples, strict audit passes. Wall/instruction:
+development 1.001065/0.999139; external 0.998117/1.001694;
+broad 0.986517/0.998244; sentinel 0.960250/0.995992. A remains open for external
+instructions and development wall. Native f9d6d86c full check passes 2,521
+runtime/5,170 curated cases, all NG modes pass, and its complete quiet resource
+replay passes all original/new RSS limits (owned ratios 1.173/1.091/1.165).
+No final exact scans were restarted on this unaccepted source.
+
+Next architecture step packs deferred/transient publication state into one
+byte enum while retaining the dictionary flag. Ready and private-transient
+states need no publication; deferred seed and shared transient states do.
+Copying into a dictionary preserves root-on-demand behavior but makes the
+private version directly guardable. This replaces the multi-flag predicate on
+construction/guard publication with one state-range test, without growing the
+80-byte Layout or changing any slot/value/prototype semantics. Migrate all
+constructors and flag reads together, then run guard/prefix tests and focused
+instructions before new final qualification.

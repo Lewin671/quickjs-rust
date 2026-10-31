@@ -190,7 +190,7 @@ impl Layout {
         if let Some(root) = layout.known_root() {
             return root;
         }
-        if layout.len == 0 && !layout.transient {
+        if layout.len == 0 && !layout.publication.is_transient() {
             return layout;
         }
         let prototype = layout.prototype.as_ref().and_then(WeakPrototype::upgrade);
@@ -202,7 +202,7 @@ impl Layout {
         })
     }
     pub(crate) fn matches_prototype(&self, prototype: Option<&Prototype>, flavor: u16) -> bool {
-        !self.deferred_seed
+        !self.publication.is_deferred()
             && self.flavor == flavor
             && self.prototype.as_ref().map(WeakPrototype::identity)
                 == prototype.map(Prototype::identity)
@@ -239,7 +239,7 @@ impl NamedStore {
         Some(edge)
     }
     fn deferred(&self) -> bool {
-        self.layout.deferred_seed
+        self.layout.publication.is_deferred()
     }
     /// An empty seed carries no cacheable prototype identity until admission.
     pub(super) fn guard_layout(&self) -> &Rc<Layout> {
@@ -264,7 +264,7 @@ impl NamedStore {
         }
     }
     pub(super) fn needs_publication(&self) -> bool {
-        self.layout.deferred_seed || (self.layout.transient && !self.layout.dictionary)
+        self.layout.publication.is_pending()
     }
     /// Publish observed metadata without changing properties or their slots.
     pub(crate) fn materialize_layout(&mut self) {

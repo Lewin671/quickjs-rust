@@ -32,6 +32,8 @@ mod links;
 use links::LayoutLinks;
 mod lazy;
 mod prototype;
+mod publication;
+use publication::Publication;
 mod roots;
 mod sequence;
 #[cfg(test)]
@@ -114,8 +116,7 @@ pub(crate) struct Layout {
     len: usize,
     dictionary: bool,
     epoch: std::cell::Cell<u64>,
-    deferred_seed: bool,
-    transient: bool,
+    publication: Publication,
     edits: u8,
     prototype: Option<WeakPrototype>,
     flavor: u16,
@@ -168,8 +169,7 @@ impl PropertyOwner {
                 links: OnceCell::new(),
                 dictionary: false,
                 epoch: std::cell::Cell::new(0),
-                deferred_seed: false,
-                transient: false,
+                publication: Publication::Ready,
                 edits: 0,
                 prototype: None,
                 flavor: 0,
