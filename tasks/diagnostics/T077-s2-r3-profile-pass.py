@@ -1,7 +1,8 @@
 """One exact-image root-cause pass; sample self counts and static disassembly."""
 from pathlib import Path
 from collections import Counter
-import argparse, dataclasses, hashlib, json, os, re, subprocess
+import argparse, dataclasses, hashlib, json, os, re, subprocess, sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from tools.benchmark.screen import counter_tool, sample
 from tools.benchmark.layout_symbols import parse_symbol
 from tools.benchmark.layout_tables import text_symbols
