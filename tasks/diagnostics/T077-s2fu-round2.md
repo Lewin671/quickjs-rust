@@ -151,3 +151,11 @@ regeneration. Job `20261031T112639Z-t077-s2fu-r2-order` profiles the declared
 default external/sentinel/broad set on frozen `c0f99d4e`, producing 464 symbols.
 That intermediate order is retained; regenerate against the repaired template
 source before final adoption rather than treating an old-image pin as current.
+
+Template-repaired source `362d1bf0` passes all 268 NG fixtures in cached/off/
+debug-verify modes, and eight focused cycle tests pass on x86_64. Final order
+job `20261031T113502Z-t077-s2fu-r2-final-order` uses that exact source and the
+default external/sentinel/broad set, producing 491 symbols at the unchanged
+default pin offset. No held-out/development selection or offset search is used.
+The generated order and image receipt are applied; final relink/audit and
+public86 remain required.
