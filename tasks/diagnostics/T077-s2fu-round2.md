@@ -175,3 +175,15 @@ Native pinned release/agents SHA-256:
 actual --agent smoke passes. Final exact scans execute this image with ICs
 cached/off, four --all/engine-both partitions per mode, one worker per shard,
 20-second timeout, no selection/exclusion changes.
+
+
+Ordered candidate `68046c8a`, job `20261031T114212Z-t077-s2fu-r2-final-public86`:
+strict layout audit passes (zero stale entries, declared wide offset 0x400),
+430 valid pairs, no invalid/heavy pairs. Lane wall/instruction: development
+0.998060/0.999644; external 0.992885/1.001476; broad 0.989289/1.001083;
+sentinel 0.977227/0.998313. Wall targets pass, external/broad instruction limits
+remain open. Do not label this accepted. The remaining correction removes
+receiver-era `set_epoch(0)` work on immutable shared layouts after append/rebase
+and in literal construction. Such layouts already carry epoch zero by
+construction; private copies still initialize to one. Own guards explicitly
+short-circuit the private epoch load when the expected shared epoch is zero.

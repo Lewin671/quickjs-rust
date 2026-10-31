@@ -58,7 +58,8 @@ impl NamedStore {
     /// A present own slot proves that its layout has already been published.
     #[inline(always)]
     pub(crate) fn matches_own_version(&self, expected: &LayoutVersion) -> bool {
-        expected.matches_layout(&self.layout, self.layout.epoch.get())
+        expected.matches_identity(&self.layout)
+            && (expected.is_shared() || expected.epoch == self.layout.epoch.get())
     }
     #[inline(always)]
     pub(crate) fn matches_version(&self, expected: &LayoutVersion) -> bool {

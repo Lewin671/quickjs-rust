@@ -431,7 +431,6 @@ impl NamedStore {
         self.cold.clear_guard();
         if self.is_empty() {
             self.layout = root.clone();
-            self.set_epoch(0);
         } else if self.layout.dictionary {
             let mut next = self.layout.copied(true);
             next.set_root(root.clone());
@@ -450,7 +449,6 @@ impl NamedStore {
             drop(fields);
             drop(keys);
             self.layout = next;
-            self.set_epoch(0);
         }
         self.prototype = prototype.clone();
         if let Some(mode) = mode {

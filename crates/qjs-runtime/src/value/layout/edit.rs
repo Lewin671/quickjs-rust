@@ -333,7 +333,6 @@ impl NamedStore {
     pub(super) fn bump_epoch(&mut self) {
         self.cold.clear_guard();
         if !self.layout.dictionary {
-            self.set_epoch(0);
             return;
         }
         let epoch = match self.epoch().checked_add(1) {
