@@ -164,3 +164,10 @@ crates scripts Cargo.toml Cargo.lock .cargo rust-toolchain.toml` proves engine,
 CLI, build and harness inputs identical. Cached burndown will name `590edc60`;
 IC-off may name that documentation-only checkpoint because the ledger permits
 only one row per commit. Both modes execute the same pinned `590edc60` binary.
+
+
+`590edc60` final full `check.sh` passes, including all 5,170 curated cases.
+The compact-sharing source supersedes the earlier `3dc2a684` checkpoint for
+final qualification. Cached burndown will name `590edc60`; IC-off will name
+the following documentation-only checkpoint, with identical engine/build/
+harness inputs proved by the same scoped git diff and the shared binary pin.
