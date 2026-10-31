@@ -14,7 +14,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::{
     GLOBAL_THIS_BINDING, Property, RuntimeError, Value,
-    function::{CallEnv, Upvalue},
+    function::{BindingCell, CallEnv},
     property_value,
     value::OwnDataPropertyWrite,
 };
@@ -28,7 +28,7 @@ use super::{ir::Bytecode, vm::Vm};
 pub(super) struct TypedLoopSloppyGlobalWrite {
     slot: usize,
     name: String,
-    cell: Upvalue,
+    cell: BindingCell,
     global_this: crate::ObjectRef,
     /// The global object's own-property slot for `name`, with the layout
     /// revision it was resolved at: while the layout holds, each write goes
@@ -109,7 +109,7 @@ impl Vm<'_> {
         for slot in split_slots {
             let name = self.bytecode.locals[slot].name.clone();
             let value = Value::Undefined;
-            let upvalue = Upvalue::new(value.clone());
+            let upvalue = BindingCell::new(value.clone());
             self.locals[slot] = Some(value);
             self.local_upvalues[slot] = Some(upvalue.clone());
             body_bindings.insert_cell(name, upvalue);
@@ -505,6 +505,11 @@ impl Vm<'_> {
                 message: format!("ReferenceError: undefined identifier `{name}`"),
             });
         }
+        if self.bytecode.locals[slot].name != "this"
+            && let Some(cell) = self.local_upvalue_cell(slot)
+        {
+            return cell.read();
+        }
         if let Some(value) = self.upvalue_slot_value(slot) {
             return self.checked_local_value(slot, value);
         }
@@ -702,7 +707,7 @@ impl Vm<'_> {
     }
 
     pub(super) fn upvalue_slot_value(&self, slot: usize) -> Option<Value> {
-        self.local_upvalue_cell(slot).map(Upvalue::get)
+        self.local_upvalue_cell(slot).map(BindingCell::get)
     }
 
     #[inline(always)]
@@ -819,7 +824,11 @@ impl Vm<'_> {
         }
         *local = Some(value.clone());
         let uses_shared_cell = if let Some(upvalue) = self.local_upvalue_cell(slot) {
-            upvalue.set(value.clone());
+            if upvalue.is_initialized() {
+                upvalue.assign(value.clone(), self.bytecode.is_strict())?;
+            } else {
+                upvalue.initialize(value.clone())?;
+            }
             true
         } else {
             false
@@ -836,25 +845,6 @@ impl Vm<'_> {
             // binding is already updated through the shared cell, and a
             // same-named outer binding can be a different cell.
             self.write_through_module_live_binding_slot(slot, &value);
-        }
-        if self.bytecode.global_scope
-            && self.persist_global_lexicals
-            && !hoisted
-            && self.bytecode.local_slot(&self.bytecode.locals[slot].name) == Some(slot)
-            && self
-                .bytecode
-                .global_lexical_names()
-                .iter()
-                .any(|name| name == &self.bytecode.locals[slot].name)
-            && !self.bytecode.local_is_compiler_temporary(slot)
-        {
-            let name = self.bytecode.locals[slot].name.clone();
-            self.env
-                .set_global_lexical_value(name.clone(), value.clone());
-            self.env.mark_global_lexical_binding(name.clone());
-            if !mutable {
-                self.env.mark_immutable_lexical_binding(name);
-            }
         }
         let mut env_mirror_synced = false;
         if !uses_shared_cell
@@ -1016,12 +1006,24 @@ impl Vm<'_> {
         slot < u128::BITS as usize && self.realm_binding_slots & (1_u128 << slot) != 0
     }
 
+    pub(super) fn check_dynamic_assignment(
+        &self,
+        name: &str,
+        strict: bool,
+    ) -> Result<(), RuntimeError> {
+        if let Some(cell) = self.env.local_binding_cell(name) {
+            cell.check_assignment(strict)?;
+        }
+        Ok(())
+    }
+
     pub(super) fn store_local_or_global_sloppy(
         &mut self,
         slot: usize,
         name: &str,
         value: Value,
     ) -> Result<(), RuntimeError> {
+        self.check_dynamic_assignment(name, false)?;
         if self.env.has_module_import(name) {
             return Err(RuntimeError {
                 thrown: None,
@@ -1156,7 +1158,7 @@ impl Vm<'_> {
                 .is_some_and(|upvalue| local_is_some || !upvalue.is_shared());
         self.locals[slot] = None;
         if refresh_upvalue && let Some(upvalue) = self.local_upvalues.get_mut(slot) {
-            *upvalue = Some(Upvalue::new(Value::Function(
+            *upvalue = Some(BindingCell::new(Value::Function(
                 crate::Function::uninitialized_lexical_marker(),
             )));
         }
@@ -1317,6 +1319,17 @@ impl Vm<'_> {
             })
             .collect::<HashSet<_>>();
         for (name, mut value) in locals {
+            // Compiler-owned declaratives already received every effect through
+            // their canonical cell. A service view's projected value may
+            // predate a getter/setter callback; publishing it would undo that
+            // callback (notably a mapped arguments write).
+            if self
+                .env
+                .local_binding_cell(&name)
+                .is_some_and(|cell| cell.has_compiler_metadata())
+            {
+                continue;
+            }
             // Implicit this is never assigned by ordinary name writeback.
             // Derived initialization already reaches its shared cell; an
             // outer frame's stale value must not write an inherited cell.
@@ -1361,7 +1374,7 @@ impl Vm<'_> {
                     if let Some(cell) = self.local_upvalues.get_mut(index)
                         && cell.is_some()
                     {
-                        *cell = Some(Upvalue::new(value.clone()));
+                        *cell = Some(BindingCell::new(value.clone()));
                     }
                     self.env.insert_deopt(
                         format!("{}{name}", crate::DIRECT_EVAL_FUNCTION_VAR_BINDING_PREFIX),
@@ -1542,7 +1555,7 @@ impl Vm<'_> {
                     || Value::Function(crate::Function::uninitialized_lexical_marker()),
                 );
             if let Some(upvalue) = self.local_upvalues.get_mut(slot) {
-                *upvalue = Some(Upvalue::new(value));
+                *upvalue = Some(BindingCell::new(value));
             }
         }
     }

@@ -20,7 +20,7 @@ use crate::bytecode::{Bytecode, DirectCallSlots};
 use crate::value::Value;
 use crate::{CallEnv, RuntimeError};
 
-use super::upvalue::Upvalue;
+use crate::binding::BindingCell;
 
 /// What must happen after an ordinary bytecode call returns -- and nothing
 /// about how it runs.
@@ -78,7 +78,7 @@ pub(crate) struct PreparedBytecodeCall<'a> {
     pub(crate) positional_arguments: Option<&'a [Value]>,
     /// Only the general path needs these; a slot-seeded call carries its
     /// upvalues inside `slots`.
-    pub(crate) upvalues: Vec<Upvalue>,
+    pub(crate) upvalues: Vec<BindingCell>,
     pub(crate) with_stack: Vec<Value>,
     pub(crate) completion: CallCompletionPolicy,
 }

@@ -1,6 +1,6 @@
 use crate::{
     RuntimeError, Value,
-    function::{CallEnv, Upvalue},
+    function::{BindingCell, CallEnv},
 };
 
 use super::ir::Bytecode;
@@ -10,7 +10,7 @@ pub(crate) struct FunctionBytecodeResult<'a> {
     pub(super) bytecode: &'a Bytecode,
     pub(super) env: CallEnv,
     pub(super) locals: Vec<Option<Value>>,
-    pub(super) local_upvalues: Vec<Option<Upvalue>>,
+    pub(super) local_upvalues: Vec<Option<BindingCell>>,
     pub(crate) sloppy_global_names: Vec<String>,
 }
 
@@ -76,7 +76,7 @@ impl FunctionBytecodeResult<'_> {
                 self.local_upvalues
                     .get(index)
                     .and_then(Option::as_ref)
-                    .map(Upvalue::get)
+                    .map(BindingCell::get)
                     .or_else(|| self.locals.get(index).and_then(Option::as_ref).cloned())
             })
             .or_else(|| self.env.get_local(name))
@@ -89,7 +89,7 @@ impl FunctionBytecodeResult<'_> {
                 self.local_upvalues
                     .get(index)
                     .and_then(Option::as_ref)
-                    .map(Upvalue::get)
+                    .map(BindingCell::get)
                     .or_else(|| self.locals.get(index).and_then(Option::as_ref).cloned())
             })
             .or_else(|| self.env.get_local(name))
@@ -104,7 +104,7 @@ impl FunctionBytecodeResult<'_> {
                 self.local_upvalues
                     .get(index)
                     .and_then(Option::as_ref)
-                    .map(Upvalue::get)
+                    .map(BindingCell::get)
                     .or_else(|| self.locals.get(index).and_then(Option::as_ref).cloned())
             })
             .or_else(|| self.env.get(name))

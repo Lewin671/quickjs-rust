@@ -24,7 +24,7 @@ use crate::bytecode::ir::Bytecode;
 use crate::bytecode::typed_loop::helper_graph::numeric::{
     Cmp, NumOp, binary as lower_binary, first_free_register, optimize,
 };
-use crate::function::Upvalue;
+use crate::function::BindingCell;
 
 mod from_bytecode;
 
@@ -248,7 +248,7 @@ thread_local! {
 pub(in crate::bytecode) fn run(
     plan: &Rc<NumericPlan>,
     root_bytecode: &Bytecode,
-    cells: &[Upvalue],
+    cells: &[BindingCell],
     args: &[f64],
 ) -> Option<Value> {
     let result = if plan.leaf {
@@ -292,7 +292,7 @@ fn run_leaf(plan: &NumericPlan, args: &[f64]) -> Option<f64> {
 fn run_with(
     plan: &Rc<NumericPlan>,
     root_bytecode: &Bytecode,
-    cells: &[Upvalue],
+    cells: &[BindingCell],
     args: &[f64],
     scratch: &mut Scratch,
 ) -> Option<f64> {
@@ -533,7 +533,7 @@ fn resolve(
     caller: usize,
     slot: u16,
     root_bytecode: &Bytecode,
-    root_cells: &[Upvalue],
+    root_cells: &[BindingCell],
 ) -> Option<usize> {
     let caller_body = bodies.get(caller)?;
     if let Some(&(_, callee)) = caller_body
@@ -559,7 +559,7 @@ fn link(
     caller: usize,
     slot: u16,
     root_bytecode: &Bytecode,
-    root_cells: &[Upvalue],
+    root_cells: &[BindingCell],
 ) -> Option<usize> {
     let caller_body = bodies.get(caller)?;
     let bytecode: &Bytecode = caller_body.bytecode.as_deref().unwrap_or(root_bytecode);

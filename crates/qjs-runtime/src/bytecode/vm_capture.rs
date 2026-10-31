@@ -1,6 +1,6 @@
 //! Indexed shared-upvalue construction for nested functions.
 
-use crate::{Function, Value, function::Upvalue};
+use crate::{Function, Value, function::BindingCell};
 
 use super::ir::Bytecode;
 use super::vm::Vm;
@@ -10,7 +10,7 @@ impl Vm<'_> {
         &mut self,
         function_bytecode: &Bytecode,
         lexical_captures: &[(String, usize)],
-    ) -> Vec<Upvalue> {
+    ) -> Vec<BindingCell> {
         self.captured_upvalues_for_function_with_override(function_bytecode, lexical_captures, None)
     }
 
@@ -18,8 +18,8 @@ impl Vm<'_> {
         &mut self,
         function_bytecode: &Bytecode,
         _lexical_captures: &[(String, usize)],
-        binding_override: Option<(&str, &Upvalue)>,
-    ) -> Vec<Upvalue> {
+        binding_override: Option<(&str, &BindingCell)>,
+    ) -> Vec<BindingCell> {
         function_bytecode
             .locals
             .iter()
@@ -82,7 +82,7 @@ impl Vm<'_> {
             .collect()
     }
 
-    pub(super) fn ensure_upvalue_for_parent_slot(&mut self, slot: usize) -> Upvalue {
+    pub(super) fn ensure_upvalue_for_parent_slot(&mut self, slot: usize) -> BindingCell {
         if let Some(upvalue) = self.local_upvalue_cell(slot) {
             return upvalue.clone();
         }
@@ -104,7 +104,10 @@ impl Vm<'_> {
             .and_then(Option::as_ref)
             .cloned()
             .unwrap_or_else(|| Value::Function(Function::uninitialized_lexical_marker()));
-        let upvalue = Upvalue::new(value);
+        let upvalue = self.bytecode.binding_meta(slot).map_or_else(
+            || BindingCell::new(value.clone()),
+            |meta| BindingCell::with_metadata(meta, Some(value.clone())),
+        );
         if let Some(local_upvalue) = self.local_upvalues.get_mut(slot) {
             *local_upvalue = Some(upvalue.clone());
         }

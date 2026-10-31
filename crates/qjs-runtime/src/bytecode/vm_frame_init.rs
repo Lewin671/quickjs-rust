@@ -13,10 +13,10 @@ use super::operand_stack::OperandStack;
 use super::vm::{ColdFrame, FrameState, Slot, Vm};
 use crate::{
     GLOBAL_THIS_BINDING, ObjectRef, RuntimeError, Value,
-    function::{CallEnv, DynamicBindings, Realm, Upvalue},
+    function::{BindingCell, CallEnv, DynamicBindings, Realm},
     initialize_builtins,
 };
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::rc::Rc;
 
 impl<'a> Vm<'a> {
@@ -43,29 +43,6 @@ impl<'a> Vm<'a> {
         Self::new_with_globals_and_with_stack(bytecode, env, Vec::new())
     }
 
-    pub(super) fn persist_global_lexical_bindings(&mut self) {
-        if !self.bytecode.is_global_scope() {
-            return;
-        }
-        let hoisted = self.bytecode.hoisted_local_names().collect::<HashSet<_>>();
-        let global_lexical_names = self.bytecode.global_lexical_names();
-        for (slot, local) in self.bytecode.locals.iter().enumerate() {
-            if hoisted.contains(local.name.as_str()) {
-                continue;
-            }
-            if !global_lexical_names.iter().any(|name| name == &local.name) {
-                continue;
-            }
-            let Some(_value) = self.local_slot_value(slot) else {
-                continue;
-            };
-            self.env.mark_global_lexical_binding(local.name.clone());
-            if !local.mutable {
-                self.env.mark_immutable_lexical_binding(local.name.clone());
-            }
-        }
-    }
-
     pub(super) fn new_with_globals_and_with_stack(
         bytecode: &'a Bytecode,
         env: CallEnv,
@@ -77,7 +54,7 @@ impl<'a> Vm<'a> {
     pub(super) fn new_with_globals_upvalues_and_with_stack(
         bytecode: &'a Bytecode,
         env: CallEnv,
-        upvalues: Vec<Upvalue>,
+        upvalues: Vec<BindingCell>,
         with_stack: Vec<Value>,
     ) -> Self {
         Self::new_with_globals_upvalues_with_stack_and_direct_call_slots(
@@ -88,7 +65,7 @@ impl<'a> Vm<'a> {
     pub(super) fn new_with_globals_upvalues_with_stack_and_direct_call_slots(
         bytecode: &'a Bytecode,
         env: CallEnv,
-        upvalues: Vec<Upvalue>,
+        upvalues: Vec<BindingCell>,
         with_stack: Vec<Value>,
         direct_call_slots: Option<DirectCallSlots<'_>>,
     ) -> Self {
@@ -111,7 +88,7 @@ impl<'a> Vm<'a> {
     pub(super) fn with_frame_bytecode(
         handle: FrameBytecode<'a>,
         mut env: CallEnv,
-        upvalues: Vec<Upvalue>,
+        upvalues: Vec<BindingCell>,
         with_stack: Vec<Value>,
         direct_call_slots: Option<DirectCallSlots<'_>>,
         positional_arguments: Option<&[Value]>,
@@ -135,6 +112,13 @@ impl<'a> Vm<'a> {
             && env.deopt_bindings().is_none()
         {
             env.set_deopt_bindings(DynamicBindings::new());
+        }
+        if bytecode.binding_plan.has_realm_lexicals {
+            for (slot, &lexical) in bytecode.binding_plan.realm_lexical_slots.iter().enumerate() {
+                if lexical && let Some(meta) = bytecode.binding_meta(slot) {
+                    env.declare_global_lexical(meta);
+                }
+            }
         }
         let realm = env.realm_rc();
         let module_host = env.module_host();
@@ -379,7 +363,7 @@ impl<'a> Vm<'a> {
 
     /// Each live frame cell `frame_deopt_bindings` overlays, with its slot,
     /// in overlay order.
-    fn for_each_deopt_overlay_cell(&self, mut visit: impl FnMut(usize, &Upvalue)) {
+    fn for_each_deopt_overlay_cell(&self, mut visit: impl FnMut(usize, &BindingCell)) {
         for (slot, local) in self.bytecode.locals.iter().enumerate() {
             if self.bytecode.local_is_compiler_temporary(slot)
                 || local.sloppy_global_fallback
@@ -549,7 +533,7 @@ mod tests {
     fn direct_captured_frame_keeps_received_upvalue_storage() {
         let bytecode = Bytecode::new(Vec::new(), vec![local("captured", true)], Vec::new());
         let env = empty_env();
-        let captured = Upvalue::new(Value::Number(42.0));
+        let captured = BindingCell::new(Value::Number(42.0));
 
         let (local_upvalues, realm_binding_slots) =
             Vm::initial_direct_local_upvalues(&bytecode, std::slice::from_ref(&captured), 0, &env);

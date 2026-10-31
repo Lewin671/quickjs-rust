@@ -26,7 +26,7 @@ use super::{
 };
 use crate::{
     Function, ObjectRef, PropertyKey, RuntimeError, Value,
-    function::{CallEnv, Realm, Upvalue},
+    function::{BindingCell, CallEnv, Realm},
     is_truthy,
     property::try_to_property_key_without_coercion,
     to_property_key_value,
@@ -55,14 +55,13 @@ use super::vm_call_env::{VmCallEnv, VmCallEnvOrigin};
 pub(super) fn eval_bytecode(bytecode: &Bytecode) -> Result<Value, RuntimeError> {
     let mut vm = Vm::new(bytecode)?;
     let value = vm.run()?;
-    vm.persist_global_lexical_bindings();
     vm.drain_promise_jobs()?;
     Ok(value)
 }
 pub(super) fn eval_function_bytecode<'a>(
     bytecode: &'a Bytecode,
     env: CallEnv,
-    upvalues: Vec<Upvalue>,
+    upvalues: Vec<BindingCell>,
     with_stack: Vec<Value>,
     persist_global_lexicals: bool,
     direct_call_slots: Option<DirectCallSlots<'_>>,
@@ -111,7 +110,7 @@ pub(super) fn eval_function_bytecode<'a>(
 pub(super) fn eval_call_bytecode(
     bytecode: &Bytecode,
     env: CallEnv,
-    upvalues: Vec<Upvalue>,
+    upvalues: Vec<BindingCell>,
     with_stack: Vec<Value>,
     positional_arguments: Option<&[Value]>,
 ) -> Result<Value, RuntimeError> {
@@ -187,7 +186,7 @@ pub(super) struct FrameState<'a> {
     pub(super) virtual_values: Vec<Value>,
     pub(super) stack: OperandStack,
     pub(super) locals: Vec<Slot>,
-    pub(super) local_upvalues: Vec<Option<Upvalue>>,
+    pub(super) local_upvalues: Vec<Option<BindingCell>>,
     /// Direct frames that only read received cells retain the source function
     /// once and resolve cells by bytecode slot. This avoids rebuilding an
     /// owned local-sized option vector for every direct invocation while
@@ -203,7 +202,7 @@ pub(super) struct FrameState<'a> {
     /// the cell's uninitialized marker still deoptimizes deleted/accessor
     /// globals through the observable global-object path.
     pub(super) realm_binding_slots: u128,
-    pub(super) upvalues: Vec<Upvalue>,
+    pub(super) upvalues: Vec<BindingCell>,
     /// Shared realm plus this frame's internal/caller-scope bindings.
     pub(super) env: CallEnv,
     /// Ordinary leaf calls can keep their receiver here instead of
@@ -1307,6 +1306,7 @@ impl<'a> Vm<'a> {
         if updates_global_binding
             && wrote_data
             && let crate::PropertyKey::String(key) = key
+            && !self.env.is_global_lexical_binding(&key)
         {
             // [[Set]] success also includes calling a setter. Only the
             // resulting own data descriptor can supply a realm cell value;

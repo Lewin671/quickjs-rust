@@ -583,6 +583,7 @@ impl Vm<'_> {
         name: &str,
         value: Value,
     ) -> Result<(), RuntimeError> {
+        self.check_dynamic_assignment(name, true)?;
         if self.env.has_module_import(name) {
             return Err(RuntimeError {
                 thrown: None,
@@ -724,6 +725,7 @@ impl Vm<'_> {
         name: &str,
         value: Value,
     ) -> Result<(), RuntimeError> {
+        self.check_dynamic_assignment(name, false)?;
         if self.env.has_module_import(name) {
             return Err(RuntimeError {
                 thrown: None,

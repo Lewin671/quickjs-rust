@@ -20,7 +20,7 @@ use crate::bytecode::vm_props::array_index_from_number;
 use crate::bytecode::vm_result::Completion;
 use crate::{
     Function, HOME_OBJECT_BINDING, PropertyKey, RuntimeError, SUPER_CONSTRUCTOR_BINDING, Value,
-    function::{CompiledUserFunction, Upvalue},
+    function::{BindingCell, CompiledUserFunction},
     to_js_string_with_env,
 };
 use std::rc::Rc;
@@ -184,9 +184,11 @@ impl Vm<'_> {
                 let immutable_env_value = immutable_env_binding
                     .as_deref()
                     .and_then(|name| self.env.get(name))
-                    .map(Upvalue::new);
+                    .map(BindingCell::new);
                 let lexical_new_target = if *lexical_this {
-                    self.env.get(crate::NEW_TARGET_BINDING).map(Upvalue::new)
+                    self.env
+                        .get(crate::NEW_TARGET_BINDING)
+                        .map(BindingCell::new)
                 } else {
                     None
                 };

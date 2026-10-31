@@ -1319,7 +1319,7 @@ fn function_env<'a>(
     if function.is_derived_constructor && is_construct {
         frame_env.insert_frame_cell(
             "this".to_owned(),
-            super::Upvalue::new(Value::Function(Function::uninitialized_lexical_marker())),
+            super::BindingCell::new(Value::Function(Function::uninitialized_lexical_marker())),
         );
     } else if function.lexical_this {
         if let Some((cell, _)) = lexical_derived_this {
@@ -1368,7 +1368,19 @@ fn function_env<'a>(
         !use_direct_call_slots && bytecode.parameters_shadow_arguments();
     let has_own_arguments_object = !function.lexical_arguments
         && !parameter_shadows_arguments
-        && bytecode.needs_arguments_object();
+        && (bytecode.needs_arguments_object() || bytecode.has_dynamic_scope_tree());
+    if has_own_arguments_object && !function.is_strict && function.params.is_simple() {
+        for &slot in bytecode.parameter_slots() {
+            let name = bytecode.local_name_at(slot).expect("parameter route");
+            if let Some(meta) = bytecode.binding_meta(slot) {
+                let value = frame_env.get_local(name).unwrap_or(Value::Undefined);
+                frame_env.insert_frame_cell(
+                    name.to_owned(),
+                    super::BindingCell::with_metadata(meta, Some(value)),
+                );
+            }
+        }
+    }
     if has_own_arguments_object {
         frame_env.insert(
             "arguments".to_owned(),

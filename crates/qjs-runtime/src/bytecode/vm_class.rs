@@ -6,7 +6,7 @@ use std::{collections::HashMap, rc::Rc};
 
 use crate::{
     Function, ObjectRef, Property, PropertyKey, RuntimeError, Value, array_as_prototype_slot,
-    function::{CompiledUserFunction, InstanceFieldInitializer, Upvalue},
+    function::{BindingCell, CompiledUserFunction, InstanceFieldInitializer},
     object, property_value,
     symbol::symbol_function_name_description,
     to_property_key_value,
@@ -100,8 +100,8 @@ impl Vm<'_> {
             Some(ClassHeritage::Null) => function_prototype_value(&self.env),
             _ => None,
         };
-        let class_name_upvalue =
-            name.map(|_| Upvalue::new(Value::Function(Function::uninitialized_lexical_marker())));
+        let class_name_upvalue = name
+            .map(|_| BindingCell::new(Value::Function(Function::uninitialized_lexical_marker())));
         let constructor_upvalues = self.captured_upvalues_for_function_with_override(
             &constructor.bytecode,
             &constructor.lexical_captures,
@@ -964,7 +964,10 @@ pub(crate) fn install_field_value(
     Ok(())
 }
 
-pub(super) fn class_inner_upvalue(constructor: &Function, name: Option<&str>) -> Option<Upvalue> {
+pub(super) fn class_inner_upvalue(
+    constructor: &Function,
+    name: Option<&str>,
+) -> Option<BindingCell> {
     let name = name?;
     constructor
         .bytecode
@@ -975,7 +978,7 @@ pub(super) fn class_inner_upvalue(constructor: &Function, name: Option<&str>) ->
                 .zip(&constructor.upvalues)
                 .find_map(|(candidate, upvalue)| (candidate == name).then(|| upvalue.clone()))
         })
-        .or_else(|| Some(Upvalue::new(Value::Function(constructor.clone()))))
+        .or_else(|| Some(BindingCell::new(Value::Function(constructor.clone()))))
 }
 
 /// Merges a new accessor descriptor with any existing accessor for the same

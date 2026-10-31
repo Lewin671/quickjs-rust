@@ -1,5 +1,8 @@
 use crate::{Value, eval};
 
+#[path = "direct_eval/s3b_bindings.rs"]
+mod s3b_bindings;
+
 #[path = "direct_eval/derived_this.rs"]
 mod derived_this;
 

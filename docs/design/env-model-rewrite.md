@@ -21,7 +21,7 @@ value. It also makes every call build a name map the callee may never use.
 
 - A local nothing else can reach: `FrameState.locals[slot]`
   (`bytecode/vm.rs`), seen by its frame only.
-- A captured local: an `Upvalue` in `FrameState.local_upvalues[slot]`. Each
+- A captured local: an `BindingCell` in `FrameState.local_upvalues[slot]`. Each
   closure receives it as `Function.upvalues[index]` and attaches it to its
   own slot at frame entry, so the declaring frame, sibling closures and
   nested closures hold the same cell.
@@ -32,8 +32,8 @@ value. It also makes every call build a name map the callee may never use.
 - A module's top-level binding: a cell created at module instantiation,
   shared by the module body, its functions and its importers.
 
-An `Upvalue` (`function/upvalue.rs`) is `Rc<RefCell<Value>>`: cloning shares
-the cell, and identity is `Upvalue::ptr_eq`. The compiler assigns slots and
+An `BindingCell` (`binding/cell.rs`) is `Rc<RefCell<Value>>`: cloning shares
+the cell, and identity is `BindingCell::ptr_eq`. The compiler assigns slots and
 upvalue indices, so shadowed names are different slots and different cells.
 
 ## Invariants
@@ -44,7 +44,7 @@ upvalue indices, so shadowed names are different slots and different cells.
    cell is the binding and the bit is cleared (`bytecode/vm_capture.rs`).
 2. **Capture is by cell, by position.** `bytecode/upvalue_resolver.rs`
    classifies each captured parent slot as `ParentLocal` (box the parent's
-   slot) or `ParentUpvalue` (pass on a cell the parent received).
+   slot) or `ParentBindingCell` (pass on a cell the parent received).
    `captured_upvalues_for_function` builds a closure's `upvalues` in the
    callee's received-slot order; producer and consumer must agree on
    `Local::is_received_upvalue`, because one extra entry shifts every later
@@ -103,7 +103,7 @@ upvalue indices, so shadowed names are different slots and different cells.
 
 ## Derived constructor this
 
-Each derived activation shares one marker-initialized `Upvalue` through its
+Each derived activation shares one marker-initialized `BindingCell` through its
 FrameBindings, declaring slot, eval and arrows. Reads throw before binding;
 compatibility forks preserve this implicit cell, and name writeback skips it.
 Optional FunctionColdState retains an arrow's cell and original constructor.
@@ -139,11 +139,12 @@ Tests: `closure_state.rs::direct_eval_and_closures_share_the_same_local_cell`,
 
 ## What `CallEnv` is and is not
 
-`CallEnv` (`function/env.rs`) is per-call context, not binding storage: one realm-scope `Rc`,
+`CallEnv` (`function/env.rs`) is per-call context, not binding storage: one shared realm `Rc`,
 a small `frame_bindings` vector for call/native/dynamic metadata, optional `deopt_bindings`, and private-name/module/host state.
 Ordinary calls build no locals map. Static callbacks use shared cells without exporting caller names; dynamic/marked closure contexts retain their views.
 Bytecode BindingPlan (`bytecode/binding_plan.rs`) owns compiler-recorded descriptors, metadata, active-scope exposure sites and positional parameter/capture routes. Capture linking follows received-slot order; duplicate mapped parameters select the last occurrence. Receiver requirements include deferred keys/arrows; positional inputs precede cell creation and completed calls recycle cleared storage.
 Special context stays owned; mapped arguments, dynamic scope and suspension retain compatibility entry. Cells are never recycled or caller views borrowed.
+BindingCell owns immutable metadata and Uninitialized/Initialized state; checked Init and Assign are distinct. Global lexicals use canonical realm cells with declaration metadata; the copied lexical value projection and mutability side sets are removed.
 `BindingSnapshot` is an owned copy for the few consumers that enumerate a frame; it never takes part in binding identity.
 
 The compact tiers run only when the environment can answer no name at all
@@ -151,7 +152,6 @@ The compact tiers run only when the environment can answer no name at all
 slot-seeded direct frame that only reads its received cells resolves them
 from the function it retains instead of building a cell vector
 (`bytecode/vm_direct_upvalues.rs`; unit tests in `bytecode/vm_frame_init.rs`).
-
 ## Known limits
 
 - A cell holding a function that captures the same cell is an `Rc` cycle and

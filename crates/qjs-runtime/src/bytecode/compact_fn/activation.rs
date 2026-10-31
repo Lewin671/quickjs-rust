@@ -31,7 +31,7 @@ use super::execute;
 use super::execute::Action;
 use crate::bytecode::DirectCallSlots;
 use crate::bytecode::ir::Bytecode;
-use crate::function::{CallEnv, Function, Upvalue};
+use crate::function::{BindingCell, CallEnv, Function};
 use crate::{RuntimeError, Value};
 
 /// Everything an admitted body needs to run, and nothing a `FrameState`
@@ -57,7 +57,7 @@ pub(super) struct CompactActivation<'a> {
 
 impl<'a> CompactActivation<'a> {
     /// Returns the live cell for a received-upvalue slot.
-    pub(super) fn upvalue_cell(&self, slot: usize) -> Option<&Upvalue> {
+    pub(super) fn upvalue_cell(&self, slot: usize) -> Option<&BindingCell> {
         let owner = self.upvalue_owner.as_ref()?;
         let bit = (slot < u128::BITS as usize).then(|| 1_u128 << slot)?;
         (self.upvalue_slots & bit != 0).then_some(())?;

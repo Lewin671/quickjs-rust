@@ -59,4 +59,37 @@ at B1. Six plan/descriptor tests pass; default/agents/perf-counters compilation 
 269 NG fixtures pass. The fast gate exposed an old raw-IR test whose explicit
 parameter slots were out of bounds of its empty locals; the test now supplies
 valid parameter slots while preserving its duplicate-position assertion.
-Final fast gate is in progress.
+Fast gate passes at `84f3e7ef` (2,502 runtime tests and selected Test262
+slices). B1 is present; this establishes no S3b exit or timing acceptance.
+
+## B2a canonical cells and declaration policies
+
+BindingCell replaces the old Upvalue type. Cells retain the immutable compiled
+metadata owner and explicit Uninitialized/Initialized state. VM declarative
+stores and dynamic assignment selection enforce Init/Assign and const/TDZ;
+mapped parameter accessors use the parameter's exact cell and checked Assign.
+Eval demand now requests arguments even without a static arguments read.
+Compiler-owned cells are excluded from compatibility apply-back: a setter's
+canonical write must not be overwritten by an older service-view projection.
+The permanent fixture catches both equal-value const assignment and this
+mapped-arguments stale publication.
+
+Global lexicals share canonical metadata-bearing realm cells. Deleted are the
+copied global lexical value projection, global lexical/mutability side sets and
+their redundant realm-scope wrapper. Global properties of the same name remain
+independent. Root scope descriptors distinguish real top-level declarations
+from loop/switch/catch/class-name bindings; evalScript explicitly selects the
+persistent lexical routes. Simple parameters share the variable target with
+body vars; non-simple parameters retain a separate body target.
+
+Migration correction: B2's complete raw-writer deletion is coupled to B3's
+removal of compatibility projections/apply-back. B2a establishes metadata and
+canonical cells while retaining the old service-view publisher temporarily;
+the remaining B2/B3 cut removes that publisher together with the views, rather
+than adding a second checked/unchecked lexical authority. No B2 completion is
+claimed yet. B3 must replace flat deopt maps with leases and own var holders,
+remove all raw BindingCell::set calls, and implement the rest of T074.
+
+Verification: 2,507 runtime tests and 270 NG fixtures pass on the working tree;
+final staged/feature gates pending. Complete exact/stress/counters/timing remain
+B6 obligations. No performance acceptance is claimed.

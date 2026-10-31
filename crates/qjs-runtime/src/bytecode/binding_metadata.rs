@@ -30,6 +30,30 @@ impl Bytecode {
         bytecode
     }
 
+    pub(crate) fn mark_script_lexical_routes(&mut self) {
+        if let Some(root) = self.binding_plan.scopes.first() {
+            for &id in &root.declarations {
+                let meta = &self.binding_plan.bindings[id.0];
+                if meta.kind == crate::binding::BindingKind::Lexical {
+                    self.binding_plan.realm_lexical_slots[meta.slot.0] = true;
+                    self.binding_plan.has_realm_lexicals = true;
+                }
+            }
+        }
+    }
+
+    pub(crate) fn binding_meta(&self, slot: usize) -> Option<crate::binding::BindingMetaRef> {
+        self.binding_plan
+            .local_bindings
+            .get(slot)
+            .copied()
+            .flatten()
+            .map(|id| crate::binding::BindingMetaRef {
+                owner: self.binding_plan.bindings.clone(),
+                id,
+            })
+    }
+
     /// Consumes the declaration identities recorded by this body's compiler.
     /// No syntax is reparsed and no live values enter this plan.
     pub(super) fn install_scope_plan(
@@ -61,6 +85,11 @@ impl Bytecode {
             let name = declaration.map_or_else(|| local.name.clone(), |(name, _, _)| name.clone());
             let kind = if local.is_received_upvalue() {
                 BindingKind::Received
+            } else if builder
+                .implicit_arguments
+                .is_some_and(|implicit| implicit.0 == slot)
+            {
+                BindingKind::Arguments
             } else if local.parameter {
                 BindingKind::Parameter
             } else if local.catch_binding {
@@ -75,8 +104,15 @@ impl Bytecode {
             if !local.is_received_upvalue() && !local.sloppy_global_fallback {
                 let scope = declaration.map_or(builder.variable, |(_, _, scope)| *scope);
                 let descriptor = &mut builder.scopes[scope.0];
+                if self.global_scope && scope.0 == 0 && kind == BindingKind::Lexical {
+                    self.binding_plan.realm_lexical_slots[slot] = true;
+                    self.binding_plan.has_realm_lexicals = true;
+                }
                 declarations[scope.0].push(id);
                 descriptor.lookup.insert(name.clone(), id);
+            }
+            if name == "arguments" && kind == BindingKind::Lexical {
+                self.binding_plan.initial_slots[slot] = super::binding_plan::InitialSlot::Empty;
             }
             bindings.push(BindingMeta {
                 id,
@@ -99,7 +135,10 @@ impl Bytecode {
                 slot: LocalSlot(slot),
             });
         }
-        self.binding_plan.bindings = bindings.into_boxed_slice();
+        self.binding_plan.bindings = std::rc::Rc::new(crate::binding::BindingMetadata(
+            bindings.into_boxed_slice(),
+            crate::binding::MetadataOrigin::Compiled,
+        ));
         self.binding_plan.local_bindings = slots.into_boxed_slice();
         for (scope, bindings) in builder.scopes.iter_mut().zip(declarations) {
             scope.declarations = bindings.into_boxed_slice();

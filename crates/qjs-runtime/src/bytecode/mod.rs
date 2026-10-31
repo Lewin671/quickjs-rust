@@ -225,7 +225,7 @@ pub(crate) fn compile_function_body_with_kind(
 pub(crate) fn eval_function_bytecode<'a>(
     bytecode: &'a Bytecode,
     env: crate::CallEnv,
-    upvalues: Vec<crate::function::Upvalue>,
+    upvalues: Vec<crate::function::BindingCell>,
     with_stack: Vec<Value>,
     persist_global_lexicals: bool,
     positional_arguments: Option<&[Value]>,
@@ -244,7 +244,7 @@ pub(crate) fn eval_function_bytecode<'a>(
 pub(crate) fn eval_call_bytecode(
     bytecode: &Bytecode,
     env: crate::CallEnv,
-    upvalues: Vec<crate::function::Upvalue>,
+    upvalues: Vec<crate::function::BindingCell>,
     with_stack: Vec<Value>,
     positional_arguments: Option<&[Value]>,
 ) -> Result<Value, RuntimeError> {
@@ -261,11 +261,11 @@ pub(crate) fn eval_call_bytecode(
 #[derive(Clone, Copy)]
 pub(crate) enum DirectCallUpvalues<'a> {
     Function(&'a crate::Function),
-    Slice(&'a [crate::function::Upvalue]),
+    Slice(&'a [crate::function::BindingCell]),
 }
 
 impl<'a> DirectCallUpvalues<'a> {
-    pub(crate) fn as_slice(self) -> &'a [crate::function::Upvalue] {
+    pub(crate) fn as_slice(self) -> &'a [crate::function::BindingCell] {
         match self {
             Self::Function(function) => &function.upvalues,
             Self::Slice(upvalues) => upvalues,

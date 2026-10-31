@@ -4,17 +4,17 @@
 //! can use a smaller representation, including a retained function for
 //! statically read-only received cells.
 
-use crate::function::{CallEnv, Upvalue};
+use crate::function::{BindingCell, CallEnv};
 
 use super::{ir::Bytecode, vm::Vm};
 
 impl Vm<'_> {
     pub(super) fn initial_direct_local_upvalues(
         bytecode: &Bytecode,
-        upvalues: &[Upvalue],
+        upvalues: &[BindingCell],
         received_realm_binding_slots: u128,
         env: &CallEnv,
-    ) -> (Vec<Option<Upvalue>>, Option<u128>) {
+    ) -> (Vec<Option<BindingCell>>, Option<u128>) {
         // Most direct leaf calls have no captured, module, or sloppy-global
         // cells. An empty vector represents the all-None state for those
         // frames and avoids allocating one pointer-sized entry per local on
@@ -74,7 +74,7 @@ impl Vm<'_> {
     /// Returns the live cell for a local slot. Ordinary frames own the
     /// local-sized option vector; a proven read-only direct frame instead
     /// resolves the same slot from the function it retains for its duration.
-    pub(super) fn local_upvalue_cell(&self, slot: usize) -> Option<&Upvalue> {
+    pub(super) fn local_upvalue_cell(&self, slot: usize) -> Option<&BindingCell> {
         self.local_upvalues
             .get(slot)
             .and_then(Option::as_ref)

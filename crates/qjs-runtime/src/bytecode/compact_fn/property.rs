@@ -238,6 +238,7 @@ pub(super) fn set_prop_named(
     }
     if updates_global_binding
         && wrote_data
+        && !env.is_global_lexical_binding(key)
         && let Value::Object(global) = object
     {
         match global.own_property(key) {
@@ -635,7 +636,7 @@ pub(in crate::bytecode) struct GlobalReadSite(
         Option<(
             crate::function::DynamicBindings,
             u64,
-            crate::function::Upvalue,
+            crate::function::BindingCell,
         )>,
     >,
 );
@@ -779,7 +780,7 @@ enum GlobalVar {
     /// A realm binding; a store through it must still find the `globalThis`
     /// property a writable data property that [`mirrors`] the binding, and
     /// writes it in the same lookup.
-    Bound(crate::ObjectRef, crate::function::Upvalue),
+    Bound(crate::ObjectRef, crate::function::BindingCell),
 }
 
 /// Whether a `globalThis` property value mirrors its realm binding's.

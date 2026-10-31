@@ -12,7 +12,7 @@
 use crate::bytecode::ir::Bytecode;
 use crate::bytecode::typed_loop::LoopFrame;
 use crate::bytecode::vm_bindings::TypedLoopSloppyGlobalWrite;
-use crate::function::{CallEnv, Upvalue};
+use crate::function::{BindingCell, CallEnv};
 use crate::{ArrayRef, ObjectRef, Property, RuntimeError, Value};
 
 pub(super) struct WideLoopFrame<'a> {
@@ -22,7 +22,7 @@ pub(super) struct WideLoopFrame<'a> {
     pub(super) locals: &'a mut [Value],
     pub(super) own_locals: u128,
     /// The cells the activation received, indexed through the bytecode.
-    pub(super) upvalues: &'a [Upvalue],
+    pub(super) upvalues: &'a [BindingCell],
     pub(super) upvalue_slots: u128,
     /// The activation's receiver, which a program reads as the `this` name.
     pub(super) this_value: Option<&'a Value>,
@@ -51,7 +51,7 @@ impl<'a> WideLoopFrame<'a> {
         env: &'a CallEnv,
         locals: &'a mut [Value],
         own_locals: u128,
-        upvalues: &'a [Upvalue],
+        upvalues: &'a [BindingCell],
         upvalue_slots: u128,
         this_value: Option<&'a Value>,
         stack: &'a mut [Value],
@@ -81,7 +81,7 @@ impl<'a> WideLoopFrame<'a> {
             && self.own_locals & (1_u128 << slot) != 0
     }
 
-    fn cell(&self, slot: usize) -> Option<&Upvalue> {
+    fn cell(&self, slot: usize) -> Option<&BindingCell> {
         let bit = (slot < u128::BITS as usize).then(|| 1_u128 << slot)?;
         (self.upvalue_slots & bit != 0).then_some(())?;
         let index = self.bytecode.cell_received_upvalue_index(slot)?;
@@ -115,7 +115,7 @@ impl LoopFrame for WideLoopFrame<'_> {
             let value = &self.locals[slot];
             return (!value.is_uninitialized_lexical_marker()).then(|| value.clone());
         }
-        self.cell(slot).map(Upvalue::get)
+        self.cell(slot).map(BindingCell::get)
     }
 
     fn slot_accepts_typed_loop_write(&self, slot: usize) -> bool {

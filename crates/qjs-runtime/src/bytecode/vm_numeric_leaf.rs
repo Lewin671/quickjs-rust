@@ -12,7 +12,7 @@
 
 use qjs_ast::{BinaryOp, FunctionParams, UpdateOp};
 
-use crate::{NativeFunction, Value, function::Upvalue};
+use crate::{NativeFunction, Value, function::BindingCell};
 
 use super::ir::{Bytecode, Op};
 
@@ -406,7 +406,7 @@ impl NumericLeafShortcut {
         None
     }
 
-    fn eval(&self, arguments: &[Value], upvalues: &[Upvalue]) -> Option<Value> {
+    fn eval(&self, arguments: &[Value], upvalues: &[BindingCell]) -> Option<Value> {
         if let Self::Constant(value) = self {
             return value.into_value();
         }
@@ -754,7 +754,7 @@ pub(super) fn has_number_only_leaf(bytecode: &Bytecode) -> bool {
 pub(super) fn eval_number_only_leaf(
     bytecode: &Bytecode,
     params: &FunctionParams,
-    upvalues: &[Upvalue],
+    upvalues: &[BindingCell],
     arguments: &[f64],
 ) -> Option<f64> {
     let Some(Some(NumericLeafPlan::NumberOnly(program))) = bytecode.numeric_leaf_plan.get() else {
@@ -778,7 +778,7 @@ pub(crate) fn try_eval_numeric_leaf(
     bytecode: &Bytecode,
     params: &FunctionParams,
     arguments: &[Value],
-    upvalues: &[Upvalue],
+    upvalues: &[BindingCell],
 ) -> Option<Value> {
     let plan = bytecode
         .numeric_leaf_plan
@@ -941,7 +941,7 @@ fn try_eval_numeric_leaf_bytecode(
     bytecode: &Bytecode,
     params: &FunctionParams,
     arguments: &[Value],
-    upvalues: &[Upvalue],
+    upvalues: &[BindingCell],
 ) -> Option<Value> {
     let mut locals = [FastValue::Uninitialized; MAX_FAST_LOCALS];
     for (slot, local) in bytecode.locals.iter().enumerate() {
@@ -1112,7 +1112,7 @@ fn materialize_deferred(stack: &mut [AbstractValue], ops: &mut Vec<FastOp>) -> O
 
 fn commit_upvalues(
     received_upvalue_slots: &[usize],
-    upvalues: &[Upvalue],
+    upvalues: &[BindingCell],
     locals: &[FastValue; MAX_FAST_LOCALS],
     assigned_upvalues: u32,
 ) -> Option<()> {

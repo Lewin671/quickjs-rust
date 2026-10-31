@@ -31,6 +31,7 @@ pub(crate) enum ScopeKind {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum BindingKind {
     Parameter,
+    Arguments,
     Var,
     Function,
     Lexical,
@@ -95,6 +96,7 @@ pub(crate) struct ScopePlanBuilder {
     pub(crate) declaration_by_slot: Vec<Option<usize>>,
     pub(crate) sites: Vec<ExposureSite>,
     pub(crate) variable: ScopeId,
+    pub(crate) implicit_arguments: Option<LocalSlot>,
 }
 
 impl Default for ScopePlanBuilder {
@@ -113,11 +115,21 @@ impl Default for ScopePlanBuilder {
             declaration_by_slot: Vec::new(),
             sites: Vec::new(),
             variable: ScopeId(0),
+            implicit_arguments: None,
         }
     }
 }
 
 impl ScopePlanBuilder {
+    pub(crate) fn enter_function_body(&mut self, split_parameters: bool) {
+        let variable = self.variable;
+        self.enter(ScopeKind::FunctionBody);
+        if !split_parameters {
+            self.variable = variable;
+            self.scopes.last_mut().expect("body scope").variable_target = variable;
+        }
+    }
+
     pub(crate) fn enter(&mut self, kind: ScopeKind) {
         let id = ScopeId(self.scopes.len());
         let is_variable = matches!(kind, ScopeKind::FunctionBody | ScopeKind::Parameters);
@@ -162,5 +174,35 @@ impl ScopePlanBuilder {
             pc,
             scopes: self.active.clone().into_boxed_slice(),
         });
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub(crate) struct BindingMetadata(pub(crate) Box<[BindingMeta]>, pub(crate) MetadataOrigin);
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum MetadataOrigin {
+    #[default]
+    Compiled,
+    Dynamic,
+}
+
+impl std::ops::Deref for BindingMetadata {
+    type Target = [BindingMeta];
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct BindingMetaRef {
+    pub(crate) owner: std::rc::Rc<BindingMetadata>,
+    pub(crate) id: BindingId,
+}
+
+impl std::ops::Deref for BindingMetaRef {
+    type Target = BindingMeta;
+    fn deref(&self) -> &Self::Target {
+        &self.owner.0[self.id.0]
     }
 }

@@ -180,8 +180,25 @@ fn with_scope_keeps_its_variable_target_and_ordered_parent() {
         .iter()
         .find(|scope| scope.kind == ScopeKind::With)
         .unwrap();
-    assert_eq!(with.variable_target, crate::binding::ScopeId(1));
+    assert_eq!(with.variable_target, crate::binding::ScopeId(0));
     assert_eq!(with.parent, Some(crate::binding::ScopeId(1)));
     assert_eq!(scopes.last().unwrap().parent, Some(with.id));
     assert!(with.declarations.is_empty());
+}
+
+#[test]
+fn simple_parameters_share_the_variable_environment_with_body_vars() {
+    for (source, target) in [
+        ("function f(a) { var b; }", 0),
+        ("function f(a = 1) { var b; }", 1),
+    ] {
+        let root = compile(source);
+        let body = functions(&root)[0];
+        assert_eq!(body.binding_plan.scopes[1].variable_target.0, target);
+        let variable = body.binding_plan.scopes[target].lookup["b"];
+        assert_eq!(
+            body.binding_plan.bindings[variable.0].kind,
+            BindingKind::Var
+        );
+    }
 }

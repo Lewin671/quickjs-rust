@@ -693,7 +693,7 @@ fn for_of_loop_variable_shadowing_outer_does_not_leak_into_the_outer_binding() {
     // the per-iteration value back onto the outer binding — neither its frame
     // slot (read directly after the loop) nor an outer cell a closure created
     // before the loop captured. The bindings now share a source name but retain
-    // distinct slot and Upvalue identities throughout the loop.
+    // distinct slot and BindingCell identities throughout the loop.
     assert_eq!(
         eval(
             "function f() { \

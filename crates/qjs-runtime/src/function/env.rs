@@ -1,7 +1,7 @@
 //! The call-frame environment view threaded through the runtime.
 //!
 //! Ordinary JavaScript bindings do not live here: bytecode frames keep
-//! slot-indexed values and captured slots share indexed [`Upvalue`] cells.
+//! slot-indexed values and captured slots share indexed [`BindingCell`] cells.
 //! [`CallEnv`] carries only the cross-call runtime context that is still
 //! naturally name-addressed:
 //!
@@ -34,8 +34,8 @@ use qjs_parser::EvalParseContext;
 use super::eval_cache::DirectEvalCache;
 
 use crate::{
-    Bytecode, Function, JsString, ObjectRef, Value, function::Upvalue, private::PrivateEnvironment,
-    property::atom::AtomDomain,
+    Bytecode, Function, JsString, ObjectRef, Value, function::BindingCell,
+    private::PrivateEnvironment, property::atom::AtomDomain,
 };
 
 const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
@@ -45,7 +45,7 @@ pub(super) const REALM_ARRAY_PROTOTYPE_INTRINSIC: &str = "\0realm:Array.prototyp
 /// Shared realm state: intrinsics, true globals, and captured-global cells.
 ///
 /// `bindings` is the single source of truth for every realm-level name: it is
-/// a name-to-[`Upvalue`] map from the start, not a plain `Value` map with a
+/// a name-to-[`BindingCell`] map from the start, not a plain `Value` map with a
 /// separate lazily-populated cell registry layered on top. A name that never
 /// gets captured or hoisted-global-cached still costs exactly one hash lookup
 /// to read or write (through its cell); a name that does get a cell no longer
@@ -234,7 +234,7 @@ impl RealmState {
         self.bindings.contains_key(name)
     }
 
-    pub(crate) fn cell(&self, name: &str) -> Option<Upvalue> {
+    pub(crate) fn cell(&self, name: &str) -> Option<BindingCell> {
         self.bindings.cell(name)
     }
 
@@ -318,10 +318,11 @@ impl RealmState {
         *self.dynamic_function_realm_global.borrow_mut() = global;
     }
 
-    pub(crate) fn is_binding_cell(&self, name: &str, cell: &Upvalue) -> bool {
-        self.bindings
-            .cell(name)
-            .is_some_and(|candidate| candidate.ptr_eq(cell))
+    pub(crate) fn is_binding_cell(&self, name: &str, cell: &BindingCell) -> bool {
+        self.bindings.cell(name).is_some_and(|candidate| {
+            candidate.metadata().kind != crate::binding::BindingKind::Lexical
+                && candidate.ptr_eq(cell)
+        })
     }
 }
 
@@ -358,9 +359,6 @@ pub(crate) fn new_realm_sharing_atoms(
 ) -> Realm {
     Rc::new(RealmState::new(bindings, atoms))
 }
-pub(crate) type GlobalLexicalBindings = Rc<RefCell<crate::value::name_hash::NameSet<String>>>;
-pub(crate) type GlobalLexicalValues = Rc<RefCell<crate::value::name_hash::NameMap<String, Value>>>;
-pub(crate) type ImmutableLexicalBindings = Rc<RefCell<crate::value::name_hash::NameSet<String>>>;
 /// Structurally immutable module-import routing shared by function objects and
 /// call frames. Module setup uses copy-on-write so environment clones preserve
 /// their previous routing table while ordinary scripts and nested functions
@@ -371,7 +369,7 @@ pub(crate) type ModuleImports =
 #[derive(Clone)]
 enum FrameBindingValue {
     Direct(Value),
-    Cell(Upvalue),
+    Cell(BindingCell),
 }
 
 impl FrameBindingValue {
@@ -433,14 +431,14 @@ impl FrameBindings {
             .map(|(_, value)| value.get())
     }
 
-    fn cell(&self, name: &str) -> Option<Upvalue> {
+    fn cell(&self, name: &str) -> Option<BindingCell> {
         let mut bindings = self.0.borrow_mut();
         let index = bindings
             .iter()
             .rposition(|(candidate, _)| candidate == name)?;
         match &mut bindings[index].1 {
             FrameBindingValue::Direct(value) => {
-                let cell = Upvalue::new(value.clone());
+                let cell = BindingCell::new(value.clone());
                 // Replace only after cloning the direct value so promotion
                 // preserves the exact binding value and future identity.
                 let promoted = cell.clone();
@@ -475,7 +473,7 @@ impl FrameBindings {
         None
     }
 
-    fn insert_cell(&self, name: String, value: Upvalue) {
+    fn insert_cell(&self, name: String, value: BindingCell) {
         let mut bindings = self.0.borrow_mut();
         if let Some((_, existing)) = bindings
             .iter_mut()
@@ -554,7 +552,7 @@ pub(crate) struct DynamicBindings(Rc<DynamicBindingsInner>);
 
 #[derive(Default)]
 pub(crate) struct DynamicBindingsInner {
-    map: RefCell<crate::value::name_hash::NameMap<String, Upvalue>>,
+    map: RefCell<crate::value::name_hash::NameMap<String, BindingCell>>,
     /// Advanced by every change to which cell a name maps to -- a new name,
     /// a replaced or removed cell -- but not by writes through a cell. Equal
     /// generations mean every name still maps to the cell it did.
@@ -604,7 +602,7 @@ impl DynamicBindings {
     /// The map for a change that may alter which cell a name maps to.
     fn mapping_mut(
         &self,
-    ) -> std::cell::RefMut<'_, crate::value::name_hash::NameMap<String, Upvalue>> {
+    ) -> std::cell::RefMut<'_, crate::value::name_hash::NameMap<String, BindingCell>> {
         self.0
             .generation
             .set(self.0.generation.get().wrapping_add(1));
@@ -634,7 +632,7 @@ impl DynamicBindings {
             map: RefCell::new(
                 values
                     .into_iter()
-                    .map(|(name, value)| (name, Upvalue::new(value)))
+                    .map(|(name, value)| (name, BindingCell::new(value)))
                     .collect(),
             ),
             generation: std::cell::Cell::new(0),
@@ -662,10 +660,10 @@ impl DynamicBindings {
     }
 
     pub(crate) fn get(&self, name: &str) -> Option<Value> {
-        self.0.map.borrow().get(name).map(Upvalue::get)
+        self.0.map.borrow().get(name).map(BindingCell::get)
     }
 
-    pub(crate) fn cell(&self, name: &str) -> Option<Upvalue> {
+    pub(crate) fn cell(&self, name: &str) -> Option<BindingCell> {
         self.0.map.borrow().get(name).cloned()
     }
 
@@ -675,11 +673,11 @@ impl DynamicBindings {
             binding.set(value);
             return Some(previous);
         }
-        self.mapping_mut().insert(name, Upvalue::new(value));
+        self.mapping_mut().insert(name, BindingCell::new(value));
         None
     }
 
-    pub(crate) fn insert_cell(&self, name: String, upvalue: Upvalue) {
+    pub(crate) fn insert_cell(&self, name: String, upvalue: BindingCell) {
         self.mapping_mut().insert(name, upvalue);
     }
 
@@ -688,10 +686,10 @@ impl DynamicBindings {
     ///
     /// Closure creation can ask the same frame to expose its locals many
     /// times. The map is shared by those closures, so replacing an entry with
-    /// the identical [`Upvalue`] only clones and drops the owned name while
+    /// the identical [`BindingCell`] only clones and drops the owned name while
     /// leaving binding identity unchanged. A different cell must still win:
     /// it can represent a newly active lexical shadow with the same name.
-    pub(crate) fn overlay_cell(&self, name: &str, upvalue: &Upvalue) -> bool {
+    pub(crate) fn overlay_cell(&self, name: &str, upvalue: &BindingCell) -> bool {
         if self
             .0
             .map
@@ -717,7 +715,7 @@ impl DynamicBindings {
         self.mapping_mut().remove(name).map(|binding| binding.get())
     }
 
-    pub(crate) fn remove_cell_if(&self, name: &str, expected: &Upvalue) -> bool {
+    pub(crate) fn remove_cell_if(&self, name: &str, expected: &BindingCell) -> bool {
         let matches = self
             .0
             .map
@@ -762,7 +760,7 @@ impl DynamicBindings {
         }
     }
 
-    pub(crate) fn cells(&self) -> Vec<(String, Upvalue)> {
+    pub(crate) fn cells(&self) -> Vec<(String, BindingCell)> {
         self.0
             .map
             .borrow()
@@ -827,20 +825,6 @@ impl IntoIterator for BindingSnapshot {
     }
 }
 
-/// The half of an execution environment that every frame of a realm shares.
-///
-/// Building a frame environment used to clone four `Rc`s that cannot differ
-/// between two frames of the same realm -- the realm itself and the three
-/// global binding maps -- and drop four again on return. Behind one handle
-/// they cost one increment and one decrement, which matters because an
-/// ordinary call builds one of these and nothing else about it is work.
-struct RealmScope {
-    realm: Realm,
-    global_lexical_bindings: GlobalLexicalBindings,
-    global_lexical_values: GlobalLexicalValues,
-    immutable_lexical_bindings: ImmutableLexicalBindings,
-}
-
 /// Cross-call runtime context: shared realm metadata plus a small frame view.
 ///
 /// Bytecode lexical bindings remain in VM slots/upvalue cells. Cloning this
@@ -848,8 +832,7 @@ struct RealmScope {
 /// compatibility frame vector.
 #[allow(dead_code)]
 pub(crate) struct CallEnv {
-    scope: Rc<RealmScope>,
-    expose_global_lexical_values: bool,
+    scope: Realm,
     frame_bindings: FrameBindings,
     /// `new.target` for this frame. It used to travel as a NUL-prefixed frame
     /// binding, which cost a name allocation and a linear frame-binding scan on
@@ -909,7 +892,6 @@ impl Clone for CallEnv {
     fn clone(&self) -> Self {
         Self {
             scope: Rc::clone(&self.scope),
-            expose_global_lexical_values: self.expose_global_lexical_values,
             // A cloned execution view is an isolated dynamic environment. The
             // cells themselves are shared only when a direct-eval/with deopt
             // path explicitly requests that identity.
@@ -933,23 +915,7 @@ impl Clone for CallEnv {
 impl std::fmt::Debug for CallEnv {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CallEnv")
-            .field("realm", &self.scope.realm)
-            .field(
-                "global_lexical_bindings",
-                &self.scope.global_lexical_bindings.borrow().len(),
-            )
-            .field(
-                "global_lexical_values",
-                &self.scope.global_lexical_values.borrow().len(),
-            )
-            .field(
-                "expose_global_lexical_values",
-                &self.expose_global_lexical_values,
-            )
-            .field(
-                "immutable_lexical_bindings",
-                &self.scope.immutable_lexical_bindings.borrow().len(),
-            )
+            .field("realm", &self.scope)
             .field("frame_bindings", &self.snapshot_locals())
             .field("deopt_bindings", &self.deopt_bindings.is_some())
             .field("catch_bindings", &self.catch_bindings)
@@ -967,13 +933,7 @@ impl CallEnv {
     /// Builds an environment over `realm` with empty locals.
     pub(crate) fn new(realm: Realm) -> Self {
         Self {
-            scope: Rc::new(RealmScope {
-                realm,
-                global_lexical_bindings: Rc::new(RefCell::new(HashSet::default())),
-                global_lexical_values: Rc::new(RefCell::new(HashMap::default())),
-                immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::default())),
-            }),
-            expose_global_lexical_values: false,
+            scope: realm,
             frame_bindings: FrameBindings::default(),
             new_target: None,
             deopt_bindings: None,
@@ -1046,7 +1006,7 @@ impl CallEnv {
     /// Returns the exporter's shared cell backing a live module import.
     /// Capturing an import must retain this identity instead of boxing the
     /// value currently observed by the importing module frame.
-    pub(crate) fn module_import_cell(&self, local_name: &str) -> Option<Upvalue> {
+    pub(crate) fn module_import_cell(&self, local_name: &str) -> Option<BindingCell> {
         let (bindings, exported_local_name) = self.module_imports.get(local_name)?;
         bindings.cell(exported_local_name)
     }
@@ -1078,7 +1038,7 @@ impl CallEnv {
         self.module_live_bindings.is_some()
     }
 
-    pub(crate) fn module_live_binding_cell(&self, name: &str) -> Option<Upvalue> {
+    pub(crate) fn module_live_binding_cell(&self, name: &str) -> Option<BindingCell> {
         self.module_live_bindings
             .as_ref()
             .and_then(|bindings| bindings.cell(name))
@@ -1090,13 +1050,7 @@ impl CallEnv {
     /// return `None`, matching the prior empty-`HashMap` behavior.
     pub(crate) fn detached() -> Self {
         Self {
-            scope: Rc::new(RealmScope {
-                realm: new_realm(HashMap::new()),
-                global_lexical_bindings: Rc::new(RefCell::new(HashSet::default())),
-                global_lexical_values: Rc::new(RefCell::new(HashMap::default())),
-                immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::default())),
-            }),
-            expose_global_lexical_values: false,
+            scope: new_realm(HashMap::new()),
             frame_bindings: FrameBindings::default(),
             new_target: None,
             deopt_bindings: None,
@@ -1118,13 +1072,7 @@ impl CallEnv {
     /// map rather than a live VM realm.
     pub(crate) fn from_map(map: HashMap<String, Value>) -> Self {
         Self {
-            scope: Rc::new(RealmScope {
-                realm: new_realm(map),
-                global_lexical_bindings: Rc::new(RefCell::new(HashSet::default())),
-                global_lexical_values: Rc::new(RefCell::new(HashMap::default())),
-                immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::default())),
-            }),
-            expose_global_lexical_values: false,
+            scope: new_realm(map),
             frame_bindings: FrameBindings::default(),
             new_target: None,
             deopt_bindings: None,
@@ -1144,13 +1092,7 @@ impl CallEnv {
     /// Builds an environment over `realm` with the given frame locals.
     pub(crate) fn with_locals(realm: Realm, locals: HashMap<String, Value>) -> Self {
         Self {
-            scope: Rc::new(RealmScope {
-                realm,
-                global_lexical_bindings: Rc::new(RefCell::new(HashSet::default())),
-                global_lexical_values: Rc::new(RefCell::new(HashMap::default())),
-                immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::default())),
-            }),
-            expose_global_lexical_values: false,
+            scope: realm,
             frame_bindings: FrameBindings::from_values(locals),
             new_target: None,
             deopt_bindings: None,
@@ -1169,12 +1111,12 @@ impl CallEnv {
 
     /// The shared realm cell, for sharing into a new frame or snapshot.
     pub(crate) fn realm(&self) -> &Realm {
-        &self.scope.realm
+        &self.scope
     }
 
     /// A clone of the realm `Rc` (shared cell, not a deep copy).
     pub(crate) fn realm_rc(&self) -> Realm {
-        Rc::clone(&self.scope.realm)
+        Rc::clone(&self.scope)
     }
 
     /// Builds an empty frame that shares this environment's realm metadata.
@@ -1194,7 +1136,6 @@ impl CallEnv {
     pub(crate) fn new_function_frame_with_capacity(&self, capacity: usize) -> Self {
         Self {
             scope: Rc::clone(&self.scope),
-            expose_global_lexical_values: false,
             frame_bindings: FrameBindings::with_capacity(capacity),
             new_target: None,
             deopt_bindings: None,
@@ -1219,7 +1160,6 @@ impl CallEnv {
     pub(crate) fn new_direct_leaf_function_frame(&self, module_imports: ModuleImports) -> Self {
         Self {
             scope: Rc::clone(&self.scope),
-            expose_global_lexical_values: false,
             frame_bindings: FrameBindings::default(),
             new_target: None,
             deopt_bindings: None,
@@ -1240,42 +1180,35 @@ impl CallEnv {
     /// can read Script top-level lexical bindings through the global lexical
     /// environment instead of the global object.
     pub(crate) fn indirect_eval_frame(&self) -> Self {
-        let mut env = self.empty_frame();
-        env.expose_global_lexical_values = true;
-        env
+        self.empty_frame()
     }
 
-    pub(crate) fn mark_global_lexical_binding(&self, name: String) {
-        self.scope.global_lexical_bindings.borrow_mut().insert(name);
+    pub(crate) fn declare_global_lexical(
+        &self,
+        meta: crate::binding::BindingMetaRef,
+    ) -> BindingCell {
+        if let Some(cell) = self.scope.cell(&meta.name) {
+            if cell.metadata().kind == crate::binding::BindingKind::Lexical {
+                return cell;
+            }
+            cell.set(Value::Function(Function::uninitialized_lexical_marker()));
+        }
+        let name = meta.name.clone();
+        let cell = BindingCell::with_metadata(meta, None);
+        self.scope.bindings.insert_cell(name, cell.clone());
+        cell
     }
 
     pub(crate) fn is_global_lexical_binding(&self, name: &str) -> bool {
-        // A script without top-level `let`/`const`/`class` has none; skip the
-        // hash, as `is_immutable_lexical_binding` does.
-        let bindings = self.scope.global_lexical_bindings.borrow();
-        !bindings.is_empty() && bindings.contains(name)
-    }
-
-    pub(crate) fn set_global_lexical_value(&self, name: String, value: Value) {
         self.scope
-            .global_lexical_values
-            .borrow_mut()
-            .insert(name, value);
-    }
-
-    pub(crate) fn mark_immutable_lexical_binding(&self, name: String) {
-        self.scope
-            .immutable_lexical_bindings
-            .borrow_mut()
-            .insert(name);
+            .cell(name)
+            .is_some_and(|cell| cell.metadata().kind == crate::binding::BindingKind::Lexical)
     }
 
     pub(crate) fn is_immutable_lexical_binding(&self, name: &str) -> bool {
-        // Most frames never mark any immutable lexical bindings; skip the
-        // name-table hash on the common empty case instead of hashing `name`
-        // against an empty set on every call.
-        let bindings = self.scope.immutable_lexical_bindings.borrow();
-        !bindings.is_empty() && bindings.contains(name)
+        self.scope.cell(name).is_some_and(|cell| {
+            cell.metadata().kind == crate::binding::BindingKind::Lexical && !cell.metadata().mutable
+        })
     }
 
     pub(crate) fn mark_catch_binding(&mut self, name: String) {
@@ -1428,7 +1361,7 @@ impl CallEnv {
         }
     }
 
-    pub(crate) fn remove_deopt_cell_if(&mut self, name: &str, expected: &Upvalue) {
+    pub(crate) fn remove_deopt_cell_if(&mut self, name: &str, expected: &BindingCell) {
         if let Some(bindings) = &self.deopt_bindings {
             bindings.remove_cell_if(name, expected);
         }
@@ -1460,11 +1393,8 @@ impl CallEnv {
         {
             return Some(value);
         }
-        if let Some(value) = self.scope.realm.get_value(name) {
+        if let Some(value) = self.scope.get_value(name) {
             return Some(value);
-        }
-        if self.expose_global_lexical_values {
-            return self.scope.global_lexical_values.borrow().get(name).cloned();
         }
         None
     }
@@ -1476,12 +1406,12 @@ impl CallEnv {
         if !self.frame_bindings.is_empty() || self.deopt_bindings.is_some() {
             return None;
         }
-        Some(&self.scope.realm.bindings)
+        Some(&self.scope.bindings)
     }
 
     /// Looks up `name` in the shared realm layer only.
     pub(crate) fn get_realm(&self, name: &str) -> Option<Value> {
-        self.scope.realm.get_value(name)
+        self.scope.get_value(name)
     }
 
     /// Returns the active global object override used by indirect eval and
@@ -1503,14 +1433,14 @@ impl CallEnv {
                 _ => None,
             };
         }
-        self.scope.realm.dynamic_function_realm_global()
+        self.scope.dynamic_function_realm_global()
     }
 
     /// Whether [`Self::dynamic_function_realm_global`] would answer `Some`,
     /// without cloning the object. Frame setup asks this on every call.
     pub(crate) fn has_dynamic_function_realm_global(&self) -> bool {
         if self.frame_bindings.is_empty() && self.deopt_bindings.is_none() {
-            return self.scope.realm.has_dynamic_function_realm_global();
+            return self.scope.has_dynamic_function_realm_global();
         }
         self.dynamic_function_realm_global().is_some()
     }
@@ -1518,7 +1448,7 @@ impl CallEnv {
     /// Preserve marked-realm compatibility views, including a frame marker
     /// whose non-object value deliberately disables an outer override.
     pub(crate) fn has_realm_override_context(&self) -> bool {
-        self.scope.realm.has_dynamic_function_realm_global()
+        self.scope.has_dynamic_function_realm_global()
             || self
                 .frame_bindings
                 .contains_key(DYNAMIC_FUNCTION_REALM_GLOBAL)
@@ -1529,9 +1459,7 @@ impl CallEnv {
         source: &JsString,
         context: &EvalParseContext,
     ) -> Option<Rc<Bytecode>> {
-        self.scope
-            .realm
-            .cached_direct_eval_bytecode(source, context)
+        self.scope.cached_direct_eval_bytecode(source, context)
     }
 
     pub(crate) fn cache_direct_eval_bytecode(
@@ -1541,13 +1469,12 @@ impl CallEnv {
         bytecode: Rc<Bytecode>,
     ) {
         self.scope
-            .realm
             .cache_direct_eval_bytecode(source, context, bytecode);
     }
 
     #[cfg(test)]
     pub(crate) fn direct_eval_cache_len(&self) -> usize {
-        self.scope.realm.direct_eval_cache_len()
+        self.scope.direct_eval_cache_len()
     }
 
     pub(crate) fn object_prototype_intrinsic_override(&self) -> Option<ObjectRef> {
@@ -1568,15 +1495,15 @@ impl CallEnv {
     /// private string key. The slot is fixed when a realm is created; writes
     /// to the public `globalThis` property do not replace this identity.
     pub(crate) fn global_this(&self) -> Option<Value> {
-        self.scope.realm.global_this()
+        self.scope.global_this()
     }
 
     /// Returns the one shared cell for a realm binding. Every realm binding is
     /// cell-backed from the moment it is created (`RealmState`'s single
     /// `DynamicBindings` map), so this is just a lookup — no more lazy
     /// cell creation on first capture.
-    pub(crate) fn realm_binding_cell(&self, name: &str) -> Option<Upvalue> {
-        self.scope.realm.cell(name)
+    pub(crate) fn realm_binding_cell(&self, name: &str) -> Option<BindingCell> {
+        self.scope.cell(name)
     }
 
     pub(crate) fn remove_realm(&self, name: &str) -> Option<Value> {
@@ -1585,19 +1512,17 @@ impl CallEnv {
         // cell (e.g. a closure that captured the binding) observes the
         // uninitialized marker, while the returned value here is the value
         // that was live immediately before removal.
-        let removed = self.scope.realm.get_value(name);
-        if let Some(cell) = self.scope.realm.cell(name) {
+        let removed = self.scope.get_value(name);
+        if let Some(cell) = self.scope.cell(name) {
             cell.set(Value::Function(Function::uninitialized_lexical_marker()));
         }
-        self.scope.realm.remove_value(name);
-        self.scope
-            .realm
-            .sync_dynamic_function_realm_binding(name, None);
+        self.scope.remove_value(name);
+        self.scope.sync_dynamic_function_realm_binding(name, None);
         removed
     }
 
-    pub(crate) fn is_realm_binding_cell(&self, name: &str, cell: &Upvalue) -> bool {
-        self.scope.realm.is_binding_cell(name, cell)
+    pub(crate) fn is_realm_binding_cell(&self, name: &str, cell: &BindingCell) -> bool {
+        self.scope.is_binding_cell(name, cell)
     }
 
     /// True if `name` is bound in either layer.
@@ -1607,7 +1532,7 @@ impl CallEnv {
                 .deopt_bindings
                 .as_ref()
                 .is_some_and(|bindings| bindings.contains_key(name))
-            || self.scope.realm.contains(name)
+            || self.scope.contains(name)
     }
 
     /// Inserts a frame-local binding (`this`, params, captures, caller-scope
@@ -1663,7 +1588,7 @@ impl CallEnv {
     /// Installs an existing VM slot cell in this frame view. Native operations
     /// and callbacks then observe the same binding identity as bytecode, so no
     /// value snapshot can overwrite a callback's update on return.
-    pub(crate) fn insert_frame_cell(&self, name: String, value: Upvalue) {
+    pub(crate) fn insert_frame_cell(&self, name: String, value: BindingCell) {
         self.frame_bindings.insert_cell(name, value);
     }
 
@@ -1671,21 +1596,19 @@ impl CallEnv {
     /// definition). Visible to every frame sharing the realm.
     pub(crate) fn insert_realm(&self, name: String, value: Value) -> Option<Value> {
         self.scope
-            .realm
             .sync_dynamic_function_realm_binding(&name, Some(&value));
-        self.scope.realm.insert_value(name, value)
+        self.scope.insert_value(name, value)
     }
 
     /// Replaces an existing realm binding. Hot global stores use this after
     /// proving that the corresponding global-object property is still an
     /// ordinary writable data property.
     pub(crate) fn replace_existing_realm(&self, name: &str, value: Value) -> bool {
-        let Some(cell) = self.scope.realm.cell(name) else {
+        let Some(cell) = self.scope.cell(name) else {
             return false;
         };
         cell.set(value.clone());
         self.scope
-            .realm
             .sync_dynamic_function_realm_binding(name, Some(&value));
         true
     }
@@ -1699,24 +1622,26 @@ impl CallEnv {
         &self,
         name: &str,
         value: Value,
-        cell: &Upvalue,
+        cell: &BindingCell,
     ) -> bool {
         cell.set(value.clone());
         self.scope
-            .realm
             .sync_dynamic_function_realm_binding(name, Some(&value));
         true
     }
 
     /// Whether `object` is this realm's global object, without cloning it.
     pub(crate) fn is_realm_global_object(&self, object: &ObjectRef) -> bool {
-        self.scope.realm.is_global_object(object)
+        self.scope.is_global_object(object)
     }
 
     /// Mirrors a data-property definition on this realm's global object into
     /// the realm value table and any already-captured global cell.
     pub(crate) fn sync_realm_global_object_property(&self, object: &ObjectRef, name: &str) {
-        if !self.scope.realm.is_global_object(object) || !self.scope.realm.contains(name) {
+        if !self.scope.is_global_object(object)
+            || !self.scope.contains(name)
+            || self.is_global_lexical_binding(name)
+        {
             return;
         }
         let Some(property) = object.own_property(name) else {
@@ -1735,8 +1660,8 @@ impl CallEnv {
     /// resolving exactly as it does after `delete x`. A script-level lexical
     /// binding of the same name is a different binding and stays.
     pub(crate) fn forget_deleted_global_object_property(&self, object: &ObjectRef, name: &str) {
-        if !self.scope.realm.is_global_object(object)
-            || !self.scope.realm.contains(name)
+        if !self.scope.is_global_object(object)
+            || !self.scope.contains(name)
             || self.is_global_lexical_binding(name)
         {
             return;
@@ -1748,15 +1673,15 @@ impl CallEnv {
     /// Used by global-binding initialization (script and indirect-eval scopes).
     pub(crate) fn realm_entry_or_insert(&self, name: String, value: Value) {
         let refresh_dynamic_realm = name == DYNAMIC_FUNCTION_REALM_GLOBAL;
-        self.scope.realm.entry_or_insert_value(name, value);
+        self.scope.entry_or_insert_value(name, value);
         if refresh_dynamic_realm {
-            self.scope.realm.refresh_dynamic_function_realm_global();
+            self.scope.refresh_dynamic_function_realm_global();
         }
     }
 
     /// True if the shared realm cell binds `name`.
     pub(crate) fn realm_contains(&self, name: &str) -> bool {
-        self.scope.realm.contains(name)
+        self.scope.contains(name)
     }
 
     /// Removes a frame-local binding.
@@ -1815,14 +1740,14 @@ impl CallEnv {
             && self.immutable_function_name.is_none()
     }
 
-    pub(crate) fn frame_binding_cell(&self, name: &str) -> Option<Upvalue> {
+    pub(crate) fn frame_binding_cell(&self, name: &str) -> Option<BindingCell> {
         self.frame_bindings.cell(name)
     }
 
     /// Returns the live cell for a binding supplied by the current caller or
     /// dynamic environment, without falling through to the realm. Direct eval
     /// uses this to keep a same-named function local distinct from a global.
-    pub(crate) fn local_binding_cell(&self, name: &str) -> Option<Upvalue> {
+    pub(crate) fn local_binding_cell(&self, name: &str) -> Option<BindingCell> {
         self.frame_bindings.cell(name).or_else(|| {
             self.deopt_bindings
                 .as_ref()
@@ -1854,7 +1779,6 @@ impl CallEnv {
     pub(crate) fn fork_current_frame_values(&self) -> Self {
         Self {
             scope: Rc::clone(&self.scope),
-            expose_global_lexical_values: false,
             frame_bindings: self
                 .frame_bindings
                 .fork_values(self.derived_this_cell().is_some()),
@@ -1875,7 +1799,7 @@ impl CallEnv {
 
     /// The implicit binding of one derived activation, never a realm cell.
     /// Its marker denotes TDZ; forks and lexical arrows must retain identity.
-    pub(crate) fn derived_this_cell(&self) -> Option<Upvalue> {
+    pub(crate) fn derived_this_cell(&self) -> Option<BindingCell> {
         if !self
             .frame_bindings
             .contains_key(crate::ACTIVE_CONSTRUCTOR_BINDING)

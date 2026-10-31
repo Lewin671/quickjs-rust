@@ -1,7 +1,7 @@
-//! Upvalue classification for a compiled frame.
+//! BindingCell classification for a compiled frame.
 //!
 //! Given a compiled frame, decide which of its bindings must live in shared
-//! [`Upvalue`](crate::function) cells and how each nested function sources the
+//! [`BindingCell`](crate::function) cells and how each nested function sources the
 //! bindings it closes over, indexed rather than name-keyed. The analysis is
 //! pure. Frame construction (`Vm::initial_local_upvalues` in
 //! `vm_bindings.rs`) consumes `UpvaluePlan::cell_slots`; the plan's other

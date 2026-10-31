@@ -37,7 +37,7 @@ pub(crate) enum GeneratorState {
 pub(crate) struct GeneratorStart {
     pub(crate) bytecode: Rc<Bytecode>,
     pub(crate) env: CallEnv,
-    pub(crate) upvalues: Vec<crate::function::Upvalue>,
+    pub(crate) upvalues: Vec<crate::function::BindingCell>,
     pub(crate) with_stack: Vec<Value>,
     pub(crate) immutable_function_name: Option<String>,
 }
@@ -48,8 +48,8 @@ pub(crate) struct GeneratorSnapshot {
     ip: usize,
     stack: Vec<Value>,
     locals: Vec<Slot>,
-    local_upvalues: Vec<Option<crate::function::Upvalue>>,
-    upvalues: Vec<crate::function::Upvalue>,
+    local_upvalues: Vec<Option<crate::function::BindingCell>>,
+    upvalues: Vec<crate::function::BindingCell>,
     env: CallEnv,
     with_stack: Vec<Value>,
     immutable_function_name: Option<String>,

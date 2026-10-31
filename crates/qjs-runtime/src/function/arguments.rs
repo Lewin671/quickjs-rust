@@ -4,7 +4,7 @@ use crate::{
     Function, NativeFunction, Property, Prototype, RuntimeError, Value, object_prototype, symbol,
 };
 
-use super::{CallEnv, Upvalue};
+use super::{BindingCell, CallEnv};
 
 const CROSS_REALM_FUNCTION_PROTOTYPE: &str = "__quickjsRustRealmFunctionPrototype";
 
@@ -34,7 +34,7 @@ pub(super) fn arguments_object(
         if let Some(parameter_name) = mapped_argument_parameter(function, index) {
             let parameter = env
                 .frame_binding_cell(parameter_name)
-                .unwrap_or_else(|| Upvalue::new(value.clone()));
+                .unwrap_or_else(|| BindingCell::new(value.clone()));
             sequence.insert_property(
                 &index.to_string(),
                 mapped_argument_property(env.realm(), parameter, env.realm().atoms()),
@@ -73,7 +73,7 @@ fn mapped_argument_parameter(function: &Function, index: usize) -> Option<&str> 
 
 fn mapped_argument_property(
     realm: &crate::function::Realm,
-    parameter: Upvalue,
+    parameter: BindingCell,
     domain: &crate::property::atom::AtomDomain,
 ) -> Property {
     Property::accessor(
@@ -86,7 +86,7 @@ fn mapped_argument_property(
 
 fn mapped_argument_getter(
     realm: &crate::function::Realm,
-    parameter: Upvalue,
+    parameter: BindingCell,
     _domain: &crate::property::atom::AtomDomain,
 ) -> Value {
     let mut getter = Function::new_native(
@@ -102,7 +102,7 @@ fn mapped_argument_getter(
 
 fn mapped_argument_setter(
     realm: &crate::function::Realm,
-    parameter: Upvalue,
+    parameter: BindingCell,
     _domain: &crate::property::atom::AtomDomain,
 ) -> Value {
     let mut setter = Function::new_native(
@@ -235,7 +235,7 @@ pub(crate) fn native_mapped_argument_get(function: &Function) -> Result<Value, R
     Ok(function
         .upvalues
         .first()
-        .map_or(Value::Undefined, Upvalue::get))
+        .map_or(Value::Undefined, BindingCell::get))
 }
 
 pub(crate) fn native_mapped_argument_set(
@@ -243,7 +243,10 @@ pub(crate) fn native_mapped_argument_set(
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
     if let Some(parameter) = function.upvalues.first() {
-        parameter.set(argument_values.first().cloned().unwrap_or(Value::Undefined));
+        parameter.assign(
+            argument_values.first().cloned().unwrap_or(Value::Undefined),
+            false,
+        )?;
     }
     Ok(Value::Undefined)
 }

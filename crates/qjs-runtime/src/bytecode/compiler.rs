@@ -353,8 +353,7 @@ impl Compiler {
         // Mark the end of parameter instantiation: generators run the prologue
         // synchronously at the call and suspend here; others skip past it.
         self.emit(Op::FunctionPrologueEnd);
-        self.scope_plan
-            .enter(crate::binding::ScopeKind::FunctionBody);
+        self.scope_plan.enter_function_body(non_simple_params);
         let param_blocked = function_param_names(params);
         self.with_annex_b_blocked_function_names(&param_blocked, |compiler| {
             compiler.collect_hoisted_locals(body, false);
@@ -575,8 +574,16 @@ impl Compiler {
     /// not from its parent's indexed-upvalue vector; the arrow's corresponding
     /// captured slot is independently marked `from_env` when it is recompiled.
     pub(super) fn own_call_frame_slot(&mut self, name: &str) -> usize {
+        if name == "arguments"
+            && let Some(slot) = self.resolve_local_slot(name)
+        {
+            return slot;
+        }
         let slot = self.local_slot(name, false);
         self.locals[slot].from_env = false;
+        if name == "arguments" {
+            self.scope_plan.implicit_arguments = Some(crate::binding::LocalSlot(slot));
+        }
         slot
     }
 

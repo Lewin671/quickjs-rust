@@ -11,7 +11,7 @@ use std::{
 use qjs_ast::{FunctionParams, Stmt};
 
 use crate::CallEnv;
-use crate::function::{DynamicBindings, ModuleImports, Realm, Upvalue};
+use crate::function::{BindingCell, DynamicBindings, ModuleImports, Realm};
 use crate::module::ModuleHostRef;
 use crate::{
     Bytecode, NativeFunction, ObjectRef, Property, PropertyKey, Prototype, Value,
@@ -190,7 +190,7 @@ pub struct FunctionData {
     /// Value for the rare immutable outer name that is not represented by a
     /// compiler-generated received-upvalue slot (notably the self binding of a
     /// named function expression referenced only by a nested function).
-    pub(crate) immutable_env_value: Option<Upvalue>,
+    pub(crate) immutable_env_value: Option<BindingCell>,
     /// Parameter names. Held behind `Rc` so the frequent `Function` value
     /// clones (every property read, capture sync, and call setup) only bump a
     /// refcount instead of deep-cloning the parameter AST, which dominated call
@@ -199,7 +199,7 @@ pub struct FunctionData {
     pub params: Rc<FunctionParams>,
     /// Opaque state carried by native closure-like functions (promise
     /// reactions, async helpers, RegExp accessors, ...). User bytecode functions
-    /// keep this empty: lexical captures live in indexed [`Upvalue`] cells and
+    /// keep this empty: lexical captures live in indexed [`BindingCell`] cells and
     /// globals live in the shared `realm` cell below.
     pub(crate) native_context: NativeContext,
     /// Stable creation realm for bytecode and native functions; intrinsic
@@ -241,7 +241,7 @@ pub struct FunctionData {
     pub(crate) module_host: Option<ModuleHostRef>,
     pub(crate) module_imports: ModuleImports,
     pub(crate) with_stack: Vec<Value>,
-    pub(crate) upvalues: Vec<Upvalue>,
+    pub(crate) upvalues: Vec<BindingCell>,
     /// Received-upvalue slots backed by the function creation realm. The cells
     /// stay live; this mask only avoids rediscovering their identity by name on
     /// every direct call.
@@ -262,7 +262,7 @@ pub struct FunctionData {
     /// `new.target` captured when an arrow is created. Unlike `this` and
     /// `arguments`, bytecode reads this through a dedicated opcode, so it is
     /// retained explicitly rather than as an ordinary received upvalue.
-    pub(crate) lexical_new_target: Option<Upvalue>,
+    pub(crate) lexical_new_target: Option<BindingCell>,
     /// Whether this is a generator function (`function*` / `*m()`), which
     /// returns a generator object when called instead of running its body.
     pub(crate) is_generator: bool,
@@ -315,7 +315,7 @@ struct FunctionColdState {
     constructor_prototype_slot: Option<(crate::value::layout::LayoutVersion, usize)>,
     home_object: Option<Value>,
     /// An arrow's retained derived activation: binding authority and field owner.
-    lexical_derived_this: Option<(Upvalue, Function)>,
+    lexical_derived_this: Option<(BindingCell, Function)>,
     /// For a derived constructor, the parent constructor invoked by `super()`.
     super_constructor: Option<Value>,
     /// For a class constructor, the instance-field initializers run when a new
@@ -466,7 +466,7 @@ pub(crate) struct CompiledUserFunction {
     pub(crate) has_name_binding: bool,
     pub(crate) immutable_name_binding: bool,
     pub(crate) immutable_env_binding: Option<String>,
-    pub(crate) immutable_env_value: Option<Upvalue>,
+    pub(crate) immutable_env_value: Option<BindingCell>,
     pub(crate) params: Rc<FunctionParams>,
     pub(crate) realm: Realm,
     pub(crate) module_host: Option<ModuleHostRef>,
@@ -478,7 +478,7 @@ pub(crate) struct CompiledUserFunction {
     pub(crate) is_strict: bool,
     pub(crate) lexical_this: bool,
     pub(crate) lexical_arguments: bool,
-    pub(crate) lexical_new_target: Option<Upvalue>,
+    pub(crate) lexical_new_target: Option<BindingCell>,
     pub(crate) is_generator: bool,
     pub(crate) is_async: bool,
     pub(crate) is_class_constructor: bool,
@@ -488,7 +488,7 @@ pub(crate) struct CompiledUserFunction {
     pub(crate) super_constructor: Option<Value>,
     pub(crate) deopt_bindings: Option<DynamicBindings>,
     pub(crate) with_stack: Vec<Value>,
-    pub(crate) upvalues: Vec<Upvalue>,
+    pub(crate) upvalues: Vec<BindingCell>,
 }
 
 #[derive(Clone, Copy)]
@@ -537,7 +537,7 @@ impl Function {
     /// Adds an indexed capture while constructing a fresh internal native
     /// function. Keeping this mutation behind the handle prevents general
     /// copy-on-write detachment of JavaScript function identity.
-    pub(crate) fn push_upvalue(&mut self, upvalue: Upvalue) {
+    pub(crate) fn push_upvalue(&mut self, upvalue: BindingCell) {
         Rc::get_mut(&mut self.0)
             .expect("upvalues must be populated before sharing the function")
             .upvalues
@@ -1288,12 +1288,12 @@ impl Function {
             .with_cold(|cold| cold.and_then(|cold| cold.super_constructor.clone()))
     }
 
-    pub(crate) fn lexical_derived_this(&self) -> Option<(Upvalue, Function)> {
+    pub(crate) fn lexical_derived_this(&self) -> Option<(BindingCell, Function)> {
         self.auxiliary
             .with_cold(|cold| cold.and_then(|cold| cold.lexical_derived_this.clone()))
     }
 
-    pub(crate) fn set_lexical_derived_this(&self, cell: Upvalue, constructor: Function) {
+    pub(crate) fn set_lexical_derived_this(&self, cell: BindingCell, constructor: Function) {
         self.auxiliary
             .with_cold_mut(|cold| cold.lexical_derived_this = Some((cell, constructor)));
     }

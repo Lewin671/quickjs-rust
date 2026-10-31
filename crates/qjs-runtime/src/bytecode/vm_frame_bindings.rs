@@ -11,7 +11,7 @@ use super::{
 };
 use crate::{
     Value,
-    function::{CallEnv, Upvalue},
+    function::{BindingCell, CallEnv},
 };
 
 impl Vm<'_> {
@@ -43,9 +43,9 @@ impl Vm<'_> {
     pub(super) fn initial_local_upvalues(
         bytecode: &Bytecode,
         _locals: &[Slot],
-        upvalues: &[Upvalue],
+        upvalues: &[BindingCell],
         env: &CallEnv,
-    ) -> Vec<Option<Upvalue>> {
+    ) -> Vec<Option<BindingCell>> {
         let mut next_received = 0;
         let mut local_upvalues = vec![None; bytecode.locals.len()];
         let direct_eval_frame = matches!(
@@ -53,6 +53,7 @@ impl Vm<'_> {
             Some(Value::Boolean(true))
         );
         if !bytecode.global_scope
+            && !bytecode.binding_plan.has_realm_lexicals
             && !direct_eval_frame
             && !env.has_module_imports()
             && env.derived_this_cell().is_none()
@@ -76,6 +77,10 @@ impl Vm<'_> {
         } else {
             for (slot, local) in bytecode.locals.iter().enumerate() {
                 if local.compiler_temporary {
+                    continue;
+                }
+                if bytecode.binding_plan.realm_lexical_slots[slot] {
+                    local_upvalues[slot] = env.realm_binding_cell(&local.name);
                     continue;
                 }
                 if local.name == "this"
@@ -169,7 +174,9 @@ impl Vm<'_> {
             if local.compiler_temporary {
                 continue;
             }
-            if local.name == "this" && local_upvalues[slot].is_some() {
+            if (local.name == "this" || bytecode.binding_plan.realm_lexical_slots[slot])
+                && local_upvalues[slot].is_some()
+            {
                 continue;
             }
             if local.is_received_upvalue() {
@@ -183,7 +190,7 @@ impl Vm<'_> {
                 continue;
             }
             if local.parameter
-                && bytecode.needs_arguments_object()
+                && (bytecode.needs_arguments_object() || bytecode.has_dynamic_scope_tree())
                 && let Some(upvalue) = env.frame_binding_cell(&local.name)
             {
                 local_upvalues[slot] = Some(upvalue);
@@ -216,14 +223,17 @@ impl Vm<'_> {
                 .unwrap_or_else(
                     || Value::Function(crate::Function::uninitialized_lexical_marker()),
                 );
-            local_upvalues[slot] = Some(Upvalue::new(value));
+            local_upvalues[slot] = Some(bytecode.binding_meta(slot).map_or_else(
+                || BindingCell::new(value.clone()),
+                |meta| BindingCell::with_metadata(meta, Some(value.clone())),
+            ));
         }
         local_upvalues
     }
 
     pub(super) fn initial_authoritative_slots(
         bytecode: &Bytecode,
-        local_upvalues: &[Option<Upvalue>],
+        local_upvalues: &[Option<BindingCell>],
         env: &CallEnv,
     ) -> u128 {
         // A frame with no cells and an environment that supplies no name answers
@@ -257,7 +267,7 @@ impl Vm<'_> {
 
     pub(super) fn initial_realm_binding_slots(
         bytecode: &Bytecode,
-        local_upvalues: &[Option<Upvalue>],
+        local_upvalues: &[Option<BindingCell>],
         env: &CallEnv,
     ) -> u128 {
         bytecode

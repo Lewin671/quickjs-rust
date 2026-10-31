@@ -64,8 +64,10 @@ impl ParameterInfo {
 #[derive(Clone, Debug, Default)]
 pub(super) struct BindingPlan {
     pub(super) scopes: Box<[crate::binding::ScopeDescriptor]>,
-    pub(super) bindings: Box<[crate::binding::BindingMeta]>,
+    pub(super) bindings: std::rc::Rc<crate::binding::BindingMetadata>,
     pub(super) local_bindings: Box<[Option<crate::binding::BindingId>]>,
+    pub(super) realm_lexical_slots: Box<[bool]>,
+    pub(super) has_realm_lexicals: bool,
     pub(super) exposure: crate::binding::EvalExposurePlan,
     pub(super) received: Box<[super::binding_captures::CaptureRoute]>,
     pub(super) received_indices: Box<[Option<usize>]>,
@@ -139,8 +141,10 @@ impl BindingPlan {
         let dynamic_scope_tree = dynamic_tree(bytecode);
         Self {
             scopes: Box::default(),
-            bindings: Box::default(),
+            bindings: std::rc::Rc::default(),
             local_bindings: Box::default(),
+            realm_lexical_slots: vec![false; bytecode.locals.len()].into_boxed_slice(),
+            has_realm_lexicals: false,
             exposure: crate::binding::EvalExposurePlan::default(),
             received: vec![
                 super::binding_captures::CaptureRoute::Named;

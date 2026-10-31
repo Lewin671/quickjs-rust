@@ -1,6 +1,6 @@
 use super::{
-    CallEnv, DYNAMIC_FUNCTION_REALM_GLOBAL, DynamicBindings, FrameBindingValue, FrameBindings,
-    Upvalue, new_realm,
+    BindingCell, CallEnv, DYNAMIC_FUNCTION_REALM_GLOBAL, DynamicBindings, FrameBindingValue,
+    FrameBindings, new_realm,
 };
 use crate::{ObjectRef, Value};
 use std::{collections::HashMap, rc::Rc};
@@ -9,10 +9,10 @@ use std::{collections::HashMap, rc::Rc};
 fn derived_this_forks_share_only_the_implicit_cell() {
     let domain = crate::property::atom::AtomDomain::new();
     let mut env = CallEnv::detached();
-    let this = Upvalue::new(Value::Function(
+    let this = BindingCell::new(Value::Function(
         crate::Function::uninitialized_lexical_marker(),
     ));
-    let local = Upvalue::new(Value::Number(1.0));
+    let local = BindingCell::new(Value::Number(1.0));
     env.insert(
         crate::ACTIVE_CONSTRUCTOR_BINDING.to_owned(),
         Value::Undefined,
@@ -33,7 +33,7 @@ fn derived_this_forks_share_only_the_implicit_cell() {
 #[test]
 fn ordinary_undefined_this_is_not_a_derived_cell() {
     let env = CallEnv::detached();
-    let this = Upvalue::undefined();
+    let this = BindingCell::undefined();
     env.insert_frame_cell("this".to_owned(), this.clone());
     assert!(env.derived_this_cell().is_none());
     let fork = env.fork_current_frame_values();
@@ -45,10 +45,10 @@ fn ordinary_undefined_this_is_not_a_derived_cell() {
 fn derived_this_insert_does_not_write_an_inherited_activations_cell() {
     let domain = crate::property::atom::AtomDomain::new();
     let mut env = CallEnv::detached();
-    let this = Upvalue::new(Value::Function(
+    let this = BindingCell::new(Value::Function(
         crate::Function::uninitialized_lexical_marker(),
     ));
-    let other = Upvalue::new(Value::Function(
+    let other = BindingCell::new(Value::Function(
         crate::Function::uninitialized_lexical_marker(),
     ));
     let bindings = DynamicBindings::new();
@@ -140,14 +140,14 @@ fn unrelated_frame_binding_does_not_disable_an_authoritative_slot() {
 #[test]
 fn dynamic_cell_overlay_skips_only_the_identical_cell() {
     let bindings = DynamicBindings::new();
-    let first = Upvalue::new(Value::Number(1.0));
+    let first = BindingCell::new(Value::Number(1.0));
     assert!(bindings.overlay_cell("value", &first));
     assert!(!bindings.overlay_cell("value", &first));
 
     first.set(Value::Number(2.0));
     assert!(matches!(bindings.get("value"), Some(Value::Number(2.0))));
 
-    let shadow = Upvalue::new(Value::Number(2.0));
+    let shadow = BindingCell::new(Value::Number(2.0));
     assert!(bindings.overlay_cell("value", &shadow));
     assert!(
         bindings

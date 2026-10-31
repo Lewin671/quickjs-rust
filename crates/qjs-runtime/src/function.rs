@@ -9,7 +9,6 @@ mod local_names;
 mod native_kind;
 mod prototype;
 mod strict;
-mod upvalue;
 mod value;
 
 /// Realm key under which the single shared %ThrowTypeError% intrinsic is
@@ -58,6 +57,7 @@ pub(crate) fn is_call_frame_binding(name: &str) -> bool {
             | "arguments"
     )
 }
+pub(crate) use crate::binding::BindingCell;
 #[allow(unused_imports)]
 #[cfg(test)]
 pub(crate) use env::new_realm;
@@ -78,7 +78,6 @@ pub(crate) use prototype::{
     native_generator_function, native_realm_throw_type_error, native_throw_type_error,
 };
 pub(crate) use strict::is_strict_function_body;
-pub(crate) use upvalue::Upvalue;
 pub(crate) use value::{
     CompiledUserFunction, Function, FunctionWeakRef, InstanceElementInitializer,
     InstanceFieldInitializer, InstancePrivateElement, NativeContextData, PrivateFieldInit,

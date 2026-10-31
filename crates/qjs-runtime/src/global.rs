@@ -1188,7 +1188,8 @@ pub(super) fn native_eval_script(
         thrown: None,
         message: format!("SyntaxError: {}", error.message),
     })?;
-    let bytecode = compile_direct_eval_script(&script, false)?;
+    let mut bytecode = compile_direct_eval_script(&script, false)?;
+    bytecode.mark_script_lexical_routes();
     let mut eval_env = env.empty_frame();
     validate_eval_global_lexical_bindings(&bytecode, env, true, true)?;
     // $262.evalScript runs GlobalDeclarationInstantiation: a var/function
@@ -1221,23 +1222,6 @@ pub(super) fn native_eval_script(
     for name in &result.sloppy_global_names {
         if let Some(value) = result.binding(name) {
             define_eval_global_binding(&mut eval_env, name, value.clone());
-        }
-    }
-    // Top-level lexical declarations persist as global lexical bindings.
-    let hoisted = bytecode.hoisted_local_names().collect::<HashSet<_>>();
-    for name in bytecode.local_names() {
-        if hoisted.contains(name) {
-            continue;
-        }
-        if let Some(value) = result.binding(name) {
-            eval_env.insert_realm(name.to_owned(), value.clone());
-            eval_env.mark_global_lexical_binding(name.to_owned());
-            if bytecode
-                .local_slot(name)
-                .is_some_and(|slot| !bytecode.local_is_mutable(slot))
-            {
-                eval_env.mark_immutable_lexical_binding(name.to_owned());
-            }
         }
     }
     result.value

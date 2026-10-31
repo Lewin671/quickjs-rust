@@ -35,7 +35,7 @@ throw/return/jump of an in-flight `finally`, and the suspension kind. Resume
 builds a fresh `Vm` over the held bytecode, moves these back, and recomputes
 the derived slot masks (`refresh_authoritative_slots`).
 
-1. **Cell identity survives.** The snapshot holds the same `Upvalue` cells
+1. **Cell identity survives.** The snapshot holds the same `BindingCell` cells
    as the closures and declaring frames. Suspend and resume copy no binding
    value, run no refresh or write-back, and do not consult the resuming
    caller's environment ([env-model-rewrite.md](env-model-rewrite.md)). Tests:

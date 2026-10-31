@@ -17,7 +17,7 @@ use crate::bytecode::compact_fn::property;
 use crate::bytecode::ir::Bytecode;
 use crate::bytecode::typed_loop::LoopFrame;
 use crate::bytecode::vm::{ResumeFrom, Resumed};
-use crate::function::{CallEnv, Function, Upvalue};
+use crate::function::{BindingCell, CallEnv, Function};
 use crate::{RuntimeError, Value};
 
 mod exits;
@@ -38,7 +38,7 @@ struct WideActivation<'a> {
 }
 
 impl WideActivation<'_> {
-    fn upvalue_cell(&self, slot: usize) -> Option<&Upvalue> {
+    fn upvalue_cell(&self, slot: usize) -> Option<&BindingCell> {
         let owner = self.upvalue_owner?;
         let bit = (slot < u128::BITS as usize).then(|| 1_u128 << slot)?;
         (self.upvalue_slots & bit != 0).then_some(())?;
@@ -1743,7 +1743,7 @@ pub(super) fn run_typed_loop_here(
     program: &WideProgram,
     env: &CallEnv,
     window: &mut [Value],
-    upvalues: &[Upvalue],
+    upvalues: &[BindingCell],
     this_value: Option<&Value>,
     header: usize,
     backedge: usize,
