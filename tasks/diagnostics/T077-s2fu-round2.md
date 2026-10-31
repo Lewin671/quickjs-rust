@@ -1,11 +1,11 @@
 # T077 S2 follow-up, lead feedback round 2
 
-- Status: active; B–D implemented, A performance repair still open; final qualification paused pending instruction acceptance.
-- Implementation: A–D present with 80-byte bound nodes/shared tiny data, published reusable templates, allocation-free cycle checks, live-root reuse/dead-root sweeps, cached hash width and four-field linear buffers. A acceptance remains open.
-- Verified at: staged fast gate passes 2,521 runtime tests; `b731ea83` passes all 268 NG fixtures in cached/off/verify. `4e788129` native/x86 mem3 passes. Older full gates are revision-bound; final exact/performance/resource gates remain due.
+- Status: active; A–D implementation present, final performance qualification in progress.
+- Implementation: runtime `f9d6d86c`; 80-byte bound nodes/shared tiny data, canonical templates, live-root reuse/dead-root sweeps, cached hash width, visible-prefix own-data reads and allocation-free cycle checks. Default x86 order regenerated from this source.
+- Verified at: fast gate passes 2,521 runtime tests; `f9d6d86c` passes 268 NG fixtures cached/off/verify. Native full check is running. `4e788129` native/x86 mem3 passes; final public86, exact and resource qualification remain due.
 - Evidence: this record and the named job/artifact receipts below; [round 1](T077-s2-followup.md) is historical.
 - Unresolved: final per-lane instruction/wall limits, exact cached/off with burndown, complete native/x86 resource gates.
-- Next action: focused instruction replays on restored guard code; freeze a passing source before final full/exact/resource replays. No origin push or merge.
+- Next action: strict relink audit/public86, then complete final exact and native/x86 resource replays. No origin push or merge.
 
 
 ## Authority and ordered scope
@@ -309,3 +309,14 @@ discard unused ShapeEntry fields. In a separate source checkpoint, remove the
 redundant shared-epoch zero write only in from_slot_parts; dictionary copies
 still initialize to one. Shared constructors/copies already initialize zero.
 Measure both checkpoints independently before choosing the final source.
+
+
+Paired adapter job `20261031T132140Z-t077-s2fu-r2-slot-adapters`:
+inline-only 03e4b6be / plus-construction f9d6d86c instruction ratios are
+0.974262/0.974288 on dynamic read, 0.998714/0.998712 on string churn,
+1.000004/0.999999 on captured write. The inlined adapter removes the
+remaining dynamic-read excess. Use f9d6d86c, which avoids shared construction
+writes without changing private initialization. Its default external/sentinel/
+broad order generation produces 467 symbols; apply it for strict relink audit
+and a full public86 before declaring A accepted. All 268 NG fixtures pass
+cached/off/verify on f9d6d86c; its native full check remains in progress.
