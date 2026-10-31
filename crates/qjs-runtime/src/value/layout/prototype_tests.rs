@@ -241,3 +241,21 @@ fn dictionary_versions_do_not_allocate_receiver_cold_data() {
     assert!(!store.matches_own_version(&proof));
     assert!(store.cold.is_unallocated());
 }
+
+#[test]
+fn a_missing_exclusive_probe_does_not_publish_a_deferred_root() {
+    let domain = AtomDomain::new();
+    let _owner = PropertyOwner::new(domain.clone());
+    let parent = object(&domain, None);
+    let mut store = NamedStore::empty_with_prototype(&domain, Some(Prototype::Object(parent)), 0);
+    let key = domain.intern("x");
+    assert!(store.lookup(&key).unwrap().descriptor().is_none());
+    assert!(store.deferred());
+    assert!(store.cold.is_unallocated());
+    store
+        .lookup(&key)
+        .unwrap()
+        .define(Property::enumerable(Value::Null));
+    assert!(!store.deferred());
+    assert_eq!(store.get(&key).unwrap().unwrap().value, Value::Null);
+}

@@ -40,3 +40,19 @@ patterns to the memory gate (<=1.5 pre-S2 peak, goal <=1.25). C then removes
 allocation/recursion from both cycle walks. D then corrects the admission
 comment. Final qualification covers full check, all NG modes, complete exact
 cached/off with burndown, native/x86 memory/complexity and final public86.
+
+## A first iMac screen
+
+Job `20261031T100004Z-t077-s2fu-r2-a-public86`, candidate `d86f5c30` versus
+`1e6e2a2b`: 430 valid pairs, zero invalid/heavy pairs, automatic verdict unclear.
+Lane wall/instruction: development 1.000609/1.003846; external
+0.995804/0.999885; broad 0.988923/0.999621; sentinel 0.971908/0.999080.
+A's per-lane instruction target is still open for development. Largest residual
+instruction ratios include string-key churn 1.01722 and diff 1.01681.
+
+Source inspection found another unconditional addition on existing-key writes:
+`NamedStore::lookup` checked/materialized a deferred seed before every probe.
+Move publication to the missing-key define branch; pure missing probes need no
+root either. Empty seeds and semantic roots share the untouched empty ID index,
+so the exclusive miss proof remains valid. The new test proves a missing probe
+allocates/publishes nothing and a subsequent define still publishes correctly.

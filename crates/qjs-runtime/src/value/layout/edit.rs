@@ -192,6 +192,9 @@ impl Lookup<'_> {
                 return;
             }
             None => {
+                // A missing key is the only lookup outcome that can need a
+                // deferred root. Existing-key writes keep this branch cold.
+                self.store.materialize_layout();
                 let dictionary = self.store.layout.dictionary
                     || self.store.len() >= DICTIONARY_WIDTH
                     || (dynamic

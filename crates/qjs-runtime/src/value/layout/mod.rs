@@ -236,7 +236,6 @@ impl NamedStore {
         if !key.belongs_to(self.domain()) {
             return Err(ForeignKey);
         }
-        self.materialize_layout();
         let proof = self.layout.probe(key.id());
         Ok(Lookup {
             store: self,
