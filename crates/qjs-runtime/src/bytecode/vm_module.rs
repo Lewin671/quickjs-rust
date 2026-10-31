@@ -74,6 +74,9 @@ pub(super) fn eval_module_body(
     }
     realm.refresh_dynamic_function_realm_global();
     let mut env = CallEnv::new(Rc::clone(realm));
+    // Module this is initialized undefined, including when an arrow captures
+    // it into a positional cell before the first computed key runs.
+    env.insert("this".to_owned(), Value::Undefined);
     // Wire the realm's dynamic-import host so an `import()` in this module body
     // (or in a closure it creates) can load further modules.
     if let Some(host) = host {
@@ -118,6 +121,9 @@ pub(super) fn eval_module_function_hoists(
     live_exports: ModuleLiveExports,
 ) -> Result<(), RuntimeError> {
     let mut env = CallEnv::new(Rc::clone(realm));
+    // Module this is initialized undefined, including when an arrow captures
+    // it into a positional cell before the first computed key runs.
+    env.insert("this".to_owned(), Value::Undefined);
     if let Some(host) = host {
         env.set_module_host(host);
     }

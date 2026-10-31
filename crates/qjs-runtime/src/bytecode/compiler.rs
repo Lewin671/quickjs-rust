@@ -188,6 +188,7 @@ pub(super) fn compile_direct_eval_script(
         global_scope: false,
         strict,
         direct_eval_source: true,
+        arguments_owner: false,
         ..Compiler::default()
     };
     let mut bytecode = compiler.compile_eval_into(script)?;
@@ -204,6 +205,7 @@ pub(super) fn compile_module(script: &Script) -> Result<Bytecode, RuntimeError> 
     let mut compiler = Compiler {
         strict: true,
         global_scope: false,
+        arguments_owner: false,
         ..Compiler::default()
     };
     compiler.compile_into_with_hoists(script, false)
@@ -213,6 +215,7 @@ pub(super) fn compile_module_function_hoists(script: &Script) -> Result<Bytecode
     let mut compiler = Compiler {
         strict: true,
         global_scope: false,
+        arguments_owner: false,
         ..Compiler::default()
     };
     compiler.source = script.source.clone();
@@ -636,6 +639,15 @@ impl Compiler {
         let slot = self.local_slot(name, false);
         self.locals[slot].from_env = false;
         if name == "arguments" {
+            if let Some(index) = self
+                .scope_plan
+                .declaration_by_slot
+                .get(slot)
+                .copied()
+                .flatten()
+            {
+                self.scope_plan.declarations[index].2 = crate::binding::ScopeId(0);
+            }
             self.scope_plan.implicit_arguments = Some(crate::binding::LocalSlot(slot));
         }
         slot
@@ -1111,9 +1123,7 @@ impl Compiler {
                     let inner_slot =
                         compiler.declare_lexical_slot_with_storage_name(name, &storage_name, false);
                     compiler.emit(Op::ClearLocal(inner_slot));
-                    compiler.compile_class(Some(name), body)?;
-                    compiler.emit(Op::Dup);
-                    compiler.emit(Op::StoreLocal(inner_slot));
+                    compiler.compile_bound_class(name, inner_slot, body)?;
                     Ok(())
                 })?;
                 self.emit(Op::StoreLocal(slot));

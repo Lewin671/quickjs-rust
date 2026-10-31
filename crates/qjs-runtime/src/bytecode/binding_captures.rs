@@ -49,16 +49,6 @@ pub(super) fn link_children(code: &mut [Op], locals: &[Local], global_scope: boo
                     &slots,
                     &received,
                 );
-                for key in &mut def.computed_keys {
-                    if let super::ir::ClassComputedKeyDef::Deferred {
-                        bytecode,
-                        lexical_captures,
-                        ..
-                    } = key
-                    {
-                        link_child(bytecode, lexical_captures, locals, &slots, &received);
-                    }
-                }
                 for element in &mut def.elements {
                     match element {
                         ClassElementDef::Method(def) => link_child(

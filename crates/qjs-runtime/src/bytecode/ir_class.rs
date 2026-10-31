@@ -14,6 +14,7 @@ use super::ir::Bytecode;
 #[derive(Clone, Debug)]
 pub(super) struct ClassDefinition {
     pub(super) name: Option<String>,
+    pub(super) name_slot: Option<usize>,
     pub(super) constructor: ClassConstructorDef,
     /// Class elements (methods, accessors, and fields) in source order.
     pub(super) elements: Vec<ClassElementDef>,
@@ -21,10 +22,6 @@ pub(super) struct ClassDefinition {
     /// not ordinary properties; they install into per-object private storage
     /// keyed by fresh per-evaluation private-name identities.
     pub(super) private_elements: Vec<ClassPrivateElementDef>,
-    /// Computed member keys in source order. Most are pre-evaluated by the
-    /// surrounding bytecode and left on the stack; keys that need the class
-    /// private environment are deferred until `NewClass` runs.
-    pub(super) computed_keys: Vec<ClassComputedKeyDef>,
     /// Whether the class has an `extends` heritage clause. When set, the
     /// heritage value was pushed onto the stack before this op.
     pub(super) has_heritage: bool,
@@ -110,16 +107,6 @@ pub(super) enum ClassPrivateElementDef {
         name: String,
         is_static: bool,
         def: ClassMethodDef,
-    },
-}
-
-#[derive(Clone, Debug)]
-pub(super) enum ClassComputedKeyDef {
-    Precomputed,
-    Deferred {
-        local_names: Vec<String>,
-        lexical_captures: Vec<(String, usize)>,
-        bytecode: Rc<Bytecode>,
     },
 }
 

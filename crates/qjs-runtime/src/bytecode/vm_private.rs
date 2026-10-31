@@ -41,32 +41,7 @@ impl Vm<'_> {
 
         for element in private_elements {
             match element {
-                ClassPrivateElementDef::Field {
-                    name: field_name,
-                    is_static,
-                    initializer,
-                } => {
-                    let id = environment.declare_field(field_name);
-                    if *is_static {
-                        let thunk = initializer.as_ref().map(|definition| {
-                            self.build_private_field_thunk(
-                                definition,
-                                true,
-                                prototype,
-                                constructor_function,
-                                name,
-                            )
-                        });
-                        let value = match &thunk {
-                            Some(thunk) => self.run_private_field_initializer(
-                                thunk,
-                                Value::Function(constructor_function.clone()),
-                            )?,
-                            None => Value::Undefined,
-                        };
-                        constructor_function.private_storage().add_field(id, value);
-                    }
-                }
+                ClassPrivateElementDef::Field { .. } => {}
                 ClassPrivateElementDef::Method {
                     name: method_name,
                     is_static,
@@ -111,6 +86,48 @@ impl Vm<'_> {
                     }
                 }
             }
+        }
+        Ok(())
+    }
+
+    pub(super) fn initialize_static_private_field(
+        &mut self,
+        element: &ClassPrivateElementDef,
+        prototype: &ObjectRef,
+        constructor_function: &Function,
+        name: Option<&str>,
+    ) -> Result<(), RuntimeError> {
+        let Some(environment) = prototype.private_environment() else {
+            return Ok(());
+        };
+        match element {
+            ClassPrivateElementDef::Field {
+                name: field_name,
+                is_static,
+                initializer,
+            } => {
+                let id = environment.declare_field(field_name);
+                if *is_static {
+                    let thunk = initializer.as_ref().map(|definition| {
+                        self.build_private_field_thunk(
+                            definition,
+                            true,
+                            prototype,
+                            constructor_function,
+                            name,
+                        )
+                    });
+                    let value = match &thunk {
+                        Some(thunk) => self.run_private_field_initializer(
+                            thunk,
+                            Value::Function(constructor_function.clone()),
+                        )?,
+                        None => Value::Undefined,
+                    };
+                    constructor_function.private_storage().add_field(id, value);
+                }
+            }
+            _ => unreachable!("only static private fields are pending"),
         }
         Ok(())
     }
@@ -161,7 +178,7 @@ impl Vm<'_> {
         } else {
             Value::Object(prototype.clone())
         };
-        let class_upvalue = super::vm_class::class_inner_upvalue(constructor_function, name);
+        let class_upvalue = self.class_inner_upvalue(constructor_function, name);
         let function = Function::new_user_compiled(CompiledUserFunction {
             name: class_method_function_name_with_base(def.method_kind, def.name.clone()),
             has_name_binding: false,
@@ -221,7 +238,7 @@ impl Vm<'_> {
         } else {
             Value::Object(prototype.clone())
         };
-        let class_upvalue = super::vm_class::class_inner_upvalue(constructor_function, name);
+        let class_upvalue = self.class_inner_upvalue(constructor_function, name);
         Function::new_user_compiled(CompiledUserFunction {
             name: None,
             has_name_binding: false,
@@ -463,6 +480,9 @@ impl Vm<'_> {
 
     /// Returns the private environment carried by the current home object.
     pub(super) fn current_private_environment(&self) -> Option<PrivateEnvironment> {
+        if let Some(environment) = self.class_key_private_environment() {
+            return Some(environment);
+        }
         if let Some(environment) = self.env.private_environment() {
             return Some(environment);
         }

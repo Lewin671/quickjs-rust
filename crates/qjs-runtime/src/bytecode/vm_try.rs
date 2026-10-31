@@ -13,6 +13,7 @@ pub(super) struct TryFrame {
     /// Depth of the with-object stack when this try region was entered, so an
     /// exception unwinds any `with` scopes opened inside the protected region.
     with_depth: usize,
+    class_depth: usize,
 }
 
 impl Vm<'_> {
@@ -26,6 +27,7 @@ impl Vm<'_> {
         let stack_depth = self.stack.len();
         let cold = self.cold_mut();
         let with_depth = cold.with_stack.len();
+        let class_depth = cold.class_regions.len();
         cold.try_stack.push(TryFrame {
             catch,
             finally,
@@ -34,6 +36,7 @@ impl Vm<'_> {
             catch_scope_active: false,
             stack_depth,
             with_depth,
+            class_depth,
         });
     }
 
@@ -51,7 +54,7 @@ impl Vm<'_> {
         // completion must not be re-raised later by an enclosing EndFinally.
         self.clear_pending_abrupt();
         if !self.try_stack_is_empty() {
-            let (stack_depth, with_depth, catch, cleanup_slots) = {
+            let (stack_depth, with_depth, class_depth, catch, cleanup_slots) = {
                 let frame = self
                     .cold_mut()
                     .try_stack
@@ -62,9 +65,16 @@ impl Vm<'_> {
                     frame.catch_scope_active = true;
                 }
                 let cleanup_slots = catch.is_some().then(|| frame.cleanup_slots.clone());
-                (frame.stack_depth, frame.with_depth, catch, cleanup_slots)
+                (
+                    frame.stack_depth,
+                    frame.with_depth,
+                    frame.class_depth,
+                    catch,
+                    cleanup_slots,
+                )
             };
             self.stack.truncate(stack_depth);
+            self.cold_mut().class_regions.truncate(class_depth);
             if let Some(catch) = catch {
                 self.cold_mut().with_stack.truncate(with_depth);
                 self.cleanup_slots(
@@ -81,6 +91,7 @@ impl Vm<'_> {
         if let Some(frame) = self.cold_mut().try_stack.pop() {
             self.stack.truncate(frame.stack_depth);
             self.cold_mut().with_stack.truncate(frame.with_depth);
+            self.cold_mut().class_regions.truncate(frame.class_depth);
             self.cleanup_slots(&frame.cleanup_slots)?;
             self.cleanup_catch_scope(frame.catch_scope_active, frame.catch_scope)?;
             if let Some(finally) = frame.finally {
@@ -105,6 +116,7 @@ impl Vm<'_> {
         {
             self.stack.truncate(frame.stack_depth);
             self.cold_mut().with_stack.truncate(frame.with_depth);
+            self.cold_mut().class_regions.truncate(frame.class_depth);
             self.cleanup_slots(&frame.cleanup_slots)?;
             self.cleanup_catch_scope(frame.catch_scope_active, frame.catch_scope)?;
             if let Some(finally) = frame.finally {
@@ -127,6 +139,7 @@ impl Vm<'_> {
             .as_deref_mut()
             .and_then(|cold| cold.try_stack.pop())
         {
+            self.cold_mut().class_regions.truncate(frame.class_depth);
             self.cleanup_slots(&frame.cleanup_slots)?;
             self.cleanup_catch_scope(frame.catch_scope_active, frame.catch_scope)?;
             if let Some(finally) = frame.finally {

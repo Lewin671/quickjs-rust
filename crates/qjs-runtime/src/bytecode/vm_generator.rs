@@ -44,6 +44,7 @@ pub(crate) struct GeneratorStart {
 
 /// A snapshot of a generator body's VM state, taken at a `yield`.
 pub(crate) struct GeneratorSnapshot {
+    class_regions: Vec<super::vm_class_region::ClassKeyContinuation>,
     scope_instances: Option<Box<super::vm_scopes::ScopeInstances>>,
     resolved_bindings: Vec<Option<crate::binding::ResolvedReference>>,
     bytecode: Rc<Bytecode>,
@@ -133,6 +134,7 @@ impl Vm<'_> {
             .take()
             .map_or_else(ColdFrame::default, |cold| *cold);
         GeneratorSnapshot {
+            class_regions: cold.class_regions,
             scope_instances: frame.scope_instances.into_inner(),
             resolved_bindings: cold.resolved_bindings,
             bytecode,
@@ -241,6 +243,7 @@ fn run_from_yield(
     vm.refresh_authoritative_slots();
     {
         let cold = vm.cold_mut();
+        cold.class_regions = snapshot.class_regions;
         cold.resolved_bindings = snapshot.resolved_bindings;
         cold.sloppy_global_names = snapshot.sloppy_global_names;
         cold.pending_throw = snapshot.pending_throw;

@@ -330,6 +330,14 @@ pub(super) enum Op {
     NewClass {
         definition: Rc<ClassDefinition>,
     },
+    /// Resolves heritage before evaluating computed keys.
+    BeginClass,
+    /// Installs one element after its enclosing key expression completes.
+    DefineClassElement {
+        index: usize,
+    },
+    /// Initializes the class name and runs static initialization in source order.
+    FinishClass,
     /// Reads `super.<key>`: looks the property up on the current method's home
     /// object prototype, using `this` as the receiver. Pushes the value.
     SuperGet {
@@ -582,9 +590,9 @@ pub(super) enum Op {
 }
 
 pub(super) use super::ir_class::{
-    ClassComputedKeyDef, ClassConstructorDef, ClassDefinition, ClassElementDef, ClassFieldDef,
-    ClassFieldInitializerDef, ClassMemberKeyDef, ClassMethodDef, ClassMethodKind,
-    ClassPrivateElementDef, ClassStaticBlockDef,
+    ClassConstructorDef, ClassDefinition, ClassElementDef, ClassFieldDef, ClassFieldInitializerDef,
+    ClassMemberKeyDef, ClassMethodDef, ClassMethodKind, ClassPrivateElementDef,
+    ClassStaticBlockDef,
 };
 
 #[derive(Clone, Debug)]
@@ -1688,11 +1696,6 @@ fn collect_global_names_from_ops<'a>(code: &'a [Op], names: &mut BTreeSet<&'a st
                         .iter()
                         .map(String::as_str),
                 );
-                for key in &definition.computed_keys {
-                    if let ClassComputedKeyDef::Deferred { bytecode, .. } = key {
-                        names.extend(bytecode.global_names().iter().map(String::as_str));
-                    }
-                }
                 for element in &definition.elements {
                     match element {
                         ClassElementDef::Method(method) => {

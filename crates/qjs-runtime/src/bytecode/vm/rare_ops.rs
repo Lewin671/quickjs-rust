@@ -278,14 +278,18 @@ impl Vm<'_> {
                 self.stack.push(Value::Function(function));
             }
             Op::NewClass { definition } => {
-                let result = self.new_class(
-                    definition.name.as_deref(),
-                    &definition.constructor,
-                    &definition.elements,
-                    &definition.private_elements,
-                    &definition.computed_keys,
-                    definition.has_heritage,
-                );
+                self.enter_class(definition.clone());
+            }
+            Op::BeginClass => {
+                let result = self.begin_class();
+                self.handle_runtime_result(result)?;
+            }
+            Op::DefineClassElement { index } => {
+                let result = self.define_class_element(*index);
+                self.handle_runtime_result(result)?;
+            }
+            Op::FinishClass => {
+                let result = self.finish_class();
                 if let Some(value) = self.handle_runtime_result(result)? {
                     self.stack.push(value);
                 }

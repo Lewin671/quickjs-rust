@@ -7,7 +7,7 @@
 use qjs_ast::{BindingPattern, FunctionParams};
 
 use super::ir::{Bytecode, Op};
-use super::ir_class::{ClassComputedKeyDef, ClassElementDef, ClassPrivateElementDef};
+use super::ir_class::{ClassElementDef, ClassPrivateElementDef};
 
 #[derive(Clone, Copy, Debug)]
 pub(super) enum InitialSlot {
@@ -216,10 +216,6 @@ fn nested_receiver(bytecode: &Bytecode) -> bool {
             bytecode,
             ..
         } => bytecode.needs_call_receiver(),
-        Op::NewClass { definition } => definition.computed_keys.iter().any(|key| {
-            matches!(key, ClassComputedKeyDef::Deferred { bytecode, .. }
-                if bytecode.needs_call_receiver())
-        }),
         _ => false,
     })
 }
@@ -250,18 +246,23 @@ fn dynamic_tree(bytecode: &Bytecode) -> bool {
 }
 
 pub(super) fn dynamic_code(code: &[Op]) -> bool {
-    code.iter().any(|op| matches!(op, Op::CallDirectEval { .. } | Op::CallDirectEvalSpread { .. } | Op::EnterWith | Op::ExitWith))
-        || code.iter().any(|op| match op {
-            Op::NewFunction { bytecode, .. } => bytecode.has_dynamic_scope_tree(),
-            Op::NewClass { definition } => {
-                definition.constructor.bytecode.has_dynamic_scope_tree()
-                    || definition.computed_keys.iter().any(|key| matches!(key,
-                        ClassComputedKeyDef::Deferred { bytecode, .. } if bytecode.has_dynamic_scope_tree()))
-                    || definition.elements.iter().any(element_dynamic)
-                    || definition.private_elements.iter().any(private_dynamic)
-            }
-            _ => false,
-        })
+    code.iter().any(|op| {
+        matches!(
+            op,
+            Op::CallDirectEval { .. }
+                | Op::CallDirectEvalSpread { .. }
+                | Op::EnterWith
+                | Op::ExitWith
+        )
+    }) || code.iter().any(|op| match op {
+        Op::NewFunction { bytecode, .. } => bytecode.has_dynamic_scope_tree(),
+        Op::NewClass { definition } => {
+            definition.constructor.bytecode.has_dynamic_scope_tree()
+                || definition.elements.iter().any(element_dynamic)
+                || definition.private_elements.iter().any(private_dynamic)
+        }
+        _ => false,
+    })
 }
 
 fn element_dynamic(element: &ClassElementDef) -> bool {

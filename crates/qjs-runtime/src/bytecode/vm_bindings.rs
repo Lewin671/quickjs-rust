@@ -535,7 +535,8 @@ impl Vm<'_> {
             let name = self.bytecode.locals[slot].name.clone();
             return self.load_global(&name);
         }
-        if (self.bytecode.locals[slot].is_received_upvalue() && self.env.scope_cursor().is_some())
+        if (self.bytecode.locals[slot].is_received_upvalue()
+            && (self.bytecode.contains_direct_eval() || self.env.scope_cursor().is_some()))
             || (self.bytecode.locals[slot].parameter
                 && self.bytecode.contains_direct_eval()
                 && !self.in_parameter_prologue()
@@ -1024,7 +1025,8 @@ impl Vm<'_> {
 
     #[inline(always)]
     pub(super) fn assign_local(&mut self, slot: usize, value: Value) -> Result<(), RuntimeError> {
-        if (self.bytecode.locals[slot].is_received_upvalue() && self.env.scope_cursor().is_some())
+        if (self.bytecode.locals[slot].is_received_upvalue()
+            && (self.bytecode.contains_direct_eval() || self.env.scope_cursor().is_some()))
             || (self.bytecode.locals[slot].parameter
                 && self.bytecode.contains_direct_eval()
                 && !self.in_parameter_prologue()

@@ -1633,3 +1633,27 @@ fn await_as_binding_is_a_module_error() {
         EvalErrorKind::Parse | EvalErrorKind::Early
     ));
 }
+
+#[test]
+fn private_class_keys_preserve_module_receiver_and_absent_arguments() {
+    let namespace = run(
+        r#"class C { #p; [(#p in {}, eval('1'))]() {} }
+        const direct = typeof arguments;
+        const fromEval = eval('typeof arguments');
+        const fromArrow = (() => {
+            class D { #p; [(#p in {}, eval('1'))]() {} }
+            return typeof arguments;
+        })();
+        class Outer { static { class D { #p; [(#p in {}, eval('1'))]() {} } } }
+        class Receiver { #p; [(#p in {}, String(this))]() {} }
+        class ArrowReceiver { #p; [(#p in {}, (() => String(this))())]() {} }
+        export const result = [direct, fromEval, fromArrow, typeof arguments,
+            typeof new Receiver().undefined, typeof new ArrowReceiver().undefined].join(':');"#,
+        &[],
+    )
+    .expect("module class keys complete");
+    assert_eq!(
+        export(&namespace, "result"),
+        Value::String("undefined:undefined:undefined:undefined:function:function".into())
+    );
+}

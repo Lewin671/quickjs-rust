@@ -1,3 +1,6 @@
+mod declarations;
+mod outer_bindings;
+mod scope_boundaries;
 use crate::{Value, eval};
 
 #[path = "direct_eval/s3b_bindings.rs"]

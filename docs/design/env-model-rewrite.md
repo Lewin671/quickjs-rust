@@ -111,7 +111,14 @@ migration. Its typed scope cursor/entry root selects canonical cells; compiler-o
 cells are excluded from value apply-back so a stale native view cannot undo a
 callback. Remaining FrameBindings/deopt views, raw compatibility publishers and
 string call-context metadata are temporary and must disappear with Context.
-Computed private-name keys still use thunks until the enclosing-continuation cut.
+Class keys execute inline between class-region operations. A cold continuation
+owns the partial class/private overlay across yield/await; handlers truncate
+regions to their entry depth. Heritage validation precedes keys, each method
+is installed before the next key, and static public/private fields and blocks
+run together in source order. The inner-name cell remains TDZ through keys and
+is initialized once before static initialization; inferred display names create
+no inner lexical binding. Module entry explicitly supplies initialized undefined
+this for arrow capture. Field/static helpers never own implicit arguments.
 The frozen brief owns the remaining migration and deletion contract.
 
 Compact/wide/leaf tiers retain their static cell paths. A retained dynamic chain

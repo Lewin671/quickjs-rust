@@ -1,13 +1,12 @@
 //! Class lowering: `class` declarations and expressions become one
-//! `Op::NewClass` carrying the constructor, method, field-initializer and
-//! static-block bodies as nested `Bytecode`.
+//! a class-definition region. Computed keys execute in the enclosing IR;
+//! only methods, field initializers and static blocks have nested bodies.
 
 use std::rc::Rc;
 
 use qjs_ast::{
-    ArrayElement, AssignmentTarget, AssignmentTargetPropertyKey, BindingPattern, CallArgument,
-    ClassBody, ClassElement, ClassMemberKey, Expr, FunctionParams, MemberProperty, MethodKind,
-    ObjectPropertyKey, Span, Stmt,
+    BindingPattern, ClassBody, ClassElement, ClassMemberKey, Expr, FunctionParams, MethodKind,
+    Span, Stmt,
 };
 
 use crate::{
@@ -18,8 +17,8 @@ use crate::{
 use super::compiler::{Compiler, compile_function_body_with_strict};
 use super::compiler_lexical::LexicalCapture;
 use super::ir::{
-    Bytecode, ClassComputedKeyDef, ClassConstructorDef, ClassDefinition, ClassElementDef,
-    ClassFieldDef, ClassFieldInitializerDef, ClassMemberKeyDef, ClassMethodDef, ClassMethodKind,
+    Bytecode, ClassConstructorDef, ClassDefinition, ClassElementDef, ClassFieldDef,
+    ClassFieldInitializerDef, ClassMemberKeyDef, ClassMethodDef, ClassMethodKind,
     ClassPrivateElementDef, ClassStaticBlockDef, Op,
 };
 
@@ -37,63 +36,51 @@ impl Compiler {
             let storage_name = format!("\0class_expr_inner:{}:{}", name, compiler.locals.len());
             let slot = compiler.declare_lexical_slot_with_storage_name(name, &storage_name, false);
             compiler.emit(Op::ClearLocal(slot));
-            compiler.compile_class(Some(name), body)?;
-            compiler.emit(Op::Dup);
-            compiler.emit(Op::StoreLocal(slot));
+            compiler.compile_bound_class(name, slot, body)?;
             Ok(())
         })
     }
 
-    /// Compiles a class declaration or expression into a `NewClass` op that
-    /// builds the constructor function object at runtime. The class name (when
-    /// present) is used for the constructor `name` property and the bindable
-    /// inner name.
-    ///
-    /// Computed member keys are compiled into thunks and evaluated, in
-    /// class-definition order, by `NewClass` after private names are bound.
+    /// Anonymous classes may have an inferred display name without introducing
+    /// a lexical binding for that name.
     pub(super) fn compile_class(
         &mut self,
         name: Option<&str>,
         body: &ClassBody,
     ) -> Result<(), RuntimeError> {
+        self.compile_class_region(name, None, body)
+    }
+
+    pub(super) fn compile_bound_class(
+        &mut self,
+        name: &str,
+        slot: usize,
+        body: &ClassBody,
+    ) -> Result<(), RuntimeError> {
+        self.compile_class_region(Some(name), Some(slot), body)
+    }
+
+    fn compile_class_region(
+        &mut self,
+        display_name: Option<&str>,
+        name_slot: Option<usize>,
+        body: &ClassBody,
+    ) -> Result<(), RuntimeError> {
         let previous_strict = self.strict;
         self.strict = true;
-        let result = self.compile_class_strict(name, body);
+        let result = self.compile_class_strict(display_name, name_slot, body);
         self.strict = previous_strict;
         result
     }
 
     fn compile_class_strict(
         &mut self,
-        name: Option<&str>,
+        display_name: Option<&str>,
+        name_slot: Option<usize>,
         body: &ClassBody,
     ) -> Result<(), RuntimeError> {
-        // Evaluate the heritage expression first so the parent constructor is
-        // beneath the computed keys when `NewClass` runs.
+        let name = name_slot.and(display_name);
         let has_heritage = body.heritage.is_some();
-        if let Some(heritage) = &body.heritage {
-            self.compile_expr(heritage)?;
-        }
-
-        let mut computed_keys = Vec::new();
-        for element in &body.elements {
-            let key = match element {
-                ClassElement::Method(member) => &member.key,
-                ClassElement::Field(field) => &field.key,
-                // Static blocks have no key.
-                ClassElement::StaticBlock(_) => continue,
-            };
-            if let ClassMemberKey::Computed(expr) = key {
-                if expr_contains_private_name(expr) {
-                    computed_keys.push(self.compile_computed_key(name, expr)?);
-                } else {
-                    self.compile_expr(expr)?;
-                    self.emit(Op::ToPropertyKey);
-                    computed_keys.push(ClassComputedKeyDef::Precomputed);
-                }
-            }
-        }
-
         let mut constructor = None;
         let mut elements = Vec::new();
         let mut private_elements = Vec::new();
@@ -131,7 +118,7 @@ impl Compiler {
                             is_async,
                         )?;
                         constructor = Some(ClassConstructorDef {
-                            name: name.map(str::to_owned),
+                            name: display_name.map(str::to_owned),
                             params: params.clone(),
                             local_names,
                             lexical_captures,
@@ -240,18 +227,39 @@ impl Compiler {
             }
         }
 
-        let constructor = constructor.unwrap_or_else(|| default_constructor(name, has_heritage));
+        let constructor =
+            constructor.unwrap_or_else(|| default_constructor(display_name, has_heritage));
 
         self.emit(Op::NewClass {
             definition: Rc::new(ClassDefinition {
                 name: name.map(str::to_owned),
+                name_slot,
                 constructor,
                 elements,
                 private_elements,
-                computed_keys,
                 has_heritage,
             }),
         });
+        if let Some(heritage) = &body.heritage {
+            self.compile_expr(heritage)?;
+        }
+        self.emit(Op::BeginClass);
+        let mut index = 0;
+        for element in &body.elements {
+            let key = match element {
+                ClassElement::Method(member) if member.kind == MethodKind::Constructor => continue,
+                ClassElement::Method(member) => Some(&member.key),
+                ClassElement::Field(field) => Some(&field.key),
+                ClassElement::StaticBlock(_) => None,
+            };
+            if let Some(ClassMemberKey::Computed(expr)) = key {
+                self.compile_expr(expr)?;
+                self.emit(Op::ToPropertyKey);
+            }
+            self.emit(Op::DefineClassElement { index });
+            index += 1;
+        }
+        self.emit(Op::FinishClass);
         Ok(())
     }
 
@@ -292,60 +300,6 @@ fn skip_js_trivia(source: &str, mut index: usize) -> usize {
     index
 }
 
-impl Compiler {
-    fn compile_computed_key(
-        &self,
-        class_name: Option<&str>,
-        expr: &Expr,
-    ) -> Result<ClassComputedKeyDef, RuntimeError> {
-        let params = FunctionParams::positional(Vec::new());
-        let body = vec![Stmt::Return {
-            argument: Some(expr.clone()),
-            span: expr.span(),
-        }];
-        let local_names = collect_function_local_names(None, &params, &body, true);
-        let mut bytecode = compile_class_function_body_with_captures(
-            class_name,
-            &params,
-            &body,
-            &local_names,
-            false,
-            false,
-            &[],
-        )?;
-        let mut lexical_captures = self.active_lexical_captures(&bytecode, &local_names);
-        lexical_captures.retain(|capture| Some(capture.name.as_str()) != class_name);
-        if !lexical_captures.is_empty() {
-            let captured = lexical_captures
-                .iter()
-                .map(|capture| {
-                    (
-                        capture.name.as_str(),
-                        capture.storage_name.as_str(),
-                        self.locals[capture.slot].mutable,
-                    )
-                })
-                .collect::<Vec<_>>();
-            bytecode = compile_class_function_body_with_captures(
-                class_name,
-                &params,
-                &body,
-                &local_names,
-                false,
-                false,
-                &captured,
-            )?;
-            lexical_captures = self.active_lexical_captures(&bytecode, &local_names);
-            lexical_captures.retain(|capture| Some(capture.name.as_str()) != class_name);
-        }
-        Ok(ClassComputedKeyDef::Deferred {
-            local_names,
-            lexical_captures: runtime_lexical_captures(lexical_captures),
-            bytecode: Rc::new(bytecode),
-        })
-    }
-}
-
 fn compile_member_key(key: &ClassMemberKey) -> (ClassMemberKeyDef, Option<String>) {
     match key {
         ClassMemberKey::Literal(key) => {
@@ -356,144 +310,6 @@ fn compile_member_key(key: &ClassMemberKey) -> (ClassMemberKeyDef, Option<String
         // ever reached.
         ClassMemberKey::Private(name) => {
             unreachable!("private key #{name} must not reach the ordinary key path")
-        }
-    }
-}
-
-fn expr_contains_private_name(expr: &Expr) -> bool {
-    match expr {
-        Expr::Array { elements, .. } => elements.iter().any(|element| match element {
-            ArrayElement::Elision => false,
-            ArrayElement::Expr(expr) | ArrayElement::Spread(expr) => {
-                expr_contains_private_name(expr)
-            }
-        }),
-        Expr::Object { properties, .. } => properties.iter().any(|property| {
-            matches!(&property.key, ObjectPropertyKey::Computed(key) if expr_contains_private_name(key))
-                || expr_contains_private_name(&property.value)
-        }),
-        Expr::Sequence { expressions, .. } | Expr::Template { expressions, .. } => {
-            expressions.iter().any(expr_contains_private_name)
-        }
-        Expr::Unary { argument, .. }
-        | Expr::Await { argument, .. }
-        | Expr::Yield {
-            argument: Some(argument),
-            ..
-        } => expr_contains_private_name(argument),
-        Expr::Binary { left, right, .. } => {
-            expr_contains_private_name(left) || expr_contains_private_name(right)
-        }
-        Expr::TaggedTemplate {
-            tag, expressions, ..
-        } => expr_contains_private_name(tag) || expressions.iter().any(expr_contains_private_name),
-        Expr::Conditional {
-            test,
-            consequent,
-            alternate,
-            ..
-        } => {
-            expr_contains_private_name(test)
-                || expr_contains_private_name(consequent)
-                || expr_contains_private_name(alternate)
-        }
-        Expr::Assignment { target, value, .. } => {
-            assignment_target_contains_private_name(target) || expr_contains_private_name(value)
-        }
-        Expr::Update { target, .. } => assignment_target_contains_private_name(target),
-        Expr::Call {
-            callee, arguments, ..
-        }
-        | Expr::New {
-            callee, arguments, ..
-        } => {
-            expr_contains_private_name(callee)
-                || arguments.iter().any(call_argument_contains_private_name)
-        }
-        Expr::Function { .. } | Expr::Class { .. } => false,
-        Expr::Member {
-            object, property, ..
-        }
-        | Expr::OptionalMember {
-            object, property, ..
-        } => {
-            matches!(property, MemberProperty::Private(_))
-                || expr_contains_private_name(object)
-                || matches!(property, MemberProperty::Computed(key) if expr_contains_private_name(key))
-        }
-        Expr::OptionalCall {
-            callee, arguments, ..
-        } => {
-            expr_contains_private_name(callee)
-                || arguments.iter().any(|arg| match arg {
-                    qjs_ast::CallArgument::Expr(e) | qjs_ast::CallArgument::Spread(e) => {
-                        expr_contains_private_name(e)
-                    }
-                })
-        }
-        Expr::PrivateIn { .. } => true,
-        Expr::Literal(_)
-        | Expr::Yield { argument: None, .. }
-        | Expr::This { .. }
-        | Expr::Super { .. }
-        | Expr::Identifier { .. }
-        | Expr::NewTarget { .. }
-        | Expr::ImportMeta { .. } => false,
-        Expr::ImportCall {
-            specifier, options, ..
-        } => {
-            expr_contains_private_name(specifier)
-                || options
-                    .as_deref()
-                    .is_some_and(expr_contains_private_name)
-        }
-    }
-}
-
-fn call_argument_contains_private_name(argument: &CallArgument) -> bool {
-    match argument {
-        CallArgument::Expr(expr) | CallArgument::Spread(expr) => expr_contains_private_name(expr),
-    }
-}
-
-fn assignment_target_contains_private_name(target: &AssignmentTarget) -> bool {
-    match target {
-        AssignmentTarget::Identifier { .. } => false,
-        AssignmentTarget::CallExpression { call, .. } => expr_contains_private_name(call),
-        AssignmentTarget::Member {
-            object, property, ..
-        } => {
-            matches!(property, MemberProperty::Private(_))
-                || expr_contains_private_name(object)
-                || matches!(property, MemberProperty::Computed(key) if expr_contains_private_name(key))
-        }
-        AssignmentTarget::ArrayPattern { elements, rest, .. } => {
-            elements.iter().flatten().any(|element| {
-                assignment_target_contains_private_name(&element.target)
-                    || element
-                        .default
-                        .as_ref()
-                        .is_some_and(expr_contains_private_name)
-            }) || rest
-                .as_deref()
-                .is_some_and(assignment_target_contains_private_name)
-        }
-        AssignmentTarget::ObjectPattern {
-            properties, rest, ..
-        } => {
-            properties.iter().any(|property| {
-                matches!(
-                    &property.key,
-                    AssignmentTargetPropertyKey::Computed(key)
-                        if expr_contains_private_name(key)
-                ) || assignment_target_contains_private_name(&property.target)
-                    || property
-                        .default
-                        .as_ref()
-                        .is_some_and(expr_contains_private_name)
-            }) || rest
-                .as_deref()
-                .is_some_and(assignment_target_contains_private_name)
         }
     }
 }
@@ -635,8 +451,8 @@ impl Compiler {
             params,
             body,
             local_names,
-            is_generator,
-            is_async,
+            is_generator && is_async,
+            true,
             &[],
         )?;
         let mut lexical_captures = self.active_lexical_captures(&bytecode, local_names);
@@ -657,8 +473,8 @@ impl Compiler {
                 params,
                 body,
                 local_names,
-                is_generator,
-                is_async,
+                is_generator && is_async,
+                true,
                 &captured_lexicals,
             )?;
             lexical_captures = self.active_lexical_captures(&bytecode, local_names);
@@ -673,12 +489,13 @@ fn compile_class_function_body_with_captures(
     params: &FunctionParams,
     body: &[Stmt],
     local_names: &[String],
-    is_generator: bool,
-    is_async: bool,
+    async_generator: bool,
+    arguments_owner: bool,
     captured_lexicals: &[(&str, &str, bool)],
 ) -> Result<super::ir::Bytecode, RuntimeError> {
     let mut compiler = Compiler::strict_function_compiler();
-    compiler.async_generator_body = is_generator && is_async;
+    compiler.async_generator_body = async_generator;
+    compiler.arguments_owner = arguments_owner;
     for (name, storage_name, mutable) in captured_lexicals {
         compiler.declare_captured_lexical_slot_with_storage_name(name, storage_name, *mutable);
     }
@@ -700,6 +517,7 @@ fn compile_class_field_initializer(
     captured_lexicals: &[(&str, &str, bool)],
 ) -> Result<super::ir::Bytecode, RuntimeError> {
     let mut compiler = Compiler::strict_function_compiler();
+    compiler.arguments_owner = false;
     for (name, storage_name, mutable) in captured_lexicals {
         compiler.declare_captured_lexical_slot_with_storage_name(name, storage_name, *mutable);
     }

@@ -249,6 +249,7 @@ pub(super) struct FrameState<'a> {
 /// until the first such operation materializes it.
 #[derive(Default)]
 pub(super) struct ColdFrame {
+    pub(super) class_regions: Vec<super::vm_class_region::ClassKeyContinuation>,
     pub(super) resolved_bindings: Vec<Option<crate::binding::ResolvedReference>>,
     /// Frame-local override of the shared numeric mutation loop plans,
     /// materialized only when a deoptimization suppresses or rewrites one for
@@ -323,6 +324,8 @@ impl ColdFrame {
     /// frame that completed normally has already emptied its stacks, so this
     /// is a handful of length checks.
     pub(super) fn reset(&mut self) {
+        self.class_regions.clear();
+        self.resolved_bindings.clear();
         self.numeric_mutation_loop_plans = None;
         self.sloppy_global_names.clear();
         self.try_stack.clear();

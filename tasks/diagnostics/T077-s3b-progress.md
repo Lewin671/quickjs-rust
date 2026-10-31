@@ -134,8 +134,47 @@ authority, including lexical/property homonyms.
 Verification on this code: 2,512 runtime tests and 271 NG fixtures pass; 15
 permanent non-key/parameter T074 discriminators match NG; new lowest-layer
 holder/lease/selected-cell tests pass. Default/agents/perf-counters compile and
-Clippy pass. Final staged gate pending. No S3b exit/performance acceptance.
+Clippy pass. Staged gate passes at `ea53dfa7` including 117 selected Test262 cases. No S3b exit/performance acceptance.
 Remaining B3 policy/reference audit and compatibility deletion join B4/B5:
 class-key suspension/private/lexical owner, named self, complete Init/Assign and
 saved crossing-name references, borrowed Context/native ABI and all raw view
 retirement. Final stress/exact cached+off/counters/triage remain B6 obligations.
+
+## B4a enclosing class-key continuations
+
+Computed keys, including private-name keys, now lower into the enclosing IR
+between NewClass/BeginClass/DefineClassElement/FinishClass. No deferred key
+function, expression classifier or nested-key capture traversal remains.
+Cold ClassKeyContinuation retains partial constructor/prototype, the canonical
+inner-name cell, source-ordered pending statics and private overlay; VM PC,
+operand stack and scope instances supply the enclosing continuation state.
+Snapshots move the region; try handlers restore their class-region depth.
+This is a representation correction to the frozen continuation payload: existing
+VM continuation fields are not duplicated inside each class region.
+
+Heritage resolves before keys; each method installs before later key effects.
+The inner-name cell is the declaring slot's cell, TDZ throughout keys and
+initialized before static initialization. Inferred display names create no
+lexical binding. Private methods install before static initialization, then
+public/private fields and blocks run in one source order. There is no extra
+constructor-owned reference to a class cell merely to build its members.
+
+Recovered all seven T071 script/module fixtures and all three historical direct
+eval test modules. Permissive const/TDZ checks now demand the specified errors.
+Recovery exposed two B3 route bugs: a received global lexical needed live lookup
+when its own function contains eval, even without a retained parent lease; and
+catch cleanup inferred scope ownership from local allocation order, clearing an
+implicit arguments cell discovered inside try. Cleanup now uses declaration
+scope IDs. Module roots explicitly seed initialized undefined this, and eval,
+module, field and static-block roots do not invent implicit arguments owners.
+
+Verification on this working tree: 2,540 runtime tests and 279 NG script fixtures
+pass; Clippy/workspace/all-targets and agents/perf-counters compilation pass.
+Separate module comparison: `TZ=UTC target/debug/qjs --module
+ tests/fixtures/compare-modules/deferred-key-arguments.mjs` and
+`TZ=UTC third_party/quickjs-ng/build/qjs -m` for the same file both exit 0 and
+print `undefined:undefined:undefined:undefined` then `function:function`.
+Module fixture SHA-256:
+`44d067f0257e9b40cef5a3838377079788427c86466992e22bea359fa9d6a499`.
+Staged gate pending; no complete exact scan at this code, no final S3b exit or
+performance standing.

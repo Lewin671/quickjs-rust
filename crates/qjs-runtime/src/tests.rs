@@ -8,6 +8,7 @@ mod class_closures;
 mod class_constructors;
 mod class_eval;
 mod class_fields;
+mod class_keys;
 mod class_super;
 mod classes;
 mod closure_state;

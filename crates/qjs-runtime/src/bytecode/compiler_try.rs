@@ -194,7 +194,7 @@ impl Compiler {
             catch_scope: None,
             cleanup_slots: Vec::new(),
         });
-        let cleanup_start = self.locals.len();
+        let cleanup_start = self.scope_plan.scopes.len();
         let mut cleanup_slots = Vec::new();
         if block_has_using(block) {
             self.compile_disposable_block(block)?;
@@ -248,17 +248,15 @@ impl Compiler {
     }
 
     fn lexical_cleanup_slots_since(&self, start: usize) -> Vec<usize> {
-        self.locals
+        self.scope_plan
+            .declarations
             .iter()
-            .enumerate()
-            .skip(start)
-            .filter(|(_, local)| {
-                !local.name.starts_with("\0\0")
-                    && !local.hoisted
-                    && !local.parameter
-                    && !local.sloppy_global_fallback
+            .filter(|(_, slot, scope)| {
+                scope.0 >= start
+                    && !self.locals[slot.0].is_received_upvalue()
+                    && !self.locals[slot.0].compiler_temporary
             })
-            .map(|(slot, _)| slot)
+            .map(|(_, slot, _)| slot.0)
             .collect()
     }
 

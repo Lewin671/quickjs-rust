@@ -673,6 +673,9 @@ impl<'a> Analyzer<'a> {
             | Op::EndFinally
             | Op::DiscardPendingAbrupt
             | Op::NewClass { .. }
+            | Op::BeginClass
+            | Op::DefineClassElement { .. }
+            | Op::FinishClass
             | Op::SuperGet { .. }
             | Op::SuperReference
             | Op::SuperGetComputed

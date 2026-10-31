@@ -192,6 +192,9 @@ impl Vm<'_> {
             | Op::NewSpread
             | Op::NewFunction { .. }
             | Op::NewClass { .. }
+            | Op::BeginClass
+            | Op::DefineClassElement { .. }
+            | Op::FinishClass
             | Op::SuperGet { .. }
             | Op::SuperReference
             | Op::SuperGetComputed

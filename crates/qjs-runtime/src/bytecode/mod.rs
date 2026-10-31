@@ -81,6 +81,7 @@ mod vm_call;
 mod vm_call_env;
 mod vm_capture;
 mod vm_class;
+mod vm_class_region;
 mod vm_direct_upvalues;
 mod vm_dispose;
 mod vm_errors;
