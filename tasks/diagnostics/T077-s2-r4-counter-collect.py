@@ -1,6 +1,6 @@
 """Same-input raytrace/gaussian diagnostic counters and canonical instructions."""
 from pathlib import Path
-import argparse,dataclasses,hashlib,json,os,subprocess,sys
+import argparse,dataclasses,hashlib,json,os,re,subprocess,sys
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]))
 from tools.benchmark.screen import counter_tool,sample
 p=argparse.ArgumentParser(description=__doc__)
@@ -30,6 +30,7 @@ for record in old['records']:
   for line in result.stderr.splitlines():
    bits=line.split()
    if len(bits)==2 and bits[1].isdigit():counters[bits[0]]=int(bits[1])
+   if line.startswith('QJS_ALLOC_COUNTERS '): counters.update({'allocator_'+key:int(value) for key,value in re.findall(r'(\w+)=(\d+)',line)})
   assert any(k.startswith('r4_') for k in counters)
   measurements=[dataclasses.asdict(sample(tool,[str(canonical),*args],120.0)) for _ in range(3)]
   assert all(m['stdout']==expected for m in measurements)
