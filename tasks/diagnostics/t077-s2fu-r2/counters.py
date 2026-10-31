@@ -13,6 +13,7 @@ p.add_argument('--base', required=True)
 p.add_argument('--candidate', required=True)
 p.add_argument('--triage', type=Path, required=True)
 p.add_argument('--output', type=Path, required=True)
+p.add_argument('--case', action='append', help='Measured public case id; repeatable.')
 a = p.parse_args()
 a.output.mkdir(parents=True, exist_ok=False)
 from tools.benchmark.build_cache import RUST_RECIPE
@@ -36,7 +37,7 @@ for role, ref in [('base', a.base), ('candidate', a.candidate)]:
     binary = target / 'release/qjs'
     roles[role] = {'revision': revision, 'path': str(binary),
                    'sha256': hashlib.sha256(binary.read_bytes()).hexdigest()}
-cases = ['development/diff/compare', 'development/lodash/transform',
+cases = a.case or ['development/diff/compare', 'development/lodash/transform',
          'sentinel/string_key_map_churn', 'broad/property_dynamic_read']
 records = []
 for case in cases:

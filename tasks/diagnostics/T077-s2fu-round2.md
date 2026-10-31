@@ -79,3 +79,11 @@ monomorphic shared own-data hits omit epochs entirely. Versioned own hits keep
 the original guard in a separate adapter; no private-dictionary or global
 binding guard is weakened. The task-index budget issue from the archive
 checkpoint is repaired in this commit and the fast gate is rerun successfully.
+
+The shared-witness focused replay has no clear overall gain (date-tofte
+1.004163, binary trees 1.008911, JSON parse 1.005448, diff 0.996534).
+Collect measured operation/allocation counters on retained 4c6fc5c6 for
+access-nsieve, binary trees, date-tofte and JSON parse before any further hot
+adapter changes. The instruction-only suite was missing the largest residual
+(nsieve 1.016722 in the retained full screen); add explicit case selection to
+the existing diagnostic counter collector. Counters remain non-timing evidence.
