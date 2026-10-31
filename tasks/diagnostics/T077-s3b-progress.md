@@ -90,6 +90,28 @@ than adding a second checked/unchecked lexical authority. No B2 completion is
 claimed yet. B3 must replace flat deopt maps with leases and own var holders,
 remove all raw BindingCell::set calls, and implement the rest of T074.
 
-Verification: 2,507 runtime tests and 270 NG fixtures pass on the working tree;
-final staged/feature gates pending. Complete exact/stress/counters/timing remain
-B6 obligations. No performance acceptance is claimed.
+Verification at `ac914ebb`: staged fast gate, default/agents/perf-counters
+compile, full check (including 5,170 curated cases), 2,507 runtime tests and
+270 NG fixtures pass. Complete exact cached scan: Rust 42,672/42,672,
+zero fail/timeout/not-run; NG 42,602 passes/70 failures; zero gaps. Total records
+53,572, unchanged skips 10,900. The full case map hash is identical to the
+accepted S2 map: `2263183d8df546cb37338205c107cc4614a7ddee069a711be6181c0e27c2f61a`.
+Burndown is appended at the verified runtime SHA, not the current B3 draft.
+Production CLI was built with `cargo build -p qjs-cli --release --features
+agents --target-dir target/s3b-b2a-production`; agent-ready smoke succeeds.
+CLI SHA-256: `7341b7821c963ffa20f769a2e4ffa55e16828fa2f1290d743c86ee45cca8bc93`.
+Summary hash: `cffdf394963ec66c41d006192593e9975e6b082a55483748550b7a9fb866e80f`.
+Command: pinned QJS_CLI_BIN, QJS_AGENTS=1, `find-qjsng-gaps.sh --exact --all
+--no-recommend --out-dir target/s3b-b2a-exact`. Input Test262 pin is `42496613`.
+IC-off, stress, counters and timing remain final B6 obligations; this is not S3b
+exit or performance acceptance.
+
+## B3 work in progress
+
+The working tree contains uncommitted scope leases, fresh own var holders,
+PC-selected scope descriptors, explicit eval entry roots/global binding targets,
+and canonical eval declaration routes. The selected-name cached eval view is
+removed; compiled plans still cache, with each invocation resolving its live
+chain. The independent non-key T074 discriminators and parameter/body split
+match NG in a focused diagnostic. Regression repairs are ongoing; no full-gate,
+stress or performance claim applies to this uncommitted B3 code.
