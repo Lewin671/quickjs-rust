@@ -46,6 +46,7 @@ pub(crate) struct GeneratorStart {
 pub(crate) struct GeneratorSnapshot {
     class_regions: Vec<super::vm_class_region::ClassKeyContinuation>,
     scope_instances: Option<Box<super::vm_scopes::ScopeInstances>>,
+    active_reference_lifetimes: Vec<usize>,
     resolved_bindings: Vec<Option<crate::binding::ResolvedReference>>,
     bytecode: Rc<Bytecode>,
     ip: usize,
@@ -134,6 +135,7 @@ impl Vm<'_> {
         GeneratorSnapshot {
             class_regions: cold.class_regions,
             scope_instances: frame.scope_instances.into_inner(),
+            active_reference_lifetimes: cold.active_reference_lifetimes,
             resolved_bindings: cold.resolved_bindings,
             bytecode,
             ip: frame.ip,
@@ -248,6 +250,7 @@ fn run_from_yield(
     {
         let cold = vm.cold_mut();
         cold.class_regions = snapshot.class_regions;
+        cold.active_reference_lifetimes = snapshot.active_reference_lifetimes;
         cold.resolved_bindings = snapshot.resolved_bindings;
         cold.sloppy_global_names = snapshot.sloppy_global_names;
         cold.pending_throw = snapshot.pending_throw;
@@ -256,6 +259,11 @@ fn run_from_yield(
         cold.try_stack = snapshot.try_stack;
         cold.disposable_scopes = snapshot.disposable_scopes;
     }
+
+    vm.active_reference_count = vm
+        .cold()
+        .map_or(0, |cold| cold.active_reference_lifetimes.len());
+    vm.reference_hooks |= vm.active_reference_count != 0;
 
     // A suspension inside a `yield*` forwards the resume to the inner iterator:
     // the re-entered `Op::YieldDelegate` reads `resume_mode` and decides how to

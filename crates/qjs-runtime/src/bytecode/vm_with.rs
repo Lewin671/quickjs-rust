@@ -232,25 +232,21 @@ impl Vm<'_> {
         name: &str,
         object_slot: usize,
     ) -> Result<(), RuntimeError> {
-        if let Some(reference) = self.resolve_scope_binding(name, self.execution_is_strict())? {
-            let object = match &reference {
-                crate::binding::ResolvedReference::Property {
-                    base,
-                    with_environment: true,
-                    ..
-                } => base.clone(),
-                _ => Value::Undefined,
-            };
-            self.store_local(object_slot, object)?;
-            let references = &mut self.cold_mut().resolved_bindings;
-            if references.len() <= object_slot {
-                references.resize_with(object_slot + 1, || None);
-            }
-            references[object_slot] = Some(reference);
-            return Ok(());
-        }
-        let value = self.with_binding_object(name)?.unwrap_or(Value::Undefined);
-        self.store_local(object_slot, value)
+        let scope = self.bytecode.binding_plan.pc_scopes[self.ip.saturating_sub(1)];
+        let reference = self.select_binding_reference(name, self.execution_is_strict(), scope)?;
+        let object = match &reference {
+            crate::binding::ResolvedReference::Property {
+                base,
+                with_environment: true,
+                ..
+            } => base.clone(),
+            _ => Value::Undefined,
+        };
+        self.store_local(object_slot, object)?;
+        let lifetime = self.bytecode.binding_plan.references.explicit[object_slot]
+            .expect("explicit reference lifetime");
+        self.save_reference(object_slot, lifetime, reference);
+        Ok(())
     }
 
     pub(super) fn load_resolved_ident_with(

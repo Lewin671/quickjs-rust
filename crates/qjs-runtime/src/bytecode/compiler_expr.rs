@@ -468,6 +468,17 @@ impl Compiler {
                             });
                             continue;
                         }
+                        let reference = if *kind == VarKind::Var {
+                            if let qjs_ast::BindingPattern::Identifier { name, .. } =
+                                &declaration.binding
+                            {
+                                Some(self.begin_reference(name))
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        };
                         self.compile_declaration_init(&declaration.binding, init)?;
                         if self.disposable_scope_depth > 0 {
                             match kind {
@@ -481,6 +492,9 @@ impl Compiler {
                             }
                         }
                         self.compile_binding_initializer(&declaration.binding, *kind)?;
+                        if let Some(reference) = reference {
+                            self.finish_reference(reference, None, self.code.len() - 1);
+                        }
                     } else {
                         self.compile_binding_uninitialized(&declaration.binding, *kind)?;
                     }

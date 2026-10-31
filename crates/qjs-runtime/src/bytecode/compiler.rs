@@ -52,6 +52,7 @@ pub(super) struct Compiler {
     pub(super) global_scope: bool,
     pub(super) arguments_owner: bool,
     pub(super) arguments_body_copy: Option<(usize, usize)>,
+    pub(super) references: Vec<super::reference_plan::ReferenceDraft>,
     body_var_split: bool,
     parameter_copies: Vec<(usize, usize)>,
     /// Direct-eval source can introduce/delete function-environment `var` and
@@ -157,6 +158,7 @@ impl Default for Compiler {
             global_scope: true,
             arguments_owner: true,
             arguments_body_copy: None,
+            references: Vec::new(),
             body_var_split: false,
             parameter_copies: Vec::new(),
             direct_eval_source: false,

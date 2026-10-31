@@ -609,3 +609,35 @@ engines, with zero skips/gaps/timeouts/not-run. Production agents binary SHA-256
 summary `80d79e27758ae48f0102405e8a5e24c3a2bdc23d57d8f524486171ac27f410c6`;
 case map `d3f84fe67ea9972b020213203a59419f57a2108c438174a5cfc2b4a06cbb21f9`.
 This filtered scan creates no burndown or final S3b acceptance.
+
+
+## B3b2 pre-RHS reference selection
+
+Immutable BindingPlan reference sites retain the LHS scope before lowering its
+RHS. Existing IR and PCs are unchanged. The general VM selects a crossing
+reference before effects, consumes it at the recorded read/store, and releases
+it after short-circuit/abrupt exit. Explicit with references share the lifetime
+bank; read-only call references release after the callee/receiver reach the stack.
+Generator snapshots retain the same reference and lifetime, including originally
+missing names. Owned static slots, received cells without mutable scope chains
+and undeletable global bindings retain indexed/tier execution; unstable sites
+stay on the interpreter until their interval completes. No name/value snapshot.
+
+GlobalReference retains the global environment and original resolvability.
+Originally missing strict writes throw even if the RHS creates the property;
+sloppy writes target that global object. Global eval excludes module imports,
+and selected-global overrides are taken from the actual activation rather than
+an empty service view. Declarative and object subrecords stay distinct.
+
+Ten runtime tests cover closer eval declarations, const policies, holder deletion,
+strict missing writes, yield, ToNumeric callbacks, destructuring defaults,
+class-name scope entry, repeated logical assignments and catch/reentry. A metadata
+test proves the recorded LHS scope precedes the RHS class scope. The compatible
+NG fixture covers short-circuit/reentry/catch and with-call receivers. Primary
+semantics: ES2025 13.15.2 evaluates lRef before rRef and later PutValue uses lRef;
+9.1.1.1.5 handles a missing binding in the already selected declarative record.
+NG and Node currently re-resolve several crossing-reference probes; those spec
+results remain independent unit tests, not fixtures encoding their wrong answer.
+Verified over `3999f127`: all **2,592 default runtime tests**, agents/perf-counters
+compile, the staged gate including **65 Test262 cases**, and all **291 NG scripts**
+with COMPARE_QJS_JOBS=1 pass. Final S3b gates remain open.

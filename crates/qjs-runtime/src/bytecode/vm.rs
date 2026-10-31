@@ -159,6 +159,8 @@ pub(super) fn eval_direct_call_bytecode(
 }
 
 pub(super) struct FrameState<'a> {
+    pub(super) reference_hooks: bool,
+    pub(super) active_reference_count: usize,
     pub(super) scope_instances: RefCell<Option<Box<super::vm_scopes::ScopeInstances>>>,
     pub(super) bytecode: FrameBytecode<'a>,
     /// Whether this frame may run the lowered stream that also virtualizes
@@ -238,6 +240,7 @@ pub(super) struct FrameState<'a> {
 #[derive(Default)]
 pub(super) struct ColdFrame {
     pub(super) class_regions: Vec<super::vm_class_region::ClassKeyContinuation>,
+    pub(super) active_reference_lifetimes: Vec<usize>,
     pub(super) resolved_bindings: Vec<Option<crate::binding::ResolvedReference>>,
     /// Frame-local override of the shared numeric mutation loop plans,
     /// materialized only when a deoptimization suppresses or rewrites one for
@@ -303,6 +306,7 @@ impl ColdFrame {
     pub(super) fn reset(&mut self) {
         self.class_regions.clear();
         self.resolved_bindings.clear();
+        self.active_reference_lifetimes.clear();
         self.numeric_mutation_loop_plans = None;
         self.sloppy_global_names.clear();
         self.try_stack.clear();
@@ -502,7 +506,34 @@ impl<'a> Vm<'a> {
         let code = program.execution_code;
         let constants: &[Value] = &program.bytecode.constants;
         let mut pc = self.current.ip;
+        let references = &program.bytecode.binding_plan.references;
+        let mut event_cursor = references.events.partition_point(|event| event.pc < pc);
+        let mut expected_pc = pc;
         loop {
+            if self.current.reference_hooks {
+                if pc != expected_pc {
+                    event_cursor = references.events.partition_point(|event| event.pc < pc);
+                }
+                expected_pc = pc + 1;
+                self.prune_references(references, pc);
+                if references
+                    .events
+                    .get(event_cursor)
+                    .is_some_and(|event| event.pc == pc)
+                {
+                    let event = &references.events[event_cursor];
+                    event_cursor += 1;
+                    self.current.ip = pc + 1;
+                    let result = self.run_reference_event(references, event, &code[pc]);
+                    match self.handle_runtime_result(result)? {
+                        Some(false) => {}
+                        _ => {
+                            pc = self.current.ip;
+                            continue;
+                        }
+                    }
+                }
+            }
             let Some(op) = code.get(pc) else {
                 self.current.ip = pc;
                 return Err(RuntimeError {

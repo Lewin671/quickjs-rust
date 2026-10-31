@@ -312,7 +312,14 @@ fn inline_callee(callee: &Value, env: &CallEnv) -> Option<InlineCallee> {
         return None;
     };
     let facts = fixed_inline_facts(callee, function);
-    if facts & FACTS_ELIGIBLE == 0 {
+    if facts & FACTS_ELIGIBLE == 0
+        || !function
+            .bytecode
+            .as_ref()?
+            .binding_plan
+            .references
+            .can_skip(env)
+    {
         return None;
     }
     // The parts of `shares_caller_environment` that can change after the
@@ -754,7 +761,9 @@ pub(in crate::bytecode) fn try_run_standalone(
     // This tier resolves every name by slot index. An environment that can
     // still answer a name, that carries deoptimized dynamic bindings, or that
     // overrides the realm global belongs on the general path.
-    if !environment_is_slot_only(env.as_ref()?) {
+    if !environment_is_slot_only(env.as_ref()?)
+        || !bytecode.binding_plan.references.can_skip(env.as_ref()?)
+    {
         return None;
     }
     // A body outside this tier's numeric set may still be one the wide tier
@@ -817,7 +826,10 @@ pub(crate) fn try_run_in_caller_env(
     arguments: &[Value],
     env: &CallEnv,
 ) -> Option<Result<Value, RuntimeError>> {
-    if !environment_is_slot_only(env) || !shares_caller_environment(function, bytecode, env) {
+    if !environment_is_slot_only(env)
+        || !shares_caller_environment(function, bytecode, env)
+        || !bytecode.binding_plan.references.can_skip(env)
+    {
         return None;
     }
     let upvalues = crate::bytecode::DirectCallUpvalues::Function(function);

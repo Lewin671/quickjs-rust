@@ -264,6 +264,7 @@ impl ScopeCursor {
 
 #[derive(Clone, Debug)]
 pub(crate) enum ResolvedReference {
+    Global(super::GlobalReference),
     Cell {
         binding: CellReference,
     },
@@ -341,6 +342,7 @@ impl ScopeCursor {
 impl ResolvedReference {
     pub(crate) fn read(&self, env: &mut crate::CallEnv) -> Result<Value, RuntimeError> {
         match self {
+            Self::Global(reference) => reference.read(env),
             Self::Cell { binding } => binding.read(),
             Self::Holder { holder, name } => holder
                 .cell(name)
@@ -373,6 +375,7 @@ impl ResolvedReference {
         env: &mut crate::CallEnv,
     ) -> Result<(), RuntimeError> {
         match self {
+            Self::Global(reference) => reference.assign(value, env),
             Self::Cell { binding } => binding.assign(value, strict),
             Self::Holder { holder, name } => {
                 let cell = match holder.cell(name) {
@@ -412,6 +415,7 @@ impl ResolvedReference {
     }
     pub(crate) fn delete(&self, env: &mut crate::CallEnv) -> Result<bool, RuntimeError> {
         match self {
+            Self::Global(reference) => reference.delete(env),
             Self::Holder { holder, name } => Ok(holder.delete(name)),
             Self::Cell { .. } => Ok(false),
             Self::Property { base, name, .. } => crate::bytecode::delete_object_property(

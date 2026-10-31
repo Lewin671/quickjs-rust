@@ -76,6 +76,7 @@ impl Compiler {
                     });
                     return Ok(());
                 }
+                let reference = self.begin_reference(name);
                 let Some(slot) = slot else {
                     if *parenthesized {
                         self.compile_expr(value)?;
@@ -86,6 +87,7 @@ impl Compiler {
                         self.emit(Op::Dup);
                     }
                     self.emit_store_unresolved_identifier(name, None);
+                    self.finish_reference(reference, None, self.code.len() - 1);
                     return Ok(());
                 };
                 if *parenthesized {
@@ -97,6 +99,7 @@ impl Compiler {
                     self.emit(Op::Dup);
                 }
                 self.emit_store_unresolved_identifier(name, Some(slot));
+                self.finish_reference(reference, None, self.code.len() - 1);
                 Ok(())
             }
             AssignmentTarget::Member {
@@ -271,6 +274,10 @@ impl Compiler {
         let store_slot = self.resolve_local_slot(name);
         let load_slot = self.resolve_identifier_load_slot(name);
         let resolved_with_object_slot = self.resolve_with_identifier_target(name, store_slot);
+        let reference = resolved_with_object_slot
+            .is_none()
+            .then(|| self.begin_reference(name));
+        let read = self.code.len();
         match op {
             AssignmentOp::LogicalAndAssign => {
                 self.emit_load_identifier(name, load_slot, resolved_with_object_slot);
@@ -335,6 +342,10 @@ impl Compiler {
                             discard: !produce_value,
                         });
                     }
+                    if let Some(reference) = reference {
+                        let pc = self.code.len() - 1;
+                        self.finish_reference(reference, Some(pc), pc);
+                    }
                     return Ok(());
                 }
                 self.emit_load_identifier(name, load_slot, resolved_with_object_slot);
@@ -345,6 +356,9 @@ impl Compiler {
                 }
                 self.emit_store_identifier(name, store_slot, resolved_with_object_slot);
             }
+        }
+        if let Some(reference) = reference {
+            self.finish_reference(reference, Some(read), self.code.len() - 1);
         }
         Ok(())
     }
@@ -361,6 +375,10 @@ impl Compiler {
         let store_slot = self.resolve_local_slot(name);
         let load_slot = self.resolve_identifier_load_slot(name);
         let resolved_with_object_slot = self.resolve_with_identifier_target(name, store_slot);
+        let reference = resolved_with_object_slot
+            .is_none()
+            .then(|| self.begin_reference(name));
+        let read = self.code.len();
         self.emit_load_identifier(name, load_slot, resolved_with_object_slot);
         self.emit(Op::ToNumeric);
         if !prefix {
@@ -372,6 +390,9 @@ impl Compiler {
             self.emit_store_identifier(name, store_slot, resolved_with_object_slot);
         } else {
             self.emit_store_identifier(name, store_slot, resolved_with_object_slot);
+        }
+        if let Some(reference) = reference {
+            self.finish_reference(reference, Some(read), self.code.len() - 1);
         }
         Ok(())
     }

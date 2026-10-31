@@ -83,8 +83,8 @@ Tests: `binding/scope_tests.rs`, `direct_eval/s3b_bindings.rs`.
 
 The resolver walks descriptor/cells, own holder, with object and parent in lexical
 order. With uses HasProperty and unscopables, releasing every storage/cell borrow
-before hooks. With-reference instructions save the selected cell/holder/property
-before RHS effects, and suspension retains that reference until consumption.
+before hooks. BindingPlan reference intervals save the selected cell/holder/global
+base before RHS effects; consumption, abrupt exit or short-circuit releases it.
 
 Sloppy function eval declares in the caller's selected own holder after checking
 active lexical/parameter conflicts. Strict eval owns a new holder and lexical

@@ -16,3 +16,6 @@ mod scope_tests;
 
 mod table;
 pub(crate) use table::DynamicBindings;
+
+mod global_reference;
+pub(crate) use global_reference::GlobalReference;

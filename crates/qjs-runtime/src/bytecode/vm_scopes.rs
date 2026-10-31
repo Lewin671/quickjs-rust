@@ -141,31 +141,51 @@ impl Vm<'_> {
         let mut env = self.realm_env();
         match cursor.resolve(name, strict, &mut env)? {
             crate::binding::ResolvedReference::Unresolvable => {
-                if self.env.can_cache_realm_globals()
-                    && self.env.is_global_lexical_binding(name)
-                    && let Some(cell) = self.env.realm_binding_cell(name)
+                if !self.env.has_global_binding_root()
+                    && let Some(cell) = self.env.module_import_cell(name)
                 {
                     return Ok(Some(crate::binding::ResolvedReference::Cell {
                         binding: CellReference {
                             cell,
-                            access: AccessPolicy::Mutable,
+                            access: AccessPolicy::Import,
                         },
                     }));
                 }
-                if let Some(base) = self.env.selected_global_this()
-                    && crate::property::has_property(base.clone(), &env, name)?
-                {
-                    return Ok(Some(crate::binding::ResolvedReference::Property {
-                        base,
-                        name: name.to_owned(),
-                        strict,
-                        with_environment: false,
-                    }));
-                }
-                Ok(None)
+                let reference = crate::binding::GlobalReference::select(name, strict, &self.env)?;
+                Ok(reference
+                    .is_bound()
+                    .then_some(crate::binding::ResolvedReference::Global(reference)))
             }
             reference => Ok(Some(reference)),
         }
+    }
+
+    pub(super) fn select_binding_reference(
+        &self,
+        name: &str,
+        strict: bool,
+        scope: ScopeId,
+    ) -> Result<crate::binding::ResolvedReference, crate::RuntimeError> {
+        let mut services = self.realm_env();
+        if let Some(cursor) = self.prepare_scope_cursor_at(scope) {
+            let reference = cursor.resolve(name, strict, &mut services)?;
+            if !matches!(reference, crate::binding::ResolvedReference::Unresolvable) {
+                return Ok(reference);
+            }
+        }
+        if !self.env.has_global_binding_root()
+            && let Some(cell) = self.env.module_import_cell(name)
+        {
+            return Ok(crate::binding::ResolvedReference::Cell {
+                binding: CellReference {
+                    cell,
+                    access: AccessPolicy::Import,
+                },
+            });
+        }
+        Ok(crate::binding::ResolvedReference::Global(
+            crate::binding::GlobalReference::select(name, strict, &self.env)?,
+        ))
     }
 
     pub(super) fn read_scope_binding(
@@ -185,12 +205,6 @@ impl Vm<'_> {
     }
 
     pub(super) fn prepare_scope_cursor(&self) -> Option<ScopeCursor> {
-        if !self.bytecode.has_dynamic_scope_tree()
-            && self.env.scope_cursor().is_none()
-            && self.with_stack().is_empty()
-        {
-            return None;
-        }
         let id = self
             .bytecode
             .binding_plan
@@ -198,6 +212,17 @@ impl Vm<'_> {
             .get(self.ip.saturating_sub(1))
             .copied()
             .unwrap_or(ScopeId(0));
+        self.prepare_scope_cursor_at(id)
+    }
+
+    pub(super) fn prepare_scope_cursor_at(&self, id: ScopeId) -> Option<ScopeCursor> {
+        if !self.bytecode.has_dynamic_scope_tree()
+            && self.env.scope_cursor().is_none()
+            && self.with_stack().is_empty()
+        {
+            return None;
+        }
+
         if self.env.has_global_binding_root()
             && id.0 == 0
             && self.env.scope_cursor().is_none()

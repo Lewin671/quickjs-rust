@@ -1605,7 +1605,9 @@ pub(in crate::bytecode) fn try_run_standalone(
     env: &mut Option<CallEnv>,
     slots: &mut Option<DirectCallSlots<'_>>,
 ) -> Option<Result<Value, RuntimeError>> {
-    if !environment_is_slot_only(env.as_ref()?) {
+    if !environment_is_slot_only(env.as_ref()?)
+        || !bytecode.binding_plan.references.can_skip(env.as_ref()?)
+    {
         return None;
     }
     let entry = admit(bytecode, slots.as_ref()?.upvalues)?;
@@ -1641,6 +1643,9 @@ pub(crate) fn try_run_in_caller_env(
     arguments: &[Value],
     env: &CallEnv,
 ) -> Option<Result<Value, RuntimeError>> {
+    if !bytecode.binding_plan.references.can_skip(env) {
+        return None;
+    }
     let entry = admit(bytecode, upvalues)?;
     if entry.program.requires_this {
         return None;

@@ -11,6 +11,7 @@ impl Bytecode {
     ) -> Self {
         let arguments_body_copy = compiler.arguments_body_copy;
         let lexical_arguments = !compiler.arguments_owner && compiler.arguments_demand();
+        let references = compiler.references;
         let (slots, params) = match parameters {
             Some((slots, params)) => (Some(slots), Some(params)),
             None => (None, None),
@@ -36,6 +37,8 @@ impl Bytecode {
             bytecode.binding_plan.parameters =
                 super::binding_plan::ParameterInfo::compile(&bytecode, params);
         }
+        bytecode.binding_plan.references =
+            super::reference_plan::ReferencePlan::compile(&bytecode, references);
         bytecode
     }
 

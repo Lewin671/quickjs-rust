@@ -257,6 +257,8 @@ impl<'a> Vm<'a> {
             });
         Self {
             current: FrameState {
+                reference_hooks: !handle.binding_plan.references.can_skip(&env),
+                active_reference_count: 0,
                 scope_instances: Default::default(),
                 bytecode: handle,
                 ip: 0,

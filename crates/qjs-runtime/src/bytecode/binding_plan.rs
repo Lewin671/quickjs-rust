@@ -58,6 +58,7 @@ impl ParameterInfo {
 
 #[derive(Clone, Debug, Default)]
 pub(super) struct BindingPlan {
+    pub(super) references: super::reference_plan::ReferencePlan,
     pub(super) self_name: Option<std::rc::Rc<crate::binding::FunctionNamePlan>>,
     pub(super) scopes: std::rc::Rc<crate::binding::ScopeDescriptors>,
     pub(super) pc_scopes: Box<[crate::binding::ScopeId]>,
@@ -132,6 +133,7 @@ impl BindingPlan {
         dynamic_cell_slots.dedup();
         let dynamic_scope_tree = dynamic_tree(bytecode);
         Self {
+            references: super::reference_plan::ReferencePlan::default(),
             self_name: None,
             scopes: std::rc::Rc::default(),
             pc_scopes: Box::default(),
