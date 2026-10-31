@@ -936,7 +936,10 @@ impl Bytecode {
         bytecode.cached_authoritative_mask_clean = bytecode.compute_authoritative_mask_clean();
         bytecode.cached_creates_closures = bytecode.compute_creates_closures();
         bytecode.cached_creates_capturing_closures = bytecode.compute_creates_capturing_closures();
-        bytecode.cached_needs_arguments_object = bytecode.compute_needs_arguments_object();
+        bytecode.cached_needs_arguments_object = scope_plan.as_ref().map_or_else(
+            || bytecode.compute_needs_arguments_object(),
+            |(scopes, _)| scopes.implicit_arguments.is_some(),
+        );
         bytecode.cached_contains_direct_eval = bytecode.code.iter().any(|op| {
             matches!(
                 op,

@@ -591,9 +591,6 @@ impl Compiler {
                 let is_strict = self.strict || is_strict_function_body(body);
                 let local_names =
                     collect_function_local_names(name.as_ref(), params, body, !lexical_arguments);
-                if *lexical_arguments && !self.global_scope && self.arguments_owner {
-                    self.own_call_frame_slot("arguments");
-                }
                 let (mut bytecode, lexical_captures) = self.compile_nested_function_body(
                     params,
                     body,
@@ -767,9 +764,6 @@ impl Compiler {
                 let is_strict = self.strict || is_strict_function_body(body);
                 let local_names =
                     collect_function_local_names(None, params, body, !lexical_arguments);
-                if *lexical_arguments && !self.global_scope && self.arguments_owner {
-                    self.own_call_frame_slot("arguments");
-                }
                 let (bytecode, lexical_captures) = self.compile_nested_function_body(
                     params,
                     body,
@@ -826,9 +820,6 @@ impl Compiler {
         let source_text = self.function_source_text(*span);
         let is_strict = self.strict || is_strict_function_body(body);
         let local_names = collect_function_local_names(None, params, body, !lexical_arguments);
-        if *lexical_arguments && !self.global_scope && self.arguments_owner {
-            self.own_call_frame_slot("arguments");
-        }
         let (bytecode, lexical_captures) = self.compile_nested_function_body(
             params,
             body,

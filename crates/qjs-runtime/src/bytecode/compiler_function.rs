@@ -61,7 +61,7 @@ impl Compiler {
 
     #[allow(clippy::too_many_arguments)]
     pub(super) fn compile_nested_function_body(
-        &self,
+        &mut self,
         params: &FunctionParams,
         body: &[Stmt],
         is_strict: bool,
@@ -88,6 +88,15 @@ impl Compiler {
             compiler.source_is_wtf16 = self.source_is_wtf16;
             compiler.compile_function(params, body)?
         };
+        // An arrow inherits arguments only if its compiled operations can reach
+        // that binding. Ordinary children establish their own arguments owner.
+        if !arguments_owner
+            && bytecode.binding_plan.needs_lexical_arguments
+            && self.arguments_owner
+            && !self.global_scope
+        {
+            self.own_call_frame_slot("arguments");
+        }
         let mut lexical_captures = self.active_lexical_captures(&bytecode, local_names);
         if !lexical_captures.is_empty() {
             let captured_lexicals = lexical_captures

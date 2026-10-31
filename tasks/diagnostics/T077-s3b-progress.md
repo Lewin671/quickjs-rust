@@ -358,3 +358,19 @@ routing; an import's readonly policy applies only to that selected canonical cel
 Runtime and module regressions cover both homonyms. Initialization probes inspect
 cell state without reading its value. All **2,565 runtime tests**, 286 NG fixtures,
 Clippy and the staged gate including 117 selected Test262 cases pass. Borrowed Context and removal of named call inputs remain.
+
+
+## B2c2 arguments demand boundaries
+
+Compiler arguments demand now follows current operations and lexical arrow
+children, using each operation's recorded scope. Ordinary children/methods,
+fields and static blocks do not demand the parent's arguments object. Arrows
+that only use parameters no longer synthesize a parent arguments binding or
+mapped parameter cells. A demanded lexical arrow installs its owner's slot
+before capture recompilation; transitive arrows and eval propagate demand.
+Parameter/lexical homonyms stop it, with parameter-default eval retaining the
+separate earlier scope. BindingPlan records inherited demand; own object demand
+comes from its implicit Arguments declaration. No executable IR/source-shape
+recognizer is introduced. All **2,568 runtime tests**, Clippy and the staged gate including 117 selected
+Test262 cases pass. Lazy object recipes and
+positional inputs for suspend/eval paths remain upcoming work.

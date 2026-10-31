@@ -1273,7 +1273,7 @@ fn function_env<'a>(
         !use_direct_call_slots && bytecode.parameters_shadow_arguments();
     let has_own_arguments_object = !function.lexical_arguments
         && !parameter_shadows_arguments
-        && (bytecode.needs_arguments_object() || bytecode.has_dynamic_scope_tree());
+        && bytecode.needs_arguments_object();
     if has_own_arguments_object && !function.is_strict && function.params.is_simple() {
         for &slot in bytecode.parameter_slots() {
             let name = bytecode.local_name_at(slot).expect("parameter route");

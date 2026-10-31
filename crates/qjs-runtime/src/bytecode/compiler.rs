@@ -377,10 +377,7 @@ impl Compiler {
             }
             Ok(())
         })?;
-        let argument_demand = super::binding_plan::dynamic_code(&self.code) || self.code.iter().any(|op| {
-            matches!(op, Op::LoadGlobal(name) | Op::TypeofGlobal(name) | Op::StoreGlobalStrict(name) if name == "arguments")
-                || matches!(op, Op::StoreGlobalSloppy { name, .. } | Op::StoreLocalOrGlobalSloppy { name, .. } if name == "arguments")
-        });
+        let argument_demand = self.arguments_demand();
         if self.arguments_owner
             && !params.names().iter().any(|name| name == "arguments")
             && self.scope_plan.implicit_arguments.is_none()
@@ -606,7 +603,7 @@ impl Compiler {
         self.local_slot_with_kind(name, hoisted, true)
     }
 
-    /// Materializes an own `this`/`arguments` slot so a nested arrow can
+    /// Materializes an own `arguments` slot so a nested arrow can
     /// capture it. The declaring function receives the value from call setup,
     /// not from its parent's indexed-upvalue vector; the arrow's corresponding
     /// captured slot is independently marked `from_env` when it is recompiled.

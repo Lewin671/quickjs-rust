@@ -50,6 +50,7 @@ mod binding_plan;
 mod call_context;
 mod compact_fn;
 mod compiler;
+mod compiler_arguments;
 mod compiler_assign;
 mod compiler_binding;
 mod compiler_class;

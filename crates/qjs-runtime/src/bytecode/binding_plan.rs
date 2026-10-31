@@ -83,6 +83,7 @@ pub(super) struct BindingPlan {
     pub(super) dynamic_scope_tree: bool,
     pub(super) needs_receiver: bool,
     pub(super) needs_lexical_owner: bool,
+    pub(super) needs_lexical_arguments: bool,
     pub(super) reads_new_target: bool,
     pub(super) prologue_end: Option<usize>,
 }
@@ -192,6 +193,7 @@ impl BindingPlan {
                 ..ParameterInfo::default()
             },
             dynamic_scope_tree,
+            needs_lexical_arguments: false,
             needs_lexical_owner: bytecode.uses_lexical_this()
                 || bytecode.contains_super_operation()
                 || bytecode.contains_direct_eval()
