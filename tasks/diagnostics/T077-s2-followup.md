@@ -1,11 +1,11 @@
 # S2 follow-up: prototype memory and complexity
 
-- Status: active; final compact-sharing repair passes the fast gate; full qualification pending.
-- Implementation: all five mechanisms present; final compact-edge sharing repair passes 2,505 runtime tests, with final qualification pending. Collector at `d30838c6`.
-- Verified at: `3dc2a684`: full check (5,170 curated cases), 268 NG fixtures cached/off/verify, seven x86_64 graph tests; 2,504 default runtime tests.
+- Status: active; final runtime frozen and full local check passes; complete exact scans and performance qualification pending.
+- Implementation: present at `590edc60`; all five requested mechanisms, direct guards, lazy prototype state and shared compact edge boxes.
+- Verified at: `590edc60`, 2026-10-31: full check (5,170 curated), 268 NG fixtures cached/off/verify (verify uses 60 seconds), eight x86_64 graph tests; fast gate runs 2,505 runtime tests.
 - Evidence: this record and [retained review programs/collector](t077-s2-followup/measure.py).
-- Unresolved: final compact-sharing qualification, complete exact cached/off results and burndown; quiet native timings; iMac gates blocked by no-push; x86 order audit.
-- Next action: freeze the compact-sharing repair, complete full checks and exact scans per mode, record burndown, then measure on a quiet host; no push or merge.
+- Unresolved: exact cached/off results and burndown; quiet native timings/RSS and default-timeout verification; iMac gates blocked by no-push; x86 order audit.
+- Next action: complete four exact shards per mode, record burndown, then qualify measurements on a quiet host; no push or merge.
 
 
 ## Frozen scope and migration
@@ -137,3 +137,30 @@ test proves edge-box reuse across instances/conversion and proves retained
 root metadata does not pin the prototype. The eight `3dc2a684` shards are
 superseded partial scans (no burndown), and final exact qualification restarts
 at the corrected source. No function/env/call/context path changes.
+
+
+Final compact-sharing source is `590edc60`; release `agents` CLI SHA-256 is
+`c592a375cef71ace12fad265cfd45ca6c92c525323b2a1ab7bdd59f2ff32bf58`.
+Actual `--agent` smoke passes. All 268 NG fixtures pass cached/release and
+IC-off/release, and eight focused tests pass on x86_64. The first debug IC-verify
+comparison at the default 10-second timeout failed under concurrent host load:
+
+```text
+error: quickjs-rust timed out after 10s: /Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s2-followup/tests/fixtures/compare-qjs/named-property-iterative-release.js
+```
+
+A complete unchanged-source rerun with two jobs and a 60-second fixture timeout
+passes all 268 debug IC-verified fixtures. No fixture was excluded. Final exact
+scans keep the original 20-second case timeout and one worker per shard.
+
+
+## Final runtime checkpoint
+
+`590edc60` full `check.sh` completes successfully, including default, agents
+and perf-counters checks, tooling/context checks and all 5,170 curated cases.
+The source is frozen for final exact scans and measurements. The later
+checkpoint commit changes only this record; `git diff --quiet 590edc60 HEAD --
+crates scripts Cargo.toml Cargo.lock .cargo rust-toolchain.toml` proves engine,
+CLI, build and harness inputs identical. Cached burndown will name `590edc60`;
+IC-off may name that documentation-only checkpoint because the ledger permits
+only one row per commit. Both modes execute the same pinned `590edc60` binary.
