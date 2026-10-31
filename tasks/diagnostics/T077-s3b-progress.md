@@ -1001,3 +1001,13 @@ value/layout and named_property_cache submodules match main exactly. In
 value/object.rs, the only S3b delta against main is checked module namespace
 export access, and its cycle walker is unchanged. Final comparison baseline is
 now **main `3cc12c6f`**. The x86 order must be regenerated before triage.
+
+
+## Merged-source x86 order
+
+The required default external/sentinel/broad order regeneration completes on the
+iMac at source `4f6c0444`, job `20261031T232541Z-t077-s3b-merged-order`: 76 cases,
+485 symbols, exit 0. [Order evidence](T077-s3b-merged-order/README.md) owns source,
+binary/producer/order hashes and the exact command. No development/held-out
+profiling or layout offset search is added. The final x86 timing binary must be
+rebuilt with this order. Baseline for every new comparison is `3cc12c6f`.

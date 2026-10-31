@@ -5,7 +5,7 @@
 - Verified at: merged working tree over `539d6b8f` + main `3cc12c6f` passes the fresh fast gate (2,636 default runtime tests + 117 curated Test262 cases). Pre-merge evidence belongs to its named revisions; final merged-source feature/full/NG/exact/depth/counter/public86 checks remain. S2 follow-up acceptance has its own [receipt](diagnostics/T077-s2fu-acceptance.md).
 - Evidence: [S3b progress](diagnostics/T077-s3b-progress.md), [lead feedback](diagnostics/T077-s3b-lead-feedback-1.md), [follow-up acceptance](diagnostics/T077-s2fu-acceptance.md), [S1+S2 acceptance](diagnostics/T077-s1s2-acceptance.md), [target](../docs/design/core-rebuild.md), [baseline](diagnostics/T077-baseline.md), [S3 plan](proposals/T077-s3-plan.md), [S3b brief](proposals/T077-s3b-brief.md).
 - Unresolved: accepted local regressions (external +0.25% vs S3a, typed-loop/wide static size, follow-up held-out instructions +0.35% and json-parse-financial) are S3e/S4 obligations; `class extends` construction is still quadratic (after S3b). The global accessor stale-read bug is repaired on this owner branch; deep native-stack exhaustion is S3d-owned.
-- Next action: regenerate the x86 order and all final counters/depth/full/exact/public86 evidence against `3cc12c6f`. Lead owns formal/held-out/RSS and acceptance; never push to origin or merge into main.
+- Next action: freeze the regenerated x86 order, then collect final counters/depth/full/exact/public86 evidence against `3cc12c6f`. Lead owns formal/held-out/RSS and acceptance; never push to origin or merge into main.
 
 ## Authority and scope
 

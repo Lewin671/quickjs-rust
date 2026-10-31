@@ -42,4 +42,3 @@ Missing and accessor outcomes use the same proof. Accessors execute once after a
 Proxy/unmodeled exotic chains remain uncached. Expired layouts/generations are
 stale entries and can be replaced without consuming another polymorphic way.
 Enumeration and creation proofs use the same shared generations and layout roots.
-
