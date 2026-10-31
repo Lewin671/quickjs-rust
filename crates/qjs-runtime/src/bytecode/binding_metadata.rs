@@ -9,6 +9,7 @@ impl Bytecode {
         parameters: Option<(Vec<usize>, &qjs_ast::FunctionParams)>,
         global_lexical_names: Vec<String>,
     ) -> Self {
+        let arguments_body_copy = compiler.arguments_body_copy;
         let lexical_arguments = !compiler.arguments_owner && compiler.arguments_demand();
         let (slots, params) = match parameters {
             Some((slots, params)) => (Some(slots), Some(params)),
@@ -25,6 +26,12 @@ impl Bytecode {
             Some((compiler.scope_plan, compiler.direct_eval_source)),
         );
         bytecode.binding_plan.needs_lexical_arguments = lexical_arguments;
+        if let Some((source, target)) = arguments_body_copy {
+            bytecode.binding_plan.arguments_body_copy = Some((source, target));
+            bytecode.binding_plan.cell_slots.push(target);
+            bytecode.binding_plan.cell_slots.sort_unstable();
+            bytecode.binding_plan.cell_slots.dedup();
+        }
         if let Some(params) = params {
             bytecode.binding_plan.parameters =
                 super::binding_plan::ParameterInfo::compile(&bytecode, params);

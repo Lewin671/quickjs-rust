@@ -197,7 +197,7 @@ impl<'a> Vm<'a> {
         let direct_this = direct_call_slots.and_then(|direct_call_slots| {
             Self::seed_direct_call_slots(bytecode, &mut locals, direct_call_slots)
         });
-        let (local_upvalues, direct_realm_binding_slots) =
+        let (mut local_upvalues, direct_realm_binding_slots) =
             if direct_readonly_upvalue_owner.is_some() {
                 (
                     Vec::new(),
@@ -219,29 +219,18 @@ impl<'a> Vm<'a> {
         if let Some(inputs) = call_inputs
             && let Some(slot) = bytecode.binding_plan.arguments_slot
         {
-            let value = crate::function::arguments_object(
-                inputs.function,
-                inputs.arguments,
+            let recipe = crate::function::ArgumentsRecipe::prepare(
+                inputs,
+                bytecode,
+                &locals,
+                &mut local_upvalues,
                 &env,
-                &local_upvalues,
             );
-            let cell = local_upvalues[slot].as_ref().expect("arguments cell route");
-            cell.assign(value.clone(), false)
-                .expect("implicit arguments is mutable");
-            locals[slot] = Some(value);
-            env.insert_frame_cell("arguments".to_owned(), cell.clone());
-        }
-        if bytecode.has_dynamic_scope_tree() {
-            for meta in bytecode
-                .binding_plan
-                .bindings
-                .iter()
-                .filter(|meta| meta.kind == crate::binding::BindingKind::Arguments)
-            {
-                if let Some(cell) = local_upvalues.get(meta.slot.0).and_then(Option::as_ref) {
-                    env.insert_frame_cell("arguments".to_owned(), cell.clone());
-                }
-            }
+            local_upvalues[slot]
+                .as_ref()
+                .expect("arguments cell route")
+                .initialize_arguments(recipe)
+                .expect("fresh arguments binding");
         }
         let authoritative_slots =
             Self::initial_authoritative_slots(bytecode, &local_upvalues, &env)

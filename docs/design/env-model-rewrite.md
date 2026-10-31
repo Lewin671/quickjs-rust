@@ -36,14 +36,14 @@ parameter leaf bindings are parameters too; raw pattern inputs are not bindings.
    frame's cell handle without modifying escaped cells. Fresh cells retain the
    declaration's policy and TDZ state. Per-iteration copying reads the current
    cell rather than an older slot projection. Tests: `closure_state.rs` loop cells.
-5. **Arguments is a lexical binding.** Observable implicit arguments belongs to
-   the real function's parameter descriptor. Parameters, body lexicals and block
-   lexicals can shadow it. Arrows inherit the enclosing binding; absent arguments
-   is unresolvable, not a TDZ cell. Eval-only demand also requests arguments.
-6. **Mapped indices alias parameter cells.** Simple sloppy parameter mappings
-   use the last duplicate position. Reverse writes and descriptor/delete severance
-   preserve the specified identity; strict/non-simple arguments is unmapped.
-   Tests: `parameters.rs`, `function/call_activation_tests.rs`, `s3b_bindings.rs`.
+5. **Arguments is a lexical binding.** Its parameter descriptor owns an initialized
+   lazy recipe, including eval demand; first read creates the object, assignment
+   can discard it unread. Arrows inherit the binding; parameters/lexicals shadow
+   it. Absent arguments is unresolvable, not a TDZ cell.
+6. **Mapped indices alias parameter cells.** Supplied simple-sloppy indices use
+   the last duplicate position; descriptor/delete operations sever mappings.
+   Strict/non-simple is unmapped. Parameter/body cells can share one lazy object.
+   Tests: `parameters.rs`, `binding/cell.rs`, `function/call_activation_tests.rs`.
 7. **Parameter/body targets are distinct where needed.** Non-simple parameters
    keep their own bindings and TDZ during defaults. Same-named body vars get
    their own locations initialized from the parameters; default-created closures

@@ -37,6 +37,76 @@ impl Compiler {
         })
     }
 
+    pub(super) fn ensure_implicit_arguments(&mut self) -> usize {
+        if let Some(slot) = self.scope_plan.implicit_arguments {
+            return slot.0;
+        }
+        let own_var = self
+            .local_slots
+            .get("arguments")
+            .copied()
+            .filter(|&slot| self.locals[slot].hoisted && self.scope_plan.variable.0 == 0);
+        let slot = own_var.unwrap_or_else(|| self.local_slot("\0implicit_arguments", false));
+        self.locals[slot].from_env = false;
+        let variable = self.scope_plan.variable;
+        self.scope_plan.variable = crate::binding::ScopeId(0);
+        self.scope_plan.declare("arguments", slot, false);
+        self.scope_plan.variable = variable;
+        self.scope_plan.implicit_arguments = Some(crate::binding::LocalSlot(slot));
+        slot
+    }
+
+    /// Late demand may synthesize the implicit slot after earlier references
+    /// were lowered as free names. Wire those operations without changing PCs.
+    pub(super) fn wire_arguments_slot(&mut self) {
+        let Some(slot) = self.scope_plan.implicit_arguments else {
+            return;
+        };
+        for op in &mut self.code {
+            match op {
+                Op::LoadGlobal(name) if name == "arguments" => *op = Op::LoadLocal(slot.0),
+                Op::TypeofGlobal(name) if name == "arguments" => {
+                    *op = Op::TypeofIdentWith {
+                        name: name.clone(),
+                        slot: Some(slot.0),
+                    };
+                }
+                Op::DeleteIdent(name) if name == "arguments" => {
+                    *op = Op::DeleteIdentWith {
+                        name: name.clone(),
+                        slot: Some(slot.0),
+                    };
+                }
+                Op::StoreGlobalStrict(name) if name == "arguments" => *op = Op::AssignLocal(slot.0),
+                Op::StoreGlobalSloppy { name, .. } | Op::StoreLocalOrGlobalSloppy { name, .. }
+                    if name == "arguments" =>
+                {
+                    *op = Op::AssignLocal(slot.0)
+                }
+                Op::LoadIdentWith {
+                    name, slot: target, ..
+                }
+                | Op::LoadResolvedIdentWith {
+                    name, slot: target, ..
+                }
+                | Op::StoreIdentWith {
+                    name, slot: target, ..
+                }
+                | Op::StoreResolvedIdentWith {
+                    name, slot: target, ..
+                }
+                | Op::TypeofIdentWith { name, slot: target }
+                | Op::DeleteIdentWith { name, slot: target }
+                | Op::ResolveIdentWith {
+                    name, slot: target, ..
+                } if name == "arguments" && target.is_none() => {
+                    *target = Some(slot.0);
+                }
+                _ => {}
+            }
+        }
+    }
+
     fn arguments_reaches_owner(&self, pc: usize) -> bool {
         let mut scope = self
             .scope_plan

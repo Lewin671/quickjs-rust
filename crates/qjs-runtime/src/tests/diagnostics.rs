@@ -143,9 +143,8 @@ fn an_unrecognized_loop_probes_every_engine_and_enters_none() {
 }
 
 #[test]
-fn an_ordinary_call_hands_over_an_environment_that_cannot_carry_markers() {
-    // Nothing here can resolve a name dynamically, so every callee gets a
-    // freshly built frame and the pre-call marker scrub has nothing to find.
+fn ordinary_calls_run_without_eval_marker_scrubs() {
+    // Typed eval-site data requires no marker names or scrub on ordinary entry.
     let (_, counters) = counted(
         "function inner(value) { return value + 1; }
          function outer(value) { return inner(value) + 1; }
@@ -158,12 +157,10 @@ fn an_ordinary_call_hands_over_an_environment_that_cannot_carry_markers() {
 }
 
 #[test]
-fn a_callee_handed_the_callers_dynamic_view_still_scrubs() {
-    // A Proxy callee is neither a user bytecode function (which would get its
-    // own fresh frame) nor a plain native (which resolves through the realm),
-    // so a caller with an eval-bearing closure retains its dynamic name view.
-    // That environment can carry markers, so the scrub must remain.
-    let (_, counters) = counted(
+fn proxy_callbacks_keep_live_scope_effects_without_marker_scrubs() {
+    // Proxy forwarding and the eval closure retain their real cells. No
+    // marker-carrying environment is projected or scrubbed around the call.
+    let (value, counters) = counted(
         "var proxied = new Proxy(function (value) { return value; }, {});
          function caller(value) {
              var captured = value;
@@ -174,14 +171,12 @@ fn a_callee_handed_the_callers_dynamic_view_still_scrubs() {
          for (var i = 0; i < 5; i++) { total += caller(i); }
          total;",
     );
-    assert!(
-        counters.call_env_marker_scrubs > 0,
-        "an inherited dynamic frame must keep scrubbing"
-    );
+    assert_eq!(value, Value::Number(20.0));
+    assert_eq!(counters.call_env_marker_scrubs, 0);
 }
 
 #[test]
-fn direct_eval_still_reaches_caller_locals_across_the_provenance_split() {
+fn direct_eval_reaches_its_typed_caller_scope() {
     // The marker plumbing is what makes a direct eval resolve names in its
     // caller's frame. Skipping the scrub for provably empty environments must
     // not touch that.

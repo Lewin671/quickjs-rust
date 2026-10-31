@@ -394,6 +394,14 @@ impl Vm<'_> {
         name: &str,
         slot: Option<usize>,
     ) -> Result<(), RuntimeError> {
+        if self.prepare_scope_cursor().is_some() {
+            let value = match self.resolve_scope_binding(name, false)? {
+                Some(reference) => reference.delete(&mut self.realm_env())?,
+                None => true,
+            };
+            self.stack.push(Value::Boolean(value));
+            return Ok(());
+        }
         if let Some(object) = self.with_binding_object(name)? {
             let mut env = self.current_env();
             let result = super::vm_props::delete_property_key(
@@ -405,7 +413,11 @@ impl Vm<'_> {
         } else {
             // Fall back to ordinary identifier deletion.
             let result = if let Some(s) = slot {
-                if self.locals[s].is_some() {
+                if self.locals[s].is_some()
+                    || self
+                        .local_upvalue_cell(s)
+                        .is_some_and(|cell| !cell.metadata().deletable)
+                {
                     false
                 } else {
                     self.delete_ident(name)?

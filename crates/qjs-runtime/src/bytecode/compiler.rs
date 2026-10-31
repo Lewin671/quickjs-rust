@@ -51,6 +51,7 @@ pub(super) struct Compiler {
     pub(super) strict: bool,
     pub(super) global_scope: bool,
     pub(super) arguments_owner: bool,
+    pub(super) arguments_body_copy: Option<(usize, usize)>,
     body_var_split: bool,
     parameter_copies: Vec<(usize, usize)>,
     /// Direct-eval source can introduce/delete function-environment `var` and
@@ -155,6 +156,7 @@ impl Default for Compiler {
             strict: false,
             global_scope: true,
             arguments_owner: true,
+            arguments_body_copy: None,
             body_var_split: false,
             parameter_copies: Vec::new(),
             direct_eval_source: false,
@@ -354,6 +356,18 @@ impl Compiler {
             compiler.collect_hoisted_locals(body, false);
             Ok(())
         })?;
+        if non_simple_params
+            && self.arguments_owner
+            && !params.names().iter().any(|name| name == "arguments")
+            && let Some(body) = self.local_slots.get("arguments").copied()
+            && self.locals[body].hoisted
+            && !self.locals[body].hoisted_function
+        {
+            let source = self.ensure_implicit_arguments();
+            self.arguments_body_copy = Some((source, body));
+            self.parameter_copies
+                .retain(|&(from, to)| from != source || to != body);
+        }
         for (parameter, body) in std::mem::take(&mut self.parameter_copies) {
             self.emit(Op::LoadLocal(parameter));
             self.emit(Op::StoreLocal(body));
@@ -383,19 +397,9 @@ impl Compiler {
             && self.scope_plan.implicit_arguments.is_none()
             && argument_demand
         {
-            let own_var = self
-                .local_slots
-                .get("arguments")
-                .copied()
-                .filter(|&slot| self.locals[slot].hoisted && !self.body_var_split);
-            let slot = own_var.unwrap_or_else(|| self.local_slot("\0implicit_arguments", false));
-            self.locals[slot].from_env = false;
-            let variable = self.scope_plan.variable;
-            self.scope_plan.variable = crate::binding::ScopeId(0);
-            self.scope_plan.declare("arguments", slot, false);
-            self.scope_plan.variable = variable;
-            self.scope_plan.implicit_arguments = Some(crate::binding::LocalSlot(slot));
+            self.ensure_implicit_arguments();
         }
+        self.wire_arguments_slot();
         self.emit_load_undefined();
         self.code.push(Op::Return);
         Ok(Bytecode::from_compiler(
@@ -550,6 +554,18 @@ impl Compiler {
     ) -> usize {
         if hoisted && self.global_scope && !compiler_temporary {
             self.global_hoisted.insert(name.to_owned());
+        }
+        // An unresolved reference in a parameter expression is not a body
+        // declaration. Keep its fallback slot separate from a later own var.
+        if hoisted
+            && self.body_var_split
+            && !compiler_temporary
+            && self
+                .local_slots
+                .get(name)
+                .is_some_and(|&slot| self.locals[slot].sloppy_global_fallback)
+        {
+            self.local_slots.remove(name);
         }
         let parameter_copy = self.local_slots.get(name).copied().filter(|&slot| {
             hoisted

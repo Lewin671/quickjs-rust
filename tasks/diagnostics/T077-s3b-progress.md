@@ -512,3 +512,67 @@ language `1c00ef143a90bcdcb285b63273a76abda71c6df119f9f3c9ed61575b66130d31` /
 Annex B `5bf1e237e9391c74e6d39c7872e8b943a57b141f0c72e6087387f9240fd82b5c` /
 `383b164a4662190d414a5fe23677327ce096045ffdd930603ee9a5265e03df5d`.
 These filtered scans create no burndown record or final S3b acceptance.
+
+
+## B2c5 lazy arguments value authority
+
+Implicit arguments is initialized with a typed recipe; no Arguments object or
+mapped getter/setter functions are created until a value read. Intrinsic,
+prototype, callee and iterator identities are captured at entry without JS.
+The recipe retains only actual argc values and supplied mapped parameter cells;
+unmapped/missing/duplicate positions preserve their distinct rules. Unused
+formal parameter cells are no longer allocated solely for arguments. Debug,
+initialization probes and Assign do not read the recipe. The first value read
+runs the pure factory once, outside the binding storage borrow.
+
+Late-synthesized arguments references wire to the compiled slot without changing
+instruction PCs. The canonical binding no longer publishes into FrameBindings.
+Non-simple body-var copies use a compiler-recorded prologue route: distinct
+parameter/body cells share one deferred object value and can be independently
+reassigned. This also avoids the old eager LoadLocal/StoreLocal copy. Parameter
+expression fallback slots stay separate from later body var declarations.
+Design correction: the frozen Box-only recipe cannot represent a non-simple
+parameter/body value copy without eager materialization or two factories.
+A shared lazy-value Rc owns one factory while the two binding cells stay
+independently mutable. This changes no executable IR type, Value representation,
+dependency or unsafe code.
+
+Before the final copy deduplication, **2,577 runtime tests** pass. Five focused
+perf-counter/cell tests now prove: no object for direct/eval/body-copy overwrites;
+one recipe/one materialization for copied values; no recipe for parameter-only
+arrows; escaping identity and mapped cells survive suspension before first read.
+Final default/feature/staged/NG gates follow. Owned suspend-start positional
+inputs still remain until the borrowed entry cut; this is not S3b completion.
+
+
+Full agents/perf-counters testing exposed one obsolete counter assertion from
+the deleted marker-scrub protocol. It now asserts the Proxy/eval callback result
+and zero scrub events. The lazy-copy independence case is another pinned NG
+limitation: after `var arguments; arguments = 'body'` in a non-simple body,
+the parameter-default arrow must retain its parameter arguments object. Node
+returns true for identity with the body's pre-assignment value; NG returns false.
+The existing runtime test enforces the approved distinct parameter/body cells;
+the NG fixture compares identity before the reassignment and retains its other
+mapped/argc/deletion/suspension checks.
+
+
+After the wrapper interruption, branch/index/resume were checked at `a1575448`;
+no unstaged or unrelated changes were present. A fresh staged gate passed
+2,577 runtime tests plus 135 selected Test262 cases; repeated feature tests
+passed 2,626 and the script comparison passed 289. Staged review then found that
+late-wired implicit arguments slots must share the parameter-binding live-body
+route for non-simple functions with eval. The route now uses declaration source
+names (including internal storage slots), with a focused body-eval shadow/write
+regression. The updated staged gate passed; the final common-path correction was then
+reverified with 2,578 default tests, 135 selected Test262 cases, 2,627 full
+agents/perf-counters tests and 289 NG scripts.
+
+
+The body-eval shadow regression passes. Updated full feature tests pass
+**2,627/2,627**; default gate passes **2,578/2,578** plus 135 selected Test262
+cases. The maximum-concurrency script run hit a 10-second teardown timeout in
+named-property-iterative-release.js while full feature tests were running.
+A complete rerun with COMPARE_QJS_JOBS=4 passes all **289** scripts without
+changing the timeout or expected results. Ordinary initialized cell reads keep
+the original single-borrow path; only lazy reads enter materialization.
+The final staged gate includes that common-path correction.

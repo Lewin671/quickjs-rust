@@ -49,6 +49,16 @@ impl Vm<'_> {
     }
 
     pub(super) fn enter_function_body(&mut self) {
+        if let Some((source, target)) = self.bytecode.binding_plan.arguments_body_copy {
+            self.local_upvalue_cell(target)
+                .expect("body arguments cell")
+                .copy_initialized_from(
+                    self.local_upvalue_cell(source)
+                        .expect("parameter arguments cell"),
+                )
+                .expect("initialized mutable argument-copy routes");
+            self.locals[target] = None;
+        }
         if let Some(scope) = self.bytecode.binding_plan.pc_scopes.get(self.ip) {
             let target = self.bytecode.binding_plan.scopes[scope.0].variable_target;
             self.env.select_variable_boundary(target);
@@ -416,6 +426,26 @@ impl Vm<'_> {
                 .is_some_and(|property| !property.writable)
     }
 
+    fn parameter_binding_crosses_body(&self, slot: usize) -> bool {
+        (self.bytecode.locals[slot].parameter
+            || self.bytecode.binding_plan.arguments_slot == Some(slot))
+            && self.bytecode.contains_direct_eval()
+            && !self.in_parameter_prologue()
+            && self
+                .bytecode
+                .binding_plan
+                .scopes
+                .get(1)
+                .is_some_and(|scope| scope.variable_target.0 == 1)
+    }
+
+    fn reference_binding_name(&self, slot: usize) -> &str {
+        self.bytecode.binding_plan.local_bindings[slot]
+            .map_or(self.bytecode.locals[slot].name.as_str(), |id| {
+                self.bytecode.binding_plan.bindings[id.0].name.as_str()
+            })
+    }
+
     #[inline(always)]
     pub(super) fn load_local(&mut self, slot: usize) -> Result<Value, RuntimeError> {
         if self.slot_is_authoritative(slot) {
@@ -449,17 +479,9 @@ impl Vm<'_> {
         }
         if (self.bytecode.locals[slot].is_received_upvalue()
             && (self.bytecode.contains_direct_eval() || self.env.scope_cursor().is_some()))
-            || (self.bytecode.locals[slot].parameter
-                && self.bytecode.contains_direct_eval()
-                && !self.in_parameter_prologue()
-                && self
-                    .bytecode
-                    .binding_plan
-                    .scopes
-                    .get(1)
-                    .is_some_and(|scope| scope.variable_target.0 == 1))
+            || self.parameter_binding_crosses_body(slot)
         {
-            let name = &self.bytecode.locals[slot].name;
+            let name = self.reference_binding_name(slot);
             if let Some(reference) = self.resolve_scope_binding(name, self.execution_is_strict())? {
                 return self.read_scope_binding(&reference);
             }
@@ -923,17 +945,9 @@ impl Vm<'_> {
     pub(super) fn assign_local(&mut self, slot: usize, value: Value) -> Result<(), RuntimeError> {
         if (self.bytecode.locals[slot].is_received_upvalue()
             && (self.bytecode.contains_direct_eval() || self.env.scope_cursor().is_some()))
-            || (self.bytecode.locals[slot].parameter
-                && self.bytecode.contains_direct_eval()
-                && !self.in_parameter_prologue()
-                && self
-                    .bytecode
-                    .binding_plan
-                    .scopes
-                    .get(1)
-                    .is_some_and(|scope| scope.variable_target.0 == 1))
+            || self.parameter_binding_crosses_body(slot)
         {
-            let name = &self.bytecode.locals[slot].name;
+            let name = self.reference_binding_name(slot);
             if let Some(reference) = self.resolve_scope_binding(name, self.execution_is_strict())? {
                 return self.assign_scope_binding(&reference, value, self.execution_is_strict());
             }
@@ -991,9 +1005,23 @@ impl Vm<'_> {
                 }),
             };
         }
-        let current = self
-            .upvalue_slot_value(slot)
-            .or_else(|| self.locals.get(slot).and_then(Option::as_ref).cloned());
+        if let Some(cell) = self.local_upvalue_cell(slot) {
+            let name = &self.bytecode.locals[slot].name;
+            if self
+                .env
+                .module_import_cell(name)
+                .is_some_and(|import| import.ptr_eq(cell))
+            {
+                return Err(RuntimeError {
+                    thrown: None,
+                    message: "TypeError: assignment to constant variable".into(),
+                });
+            }
+            // Assignment checks state/policy without reading a lazy value.
+            cell.check_assignment(self.execution_is_strict())?;
+            return self.store_local(slot, value);
+        }
+        let current = self.locals.get(slot).and_then(Option::as_ref).cloned();
         match current {
             Some(Value::Function(function)) if function.is_uninitialized_lexical_marker() => {
                 Err(RuntimeError {

@@ -55,6 +55,10 @@ declare_counters! {
     property_array_named_materializations,
     property_constructor_prototype_hits,
     property_constructor_prototype_misses,
+    /// Lazy implicit arguments values prepared at function entry.
+    arguments_recipes,
+    /// Arguments objects constructed by a binding value read.
+    arguments_materializations,
     property_arguments_template_hits,
     property_arguments_template_misses,
     property_arguments_templates_inserted,
@@ -77,9 +81,8 @@ declare_counters! {
     /// Always zero: no counting site exists, because no call routes through
     /// the frame-stack driver (`bytecode/frame_stack.rs`).
     same_vm_frame_entries,
-    /// Generic calls whose environment could carry a direct-eval marker and
-    /// therefore paid the pre-call scrub. An ordinary workload should report
-    /// zero: every environment it hands over is built empty.
+    /// Retired direct-eval marker scrub event, retained during the Context
+    /// migration audit. Typed eval sites have no counting site for this event.
     call_env_marker_scrubs,
     /// Statically named property reads and writes.
     named_property_reads,

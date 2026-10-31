@@ -382,3 +382,50 @@ fn nested_arrow_new_target_demand_retains_the_original_owner() {
     let owner = function.lexical_call().expect("nested new.target owner");
     assert!(matches!(owner.new_target, Some(Value::Function(_))));
 }
+
+#[test]
+fn parameter_assignment_fallback_is_distinct_from_a_body_var_declaration() {
+    assert_eq!(
+        eval(
+            "var defaultTarget = 3; function f(value = (defaultTarget = 8)) { var defaultTarget; return String(defaultTarget); } f() + ':' + defaultTarget;"
+        ),
+        Ok(Value::String("undefined:8".into()))
+    );
+}
+
+#[test]
+fn non_simple_body_arguments_copy_preserves_value_identity_and_binding_independence() {
+    assert_eq!(
+        eval(
+            r#"
+        function f(read = () => arguments) {
+            var arguments; const initial = arguments; arguments = 'body';
+            return (read() === initial) + ':' + initial.length + ':' + arguments;
+        }
+        function g(value = (arguments = 11)) { var arguments; return arguments; }
+        f(undefined, 7) + '|' + g();
+    "#
+        ),
+        Ok(Value::String("true:2:body|11".into()))
+    );
+}
+
+#[test]
+fn non_simple_body_eval_can_shadow_parameter_arguments() {
+    assert_eq!(
+        eval(
+            r#"
+        function f(read = () => arguments) {
+            eval('var arguments = ["body"]'); arguments = ['changed'];
+            return arguments[0] + ':' + read()[1];
+        }
+        f(undefined, 'parameter');
+    "#
+        ),
+        Ok(Value::String("changed:parameter".into()))
+    );
+    assert_eq!(
+        eval("function f(value = 0) { eval('var arguments = [7]'); return arguments[0]; } f(3);"),
+        Ok(Value::Number(7.0))
+    );
+}

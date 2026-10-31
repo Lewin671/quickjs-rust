@@ -1,5 +1,5 @@
 mod arguments;
-pub(crate) use arguments::{CallInputs, OwnedCallInputs, arguments_object};
+pub(crate) use arguments::{ArgumentsRecipe, CallInputs, LazyArguments, OwnedCallInputs};
 mod call;
 mod call_frame;
 mod env;

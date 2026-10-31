@@ -76,6 +76,7 @@ pub(super) struct BindingPlan {
     pub(super) module_live_candidates: Vec<usize>,
     pub(super) parameters: ParameterInfo,
     pub(super) arguments_slot: Option<usize>,
+    pub(super) arguments_body_copy: Option<(usize, usize)>,
     pub(super) dynamic_scope_tree: bool,
     pub(super) needs_receiver: bool,
     pub(super) needs_lexical_owner: bool,
@@ -116,17 +117,6 @@ impl BindingPlan {
             })
             .collect();
         let mut cell_slots = super::upvalue_resolver::resolve_upvalues(bytecode).cell_slots;
-        if bytecode.needs_arguments_object() {
-            cell_slots.extend(
-                bytecode
-                    .locals
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(slot, local)| {
-                        (local.parameter && !local.compiler_temporary).then_some(slot)
-                    }),
-            );
-        }
         cell_slots.sort_unstable();
         cell_slots.dedup();
         let mut dynamic_cell_slots = cell_slots.clone();
@@ -186,6 +176,7 @@ impl BindingPlan {
             // Expression thunks (notably field initializers) have no parameter
             // AST. Their empty list still satisfies the existing leaf contract.
             arguments_slot: None,
+            arguments_body_copy: None,
             parameters: ParameterInfo {
                 direct_seedable: bytecode.parameter_slots().is_empty(),
                 ..ParameterInfo::default()

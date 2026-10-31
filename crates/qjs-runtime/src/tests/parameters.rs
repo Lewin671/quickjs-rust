@@ -694,3 +694,13 @@ fn default_initializers_run_on_the_direct_call_path() {
         Ok(Value::Number(2.0))
     );
 }
+
+#[test]
+fn retained_arguments_preserve_aliases_identity_and_parameter_body_boundaries() {
+    assert_eq!(
+        eval(include_str!(
+            "../../../../tests/fixtures/compare-qjs/s3b-scope-lazy-arguments.js"
+        )),
+        Ok(Value::String("true|2|9|3|true:2:body|11|false|8".into()))
+    );
+}

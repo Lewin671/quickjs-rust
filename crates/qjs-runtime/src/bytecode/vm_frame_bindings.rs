@@ -29,7 +29,7 @@ impl Vm<'_> {
                 InitialSlot::Empty => None,
                 InitialSlot::Undefined => Some(Value::Undefined),
                 InitialSlot::Frame => env.get_local(name),
-                InitialSlot::Arguments => Some(Value::Undefined),
+                InitialSlot::Arguments => None,
                 InitialSlot::FrameOrUndefined => {
                     Some(env.get_local(name).unwrap_or(Value::Undefined))
                 }
