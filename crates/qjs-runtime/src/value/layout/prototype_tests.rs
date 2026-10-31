@@ -123,3 +123,20 @@ fn first_dependency_and_invalidation_walk_deep_chains_iteratively() {
     assert!(!fresh.is_valid());
     assert_eq!(state.visits.get(), visits + 1);
 }
+
+#[test]
+fn publishing_a_deferred_guard_preserves_its_identity_and_retires_it_on_reparent() {
+    let domain = AtomDomain::new();
+    let _owner = PropertyOwner::new(domain.clone());
+    let parent = object(&domain, None);
+    let mut store = NamedStore::empty_with_prototype(&domain, Some(Prototype::Object(parent)), 0);
+    assert!(store.deferred());
+    let guard = store.version();
+    assert!(store.matches_version(&guard));
+    store.materialize_layout();
+    assert!(!store.deferred());
+    assert!(store.matches_version(&guard));
+    assert!(store.cold.guard().is_none());
+    store.set_prototype(Some(Prototype::Object(object(&domain, None))));
+    assert!(!store.matches_version(&guard));
+}

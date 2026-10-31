@@ -283,7 +283,8 @@ impl NamedStore {
             Some(&self.layout)
         }
     }
-    pub(super) fn materialize_layout(&mut self) {
+    /// Publish an already-issued guard without changing its identity.
+    pub(crate) fn materialize_layout(&mut self) {
         if self.deferred() {
             self.layout = self.cold.guard().cloned().unwrap_or_else(|| {
                 PropertyOwner::new(self.domain().clone())

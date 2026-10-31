@@ -63,3 +63,20 @@ The iMac queue was read successfully and was idle; local clock there was
 2026-10-31 13:58 CST, outside the prohibited window. No runner job has been
 submitted: `imac-bench.sh` uses `git push` internally, and the explicit no-push
 instruction remains in force pending the requested clarification.
+
+## Initial arm64 diagnostics and guard publication
+
+`635ca6f8` (production `6a9c615d`), three alternating pairs, frozen isolated
+release `agents` builds. RSS in decimal MB: million-object chain
+119.49 pre-S2 / 1324.37 integration / 119.05 candidate; 200k one-child prototypes
+58.31 / 287.03 / 54.53; 100k ten-property prototypes 46.91 / 201.67 / 46.45.
+All seven memory programs are within 1.017 of pre-S2 RSS. Whole-process
+reparent time 2.465 → 0.078 s; cascade 1 0.692 → 0.070 s; cascade 2
+0.415 → 0.087 s; 6000-deep setPrototypeOf construction 11.772 → 1.231 s.
+The inherited-write case is 0.458 → 0.491 s (1.072), with its deferred guard
+still in cold metadata. Final correction publishes that guard into the direct
+layout field once at cache admission; no eager root is added to creation.
+It applies to all ordinary/Map/Set receivers. Array/function empty authorities
+already have their final root and retain their allocation-free probe path.
+A focused test preserves an issued guard through publication and retires it on
+reparenting. This correction requires a new full qualification and measurement.

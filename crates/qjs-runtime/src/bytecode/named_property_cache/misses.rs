@@ -1,6 +1,7 @@
 //! Cold resolution and bounded cache admission. No miss/update code is inlined
 //! into typed, compact, wide or interpreter dispatch. All hooks stay outside borrows.
 use super::*;
+use crate::value::layout::NamedStore;
 impl CacheData {
     #[cold]
     #[inline(never)]
@@ -65,6 +66,19 @@ impl CacheData {
         let policy = target.policy();
         if !policy.enabled {
             return;
+        }
+        // Ordinary empty receivers defer roots until admission. Publish the
+        // root once so inherited hits use the normal direct layout guard.
+        // Array/function empty authorities already carry their final root.
+        match target {
+            NamedTarget::Object(o) => o.with_named_mut(NamedStore::materialize_layout),
+            NamedTarget::Map(m) => m
+                .object_ref()
+                .with_named_mut(NamedStore::materialize_layout),
+            NamedTarget::Set(s) => s
+                .object_ref()
+                .with_named_mut(NamedStore::materialize_layout),
+            _ => {}
         }
         let Some(version) = target.version() else {
             return;

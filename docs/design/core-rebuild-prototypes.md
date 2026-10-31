@@ -8,6 +8,8 @@ guard root. Empty ordinary objects retain only an inline prototype edge and a
 shared neutral seed until a guard is issued or a named property is added. A
 neutral seed never validates a prototype-sensitive guard. Existing roots are
 reused at construction; newly demanded roots share the empty descriptor buffer.
+IC admission publishes an ordinary receiver's deferred root into its direct
+layout field once, preserving an already-issued guard identity.
 Array/function empty seeds retain their compact shared edge representation.
 
 A dependency request installs only the required ancestor path, iteratively.
