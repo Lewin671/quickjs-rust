@@ -260,9 +260,18 @@ impl Prototype {
         self.chain_contains((2, target.address()))
     }
 
+    pub(crate) fn would_cycle_function(&self, target: &Function) -> bool {
+        self.chain_contains((3, target.address()))
+    }
+
+    /// Brent's checkpoint detects even a host-created malformed cycle with
+    /// constant storage. Ordinary JS chains are acyclic; proxies terminate
+    /// this pure walk without invoking traps.
     fn chain_contains(&self, target: (u8, usize)) -> bool {
-        let mut seen = std::collections::HashSet::new();
         let mut next = Some(self.clone());
+        let mut checkpoint = None;
+        let mut power = 1usize;
+        let mut span = 0usize;
         while let Some(prototype) = next {
             let identity = match &prototype {
                 Self::Map(m) => (1, m.object_ref().address()),
@@ -272,9 +281,15 @@ impl Prototype {
             if identity == target {
                 return true;
             }
-            if !seen.insert(identity) {
+            if checkpoint == Some(identity) {
                 return false;
             }
+            if span == power {
+                checkpoint = Some(identity);
+                power = power.saturating_mul(2);
+                span = 0;
+            }
+            span += 1;
             next = match prototype {
                 Self::Object(o) => o.prototype_slot(),
                 Self::Array(a) => a.effective_prototype_slot(),

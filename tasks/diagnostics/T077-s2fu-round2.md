@@ -1,7 +1,7 @@
 # T077 S2 follow-up, lead feedback round 2
 
 - Status: active; checked clean branch at `3c6bec4e`; executing A, then B, C, D.
-- Implementation: A/B present: direct guards/private-layout epochs, 80-byte bound nodes, shared tiny metadata and transient write paths; C/D pending.
+- Implementation: A/B/C present, including both allocation-free cycle checks; D comment and final qualification pending.
 - Verified at: A increment on `3c6bec4e` passes 2,507 runtime tests and the fast gate, including 65 selected Test262 cases; iMac lane measurements pending.
 - Evidence: this record; lead jobs `20261031T083411Z-t077-s2fu-public86` and `20261031T083411Z-t077-s2fu-rss15`.
 - Unresolved: all round-2 acceptance gates.
@@ -114,3 +114,17 @@ also retained (95.21/110.87 MB). Exact source clarification remains requested.
 All meet <=1.25 in this preliminary check; final native/x86 pairs remain due.
 
 B fast gate passes 2,514 runtime tests and 65 selected Test262 cases; clippy passes. The 80-byte header assertion compiles on the native target.
+
+
+## C implementation target
+
+Use one iterative allocation-free Brent checkpoint walk for object, array and
+function targets. Normalize Map/Set carrier identities as before and stop at a
+Proxy without traps. The function edit is confined to
+`prototype_chain_contains_function_inner`; its existing wrapper's empty Vec
+arguments perform no heap allocation and are unused by the new helper. No
+function/env/call/context representation or behavior is changed. Tests cover
+a host-created cycle, a target reached through mixed object/function edges,
+and the reported 100,000-deep function-target stack-overflow case.
+
+C passes 2,517 runtime tests and its fast gate, including 52 selected function Test262 cases.

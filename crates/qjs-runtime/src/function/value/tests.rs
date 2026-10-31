@@ -331,3 +331,44 @@ fn unrelated_probes_leave_function_defaults_and_lazy_prototype_implicit() {
     assert!(function.auxiliary.lazy_default_prototype.get());
     assert_eq!(function.named_version(), version);
 }
+
+#[test]
+fn function_cycle_check_walks_a_hundred_thousand_object_edges_without_recursion() {
+    use crate::{ObjectRef, Prototype};
+    use std::collections::HashMap;
+    let domain = crate::property::atom::AtomDomain::new();
+    let _owner = crate::value::layout::PropertyOwner::new(domain.clone());
+    let mut head = ObjectRef::new(HashMap::new(), &domain);
+    for _ in 0..100_000 {
+        head = ObjectRef::with_prototype(HashMap::new(), Some(head), &domain);
+    }
+    let f = Function::new_native_in_domain(Some("f"), 0, NativeFunction::MathAbs, false, &domain);
+    assert!(
+        f.set_internal_prototype_slot(Some(Prototype::Object(head)))
+            .is_ok()
+    );
+    assert!(
+        f.set_internal_prototype_slot(Some(Prototype::Function(f.clone())))
+            .is_err()
+    );
+    f.set_internal_prototype_slot(None).unwrap();
+}
+
+#[test]
+fn function_cycle_check_rejects_a_target_reached_through_object_edges() {
+    use crate::{ObjectRef, Prototype};
+    use std::collections::HashMap;
+    let domain = crate::property::atom::AtomDomain::new();
+    let f = Function::new_native_in_domain(Some("f"), 0, NativeFunction::MathAbs, false, &domain);
+    let mut object = ObjectRef::new(HashMap::new(), &domain);
+    object
+        .set_prototype_slot(Some(Prototype::Function(f.clone())))
+        .unwrap();
+    for _ in 0..1000 {
+        object = ObjectRef::with_prototype(HashMap::new(), Some(object), &domain);
+    }
+    assert!(
+        f.set_internal_prototype_slot(Some(Prototype::Object(object)))
+            .is_err()
+    );
+}

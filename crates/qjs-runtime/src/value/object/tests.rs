@@ -444,3 +444,18 @@ fn prototype_cycle_checks_walk_deep_chains_without_recursion() {
     assert!(Prototype::Object(head.clone()).would_cycle(&root));
     assert!(!Prototype::Object(head).would_cycle(&ObjectRef::new(HashMap::new(), &domain)));
 }
+
+#[test]
+fn cycle_walk_terminates_for_host_created_cycles_and_still_finds_targets() {
+    use crate::Prototype;
+    let domain = crate::property::atom::AtomDomain::new();
+    let a = ObjectRef::new(HashMap::new(), &domain);
+    let b = ObjectRef::with_prototype(HashMap::new(), Some(a.clone()), &domain);
+    // Bypass the JS cycle-rejecting API solely to prove walk termination.
+    a.with_named_mut(|s| s.set_prototype(Some(Prototype::Object(b.clone()))));
+    let unrelated = ObjectRef::new(HashMap::new(), &domain);
+    assert!(!Prototype::Object(a.clone()).would_cycle(&unrelated));
+    assert!(Prototype::Object(a.clone()).would_cycle(&b));
+    a.with_named_mut(|s| s.set_prototype(None));
+    b.with_named_mut(|s| s.set_prototype(None));
+}
