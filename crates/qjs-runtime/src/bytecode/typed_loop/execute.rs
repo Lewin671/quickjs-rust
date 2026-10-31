@@ -463,7 +463,7 @@ fn execute<F: LoopFrame>(
                 {
                     continue;
                 }
-                if !set_named(
+                if !set_named_typed_miss(
                     &boxed[object as usize],
                     &program.names[name as usize],
                     &registers[reg(value)].to_value(),
@@ -1367,6 +1367,19 @@ fn set_named_slow(
         return true;
     }
     false
+}
+
+// A numeric-store miss must not inline the boxed-store frame into its arm.
+#[cold]
+#[inline(never)]
+fn set_named_typed_miss(
+    receiver: &Value,
+    name: &Rc<str>,
+    value: &Value,
+    shapes: &mut super::ShapeWays,
+    env: &crate::CallEnv,
+) -> bool {
+    set_named(receiver, name, value, shapes, env)
 }
 
 /// Reads `receiver[key]` for a boxed key, discriminating on what the receiver

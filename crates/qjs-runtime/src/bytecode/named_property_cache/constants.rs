@@ -32,7 +32,7 @@ impl ConstantValue {
             ),
         }
     }
-    #[inline]
+    #[inline(never)]
     fn load(&self) -> Option<Value> {
         Some(match self {
             Self::Number(n) => Value::Number(*n),
@@ -74,7 +74,7 @@ impl Constant {
             })
         })?
     }
-    #[inline]
+    #[inline(never)]
     pub(super) fn data(&self) -> Option<Value> {
         match self {
             Self::Data(value) => value.load(),

@@ -84,3 +84,35 @@ The step1/2 strict order audit can report stale mangled symbols after new method
 and outlining. After step3 source freezes, regenerate x86 with the same default
 external/sentinel/broad set and existing pins, leaving arm64 untouched and doing
 no offset/address search; final triage uses that committed order.
+
+
+Step2 public86 job 20261031T022131Z-t077-s2-r4-step2-public86 completes healthy
+(430 valid, zero invalid/heavy): wall/instructions development .971709/.959209,
+external 1.031199/1.014235, broad .989974/.981720, sentinel .935974/.934362,
+all86 1.005206/.992482. [Report](T077-s2-r4-step2-public86.json).
+
+X86 paired counts complete at 1352178a and 2c47383a: [before](T077-s2-r4-counters-before.json),
+[after](T077-s2-r4-counters-after-2c47383a.json). Gaussian instructions drop
+7,500,871,478 → 6,602,457,928 (base 6,744,862,640); hot IC attempts
+720,022 → 20, typed-array indexed-name tests 360,001 → 0, ID probes
+1,081,256 → 1,253. X86 allocations base/after are 41,615/43,294; same-input
+arm64 before/after allocations 403,293/43,293 prove 360,000 pair allocations
+removed. Raytrace instructions 502,619,366 → 469,317,059 (base 446,837,039);
+39,139 array-length misses disappear. Residual +5% instructions remain; dense
+write failure counts match base, so the typed dense-write proposal stays deferred.
+No per-function dynamic instruction attribution or qualified hardware CPI/cache
+miss claim is available.
+
+[2c47383a static](T077-s2-r4-static-2c47383a.json) exposes the inlining cost:
+typed VM 3,923, typed Wide 3,945, wide dispatch 6,753. Shared constant-payload
+loads are now explicitly non-inlined, and a numeric-store miss calls a cold
+boxed-store helper. Guards and ordinary hit loads stay inline. This is the final
+cold-boundary correction; no new runtime change follows final public86.
+2c47383a passes the fresh full gate/5,170 curated cases, all 268 NG fixtures in
+three modes, 300+50 differential seeds and 2,542 verified tests on arm64/x86.
+Those are revision-bound results; final corrected source needs its own checks.
+
+Order job 20261031T024025Z-t077-s2-r4-final-x86-order completed for 2c47383a,
+463 ranked symbols, SHA 121c0b31b27164cbbfa6948336507a53e6bb7ab1d18eb518e4be15e98c37d86c.
+It is superseded before final timing by the last cold-boundary correction; no
+performance result used it and no offset/address search occurred.
