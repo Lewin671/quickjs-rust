@@ -33,7 +33,6 @@ impl AppendRecipe {
         store.cold.clear_guard();
         store.values.push(value);
         store.layout = self.after.clone();
-        store.set_epoch(0);
         store.verify_slot(self.slot);
         true
     }

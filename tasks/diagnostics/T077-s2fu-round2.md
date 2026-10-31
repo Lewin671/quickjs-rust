@@ -408,3 +408,15 @@ adds work broadly (lod 1.014941, meriyah 1.006394, captured write 1.028319).
 Remove forced inlining and restore the prior comparison expression, keeping
 only the release seed-check removal and debug cache-admission assertion.
 This isolates the redundant flag test without expanding constructor callers.
+
+
+Non-inlined bound guard `4c6fc5c6`, job
+`20261031T145539Z-t077-s2fu-r2-bound-comparison`, restores the earlier profile
+(lod 0.999281, meriyah 0.998479, JSON parse 1.006059).
+The next isolated repair removes set_epoch(0) after installing AppendRecipe /
+AppendBatchRecipe.after. Both plans admit immutable shared layouts, whose epoch
+is already zero; the setter merely repeats a dictionary-mode branch on every
+cached append. The older broad epoch experiment was confounded by root-cache
+retention changes; this retains live-root reuse and changes only the two append
+plan publications. Existing append/invalidation tests cover the shared-version
+and prototype-holder contracts; final hardware measurements still decide A.
