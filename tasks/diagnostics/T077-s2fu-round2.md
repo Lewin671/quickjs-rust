@@ -239,3 +239,15 @@ A final quiet replay remains due. Diagnostic counter replays now choose measured
 internal argv rather than their initial calibration sizes; a focused instruction
 helper retains two N/2N pairs (startup-subtracted for internal cases), without
 making acceptance or wall-time claims.
+
+
+Focused instruction job `20261031T122853Z-t077-s2fu-r2-guard-instructions`
+shows 61039679 essentially equal to rejected 5b2728ef, including captured-write
+1.02833 and dynamic-read 1.06669 (68046c8a is 0.99996 / 1.04584).
+The guard-expression spelling is not the cause. Next migration restores the
+previous version initialization and live-prototype root retention, then sweeps
+retained metadata whose weak prototype is dead. An owner countdown spaces
+sweeps geometrically by live root count, only on new canonical root creation;
+no new work enters own hits or unobserved transient appends. Test stable-root
+reuse after the last receiver dies and bounded dead-binding churn before
+measuring; retain 80-byte nodes and unchanged tiny shared-data/slot invariants.

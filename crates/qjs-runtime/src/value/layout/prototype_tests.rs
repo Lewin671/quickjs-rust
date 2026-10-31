@@ -201,12 +201,47 @@ fn compact_authorities_share_weak_edge_boxes_without_pinning_prototypes() {
     drop(first);
     drop(second);
     drop(third);
-    assert!(!guard.is_alive(), "unused empty bindings are not retained");
+    assert!(guard.is_alive(), "binding remains available for reuse");
     assert!(
         weak.upgrade().is_none(),
         "the root memo must not pin the prototype"
     );
+    for _ in 0..70 {
+        let mut temporary = NamedStore::empty_with_prototype(
+            &domain,
+            Some(Prototype::Object(object(&domain, None))),
+            0x100,
+        );
+        temporary.materialize_layout();
+    }
+    assert!(!guard.is_alive(), "dead prototype bindings are swept");
     assert_eq!(std::mem::size_of::<RefCell<NamedStorage>>(), 32);
+}
+
+#[test]
+fn root_reuse_survives_empty_receiver_churn_without_retaining_dead_bindings() {
+    let domain = AtomDomain::new();
+    let owner = PropertyOwner::new(domain.clone());
+    let parent = object(&domain, None);
+    let make =
+        || NamedStore::empty_with_prototype(&domain, Some(Prototype::Object(parent.clone())), 0);
+    let first = make().version();
+    assert!(first.is_alive());
+    for _ in 0..1000 {
+        let store = NamedStore::empty_with_prototype(
+            &domain,
+            Some(Prototype::Object(object(&domain, None))),
+            0,
+        );
+        store.version();
+    }
+    assert_eq!(
+        first,
+        make().version(),
+        "live prototype keeps its canonical root"
+    );
+    assert!(owner.0.roots.borrow().len() < 100);
+    assert!(owner.retained_nodes() < 100);
 }
 
 #[test]

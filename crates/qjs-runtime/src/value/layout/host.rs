@@ -55,12 +55,11 @@ impl NamedStore {
         accessors: Option<Box<AccessorSlots>>,
     ) -> Self {
         let layout = if layout.dictionary {
-            let copy = layout.copied(true);
-            copy.epoch.set(1);
-            Rc::new(copy)
+            Rc::new(layout.copied(true))
         } else {
             layout
         };
+        let epoch = if layout.dictionary { 1 } else { 0 };
         let prototype = layout.prototype.as_ref().and_then(WeakPrototype::upgrade);
         let store = Self {
             layout,
@@ -68,6 +67,7 @@ impl NamedStore {
             cold: accessors.into(),
             prototype,
         };
+        store.set_epoch(epoch);
         store.verify();
         store
     }

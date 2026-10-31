@@ -1,4 +1,4 @@
-//! Prototype-sensitive root layouts and per-prototype validity generations.
+//! Weak prototype identities, receiver publication and prototype validity generations.
 //! Layouts hold weak identities; only actual receivers own prototype values.
 //! The user graph is weak, uncapped, and invalidation drains it iteratively.
 use super::*;
@@ -15,7 +15,7 @@ pub(crate) enum WeakPrototype {
     Set(crate::value::set::SetWeakRef),
 }
 impl WeakPrototype {
-    fn new(value: &Prototype) -> Self {
+    pub(super) fn new(value: &Prototype) -> Self {
         match value {
             Prototype::Object(o) => Self::Object(o.downgrade()),
             Prototype::Array(a) => Self::Array(a.array_ref().downgrade()),
@@ -208,102 +208,6 @@ impl Layout {
                 == prototype.map(Prototype::identity)
     }
 }
-impl PropertyOwner {
-    fn cached_root(&self, prototype: Option<&Prototype>, flavor: u16) -> Option<Rc<Layout>> {
-        if prototype.is_none() && flavor == 0 {
-            return Some(self.0.root.clone());
-        }
-        let (kind, address) = prototype.map(Prototype::identity).unwrap_or((0, 0));
-        self.0
-            .roots
-            .borrow()
-            .get(&(kind, address, flavor))
-            .and_then(Weak::upgrade)
-    }
-    /// These seeds are never issued as guards, including for null prototypes.
-    fn empty_layout(&self, prototype: Option<&Prototype>, flavor: u16) -> Rc<Layout> {
-        if let Some(root) = self.cached_root(prototype, flavor) {
-            return root;
-        }
-        if prototype.is_none() {
-            return self.root_for(None, flavor);
-        }
-        if let Some(seed) = self.0.seeds.borrow().get(&flavor) {
-            return seed.clone();
-        }
-        let mut seed = self.0.root.copied(false);
-        seed.data = self.0.root.data.clone();
-        seed.flavor = flavor;
-        seed.deferred_seed = true;
-        let seed = Rc::new(seed);
-        self.0.seeds.borrow_mut().insert(flavor, seed.clone());
-        seed
-    }
-    pub(super) fn write_root(&self, prototype: Option<&Prototype>, flavor: u16) -> Rc<Layout> {
-        if let Some(root) = self.cached_root(prototype, flavor) {
-            return root;
-        }
-        let budget = self.0.root.budget.clone();
-        budget.add(size_of::<Layout>());
-        Rc::new(Layout {
-            budget,
-            domain: self.domain().clone(),
-            owner: Rc::downgrade(&self.0),
-            data: self.0.root.data.clone(),
-            len: 0,
-            links: OnceCell::new(),
-            dictionary: false,
-            epoch: std::cell::Cell::new(0),
-            deferred_seed: false,
-            transient: true,
-            edits: 0,
-            prototype: prototype.map(WeakPrototype::new),
-            flavor,
-            capacity_hint: std::cell::Cell::new(0),
-            append_misses: std::cell::Cell::new(0),
-        })
-    }
-
-    pub(super) fn root_for(&self, prototype: Option<&Prototype>, flavor: u16) -> Rc<Layout> {
-        if prototype.is_none() && flavor == 0 {
-            return self.0.root.clone();
-        }
-        let (kind, address) = prototype.map(Prototype::identity).unwrap_or((0, 0));
-        let key = (kind, address, flavor);
-        if let Some(layout) = self.0.roots.borrow().get(&key).and_then(Weak::upgrade) {
-            return layout;
-        }
-        let budget = self.0.root.budget.clone();
-        budget.add(size_of::<Layout>());
-        let root = Rc::new(Layout {
-            budget: budget.clone(),
-            domain: self.domain().clone(),
-            owner: Rc::downgrade(&self.0),
-            data: self.0.root.data.clone(),
-            len: 0,
-            links: OnceCell::new(),
-            dictionary: false,
-            epoch: std::cell::Cell::new(0),
-            deferred_seed: false,
-            transient: false,
-            edits: 0,
-            prototype: prototype.map(WeakPrototype::new),
-            flavor,
-            capacity_hint: std::cell::Cell::new(0),
-            append_misses: std::cell::Cell::new(0),
-        });
-        let mut roots = self.0.roots.borrow_mut();
-        if roots.len() >= 64 && roots.len().is_power_of_two() {
-            roots.retain(|_, r| r.strong_count() > 0);
-        }
-        roots.insert(key, Rc::downgrade(&root));
-        drop(roots);
-        // Empty bindings have no descriptor path worth retaining independently.
-        // Live receivers and retained property transitions keep their root alive;
-        // an owner-only root would retain dead prototype allocations through Weak.
-        root
-    }
-}
 impl NamedStore {
     pub(crate) fn empty_with_prototype(
         domain: &AtomDomain,
@@ -433,6 +337,7 @@ impl NamedStore {
         self.cold.clear_guard();
         if self.is_empty() {
             self.layout = root.clone();
+            self.set_epoch(0);
         } else if self.layout.dictionary {
             let mut next = self.layout.copied(true);
             next.set_root(root.clone());
@@ -451,6 +356,7 @@ impl NamedStore {
             drop(fields);
             drop(keys);
             self.layout = next;
+            self.set_epoch(0);
         }
         self.prototype = prototype.clone();
         if let Some(mode) = mode {

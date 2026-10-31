@@ -32,6 +32,7 @@ mod links;
 use links::LayoutLinks;
 mod lazy;
 mod prototype;
+mod roots;
 mod sequence;
 #[cfg(test)]
 mod sequence_tests;
@@ -125,6 +126,7 @@ pub(crate) struct Layout {
 pub(crate) struct OwnerState {
     root: Rc<Layout>,
     roots: RefCell<crate::value::name_hash::NameMap<(u8, usize, u16), Weak<Layout>>>,
+    roots_until_sweep: std::cell::Cell<usize>,
     seeds: RefCell<crate::value::name_hash::NameMap<u16, Rc<Layout>>>,
     tiny_data:
         RefCell<crate::value::name_hash::NameMap<[u64; 2], Weak<RefCell<storage::LayoutData>>>>,
@@ -175,6 +177,7 @@ impl PropertyOwner {
                 append_misses: std::cell::Cell::new(0),
             }),
             roots: RefCell::default(),
+            roots_until_sweep: std::cell::Cell::new(64),
             seeds: RefCell::default(),
             tiny_data: RefCell::default(),
             retained: RefCell::new(transitions::Retention::default()),

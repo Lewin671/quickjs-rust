@@ -111,9 +111,10 @@ Layouts include prototype identity and semantic hook flavor. Shared guards compa
 weak allocation identity only; dictionary guards additionally compare versions.
 A receiver owns its explicit prototype edge; layouts retain weak identities so
 retained shapes cannot pin JavaScript values or realms. Roots and transition
-trees are canonical per prototype/flavor. Empty roots are weakly cached; live
-receivers or retained property transitions own them, so empty-binding churn does
-not retain dead prototype allocations. Prototype mutation re-roots the layout. Unconditional array/string length hooks
+trees are canonical per prototype/flavor. Root lookup is weak; the bounded
+metadata cache retains reusable roots while their prototype lives. Geometrically
+spaced sweeps on root misses evict dead-prototype metadata, bounding empty-binding
+churn without losing reuse. Prototype mutation re-roots the layout. Unconditional array/string length hooks
 precede IC lookup. The interpreter may evaluate a cell-proven native typed-array
 length getter directly; custom accessors retain the ordinary call path.
 
