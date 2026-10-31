@@ -1,7 +1,7 @@
 # T077 S2 follow-up, lead feedback round 2
 
 - Status: active; A–D implemented, final qualification in progress.
-- Implementation: A–D present, with shared-epoch cleanup at `6bf1055b`; current repair stops retaining otherwise unused empty roots. Generated x86 order at `68046c8a`.
+- Implementation: A–D present, with shared-epoch cleanup at `6bf1055b`; current repair stops retaining otherwise unused empty roots. Current x86 order regenerated from `3c6ce3d7` (job below).
 - Verified at: native full check on `362d1bf0` passes 2,519 runtime tests/5,170 curated cases; all 268 NG fixtures cached/off/verify; eight x86 cycle tests. Preliminary owned-child RSS meets <=1.25. Final exact/performance/resource results pending.
 - Evidence: this record and the named job/artifact receipts below; [round 1](T077-s2-followup.md) is historical.
 - Unresolved: final per-lane instruction/wall limits, exact cached/off with burndown, complete native/x86 resource gates.
@@ -203,3 +203,20 @@ Job `20261031T115955Z-t077-s2fu-r2-epochs-public86` measures the shared-epoch
 cleanup; the empty-root correction needs its own final qualification.
 The partial cached/off exact scans on superseded `68046c8a` were stopped after
 its instruction gate failed; no burndown rows were recorded for partial scans.
+
+
+The shared-epoch and weak-empty-root public86 preflights stop on stale compiler
+alias entries in the previous order (jobs `20261031T115955Z-t077-s2fu-r2-epochs-public86`
+and `20261031T120354Z-t077-s2fu-r2-weak-roots-public86`); neither contains timing.
+Default-set order job `20261031T121128Z-t077-s2fu-r2-weak-roots-order` completes
+from exact runtime `3c6ce3d7`, yielding 468 symbols. Apply this order before the
+next strict audit/public86. The obsolete 68046c8a RSS replay is canceled after
+four development cases; queued pre-relink resource jobs are also canceled.
+Only this owner's jobs are affected, and partial results are not acceptance.
+
+Native quiet three-pair replay at `3c6ce3d7`: mem3 is 5.69 MB versus pre-S2
+6.16 MB; the other mem1..mem7 cases and all new owned-child patterns pass so far.
+All 268 NG fixtures pass cached/off/IC-verify (debug verify uses two workers at
+the original ten-second timeout after the initial parallel-load timeout).
+An inline annotation on tiny/indexed probe dispatch gives no useful native
+instruction reduction and is reverted without committing a runtime change.
