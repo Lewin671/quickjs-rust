@@ -1,10 +1,10 @@
+use crate::function::NativeCaptures;
+use crate::function::PromiseElementCaptures;
 use std::collections::HashMap;
 
 use crate::{ArrayRef, Function, NativeFunction, ObjectRef, RuntimeError, Value, call_function};
 
 use super::{
-    PROMISE_ALL_ALREADY_CALLED, PROMISE_ALL_CAPABILITY_RESOLVE, PROMISE_ALL_INDEX,
-    PROMISE_ALL_REMAINING, PROMISE_ALL_VALUES,
     capability::PromiseCapability,
     perform::{self, ElementHandler},
 };
@@ -49,24 +49,14 @@ impl ElementHandler for AllHandler {
             false,
             _env.realm(),
         );
-        on_fulfilled.insert_native_context(
-            PROMISE_ALL_CAPABILITY_RESOLVE.to_owned(),
-            capability.resolve.clone(),
-        );
-        on_fulfilled
-            .insert_native_context(PROMISE_ALL_INDEX.to_owned(), Value::Number(index as f64));
-        on_fulfilled.insert_native_context(
-            PROMISE_ALL_VALUES.to_owned(),
-            Value::Array(self.values.clone()),
-        );
-        on_fulfilled.insert_native_context(
-            PROMISE_ALL_REMAINING.to_owned(),
-            Value::Object(self.remaining.clone()),
-        );
-        on_fulfilled.insert_native_context(
-            PROMISE_ALL_ALREADY_CALLED.to_owned(),
-            Value::Object(already_called),
-        );
+        on_fulfilled.set_native_captures(NativeCaptures::PromiseElement(PromiseElementCaptures {
+            index,
+            values: self.values.clone(),
+            remaining: self.remaining.clone(),
+            already_called,
+            settle: capability.resolve.clone(),
+            aggregate_error: None,
+        }));
 
         Ok((Value::Function(on_fulfilled), capability.reject.clone()))
     }
@@ -101,42 +91,21 @@ pub(crate) fn native_promise_all_resolve_element(
     if already_called(function) {
         return Ok(Value::Undefined);
     }
-    let index = match function.native_context.get(PROMISE_ALL_INDEX) {
-        Some(Value::Number(index)) if *index >= 0.0 => *index as usize,
-        _ => {
-            return Err(RuntimeError {
-                thrown: None,
-                message: "Promise.all resolve element is missing its index".to_owned(),
-            });
-        }
-    };
-    let values = match function.native_context.get(PROMISE_ALL_VALUES).cloned() {
-        Some(Value::Array(values)) => values,
-        _ => {
-            return Err(RuntimeError {
-                thrown: None,
-                message: "Promise.all resolve element is missing values".to_owned(),
-            });
-        }
-    };
-    let remaining = match function.native_context.get(PROMISE_ALL_REMAINING).cloned() {
-        Some(Value::Object(remaining)) => remaining,
-        _ => {
-            return Err(RuntimeError {
-                thrown: None,
-                message: "Promise.all resolve element is missing remaining count".to_owned(),
-            });
-        }
-    };
+    let captures = function
+        .native_captures()
+        .promise_element()
+        .ok_or_else(|| RuntimeError {
+            thrown: None,
+            message: "Promise.all element is missing its capture payload".into(),
+        })?;
+    let index = captures.index;
+    let values = captures.values.clone();
+    let remaining = captures.remaining.clone();
 
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     values.set(index, value);
     if perform::decrement_remaining(&remaining) == 0.0 {
-        let resolve = function
-            .native_context
-            .get(PROMISE_ALL_CAPABILITY_RESOLVE)
-            .cloned()
-            .unwrap_or(Value::Undefined);
+        let resolve = captures.settle.clone();
         call_function(
             resolve,
             Value::Undefined,
@@ -150,9 +119,10 @@ pub(crate) fn native_promise_all_resolve_element(
 
 /// Reads-and-sets the single-call guard, returning whether it was already set.
 pub(super) fn already_called(function: &Function) -> bool {
-    let Some(Value::Object(cell)) = function.native_context.get(PROMISE_ALL_ALREADY_CALLED) else {
+    let Some(captures) = function.native_captures().promise_element() else {
         return false;
     };
+    let cell = &captures.already_called;
     if cell.own_property("called").is_some() {
         return true;
     }

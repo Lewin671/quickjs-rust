@@ -13,6 +13,7 @@
 //! functions that carry that object plus the result promise in their captured
 //! environment and call back into the driver.
 
+use crate::function::NativeCaptures;
 use std::collections::HashMap;
 
 use crate::CallEnv;
@@ -25,10 +26,6 @@ use crate::{
 /// Intrinsic binding for `%AsyncFunction.prototype%`, the object that sits
 /// between an async function and `%Function.prototype%` in its prototype chain.
 pub(crate) const ASYNC_FUNCTION_PROTOTYPE_BINDING: &str = "\0AsyncFunctionPrototype";
-
-/// Internal slot names carried in an await-reaction native's environment.
-const ASYNC_CONTEXT: &str = "\0AsyncContext";
-const ASYNC_RESULT_PROMISE: &str = "\0AsyncResultPromise";
 
 /// Installs `%AsyncFunction.prototype%`: an ordinary object whose `[[Prototype]]`
 /// is `%Function.prototype%`, carrying the "AsyncFunction" `Symbol.toStringTag`.
@@ -189,11 +186,10 @@ fn await_reaction(
     result_promise: &ObjectRef,
 ) -> Value {
     let mut function = Function::new_native(None, 1, native, false, realm);
-    function.insert_native_context(ASYNC_CONTEXT.to_owned(), Value::Object(context.clone()));
-    function.insert_native_context(
-        ASYNC_RESULT_PROMISE.to_owned(),
-        Value::Object(result_promise.clone()),
-    );
+    function.set_native_captures(NativeCaptures::AsyncFunction {
+        context: context.clone(),
+        result_promise: result_promise.clone(),
+    });
     Value::Function(function)
 }
 
@@ -228,10 +224,11 @@ fn resume_await(
     resume: Resume,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let (Some(Value::Object(context)), Some(Value::Object(result_promise))) = (
-        function.native_context.get(ASYNC_CONTEXT),
-        function.native_context.get(ASYNC_RESULT_PROMISE),
-    ) else {
+    let NativeCaptures::AsyncFunction {
+        context,
+        result_promise,
+    } = function.native_captures()
+    else {
         return Err(RuntimeError {
             thrown: None,
             message: "TypeError: missing async reaction context".to_owned(),

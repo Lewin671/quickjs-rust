@@ -6,7 +6,11 @@ mod env;
 mod install;
 mod intrinsic_construct;
 mod local_names;
+mod native_captures;
 mod native_kind;
+pub(crate) use native_captures::{
+    NativeCaptures, PromiseElementCaptures, PromisePrototypeCaptures,
+};
 mod prototype;
 mod strict;
 mod value;
@@ -71,5 +75,5 @@ pub(crate) use prototype::{
 pub(crate) use strict::is_strict_function_body;
 pub(crate) use value::{
     CompiledUserFunction, Function, FunctionWeakRef, InstanceElementInitializer,
-    InstanceFieldInitializer, InstancePrivateElement, NativeContextData, PrivateFieldInit,
+    InstanceFieldInitializer, InstancePrivateElement, PrivateFieldInit,
 };

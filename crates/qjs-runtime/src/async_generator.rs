@@ -15,6 +15,7 @@
 //! `{ value, done: true }`; an exception rejects the pending request and
 //! completes the generator.
 
+use crate::function::NativeCaptures;
 use std::collections::HashMap;
 
 use crate::CallEnv;
@@ -38,18 +39,6 @@ pub(crate) const ASYNC_ITERATOR_PROTOTYPE_BINDING: &str = "\0AsyncIteratorProtot
 /// Intrinsic binding for `%AsyncGeneratorPrototype%`, the object async generator
 /// instances inherit from.
 pub(crate) const ASYNC_GENERATOR_PROTOTYPE_BINDING: &str = "\0AsyncGeneratorPrototype";
-
-/// Internal slot names carried in a reaction native's environment.
-const ASYNC_GEN: &str = "\0AsyncGenObject";
-/// The sync iterator wrapped by a CreateAsyncFromSyncIterator object.
-const SYNC_ITERATOR: &str = "\0SyncIterator";
-const SYNC_ITERATOR_NEXT: &str = "\0SyncIteratorNext";
-/// The wrapper promise capability and the `done` flag for an async-from-sync
-/// value await reaction.
-const WRAP_PROMISE: &str = "\0WrapPromise";
-const WRAP_DONE: &str = "\0WrapDone";
-const WRAP_SYNC_ITERATOR: &str = "\0WrapSyncIterator";
-const WRAP_CLOSE_ON_REJECTION: &str = "\0WrapCloseOnRejection";
 
 /// How a pending async-generator request was requested.
 #[derive(Clone)]
@@ -615,7 +604,7 @@ fn reaction(
     generator: &ObjectRef,
 ) -> Value {
     let mut function = Function::new_native(None, 1, native, false, realm);
-    function.insert_native_context(ASYNC_GEN.to_owned(), Value::Object(generator.clone()));
+    function.set_native_captures(NativeCaptures::AsyncGenerator(generator.clone()));
     Value::Function(function)
 }
 
@@ -626,7 +615,7 @@ pub(crate) fn async_generator_await_fulfilled(
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     {
-        let Some(Value::Object(generator)) = info.callee.native_context.get(ASYNC_GEN) else {
+        let NativeCaptures::AsyncGenerator(generator) = info.callee.native_captures() else {
             return Err(RuntimeError {
                 thrown: None,
                 message: "TypeError: missing async generator reaction context".to_owned(),
@@ -646,7 +635,7 @@ pub(crate) fn async_generator_await_rejected(
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     {
-        let Some(Value::Object(generator)) = info.callee.native_context.get(ASYNC_GEN) else {
+        let NativeCaptures::AsyncGenerator(generator) = info.callee.native_captures() else {
             return Err(RuntimeError {
                 thrown: None,
                 message: "TypeError: missing async generator reaction context".to_owned(),
@@ -666,7 +655,7 @@ pub(crate) fn async_generator_yield_fulfilled(
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     {
-        let Some(Value::Object(generator)) = info.callee.native_context.get(ASYNC_GEN) else {
+        let NativeCaptures::AsyncGenerator(generator) = info.callee.native_captures() else {
             return Err(RuntimeError {
                 thrown: None,
                 message: "TypeError: missing async generator reaction context".to_owned(),
@@ -689,7 +678,7 @@ pub(crate) fn async_generator_yield_rejected(
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     {
-        let Some(Value::Object(generator)) = info.callee.native_context.get(ASYNC_GEN) else {
+        let NativeCaptures::AsyncGenerator(generator) = info.callee.native_captures() else {
             return Err(RuntimeError {
                 thrown: None,
                 message: "TypeError: missing async generator reaction context".to_owned(),
@@ -709,7 +698,7 @@ pub(crate) fn async_generator_return_resume_fulfilled(
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     {
-        let Some(Value::Object(generator)) = info.callee.native_context.get(ASYNC_GEN) else {
+        let NativeCaptures::AsyncGenerator(generator) = info.callee.native_captures() else {
             return Err(RuntimeError {
                 thrown: None,
                 message: "TypeError: missing async generator reaction context".to_owned(),
@@ -728,7 +717,7 @@ pub(crate) fn async_generator_return_resume_rejected(
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     {
-        let Some(Value::Object(generator)) = info.callee.native_context.get(ASYNC_GEN) else {
+        let NativeCaptures::AsyncGenerator(generator) = info.callee.native_captures() else {
             return Err(RuntimeError {
                 thrown: None,
                 message: "TypeError: missing async generator reaction context".to_owned(),
@@ -747,7 +736,7 @@ pub(crate) fn async_generator_return_fulfilled(
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     {
-        let Some(Value::Object(generator)) = info.callee.native_context.get(ASYNC_GEN) else {
+        let NativeCaptures::AsyncGenerator(generator) = info.callee.native_captures() else {
             return Err(RuntimeError {
                 thrown: None,
                 message: "TypeError: missing async generator reaction context".to_owned(),
@@ -768,7 +757,7 @@ pub(crate) fn async_generator_return_rejected(
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     {
-        let Some(Value::Object(generator)) = info.callee.native_context.get(ASYNC_GEN) else {
+        let NativeCaptures::AsyncGenerator(generator) = info.callee.native_captures() else {
             return Err(RuntimeError {
                 thrown: None,
                 message: "TypeError: missing async generator reaction context".to_owned(),
@@ -988,10 +977,10 @@ pub(crate) fn create_async_from_sync_iterator(
         ("throw", NativeFunction::AsyncFromSyncIteratorThrow),
     ] {
         let mut method = Function::new_native(Some(name), 1, native, false, env.realm());
-        method.insert_native_context(SYNC_ITERATOR.to_owned(), sync_iterator.clone());
-        if matches!(native, NativeFunction::AsyncFromSyncIteratorNext) {
-            method.insert_native_context(SYNC_ITERATOR_NEXT.to_owned(), next.clone());
-        }
+        method.set_native_captures(NativeCaptures::AsyncFromSync {
+            iterator: sync_iterator.clone(),
+            next: matches!(native, NativeFunction::AsyncFromSyncIteratorNext).then(|| next.clone()),
+        });
         wrapper.define_non_enumerable(name.to_owned(), Value::Function(method));
     }
     Ok(Value::Object(wrapper))
@@ -1047,11 +1036,17 @@ fn async_from_sync_method(
 ) -> Value {
     let argument = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let capability = promise::new_pending_promise(env);
-    let Some(sync_iterator) = function.native_context.get(SYNC_ITERATOR).cloned() else {
+    let NativeCaptures::AsyncFromSync {
+        iterator: sync_iterator,
+        next,
+    } = function.native_captures()
+    else {
         let reason = not_an_async_generator_value(env);
         promise::reject_promise_capability(&capability, reason, env);
         return Value::Object(capability);
     };
+
+    let sync_iterator = sync_iterator.clone();
 
     let method_name = match native {
         NativeFunction::AsyncFromSyncIteratorNext => "next",
@@ -1061,11 +1056,7 @@ fn async_from_sync_method(
     };
 
     let method = if matches!(native, NativeFunction::AsyncFromSyncIteratorNext) {
-        function
-            .native_context
-            .get(SYNC_ITERATOR_NEXT)
-            .cloned()
-            .unwrap_or(Value::Undefined)
+        next.clone().unwrap_or(Value::Undefined)
     } else {
         match property_value(sync_iterator.clone(), method_name, env) {
             Ok(method) => method,
@@ -1213,37 +1204,37 @@ fn value_await_reaction(
     close_sync: Option<&Value>,
 ) -> Value {
     let mut function = Function::new_native(None, 1, native, false, realm);
-    function.insert_native_context(WRAP_PROMISE.to_owned(), Value::Object(capability.clone()));
-    function.insert_native_context(WRAP_DONE.to_owned(), Value::Boolean(done));
-    if let Some(sync_iterator) = close_sync {
-        function.insert_native_context(WRAP_SYNC_ITERATOR.to_owned(), sync_iterator.clone());
-        function.insert_native_context(WRAP_CLOSE_ON_REJECTION.to_owned(), Value::Boolean(true));
-    }
+    function.set_native_captures(NativeCaptures::AsyncFromSyncValue {
+        capability: capability.clone(),
+        done,
+        close_iterator: close_sync.cloned(),
+    });
     Value::Function(function)
 }
 
 fn async_from_sync_value_rejected(function: &Function, reason: Value, env: &mut CallEnv) {
-    let Some(Value::Object(capability)) = function.native_context.get(WRAP_PROMISE) else {
+    let NativeCaptures::AsyncFromSyncValue {
+        capability,
+        close_iterator,
+        ..
+    } = function.native_captures()
+    else {
         return;
     };
     let capability = capability.clone();
     // When the awaited value rejects under closeOnRejection, close the sync
     // iterator before rejecting; the original rejection reason is preserved.
-    if matches!(
-        function.native_context.get(WRAP_CLOSE_ON_REJECTION),
-        Some(Value::Boolean(true))
-    ) && let Some(sync_iterator) = function.native_context.get(WRAP_SYNC_ITERATOR).cloned()
-    {
-        let _ = close_sync_iterator(&sync_iterator, env);
+    if let Some(sync_iterator) = close_iterator {
+        let _ = close_sync_iterator(sync_iterator, env);
     }
     promise::reject_promise_capability(&capability, reason, env);
 }
 
 fn async_from_sync_value_fulfilled(function: &Function, value: Value, env: &mut CallEnv) {
-    let (Some(Value::Object(capability)), Some(Value::Boolean(done))) = (
-        function.native_context.get(WRAP_PROMISE),
-        function.native_context.get(WRAP_DONE),
-    ) else {
+    let NativeCaptures::AsyncFromSyncValue {
+        capability, done, ..
+    } = function.native_captures()
+    else {
         return;
     };
     let capability = capability.clone();

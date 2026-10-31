@@ -704,3 +704,30 @@ A feature-counter test checks internal rejection conversion retains prototype,
 message and ErrorData with zero CallEnv construction/clone events. All **2,644
 agents/perf-counters tests**, **293 serial NG scripts**, and the staged gate
 (**2,593 default tests + 117 Test262 cases**) pass. Final S3b remains open.
+
+
+## B4e3 typed native closure payloads
+
+Over `6bda819b`, NativeCaptures replaces NativeContext's string/value HashMap.
+Promise capability/resolution/finally/element reactions, async function/generator
+continuations, async-from-sync wrappers, Array.fromAsync reactions and RegExp
+getters retain concrete product variants. Indices are usize, done is bool,
+arrays/state/guards are typed handles; JS callback/value fields remain Value.
+Shared guards and retained object identities are unchanged. No payload retains
+an execution facade. Captures are installed only while Function identity is
+unique, then retained immutably through that identity.
+
+Plain natives have None and allocate no capture payload or shared empty context.
+The obsolete per-domain weak empty NativeContext attachment, map insertion/COW
+and map access APIs are deleted; property domain comes from creation ownership.
+The payload allocation counter counts actual Rc::new sites, independently from
+function creation or old CallEnv construction. Existing lifetime/header tests
+now enforce absent empty payloads and unchanged domain lifetime. A counter test
+separately verifies zero empty allocation, one real payload and its retained value.
+
+All **2,646 agents/perf-counters runtime tests** and **294 serial NG scripts**
+pass. The new fixture checks duplicate-call guards and indexed values through
+Promise.all/allSettled/any with a generic synchronous constructor. Source audit
+finds zero NativeContext/native_context/insert_native_context references under
+runtime src. The staged gate passes **2,594 default tests + 52 Test262 cases**;
+the atomic Context ABI cut remains.

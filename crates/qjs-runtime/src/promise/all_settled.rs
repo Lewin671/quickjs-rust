@@ -1,3 +1,5 @@
+use crate::function::NativeCaptures;
+use crate::function::PromiseElementCaptures;
 use std::collections::HashMap;
 
 use crate::{
@@ -5,8 +7,7 @@ use crate::{
 };
 
 use super::{
-    PROMISE_ALL_ALREADY_CALLED, PROMISE_ALL_CAPABILITY_RESOLVE, PROMISE_ALL_INDEX,
-    PROMISE_ALL_REMAINING, PROMISE_ALL_VALUES, PROMISE_FULFILLED, PROMISE_REJECTED,
+    PROMISE_FULFILLED, PROMISE_REJECTED,
     all::already_called,
     capability::PromiseCapability,
     perform::{self, ElementHandler},
@@ -111,20 +112,14 @@ fn element_function(
     capability: &PromiseCapability,
 ) -> Function {
     let mut function = Function::new_native(None, 1, native, false, realm);
-    function.insert_native_context(PROMISE_ALL_INDEX.to_owned(), Value::Number(index as f64));
-    function.insert_native_context(PROMISE_ALL_VALUES.to_owned(), Value::Array(values.clone()));
-    function.insert_native_context(
-        PROMISE_ALL_REMAINING.to_owned(),
-        Value::Object(remaining.clone()),
-    );
-    function.insert_native_context(
-        PROMISE_ALL_ALREADY_CALLED.to_owned(),
-        Value::Object(already_called.clone()),
-    );
-    function.insert_native_context(
-        PROMISE_ALL_CAPABILITY_RESOLVE.to_owned(),
-        capability.resolve.clone(),
-    );
+    function.set_native_captures(NativeCaptures::PromiseElement(PromiseElementCaptures {
+        index,
+        values: values.clone(),
+        remaining: remaining.clone(),
+        already_called: already_called.clone(),
+        settle: capability.resolve.clone(),
+        aggregate_error: None,
+    }));
     function
 }
 
@@ -137,42 +132,21 @@ fn settle_element(
     if already_called(function) {
         return Ok(Value::Undefined);
     }
-    let index = match function.native_context.get(PROMISE_ALL_INDEX) {
-        Some(Value::Number(index)) if *index >= 0.0 => *index as usize,
-        _ => {
-            return Err(RuntimeError {
-                thrown: None,
-                message: "Promise.allSettled element is missing its index".to_owned(),
-            });
-        }
-    };
-    let values = match function.native_context.get(PROMISE_ALL_VALUES).cloned() {
-        Some(Value::Array(values)) => values,
-        _ => {
-            return Err(RuntimeError {
-                thrown: None,
-                message: "Promise.allSettled element is missing values".to_owned(),
-            });
-        }
-    };
-    let remaining = match function.native_context.get(PROMISE_ALL_REMAINING).cloned() {
-        Some(Value::Object(remaining)) => remaining,
-        _ => {
-            return Err(RuntimeError {
-                thrown: None,
-                message: "Promise.allSettled element is missing remaining count".to_owned(),
-            });
-        }
-    };
+    let captures = function
+        .native_captures()
+        .promise_element()
+        .ok_or_else(|| RuntimeError {
+            thrown: None,
+            message: "Promise.allSettled element is missing its capture payload".into(),
+        })?;
+    let index = captures.index;
+    let values = captures.values.clone();
+    let remaining = captures.remaining.clone();
 
     let settled_value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     values.set(index, settled_result_object(state, settled_value, env));
     if perform::decrement_remaining(&remaining) == 0.0 {
-        let resolve = function
-            .native_context
-            .get(PROMISE_ALL_CAPABILITY_RESOLVE)
-            .cloned()
-            .unwrap_or(Value::Undefined);
+        let resolve = captures.settle.clone();
         call_function(
             resolve,
             Value::Undefined,

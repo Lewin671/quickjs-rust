@@ -81,6 +81,8 @@ declare_counters! {
     /// Always zero: no counting site exists, because no call routes through
     /// the frame-stack driver (`bytecode/frame_stack.rs`).
     same_vm_frame_entries,
+    /// Rc allocations for nonempty typed native closure payloads.
+    native_capture_payload_allocations,
     /// Actual construction of the temporary owned CallEnv, excluding Clone.
     /// Retained at zero after the borrowed Context migration.
     call_env_constructions,

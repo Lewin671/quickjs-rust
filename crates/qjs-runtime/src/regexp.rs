@@ -1,3 +1,4 @@
+use crate::function::NativeCaptures;
 use std::collections::HashMap;
 
 use crate::JsString;
@@ -209,10 +210,7 @@ fn define_regexp_accessor(
     native: NativeFunction,
 ) {
     let mut getter = Function::new_native(Some(&format!("get {name}")), 0, native, false, realm);
-    getter.insert_native_context(
-        REGEXP_PROTOTYPE_BINDING.to_owned(),
-        Value::Object(prototype.clone()),
-    );
+    getter.set_native_captures(NativeCaptures::RegExpPrototype(prototype.clone()));
     prototype.define_property(
         name.to_owned(),
         Property::accessor(Some(Value::Function(getter)), None, false, true),
@@ -670,7 +668,7 @@ fn is_regexp_prototype_value_for_accessor(
     let Value::Object(object) = value else {
         return false;
     };
-    if let Some(Value::Object(prototype)) = function.native_context.get(REGEXP_PROTOTYPE_BINDING) {
+    if let NativeCaptures::RegExpPrototype(prototype) = function.native_captures() {
         return object.ptr_eq(prototype);
     }
     is_regexp_prototype_value(value, env)

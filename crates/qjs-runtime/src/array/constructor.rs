@@ -1,3 +1,4 @@
+use crate::function::NativeCaptures;
 use std::collections::HashMap;
 
 use crate::{
@@ -645,18 +646,13 @@ fn array_from_async_reaction(
     state: &ObjectRef,
 ) -> Value {
     let mut function = Function::new_native(None, 1, native, false, realm);
-    function.insert_native_context(
-        ARRAY_FROM_ASYNC_STATE.to_owned(),
-        Value::Object(state.clone()),
-    );
+    function.set_native_captures(NativeCaptures::ArrayFromAsync(state.clone()));
     Value::Function(function)
 }
 
-const ARRAY_FROM_ASYNC_STATE: &str = "\0ArrayFromAsyncState";
-
 fn array_from_async_state(function: &Function) -> Result<ObjectRef, RuntimeError> {
-    match function.native_context.get(ARRAY_FROM_ASYNC_STATE) {
-        Some(Value::Object(state)) => Ok(state.clone()),
+    match function.native_captures() {
+        NativeCaptures::ArrayFromAsync(state) => Ok(state.clone()),
         _ => Err(RuntimeError {
             thrown: None,
             message: "TypeError: Array.fromAsync reaction state is missing".to_owned(),

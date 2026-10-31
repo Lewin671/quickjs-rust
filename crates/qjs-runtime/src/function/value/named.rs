@@ -51,7 +51,7 @@ impl Function {
             ) << 3)
     }
     pub(super) fn initialize_named(&self) {
-        if self.realm().is_none() && self.native_context.0.is_none() {
+        if self.realm().is_none() {
             return;
         }
         let prototype = self.creation.as_ref().and_then(|creation| {

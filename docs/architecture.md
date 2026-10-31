@@ -135,7 +135,7 @@ share recyclable IDs; live leases prevent reuse. Domain indices are weak.
 **Creation inputs.** Realm-aware constructors receive stable intrinsic prototypes;
 low-level builders receive explicit prototype/domain inputs, including null.
 Realm roots own PropertyOwner outside the domain; layouts retain the domain.
-Native functions share empty native state per domain and copy it on mutation.
+Native closures use typed payloads; plain natives have none (`function/native_captures.rs`).
 
 **Per-site caches.** `bytecode/named_property_cache.rs` caches named property
 reads and writes per instruction site, keyed by receiver layout.

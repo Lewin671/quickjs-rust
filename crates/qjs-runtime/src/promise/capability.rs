@@ -7,6 +7,7 @@
 //! where `executor` is a fresh GetCapabilitiesExecutor function that records the
 //! resolve/reject arguments it is called with.
 
+use crate::function::NativeCaptures;
 use std::collections::HashMap;
 
 use crate::{
@@ -19,7 +20,6 @@ use crate::CallEnv;
 
 /// Internal slot on a GetCapabilitiesExecutor holding the shared capability
 /// record it writes `resolve`/`reject` into.
-const CAPABILITY_RECORD: &str = "\0PromiseCapabilityRecord";
 const CAPABILITY_RESOLVE: &str = "resolve";
 const CAPABILITY_REJECT: &str = "reject";
 
@@ -67,7 +67,7 @@ pub(crate) fn new_promise_capability(
         false,
         env.realm(),
     );
-    executor.insert_native_context(CAPABILITY_RECORD.to_owned(), Value::Object(record.clone()));
+    executor.set_native_captures(NativeCaptures::PromiseCapability(record.clone()));
 
     let promise = construct_function(c.clone(), c.clone(), vec![Value::Function(executor)], env)?;
 
@@ -100,8 +100,7 @@ pub(crate) fn native_get_capabilities_executor(
     argument_values: &[Value],
     _env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let Some(Value::Object(record)) = function.native_context.get(CAPABILITY_RECORD).cloned()
-    else {
+    let NativeCaptures::PromiseCapability(record) = function.native_captures() else {
         return Err(RuntimeError {
             thrown: None,
             message: "Promise capability executor is missing its record".to_owned(),

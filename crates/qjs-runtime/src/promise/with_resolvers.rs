@@ -1,6 +1,6 @@
 use crate::{Function, ObjectRef, RuntimeError, Value};
 
-use super::{PROMISE_OBJECT_PROTOTYPE, capability::new_promise_capability};
+use super::capability::new_promise_capability;
 use crate::CallEnv;
 
 /// `Promise.withResolvers` (ES2024 27.2.4.8): builds a capability from the
@@ -24,12 +24,8 @@ pub(crate) fn native_promise_with_resolvers(
 }
 
 fn object_prototype(function: &Function) -> Option<ObjectRef> {
-    match function
-        .native_context
-        .get(PROMISE_OBJECT_PROTOTYPE)
-        .cloned()
-    {
-        Some(Value::Object(prototype)) => Some(prototype),
-        _ => None,
-    }
+    function
+        .native_captures()
+        .promise_prototypes()
+        .and_then(|captures| captures.object.clone())
 }

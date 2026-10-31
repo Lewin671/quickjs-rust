@@ -177,7 +177,7 @@ pub struct FunctionData {
     /// reactions, async helpers, RegExp accessors, ...). User bytecode functions
     /// keep this empty: lexical captures live in indexed [`BindingCell`] cells and
     /// globals live in the shared `realm` cell below.
-    pub(crate) native_context: NativeContext,
+    native_captures: Option<Rc<crate::function::NativeCaptures>>,
     /// Stable creation realm for bytecode and native functions; intrinsic
     /// prototypes never resolve through mutable global constructor bindings.
     pub(crate) creation: Option<Rc<crate::context::CreationContext>>,
@@ -290,72 +290,6 @@ struct FunctionColdState {
     private_state: crate::private::PrivateState,
 }
 
-/// Lazily allocated state captured by native closure-like functions.
-///
-/// User bytecode functions use their creation realm and keep this absent.
-/// Native functions share one empty context per domain through a weak attachment;
-/// the HashMap allocates buckets only on insertion and mutations copy on write. Native
-/// capture COW never detaches function identity or the property domain.
-#[derive(Clone, Default)]
-pub(crate) struct NativeContext(Option<Rc<NativeContextData>>);
-
-#[derive(Clone)]
-pub(crate) struct NativeContextData {
-    bindings: HashMap<String, Value>,
-    domain: crate::property::atom::AtomDomain,
-}
-
-impl NativeContext {
-    fn from_map(
-        map: HashMap<String, Value>,
-        domain: Option<&crate::property::atom::AtomDomain>,
-    ) -> Self {
-        match domain {
-            Some(domain) => {
-                if map.is_empty() {
-                    if let Some(context) = domain.empty_native_context().borrow().upgrade() {
-                        return Self(Some(context));
-                    }
-                    let context = Rc::new(NativeContextData {
-                        bindings: map,
-                        domain: domain.clone(),
-                    });
-                    *domain.empty_native_context().borrow_mut() = Rc::downgrade(&context);
-                    Self(Some(context))
-                } else {
-                    Self(Some(Rc::new(NativeContextData {
-                        bindings: map,
-                        domain: domain.clone(),
-                    })))
-                }
-            }
-            None => {
-                debug_assert!(map.is_empty());
-                Self::default()
-            }
-        }
-    }
-
-    pub(crate) fn get(&self, key: &str) -> Option<&Value> {
-        self.0
-            .as_deref()
-            .and_then(|context| context.bindings.get(key))
-    }
-
-    fn insert(&mut self, key: String, value: Value) {
-        let context = self
-            .0
-            .as_mut()
-            .expect("native captures require an explicit domain");
-        Rc::make_mut(context).bindings.insert(key, value);
-    }
-
-    #[cfg(test)]
-    fn is_allocated(&self) -> bool {
-        self.0.is_some()
-    }
-}
-
 impl FunctionAuxiliaryState {
     fn new(home_object: Option<Value>, super_constructor: Option<Value>) -> Self {
         let cold = (home_object.is_some() || super_constructor.is_some())
@@ -458,13 +392,16 @@ impl fmt::Debug for Function {
 }
 
 impl Function {
-    /// Inserts a binding into the function's creation environment. Used to seed
-    /// a freshly created native reaction's captured state; `Rc::make_mut` is
-    /// cheap here because the `Rc` is uniquely held immediately after creation.
-    pub(crate) fn insert_native_context(&mut self, key: String, value: Value) {
-        let data = Rc::get_mut(&mut self.0)
-            .expect("native context must be populated before sharing the function");
-        data.native_context.insert(key, value);
+    pub(crate) fn native_captures(&self) -> &crate::function::NativeCaptures {
+        self.native_captures
+            .as_deref()
+            .unwrap_or(&crate::function::NativeCaptures::None)
+    }
+    pub(crate) fn set_native_captures(&mut self, captures: crate::function::NativeCaptures) {
+        let data =
+            Rc::get_mut(&mut self.0).expect("capture payload is installed before function sharing");
+        crate::diagnostics::count!(native_capture_payload_allocations);
+        data.native_captures = Some(Rc::new(captures));
     }
 
     /// Adds an indexed capture while constructing a fresh internal native
@@ -546,7 +483,7 @@ impl Function {
             has_name_binding,
             name,
             params,
-            native_context: NativeContext::default(),
+            native_captures: None,
             creation: Some(creation),
             has_dynamic_function_realm,
             has_dynamic_function_realm_override: Cell::new(false),
@@ -627,7 +564,6 @@ impl Function {
         Self::new(
             name.map(str::to_owned),
             vec![String::new(); length],
-            HashMap::new(),
             Some(native),
             constructable,
             Some(realm.atoms()),
@@ -665,7 +601,6 @@ impl Function {
         Self::new(
             name.map(str::to_owned),
             vec![String::new(); length],
-            HashMap::new(),
             Some(native),
             constructable,
             Some(domain),
@@ -681,7 +616,6 @@ impl Function {
         Self::new(
             Some("\0\0uninitialized_lexical".to_owned()),
             Vec::new(),
-            HashMap::new(),
             Some(NativeFunction::UninitializedLexical),
             false,
             None,
@@ -693,12 +627,7 @@ impl Function {
         if let Some(realm) = self.realm() {
             return realm.atoms();
         }
-        &self
-            .native_context
-            .0
-            .as_ref()
-            .expect("TDZ sentinel has no property domain")
-            .domain
+        panic!("TDZ sentinel has no property domain")
     }
 
     pub(crate) fn downgrade(&self) -> FunctionWeakRef {
@@ -718,7 +647,7 @@ impl Function {
         this_value: Value,
         arguments: Vec<Value>,
         length: usize,
-        domain: &crate::property::atom::AtomDomain,
+        _domain: &crate::property::atom::AtomDomain,
     ) -> Self {
         let constructable = match &target {
             Value::Function(function) => function.constructable,
@@ -730,7 +659,7 @@ impl Function {
             name: Some(name),
             has_name_binding: false,
             params: Rc::new(FunctionParams::positional(vec![String::new(); length])),
-            native_context: NativeContext::from_map(HashMap::new(), Some(domain)),
+            native_captures: None,
             creation: callable_creation(&target),
             has_dynamic_function_realm: match &target {
                 Value::Function(function) => function.has_dynamic_function_realm,
@@ -775,7 +704,6 @@ impl Function {
     fn new(
         name: Option<String>,
         params: Vec<String>,
-        env: HashMap<String, Value>,
         native: Option<NativeFunction>,
         constructable: bool,
         domain: Option<&crate::property::atom::AtomDomain>,
@@ -792,7 +720,7 @@ impl Function {
             has_name_binding: false,
             name,
             params: Rc::new(FunctionParams::positional(params)),
-            native_context: NativeContext::from_map(env, domain),
+            native_captures: None,
             creation: creation_realm.map(crate::context::CreationContext::root),
             has_dynamic_function_realm: false,
             has_dynamic_function_realm_override: Cell::new(false),
