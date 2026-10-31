@@ -1011,3 +1011,22 @@ iMac at source `4f6c0444`, job `20261031T232541Z-t077-s3b-merged-order`: 76 case
 binary/producer/order hashes and the exact command. No development/held-out
 profiling or layout offset search is added. The final x86 timing binary must be
 rebuilt with this order. Baseline for every new comparison is `3cc12c6f`.
+
+
+## Owner checks at the merged/order-regenerated freeze
+
+Runtime **`73c93d8f`**, baseline **`3cc12c6f`**. The [owner check receipt](T077-s3b-owner-73c/README.md) records complete two-run development maps, metadata,
+all depth traces/landmarks, module matrix and deletion audit. The full gate passes
+at this source (5,171 curated cases), 2,636 default/2,691 feature runtime tests,
+299 NG scripts in each default/off/verify/force/poison/combined mode and all module
+comparisons pass. Every baseline debug/release success maximum and landmark is
+preserved. Production default/agents/perf-counters builds pass on both targets.
+
+Complete exact cached/off scans are running on the pinned agents release binary;
+no partial burndown is recorded. Initial merged public86 job
+`20261031T233745Z-t077-s3b-merged-public86` exits before measurement: policy expects
+`iMac.local`, actual is `iMac.lan`. Identity job
+`20261031T234927Z-t077-s3b-host-identity` confirms all other host/recipe fields
+identical. The proposed alias-only tooling change is pending explicit approval;
+no policy bands or identity guard have been bypassed. Final owner handoff remains
+pending complete scans and valid public86 improvement.

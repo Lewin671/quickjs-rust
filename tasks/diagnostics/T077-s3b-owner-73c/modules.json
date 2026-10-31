@@ -1,0 +1,411 @@
+{
+  "source": "73c93d8feb3b0e46b8aee581cf293ed2a6d953c8",
+  "tz": "UTC",
+  "cases": [
+    {
+      "mode": "default",
+      "source": "tests/fixtures/compare-modules/deferred-key-arguments.mjs",
+      "source_sha256": "44d067f0257e9b40cef5a3838377079788427c86466992e22bea359fa9d6a499",
+      "binary_sha256": "0902b12ded5450db5bb09d9d43405d34940eabbce599966e71c49a6042b0b124",
+      "flags": {},
+      "rust_command": [
+        "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/target/s3b-73c-agents/release/qjs",
+        "--module",
+        "tests/fixtures/compare-modules/deferred-key-arguments.mjs"
+      ],
+      "ng_command": [
+        "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/third_party/quickjs-ng/build/qjs",
+        "-m",
+        "tests/fixtures/compare-modules/deferred-key-arguments.mjs"
+      ],
+      "exit": 0,
+      "stdout": "undefined:undefined:undefined:undefined\nfunction:function\n",
+      "stdout_sha256": "8b839ca4974d1086d3d9105322e1372606c8d146d0053541eb6b65527c295ac8"
+    },
+    {
+      "mode": "default",
+      "source": "tests/fixtures/compare-modules/s3b-context-imports-dep.mjs",
+      "source_sha256": "96e9a708b67eb43c53624cc7846fd7ac30afe8ed4e5f7a06bb77975c7842e8a5",
+      "binary_sha256": "0902b12ded5450db5bb09d9d43405d34940eabbce599966e71c49a6042b0b124",
+      "flags": {},
+      "rust_command": [
+        "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/target/s3b-73c-agents/release/qjs",
+        "--module",
+        "tests/fixtures/compare-modules/s3b-context-imports-dep.mjs"
+      ],
+      "ng_command": [
+        "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/third_party/quickjs-ng/build/qjs",
+        "-m",
+        "tests/fixtures/compare-modules/s3b-context-imports-dep.mjs"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "mode": "default",
+      "source": "tests/fixtures/compare-modules/s3b-context-imports.mjs",
+      "source_sha256": "91c9a512b922fb1dda4b9519a5c077863689c9469e265c05bd4121fa1c3a5b71",
+      "binary_sha256": "0902b12ded5450db5bb09d9d43405d34940eabbce599966e71c49a6042b0b124",
+      "flags": {},
+      "rust_command": [
+        "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/target/s3b-73c-agents/release/qjs",
+        "--module",
+        "tests/fixtures/compare-modules/s3b-context-imports.mjs"
+      ],
+      "ng_command": [
+        "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/third_party/quickjs-ng/build/qjs",
+        "-m",
+        "tests/fixtures/compare-modules/s3b-context-imports.mjs"
+      ],
+      "exit": 0,
+      "stdout": "7:undefined:undefined:undefined\n9:9\n",
+      "stdout_sha256": "bb0199327236bb286b72263d3b5678affe852f0cb0fe2f392782e88533301da5"
+    },
+    {
+      "mode": "off",
+      "source": "tests/fixtures/compare-modules/deferred-key-arguments.mjs",
+      "source_sha256": "44d067f0257e9b40cef5a3838377079788427c86466992e22bea359fa9d6a499",
+      "binary_sha256": "0902b12ded5450db5bb09d9d43405d34940eabbce599966e71c49a6042b0b124",
+      "flags": {
+        "QJS_DISABLE_IC": "1"
+      },
+      "rust_command": [
+        "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/target/s3b-73c-agents/release/qjs",
+        "--module",
+        "tests/fixtures/compare-modules/deferred-key-arguments.mjs"
+      ],
+      "ng_command": [
+        "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/third_party/quickjs-ng/build/qjs",
+        "-m",
+        "tests/fixtures/compare-modules/deferred-key-arguments.mjs"
+      ],
+      "exit": 0,
+      "stdout": "undefined:undefined:undefined:undefined\nfunction:function\n",
+      "stdout_sha256": "8b839ca4974d1086d3d9105322e1372606c8d146d0053541eb6b65527c295ac8"
+    },
+    {
+      "mode": "off",
+      "source": "tests/fixtures/compare-modules/s3b-context-imports-dep.mjs",
+      "source_sha256": "96e9a708b67eb43c53624cc7846fd7ac30afe8ed4e5f7a06bb77975c7842e8a5",
+      "binary_sha256": "0902b12ded5450db5bb09d9d43405d34940eabbce599966e71c49a6042b0b124",
+      "flags": {
+        "QJS_DISABLE_IC": "1"
+      },
+      "rust_command": [
+        "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/target/s3b-73c-agents/release/qjs",
+        "--module",
+        "tests/fixtures/compare-modules/s3b-context-imports-dep.mjs"
+      ],
+      "ng_command": [
+        "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/third_party/quickjs-ng/build/qjs",
+        "-m",
+        "tests/fixtures/compare-modules/s3b-context-imports-dep.mjs"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "mode": "off",
+      "source": "tests/fixtures/compare-modules/s3b-context-imports.mjs",
+      "source_sha256": "91c9a512b922fb1dda4b9519a5c077863689c9469e265c05bd4121fa1c3a5b71",
+      "binary_sha256": "0902b12ded5450db5bb09d9d43405d34940eabbce599966e71c49a6042b0b124",
+      "flags": {
+        "QJS_DISABLE_IC": "1"
+      },
+      "rust_command": [
+        "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/target/s3b-73c-agents/release/qjs",
+        "--module",
+        "tests/fixtures/compare-modules/s3b-context-imports.mjs"
+      ],
+      "ng_command": [
+        "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/third_party/quickjs-ng/build/qjs",
+        "-m",
+        "tests/fixtures/compare-modules/s3b-context-imports.mjs"
+      ],
+      "exit": 0,
+      "stdout": "7:undefined:undefined:undefined\n9:9\n",
+      "stdout_sha256": "bb0199327236bb286b72263d3b5678affe852f0cb0fe2f392782e88533301da5"
+    },
+    {
+      "mode": "verify",
+      "source": "tests/fixtures/compare-modules/deferred-key-arguments.mjs",
+      "source_sha256": "44d067f0257e9b40cef5a3838377079788427c86466992e22bea359fa9d6a499",
+      "binary_sha256": "dcbc2a16619634781bd7177979c01240746ada808efe31c98ce672e196fcecd0",
+      "flags": {
+        "QJS_VERIFY_BINDINGS": "1",
+        "QJS_VERIFY_IC": "1"
+      },
+      "rust_command": [
+        "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/target/s3b-73c-default/debug/qjs",
+        "--module",
+        "tests/fixtures/compare-modules/deferred-key-arguments.mjs"
+      ],
+      "ng_command": [
+        "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/third_party/quickjs-ng/build/qjs",
+        "-m",
+        "tests/fixtures/compare-modules/deferred-key-arguments.mjs"
+      ],
+      "exit": 0,
+      "stdout": "undefined:undefined:undefined:undefined\nfunction:function\n",
+      "stdout_sha256": "8b839ca4974d1086d3d9105322e1372606c8d146d0053541eb6b65527c295ac8"
+    },
+    {
+      "mode": "verify",
+      "source": "tests/fixtures/compare-modules/s3b-context-imports-dep.mjs",
+      "source_sha256": "96e9a708b67eb43c53624cc7846fd7ac30afe8ed4e5f7a06bb77975c7842e8a5",
+      "binary_sha256": "dcbc2a16619634781bd7177979c01240746ada808efe31c98ce672e196fcecd0",
+      "flags": {
+        "QJS_VERIFY_BINDINGS": "1",
+        "QJS_VERIFY_IC": "1"
+      },
+      "rust_command": [
+        "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/target/s3b-73c-default/debug/qjs",
+        "--module",
+        "tests/fixtures/compare-modules/s3b-context-imports-dep.mjs"
+      ],
+      "ng_command": [
+        "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/third_party/quickjs-ng/build/qjs",
+        "-m",
+        "tests/fixtures/compare-modules/s3b-context-imports-dep.mjs"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "mode": "verify",
+      "source": "tests/fixtures/compare-modules/s3b-context-imports.mjs",
+      "source_sha256": "91c9a512b922fb1dda4b9519a5c077863689c9469e265c05bd4121fa1c3a5b71",
+      "binary_sha256": "dcbc2a16619634781bd7177979c01240746ada808efe31c98ce672e196fcecd0",
+      "flags": {
+        "QJS_VERIFY_BINDINGS": "1",
+        "QJS_VERIFY_IC": "1"
+      },
+      "rust_command": [
+        "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/target/s3b-73c-default/debug/qjs",
+        "--module",
+        "tests/fixtures/compare-modules/s3b-context-imports.mjs"
+      ],
+      "ng_command": [
+        "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/third_party/quickjs-ng/build/qjs",
+        "-m",
+        "tests/fixtures/compare-modules/s3b-context-imports.mjs"
+      ],
+      "exit": 0,
+      "stdout": "7:undefined:undefined:undefined\n9:9\n",
+      "stdout_sha256": "bb0199327236bb286b72263d3b5678affe852f0cb0fe2f392782e88533301da5"
+    },
+    {
+      "mode": "force",
+      "source": "tests/fixtures/compare-modules/deferred-key-arguments.mjs",
+      "source_sha256": "44d067f0257e9b40cef5a3838377079788427c86466992e22bea359fa9d6a499",
+      "binary_sha256": "dcbc2a16619634781bd7177979c01240746ada808efe31c98ce672e196fcecd0",
+      "flags": {
+        "QJS_FORCE_EVAL_EXPOSURE": "1"
+      },
+      "rust_command": [
+        "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/target/s3b-73c-default/debug/qjs",
+        "--module",
+        "tests/fixtures/compare-modules/deferred-key-arguments.mjs"
+      ],
+      "ng_command": [
+        "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/third_party/quickjs-ng/build/qjs",
+        "-m",
+        "tests/fixtures/compare-modules/deferred-key-arguments.mjs"
+      ],
+      "exit": 0,
+      "stdout": "undefined:undefined:undefined:undefined\nfunction:function\n",
+      "stdout_sha256": "8b839ca4974d1086d3d9105322e1372606c8d146d0053541eb6b65527c295ac8"
+    },
+    {
+      "mode": "force",
+      "source": "tests/fixtures/compare-modules/s3b-context-imports-dep.mjs",
+      "source_sha256": "96e9a708b67eb43c53624cc7846fd7ac30afe8ed4e5f7a06bb77975c7842e8a5",
+      "binary_sha256": "dcbc2a16619634781bd7177979c01240746ada808efe31c98ce672e196fcecd0",
+      "flags": {
+        "QJS_FORCE_EVAL_EXPOSURE": "1"
+      },
+      "rust_command": [
+        "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/target/s3b-73c-default/debug/qjs",
+        "--module",
+        "tests/fixtures/compare-modules/s3b-context-imports-dep.mjs"
+      ],
+      "ng_command": [
+        "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/third_party/quickjs-ng/build/qjs",
+        "-m",
+        "tests/fixtures/compare-modules/s3b-context-imports-dep.mjs"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "mode": "force",
+      "source": "tests/fixtures/compare-modules/s3b-context-imports.mjs",
+      "source_sha256": "91c9a512b922fb1dda4b9519a5c077863689c9469e265c05bd4121fa1c3a5b71",
+      "binary_sha256": "dcbc2a16619634781bd7177979c01240746ada808efe31c98ce672e196fcecd0",
+      "flags": {
+        "QJS_FORCE_EVAL_EXPOSURE": "1"
+      },
+      "rust_command": [
+        "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/target/s3b-73c-default/debug/qjs",
+        "--module",
+        "tests/fixtures/compare-modules/s3b-context-imports.mjs"
+      ],
+      "ng_command": [
+        "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/third_party/quickjs-ng/build/qjs",
+        "-m",
+        "tests/fixtures/compare-modules/s3b-context-imports.mjs"
+      ],
+      "exit": 0,
+      "stdout": "7:undefined:undefined:undefined\n9:9\n",
+      "stdout_sha256": "bb0199327236bb286b72263d3b5678affe852f0cb0fe2f392782e88533301da5"
+    },
+    {
+      "mode": "poison",
+      "source": "tests/fixtures/compare-modules/deferred-key-arguments.mjs",
+      "source_sha256": "44d067f0257e9b40cef5a3838377079788427c86466992e22bea359fa9d6a499",
+      "binary_sha256": "dcbc2a16619634781bd7177979c01240746ada808efe31c98ce672e196fcecd0",
+      "flags": {
+        "QJS_POISON_RELEASED_SCOPES": "1"
+      },
+      "rust_command": [
+        "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/target/s3b-73c-default/debug/qjs",
+        "--module",
+        "tests/fixtures/compare-modules/deferred-key-arguments.mjs"
+      ],
+      "ng_command": [
+        "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/third_party/quickjs-ng/build/qjs",
+        "-m",
+        "tests/fixtures/compare-modules/deferred-key-arguments.mjs"
+      ],
+      "exit": 0,
+      "stdout": "undefined:undefined:undefined:undefined\nfunction:function\n",
+      "stdout_sha256": "8b839ca4974d1086d3d9105322e1372606c8d146d0053541eb6b65527c295ac8"
+    },
+    {
+      "mode": "poison",
+      "source": "tests/fixtures/compare-modules/s3b-context-imports-dep.mjs",
+      "source_sha256": "96e9a708b67eb43c53624cc7846fd7ac30afe8ed4e5f7a06bb77975c7842e8a5",
+      "binary_sha256": "dcbc2a16619634781bd7177979c01240746ada808efe31c98ce672e196fcecd0",
+      "flags": {
+        "QJS_POISON_RELEASED_SCOPES": "1"
+      },
+      "rust_command": [
+        "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/target/s3b-73c-default/debug/qjs",
+        "--module",
+        "tests/fixtures/compare-modules/s3b-context-imports-dep.mjs"
+      ],
+      "ng_command": [
+        "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/third_party/quickjs-ng/build/qjs",
+        "-m",
+        "tests/fixtures/compare-modules/s3b-context-imports-dep.mjs"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "mode": "poison",
+      "source": "tests/fixtures/compare-modules/s3b-context-imports.mjs",
+      "source_sha256": "91c9a512b922fb1dda4b9519a5c077863689c9469e265c05bd4121fa1c3a5b71",
+      "binary_sha256": "dcbc2a16619634781bd7177979c01240746ada808efe31c98ce672e196fcecd0",
+      "flags": {
+        "QJS_POISON_RELEASED_SCOPES": "1"
+      },
+      "rust_command": [
+        "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/target/s3b-73c-default/debug/qjs",
+        "--module",
+        "tests/fixtures/compare-modules/s3b-context-imports.mjs"
+      ],
+      "ng_command": [
+        "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/third_party/quickjs-ng/build/qjs",
+        "-m",
+        "tests/fixtures/compare-modules/s3b-context-imports.mjs"
+      ],
+      "exit": 0,
+      "stdout": "7:undefined:undefined:undefined\n9:9\n",
+      "stdout_sha256": "bb0199327236bb286b72263d3b5678affe852f0cb0fe2f392782e88533301da5"
+    },
+    {
+      "mode": "combined",
+      "source": "tests/fixtures/compare-modules/deferred-key-arguments.mjs",
+      "source_sha256": "44d067f0257e9b40cef5a3838377079788427c86466992e22bea359fa9d6a499",
+      "binary_sha256": "dcbc2a16619634781bd7177979c01240746ada808efe31c98ce672e196fcecd0",
+      "flags": {
+        "QJS_VERIFY_BINDINGS": "1",
+        "QJS_FORCE_EVAL_EXPOSURE": "1",
+        "QJS_POISON_RELEASED_SCOPES": "1",
+        "QJS_DISABLE_IC": "1",
+        "QJS_VERIFY_IC": "1"
+      },
+      "rust_command": [
+        "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/target/s3b-73c-default/debug/qjs",
+        "--module",
+        "tests/fixtures/compare-modules/deferred-key-arguments.mjs"
+      ],
+      "ng_command": [
+        "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/third_party/quickjs-ng/build/qjs",
+        "-m",
+        "tests/fixtures/compare-modules/deferred-key-arguments.mjs"
+      ],
+      "exit": 0,
+      "stdout": "undefined:undefined:undefined:undefined\nfunction:function\n",
+      "stdout_sha256": "8b839ca4974d1086d3d9105322e1372606c8d146d0053541eb6b65527c295ac8"
+    },
+    {
+      "mode": "combined",
+      "source": "tests/fixtures/compare-modules/s3b-context-imports-dep.mjs",
+      "source_sha256": "96e9a708b67eb43c53624cc7846fd7ac30afe8ed4e5f7a06bb77975c7842e8a5",
+      "binary_sha256": "dcbc2a16619634781bd7177979c01240746ada808efe31c98ce672e196fcecd0",
+      "flags": {
+        "QJS_VERIFY_BINDINGS": "1",
+        "QJS_FORCE_EVAL_EXPOSURE": "1",
+        "QJS_POISON_RELEASED_SCOPES": "1",
+        "QJS_DISABLE_IC": "1",
+        "QJS_VERIFY_IC": "1"
+      },
+      "rust_command": [
+        "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/target/s3b-73c-default/debug/qjs",
+        "--module",
+        "tests/fixtures/compare-modules/s3b-context-imports-dep.mjs"
+      ],
+      "ng_command": [
+        "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/third_party/quickjs-ng/build/qjs",
+        "-m",
+        "tests/fixtures/compare-modules/s3b-context-imports-dep.mjs"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "mode": "combined",
+      "source": "tests/fixtures/compare-modules/s3b-context-imports.mjs",
+      "source_sha256": "91c9a512b922fb1dda4b9519a5c077863689c9469e265c05bd4121fa1c3a5b71",
+      "binary_sha256": "dcbc2a16619634781bd7177979c01240746ada808efe31c98ce672e196fcecd0",
+      "flags": {
+        "QJS_VERIFY_BINDINGS": "1",
+        "QJS_FORCE_EVAL_EXPOSURE": "1",
+        "QJS_POISON_RELEASED_SCOPES": "1",
+        "QJS_DISABLE_IC": "1",
+        "QJS_VERIFY_IC": "1"
+      },
+      "rust_command": [
+        "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/target/s3b-73c-default/debug/qjs",
+        "--module",
+        "tests/fixtures/compare-modules/s3b-context-imports.mjs"
+      ],
+      "ng_command": [
+        "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/third_party/quickjs-ng/build/qjs",
+        "-m",
+        "tests/fixtures/compare-modules/s3b-context-imports.mjs"
+      ],
+      "exit": 0,
+      "stdout": "7:undefined:undefined:undefined\n9:9\n",
+      "stdout_sha256": "bb0199327236bb286b72263d3b5678affe852f0cb0fe2f392782e88533301da5"
+    }
+  ]
+}

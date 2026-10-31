@@ -1,0 +1,46 @@
+{
+  "runtime_revision": "73c93d8feb3b0e46b8aee581cf293ed2a6d953c8",
+  "baseline": "3cc12c6f8d93ffd6eae91d1bd44efe74134ae195",
+  "host": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+  "rustc": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: aarch64-apple-darwin\nrelease: 1.95.0\nLLVM version: 22.1.2\n",
+  "test262_pin": "4249661388e5d3f92a85186213da140a6481490f",
+  "ng_pin": "f7830186043e4488f2998759d60a514faf07cbc9",
+  "binaries": {
+    "agents-arm64": {
+      "path": "target/s3b-73c-agents/release/qjs",
+      "sha256": "0902b12ded5450db5bb09d9d43405d34940eabbce599966e71c49a6042b0b124"
+    },
+    "default-arm64": {
+      "path": "target/s3b-73c-default/release/qjs",
+      "sha256": "8ab136986171c25f8ae3910dda81bdae37c4b527885c92dcaae65e7fa9c97021"
+    },
+    "debug-arm64": {
+      "path": "target/s3b-73c-default/debug/qjs",
+      "sha256": "dcbc2a16619634781bd7177979c01240746ada808efe31c98ce672e196fcecd0"
+    },
+    "counts-arm64": {
+      "path": "target/s3b-73c-counts/release/qjs",
+      "sha256": "6a43f2e83aff81eab856370916ecc67384324b8bab33bc1e03e71451c51893e8"
+    },
+    "agents-x86": {
+      "path": "target/s3b-73c-x86/x86_64-apple-darwin/release/qjs",
+      "sha256": "d7a8b60fab6919acc87bbf03145a788d40fac499ecdb59fe504c3d01925d8e2a"
+    },
+    "counts-x86": {
+      "path": "target/s3b-73c-x86-extra/x86_64-apple-darwin/release/qjs",
+      "sha256": "058f7fcfb4c478525d42cb5927b7237d0c5663c4e0537ae4538ebfcc1e1a4287"
+    }
+  },
+  "counter_instrumentation": "../T077-s3b-round1/base-instrumentation.patch",
+  "base_instrumentation_sha256": "75dfd736bc32991c7fefac363877bb716b4de871345915cfd768b796006c4b5b",
+  "counter_collector_sha256": "71ca81663d4e6ceb8ea5aea42b0f9a5268591766e67dc3598420d83826025061",
+  "files": {
+    "depth-landmarks.json": "f9915362b9f8bbdda3e0f583971ef1f8973d83997a3885dabdfd5ec34dc86469",
+    "deletion-audit.json": "7e3642939f959935ac00aa893b7a7116154a6966f0abe41a2323d31363663589",
+    "base-depth.json": "b6c96b483b7c8ebd6df81f00ca8adf53e1bb189f682b94745035ead2665a7b39",
+    "candidate-counts.json": "22c5f8f699abcdfb3e43f68111a1d304585d630b934e18422b28bc8d4f536490",
+    "candidate-depth.json": "5bff25247460f99b3054a14ffaea3829703d81d23e82d7c94072c0f2aada8ffc",
+    "base-counts.json": "e97ce3150ba2f14a3abc4bd8895419b0d140c3f3dd3c7335f1b5e3ffe921f5f4",
+    "modules.json": "3898e85de5ce78282fe629fddea30c13c03b9c5727fc58090953a378d966709e"
+  }
+}
