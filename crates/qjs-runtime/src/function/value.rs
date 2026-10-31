@@ -1032,87 +1032,10 @@ fn prototype_chain_contains_function(prototype: &Prototype, target: &Function) -
 fn prototype_chain_contains_function_inner(
     prototype: &Prototype,
     target: &Function,
-    seen_functions: &mut Vec<Function>,
-    seen_objects: &mut Vec<ObjectRef>,
+    _seen_functions: &mut Vec<Function>,
+    _seen_objects: &mut Vec<ObjectRef>,
 ) -> bool {
-    match prototype {
-        Prototype::Function(function) => {
-            if function.ptr_eq(target) {
-                return true;
-            }
-            if seen_functions.iter().any(|seen| seen.ptr_eq(function)) {
-                return false;
-            }
-            seen_functions.push(function.clone());
-            function
-                .effective_internal_prototype()
-                .is_some_and(|prototype| {
-                    prototype_chain_contains_function_inner(
-                        &prototype,
-                        target,
-                        seen_functions,
-                        seen_objects,
-                    )
-                })
-        }
-        Prototype::Object(object) => {
-            if seen_objects.iter().any(|seen| seen.ptr_eq(object)) {
-                return false;
-            }
-            seen_objects.push(object.clone());
-            object.prototype_slot().is_some_and(|prototype| {
-                prototype_chain_contains_function_inner(
-                    &prototype,
-                    target,
-                    seen_functions,
-                    seen_objects,
-                )
-            })
-        }
-        Prototype::Array(array) => array.effective_prototype_slot().is_some_and(|prototype| {
-            prototype_chain_contains_function_inner(
-                &prototype,
-                target,
-                seen_functions,
-                seen_objects,
-            )
-        }),
-        Prototype::Proxy(_) => false,
-
-        Prototype::Map(_carrier) => {
-            let object = &_carrier.object();
-
-            if seen_objects.iter().any(|seen| seen.ptr_eq(object)) {
-                return false;
-            }
-            seen_objects.push(object.clone());
-            object.prototype_slot().is_some_and(|prototype| {
-                prototype_chain_contains_function_inner(
-                    &prototype,
-                    target,
-                    seen_functions,
-                    seen_objects,
-                )
-            })
-        }
-
-        Prototype::Set(_carrier) => {
-            let object = &_carrier.object();
-
-            if seen_objects.iter().any(|seen| seen.ptr_eq(object)) {
-                return false;
-            }
-            seen_objects.push(object.clone());
-            object.prototype_slot().is_some_and(|prototype| {
-                prototype_chain_contains_function_inner(
-                    &prototype,
-                    target,
-                    seen_functions,
-                    seen_objects,
-                )
-            })
-        }
-    }
+    prototype.would_cycle_function(target)
 }
 
 #[cfg(test)]

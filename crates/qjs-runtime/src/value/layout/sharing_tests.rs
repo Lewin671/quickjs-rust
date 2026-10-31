@@ -1,5 +1,6 @@
 //! Regression proofs for sharing, prefix lookup, retention and integrity edits.
 use super::*;
+use crate::value::OwnDataPropertyRead;
 fn data() -> Property {
     Property::enumerable(Value::Number(1.0))
 }
@@ -24,6 +25,45 @@ fn branches_and_prefixes_never_expose_the_shared_tail() {
     assert!(!Rc::ptr_eq(&prefix.layout.data, &longer.layout.data));
     assert_eq!(prefix.keys(), [a.clone(), c]);
     assert_eq!(longer.keys(), [a, b]);
+}
+
+#[test]
+fn prefix_forks_preserve_keys_and_descriptors_across_index_promotion() {
+    let owner = owner();
+    let keys: Vec<_> = ["a", "b", "c", "d", "e"]
+        .map(|key| owner.domain().intern(key))
+        .into();
+    let mut prefix = owner.empty_store();
+    let mut longer = owner.empty_store();
+    for key in &keys[..4] {
+        prefix.define(key, data()).unwrap();
+        longer.define(key, data()).unwrap();
+    }
+    longer.define(&keys[4], data()).unwrap();
+    assert!(Rc::ptr_eq(&prefix.layout.data, &longer.layout.data));
+    assert!(prefix.get(&keys[4]).unwrap().is_none());
+    assert!(matches!(
+        prefix.read_data_slot(&keys[4]).0,
+        OwnDataPropertyRead::Missing
+    ));
+    for key in &keys[..4] {
+        assert!(
+            matches!(prefix.read_data_slot(key).0, OwnDataPropertyRead::Data(v) if v == Value::Number(1.0))
+        );
+    }
+    assert!(
+        matches!(longer.read_data_slot(&keys[4]).0, OwnDataPropertyRead::Data(v) if v == Value::Number(1.0))
+    );
+    prefix
+        .define(&keys[4], Property::non_enumerable(Value::Number(9.0)))
+        .unwrap();
+    assert_eq!(prefix.keys(), keys);
+    assert!(!prefix.get(&keys[4]).unwrap().unwrap().enumerable);
+    assert!(longer.get(&keys[4]).unwrap().unwrap().enumerable);
+    assert_eq!(
+        prefix.get(&keys[4]).unwrap().unwrap().value,
+        Value::Number(9.0)
+    );
 }
 
 #[test]
@@ -70,7 +110,7 @@ fn last_delete_restores_parent_but_other_delete_detaches() {
     store.define(&b, data()).unwrap();
     assert!(Rc::ptr_eq(&child, store.layout()));
     store.remove(&a).unwrap();
-    assert!(store.layout.parent.is_none());
+    assert!(store.layout.parent().is_none());
     assert_eq!(store.keys(), [b]);
 }
 
@@ -191,7 +231,7 @@ fn dead_children_remove_their_small_and_hashed_edges() {
                 .unwrap();
         }
         owner.0.retained.borrow_mut().nodes.clear();
-        assert!(owner.0.root.transitions.borrow().is_empty());
+        assert!(owner.0.root.transitions_empty());
     }
 }
 

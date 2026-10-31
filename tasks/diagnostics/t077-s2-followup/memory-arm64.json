@@ -1,0 +1,512 @@
+{
+  "binaries": {
+    "pre_s2": {
+      "path": "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s2-followup/target/t077-followup/pre-s2-build/release/qjs",
+      "sha256": "a53f06d8d4233fc9dd600ca863fa2e838fd08084d08d998287c23967680ccb9f"
+    },
+    "integration": {
+      "path": "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s2-followup/target/t077-followup/base-build/release/qjs",
+      "sha256": "aeefbcd9e70ec3dfd5ad8d31760df70cb42b9d37f8c5c11fbeedff7e62b1e77f"
+    },
+    "candidate": {
+      "path": "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s2-followup/target/t077-followup/head-build-compact/release/qjs",
+      "sha256": "c592a375cef71ace12fad265cfd45ca6c92c525323b2a1ab7bdd59f2ff32bf58"
+    }
+  },
+  "pairs": 3,
+  "cases": {
+    "mem1": {
+      "sha256": "fb6fccd9ea881079469350d16064bd8072b2733cf50a10ee67f66871830b3451",
+      "samples": {
+        "pre_s2": [
+          {
+            "wall_s": 0.34884912497363985,
+            "rss_bytes": 119472128,
+            "stdout": "chain\nUndefined"
+          },
+          {
+            "wall_s": 0.3349128330592066,
+            "rss_bytes": 119488512,
+            "stdout": "chain\nUndefined"
+          },
+          {
+            "wall_s": 0.33295154199004173,
+            "rss_bytes": 119504896,
+            "stdout": "chain\nUndefined"
+          }
+        ],
+        "integration": [
+          {
+            "wall_s": 0.6576114590279758,
+            "rss_bytes": 1324367872,
+            "stdout": "chain\nUndefined"
+          },
+          {
+            "wall_s": 0.6180906670633703,
+            "rss_bytes": 1324384256,
+            "stdout": "chain\nUndefined"
+          },
+          {
+            "wall_s": 0.6211215001530945,
+            "rss_bytes": 1324384256,
+            "stdout": "chain\nUndefined"
+          }
+        ],
+        "candidate": [
+          {
+            "wall_s": 0.31728916708379984,
+            "rss_bytes": 118964224,
+            "stdout": "chain\nUndefined"
+          },
+          {
+            "wall_s": 0.31228791712783277,
+            "rss_bytes": 118964224,
+            "stdout": "chain\nUndefined"
+          },
+          {
+            "wall_s": 0.3043777081184089,
+            "rss_bytes": 118947840,
+            "stdout": "chain\nUndefined"
+          }
+        ]
+      },
+      "median": {
+        "pre_s2": {
+          "wall_s": 0.3349128330592066,
+          "rss_bytes": 119488512
+        },
+        "integration": {
+          "wall_s": 0.6211215001530945,
+          "rss_bytes": 1324384256
+        },
+        "candidate": {
+          "wall_s": 0.31228791712783277,
+          "rss_bytes": 118964224
+        }
+      }
+    },
+    "mem2": {
+      "sha256": "49aeb4261c0bb1cacfbda575360f19a97053c32a589751af46f72d54e234d278",
+      "samples": {
+        "pre_s2": [
+          {
+            "wall_s": 0.14348674984648824,
+            "rss_bytes": 58310656,
+            "stdout": "fan 200000\nUndefined"
+          },
+          {
+            "wall_s": 0.14166295784525573,
+            "rss_bytes": 58310656,
+            "stdout": "fan 200000\nUndefined"
+          },
+          {
+            "wall_s": 0.14218950015492737,
+            "rss_bytes": 58310656,
+            "stdout": "fan 200000\nUndefined"
+          }
+        ],
+        "integration": [
+          {
+            "wall_s": 0.19164550001733005,
+            "rss_bytes": 287113216,
+            "stdout": "fan 200000\nUndefined"
+          },
+          {
+            "wall_s": 0.19052770920097828,
+            "rss_bytes": 287031296,
+            "stdout": "fan 200000\nUndefined"
+          },
+          {
+            "wall_s": 0.1932455829810351,
+            "rss_bytes": 287031296,
+            "stdout": "fan 200000\nUndefined"
+          }
+        ],
+        "candidate": [
+          {
+            "wall_s": 0.13452500011771917,
+            "rss_bytes": 54558720,
+            "stdout": "fan 200000\nUndefined"
+          },
+          {
+            "wall_s": 0.12982229189947248,
+            "rss_bytes": 54558720,
+            "stdout": "fan 200000\nUndefined"
+          },
+          {
+            "wall_s": 0.13246720796450973,
+            "rss_bytes": 54542336,
+            "stdout": "fan 200000\nUndefined"
+          }
+        ]
+      },
+      "median": {
+        "pre_s2": {
+          "wall_s": 0.14218950015492737,
+          "rss_bytes": 58310656
+        },
+        "integration": {
+          "wall_s": 0.19164550001733005,
+          "rss_bytes": 287031296
+        },
+        "candidate": {
+          "wall_s": 0.13246720796450973,
+          "rss_bytes": 54558720
+        }
+      }
+    },
+    "mem3": {
+      "sha256": "47018c33a8a2ee44265730fa1f3c39d493d9505fc14664d1a7fe5ab14e006c8f",
+      "samples": {
+        "pre_s2": [
+          {
+            "wall_s": 1.1200654581189156,
+            "rss_bytes": 6144000,
+            "stdout": "churn 1000000\nUndefined"
+          },
+          {
+            "wall_s": 1.1938386668916792,
+            "rss_bytes": 6160384,
+            "stdout": "churn 1000000\nUndefined"
+          },
+          {
+            "wall_s": 1.1694339169189334,
+            "rss_bytes": 6160384,
+            "stdout": "churn 1000000\nUndefined"
+          }
+        ],
+        "integration": [
+          {
+            "wall_s": 1.428728625178337,
+            "rss_bytes": 5980160,
+            "stdout": "churn 1000000\nUndefined"
+          },
+          {
+            "wall_s": 1.4320140830241144,
+            "rss_bytes": 5980160,
+            "stdout": "churn 1000000\nUndefined"
+          },
+          {
+            "wall_s": 1.503923875046894,
+            "rss_bytes": 5980160,
+            "stdout": "churn 1000000\nUndefined"
+          }
+        ],
+        "candidate": [
+          {
+            "wall_s": 1.3219072080682963,
+            "rss_bytes": 6045696,
+            "stdout": "churn 1000000\nUndefined"
+          },
+          {
+            "wall_s": 1.3801493330392987,
+            "rss_bytes": 5996544,
+            "stdout": "churn 1000000\nUndefined"
+          },
+          {
+            "wall_s": 1.4469861248508096,
+            "rss_bytes": 6062080,
+            "stdout": "churn 1000000\nUndefined"
+          }
+        ]
+      },
+      "median": {
+        "pre_s2": {
+          "wall_s": 1.1694339169189334,
+          "rss_bytes": 6160384
+        },
+        "integration": {
+          "wall_s": 1.4320140830241144,
+          "rss_bytes": 5980160
+        },
+        "candidate": {
+          "wall_s": 1.3801493330392987,
+          "rss_bytes": 6045696
+        }
+      }
+    },
+    "mem4": {
+      "sha256": "9d4f83ca3612d736d5c0d247a2eb4a96b9f77ed94a220d2cc07b797e5c76300f",
+      "samples": {
+        "pre_s2": [
+          {
+            "wall_s": 0.25904241600073874,
+            "rss_bytes": 162316288,
+            "stdout": "fan-call 200000\nUndefined"
+          },
+          {
+            "wall_s": 0.2520390418358147,
+            "rss_bytes": 162299904,
+            "stdout": "fan-call 200000\nUndefined"
+          },
+          {
+            "wall_s": 0.2544012079015374,
+            "rss_bytes": 162332672,
+            "stdout": "fan-call 200000\nUndefined"
+          }
+        ],
+        "integration": [
+          {
+            "wall_s": 0.3628684161230922,
+            "rss_bytes": 394215424,
+            "stdout": "fan-call 200000\nUndefined"
+          },
+          {
+            "wall_s": 0.33241058397106826,
+            "rss_bytes": 394215424,
+            "stdout": "fan-call 200000\nUndefined"
+          },
+          {
+            "wall_s": 0.30625991709530354,
+            "rss_bytes": 394199040,
+            "stdout": "fan-call 200000\nUndefined"
+          }
+        ],
+        "candidate": [
+          {
+            "wall_s": 0.24687237502075732,
+            "rss_bytes": 158646272,
+            "stdout": "fan-call 200000\nUndefined"
+          },
+          {
+            "wall_s": 0.24908808409236372,
+            "rss_bytes": 158646272,
+            "stdout": "fan-call 200000\nUndefined"
+          },
+          {
+            "wall_s": 0.2395102500449866,
+            "rss_bytes": 158662656,
+            "stdout": "fan-call 200000\nUndefined"
+          }
+        ]
+      },
+      "median": {
+        "pre_s2": {
+          "wall_s": 0.2544012079015374,
+          "rss_bytes": 162316288
+        },
+        "integration": {
+          "wall_s": 0.33241058397106826,
+          "rss_bytes": 394215424
+        },
+        "candidate": {
+          "wall_s": 0.24687237502075732,
+          "rss_bytes": 158646272
+        }
+      }
+    },
+    "mem5": {
+      "sha256": "d37bd748fec76f552bf623cc6883f805cf0dbc9336607b0cdbf8d161eac6792d",
+      "samples": {
+        "pre_s2": [
+          {
+            "wall_s": 0.5598738749977201,
+            "rss_bytes": 5963776,
+            "stdout": "holder 1999999000000\nUndefined"
+          },
+          {
+            "wall_s": 0.5615385838318616,
+            "rss_bytes": 5947392,
+            "stdout": "holder 1999999000000\nUndefined"
+          },
+          {
+            "wall_s": 0.5564567078836262,
+            "rss_bytes": 5963776,
+            "stdout": "holder 1999999000000\nUndefined"
+          }
+        ],
+        "integration": [
+          {
+            "wall_s": 0.4528143329080194,
+            "rss_bytes": 5455872,
+            "stdout": "holder 1999999000000\nUndefined"
+          },
+          {
+            "wall_s": 0.45502983406186104,
+            "rss_bytes": 5455872,
+            "stdout": "holder 1999999000000\nUndefined"
+          },
+          {
+            "wall_s": 0.4554276668932289,
+            "rss_bytes": 5455872,
+            "stdout": "holder 1999999000000\nUndefined"
+          }
+        ],
+        "candidate": [
+          {
+            "wall_s": 0.5332588751334697,
+            "rss_bytes": 5505024,
+            "stdout": "holder 1999999000000\nUndefined"
+          },
+          {
+            "wall_s": 0.5353123750537634,
+            "rss_bytes": 5505024,
+            "stdout": "holder 1999999000000\nUndefined"
+          },
+          {
+            "wall_s": 0.5384654998779297,
+            "rss_bytes": 5505024,
+            "stdout": "holder 1999999000000\nUndefined"
+          }
+        ]
+      },
+      "median": {
+        "pre_s2": {
+          "wall_s": 0.5598738749977201,
+          "rss_bytes": 5963776
+        },
+        "integration": {
+          "wall_s": 0.45502983406186104,
+          "rss_bytes": 5455872
+        },
+        "candidate": {
+          "wall_s": 0.5353123750537634,
+          "rss_bytes": 5505024
+        }
+      }
+    },
+    "mem6": {
+      "sha256": "594237b4ec95ddea468ad65a1d3aa85fa5cc6eacee7958dc7fd27f99d07608ac",
+      "samples": {
+        "pre_s2": [
+          {
+            "wall_s": 0.08776937494985759,
+            "rss_bytes": 46907392,
+            "stdout": "fan10 100000\nUndefined"
+          },
+          {
+            "wall_s": 0.08379412512294948,
+            "rss_bytes": 46907392,
+            "stdout": "fan10 100000\nUndefined"
+          },
+          {
+            "wall_s": 0.08438558294437826,
+            "rss_bytes": 46907392,
+            "stdout": "fan10 100000\nUndefined"
+          }
+        ],
+        "integration": [
+          {
+            "wall_s": 0.1082726251333952,
+            "rss_bytes": 201670656,
+            "stdout": "fan10 100000\nUndefined"
+          },
+          {
+            "wall_s": 0.10776124987751245,
+            "rss_bytes": 201670656,
+            "stdout": "fan10 100000\nUndefined"
+          },
+          {
+            "wall_s": 0.10825179098173976,
+            "rss_bytes": 201670656,
+            "stdout": "fan10 100000\nUndefined"
+          }
+        ],
+        "candidate": [
+          {
+            "wall_s": 0.07805741694755852,
+            "rss_bytes": 46481408,
+            "stdout": "fan10 100000\nUndefined"
+          },
+          {
+            "wall_s": 0.07947262492962182,
+            "rss_bytes": 46497792,
+            "stdout": "fan10 100000\nUndefined"
+          },
+          {
+            "wall_s": 0.07696366705931723,
+            "rss_bytes": 46481408,
+            "stdout": "fan10 100000\nUndefined"
+          }
+        ]
+      },
+      "median": {
+        "pre_s2": {
+          "wall_s": 0.08438558294437826,
+          "rss_bytes": 46907392
+        },
+        "integration": {
+          "wall_s": 0.10825179098173976,
+          "rss_bytes": 201670656
+        },
+        "candidate": {
+          "wall_s": 0.07805741694755852,
+          "rss_bytes": 46481408
+        }
+      }
+    },
+    "mem7": {
+      "sha256": "166c6bb7f8b01cc80e0dd245c0ecc02f01a9ad3c3e70367ce07780cfd4556aff",
+      "samples": {
+        "pre_s2": [
+          {
+            "wall_s": 0.06975545804016292,
+            "rss_bytes": 35520512,
+            "stdout": "noproto10 100000\nUndefined"
+          },
+          {
+            "wall_s": 0.06496891705319285,
+            "rss_bytes": 35536896,
+            "stdout": "noproto10 100000\nUndefined"
+          },
+          {
+            "wall_s": 0.06654679193161428,
+            "rss_bytes": 35553280,
+            "stdout": "noproto10 100000\nUndefined"
+          }
+        ],
+        "integration": [
+          {
+            "wall_s": 0.06229691696353257,
+            "rss_bytes": 34996224,
+            "stdout": "noproto10 100000\nUndefined"
+          },
+          {
+            "wall_s": 0.061542082810774446,
+            "rss_bytes": 34996224,
+            "stdout": "noproto10 100000\nUndefined"
+          },
+          {
+            "wall_s": 0.06381512503139675,
+            "rss_bytes": 34996224,
+            "stdout": "noproto10 100000\nUndefined"
+          }
+        ],
+        "candidate": [
+          {
+            "wall_s": 0.0637902079615742,
+            "rss_bytes": 35110912,
+            "stdout": "noproto10 100000\nUndefined"
+          },
+          {
+            "wall_s": 0.06250962498597801,
+            "rss_bytes": 35094528,
+            "stdout": "noproto10 100000\nUndefined"
+          },
+          {
+            "wall_s": 0.06145791709423065,
+            "rss_bytes": 35094528,
+            "stdout": "noproto10 100000\nUndefined"
+          }
+        ]
+      },
+      "median": {
+        "pre_s2": {
+          "wall_s": 0.06654679193161428,
+          "rss_bytes": 35536896
+        },
+        "integration": {
+          "wall_s": 0.06229691696353257,
+          "rss_bytes": 34996224
+        },
+        "candidate": {
+          "wall_s": 0.06250962498597801,
+          "rss_bytes": 35094528
+        }
+      }
+    }
+  },
+  "load_monitor_interval_s": 0.5,
+  "load_events": [],
+  "valid_quiet_host": true
+}

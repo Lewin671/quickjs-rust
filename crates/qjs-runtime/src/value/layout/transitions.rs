@@ -103,7 +103,7 @@ pub(super) struct Retention {
 }
 impl Layout {
     pub(super) fn cache(&self, label: Transition, child: &Rc<Self>) {
-        self.transitions.borrow_mut().insert(label, child);
+        self.links().transitions.borrow_mut().insert(label, child);
         child.retain();
     }
     pub(super) fn retain(self: &Rc<Self>) {

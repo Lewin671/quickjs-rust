@@ -1,0 +1,10 @@
+{
+  "native_cases": 18,
+  "x86_cases": 18,
+  "all_non_timer_outputs_equal": true,
+  "native_all_accepted_pairs_quiet": true,
+  "all_rss_limits_pass": true,
+  "x86_job": "20261031T173713Z-t077-s2fu-r3-resources",
+  "native_quiet_unit": "one whole three-engine pair; first three undisturbed pairs per case",
+  "native_rejected_pairs": 15
+}

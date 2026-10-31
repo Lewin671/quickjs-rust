@@ -4,40 +4,44 @@ use super::*;
 impl Layout {
     pub(super) fn copied(&self, dictionary: bool) -> Self {
         self.budget.add(size_of::<Self>());
-        Self {
+        let mut next = Self {
             budget: self.budget.clone(),
             domain: self.domain.clone(),
             owner: self.owner.clone(),
             data: Rc::new(RefCell::new(self.data.borrow().prefix(self.len))),
             len: self.len,
-            parent: None,
-            incoming: None,
+            links: OnceCell::new(),
             dictionary,
+            epoch: std::cell::Cell::new(if dictionary {
+                self.epoch.get().max(1)
+            } else {
+                0
+            }),
+            deferred_seed: false,
+            transient: self.transient,
             edits: self.edits,
-            next_order: self.next_order,
-            transitions: RefCell::new(transitions::Transitions::default()),
-            root: self.root.clone(),
             prototype: self.prototype.clone(),
-            prototype_value: RefCell::new(Weak::new()),
-            parent_state: self.parent_state.clone(),
-            mode: self.mode.clone(),
             flavor: self.flavor,
             capacity_hint: std::cell::Cell::new(0),
             append_misses: std::cell::Cell::new(0),
+        };
+        if let Some(root) = self.known_root() {
+            next.set_root(root.clone());
         }
+        next
     }
 
     fn allocate_order(&mut self) -> u32 {
-        if self.next_order == u32::MAX {
+        if self.private_data().next_order == u32::MAX {
             let mut positions: Vec<_> = (0..self.len).collect();
             positions.sort_unstable_by_key(|&position| self.private_data().entries[position].order);
             for (order, position) in positions.into_iter().enumerate() {
                 self.private_data().entries[position].order = order as u32;
             }
-            self.next_order = self.len as u32;
+            self.private_data().next_order = self.len as u32;
         }
-        let order = self.next_order;
-        self.next_order = order
+        let order = self.private_data().next_order;
+        self.private_data().next_order = order
             .checked_add(1)
             .expect("property order space exhausted");
         order
@@ -52,55 +56,46 @@ impl Layout {
             key: key.id(),
             attrs,
         };
-        if let Some(shape) = self.transitions.borrow().get(label) {
+        if let Some(shape) = self.transition(label) {
             crate::diagnostics::count!(property_transition_hits);
             return shape;
         }
         crate::diagnostics::count!(property_transition_misses);
         self.append_misses
             .set(self.append_misses.get().saturating_add(1));
-        let tail = self.len > 0 && self.data.borrow().entries.len() == self.len;
-        let data = if tail {
-            self.data.clone()
-        } else {
-            Rc::new(RefCell::new(self.data.borrow().prefix(self.len)))
-        };
-        {
-            let mut data = data.borrow_mut();
-            let proof = if tail {
-                proof
-            } else {
-                data.index.probe_uncounted(key.id())
-            };
-            data.append(key, attrs, proof);
+        let data = self.append_data(key, attrs, proof);
+        if !self.transient {
+            let root = Self::root_shape(self);
+            root.capacity_hint
+                .set(root.capacity_hint.get().max((self.len + 1).min(16) as u8));
         }
-        let root = Self::root_shape(self);
-        root.capacity_hint
-            .set(root.capacity_hint.get().max((self.len + 1).min(16) as u8));
         self.budget.add(size_of::<Self>());
-        let next = Rc::new(Self {
+        let mut next = Self {
             budget: self.budget.clone(),
             domain: self.domain.clone(),
             owner: self.owner.clone(),
             data,
             len: self.len + 1,
-            parent: Some(self.clone()),
-            incoming: Some(label),
+            links: OnceCell::new(),
             dictionary: false,
+            epoch: std::cell::Cell::new(0),
+            deferred_seed: false,
+            transient: self.transient,
             edits: self.edits,
-            next_order: self.len as u32 + 1,
-            transitions: RefCell::new(transitions::Transitions::default()),
-            root: Some(self.root.as_ref().unwrap_or(self).clone()),
             prototype: self.prototype.clone(),
-            prototype_value: RefCell::new(Weak::new()),
-            parent_state: self.parent_state.clone(),
-            mode: None,
             flavor: self.flavor,
             capacity_hint: std::cell::Cell::new(0),
             append_misses: std::cell::Cell::new(0),
-        });
+        };
+        if !self.transient {
+            next.set_parent(self.clone(), label);
+            next.set_root(Self::root_shape(self).clone());
+        }
+        let next = Rc::new(next);
         crate::diagnostics::count!(property_shape_nodes_created);
-        self.cache(label, &next);
+        if !self.transient {
+            self.cache(label, &next);
+        }
         next
     }
     fn reconfigure(self: &Rc<Self>, position: usize, attrs: Attributes) -> Rc<Self> {
@@ -108,7 +103,7 @@ impl Layout {
             position: position as u32,
             attrs,
         };
-        if let Some(next) = self.transitions.borrow().get(label) {
+        if let Some(next) = self.transition(label) {
             crate::diagnostics::count!(property_transition_hits);
             return next;
         }
@@ -116,8 +111,7 @@ impl Layout {
         let mut next = self.copied(u64::from(edits) >= DICTIONARY_EDITS);
         next.edits = edits;
         if !next.dictionary {
-            next.parent = Some(self.clone());
-            next.incoming = Some(label);
+            next.set_parent(self.clone(), label);
         }
         next.private_data().entries[position].attrs = attrs;
         crate::diagnostics::count!(property_transition_misses);
@@ -188,16 +182,17 @@ impl Lookup<'_> {
                 return;
             }
             None => {
+                // A missing key is the only lookup outcome that can need a
+                // deferred root. Existing-key writes keep this branch cold.
+                self.store.materialize_write_layout();
                 let dictionary = self.store.layout.dictionary
                     || self.store.len() >= DICTIONARY_WIDTH
                     || (dynamic
                         && self.store.layout.append_misses.get() > 8
-                        && !self.store.layout.transitions.borrow().contains_live(
-                            Transition::Append {
-                                key: self.key.id(),
-                                attrs,
-                            },
-                        ));
+                        && !self.store.layout.has_transition(Transition::Append {
+                            key: self.key.id(),
+                            attrs,
+                        }));
                 if dictionary {
                     let key = self.key.clone();
                     let same_index =
@@ -211,7 +206,7 @@ impl Lookup<'_> {
                         let proof = if same_index {
                             self.proof
                         } else {
-                            data.index.probe_uncounted(key.id())
+                            data.probe(key.id(), false)
                         };
                         data.append(&key, attrs, proof);
                         data.entries[slot].order = order;
@@ -234,25 +229,28 @@ impl Lookup<'_> {
         let position = self.position?;
         let old = self.store.descriptor(position);
         if !self.store.layout.dictionary
-            && matches!(self.store.layout.incoming, Some(Transition::Append { .. }))
+            && matches!(
+                self.store.layout.incoming(),
+                Some(Transition::Append { .. })
+            )
             && position + 1 == self.store.len()
-            && self.store.epoch != u64::MAX
-            && let Some(parent) = self.store.layout.parent.clone()
+            && self.store.epoch() != u64::MAX
+            && let Some(parent) = self.store.layout.parent().cloned()
         {
             self.store.invalidate_dependencies();
             self.store.layout = parent;
             self.store.bump_epoch();
             self.store.values.pop();
-            if let Some(slots) = &mut self.store.accessors {
+            if let Some(slots) = self.store.cold.as_mut() {
                 slots.remove(&(position as u32));
             }
             if self
                 .store
-                .accessors
+                .cold
                 .as_ref()
                 .is_some_and(|slots| slots.is_empty())
             {
-                self.store.accessors = None;
+                self.store.cold.clear();
             }
             self.store.verify();
             return Some(old);
@@ -264,7 +262,7 @@ impl Lookup<'_> {
         let proof = if same_index {
             self.proof
         } else {
-            layout.private_data().index.probe_uncounted(self.key.id())
+            layout.private_data().probe(self.key.id(), false)
         };
         layout.private_data().index.remove_at(proof);
         if layout.dictionary {
@@ -278,7 +276,7 @@ impl Lookup<'_> {
             }
             layout.private_data().reaccount(before_bytes);
             self.store.values.swap_remove(position);
-            if let Some(slots) = self.store.accessors.as_mut() {
+            if let Some(slots) = self.store.cold.as_mut() {
                 slots.remove(&(position as u32));
                 if position < last
                     && let Some(pair) = slots.remove(&(last as u32))
@@ -295,10 +293,10 @@ impl Lookup<'_> {
                 entry.order = position as u32;
                 data.index.set_position(entry.key, position);
             }
-            layout.next_order = layout.len as u32 - 1;
+            layout.private_data().next_order = layout.len as u32 - 1;
             layout.private_data().reaccount(before_bytes);
             self.store.values.remove(position);
-            if let Some(slots) = self.store.accessors.as_mut() {
+            if let Some(slots) = self.store.cold.as_mut() {
                 let previous = std::mem::take(slots.as_mut());
                 for (slot, pair) in previous {
                     if (slot as usize) < position {
@@ -312,11 +310,11 @@ impl Lookup<'_> {
         self.store.layout_mut_len_after_remove();
         if self
             .store
-            .accessors
+            .cold
             .as_ref()
             .is_some_and(|slots| slots.is_empty())
         {
-            self.store.accessors = None;
+            self.store.cold.clear();
         }
         Rc::get_mut(&mut self.store.layout)
             .expect("private edited layout")
@@ -333,17 +331,19 @@ impl NamedStore {
         layout.len -= 1;
     }
     pub(super) fn bump_epoch(&mut self) {
+        self.cold.clear_guard();
         if !self.layout.dictionary {
-            self.epoch = 0;
+            self.set_epoch(0);
             return;
         }
-        self.epoch = match self.epoch.checked_add(1) {
+        let epoch = match self.epoch().checked_add(1) {
             Some(next) if next != 0 => next,
             _ => {
                 self.layout = Rc::new(self.layout.copied(true));
                 1
             }
         };
+        self.set_epoch(epoch);
     }
     fn edit_layout(&mut self, force_dictionary: bool) -> &mut Layout {
         self.invalidate_dependencies();
@@ -356,8 +356,8 @@ impl NamedStore {
         if !self.layout.dictionary {
             self.layout = Rc::new(self.layout.copied(dictionary));
         }
-        if dictionary && self.epoch == 0 {
-            self.epoch = 1;
+        if dictionary && self.epoch() == 0 {
+            self.set_epoch(1);
         }
         let layout = Rc::make_mut(&mut self.layout);
         layout.edits = edits;
@@ -371,7 +371,7 @@ impl NamedStore {
 
 impl Drop for Layout {
     fn drop(&mut self) {
-        if self.root.is_none()
+        if self.known_root().is_none()
             && let Some(owner) = self.owner.upgrade()
             && let Ok(mut roots) = owner.roots.try_borrow_mut()
         {
@@ -391,10 +391,14 @@ impl Drop for Layout {
                 roots.shrink_to_fit();
             }
         }
-        if let (Some(parent), Some(label)) = (&self.parent, self.incoming)
-            && let Ok(mut edges) = parent.transitions.try_borrow_mut()
+        if let (Some(parent), Some(label)) = (self.parent(), self.incoming())
+            && let Some(links) = parent.links.get()
+            && let Ok(mut edges) = links.transitions.try_borrow_mut()
         {
             edges.remove(label, self as *const Layout);
+        }
+        if self.links.get().is_some() {
+            self.budget.sub(size_of::<LayoutLinks>());
         }
         self.budget.sub(size_of::<Self>());
     }

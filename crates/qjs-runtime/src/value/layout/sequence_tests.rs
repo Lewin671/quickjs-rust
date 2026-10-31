@@ -75,3 +75,77 @@ fn descriptor_predictions_reject_foreign_domains_and_prototype_edges() {
     let (store, _) = sequence.finish_store();
     assert!(store.prototype_is_object(&prototype));
 }
+
+#[test]
+fn reusable_predictions_are_canonical_even_for_a_new_prototype_family() {
+    let domain = crate::property::atom::AtomDomain::new();
+    let _owner = PropertyOwner::new(domain.clone());
+    let parent = crate::ObjectRef::new(std::collections::HashMap::new(), &domain);
+    let mut builder = DataSequence::new(
+        None,
+        &domain,
+        Some(crate::Prototype::Object(parent.clone())),
+    );
+    builder.insert("x", Value::Number(1.0));
+    let (first, prediction, _) = builder.finish();
+    let prediction = prediction.unwrap();
+    assert!(!prediction.transient);
+    assert!(Rc::ptr_eq(&first.layout, &prediction));
+    let mut next = DataSequence::new(
+        Some(prediction.clone()),
+        &domain,
+        Some(crate::Prototype::Object(parent)),
+    );
+    next.insert("x", Value::Number(2.0));
+    let (second, _, _) = next.finish();
+    assert!(Rc::ptr_eq(&second.layout, &prediction));
+    assert_eq!(second.get_text("x").unwrap().value, Value::Number(2.0));
+}
+
+#[test]
+fn string_wrapper_templates_publish_before_instances_are_minted() {
+    let domain = crate::property::atom::AtomDomain::new();
+    let _owner = PropertyOwner::new(domain.clone());
+    let parent = crate::ObjectRef::new(std::collections::HashMap::new(), &domain);
+    let template = StringWrapperLayout::new(&domain, parent);
+    let a = template.instantiate(1.0);
+    let b = template.instantiate(2.0);
+    assert!(!a.layout.transient && !b.layout.transient);
+    assert!(Rc::ptr_eq(&a.layout, &b.layout));
+    assert_eq!(a.get_text("length").unwrap().value, Value::Number(1.0));
+    assert_eq!(b.get_text("length").unwrap().value, Value::Number(2.0));
+}
+
+#[test]
+fn predicted_builders_own_the_prototype_until_exact_or_mismatching_completion() {
+    for mismatch in [false, true] {
+        let domain = AtomDomain::new();
+        let _owner = PropertyOwner::new(domain.clone());
+        let parent = crate::ObjectRef::new(HashMap::new(), &domain);
+        let weak = parent.downgrade();
+        let mut first = DataSequence::new(
+            None,
+            &domain,
+            Some(crate::Prototype::Object(parent.clone())),
+        );
+        first.insert("x", Value::Null);
+        let (store, prediction, _) = first.finish();
+        drop(store);
+        let mut next = DataSequence::new(
+            prediction.clone(),
+            &domain,
+            Some(crate::Prototype::Object(parent)),
+        );
+        assert!(weak.upgrade().is_some(), "the builder owns its actual edge");
+        next.insert(if mismatch { "other" } else { "x" }, Value::Number(2.0));
+        let (store, _) = next.finish_store();
+        let parent = weak.upgrade().expect("completed receiver keeps the edge");
+        assert!(store.prototype_is_object(&parent));
+        drop(parent);
+        drop(store);
+        assert!(
+            weak.upgrade().is_none(),
+            "prediction metadata must not pin the prototype"
+        );
+    }
+}

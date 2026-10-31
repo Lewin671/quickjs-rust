@@ -6,7 +6,7 @@ use crate::value::{OwnDataPropertyRead, OwnDataPropertyWrite};
 impl NamedStore {
     /// Shared construction metadata; a retaining caller must own its symbol lifetime.
     pub(crate) fn shared_layout(&self) -> Option<&Rc<Layout>> {
-        (!self.layout.dictionary && self.layout.mode.is_none()).then_some(&self.layout)
+        (!self.layout.dictionary).then(|| self.guard_layout())
     }
 
     /// Construction caches retain only an empty layout; the new store owns its edge.
@@ -21,12 +21,12 @@ impl NamedStore {
             Self {
                 layout: layout.clone(),
                 values: ValueSlots::Empty,
-                accessors: None,
-                epoch: 0,
-                prototype: Self::retain_prototype(layout, prototype),
+                cold: ColdStorage::default(),
+                prototype,
             }
         } else {
-            let store = Self::empty_with_prototype(domain, prototype, 0);
+            let mut store = Self::empty_with_prototype(domain, prototype, 0);
+            store.materialize_layout();
             *cache = Some(store.layout.clone());
             store
         };
@@ -39,45 +39,41 @@ impl NamedStore {
     pub(crate) fn reserve(&mut self, capacity: usize) {
         self.values.reserve(capacity);
     }
-    pub(crate) fn from_data_layout(layout: Rc<Layout>, values: Vec<Value>) -> Self {
-        Self::from_slots(layout, ValueSlots::from_vec(values))
+    pub(crate) fn from_data_layout(
+        layout: Rc<Layout>,
+        values: Vec<Value>,
+        prototype: Option<crate::Prototype>,
+    ) -> Self {
+        Self::from_slot_parts(layout, ValueSlots::from_vec(values), None, prototype)
     }
     /// Unique two-key input is already in slot order and needs no Vec allocation.
-    pub(crate) fn from_data_pair(layout: Rc<Layout>, values: [Value; 2]) -> Self {
-        Self::from_slots(layout, ValueSlots::pair(values))
+    pub(crate) fn from_data_pair(
+        layout: Rc<Layout>,
+        values: [Value; 2],
+        prototype: Option<crate::Prototype>,
+    ) -> Self {
+        Self::from_slot_parts(layout, ValueSlots::pair(values), None, prototype)
     }
-    pub(super) fn from_slots(layout: Rc<Layout>, values: ValueSlots) -> Self {
-        Self::from_slot_parts(layout, values, None)
-    }
+    /// A live builder can move its already-owned prototype into the receiver.
+    /// The caller has already matched this edge to the layout.
     pub(super) fn from_slot_parts(
         layout: Rc<Layout>,
         values: ValueSlots,
         accessors: Option<Box<AccessorSlots>>,
+        prototype: Option<crate::Prototype>,
     ) -> Self {
         let layout = if layout.dictionary {
-            Rc::new(layout.copied(true))
+            let copy = layout.copied(true);
+            copy.epoch.set(1);
+            Rc::new(copy)
         } else {
+            debug_assert_eq!(layout.epoch.get(), 0);
             layout
         };
-        let epoch = if layout.dictionary { 1 } else { 0 };
-        let cached = layout
-            .root
-            .as_ref()
-            .unwrap_or(&layout)
-            .prototype_value
-            .borrow()
-            .upgrade();
-        let prototype = cached.or_else(|| {
-            Self::retain_prototype(
-                &layout,
-                layout.prototype.as_ref().and_then(WeakPrototype::upgrade),
-            )
-        });
         let store = Self {
             layout,
             values,
-            accessors,
-            epoch,
+            cold: accessors.into(),
             prototype,
         };
         store.verify();
@@ -152,7 +148,7 @@ impl NamedStore {
     pub(crate) fn transform_descriptors(&mut self, frozen: bool) {
         let source = self.layout.clone();
         let label = Transition::Integrity { frozen };
-        if let Some(next) = source.transitions.borrow().get(label) {
+        if let Some(next) = source.transition(label) {
             crate::diagnostics::count!(property_transition_hits);
             self.invalidate_dependencies();
             self.layout = next;
@@ -178,8 +174,7 @@ impl NamedStore {
             entry.attrs = change(entry.attrs);
         }
         if !source.dictionary {
-            next.parent = Some(source.clone());
-            next.incoming = Some(label);
+            next.set_parent(source.clone(), label);
         }
         crate::diagnostics::count!(property_transition_misses);
         crate::diagnostics::count!(property_shape_nodes_created);

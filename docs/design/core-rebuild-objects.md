@@ -41,11 +41,11 @@ slice/key lease share a 24-byte payload, with no extra allocation. No receiver/d
 | Type | Fields / size |
 | --- | --- |
 | `ShapeEntry` | `key:u32, slot:u32, order:u32, attrs:u16, reserved:u16` = 16 bytes |
-| `NamedStore` | `layout:Rc<Layout>` 8, `values:ValueSlots` 32, `accessors:Option<Box<AccessorSlots>>` 8, `epoch:u64` 8, strong prototype owner 8 = 64 bytes; `RefCell` wrapper 72 |
+| `NamedStore` | `layout:Rc<Layout>` 8, `values:ValueSlots` 32, cold metadata pointer 8, inline strong prototype edge 16 = 64 bytes; `RefCell` wrapper 72; dictionary epoch resides in its private Layout |
 | Ordinary hot payload | `named:RefCell<NamedStore>` 72, tagged cold pointer 16, index count 4, packed flags/edit count/padding 4 = 96 bytes, excluding RC header |
 | Array hot/cold payload | 56-byte header: dense Vec RefCell 32, packed length/flags 8, scoped seed owner 8, cold pointer 8. Optional hole payload 40: holes RefCell 32 and lazy named pointer 8; a separate NamedStore RefCell 72 is created only on named/prototype mutation. Realm shares the default empty seed; probes allocate nothing. |
 | `Slot` | One owning `Value`: initially 16 bytes, S5 target 8; TDZ/hole state separate from ordinary data |
-| `Layout` | Immutable shape or unique dictionary; ID/domain, owned entries/key leases and one key-ID lookup index; transition cache is cold |
+| `Layout` | 80-byte prototype-bound header; shared leased property buffer; parent/root/transition links cold. Buffers through two keys are interned independently of prototypes; shared buffers through four keys use linear lookup, then one ID index. |
 | `Dictionary` | Private identity + `u64` structural version; key-ID index, attributes/order and slot allocation are its sole authority |
 
 Compile-time assertions verify these sizes on aarch64/x86_64 macOS; a layout
@@ -111,25 +111,16 @@ Layouts include prototype identity and semantic hook flavor. Shared guards compa
 weak allocation identity only; dictionary guards additionally compare versions.
 A receiver owns its explicit prototype edge; layouts retain weak identities so
 retained shapes cannot pin JavaScript values or realms. Roots and transition
-trees are canonical per prototype/flavor. Prototype mutation re-roots the layout. Unconditional array/string length hooks
+trees are canonical per prototype/flavor. Root lookup is weak; the bounded
+metadata cache retains reusable roots while their prototype lives. Geometrically
+spaced sweeps on root misses evict dead-prototype metadata, bounding empty-binding
+churn without losing reuse. Prototype mutation re-roots the layout. Unconditional array/string length hooks
 precede IC lookup. The interpreter may evaluate a cell-proven native typed-array
 length getter directly; custom accessors retain the ordinary call path.
 
-Prototype-mode objects use private dictionaries and one validity state. Their
-weak user graph links prototype-mode children, never IC sites. Structural
-mutation replaces its validity generation and cascades iteratively. The single
-NamedStore write barrier also invalidates on prototype value/accessor writes.
-After four value-write invalidations a holder becomes permanently value-unstable: the
-transition invalidates once, future entries load live slots and value writes stop
-invalidating. Structural edits always invalidate; additions do not spend the
-overwrite budget. There is no subscriber cap. Inherited entries hold the first
-prototype's generation, weak holder/slot and optional stable-holder constant;
-the receiver layout already implies its first prototype. Numbers/booleans/null/undefined are copied; RC values and existing accessor pairs
-use weak handles (no hit-time pair allocation), and a failed upgrade misses.
-Missing and accessor outcomes use the same proof. Accessors execute once after all borrows end. Array prototype identity is the live array payload, with no contextual wrapper.
-Proxy/unmodeled exotic chains remain uncached. Expired layouts/generations are
-stale entries and can be replaced without consuming another polymorphic way.
-Enumeration and creation proofs use the same shared generations and layout roots.
+Prototype holders keep shared shapes; roots and per-object validity metadata
+are demand-driven. The [prototype contract](core-rebuild-prototypes.md) owns
+edge lifetime, invalidation, weak constants and the value-instability policy.
 
 S2 deletes the old unguarded exact-value/receiver variants and repeated probe
 paths. In debug mode compare every IC result with

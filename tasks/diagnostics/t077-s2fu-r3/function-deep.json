@@ -1,0 +1,10 @@
+{
+  "native": {
+    "exit_code": 0,
+    "stdout": "function-deep true\nUndefined\n"
+  },
+  "quickjs-ng": {
+    "exit_code": 0,
+    "stdout": "function-deep true\n"
+  }
+}

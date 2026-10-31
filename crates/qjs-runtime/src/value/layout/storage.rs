@@ -4,6 +4,8 @@
 use super::*;
 use std::cell::{Cell, Ref};
 
+const LINEAR_WIDTH: usize = 4;
+
 #[derive(Clone, Default)]
 pub(super) struct Budget(Rc<Cell<usize>>);
 impl Budget {
@@ -21,6 +23,7 @@ impl Budget {
 pub(super) struct LayoutData {
     budget: Budget,
     key_bytes: usize,
+    pub(super) next_order: u32,
     pub(super) entries: Vec<ShapeEntry>,
     pub(super) keys: Vec<KeyLease>,
     pub(super) index: IdIndex,
@@ -30,9 +33,10 @@ impl LayoutData {
         let data = Self {
             budget,
             key_bytes: 0,
+            next_order: 0,
             entries: Vec::new(),
             keys: Vec::new(),
-            index: IdIndex::new(),
+            index: IdIndex::unallocated(),
         };
         data.budget.add(data.bytes());
         data
@@ -43,6 +47,8 @@ impl LayoutData {
         }
         let index = if len == self.entries.len() {
             self.index.clone()
+        } else if len <= LINEAR_WIDTH {
+            IdIndex::unallocated()
         } else {
             let mut index = IdIndex::new();
             for (position, entry) in self.entries[..len].iter().enumerate() {
@@ -53,6 +59,11 @@ impl LayoutData {
         let data = Self {
             budget: self.budget.clone(),
             key_bytes: self.keys[..len].iter().map(Self::key_bytes).sum(),
+            next_order: if len == self.entries.len() {
+                self.next_order
+            } else {
+                len as u32
+            },
             entries: self.entries[..len].to_vec(),
             keys: self.keys[..len].to_vec(),
             index,
@@ -70,8 +81,25 @@ impl LayoutData {
     fn key_bytes(key: &KeyLease) -> usize {
         key.string_text().map_or(0, str::len) + 64
     }
-    pub(super) fn append(&mut self, key: &KeyLease, attrs: Attributes, proof: IdProbe) {
+    pub(super) fn probe(&self, key: KeyId, counted: bool) -> IdProbe {
+        if counted {
+            crate::diagnostics::count!(property_id_probes);
+        }
+        if self.index.allocated() {
+            return self.index.probe_uncounted(key);
+        }
+        IdProbe::linear(key, self.entries.iter().position(|entry| entry.key == key))
+    }
+    pub(super) fn append(&mut self, key: &KeyLease, attrs: Attributes, mut proof: IdProbe) {
         let before = self.bytes();
+        if !self.index.allocated() && self.entries.len() >= LINEAR_WIDTH {
+            self.index = IdIndex::new();
+            for (position, entry) in self.entries.iter().enumerate() {
+                self.index
+                    .insert_at(self.index.probe_uncounted(entry.key), position);
+            }
+            proof = self.index.probe_uncounted(key.id());
+        }
         let slot = self.entries.len() as u32;
         self.entries.push(ShapeEntry {
             key: key.id(),
@@ -82,7 +110,10 @@ impl LayoutData {
         });
         self.keys.push(key.clone());
         self.key_bytes += Self::key_bytes(key);
-        self.index.insert_at(proof, slot as usize);
+        if self.index.allocated() {
+            self.index.insert_at(proof, slot as usize);
+        }
+        self.next_order = self.next_order.max(self.entries.len() as u32);
         self.budget.add(self.bytes() - before);
     }
     pub(super) fn reaccount(&mut self, before: usize) {
@@ -121,20 +152,31 @@ impl Layout {
         self.entries().get(position).copied()
     }
     pub(super) fn probe(&self, key: KeyId) -> IdProbe {
-        let mut proof = self.data.borrow().index.probe(key);
+        let mut proof = self.data.borrow().probe(key, true);
         proof.position = proof.position.filter(|&position| position < self.len);
         proof
     }
+    #[inline(always)]
     pub(super) fn entry_for_key(&self, key: KeyId) -> Option<ShapeEntry> {
         let data = self.data.borrow();
-        let position = data.index.probe(key).position?;
+        crate::diagnostics::count!(property_id_probes);
+        // A shared tail can be wider than this receiver. Choose the read path
+        // by its visible prefix, never by another shape's future fields.
+        if self.len <= LINEAR_WIDTH {
+            return data.entries[..self.len]
+                .iter()
+                .find(|entry| entry.key == key)
+                .copied();
+        }
+        debug_assert!(data.index.allocated());
+        let position = data.index.probe_uncounted(key).position?;
         (position < self.len).then(|| data.entries[position])
     }
     pub(super) fn verify_position(&self, key: KeyId) -> Option<usize> {
         self.data
             .borrow()
-            .index
-            .verify_position(key)
+            .probe(key, false)
+            .position
             .filter(|&position| position < self.len)
     }
     pub(super) fn private_data(&mut self) -> &mut LayoutData {

@@ -242,3 +242,25 @@ fn weak_accessor_constants_release_the_pair_and_its_getter() {
     assert!(weak.upgrade().is_none());
     assert!(constant.fetch().is_none());
 }
+
+#[test]
+fn virtual_properties_are_rejected_before_constant_fetch() {
+    let Value::Function(function) = crate::eval("(function Constructor() {})").unwrap() else {
+        panic!("user function");
+    };
+    crate::Prototype::Function(function.clone())
+        .enter_prototype_mode()
+        .unwrap();
+    let holder = WeakTarget::Function(function.downgrade());
+    assert_eq!(
+        function.virtual_named_probe("prototype"),
+        Some(Virtual::FunctionPrototype)
+    );
+    let before = function.named_version();
+    assert!(Constant::admit(&holder, Probe::Virtual(Virtual::FunctionPrototype)).is_none());
+    assert_eq!(
+        function.virtual_named_probe("prototype"),
+        Some(Virtual::FunctionPrototype)
+    );
+    assert_eq!(function.named_version(), before);
+}

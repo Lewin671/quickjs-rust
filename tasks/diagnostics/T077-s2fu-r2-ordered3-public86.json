@@ -1,0 +1,2625 @@
+{
+  "artifact_type": "quickjs-triage",
+  "attempts_consumed": 0,
+  "budget_met": true,
+  "builds": {
+    "base": {
+      "cache_hit": true,
+      "cache_key": "e1db3792c7e3b2a2d3a6472804e985f58608cc3561442ba64eaa22cb6ed50758",
+      "cache_spec_sha256": "a91299bfc1b37282d2091114fabba311ef9541e52e3568fb3804ec5a4ff397cb",
+      "path": "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261031T133013Z-t077-s2fu-r2-slot-public86/out/triage/base000/qjs",
+      "revision": "1e6e2a2b8ccdb590d735e5b6e969105cb1344c72",
+      "sha256": "b756fe7409b65b6c273d71dfbbc06238fbb73b32341797c4df0c19a4725841a5"
+    },
+    "candidate": {
+      "cache_hit": true,
+      "cache_key": "e45b0b89748bae1cb3b0c437e236a9e1f3872984903ca2c717c0002d97238c80",
+      "cache_spec_sha256": "27cc070c5f24d39d8664e8581ddb2630eb9f6085e64fc020155d659dd4d8e0f2",
+      "path": "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261031T133013Z-t077-s2fu-r2-slot-public86/out/triage/cand000/qjs",
+      "revision": "70bedf7c325d4398a95aa0e8f75c782bdcfca8f3",
+      "sha256": "6d687969637ffb3d110811d8aa2391e29e029e26ffe4c004a65e1a43925bfc0e"
+    }
+  },
+  "case_shards": [
+    [
+      "broad/array_allocation",
+      "broad/array_write",
+      "broad/closure_allocation_call",
+      "broad/function_call_two_args",
+      "broad/math_abs",
+      "broad/property_dynamic_read",
+      "broad/top_level_function_call",
+      "development/immutable/persistent",
+      "development/meriyah/parse",
+      "external/jetstream3-js-subset/gaussian-blur",
+      "external/kraken-1.1/ai-astar",
+      "external/kraken-1.1/audio-oscillator",
+      "external/kraken-1.1/json-parse-financial",
+      "external/kraken-1.1/stanford-crypto-pbkdf2",
+      "external/sunspider-1.0/3d-raytrace",
+      "external/sunspider-1.0/access-nsieve",
+      "external/sunspider-1.0/bitops-nsieve-bits",
+      "external/sunspider-1.0/crypto-sha1",
+      "external/sunspider-1.0/math-partial-sums",
+      "external/sunspider-1.0/string-fasta",
+      "sentinel/capturing_closure_call",
+      "sentinel/recursive_call_tree"
+    ],
+    [
+      "broad/array_dynamic_read",
+      "broad/branch_arithmetic",
+      "broad/dynamic_method_call",
+      "broad/global_read",
+      "broad/method_call",
+      "broad/property_read",
+      "development/big.js/arith",
+      "development/js-yaml/document",
+      "development/moment/dates",
+      "external/jetstream3-js-subset/hash-map",
+      "external/kraken-1.1/audio-beat-detection",
+      "external/kraken-1.1/imaging-darkroom",
+      "external/kraken-1.1/json-stringify-tinderbox",
+      "external/kraken-1.1/stanford-crypto-sha256-iterative",
+      "external/sunspider-1.0/access-binary-trees",
+      "external/sunspider-1.0/bitops-3bit-bits-in-byte",
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/sunspider-1.0/date-format-tofte",
+      "external/sunspider-1.0/math-spectral-norm",
+      "external/sunspider-1.0/string-tagcloud",
+      "sentinel/heterogeneous_property_read",
+      "sentinel/string_key_map_churn"
+    ],
+    [
+      "broad/array_index_of",
+      "broad/captured_read",
+      "broad/empty_loop",
+      "broad/local_read",
+      "broad/object_allocation",
+      "broad/property_write",
+      "development/diff/compare",
+      "development/lodash/transform",
+      "development/papaparse/csv",
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/kraken-1.1/audio-dft",
+      "external/kraken-1.1/imaging-desaturate",
+      "external/kraken-1.1/stanford-crypto-aes",
+      "external/sunspider-1.0/3d-cube",
+      "external/sunspider-1.0/access-fannkuch",
+      "external/sunspider-1.0/bitops-bits-in-byte",
+      "external/sunspider-1.0/crypto-aes",
+      "external/sunspider-1.0/date-format-xparb",
+      "external/sunspider-1.0/regexp-dna",
+      "external/sunspider-1.0/string-unpack-code",
+      "sentinel/polymorphic_call_site"
+    ],
+    [
+      "broad/array_read",
+      "broad/captured_write",
+      "broad/function_call_reordered",
+      "broad/many_locals_call",
+      "broad/plain_function_call",
+      "broad/string_slice",
+      "development/graphlib/paths",
+      "development/matter-js/simulate",
+      "external/jetstream3-js-subset/cdjs",
+      "external/jetstream3-js-subset/stanford-crypto-aes",
+      "external/kraken-1.1/audio-fft",
+      "external/kraken-1.1/imaging-gaussian-blur",
+      "external/kraken-1.1/stanford-crypto-ccm",
+      "external/sunspider-1.0/3d-morph",
+      "external/sunspider-1.0/access-nbody",
+      "external/sunspider-1.0/bitops-bitwise-and",
+      "external/sunspider-1.0/crypto-md5",
+      "external/sunspider-1.0/math-cordic",
+      "external/sunspider-1.0/string-base64",
+      "external/sunspider-1.0/string-validate-input",
+      "sentinel/prototype_method_call"
+    ]
+  ],
+  "cases": [
+    {
+      "id": "broad/array_allocation",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9999637273072045,
+          "upper": 1.0000308817438908
+        },
+        "precise": false,
+        "ratio": 1.0000095769946014,
+        "relative_half_width": 4.5851350548797853e-05
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.0018428383886413,
+          "upper": 1.0341565403247672
+        },
+        "precise": false,
+        "ratio": 1.0095206148860845,
+        "relative_half_width": 0.024403588272897903
+      }
+    },
+    {
+      "id": "broad/array_dynamic_read",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9999507908471427,
+          "upper": 1.0000519003081894
+        },
+        "precise": false,
+        "ratio": 1.000003733359702,
+        "relative_half_width": 5.294511794384782e-05
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9555051306137948,
+          "upper": 1.0173149242836683
+        },
+        "precise": false,
+        "ratio": 1.0001519639710612,
+        "relative_half_width": 0.04672589599658794
+      }
+    },
+    {
+      "id": "broad/array_index_of",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9911152848291496,
+          "upper": 0.991265368664851
+        },
+        "precise": false,
+        "ratio": 0.9911649054292215,
+        "relative_half_width": 0.00010135874976935355
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.8718517724675281,
+          "upper": 1.0523839400157111
+        },
+        "precise": false,
+        "ratio": 0.9333327302435978,
+        "relative_half_width": 0.12755495003485118
+      }
+    },
+    {
+      "id": "broad/array_read",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9999503323705438,
+          "upper": 1.0001616427654696
+        },
+        "precise": false,
+        "ratio": 1.0000924857811597,
+        "relative_half_width": 0.0001421604713895963
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9533578482231319,
+          "upper": 1.0261009043624518
+        },
+        "precise": false,
+        "ratio": 1.0042782759699713,
+        "relative_half_width": 0.05341166262148578
+      }
+    },
+    {
+      "id": "broad/array_write",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9998823587874679,
+          "upper": 1.0000441546827252
+        },
+        "precise": false,
+        "ratio": 0.9999466059666592,
+        "relative_half_width": 9.755392486354708e-05
+      },
+      "target": true,
+      "wall_band": 1.0537144236489662,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9078128069892867,
+          "upper": 1.014892073019945
+        },
+        "precise": false,
+        "ratio": 0.9963951604894005,
+        "relative_half_width": 0.09757777464485495
+      }
+    },
+    {
+      "id": "broad/branch_arithmetic",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9998745205916102,
+          "upper": 1.000027399856088
+        },
+        "precise": false,
+        "ratio": 1.0000056500059638,
+        "relative_half_width": 0.00013114587045981452
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9184315083790797,
+          "upper": 0.9620981865719077
+        },
+        "precise": false,
+        "ratio": 0.9359939454913694,
+        "relative_half_width": 0.027889326855457863
+      }
+    },
+    {
+      "id": "broad/captured_read",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9999436747051004,
+          "upper": 1.0000778937844401
+        },
+        "precise": false,
+        "ratio": 1.0000016123413322,
+        "relative_half_width": 7.62813201162782e-05
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9524068930132931,
+          "upper": 1.1501956790383014
+        },
+        "precise": false,
+        "ratio": 1.004221442138156,
+        "relative_half_width": 0.14536060551479757
+      }
+    },
+    {
+      "id": "broad/captured_write",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9999655225237435,
+          "upper": 1.0002291029349717
+        },
+        "precise": false,
+        "ratio": 1.0000038016774255,
+        "relative_half_width": 0.00022530040102664017
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9927874034466928,
+          "upper": 1.309179787341473
+        },
+        "precise": false,
+        "ratio": 1.0006404533773985,
+        "relative_half_width": 0.30834185538140213
+      }
+    },
+    {
+      "id": "broad/closure_allocation_call",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9999745114023038,
+          "upper": 1.000073591328236
+        },
+        "precise": false,
+        "ratio": 1.0000183112288863,
+        "relative_half_width": 5.5279087121551385e-05
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9359484183334683,
+          "upper": 1.0188948329076055
+        },
+        "precise": false,
+        "ratio": 1.0116086301659164,
+        "relative_half_width": 0.08083801452132078
+      }
+    },
+    {
+      "id": "broad/dynamic_method_call",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9984173088959626,
+          "upper": 0.9985518889318655
+        },
+        "precise": false,
+        "ratio": 0.9984726239666395,
+        "relative_half_width": 7.93862178325444e-05
+      },
+      "target": true,
+      "wall_band": 1.1124430413801016,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9711945184218985,
+          "upper": 1.0252863931968441
+        },
+        "precise": false,
+        "ratio": 1.0032158962825,
+        "relative_half_width": 0.03297112705355176
+      }
+    },
+    {
+      "id": "broad/empty_loop",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9998973168103608,
+          "upper": 1.0000239535228135
+        },
+        "precise": false,
+        "ratio": 0.9999340711851962,
+        "relative_half_width": 8.988826384404014e-05
+      },
+      "target": true,
+      "wall_band": 1.1117226183903322,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9202786644299158,
+          "upper": 0.9509215020044564
+        },
+        "precise": false,
+        "ratio": 0.9385125740516371,
+        "relative_half_width": 0.01981346555830088
+      }
+    },
+    {
+      "id": "broad/function_call_reordered",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9999398375724887,
+          "upper": 1.0000435425321403
+        },
+        "precise": false,
+        "ratio": 1.0000329725426673,
+        "relative_half_width": 9.314057374165685e-05
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9902494617395716,
+          "upper": 1.208508107951584
+        },
+        "precise": false,
+        "ratio": 1.0072237672270408,
+        "relative_half_width": 0.19984073775253886
+      }
+    },
+    {
+      "id": "broad/function_call_two_args",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9999529985854838,
+          "upper": 1.000038372263089
+        },
+        "precise": false,
+        "ratio": 1.0000106860832154,
+        "relative_half_width": 5.7690209253058455e-05
+      },
+      "target": true,
+      "wall_band": 1.0582418565836376,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9801424206319235,
+          "upper": 1.0229394570315187
+        },
+        "precise": false,
+        "ratio": 0.9987570060801875,
+        "relative_half_width": 0.02421254700003539
+      }
+    },
+    {
+      "id": "broad/global_read",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9998769695549882,
+          "upper": 0.9999504662252693
+        },
+        "precise": false,
+        "ratio": 0.99990154063738,
+        "relative_half_width": 4.893040554576622e-05
+      },
+      "target": true,
+      "wall_band": 1.1131654120394188,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9196061324092968,
+          "upper": 0.9493457198674506
+        },
+        "precise": false,
+        "ratio": 0.929616071276936,
+        "relative_half_width": 0.021223437502982945
+      }
+    },
+    {
+      "id": "broad/local_read",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.999898304010301,
+          "upper": 1.0000378698185437
+        },
+        "precise": false,
+        "ratio": 0.9999929730876013,
+        "relative_half_width": 9.467870574497717e-05
+      },
+      "target": true,
+      "wall_band": 1.0869808129252558,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9716425641615304,
+          "upper": 0.9909453703529668
+        },
+        "precise": false,
+        "ratio": 0.9800715529493736,
+        "relative_half_width": 0.011094921968574756
+      }
+    },
+    {
+      "id": "broad/many_locals_call",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.999899366198559,
+          "upper": 1.0000230126246212
+        },
+        "precise": false,
+        "ratio": 0.9999800781949909,
+        "relative_half_width": 8.072011960447156e-05
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9838027862861703,
+          "upper": 1.0114587409094444
+        },
+        "precise": false,
+        "ratio": 1.00713206416521,
+        "relative_half_width": 0.023713368374475685
+      }
+    },
+    {
+      "id": "broad/math_abs",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9999653926426892,
+          "upper": 1.0000942284761083
+        },
+        "precise": false,
+        "ratio": 1.00006691486403,
+        "relative_half_width": 0.00010152573487820504
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9773998679523759,
+          "upper": 1.016321534265606
+        },
+        "precise": false,
+        "ratio": 0.998093475828744,
+        "relative_half_width": 0.02117210013514792
+      }
+    },
+    {
+      "id": "broad/method_call",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9971502018567913,
+          "upper": 0.997281212960534
+        },
+        "precise": false,
+        "ratio": 0.9971766208945577,
+        "relative_half_width": 0.00010488820514309438
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9837259582919262,
+          "upper": 1.0268386196468566
+        },
+        "precise": false,
+        "ratio": 0.9945867511586217,
+        "relative_half_width": 0.032427406106771306
+      }
+    },
+    {
+      "id": "broad/object_allocation",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9999369602210394,
+          "upper": 1.0000435480479413
+        },
+        "precise": false,
+        "ratio": 0.9999925185563743,
+        "relative_half_width": 5.556183794075409e-05
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9670685272066347,
+          "upper": 1.0177274571703971
+        },
+        "precise": false,
+        "ratio": 0.9969870537370997,
+        "relative_half_width": 0.030937338656738422
+      }
+    },
+    {
+      "id": "broad/plain_function_call",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9999539603359429,
+          "upper": 1.0000089817683304
+        },
+        "precise": false,
+        "ratio": 0.9999837905893636,
+        "relative_half_width": 2.983162685876728e-05
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9709662665542028,
+          "upper": 0.9970573078138574
+        },
+        "precise": false,
+        "ratio": 0.9925635296434898,
+        "relative_half_width": 0.022243062229063915
+      }
+    },
+    {
+      "id": "broad/property_dynamic_read",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9742517421839939,
+          "upper": 0.9743256532950122
+        },
+        "precise": false,
+        "ratio": 0.9742745263277154,
+        "relative_half_width": 5.2476962001168914e-05
+      },
+      "target": true,
+      "wall_band": 1.0880207723285373,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9440602060442684,
+          "upper": 0.9579255440555933
+        },
+        "precise": false,
+        "ratio": 0.9453299309254897,
+        "relative_half_width": 0.013324039277770927
+      }
+    },
+    {
+      "id": "broad/property_read",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9999344081877937,
+          "upper": 1.000029835811175
+        },
+        "precise": false,
+        "ratio": 1.0000271316498994,
+        "relative_half_width": 9.272954440464609e-05
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9951307363667985,
+          "upper": 1.019548671624614
+        },
+        "precise": false,
+        "ratio": 1.0005380814342306,
+        "relative_half_width": 0.019000366445955263
+      }
+    },
+    {
+      "id": "broad/property_write",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9998778097066852,
+          "upper": 1.0000063456325037
+        },
+        "precise": false,
+        "ratio": 0.9999159692140219,
+        "relative_half_width": 9.038401352134962e-05
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.953823357234696,
+          "upper": 0.9973809599563934
+        },
+        "precise": false,
+        "ratio": 0.9942328006076249,
+        "relative_half_width": 0.04236575154762723
+      }
+    },
+    {
+      "id": "broad/string_slice",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.0005464646874849,
+          "upper": 1.0007049852001675
+        },
+        "precise": false,
+        "ratio": 1.0006270763335217,
+        "relative_half_width": 8.056761867814011e-05
+      },
+      "target": true,
+      "wall_band": 1.0816584182338898,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9780385267624809,
+          "upper": 1.0104730572859
+        },
+        "precise": false,
+        "ratio": 0.9857332621513656,
+        "relative_half_width": 0.02509785971971734
+      }
+    },
+    {
+      "id": "broad/top_level_function_call",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9944949165487948,
+          "upper": 0.99485159777584
+        },
+        "precise": false,
+        "ratio": 0.9948111924773785,
+        "relative_half_width": 0.0003180266920630448
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.6337447513720679,
+          "upper": 1.0032630938478557
+        },
+        "precise": false,
+        "ratio": 1.0030433016444944,
+        "relative_half_width": 0.5827244319939362
+      }
+    },
+    {
+      "id": "development/big.js/arith",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.0000882773075768,
+          "upper": 1.0001320767848196
+        },
+        "precise": false,
+        "ratio": 1.0000992493787713,
+        "relative_half_width": 3.282414827210367e-05
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9896081511083251,
+          "upper": 1.0189562098466751
+        },
+        "precise": false,
+        "ratio": 0.999446993730106,
+        "relative_half_width": 0.019520010804932708
+      }
+    },
+    {
+      "id": "development/diff/compare",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.0007626901050595,
+          "upper": 1.000819938827022
+        },
+        "precise": false,
+        "ratio": 1.000784760170592,
+        "relative_half_width": 3.5151071269501344e-05
+      },
+      "target": true,
+      "wall_band": 1.0991099041376808,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9845395797963904,
+          "upper": 1.023285198812526
+        },
+        "precise": false,
+        "ratio": 1.002896708671279,
+        "relative_half_width": 0.020329601209140735
+      }
+    },
+    {
+      "id": "development/graphlib/paths",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.0019367700864243,
+          "upper": 1.0021055463446982
+        },
+        "precise": false,
+        "ratio": 1.00209757266987,
+        "relative_half_width": 0.00016049174782928333
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9973709023486413,
+          "upper": 1.0962984282343622
+        },
+        "precise": false,
+        "ratio": 1.019121659862157,
+        "relative_half_width": 0.07572870974270507
+      }
+    },
+    {
+      "id": "development/immutable/persistent",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.0024138104723914,
+          "upper": 1.0025598276183243
+        },
+        "precise": false,
+        "ratio": 1.0025166943166894,
+        "relative_half_width": 0.00010263610020455616
+      },
+      "target": true,
+      "wall_band": 1.076242822605886,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.0051653932240723,
+          "upper": 1.0258820346320083
+        },
+        "precise": false,
+        "ratio": 1.0072967462359599,
+        "relative_half_width": 0.01845065862219597
+      }
+    },
+    {
+      "id": "development/js-yaml/document",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.002208485317052,
+          "upper": 1.0023640039606077
+        },
+        "precise": false,
+        "ratio": 1.0023053472088947,
+        "relative_half_width": 9.664844517054405e-05
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9140756354481133,
+          "upper": 1.0279269875899786
+        },
+        "precise": false,
+        "ratio": 1.0032239169298292,
+        "relative_half_width": 0.09752834232148855
+      }
+    },
+    {
+      "id": "development/lodash/transform",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.999838364591336,
+          "upper": 1.0006526636964415
+        },
+        "precise": false,
+        "ratio": 1.000241050251979,
+        "relative_half_width": 0.0004115142488492207
+      },
+      "target": true,
+      "wall_band": 1.0677281691676783,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9772436270210224,
+          "upper": 1.0560544645705585
+        },
+        "precise": false,
+        "ratio": 1.0076663234819705,
+        "relative_half_width": 0.04802000420276409
+      }
+    },
+    {
+      "id": "development/matter-js/simulate",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.000705905337773,
+          "upper": 1.000797997276273
+        },
+        "precise": false,
+        "ratio": 1.0007681096367174,
+        "relative_half_width": 6.216041957252116e-05
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9267835395741697,
+          "upper": 1.001148098958151
+        },
+        "precise": false,
+        "ratio": 0.9973532602348042,
+        "relative_half_width": 0.07614477129477204
+      }
+    },
+    {
+      "id": "development/meriyah/parse",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.000371901608202,
+          "upper": 1.0004859668006816
+        },
+        "precise": false,
+        "ratio": 1.0004291269550596,
+        "relative_half_width": 5.7204072571037656e-05
+      },
+      "target": true,
+      "wall_band": 1.0718949238841748,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9878135011416095,
+          "upper": 1.0128454487422902
+        },
+        "precise": false,
+        "ratio": 1.0092047176300962,
+        "relative_half_width": 0.021655116541497987
+      }
+    },
+    {
+      "id": "development/moment/dates",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.978406854851451,
+          "upper": 0.9785259974348015
+        },
+        "precise": false,
+        "ratio": 0.9784675425620527,
+        "relative_half_width": 6.202707013014397e-05
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9513495803045725,
+          "upper": 1.0017741587893043
+        },
+        "precise": false,
+        "ratio": 0.9591042219989439,
+        "relative_half_width": 0.04448936394152114
+      }
+    },
+    {
+      "id": "development/papaparse/csv",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.0033944138530992,
+          "upper": 1.0043075151167882
+        },
+        "precise": false,
+        "ratio": 1.0039240028064256,
+        "relative_half_width": 0.0005277973905521982
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9895435344383622,
+          "upper": 1.012230799557558
+        },
+        "precise": false,
+        "ratio": 1.006502773952316,
+        "relative_half_width": 0.017138447095790932
+      }
+    },
+    {
+      "id": "external/jetstream3-js-subset/cdjs",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.002796982060102,
+          "upper": 1.0035758914456256
+        },
+        "precise": false,
+        "ratio": 1.0032554367174558,
+        "relative_half_width": 0.0004571759444389478
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9974825742309877,
+          "upper": 1.0656107463252702
+        },
+        "precise": false,
+        "ratio": 1.0057838193397364,
+        "relative_half_width": 0.059482888703467296
+      }
+    },
+    {
+      "id": "external/jetstream3-js-subset/gaussian-blur",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9989121752970409,
+          "upper": 1.0007788803346032
+        },
+        "precise": false,
+        "ratio": 0.9998304808077237,
+        "relative_half_width": 0.000948560326059722
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9711254917460358,
+          "upper": 1.0569854312700127
+        },
+        "precise": false,
+        "ratio": 0.9867083203183621,
+        "relative_half_width": 0.07122379481808316
+      }
+    },
+    {
+      "id": "external/jetstream3-js-subset/hash-map",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.998516251591256,
+          "upper": 0.9989145167192549
+        },
+        "precise": false,
+        "ratio": 0.9986777207479487,
+        "relative_half_width": 0.00023710949627364641
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9935160861111224,
+          "upper": 1.004204644308366
+        },
+        "precise": false,
+        "ratio": 0.9965809468119626,
+        "relative_half_width": 0.007649852749835873
+      }
+    },
+    {
+      "id": "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9967454604442885,
+          "upper": 0.9968078996304774
+        },
+        "precise": false,
+        "ratio": 0.9967745479809639,
+        "relative_half_width": 3.3459571756822015e-05
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9686196619352085,
+          "upper": 0.9915566117206612
+        },
+        "precise": false,
+        "ratio": 0.9742807488362974,
+        "relative_half_width": 0.017731914445603625
+      }
+    },
+    {
+      "id": "external/jetstream3-js-subset/stanford-crypto-aes",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.000699852330211,
+          "upper": 1.0022144171652458
+        },
+        "precise": false,
+        "ratio": 1.001456514499658,
+        "relative_half_width": 0.0007568003748685825
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9645324994715642,
+          "upper": 1.007857796299819
+        },
+        "precise": false,
+        "ratio": 0.987908152380594,
+        "relative_half_width": 0.02423521542491991
+      }
+    },
+    {
+      "id": "external/kraken-1.1/ai-astar",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9963870896304284,
+          "upper": 0.9966548455774353
+        },
+        "precise": false,
+        "ratio": 0.9965291104636317,
+        "relative_half_width": 0.00014253580228129614
+      },
+      "target": true,
+      "wall_band": 1.0629603642460599,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9399710546488046,
+          "upper": 1.012627036316192
+        },
+        "precise": false,
+        "ratio": 0.9669952265508384,
+        "relative_half_width": 0.04718928130402156
+      }
+    },
+    {
+      "id": "external/kraken-1.1/audio-beat-detection",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9874244601675941,
+          "upper": 1.0020394029202082
+        },
+        "precise": false,
+        "ratio": 0.99855930980698,
+        "relative_half_width": 0.011276659722907922
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9877616725260655,
+          "upper": 1.0249005605855206
+        },
+        "precise": false,
+        "ratio": 1.0063231636430772,
+        "relative_half_width": 0.018791467246894955
+      }
+    },
+    {
+      "id": "external/kraken-1.1/audio-dft",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.001369799957463,
+          "upper": 1.0015290257315523
+        },
+        "precise": false,
+        "ratio": 1.0014071614069335,
+        "relative_half_width": 0.00012169308280918223
+      },
+      "target": true,
+      "wall_band": 1.1117040530377793,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9617302050621103,
+          "upper": 1.022174624896834
+        },
+        "precise": false,
+        "ratio": 1.014876130556628,
+        "relative_half_width": 0.05526074278917492
+      }
+    },
+    {
+      "id": "external/kraken-1.1/audio-fft",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9927984941172391,
+          "upper": 0.9928797507190562
+        },
+        "precise": false,
+        "ratio": 0.9928352629179381,
+        "relative_half_width": 4.48088447093653e-05
+      },
+      "target": true,
+      "wall_band": 1.0720965324794016,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9598367710819916,
+          "upper": 1.0056054070841918
+        },
+        "precise": false,
+        "ratio": 0.9950553224860825,
+        "relative_half_width": 0.036692229830276535
+      }
+    },
+    {
+      "id": "external/kraken-1.1/audio-oscillator",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9999814266076883,
+          "upper": 1.0001462135669668
+        },
+        "precise": false,
+        "ratio": 1.000074569307386,
+        "relative_half_width": 9.314442970587145e-05
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9538174960556853,
+          "upper": 1.0201171064906254
+        },
+        "precise": false,
+        "ratio": 0.9974474131370644,
+        "relative_half_width": 0.04574241640754284
+      }
+    },
+    {
+      "id": "external/kraken-1.1/imaging-darkroom",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9976283718278206,
+          "upper": 1.0006470040474396
+        },
+        "precise": false,
+        "ratio": 0.9998078810240637,
+        "relative_half_width": 0.0021846904697084835
+      },
+      "target": true,
+      "wall_band": 1.070312265730521,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.951642986308734,
+          "upper": 1.0088503905291204
+        },
+        "precise": false,
+        "ratio": 0.9945789321623876,
+        "relative_half_width": 0.0451177032473018
+      }
+    },
+    {
+      "id": "external/kraken-1.1/imaging-desaturate",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.0000852521842487,
+          "upper": 1.0027945461612804
+        },
+        "precise": false,
+        "ratio": 1.0007638730656507,
+        "relative_half_width": 0.0020291231031441814
+      },
+      "target": true,
+      "wall_band": 1.0643389881563874,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.934204152409046,
+          "upper": 1.009895765809765
+        },
+        "precise": false,
+        "ratio": 0.9793351436712383,
+        "relative_half_width": 0.048309559688653136
+      }
+    },
+    {
+      "id": "external/kraken-1.1/imaging-gaussian-blur",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9973477509260036,
+          "upper": 0.9979960867610401
+        },
+        "precise": false,
+        "ratio": 0.9974549868330655,
+        "relative_half_width": 0.0005424805481122341
+      },
+      "target": true,
+      "wall_band": 1.0507099376923927,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.0120268628936104,
+          "upper": 1.0297522718337748
+        },
+        "precise": false,
+        "ratio": 1.0190626947679324,
+        "relative_half_width": 0.010489616704374205
+      }
+    },
+    {
+      "id": "external/kraken-1.1/json-parse-financial",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.0103872761163148,
+          "upper": 1.0105367726223353
+        },
+        "precise": false,
+        "ratio": 1.010491652333703,
+        "relative_half_width": 0.00010330317874696071
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9956291496147438,
+          "upper": 1.1503842268266202
+        },
+        "precise": false,
+        "ratio": 1.0773516540867856,
+        "relative_half_width": 0.08208126942010896
+      }
+    },
+    {
+      "id": "external/kraken-1.1/json-stringify-tinderbox",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9966127618343865,
+          "upper": 0.9989648876614667
+        },
+        "precise": false,
+        "ratio": 0.996917683800698,
+        "relative_half_width": 0.0020535335003426525
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9310127882169827,
+          "upper": 1.028775372324173
+        },
+        "precise": false,
+        "ratio": 1.0076645733245382,
+        "relative_half_width": 0.08233161356929819
+      }
+    },
+    {
+      "id": "external/kraken-1.1/stanford-crypto-aes",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.0017157516155273,
+          "upper": 1.0021984614740063
+        },
+        "precise": false,
+        "ratio": 1.0019163794110453,
+        "relative_half_width": 0.0002815425206710298
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9933077746306808,
+          "upper": 1.0005932702790554
+        },
+        "precise": false,
+        "ratio": 0.9947931373764254,
+        "relative_half_width": 0.005830491470746102
+      }
+    },
+    {
+      "id": "external/kraken-1.1/stanford-crypto-ccm",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9998932289133322,
+          "upper": 1.0001121779642128
+        },
+        "precise": false,
+        "ratio": 0.9999913029513647,
+        "relative_half_width": 0.00012087606411315122
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9945407520468265,
+          "upper": 1.005139549807021
+        },
+        "precise": false,
+        "ratio": 0.998879920663733,
+        "relative_half_width": 0.006266648286541443
+      }
+    },
+    {
+      "id": "external/kraken-1.1/stanford-crypto-pbkdf2",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9997898867820499,
+          "upper": 0.9998153352121747
+        },
+        "precise": false,
+        "ratio": 0.9998113846011423,
+        "relative_half_width": 2.150233701758708e-05
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.0135480698670294,
+          "upper": 1.0316707995608052
+        },
+        "precise": false,
+        "ratio": 1.0174021235874795,
+        "relative_half_width": 0.014024617840399989
+      }
+    },
+    {
+      "id": "external/kraken-1.1/stanford-crypto-sha256-iterative",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.998098407040373,
+          "upper": 0.9981649316115732
+        },
+        "precise": false,
+        "ratio": 0.9981257468277679,
+        "relative_half_width": 3.925836391838189e-05
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.0120129446202448,
+          "upper": 1.0366500994073016
+        },
+        "precise": false,
+        "ratio": 1.0262780791301385,
+        "relative_half_width": 0.014095802416091319
+      }
+    },
+    {
+      "id": "external/sunspider-1.0/3d-cube",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.001511629601448,
+          "upper": 1.001817977114576
+        },
+        "precise": false,
+        "ratio": 1.0017056183913748,
+        "relative_half_width": 0.00019369599332974552
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9517650518136621,
+          "upper": 1.0074241304673028
+        },
+        "precise": false,
+        "ratio": 0.995000363034846,
+        "relative_half_width": 0.045426453869886974
+      }
+    },
+    {
+      "id": "external/sunspider-1.0/3d-morph",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.0022472048774576,
+          "upper": 1.0024814759749496
+        },
+        "precise": false,
+        "ratio": 1.0023102306589753,
+        "relative_half_width": 0.0001708506116531172
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9825348845251963,
+          "upper": 1.0078688008952457
+        },
+        "precise": false,
+        "ratio": 0.9987366825264463,
+        "relative_half_width": 0.016489794160417404
+      }
+    },
+    {
+      "id": "external/sunspider-1.0/3d-raytrace",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9999713602128799,
+          "upper": 1.0001432794148972
+        },
+        "precise": false,
+        "ratio": 1.0001126605913995,
+        "relative_half_width": 0.00014130442544812993
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9719509669486451,
+          "upper": 0.9985210251425111
+        },
+        "precise": false,
+        "ratio": 0.990940059067989,
+        "relative_half_width": 0.01953708856215086
+      }
+    },
+    {
+      "id": "external/sunspider-1.0/access-binary-trees",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.0077779185618387,
+          "upper": 1.0080065625514114
+        },
+        "precise": false,
+        "ratio": 1.007919410477431,
+        "relative_half_width": 0.00014039989663006125
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9891638463400406,
+          "upper": 1.016299876553618
+        },
+        "precise": false,
+        "ratio": 1.0025115395544988,
+        "relative_half_width": 0.013753793801961178
+      }
+    },
+    {
+      "id": "external/sunspider-1.0/access-fannkuch",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.0015357830030973,
+          "upper": 1.0016080127956812
+        },
+        "precise": false,
+        "ratio": 1.001590290578237,
+        "relative_half_width": 5.4423991698193674e-05
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.029422262010672,
+          "upper": 1.0443685596855432
+        },
+        "precise": false,
+        "ratio": 1.0318539601760814,
+        "relative_half_width": 0.01212826620089369
+      }
+    },
+    {
+      "id": "external/sunspider-1.0/access-nbody",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.0067025482186265,
+          "upper": 1.0068412444335522
+        },
+        "precise": false,
+        "ratio": 1.0067310842944297,
+        "relative_half_width": 0.00010942359964949411
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9973893011232017,
+          "upper": 1.015006815609182
+        },
+        "precise": false,
+        "ratio": 1.0041027023458406,
+        "relative_half_width": 0.010859559722194323
+      }
+    },
+    {
+      "id": "external/sunspider-1.0/access-nsieve",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.0154830521150988,
+          "upper": 1.0168666192841185
+        },
+        "precise": false,
+        "ratio": 1.016787820785673,
+        "relative_half_width": 0.0012848748857567927
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9992015678523891,
+          "upper": 1.043355047803897
+        },
+        "precise": false,
+        "ratio": 1.0243854687848304,
+        "relative_half_width": 0.02520402463595972
+      }
+    },
+    {
+      "id": "external/sunspider-1.0/bitops-3bit-bits-in-byte",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.0021660563307897,
+          "upper": 1.0025872580980417
+        },
+        "precise": false,
+        "ratio": 1.0025253122615936,
+        "relative_half_width": 0.0003584794441344741
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9098033153625656,
+          "upper": 0.942782963794564
+        },
+        "precise": false,
+        "ratio": 0.921262285306275,
+        "relative_half_width": 0.02335999077736539
+      }
+    },
+    {
+      "id": "external/sunspider-1.0/bitops-bits-in-byte",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.0008984451055978,
+          "upper": 1.0010612426659888
+        },
+        "precise": false,
+        "ratio": 1.0009659260700638,
+        "relative_half_width": 9.52246159859893e-05
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9858229363752372,
+          "upper": 1.0027952688539743
+        },
+        "precise": false,
+        "ratio": 0.9952802285499319,
+        "relative_half_width": 0.009593296956011299
+      }
+    },
+    {
+      "id": "external/sunspider-1.0/bitops-bitwise-and",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.0013064674633578,
+          "upper": 1.0020485462600328
+        },
+        "precise": false,
+        "ratio": 1.0016677409852044,
+        "relative_half_width": 0.0003801712476572128
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9988875462866894,
+          "upper": 1.05707780595237
+        },
+        "precise": false,
+        "ratio": 1.019304448800145,
+        "relative_half_width": 0.03705797340204797
+      }
+    },
+    {
+      "id": "external/sunspider-1.0/bitops-nsieve-bits",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.0006368601628575,
+          "upper": 1.0007832662528036
+        },
+        "precise": false,
+        "ratio": 1.000732772651236,
+        "relative_half_width": 9.585144441204285e-05
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9841105760150942,
+          "upper": 1.017440439868375
+        },
+        "precise": false,
+        "ratio": 1.0067083292321597,
+        "relative_half_width": 0.022962615957821786
+      }
+    },
+    {
+      "id": "external/sunspider-1.0/controlflow-recursive",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.0016463485313174,
+          "upper": 1.0020945730066548
+        },
+        "precise": false,
+        "ratio": 1.0020374481498189,
+        "relative_half_width": 0.00039045679053772986
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9530146042603369,
+          "upper": 1.031077315135245
+        },
+        "precise": false,
+        "ratio": 0.997752052950926,
+        "relative_half_width": 0.04694308827020666
+      }
+    },
+    {
+      "id": "external/sunspider-1.0/crypto-aes",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.001956075348564,
+          "upper": 1.003231233902335
+        },
+        "precise": false,
+        "ratio": 1.0027197526857465,
+        "relative_half_width": 0.0007621864430702452
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9825033963550948,
+          "upper": 1.009794408548685
+        },
+        "precise": false,
+        "ratio": 1.0009094621609493,
+        "relative_half_width": 0.018733844457065052
+      }
+    },
+    {
+      "id": "external/sunspider-1.0/crypto-md5",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.0007602008408925,
+          "upper": 1.0010338349844004
+        },
+        "precise": false,
+        "ratio": 1.001007992787696,
+        "relative_half_width": 0.0002476037182488344
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9653504953411939,
+          "upper": 1.0086493285203164
+        },
+        "precise": false,
+        "ratio": 0.989588431529931,
+        "relative_half_width": 0.025107912934949628
+      }
+    },
+    {
+      "id": "external/sunspider-1.0/crypto-sha1",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.0037678984048835,
+          "upper": 1.0039932911969907
+        },
+        "precise": false,
+        "ratio": 1.0038626658646275,
+        "relative_half_width": 0.00013012271180601331
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9575481327550646,
+          "upper": 1.0058350689960882
+        },
+        "precise": false,
+        "ratio": 0.9980364074305365,
+        "relative_half_width": 0.04228327881438054
+      }
+    },
+    {
+      "id": "external/sunspider-1.0/date-format-tofte",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.0061810716821598,
+          "upper": 1.0067344335852222
+        },
+        "precise": false,
+        "ratio": 1.0066968189524188,
+        "relative_half_width": 0.0005125789828235305
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9773867056959153,
+          "upper": 1.038634387593855
+        },
+        "precise": false,
+        "ratio": 0.9974739885181236,
+        "relative_half_width": 0.04126463401504887
+      }
+    },
+    {
+      "id": "external/sunspider-1.0/date-format-xparb",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.0047732972756822,
+          "upper": 1.0049960201704848
+        },
+        "precise": false,
+        "ratio": 1.0049075094968893,
+        "relative_half_width": 0.00013357462979057821
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.96277975569332,
+          "upper": 0.9955659358101383
+        },
+        "precise": false,
+        "ratio": 0.9865827771754923,
+        "relative_half_width": 0.024723225993707354
+      }
+    },
+    {
+      "id": "external/sunspider-1.0/math-cordic",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.0007542192863532,
+          "upper": 1.0009777773043238
+        },
+        "precise": false,
+        "ratio": 1.000900691328522,
+        "relative_half_width": 0.00014636165338721696
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9776416436579275,
+          "upper": 1.0169036474423125
+        },
+        "precise": false,
+        "ratio": 0.9971438723163828,
+        "relative_half_width": 0.019948238482851544
+      }
+    },
+    {
+      "id": "external/sunspider-1.0/math-partial-sums",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9940541801661656,
+          "upper": 0.9941675585876348
+        },
+        "precise": false,
+        "ratio": 0.9941318534254515,
+        "relative_half_width": 7.813785288135477e-05
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9469394224870901,
+          "upper": 1.0363705588897836
+        },
+        "precise": false,
+        "ratio": 1.001538861236276,
+        "relative_half_width": 0.05765885066415666
+      }
+    },
+    {
+      "id": "external/sunspider-1.0/math-spectral-norm",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.005660886189358,
+          "upper": 1.0059247847685684
+        },
+        "precise": false,
+        "ratio": 1.005765312395393,
+        "relative_half_width": 0.00015855823541555125
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.8987979117333948,
+          "upper": 0.9873556908897178
+        },
+        "precise": false,
+        "ratio": 0.9760231660182959,
+        "relative_half_width": 0.08592059825324538
+      }
+    },
+    {
+      "id": "external/sunspider-1.0/regexp-dna",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9987965347592362,
+          "upper": 0.9988414928384383
+        },
+        "precise": false,
+        "ratio": 0.9988246229029313,
+        "relative_half_width": 2.8121987529550196e-05
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9612581732867671,
+          "upper": 0.972044487961402
+        },
+        "precise": false,
+        "ratio": 0.9706013260127604,
+        "relative_half_width": 0.00971971212899736
+      }
+    },
+    {
+      "id": "external/sunspider-1.0/string-base64",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.0080268649663393,
+          "upper": 1.0082082856781232
+        },
+        "precise": false,
+        "ratio": 1.0081285010875713,
+        "relative_half_width": 0.00010082679813838702
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9716094692874722,
+          "upper": 1.0714090566185606
+        },
+        "precise": false,
+        "ratio": 1.000241378028672,
+        "relative_half_width": 0.07115050442139226
+      }
+    },
+    {
+      "id": "external/sunspider-1.0/string-fasta",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.0050377361062282,
+          "upper": 1.0051027123133276
+        },
+        "precise": false,
+        "ratio": 1.0050957000157985,
+        "relative_half_width": 5.767336637019227e-05
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.0006467721796706,
+          "upper": 1.0250736923643577
+        },
+        "precise": false,
+        "ratio": 1.0060774948015236,
+        "relative_half_width": 0.018881445674899577
+      }
+    },
+    {
+      "id": "external/sunspider-1.0/string-tagcloud",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.0005495346648587,
+          "upper": 1.0015810806732963
+        },
+        "precise": false,
+        "ratio": 1.0012087909815992,
+        "relative_half_width": 0.0006588942315197688
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9755595190423026,
+          "upper": 0.9947086958735808
+        },
+        "precise": false,
+        "ratio": 0.9838193292920803,
+        "relative_half_width": 0.011068461715766587
+      }
+    },
+    {
+      "id": "external/sunspider-1.0/string-unpack-code",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9981184372864955,
+          "upper": 0.9984178302458229
+        },
+        "precise": false,
+        "ratio": 0.9983553570941925,
+        "relative_half_width": 0.00023736642751637227
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9475194824346285,
+          "upper": 0.9948713417729385
+        },
+        "precise": false,
+        "ratio": 0.9784806260501451,
+        "relative_half_width": 0.03267599684173539
+      }
+    },
+    {
+      "id": "external/sunspider-1.0/string-validate-input",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 1.0051169710911907,
+          "upper": 1.0053909034407738
+        },
+        "precise": false,
+        "ratio": 1.0052378288657502,
+        "relative_half_width": 0.0001522769742920982
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.96935330976676,
+          "upper": 1.0166246072957033
+        },
+        "precise": false,
+        "ratio": 1.0041565081113613,
+        "relative_half_width": 0.03590352247621187
+      }
+    },
+    {
+      "id": "sentinel/capturing_closure_call",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.999800517218528,
+          "upper": 1.000078257513275
+        },
+        "precise": false,
+        "ratio": 0.9999455826112289,
+        "relative_half_width": 0.00014509433652265535
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.7358714498161363,
+          "upper": 1.0656088735677016
+        },
+        "precise": false,
+        "ratio": 0.9175189511085962,
+        "relative_half_width": 0.2468467846358844
+      }
+    },
+    {
+      "id": "sentinel/heterogeneous_property_read",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9875944137082241,
+          "upper": 0.9877135182042328
+        },
+        "precise": false,
+        "ratio": 0.9876282186315001,
+        "relative_half_width": 8.636809998296968e-05
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9269403066206852,
+          "upper": 0.9675381408585546
+        },
+        "precise": false,
+        "ratio": 0.940846619652914,
+        "relative_half_width": 0.02836968390818817
+      }
+    },
+    {
+      "id": "sentinel/polymorphic_call_site",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9998533875326597,
+          "upper": 1.0000840707855034
+        },
+        "precise": false,
+        "ratio": 1.000022760847668,
+        "relative_half_width": 0.00016939815088901078
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9393783148643521,
+          "upper": 1.0030452897506446
+        },
+        "precise": false,
+        "ratio": 0.9661720322577605,
+        "relative_half_width": 0.03816427743899631
+      }
+    },
+    {
+      "id": "sentinel/prototype_method_call",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9897620760492416,
+          "upper": 0.9898831618631315
+        },
+        "precise": false,
+        "ratio": 0.9898540818285917,
+        "relative_half_width": 9.295747086746076e-05
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9044515405443385,
+          "upper": 1.0229520843663158
+        },
+        "precise": false,
+        "ratio": 0.9574339862209935,
+        "relative_half_width": 0.06843093005704048
+      }
+    },
+    {
+      "id": "sentinel/recursive_call_tree",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.999953500038387,
+          "upper": 1.000032814114811
+        },
+        "precise": false,
+        "ratio": 0.9999672626007687,
+        "relative_half_width": 6.555366009863839e-05
+      },
+      "target": true,
+      "wall_band": 1.0501274307821105,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9613043148151618,
+          "upper": 1.0160955022265943
+        },
+        "precise": false,
+        "ratio": 0.9742768824544162,
+        "relative_half_width": 0.0429227261010523
+      }
+    },
+    {
+      "id": "sentinel/string_key_map_churn",
+      "instruction_limit": 1.03,
+      "instructions": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9984949145448082,
+          "upper": 0.9988469776695391
+        },
+        "precise": false,
+        "ratio": 0.9986174780493255,
+        "relative_half_width": 0.0002298173477415233
+      },
+      "target": true,
+      "wall_band": 1.0822386259497374,
+      "wall_ns": {
+        "blocks": 5,
+        "confidence_interval": {
+          "lower": 0.9023658860096412,
+          "upper": 1.069821051616732
+        },
+        "precise": false,
+        "ratio": 1.0076854774781452,
+        "relative_half_width": 0.11671495243934649
+      }
+    }
+  ],
+  "caveat": "Diagnostic only: triage cannot promote anything, spend/reset a plan attempt, waive a required run, select an acceptance run to keep, or change an existing decision. Five-pair 95% bootstrap intervals are exploratory, unadjusted, and do not cover layout bias or unmeasured cases. Natural layout only; no formal precision or complete-portfolio claim.",
+  "collection_seconds": 402.15518751204945,
+  "counts": {
+    "attempts": 430,
+    "heavy_samples": 0,
+    "invalid": 0,
+    "valid": 430
+  },
+  "decision_evidence": false,
+  "launch_preflight": [
+    {
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261031T133013Z-t077-s2fu-r2-slot-public86/out/triage/base000/qjs",
+        "--raw",
+        "-e",
+        "0"
+      ],
+      "binary": "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261031T133013Z-t077-s2fu-r2-slot-public86/out/triage/base000/qjs",
+      "binary_sha256": "b756fe7409b65b6c273d71dfbbc06238fbb73b32341797c4df0c19a4725841a5",
+      "exit_code": 0,
+      "started_at": "2026-10-31T13:32:30.532128+00:00",
+      "wall_ns": 859361634
+    },
+    {
+      "argv": [
+        "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261031T133013Z-t077-s2fu-r2-slot-public86/out/triage/cand000/qjs",
+        "--raw",
+        "-e",
+        "0"
+      ],
+      "binary": "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261031T133013Z-t077-s2fu-r2-slot-public86/out/triage/cand000/qjs",
+      "binary_sha256": "6d687969637ffb3d110811d8aa2391e29e029e26ffe4c004a65e1a43925bfc0e",
+      "exit_code": 0,
+      "started_at": "2026-10-31T13:32:31.405130+00:00",
+      "wall_ns": 245638277
+    }
+  ],
+  "load": {
+    "anchor": 1793453548.046624,
+    "protocol": {
+      "cpu_threshold": 200,
+      "guard_seconds": 2,
+      "heavy_cluster_seconds": 60,
+      "invalid_fraction_cap": 0.2,
+      "sample_gap_seconds": 6,
+      "settle_seconds": 8,
+      "timestamp_bucket_seconds": 1,
+      "version": 1
+    },
+    "sealed_at": 1793453961.973857,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "text": ""
+  },
+  "measurement_schedule": {
+    "kind": "case-shards-v1",
+    "workers": 4
+  },
+  "obvious_regressions": [],
+  "possible_regressions": [
+    "broad/array_index_of",
+    "broad/captured_read",
+    "broad/captured_write",
+    "broad/function_call_reordered",
+    "development/graphlib/paths",
+    "external/jetstream3-js-subset/cdjs",
+    "external/jetstream3-js-subset/gaussian-blur",
+    "external/kraken-1.1/json-parse-financial",
+    "external/sunspider-1.0/bitops-bitwise-and",
+    "external/sunspider-1.0/string-base64",
+    "sentinel/capturing_closure_call"
+  ],
+  "quieting": {
+    "disabled_services": "disabled services = {\n\t\"com.bjango.istatmenus.agent\" => false\n\t\"com.google.keystone.user.xpcservice\" => false\n\t\"com.TickTick.task.mac-LaunchAtLoginHelper\" => false\n\t\"com.docker.helper\" => false\n\t\"com.bjango.istatmenus.status\" => false\n\t\"com.apple.ManagedClientAgent.enrollagent\" => true\n\t\"5A4RE8SF68.com.tencent.xinWeChat.IPCHelper\" => true\n\t\"com.adobe.AdobeCreativeCloud\" => false\n\t\"com.apple.Siri.agent\" => false\n\t\"com.sogou.SogouTaskManager\" => false\n\t\"com.microsoft.update.agent\" => false\n\t\"com.zzd.XnipLoginHelperApp\" => false\n\t\"com.spotify.client.startuphelper\" => false\n\t\"com.sogou.SogouServices\" => false\n\t\"com.apple.FolderActionsDispatcher\" => true\n\t\"com.microsoft.OneDriveLauncher\" => false\n\t\"com.apple.photoanalysisd\" => true\n\t\"com.apple.appleseed.seedusaged.postinstall\" => true\n\t\"com.apple.mediaanalysisd\" => true\n\t\"com.apple.ScriptMenuApp\" => true\n\t\"com.google.keystone.user.agent\" => false\n\t\"com.microsoft.OneDriveMigrationLauncher\" => true\n\t\"com.adobe.ccxprocess\" => false\n}\nlogin item associations = {\n\t\"version.com.docker.helper\" => \"184744\"\n\t\"com.docker.helper\" => \"com.docker.docker\"\n\t\"com.TickTick.task.mac-LaunchAtLoginHelper\" => \"com.TickTick.task.mac\"\n\t\"version.com.microsoft.OneDriveLauncher\" => \"24186.0915.0004\"\n\t\"version.com.zzd.XnipLoginHelperApp\" => \"61\"\n\t\"com.microsoft.OneDriveLauncher\" => \"com.microsoft.OneDrive\"\n\t\"com.spotify.client.startuphelper\" => \"com.spotify.client\"\n\t\"com.zzd.XnipLoginHelperApp\" => \"com.zzd.Xnip\"\n\t\"version.com.spotify.client.startuphelper\" => \"1.1.96.785.g464c973a-1288\"\n\t\"version.com.TickTick.task.mac-LaunchAtLoginHelper\" => \"249\"\n}\n",
+    "indexing": "/:\n\tIndexing disabled.\n"
+  },
+  "raw_sha256": {
+    "variant0/broad--array_allocation.json": "25d928e214bb13e4c980428a2c995414035533c9c37ad7be34ef3f969c489b92",
+    "variant0/broad--array_dynamic_read.json": "e23040472355be129a36abd5388ec30b4bae9394dbf469c11c291ba580525641",
+    "variant0/broad--array_index_of.json": "3b0f8966ca4e95c29bc396dcefe3cce8976f0820d905320028f02b88e4613142",
+    "variant0/broad--array_read.json": "0e797f1c55307dfe29f3399d0c6eeb7c9c9916b27243f47751ee565e74e1f095",
+    "variant0/broad--array_write.json": "3855d4cf9a50090ec60e1d19a69d25b69f84eb324a2dc6084f654698da4ff1f2",
+    "variant0/broad--branch_arithmetic.json": "9c3389436b6feb4e9db8b374b6fd0dac62c0cb2523051aeba7dcf89bb810a506",
+    "variant0/broad--captured_read.json": "7c2d281f5978a9e055d84c87a36647c19d2250f726d44ced5d88a8b3e13b5ef7",
+    "variant0/broad--captured_write.json": "3dcc435471b2a2a02d12fee84dca8cb8115ea29720111a447e312452ed2d1784",
+    "variant0/broad--closure_allocation_call.json": "eb03297b979cf5399fceecb45bcf75b6ebd3972726d8cd6cbcfd762cc4105b74",
+    "variant0/broad--dynamic_method_call.json": "90f2d807c9e9c1da4780efc270ebc7d8a2a6f9ae2bf3ad2bfbe7d938b2ac8c5f",
+    "variant0/broad--empty_loop.json": "d160a650efc927bb84b7ed2201cfcfb9af747e9e8412b993203eab11b31c5395",
+    "variant0/broad--function_call_reordered.json": "260ff1a7b0942e16de9037e7b08e909faebb3ab31ccd9e360eb9476988807920",
+    "variant0/broad--function_call_two_args.json": "c6f83f25096ccf58382b20da0031289780b3e5bb4d84f8d2db93f85720bf9c4c",
+    "variant0/broad--global_read.json": "5c7eac1460d5bd25aa51e3c72b45a65cbcffc71c946faa4fbaf33b6331d69e3d",
+    "variant0/broad--local_read.json": "6aebae68261b9c0d7e547518b2f396834942a7b57d0cbc7fa2aae9edebd60d5d",
+    "variant0/broad--many_locals_call.json": "7cb688b2b0f65dcbb7f3881f8d7d82e071a7e7dd5b270d849fe5cf6dd9409616",
+    "variant0/broad--math_abs.json": "a3e57707b1b9ecc1011661132b3264c119f8741de1366224f2164fc49c345990",
+    "variant0/broad--method_call.json": "3a745394a2ddb93e7ab22cdfab3d9c1a85bccc358543838c96f7d38653a4d7f7",
+    "variant0/broad--object_allocation.json": "166752afe8ce8ade14bd12ef50a3398240865608e1cbf6196362d2b14c9de141",
+    "variant0/broad--plain_function_call.json": "0b637d9d74254e009ffa596021984658e6a9c9b315da8d02e5db39790d7861bf",
+    "variant0/broad--property_dynamic_read.json": "5383778a7e83c40bc980ad67bf4c3a42727b61873923e0b001b8a98057418dfb",
+    "variant0/broad--property_read.json": "bbdbae7b7aec2f760a4aa0e577ef02e0cf8f4b11646c1ed84399955d6cf1d452",
+    "variant0/broad--property_write.json": "94bd25caa0bbb620636a8df5f5deac20e76cc516aef15ec9e974f194e38dd6bf",
+    "variant0/broad--string_slice.json": "40ca08be1f1abdab5c6b125cf7bd29da742d612d3702f21a1a18e5a7fe88aae4",
+    "variant0/broad--top_level_function_call.json": "139d846438567a64b4d6f8b0ad97e6ffb51c840d089b5ae0002d795a8654d0a8",
+    "variant0/development--big.js--arith.json": "61529a0018ab6faa7b285d186992bb2ba529f3eb841b92c11442ea56ddbe8b5f",
+    "variant0/development--diff--compare.json": "4d24f2c1befb6bf8ddce1992c46eed204c52ff7947684066079e6a99331de057",
+    "variant0/development--graphlib--paths.json": "8c4ce348bb1a24138e36bab925512369b57bbc1eb66f80386a530d94e79b1e38",
+    "variant0/development--immutable--persistent.json": "86788f83a1a6bf51862361d113f468eab7ab78409f7aec0975118c78214e8fdb",
+    "variant0/development--js-yaml--document.json": "fd15c11cf8a8fcb73dfcf8344793808639d84145357057514689fcf663e0e1c8",
+    "variant0/development--lodash--transform.json": "09adf759b329586016f54c82f2c8a7fe64ae073d77bdd8e8f88cf33df0832f48",
+    "variant0/development--matter-js--simulate.json": "6b88a8ab3d00bd47e31d091d86e711f991edc98f9bcc7fe1de06806dbbdf1d2c",
+    "variant0/development--meriyah--parse.json": "5e124e9eff486566f85c3f46f7c91ace53e6d2e9ced31ba3d53506db81c2bb92",
+    "variant0/development--moment--dates.json": "e9ac91f8786eea1452d8a5d0172346dc64ca4dc286f00634b4673df19398ed08",
+    "variant0/development--papaparse--csv.json": "6e1da108d301d62987a79b0f1c0c5886ed6e120043efbf4afd78d33022b70e7a",
+    "variant0/external--jetstream3-js-subset--cdjs.json": "bf1bb4ecc11214fad9d5c1b96b3df61051913cef8be85b4526ae347032fef37d",
+    "variant0/external--jetstream3-js-subset--gaussian-blur.json": "c30ba7605028a79954f235f7460f2679ab682bca92787a27c18a02764954d5ed",
+    "variant0/external--jetstream3-js-subset--hash-map.json": "29c484dd25c565b24839010afc5e6a85c4b7d73ea7549dc15142fac5a2f50a89",
+    "variant0/external--jetstream3-js-subset--raytrace-public-class-fields.json": "d07a08caff0f06a55cfd7bf3f44a149b6622e7d65c6afa477c429901690fbaeb",
+    "variant0/external--jetstream3-js-subset--stanford-crypto-aes.json": "a3d7fde9903e19547f99f14f10110797d63d25d1c1b062cad50f0483bfeb9c87",
+    "variant0/external--kraken-1.1--ai-astar.json": "b14c897d7d3e97edeaf352f7e562d3e1b9528f469afa54ab6d27cf6346793ca1",
+    "variant0/external--kraken-1.1--audio-beat-detection.json": "e9bb78651b634d0e0d2fe870592887a9476a8baf2b19b924569b392b96514f9b",
+    "variant0/external--kraken-1.1--audio-dft.json": "9c674fb04a9d9aa426462853ba8284ddf2a5d17e7f04f89beb6b103f175dd7a4",
+    "variant0/external--kraken-1.1--audio-fft.json": "fb66d82cf8e8342cf70d117856b79e09f2af9664b2d569da305991f6d2fc9348",
+    "variant0/external--kraken-1.1--audio-oscillator.json": "52118b59a7a00f45fd8ffd62c9098c7b18f17fa6a8010b5f5ec9f3ba3d60acc1",
+    "variant0/external--kraken-1.1--imaging-darkroom.json": "1d3af4870c6282b1e1ee8ed4ab15dbd734950ac5dccf0797bc3b0d4e51e6634c",
+    "variant0/external--kraken-1.1--imaging-desaturate.json": "9b0dde4d049f76013e546f357ea0ab14a056637ad29bb588bb7e5f68b9a63524",
+    "variant0/external--kraken-1.1--imaging-gaussian-blur.json": "939f78530704d0b8a2c0e30b12b1c50a586864b3fe665da72ecb0c1fbd339e2f",
+    "variant0/external--kraken-1.1--json-parse-financial.json": "84189887dd0c77acfc2480f25702e53a28bc1279af204da0e2a144aa5c78f929",
+    "variant0/external--kraken-1.1--json-stringify-tinderbox.json": "4b8a0ce9d7c7a9f7336a9d558197d5f121050b1ba89da283687a8935f0385b89",
+    "variant0/external--kraken-1.1--stanford-crypto-aes.json": "aa612d9ffdc914d919651001594ae26884a2beae50bd1d80587e985a12844e95",
+    "variant0/external--kraken-1.1--stanford-crypto-ccm.json": "9e5712bcee7138666a6323836a55eb25c25653afa2e8f4ada06b195ddb441c4f",
+    "variant0/external--kraken-1.1--stanford-crypto-pbkdf2.json": "c2e09d79437714eb2734cfe32978f7d9d89ca20632ec7d33b5f8202a25d5993e",
+    "variant0/external--kraken-1.1--stanford-crypto-sha256-iterative.json": "8f9c0865c0d1d24a22fa06f0d5bb1838321909c4f3bf57a6eb38f59cd39440bb",
+    "variant0/external--sunspider-1.0--3d-cube.json": "d56b7ce15dfa1ba04b012f705ed79f028b483a5ea3626e2774654b8d7455d784",
+    "variant0/external--sunspider-1.0--3d-morph.json": "2e9ce6127c6b847ebdb5895c7f82ee2091ddef16f80465e1e42afaf016d2b436",
+    "variant0/external--sunspider-1.0--3d-raytrace.json": "8a7ccf0f78525634ebd061f0af56bf9d768292368fc37ee29ef59f06caf5ea76",
+    "variant0/external--sunspider-1.0--access-binary-trees.json": "aa384b5b64428283baa6bc4bb380c5ee227c5ff575fe85ab76f6f2a04c6de1f5",
+    "variant0/external--sunspider-1.0--access-fannkuch.json": "d876ff59d0b0f2a3b3be4e65993335b5616007bd1d0a9d6d7703bee159bfbba1",
+    "variant0/external--sunspider-1.0--access-nbody.json": "0adf942739db7c58b2ff289488f1a2c1f10d78def04d5428b42aa34c3f2ad782",
+    "variant0/external--sunspider-1.0--access-nsieve.json": "2c4967c5891f895400c273f2b1b3399fd814be87e7241dcda46129102c6bb82c",
+    "variant0/external--sunspider-1.0--bitops-3bit-bits-in-byte.json": "14bffa7ff2b6189ae178546bf9c4431946010f20902edc01a2d3763016001b6e",
+    "variant0/external--sunspider-1.0--bitops-bits-in-byte.json": "ae7fbcc46c294acba546f6564248f91a8488daca3211b0e933cb6208db44d77f",
+    "variant0/external--sunspider-1.0--bitops-bitwise-and.json": "dca596b6fbcf10267c976175fa47221e0917ef2fa0b113116deddb24aeabea5d",
+    "variant0/external--sunspider-1.0--bitops-nsieve-bits.json": "56cf2ef7b5e3a507c67df72d90e4e369f702b55b9d7b1e8cf96cfd185f720302",
+    "variant0/external--sunspider-1.0--controlflow-recursive.json": "a8ad4b2af93ce81b9819db73682835fb5a9e22024c1450db23f90ea071b9b490",
+    "variant0/external--sunspider-1.0--crypto-aes.json": "fde74f5c2c9a8200c5691353d75c3254bd1232d3e753dd9658fc95102716af89",
+    "variant0/external--sunspider-1.0--crypto-md5.json": "8872910e306ae276100a8772287115628c1cd44569ea6ca98a0004938856c7ef",
+    "variant0/external--sunspider-1.0--crypto-sha1.json": "c9100d9562e88160e03b121b7ac95298f0b409abd3ca3960dee1cb57025b4979",
+    "variant0/external--sunspider-1.0--date-format-tofte.json": "60c0fe69903859f41412fa5a19f985540aa6d31361e9313f64c269dd8797e6ec",
+    "variant0/external--sunspider-1.0--date-format-xparb.json": "7b79984141e1cf5c5cf87cb665a91998299571239de36f64d331f1b95c7ae966",
+    "variant0/external--sunspider-1.0--math-cordic.json": "b2454fc282ddfe4ca56abb004be8c73fdc7372007962e8c44b1164f88ed5d5f0",
+    "variant0/external--sunspider-1.0--math-partial-sums.json": "af72e634211c03a91764b5f5fa85d4768a847b91cfc05bc9945f20cc3fd3b456",
+    "variant0/external--sunspider-1.0--math-spectral-norm.json": "ee2cf705eedaee22180177ba7fdb7e29d1ea2b2b9cd1d7de1ef5945b7f8510a9",
+    "variant0/external--sunspider-1.0--regexp-dna.json": "2b5aa60bd5bf5c4ea2b93ffc7cfb6e5ab893d96e0c71efabbacf73eb8b5e06bb",
+    "variant0/external--sunspider-1.0--string-base64.json": "45adff0b20586e6eef0563e432a56f84921fb68466667d6ad9a1701dbccde77e",
+    "variant0/external--sunspider-1.0--string-fasta.json": "810f58af2c667ae770ca25e10ac3787e08112a833cdcad5178c74369f538c8bf",
+    "variant0/external--sunspider-1.0--string-tagcloud.json": "28d0f6f7e3e91addc987941ada3abf10c34e6160aea63003c8b9f2ad40b9b3c5",
+    "variant0/external--sunspider-1.0--string-unpack-code.json": "cfc9a55f236612c24d346ce0314abfa3dae33a148b8b27c7ac635b1300f8a0eb",
+    "variant0/external--sunspider-1.0--string-validate-input.json": "a97be665cb8dc1a91220d2c54bb93192fa5e8b2859d61c67cf2c2dd9ae27fcda",
+    "variant0/sentinel--capturing_closure_call.json": "84d64f393c7879775659bb8aa07546991a86d155afdf19e99501225ea1eb950b",
+    "variant0/sentinel--heterogeneous_property_read.json": "33cd6cb98b585614d44c341cc06774419c7a17c42afbcd6d69f7691e5745fe44",
+    "variant0/sentinel--polymorphic_call_site.json": "d0eb3d544077d9882d515e2f9018e6ccdc78aef7eab2db95a426e2950db286e7",
+    "variant0/sentinel--prototype_method_call.json": "495cabf454e6ea4f95357211ceb25221af1ce63250eb6cb58d627a080545379a",
+    "variant0/sentinel--recursive_call_tree.json": "2a0bf645ba5979fa1f705f039a517cf50ad9742df1f54fcbecee6634ea0c285a",
+    "variant0/sentinel--string_key_map_churn.json": "407e1f62946a4c04ffcdd735772aa50c399b5927a7835e01e5cd762de401568f"
+  },
+  "request_sha256": "b1c0d60dacdad128af1de97d9dcfa2357ee57b6e40fab5c1668d638a85342134",
+  "schema_version": 1,
+  "stage_seconds": {
+    "analysis": 10.27194269420579,
+    "build_base": 0.9452951778657734,
+    "build_candidate": 0.9554160330444574,
+    "build_quieting": 0.030516491970047355,
+    "collection": 402.15573257999495,
+    "command_total": 424.3068938050419,
+    "end_to_end": 557.5353882312775,
+    "prepare_workloads": 0.3388880069833249,
+    "queue_quieting": 133.23606610298157,
+    "seal_and_replay": 8.110390864079818,
+    "settle_and_launch": 1.1322946220170707,
+    "validate_and_freeze": 0.16227769618853927
+  },
+  "verdict": "unclear",
+  "workload_sha256": {
+    "broad/array_allocation": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
+    "broad/array_dynamic_read": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
+    "broad/array_index_of": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
+    "broad/array_read": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
+    "broad/array_write": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
+    "broad/branch_arithmetic": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
+    "broad/captured_read": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
+    "broad/captured_write": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
+    "broad/closure_allocation_call": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
+    "broad/dynamic_method_call": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
+    "broad/empty_loop": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
+    "broad/function_call_reordered": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
+    "broad/function_call_two_args": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
+    "broad/global_read": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
+    "broad/local_read": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
+    "broad/many_locals_call": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
+    "broad/math_abs": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
+    "broad/method_call": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
+    "broad/object_allocation": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
+    "broad/plain_function_call": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
+    "broad/property_dynamic_read": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
+    "broad/property_read": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
+    "broad/property_write": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
+    "broad/string_slice": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
+    "broad/top_level_function_call": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
+    "development/big.js/arith": "6a044d09d50474adc03898681e4308740c5852975c411d36330871e4b8a4d346",
+    "development/diff/compare": "fbb64c6f59b7718700595025d56b2aa6f5413bba10d41f9fca158ac31d6d00eb",
+    "development/graphlib/paths": "87d777c0409dea06f66052bfa763379f6370cdad05a97301f79dd7e8fbddadaf",
+    "development/immutable/persistent": "98aff279f5ab31b94f89cce2dcc94616744c7186b70b2e16466e4640c8fc5ec1",
+    "development/js-yaml/document": "fc1411db299a717af599ac2e308e68018df72c79cca569c9f3e354e40debe9fa",
+    "development/lodash/transform": "991439c433c02d22d7c3bd49246059cf1fbb3b0b5d0500d34ea1b7f68925583b",
+    "development/matter-js/simulate": "e96eb031af93f5afa39748c115421cad8a1e8c2b9cf7a04b118fe4a013a75fcc",
+    "development/meriyah/parse": "349b451206a4f46670b0ca0f5fd1cc27e459b411806231b5203390d8909c6bd1",
+    "development/moment/dates": "54b2f358cc54092074a4460f199771508cdc8369170027a47446d7b6761c1090",
+    "development/papaparse/csv": "f417c24c26a51bb1b8c2e288887530e3013a68e4cc7cd9c46cb04beb7a8dd1e7",
+    "external/jetstream3-js-subset/cdjs": "8fdde63549dd457d375730cca98efc1be687c3fa32b84e5d63a9903b768fed47",
+    "external/jetstream3-js-subset/gaussian-blur": "fce613c46cb49220bca1126c5eca6633575c2e7a454f7c914f2f79d98cc751e9",
+    "external/jetstream3-js-subset/hash-map": "aa98bc1975d8824840df5c31a397b5dab27d514e1854ff5681ceea8ec4bf2c20",
+    "external/jetstream3-js-subset/raytrace-public-class-fields": "824daa5582289787f6e25a200892a1d6bdfa682afe9ce76a30e520dc7e03528c",
+    "external/jetstream3-js-subset/stanford-crypto-aes": "7afbe130da966d379938ae8160dada27f991bba82cc0d1b85b4df86f1c2ad94f",
+    "external/kraken-1.1/ai-astar": "a3653c77773ce2b424301835021957b26119240810f43d5434d98fd88d7a416c",
+    "external/kraken-1.1/audio-beat-detection": "2e7487f8cf34c54dc4da4dc2d866364af22c490f2d6650d08c169bda878ffa9b",
+    "external/kraken-1.1/audio-dft": "57fcc07e83044e5552d83e4bf13a1e10af6e71357dddf28ea3c64de8dbd0bbda",
+    "external/kraken-1.1/audio-fft": "07fd2de1a2d39f430923300a61bda3a67f34b0e68b855fde10162f36c387147a",
+    "external/kraken-1.1/audio-oscillator": "b302c0457bc183da4106148640e17964033829769da144f537d2d7180a44c1df",
+    "external/kraken-1.1/imaging-darkroom": "bfc464b658a5b69810769631928842241a46d8d9bfbfb62da53804843eadfaba",
+    "external/kraken-1.1/imaging-desaturate": "11afc7e65e2d6b51b65bc7f14fa51d14f89cdfc30c2b3f0f87750e0fc12b9e1d",
+    "external/kraken-1.1/imaging-gaussian-blur": "54a60944b49ce59f85524db09ea4eba6f2137036e19487a45844d728b843bd38",
+    "external/kraken-1.1/json-parse-financial": "ea2f8d922325c593a8b30a896cdab50a207b0b6a050f0d3646c57dfcce6ee8a7",
+    "external/kraken-1.1/json-stringify-tinderbox": "7e04b909170413a294862d97810c12b1200e6f5ba9508020a0c348233ee255ed",
+    "external/kraken-1.1/stanford-crypto-aes": "c5a8c4ac34189f33a6539e61bda420f6e738a7ebd2028a07a72638b19d0ed16a",
+    "external/kraken-1.1/stanford-crypto-ccm": "f2d6ad5ad29f2ac2a07752b8df8993cff001b352461e17aa9f7a7a4b23919d1f",
+    "external/kraken-1.1/stanford-crypto-pbkdf2": "194f0161b4dfaa6f7df5088d6ac35de4a53b73f51277361bf93cdf211949b9ae",
+    "external/kraken-1.1/stanford-crypto-sha256-iterative": "5ce10204c1e97471fa775b46dc97a9e770371a13fc184453c387a8edb84bcad0",
+    "external/sunspider-1.0/3d-cube": "4e386ac5280b48f2d4eadc0e49de452ed094e6ca78ac07c07ad0dac2a7c00606",
+    "external/sunspider-1.0/3d-morph": "bc407940e3a80554d2c55fd75104d78a7c892c0f6c6324cfd56cae4317c54994",
+    "external/sunspider-1.0/3d-raytrace": "d7b875e3125269589871e48121dee54bbc847f575474429fffe5fc003e04a074",
+    "external/sunspider-1.0/access-binary-trees": "9c2a9eae0b951c3fd21e54875b3d4c95dbaf22ca6d2e28f1080ff32c51f0f1a8",
+    "external/sunspider-1.0/access-fannkuch": "38154db08a420cacbb0101e53f194a0388a078fdb2df62d54f8a35015f15e15f",
+    "external/sunspider-1.0/access-nbody": "a07600e8a7da8914464b21056f57b62a21192018a21ddf22d0562b22a959999a",
+    "external/sunspider-1.0/access-nsieve": "05302a44a26773439c8af738ca8d711349e1e24d73abc94ecc2254c6b7732844",
+    "external/sunspider-1.0/bitops-3bit-bits-in-byte": "b1303b8340e8eea801955a52506cf5f94b6cfcaac09df5d788f701305d4ccc9c",
+    "external/sunspider-1.0/bitops-bits-in-byte": "e6baa5aadbd650ece747ba9ad85d83734f00e29a4589577054c285423d617eb4",
+    "external/sunspider-1.0/bitops-bitwise-and": "f4495654a298a483875d43b4a49dba0e90df5aac4565f1b3e1cec185a0bc3312",
+    "external/sunspider-1.0/bitops-nsieve-bits": "aab22f0442d5591a626222c274b8043a7c06953e660eb5df6fea8d3db81966ae",
+    "external/sunspider-1.0/controlflow-recursive": "aafff5d75a143286691b51e005be1b63b6213c0f33c53bc020ebc6dee820a00b",
+    "external/sunspider-1.0/crypto-aes": "a9fd9d24682dc2611de25250c5ae54c324e4a108eb33a4212de4f6c4e6eae2f7",
+    "external/sunspider-1.0/crypto-md5": "b2360af69444da9b572415d9dda000501340ac15bb6bbf29746c6470655beef5",
+    "external/sunspider-1.0/crypto-sha1": "aa59467ba5d558e54e218b5dec1b54878b3f8dbea6aed24d807468041365f09c",
+    "external/sunspider-1.0/date-format-tofte": "fabd80e6d4c685f5723de063ba77f7d8e0bca4af6bdecd30dd87611b7f758032",
+    "external/sunspider-1.0/date-format-xparb": "d2c2724ced0217623369cb8ab7a622668b80c70f5c4e614878f6d601fc2e9bcf",
+    "external/sunspider-1.0/math-cordic": "c4e9e90514f9e3089e1e283212e0c6f1348b2f908ad7bb869da823e265092747",
+    "external/sunspider-1.0/math-partial-sums": "9a2724bf4f4e8ca4a324cb2caf7034580bab21293c84d9fbb17e271691848599",
+    "external/sunspider-1.0/math-spectral-norm": "f27e74b148b74a4d44ee72952c77b00c3b80fe2ce353bb89afe73e317efae5a5",
+    "external/sunspider-1.0/regexp-dna": "21184d9ab76c374645f20470b885b0455597624c65128aa36d9f7482ba3b35cb",
+    "external/sunspider-1.0/string-base64": "5a1a2868faec0314e7928382a33d375f1a0fe6bb13cae085cd719bdf7f0032be",
+    "external/sunspider-1.0/string-fasta": "2f3a58cd8aa17d15518b53db814255979645a511f36c870c4e8485e0f7687a7f",
+    "external/sunspider-1.0/string-tagcloud": "db6fa1a1f30fc31681ee88720ec0d0a69df4484f0bdaca7a05f0d43086d29426",
+    "external/sunspider-1.0/string-unpack-code": "e7ad696c046275bff5d00a8f537a5396b9061136d2d0d79fe599c57660c46000",
+    "external/sunspider-1.0/string-validate-input": "b7b9b65134167138facf696f0917e52a0801ef458898483ab70403b8660dc329",
+    "sentinel/capturing_closure_call": "19b1060789fc96ae941c60ae35995c3b185de319acaf9ce53515bfdb824baf7a",
+    "sentinel/heterogeneous_property_read": "19b1060789fc96ae941c60ae35995c3b185de319acaf9ce53515bfdb824baf7a",
+    "sentinel/polymorphic_call_site": "19b1060789fc96ae941c60ae35995c3b185de319acaf9ce53515bfdb824baf7a",
+    "sentinel/prototype_method_call": "19b1060789fc96ae941c60ae35995c3b185de319acaf9ce53515bfdb824baf7a",
+    "sentinel/recursive_call_tree": "19b1060789fc96ae941c60ae35995c3b185de319acaf9ce53515bfdb824baf7a",
+    "sentinel/string_key_map_churn": "19b1060789fc96ae941c60ae35995c3b185de319acaf9ce53515bfdb824baf7a"
+  }
+}

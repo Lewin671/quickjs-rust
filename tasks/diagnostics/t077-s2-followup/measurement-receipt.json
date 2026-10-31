@@ -1,0 +1,15 @@
+{
+  "runtime": "590edc60",
+  "integration_base": "1e6e2a2b",
+  "review_reference": "d38f30a7",
+  "collector_sha256": "7f870385241a21cd428a90d6228f2541a88b0dccc18da8cad28a19d63b23cbcd",
+  "pairs_per_case": 3,
+  "all_non_timer_outputs_equal": true,
+  "quiet_batches": {
+    "memory-arm64": "943bd6428612b9fbd9cc409dfe206b5cb7ddc1e4823e9dd4c13a753728ea932d",
+    "complexity-arm64": "b90e311a66315dd17d9d0ea7a9139fd1130b84309ad847bda8c10cfbced191e1"
+  },
+  "rejected_current_source_batch": "target/t077-followup/review-memory-quiet.json",
+  "rejection": "competing cargo process observed; whole batch discarded",
+  "rustc": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: aarch64-apple-darwin\nrelease: 1.95.0\nLLVM version: 22.1.2"
+}

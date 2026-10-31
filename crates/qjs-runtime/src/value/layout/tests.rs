@@ -71,7 +71,7 @@ fn reconfiguration_moves_accessor_payload_out_of_data_slots() {
     store
         .define(&key, Property::data(Value::Number(3.0), true, false, false))
         .unwrap();
-    assert!(store.accessors.is_none());
+    assert!(store.cold.is_none());
     assert_eq!(store.replace_data(0, Value::Number(4.0)), Some(false));
     assert_eq!(store.load_data(0), Some(Value::Number(3.0)));
 }
@@ -127,7 +127,7 @@ fn dictionary_churn_has_no_tombstones_and_invalidates_slots() {
         assert_eq!(store.values.len(), 2);
     }
     assert!(store.layout.dictionary);
-    assert!(store.layout.transitions.borrow().is_empty());
+    assert!(store.layout.transitions_empty());
     assert_eq!(store.keys(), [a, b]);
 }
 
@@ -177,9 +177,7 @@ fn live_shapes_exceed_cache_bound_and_keep_all_edges() {
             owner
                 .0
                 .root
-                .transitions
-                .borrow()
-                .get(Transition::Append {
+                .transition(Transition::Append {
                     key: key.id(),
                     attrs: Attributes::of(&data(0.0))
                 })
@@ -271,9 +269,10 @@ fn exhausted_epoch_publishes_a_new_identity_before_restarting_version() {
     let key = owner.domain().intern("x");
     let mut store = owner.empty_store();
     store.define(&key, data(1.0)).unwrap();
-    store.prototype_mode();
+    store.layout = Rc::new(store.layout.copied(true));
+    store.set_epoch(1);
     let old = store.layout().clone();
-    store.epoch = u64::MAX;
+    store.set_epoch(u64::MAX);
     store.remove(&key).unwrap().unwrap();
     assert!(!Rc::ptr_eq(&old, store.layout()));
     assert_eq!(store.epoch(), 1);
@@ -343,7 +342,7 @@ fn dictionary_swap_removal_moves_accessor_slots_but_preserves_key_order() {
             .collect::<Vec<_>>()
     );
     store.remove(&keys[128]).unwrap().unwrap();
-    assert!(store.accessors.is_none());
+    assert!(store.cold.is_none());
     store.define(&keys[10], data(9.0)).unwrap();
     assert_eq!(store.keys().last(), Some(&keys[10]));
 }
@@ -359,7 +358,10 @@ fn dictionary_order_exhaustion_compacts_live_order_without_changing_slots() {
         store.define(key, data(n as f64)).unwrap();
     }
     store.remove(&keys[60]).unwrap().unwrap();
-    Rc::get_mut(&mut store.layout).unwrap().next_order = u32::MAX;
+    Rc::get_mut(&mut store.layout)
+        .unwrap()
+        .private_data()
+        .next_order = u32::MAX;
     let fresh = owner.domain().intern("fresh");
     store.define(&fresh, data(1000.0)).unwrap();
     let expected: Vec<_> = keys

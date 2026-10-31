@@ -1,0 +1,27 @@
+{
+  "frozen_revision": "40814de69f430bd6cd4ee9bd4d9c53575d00368e",
+  "documentation_checkpoint": "960e89231dfe33f9834964487c0d18632e03b6ec",
+  "runtime_harness_configuration_diff": [],
+  "native_release_agents_sha256": "a4790dfc816aebbf5e15709dc69b26719f6010b3464e9d861c1286b9f5ab99fb",
+  "agent_start_report_smoke": true,
+  "full_gate": {
+    "exit_code": 0,
+    "runtime_tests": 2525,
+    "curated_cases": 5170,
+    "log_sha256": "db77d99556a367db6c1e87df2dac1155440dd85a8e81454bda3a9e8caa555fe8"
+  },
+  "ng_fixtures": {
+    "cached": {
+      "pass": 268,
+      "log_sha256": "67517616235e193c2b6877a8348cfb65f730f3d8363534ae33957e981c1a1ccc"
+    },
+    "off": {
+      "pass": 268,
+      "log_sha256": "67517616235e193c2b6877a8348cfb65f730f3d8363534ae33957e981c1a1ccc"
+    },
+    "verify": {
+      "pass": 268,
+      "log_sha256": "67517616235e193c2b6877a8348cfb65f730f3d8363534ae33957e981c1a1ccc"
+    }
+  }
+}

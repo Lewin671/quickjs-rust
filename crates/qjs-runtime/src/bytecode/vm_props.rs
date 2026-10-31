@@ -59,7 +59,7 @@ impl Vm<'_, '_> {
                     OwnDataPropertyWrite::NeedsSlowPath => {}
                 }
             }
-            let before = cache.map(|_| receiver.with_named(|s| s.version()));
+            let before = cache.and_then(|cache| cache.before_write_version(receiver));
             let write = receiver.write_or_create_data_key(key, &value, false);
             match write.result {
                 OwnDataPropertyWrite::Written => {

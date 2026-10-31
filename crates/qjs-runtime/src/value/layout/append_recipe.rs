@@ -26,12 +26,14 @@ impl AppendRecipe {
         self.index
     }
     pub(crate) fn apply(&self, store: &mut NamedStore, value: Value) -> bool {
-        if !store.matches_shared_identity(&self.before) || store.len() != self.slot {
+        if !store.matches_version(&self.before) || store.len() != self.slot {
             return false;
         }
+        store.invalidate_dependencies();
+        store.cold.clear_guard();
         store.values.push(value);
         store.layout = self.after.clone();
-        store.epoch = 0;
+        store.set_epoch(0);
         store.verify_slot(self.slot);
         true
     }
@@ -40,11 +42,10 @@ impl NamedStore {
     pub(crate) fn append_recipe(&self, before: LayoutVersion, slot: usize) -> Option<AppendRecipe> {
         if !before.is_shared()
             || self.layout.dictionary
-            || self.layout.mode.is_some()
             || slot + 1 != self.len()
-            || !before.matches_identity(self.layout.parent.as_ref()?)
+            || !before.matches_identity(self.layout.parent()?)
             || !matches!(
-                self.layout.incoming,
+                self.layout.incoming(),
                 Some(Transition::Append {
                     attrs: Attributes(7),
                     ..

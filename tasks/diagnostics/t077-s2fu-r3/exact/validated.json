@@ -1,0 +1,45 @@
+{
+  "cached": {
+    "total": 53572,
+    "unique_paths": 53572,
+    "configured": 42672,
+    "skipped": 10900,
+    "rust": {
+      "pass": 42672,
+      "fail": 0,
+      "timeout": 0,
+      "skipped": 0,
+      "not_run": 0
+    },
+    "ng": {
+      "pass": 42602,
+      "fail": 70,
+      "timeout": 0,
+      "skipped": 0
+    },
+    "canonical_sha256": "a633d502aaf8a01bf43641fb020f843eeeec372c604767ab1c6ebe3465c1b6aa",
+    "failures": []
+  },
+  "off": {
+    "total": 53572,
+    "unique_paths": 53572,
+    "configured": 42672,
+    "skipped": 10900,
+    "rust": {
+      "pass": 42672,
+      "fail": 0,
+      "timeout": 0,
+      "skipped": 0,
+      "not_run": 0
+    },
+    "ng": {
+      "pass": 42602,
+      "fail": 70,
+      "timeout": 0,
+      "skipped": 0
+    },
+    "canonical_sha256": "a633d502aaf8a01bf43641fb020f843eeeec372c604767ab1c6ebe3465c1b6aa",
+    "failures": []
+  },
+  "modes_identical": true
+}

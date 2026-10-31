@@ -1,11 +1,11 @@
 # T077: In-place core rebuild
 
-- Status: active; S3a and S1+S2 accepted and integrated (lead 2026-10-31); S2 follow-up and S3b in progress.
-- Implementation: S3b typed Context/binding migration and debug modes are committed through `0b659b89`. That first freeze fails depth parity and loses static tier admission; it is rejected. Entry footprint/static-scope/deletion repairs are present and locally verified over `dbf65c9f`; a fresh fast gate precedes commit. CallEnv, snapshots/apply-back and caller-env equality entry remain deleted. Details: [S3b progress](diagnostics/T077-s3b-progress.md).
-- Verified at: stress unit over `a5f15790`: 2,598 default/2,651 feature runtime tests, individual binding stress suites, IC verification, 297 NG scripts in four stress configurations, strict feature Clippy and staged gate with 117 Test262 cases pass. Combined IC-off runs semantic/identity tests; cache-enabled mechanism checks run with IC verification on. Earlier exact checkpoints are pinned in [S3b progress](diagnostics/T077-s3b-progress.md); none establish final S3b acceptance. Accepted S1+S2 evidence remains in [acceptance](diagnostics/T077-s1s2-acceptance.md).
-- Evidence: [S3b progress](diagnostics/T077-s3b-progress.md), [target](../docs/design/core-rebuild.md), [baseline](diagnostics/T077-baseline.md), [S2 freeze](diagnostics/T077-s2-freeze-qualification.md), [S2 round 4](diagnostics/T077-s2-r4-handoff.md), [S3 plan](proposals/T077-s3-plan.md), [S3b brief](proposals/T077-s3b-brief.md).
-- Unresolved: accepted local regressions (external +0.25% vs S3a, typed-loop/wide static size) are S3e/S4 obligations; prototype-mode memory/complexity fixes are the S2 follow-up; the global accessor stale-read bug is repaired on the S3b owner branch; deep Rust-stack exhaustion is S3d-owned.
-- Next action: commit the current repair after a fresh fast gate, then merge main `3cc12c6f` per [lead feedback](diagnostics/T077-s3b-lead-feedback-1.md). Regenerate the x86 order and all final counters/depth/full/exact/public86 evidence against that baseline. Lead owns formal/held-out/RSS and acceptance; never push to origin or merge into main.
+- Status: active; S3a, S1+S2 and S2 follow-up accepted and integrated; S3b in progress.
+- Implementation: S3b typed Context/binding migration and entry/static-scope/deletion repairs are committed through `539d6b8f`. The main `3cc12c6f` integration is present, preserving its tiny shared layouts, deferred prototype graphs and allocation-free iterative cycle checks. CallEnv, snapshots/apply-back and caller-env equality entry remain deleted. Details: [S3b progress](diagnostics/T077-s3b-progress.md).
+- Verified at: merged working tree over `539d6b8f` + main `3cc12c6f` passes the fresh fast gate (2,636 default runtime tests + 117 curated Test262 cases). Pre-merge evidence belongs to its named revisions; final merged-source feature/full/NG/exact/depth/counter/public86 checks remain. S2 follow-up acceptance has its own [receipt](diagnostics/T077-s2fu-acceptance.md).
+- Evidence: [S3b progress](diagnostics/T077-s3b-progress.md), [lead feedback](diagnostics/T077-s3b-lead-feedback-1.md), [follow-up acceptance](diagnostics/T077-s2fu-acceptance.md), [S1+S2 acceptance](diagnostics/T077-s1s2-acceptance.md), [target](../docs/design/core-rebuild.md), [baseline](diagnostics/T077-baseline.md), [S3 plan](proposals/T077-s3-plan.md), [S3b brief](proposals/T077-s3b-brief.md).
+- Unresolved: accepted local regressions (external +0.25% vs S3a, typed-loop/wide static size, follow-up held-out instructions +0.35% and json-parse-financial) are S3e/S4 obligations; `class extends` construction is still quadratic (after S3b). The global accessor stale-read bug is repaired on this owner branch; deep native-stack exhaustion is S3d-owned.
+- Next action: regenerate the x86 order and all final counters/depth/full/exact/public86 evidence against `3cc12c6f`. Lead owns formal/held-out/RSS and acceptance; never push to origin or merge into main.
 
 ## Authority and scope
 
@@ -107,7 +107,7 @@ The [round-1 correction](proposals/T077-s2-prototype-layout.md) replaces shared-
 
 ## S3 — Universal bytecode, frames, calls and native ABI
 
-- Contract: [execution](../docs/design/core-rebuild-execution.md); [approved five-stage plan](proposals/T077-s3-plan.md); [frozen S3b implementation brief](proposals/T077-s3b-brief.md) with typed Context, complete ports, binding structures, B1–B6 commits and verification matrix. S3a is integrated; S3b is under implementation on its owner branch.
+- Contract: [execution](../docs/design/core-rebuild-execution.md); [approved five-stage plan](proposals/T077-s3-plan.md); [frozen S3b implementation brief](proposals/T077-s3b-brief.md) with typed Context, complete ports, binding structures, B1–B6 commits and verification matrix. S3a is integrated; S3b owner standing is in the resume block.
 - Landings: S3a direct native entries/slices; S3b typed Context and T074
   binding authority; S3c owning activations/suspension; S3d explicit JS stack and
   callee argument writes; S3e universal register Code and executor deletion.

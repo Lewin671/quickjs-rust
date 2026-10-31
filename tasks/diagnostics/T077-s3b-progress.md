@@ -981,3 +981,23 @@ its upstream slice will be exercised through the exact harness.
 repair, merging main `3cc12c6f`, and then regenerating all final evidence against
 that new baseline. The pre-merge depth/counter standing is not merged-source
 standing. Origin pushes and merges into main remain forbidden.
+
+
+## Lead feedback round one: merge accepted S2 follow-up
+
+The fresh interrupted-step audit/gate passes before repair commit `539d6b8f`
+(2,606 default runtime tests + 117 curated Test262 cases). Main `3cc12c6f` is
+merged next as required by the lead. Conflicts retain both new function-cycle
+tests and S3b ownership tests, and append main's exact burndown rows byte-for-byte
+without editing or dropping prior records. T077's resume combines accepted
+follow-up standing with unaccepted S3b standing. Iterative allocation-free object
+and function cycle checks from main are preserved. Fresh merged-source checks
+are required; the old `1e6e2a2b` measurements remain historical only.
+
+
+The merged working tree passes the fresh fast gate: **2,636 default runtime
+tests + 117 curated Test262 cases**. Both function-cycle tests remain enabled;
+value/layout and named_property_cache submodules match main exactly. In
+value/object.rs, the only S3b delta against main is checked module namespace
+export access, and its cycle walker is unchanged. Final comparison baseline is
+now **main `3cc12c6f`**. The x86 order must be regenerated before triage.

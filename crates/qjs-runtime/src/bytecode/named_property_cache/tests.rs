@@ -611,3 +611,63 @@ fn owned_and_shared_sites_use_the_same_live_slots_and_clear_protocol() {
         std::mem::size_of::<Rc<()>>()
     );
 }
+
+#[test]
+fn megamorphic_store_sites_do_not_capture_unused_before_write_roots() {
+    let domain = AtomDomain::new();
+    let _owner = crate::value::layout::PropertyOwner::new(domain.clone());
+    let parent = ObjectRef::new(HashMap::new(), &domain);
+    let receiver = ObjectRef::with_prototype(HashMap::new(), Some(parent), &domain);
+    let cache = NamedPropertyCache::default();
+    cache.0.state.borrow_mut().entries = Entries::Mega;
+    assert!(cache.before_write_version(&receiver).is_none());
+}
+
+#[test]
+fn own_slot_admission_publishes_rebased_full_array_and_function_authorities() {
+    let domain = AtomDomain::new();
+    let _owner = crate::value::layout::PropertyOwner::new(domain.clone());
+    let parent = ObjectRef::new(HashMap::new(), &domain);
+    let array = crate::ArrayRef::new_in_domain(&domain, vec![]);
+    let function =
+        Function::new_native_in_domain(Some("f"), 0, NativeFunction::MathAbs, false, &domain);
+    let fill = |store: &mut crate::value::layout::NamedStore| {
+        store.insert_text("old", Property::enumerable(Value::Null));
+        store.remove_text("old");
+        store.set_prototype(Some(crate::Prototype::Object(parent.clone())));
+        store.insert_text("x", Property::enumerable(Value::Number(9.0)));
+    };
+    array.with_named_mut(fill);
+    function.with_named_mut(fill);
+    for value in [Value::Array(array), Value::Function(function)] {
+        let cache = NamedPropertyCache::default();
+        assert_eq!(
+            cache.read_value(&value, &domain.intern("x"), None),
+            Some(Value::Number(9.0))
+        );
+        assert_eq!(cache.get_value(&value, None), Some(Value::Number(9.0)));
+    }
+}
+
+#[test]
+fn shared_own_witness_retires_on_dictionary_conversion_and_private_reconfiguration() {
+    let domain = AtomDomain::new();
+    let _owner = crate::value::layout::PropertyOwner::new(domain.clone());
+    let object = object(&domain, "x", 1.0);
+    let shared = NamedPropertyCache::default();
+    assert_eq!(shared.read_object(&object, "x"), Some(Value::Number(1.0)));
+    assert_ne!(shared.0.first.get().unwrap().flags & SHARED, 0);
+    object.set("x".into(), Value::Number(2.0));
+    assert_eq!(shared.get(&object), Some(Value::Number(2.0)));
+    for i in 0..130 {
+        object.set(format!("p{i}"), Value::Null);
+    }
+    assert!(shared.get(&object).is_none());
+    let private = NamedPropertyCache::default();
+    assert_eq!(private.read_object(&object, "x"), Some(Value::Number(2.0)));
+    assert_eq!(private.0.first.get().unwrap().flags & SHARED, 0);
+    object.delete_own_property("x");
+    object.set("x".into(), Value::Number(3.0));
+    assert!(private.get(&object).is_none());
+    assert_eq!(private.read_object(&object, "x"), Some(Value::Number(3.0)));
+}
