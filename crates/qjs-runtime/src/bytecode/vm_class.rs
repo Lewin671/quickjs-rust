@@ -378,7 +378,7 @@ impl Vm<'_, '_> {
         // argument evaluation, then fails while trying to initialize `this`.
         let this_is_bound = self.env.derived_this_cell().map_or_else(
             || self.env.owner_kind().is_some(),
-            |cell| !cell.with_value(Value::is_uninitialized_lexical_marker),
+            |cell| cell.is_initialized(),
         );
         if this_is_bound {
             return Err(RuntimeError {

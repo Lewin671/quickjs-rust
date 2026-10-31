@@ -959,3 +959,23 @@ fn escaped_uninitialized_block_cells_survive_later_iteration_initialization() {
         Ok(Value::String("ReferenceError:7".into()))
     );
 }
+
+#[test]
+fn global_string_compound_assignment_respects_property_descriptors() {
+    assert_eq!(
+        eval(
+            "(function() { Object.defineProperty(globalThis, 's3bText', { value: 'a', configurable: true }); const result = []; for (const source of [\"s3bText += 'b'\", \"'use strict'; s3bText += 'b'\"]) { try { Function(source)(); result.push('ignored'); } catch(error) { result.push(error.name); } result.push(globalThis.s3bText); } delete globalThis.s3bText; return result.join(':'); })();"
+        ),
+        Ok(Value::String("ignored:a:TypeError:a".into()))
+    );
+}
+
+#[test]
+fn global_lexical_tdz_precedes_a_same_named_object_property_in_function_reads() {
+    assert_eq!(
+        eval(
+            "globalThis.hidden = 10; let result; function read() { return typeof hidden; } try { result = read(); } catch(error) { result = error.name; } let hidden = 3; result + ':' + hidden;"
+        ),
+        Ok(Value::String("ReferenceError:3".into()))
+    );
+}

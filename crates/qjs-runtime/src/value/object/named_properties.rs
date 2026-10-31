@@ -150,7 +150,9 @@ impl ObjectRef {
             && let Some(bindings) = cold.module_namespace_bindings.borrow().as_ref()
             && let Some(value) = bindings.value_for_export(key)
         {
-            property.value = value;
+            if let Ok(value) = value {
+                property.value = value;
+            }
         }
         Some(property)
     }

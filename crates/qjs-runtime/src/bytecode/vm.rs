@@ -591,7 +591,6 @@ impl<'a, 's> Vm<'a, 's> {
                         && *slot < u128::BITS as usize
                         && self.current.authoritative_slots & (1_u128 << *slot) != 0
                         && let Some(Some(value)) = self.current.locals.get(*slot)
-                        && !value.is_uninitialized_lexical_marker()
                     {
                         let value = super::vm_bindings::clone_local_value(value);
                         self.current.stack.push(value);
@@ -646,11 +645,7 @@ impl<'a, 's> Vm<'a, 's> {
                             .locals
                             .get(slot)
                             .is_some_and(|local| local.mutable)
-                        && self.current.locals.get(slot).is_some_and(|local| {
-                            local
-                                .as_ref()
-                                .is_some_and(|local| !local.is_uninitialized_lexical_marker())
-                        })
+                        && self.current.locals.get(slot).is_some_and(Option::is_some)
                         && let Some(value) = self.current.stack.pop()
                     {
                         self.current.locals[slot] = Some(value);
@@ -1015,7 +1010,7 @@ impl<'a, 's> Vm<'a, 's> {
                 let cached = {
                     let frame = &mut self.current;
                     match frame.locals.get(slot).and_then(Option::as_ref) {
-                        Some(object) if !object.is_uninitialized_lexical_marker() => {
+                        Some(object) => {
                             if let Some(value) = object.unconditional_named_hook(name.as_str()) {
                                 Some(value)
                             } else if let Value::Object(receiver) = object

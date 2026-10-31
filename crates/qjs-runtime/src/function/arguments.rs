@@ -325,10 +325,10 @@ fn cross_realm_array_proto_values(function: &Function) -> Option<Value> {
 }
 
 pub(crate) fn native_mapped_argument_get(function: &Function) -> Result<Value, RuntimeError> {
-    Ok(function
+    function
         .upvalues
         .first()
-        .map_or(Value::Undefined, BindingCell::get))
+        .map_or(Ok(Value::Undefined), BindingCell::read)
 }
 
 pub(crate) fn native_mapped_argument_set(

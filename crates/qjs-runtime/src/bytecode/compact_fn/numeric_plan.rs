@@ -607,11 +607,11 @@ fn link(
                 .as_ref()
                 .is_some_and(|function| function == callee)
         }))
-    })?;
+    })??;
     if let Some(existing) = existing {
         return Some(existing);
     }
-    let callee_value = cell.get();
+    let callee_value = cell.value_if_initialized()?;
     let Value::Function(callee) = &callee_value else {
         return None;
     };

@@ -69,14 +69,12 @@ impl Vm<'_, '_> {
                     if self.direct_eval_with_stack {
                         return self.typeof_ident_with(name, None);
                     }
-                    let value = if let Some(value) = self.env.module_import_value(name) {
-                        if value.is_uninitialized_lexical_marker() {
-                            return Err(RuntimeError {
-                                thrown: None,
-                                message: format!("ReferenceError: undefined identifier `{name}`"),
-                            });
-                        }
-                        value
+                    let value = if let Some(cell) = self.env.realm_binding_cell(name)
+                        && cell.metadata().kind == crate::binding::BindingKind::Lexical
+                    {
+                        cell.read()?
+                    } else if let Some(value) = self.env.module_import_value(name) {
+                        value?
                     } else if let Some(value) = self.env.get(name) {
                         value
                     } else {
@@ -87,14 +85,6 @@ impl Vm<'_, '_> {
                         // unresolvable.
                         self.global_this_own_value(name)?
                             .unwrap_or(Value::Undefined)
-                    };
-                    let value = if matches!(
-                        &value,
-                        Value::Function(function) if function.is_uninitialized_lexical_marker()
-                    ) {
-                        Value::Undefined
-                    } else {
-                        value
                     };
                     Ok(Value::String(typeof_value(value)))
                 })();

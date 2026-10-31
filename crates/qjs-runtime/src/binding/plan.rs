@@ -31,6 +31,7 @@ pub(crate) enum ScopeKind {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum BindingKind {
+    ObjectStorage,
     Parameter,
     Arguments,
     Var,

@@ -71,6 +71,15 @@ impl Vm<'_, '_> {
                 if local.compiler_temporary {
                     continue;
                 }
+                if local.name == "this"
+                    && let Some(cell) = env.derived_this_cell()
+                {
+                    local_upvalues[slot] = Some(cell);
+                    if local.is_received_upvalue() {
+                        next_received += 1;
+                    }
+                    continue;
+                }
                 // Positional captures name their source cell. Import tables
                 // cannot replace a nearer parameter/lexical homonym.
                 if local.is_received_upvalue()

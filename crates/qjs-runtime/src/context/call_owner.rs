@@ -118,9 +118,10 @@ mod tests {
     }
     #[test]
     fn retained_derived_this_can_only_initialize_once() {
-        let cell = BindingCell::new(Value::Function(
-            crate::Function::uninitialized_lexical_marker(),
-        ));
+        let cell = BindingCell::with_metadata(
+            crate::binding::BindingMetaRef::dynamic("this".into(), true, false),
+            None,
+        );
         let mut owner = CallOwner::root(Value::Undefined, OwnerKind::Function);
         owner.this = ThisBinding::Derived(cell.clone());
         let mut call = LexicalCallContext::Inline(owner);

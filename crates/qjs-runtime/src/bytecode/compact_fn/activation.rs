@@ -498,14 +498,16 @@ fn run_frames(
                         let Some(cell) = activation.upvalue_cell(slot as usize) else {
                             break Err(execute::uninitialized_local());
                         };
-                        let value = cell.get();
-                        let value = if value.is_uninitialized_lexical_marker() {
+                        let value = if !cell.is_initialized() {
                             match activation.uninitialized_upvalue(slot as usize) {
                                 Ok(value) => value,
                                 Err(error) => break Err(error),
                             }
                         } else {
-                            value
+                            match cell.read() {
+                                Ok(value) => value,
+                                Err(error) => break Err(error),
+                            }
                         };
                         execute::store(&mut window[dst as usize], value);
                     }

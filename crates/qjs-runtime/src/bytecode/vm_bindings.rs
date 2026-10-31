@@ -132,13 +132,7 @@ impl Vm<'_, '_> {
         }
         if name != "this" && !self.env.can_cache_realm_globals() {
             if let Some(value) = self.env.module_import_value(name) {
-                if value.is_uninitialized_lexical_marker() {
-                    return Err(RuntimeError {
-                        thrown: None,
-                        message: format!("ReferenceError: undefined identifier `{name}`"),
-                    });
-                }
-                return Ok(value);
+                return value;
             }
             return self.read_global_binding(name)?.ok_or_else(|| RuntimeError {
                 thrown: None,
@@ -153,18 +147,9 @@ impl Vm<'_, '_> {
         }
         if name != "this" && self.env.scope_cursor().is_some() {
             if let Some(value) = self.env.module_import_value(name) {
-                return if value.is_uninitialized_lexical_marker() {
-                    Err(RuntimeError {
-                        thrown: None,
-                        message: format!("ReferenceError: undefined identifier `{name}`"),
-                    })
-                } else {
-                    Ok(value)
-                };
+                return value;
             }
-            if let Some(value) = self.env.get_realm(name)
-                && !value.is_uninitialized_lexical_marker()
-            {
+            if let Some(value) = self.env.get_realm(name) {
                 return Ok(value);
             }
             if let Some(value) = self.global_this_own_value(name)? {
@@ -178,26 +163,20 @@ impl Vm<'_, '_> {
         if name == "this" {
             return self.env.this_value();
         }
-        let deoptimized_sloppy_global = if !self.bytecode.global_scope
+        if self.env.is_global_lexical_binding(name)
+            && let Some(cell) = self.env.realm_binding_cell(name)
+        {
+            return cell.read();
+        }
+        if !self.bytecode.global_scope
             && let Some(slot) = self.bytecode.local_slot(name)
             && self.bytecode.local_is_sloppy_global_fallback(slot)
             && let Some(value) = self.local_slot_value(slot)
         {
-            if !value.is_uninitialized_lexical_marker() {
-                return Ok(value);
-            }
-            true
-        } else {
-            false
-        };
-        if let Some(value) = self.env.module_import_value(name) {
-            if value.is_uninitialized_lexical_marker() {
-                return Err(RuntimeError {
-                    thrown: None,
-                    message: format!("ReferenceError: undefined identifier `{name}`"),
-                });
-            }
             return Ok(value);
+        }
+        if let Some(value) = self.env.module_import_value(name) {
+            return value;
         }
         if self.bytecode.global_scope
             && let Some(slot) = self.bytecode.local_slot(name)
@@ -207,24 +186,7 @@ impl Vm<'_, '_> {
         {
             return Ok(value);
         }
-        // A "global" name may actually be a caller-scope binding carried in this
-        // frame's own locals layer (e.g. an outer `var`/`let` the body closes
-        // over); check that first, then the shared realm, then a property
-        // created directly on `globalThis` (`this.x = 1` and realm bindings
-        // share one global namespace).
-        // Reconfiguring a captured sloppy global into an accessor detaches its
-        // realm cell. The frame still owns that now-invalidated cell, so skip
-        // its marker and resolve the accessor on `globalThis` below.
-        if !deoptimized_sloppy_global && let Some(value) = self.env.get(name) {
-            if matches!(
-                &value,
-                Value::Function(function) if function.is_uninitialized_lexical_marker()
-            ) {
-                return Err(RuntimeError {
-                    thrown: None,
-                    message: format!("ReferenceError: undefined identifier `{name}`"),
-                });
-            }
+        if let Some(value) = self.env.get(name) {
             return Ok(value);
         }
         if let Some(value) = self.global_this_own_value(name)? {
@@ -406,7 +368,7 @@ impl Vm<'_, '_> {
     pub(super) fn load_local(&mut self, slot: usize) -> Result<Value, RuntimeError> {
         if self.slot_is_authoritative(slot) {
             return match self.locals.get(slot) {
-                Some(Some(value)) => self.checked_local_value(slot, clone_local_value(value)),
+                Some(Some(value)) => Ok(clone_local_value(value)),
                 Some(None) => Err(RuntimeError {
                     thrown: None,
                     message: format!(
@@ -450,18 +412,11 @@ impl Vm<'_, '_> {
         if self.slot_is_realm_binding(slot)
             && let Some(cell) = self.local_upvalue_cell(slot)
         {
-            let value = cell.get();
-            if !value.is_uninitialized_lexical_marker() {
-                return Ok(value);
+            if !cell.object_route_is_invalidated() {
+                return cell.read();
             }
             let name = self.bytecode.locals[slot].name.clone();
-            if let Some(value) = self.global_this_own_value(&name)? {
-                return Ok(value);
-            }
-            return Err(RuntimeError {
-                thrown: None,
-                message: format!("ReferenceError: undefined identifier `{name}`"),
-            });
+            return self.load_global(&name);
         }
         if self.env.has_global_binding_root()
             && self
@@ -484,22 +439,16 @@ impl Vm<'_, '_> {
             return cell.read();
         }
         if let Some(value) = self.upvalue_slot_value(slot) {
-            return self.checked_local_value(slot, value);
+            return Ok(value);
         }
         if let Some(local) = self.bytecode.locals.get(slot)
             && local.from_env
             && let Some(value) = self.env.module_import_value(&local.name)
         {
-            if value.is_uninitialized_lexical_marker() {
-                return Err(RuntimeError {
-                    thrown: None,
-                    message: format!("ReferenceError: undefined identifier `{}`", local.name),
-                });
-            }
-            return Ok(value);
+            return value;
         }
         match self.locals.get(slot) {
-            Some(Some(value)) => self.checked_local_value(slot, value.clone()),
+            Some(Some(value)) => Ok(value.clone()),
             Some(None) => Err(RuntimeError {
                 thrown: None,
                 message: format!(
@@ -585,7 +534,7 @@ impl Vm<'_, '_> {
         }
         let cell = self.env.realm_binding_cell(name)?;
         if !self.env.is_realm_binding_cell(name, &cell)
-            || !cell.get().same_value(&value)
+            || !cell.value_if_initialized()?.same_value(&value)
             || !self.env.get_realm(name)?.same_value(&value)
         {
             return None;
@@ -631,7 +580,8 @@ impl Vm<'_, '_> {
             })
         {
             debug_assert!(self.env.is_realm_binding_cell(&target.name, &target.cell));
-            target.cell.set(value.clone());
+            let published = target.cell.publish_object_value(value.clone());
+            debug_assert!(published);
             self.locals[target.slot] = None;
             return true;
         }
@@ -672,35 +622,15 @@ impl Vm<'_, '_> {
     }
 
     pub(super) fn local_slot_value(&self, slot: usize) -> Option<Value> {
-        self.upvalue_slot_value(slot)
-            .or_else(|| self.locals.get(slot).and_then(Option::as_ref).cloned())
+        if let Some(cell) = self.local_upvalue_cell(slot) {
+            return cell.value_if_initialized();
+        }
+        self.locals.get(slot).and_then(Option::as_ref).cloned()
     }
 
     pub(super) fn upvalue_slot_value(&self, slot: usize) -> Option<Value> {
-        self.local_upvalue_cell(slot).map(BindingCell::get)
-    }
-
-    #[inline(always)]
-    fn checked_local_value(&self, slot: usize, value: Value) -> Result<Value, RuntimeError> {
-        if !value.is_uninitialized_lexical_marker() {
-            return Ok(value);
-        }
-        self.uninitialized_local_value(slot)
-    }
-
-    #[cold]
-    #[inline(never)]
-    fn uninitialized_local_value(&self, slot: usize) -> Result<Value, RuntimeError> {
-        if self.bytecode.local_is_compiler_temporary(slot) {
-            return Ok(Value::Undefined);
-        }
-        Err(RuntimeError {
-            thrown: None,
-            message: format!(
-                "ReferenceError: undefined identifier `{}`",
-                self.bytecode.locals[slot].name
-            ),
-        })
+        self.local_upvalue_cell(slot)
+            .and_then(BindingCell::value_if_initialized)
     }
 
     pub(super) fn load_local_or_undefined(&self, slot: usize) -> Result<Value, RuntimeError> {
@@ -711,7 +641,7 @@ impl Vm<'_, '_> {
             && local.from_env
             && let Some(value) = self.env.module_import_value(&local.name)
         {
-            return Ok(value);
+            return value;
         }
         match self.locals.get(slot) {
             Some(Some(value)) => Ok(value.clone()),
@@ -896,7 +826,6 @@ impl Vm<'_, '_> {
                 .get(slot)
                 .is_some_and(|local| local.mutable)
             && let Some(Some(local)) = self.locals.get_mut(slot)
-            && !local.is_uninitialized_lexical_marker()
         {
             *local = value;
             return Ok(());
@@ -914,17 +843,6 @@ impl Vm<'_, '_> {
                 .is_some_and(|local| local.mutable)
         {
             return match self.locals.get_mut(slot) {
-                Some(Some(Value::Function(function)))
-                    if function.is_uninitialized_lexical_marker() =>
-                {
-                    Err(RuntimeError {
-                        thrown: None,
-                        message: format!(
-                            "ReferenceError: undefined identifier `{}`",
-                            self.bytecode.locals[slot].name
-                        ),
-                    })
-                }
                 Some(Some(local)) => {
                     *local = value;
                     Ok(())
@@ -960,15 +878,6 @@ impl Vm<'_, '_> {
         }
         let current = self.locals.get(slot).and_then(Option::as_ref).cloned();
         match current {
-            Some(Value::Function(function)) if function.is_uninitialized_lexical_marker() => {
-                Err(RuntimeError {
-                    thrown: None,
-                    message: format!(
-                        "ReferenceError: undefined identifier `{}`",
-                        self.bytecode.locals[slot].name
-                    ),
-                })
-            }
             Some(_) => self.store_local(slot, value),
             None => Err(RuntimeError {
                 thrown: None,

@@ -78,16 +78,13 @@ impl Vm<'_, '_> {
         name: &str,
     ) -> Result<Option<crate::Value>, crate::RuntimeError> {
         if self.env.can_cache_realm_globals()
-            && let Some(value) = self.env.get_realm(name)
+            && let Some(cell) = self.env.realm_binding_cell(name)
         {
-            if !value.is_uninitialized_lexical_marker() {
-                return Ok(Some(value));
+            if cell.metadata().kind == crate::binding::BindingKind::Lexical {
+                return cell.read().map(Some);
             }
-            if self.env.can_cache_realm_globals() && self.env.is_global_lexical_binding(name) {
-                return Err(crate::RuntimeError {
-                    thrown: None,
-                    message: format!("ReferenceError: undefined identifier `{name}`"),
-                });
+            if let Some(value) = cell.value_if_initialized() {
+                return Ok(Some(value));
             }
         }
         let Some(base) = self.env.selected_global_this() else {

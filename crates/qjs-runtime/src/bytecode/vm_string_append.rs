@@ -104,7 +104,7 @@ impl Vm<'_, '_> {
         let matches = cell.with_value(|value| {
             matches!(value, Value::String(current) if crate::JsString::ptr_eq(current, expected))
         });
-        if !matches {
+        if matches != Some(true) {
             return false;
         }
 
@@ -123,7 +123,9 @@ impl Vm<'_, '_> {
             return false;
         }
 
-        cell.set(Value::Undefined);
+        if cell.assign(Value::Undefined, false).is_err() {
+            return false;
+        }
         if let Some(Some(local)) = self.locals.get_mut(slot)
             && matches!(local, Value::String(current) if crate::JsString::ptr_eq(current, expected))
         {
@@ -174,16 +176,18 @@ impl Vm<'_, '_> {
         }
         let cell = self.env.realm_binding_cell(name);
         if let Some(cell) = &cell
-            && !cell.with_value(|value| {
+            && cell.with_value(|value| {
                 matches!(value, Value::String(current) if crate::JsString::ptr_eq(current, expected))
-            })
+            }) != Some(true)
         {
             return false;
         }
         if let Some(cell) = cell {
             // `cell` *is* the realm's canonical binding for `name` — no
             // separate raw map entry to mirror this into.
-            cell.set(Value::Undefined);
+            if cell.assign(Value::Undefined, false).is_err() {
+                return false;
+            }
         }
         if let Some(global_this) = global_this
             && global_this
@@ -284,6 +288,14 @@ impl Vm<'_, '_> {
         suffix: &str,
         is_strict: bool,
     ) -> Result<Value, RuntimeError> {
+        if !self.env.is_global_lexical_binding(name)
+            && !self
+                .cached_global_this()
+                .and_then(|global| global.own_property(name))
+                .is_some_and(|property| !property.is_accessor() && property.writable)
+        {
+            return self.append_string_literal_global_via_store(name, suffix, is_strict);
+        }
         {
             // The cell is the sole storage for this binding, so mutating it
             // in place needs no separate cell refresh afterward — unlike the

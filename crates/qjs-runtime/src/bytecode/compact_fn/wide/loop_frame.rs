@@ -118,7 +118,7 @@ impl LoopFrame for WideLoopFrame<'_, '_> {
             let value = &self.locals[slot];
             return (!value.is_uninitialized_lexical_marker()).then(|| value.clone());
         }
-        self.cell(slot).map(BindingCell::get)
+        self.cell(slot).and_then(BindingCell::value_if_initialized)
     }
 
     fn slot_accepts_typed_loop_write(&self, slot: usize) -> bool {

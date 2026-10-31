@@ -816,3 +816,32 @@ capture with no retained slot. A permanent runtime/NG case separates an escaped
 uninitialized iteration from the later initialized instance. All **2,647 feature
 runtime tests**, **296 serial NG scripts**, and the fresh staged gate
 (**2,594 default tests + 65 Test262 cases**) pass. Final S3b remains open.
+
+
+## B2c7 checked reads/publishers and object-route invalidation
+
+Over `3ac36ec3`, BindingCell has no raw set/get or mutable-value API. Declarative
+reads return a structured TDZ error; cache probes return Option without creating
+a Function sentinel. Init/Assign remain distinct. Numeric leaf writes validate
+all destinations before publishing speculative results and use checked Assign;
+sloppy immutable self routes decline to the semantic interpreter when needed.
+Mapped argument getters and module namespace reads use the same checked cells.
+
+ObjectStorage identifies global/host data caches separately from declaratives.
+Only those cells accept object publication/invalidation; global lexical values
+cannot be overwritten by a same-named object's notifications. Invalidated object
+routes have their own state and re-resolve the live global binding/property.
+Derived this starts directly in typed uninitialized state, with no marker seed.
+The remaining wide-register-only sentinel belongs to existing tier storage; no
+binding/context/VM local or global cache manufactures it.
+
+Global literal string append now checks the property's writable descriptor and
+uses semantic store for rejected routes, including sloppy ignore/strict throw.
+Global lexical TDZ precedes a same-named property during function/typeof reads.
+New cell policy tests and runtime/NG cases cover these paths. Module namespace
+changes in value/object.rs are limited to checked export reads; prototype-cycle
+checks, value/layout and IC constant admission are untouched.
+
+Fresh feature runtime suite passes **2,650 tests**; all **297 serial NG scripts**
+and the staged gate (**2,597 default tests + 117 Test262 cases**) pass. Final S3b
+acceptance, stress controls and full/exact/counter/public86 gates remain open.

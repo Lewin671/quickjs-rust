@@ -765,8 +765,8 @@ fn captured_value(function: &Function, bytecode: &Bytecode, slot: usize) -> Opti
     let bit = (slot < u128::BITS as usize).then(|| 1_u128 << slot)?;
     (slots & bit != 0).then_some(())?;
     let index = bytecode.direct_readonly_received_upvalue_index(slot)?;
-    let value = function.upvalues.get(index)?.get();
-    (!value.is_uninitialized_lexical_marker()).then_some(value)
+    let value = function.upvalues.get(index)?.value_if_initialized()?;
+    Some(value)
 }
 
 struct Walk {

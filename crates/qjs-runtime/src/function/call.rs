@@ -1222,9 +1222,10 @@ fn enter_function_activation<'a>(
         }
         let derived = function.is_derived_constructor && is_construct;
         let this = if derived {
-            crate::context::ThisBinding::Derived(super::BindingCell::new(Value::Function(
-                Function::uninitialized_lexical_marker(),
-            )))
+            crate::context::ThisBinding::Derived(super::BindingCell::with_metadata(
+                crate::binding::BindingMetaRef::dynamic("this".into(), true, false),
+                None,
+            ))
         } else {
             crate::context::ThisBinding::Initialized(receiver)
         };

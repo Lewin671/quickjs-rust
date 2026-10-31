@@ -52,7 +52,8 @@ parameter leaf bindings are parameters too; raw pattern inputs are not bindings.
    set. A global property of the same name remains independent. Ordinary global
    data routes synchronize with the global object; delete/accessor definition
    invalidates a data route and restores semantic Get, without inventing lexical
-   TDZ. Tests: `global.rs`, `closure_state.rs`, `direct_eval/s3b_bindings.rs`.
+   TDZ. ObjectStorage publishers cannot mutate declaratives; invalidation has a
+   separate typed state. Tests: `global.rs`, `closure_state.rs`, `binding/cell.rs`.
 9. **Intrinsics are not mutable global bindings.** Set-once realm intrinsic fields
    own Object/Array/Function, primitive/error prototypes and well-known symbols.
    Internal errors use these identities without looking up public constructors.
@@ -107,7 +108,7 @@ are display names and introduce no self environment. Import routes reject Assign
 without reading an exporter's possibly uninitialized cell; reads still observe
 that cell's TDZ. Tests: `direct_eval/self_binding.rs`, `binding/scope_tests.rs`.
 
-## Lexical call context and remaining compatibility
+## Lexical call context
 
 `context/call_owner.rs` separates receiver, new.target, home/super, active
 constructor and field/static restrictions from declarative bindings. An ordinary
@@ -123,8 +124,7 @@ binding on field failure. An object return may bypass an unbound this. Root
 builders initialize script/module receivers explicitly; a public property named
 this cannot change them. Fields/static blocks establish their own receiver and
 restrictions, arrows inherit them, and ordinary nested calls establish new owners.
-Tests: `context/call_owner.rs`, `function/call_activation_tests.rs`,
-`direct_eval/derived_this.rs`, and `class_keys.rs`.
+Tests: `context/call_owner.rs`, `function/call_activation_tests.rs`, `class_keys.rs`.
 
 `context/creation.rs` owns shared realm, referrer, module routes, private
 context and explicit global selection. `context/activation.rs` owns logical
@@ -140,7 +140,7 @@ Vm/tiers own callee state; no caller-equality proof or empty-env factory remains
 RuntimeGroup shares AtomDomain/weak realm registry; host/agent services stay canonical.
 Dynamic Function reuses its callee Realm/live globals without execution projections.
 Own cells are promoted at capture/eval/reference exposure; entry keeps only
-received/module/global/mapped-arguments cells. Stress controls/publisher audit remain.
+received/module/global/mapped-arguments cells. Debug stress controls remain.
 Class keys execute inline. A cold continuation owns the partial class/private
 context across yield/await; handlers restore regions and mode to their entry.
 Heritage validation precedes keys; each method installs before the next key.

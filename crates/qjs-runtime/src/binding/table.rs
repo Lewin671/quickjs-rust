@@ -51,7 +51,9 @@ impl DynamicBindings {
             map: RefCell::new(
                 values
                     .into_iter()
-                    .map(|(name, value)| (name, BindingCell::new(value)))
+                    .map(|(name, value)| {
+                        (name.clone(), BindingCell::new_object_storage(name, value))
+                    })
                     .collect(),
             ),
             generation: std::cell::Cell::new(0),
@@ -59,20 +61,26 @@ impl DynamicBindings {
     }
 
     pub(crate) fn get(&self, name: &str) -> Option<Value> {
-        self.0.map.borrow().get(name).map(BindingCell::get)
+        self.0
+            .map
+            .borrow()
+            .get(name)
+            .and_then(BindingCell::value_if_initialized)
     }
 
     pub(crate) fn cell(&self, name: &str) -> Option<BindingCell> {
         self.0.map.borrow().get(name).cloned()
     }
 
+    /// Publishes object/host data only; existing declaratives keep their policy.
     pub(crate) fn insert(&self, name: String, value: Value) -> Option<Value> {
         if let Some(binding) = self.0.map.borrow().get(&name) {
-            let previous = binding.get();
-            binding.set(value);
-            return Some(previous);
+            let previous = binding.value_if_initialized();
+            binding.publish_object_value(value);
+            return previous;
         }
-        self.mapping_mut().insert(name, BindingCell::new(value));
+        self.mapping_mut()
+            .insert(name.clone(), BindingCell::new_object_storage(name, value));
         None
     }
 
@@ -81,7 +89,9 @@ impl DynamicBindings {
     }
 
     pub(crate) fn remove(&self, name: &str) -> Option<Value> {
-        self.mapping_mut().remove(name).map(|binding| binding.get())
+        self.mapping_mut()
+            .remove(name)
+            .and_then(|binding| binding.value_if_initialized())
     }
 
     pub(crate) fn contains_key(&self, name: &str) -> bool {
@@ -93,7 +103,11 @@ impl DynamicBindings {
             .map
             .borrow()
             .iter()
-            .map(|(name, binding)| (name.clone(), binding.get()))
+            .filter_map(|(name, binding)| {
+                binding
+                    .value_if_initialized()
+                    .map(|value| (name.clone(), value))
+            })
             .collect()
     }
 }

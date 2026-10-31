@@ -14,6 +14,7 @@ use std::{cell::RefCell, rc::Rc};
 #[derive(Clone, Debug)]
 pub(crate) enum BindingState {
     Uninitialized,
+    InvalidatedObjectRoute,
     Initialized(Value),
     LazyArguments(Rc<crate::function::LazyArguments>),
 }
@@ -65,6 +66,7 @@ impl BindingMetaRef {
 }
 
 impl BindingCell {
+    #[cfg(test)]
     pub(crate) fn new(value: Value) -> Self {
         Self::with_metadata(
             BindingMetaRef::dynamic(String::new(), true, false),
@@ -78,12 +80,7 @@ impl BindingCell {
     }
 
     pub(crate) fn with_metadata(meta: BindingMetaRef, value: Option<Value>) -> Self {
-        let state = match value {
-            Some(value) if !value.is_uninitialized_lexical_marker() => {
-                BindingState::Initialized(value)
-            }
-            _ => BindingState::Uninitialized,
-        };
+        let state = value.map_or(BindingState::Uninitialized, BindingState::Initialized);
         Self(Rc::new(CellStorage {
             meta,
             state: RefCell::new(state),
@@ -105,14 +102,19 @@ impl BindingCell {
     }
 
     pub(crate) fn is_initialized(&self) -> bool {
-        !matches!(*self.0.state.borrow(), BindingState::Uninitialized)
+        matches!(
+            *self.0.state.borrow(),
+            BindingState::Initialized(_) | BindingState::LazyArguments(_)
+        )
     }
 
     pub(crate) fn read(&self) -> Result<Value, RuntimeError> {
         let state = self.0.state.borrow();
         match &*state {
             BindingState::Initialized(value) => Ok(value.clone()),
-            BindingState::Uninitialized => Err(self.tdz_error()),
+            BindingState::Uninitialized | BindingState::InvalidatedObjectRoute => {
+                Err(self.tdz_error())
+            }
             BindingState::LazyArguments(_) => {
                 drop(state);
                 self.materialize_arguments();
@@ -213,19 +215,16 @@ impl BindingCell {
         }
     }
 
-    // The remaining VM marker-facing reads project TDZ without storing a
-    // second value; checked declarative access uses read/initialize/assign.
-    pub(crate) fn get(&self) -> Value {
+    /// A cache/diagnostic probe; semantic declarative reads use `read`.
+    pub(crate) fn value_if_initialized(&self) -> Option<Value> {
         self.with_value(Clone::clone)
     }
 
-    pub(crate) fn with_value<R>(&self, read: impl FnOnce(&Value) -> R) -> R {
+    pub(crate) fn with_value<R>(&self, read: impl FnOnce(&Value) -> R) -> Option<R> {
         let state = self.0.state.borrow();
         match &*state {
-            BindingState::Initialized(value) => read(value),
-            BindingState::Uninitialized => read(&Value::Function(
-                crate::Function::uninitialized_lexical_marker(),
-            )),
+            BindingState::Initialized(value) => Some(read(value)),
+            BindingState::Uninitialized | BindingState::InvalidatedObjectRoute => None,
             BindingState::LazyArguments(_) => {
                 drop(state);
                 self.materialize_arguments();
@@ -234,8 +233,34 @@ impl BindingCell {
         }
     }
 
-    /// Performs only callback-free mutations admitted by the current value.
-    /// Other states use the ordinary read/coerce/Assign sequence instead.
+    pub(crate) fn new_object_storage(name: String, value: Value) -> Self {
+        let mut meta = BindingMetaRef::dynamic(name, true, false);
+        Rc::get_mut(&mut meta.owner).expect("fresh metadata").0[0].kind =
+            BindingKind::ObjectStorage;
+        Self::with_metadata(meta, Some(value))
+    }
+
+    /// Only global/host object-data caches may publish or invalidate values.
+    /// Declaratives can change solely through Init/Assign.
+    pub(crate) fn publish_object_value(&self, value: Value) -> bool {
+        if self.metadata().kind != BindingKind::ObjectStorage {
+            return false;
+        }
+        *self.0.state.borrow_mut() = BindingState::Initialized(value);
+        true
+    }
+
+    pub(crate) fn invalidate_object_route(&self) {
+        if self.metadata().kind == BindingKind::ObjectStorage {
+            *self.0.state.borrow_mut() = BindingState::InvalidatedObjectRoute;
+        }
+    }
+
+    pub(crate) fn object_route_is_invalidated(&self) -> bool {
+        matches!(*self.0.state.borrow(), BindingState::InvalidatedObjectRoute)
+    }
+
+    /// Performs callback-free mutations admitted by the initialized value.
     pub(crate) fn try_assign_in_place<R>(
         &self,
         strict: bool,
@@ -253,15 +278,6 @@ impl BindingCell {
             unreachable!("callback-free mutation preserves initialized state")
         };
         Ok(Some(mutate(value)))
-    }
-
-    // Remaining raw VM/global publishers are retired in the final cell audit.
-    pub(crate) fn set(&self, value: Value) {
-        *self.0.state.borrow_mut() = if value.is_uninitialized_lexical_marker() {
-            BindingState::Uninitialized
-        } else {
-            BindingState::Initialized(value)
-        };
     }
 
     pub(crate) fn ptr_eq(&self, other: &Self) -> bool {
@@ -286,12 +302,15 @@ mod tests {
     #[test]
     fn new_then_get_roundtrips() {
         let cell = BindingCell::new(Value::Number(1.0));
-        assert!(matches!(cell.get(), Value::Number(n) if n == 1.0));
+        assert!(matches!(cell.read().unwrap(), Value::Number(n) if n == 1.0));
     }
 
     #[test]
     fn undefined_starts_undefined() {
-        assert!(matches!(BindingCell::undefined().get(), Value::Undefined));
+        assert!(matches!(
+            BindingCell::undefined().read().unwrap(),
+            Value::Undefined
+        ));
     }
 
     #[test]
@@ -299,10 +318,10 @@ mod tests {
         let declaring = BindingCell::new(Value::Number(0.0));
         // A closure capturing the same binding clones the cell.
         let captured = declaring.clone();
-        captured.set(Value::Number(42.0));
+        captured.assign(Value::Number(42.0), false).unwrap();
         // The declaring frame observes the closure's write — the whole point of
         // a shared cell vs. the old snapshot model.
-        assert!(matches!(declaring.get(), Value::Number(n) if n == 42.0));
+        assert!(matches!(declaring.read().unwrap(), Value::Number(n) if n == 42.0));
     }
 
     #[test]
@@ -312,8 +331,8 @@ mod tests {
             Value::Number(number) => Some(*number),
             _ => None,
         });
-        assert_eq!(number, Some(42.0));
-        assert!(matches!(cell.get(), Value::Number(number) if number == 42.0));
+        assert_eq!(number, Some(Some(42.0)));
+        assert!(matches!(cell.read().unwrap(), Value::Number(number) if number == 42.0));
     }
 
     #[test]
@@ -495,5 +514,29 @@ mod arguments_tests {
         let counters = crate::counters().unwrap();
         assert_eq!(counters.arguments_recipes, 0);
         assert_eq!(counters.arguments_materializations, 0);
+    }
+}
+
+#[cfg(test)]
+mod object_route_tests {
+    use super::*;
+
+    #[test]
+    fn invalidation_drops_only_object_routes_without_manufacturing_tdz_values() {
+        let cache = BindingCell::new_object_storage("name".into(), Value::Number(1.0));
+        cache.invalidate_object_route();
+        assert!(cache.object_route_is_invalidated());
+        assert!(cache.value_if_initialized().is_none());
+        assert!(cache.publish_object_value(Value::Number(2.0)));
+        assert_eq!(cache.read(), Ok(Value::Number(2.0)));
+        let lexical =
+            BindingCell::with_metadata(BindingMetaRef::dynamic("name".into(), false, false), None);
+        lexical.invalidate_object_route();
+        assert!(!lexical.object_route_is_invalidated());
+        assert!(!lexical.publish_object_value(Value::Number(9.0)));
+        assert!(!lexical.is_initialized());
+        lexical.initialize(Value::Number(3.0)).unwrap();
+        assert!(lexical.assign(Value::Number(4.0), false).is_err());
+        assert_eq!(lexical.read(), Ok(Value::Number(3.0)));
     }
 }

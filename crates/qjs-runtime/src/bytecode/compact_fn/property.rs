@@ -624,10 +624,12 @@ pub(in crate::bytecode) fn load_global(
         let access = &mut *env;
         return crate::property_value(global, name, access);
     }
+    if let Some(cell) = env.realm_binding_cell(name)
+        && cell.metadata().kind == crate::binding::BindingKind::Lexical
+    {
+        return cell.read();
+    }
     if let Some(value) = env.get(name) {
-        if value.is_uninitialized_lexical_marker() {
-            return Err(undefined_identifier(name));
-        }
         return Ok(value);
     }
     if let Some(Value::Object(global_this)) = env.global_this()
@@ -666,11 +668,9 @@ pub(in crate::bytecode) fn load_global_cached(
         if let Some((bindings, generation, cell)) = &*site.0.borrow()
             && bindings.ptr_eq(realm)
             && *generation == realm.generation()
+            && !cell.object_route_is_invalidated()
         {
-            let value = cell.get();
-            if !value.is_uninitialized_lexical_marker() {
-                return Ok(value);
-            }
+            return cell.read();
         }
     }
     let value = load_global(name, env)?;
@@ -720,7 +720,7 @@ pub(super) fn try_store_global_var(
                     mirrors(property, current)
                 })
             });
-            if !matches!(written, OwnDataPropertyWrite::Written) {
+            if !matches!(written, Some(OwnDataPropertyWrite::Written)) {
                 return false;
             }
             env.replace_existing_realm_with_cell(name, value.clone(), &cell)
@@ -765,19 +765,24 @@ pub(super) fn try_append_global_var(
     let Some(GlobalVar::Bound(global_this, cell)) = plain_global_var(name, env) else {
         return false;
     };
-    if !cell.with_value(
+    if cell.with_value(
         |value| matches!(value, Value::String(bound) if crate::JsString::ptr_eq(bound, current)),
-    ) {
+    ) != Some(true)
+    {
         return false;
     }
-    cell.set(Value::Undefined);
+    if cell.assign(Value::Undefined, false).is_err() {
+        return false;
+    }
     if !matches!(
         global_this.write_existing_own_data_property_if(name, &Value::Undefined, |property| {
             matches!(property, Value::String(bound) if crate::JsString::ptr_eq(bound, current))
         }),
         OwnDataPropertyWrite::Written
     ) {
-        cell.set(left.clone());
+        if cell.assign(left.clone(), false).is_err() {
+            return false;
+        }
         return false;
     }
     let left = std::mem::replace(left, Value::Undefined);
@@ -856,9 +861,6 @@ pub(in crate::bytecode) fn field_initializer_member_read(
         return None;
     }
     let index = bytecode.readonly_received_upvalue_index(slot)?;
-    let receiver = thunk.upvalues.get(index)?.get();
-    if receiver.is_uninitialized_lexical_marker() {
-        return None;
-    }
+    let receiver = thunk.upvalues.get(index)?.value_if_initialized()?;
     Some(get_prop_named(&receiver, key, cache, env))
 }

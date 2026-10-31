@@ -2,8 +2,7 @@
 //! copies lexical names/values or manufactures another execution environment.
 use super::{ActivationContext, Realm};
 use crate::{
-    Function, ObjectRef, Value, binding::DynamicBindings, function::BindingCell,
-    private::PrivateEnvironment,
+    ObjectRef, Value, binding::DynamicBindings, function::BindingCell, private::PrivateEnvironment,
 };
 use std::rc::Rc;
 
@@ -38,12 +37,7 @@ impl ActivationContext {
     }
 
     pub(crate) fn receiver_seed(&self) -> Option<Value> {
-        self.call.owner().map(|owner| {
-            owner
-                .this
-                .read()
-                .unwrap_or_else(|_| Value::Function(Function::uninitialized_lexical_marker()))
-        })
+        self.call.owner().and_then(|owner| owner.this.read().ok())
     }
 
     pub(crate) fn this_value(&self) -> Result<Value, crate::RuntimeError> {
@@ -146,13 +140,20 @@ impl ActivationContext {
         Rc::make_mut(&mut module.imports).insert(local_name, (bindings, exported));
     }
 
-    pub(crate) fn module_import_value(&self, local_name: &str) -> Option<Value> {
+    pub(crate) fn module_import_value(
+        &self,
+        local_name: &str,
+    ) -> Option<Result<Value, crate::RuntimeError>> {
         let (bindings, exported) = self.creation.imports().get(local_name)?;
-        Some(
-            bindings
-                .get(exported)
-                .unwrap_or_else(|| Value::Function(Function::uninitialized_lexical_marker())),
-        )
+        Some(bindings.cell(exported).map_or_else(
+            || {
+                Err(crate::RuntimeError {
+                    thrown: None,
+                    message: format!("ReferenceError: undefined identifier `{local_name}`"),
+                })
+            },
+            |cell| cell.read(),
+        ))
     }
 
     pub(crate) fn module_import_cell(&self, local_name: &str) -> Option<BindingCell> {
@@ -206,7 +207,7 @@ impl ActivationContext {
             if cell.metadata().kind == crate::binding::BindingKind::Lexical {
                 return cell;
             }
-            cell.set(Value::Function(Function::uninitialized_lexical_marker()));
+            cell.invalidate_object_route();
         }
         let name = meta.name.clone();
         let cell = BindingCell::with_metadata(meta, None);
@@ -346,7 +347,7 @@ impl ActivationContext {
         // that was live immediately before removal.
         let removed = self.creation.realm.get_value(name);
         if let Some(cell) = self.creation.realm.cell(name) {
-            cell.set(Value::Function(Function::uninitialized_lexical_marker()));
+            cell.invalidate_object_route();
         }
         self.creation.realm.remove_value(name);
         self.creation
@@ -370,7 +371,9 @@ impl ActivationContext {
         let Some(cell) = self.creation.realm.cell(name) else {
             return false;
         };
-        cell.set(value.clone());
+        if !cell.publish_object_value(value.clone()) {
+            return false;
+        }
         self.creation
             .realm
             .sync_dynamic_function_realm_binding(name, Some(&value));
@@ -383,7 +386,9 @@ impl ActivationContext {
         value: Value,
         cell: &BindingCell,
     ) -> bool {
-        cell.set(value.clone());
+        if !cell.publish_object_value(value.clone()) {
+            return false;
+        }
         self.creation
             .realm
             .sync_dynamic_function_realm_binding(name, Some(&value));

@@ -420,7 +420,7 @@ impl NumericLeafShortcut {
             upvalues.get(index)?.with_value(|value| match value {
                 Value::Number(value) => Some(*value),
                 _ => None,
-            })
+            })?
         };
         match self {
             // Handled above, before the numeric accessors.
@@ -475,7 +475,10 @@ impl NumericLeafShortcut {
             } => {
                 let value = direct_number_binary(upvalue_number(*upvalue_index)?, *op, *right)?
                     .into_value()?;
-                upvalues.get(*upvalue_index)?.set(value.clone());
+                upvalues
+                    .get(*upvalue_index)?
+                    .assign(value.clone(), true)
+                    .ok()?;
                 Some(value)
             }
         }
@@ -834,7 +837,7 @@ pub(crate) fn try_eval_numeric_leaf(
         return None;
     }
     for (&slot, upvalue) in received_upvalue_slots.iter().zip(upvalues) {
-        locals[slot] = upvalue.with_value(FastValue::from_value)?;
+        locals[slot] = upvalue.with_value(FastValue::from_value)??;
     }
 
     let mut assigned_upvalues = 0_u32;
@@ -917,7 +920,10 @@ pub(crate) fn try_eval_numeric_leaf(
                 };
                 let value = direct_number_binary(left, *op, *right)?;
                 let value = value.into_value()?;
-                upvalues.get(*upvalue_index)?.set(value.clone());
+                upvalues
+                    .get(*upvalue_index)?
+                    .assign(value.clone(), true)
+                    .ok()?;
                 return Some(value);
             }
             FastOp::Return => {
@@ -963,7 +969,7 @@ fn try_eval_numeric_leaf_bytecode(
         return None;
     }
     for (&slot, upvalue) in received_upvalue_slots.iter().zip(upvalues) {
-        locals[slot] = upvalue.with_value(FastValue::from_value)?;
+        locals[slot] = upvalue.with_value(FastValue::from_value)??;
     }
 
     let mut assigned_upvalues = 0_u32;
@@ -1116,9 +1122,19 @@ fn commit_upvalues(
     locals: &[FastValue; MAX_FAST_LOCALS],
     assigned_upvalues: u32,
 ) -> Option<()> {
+    // Validate every destination before publishing any speculative result.
     for (index, &slot) in received_upvalue_slots.iter().enumerate() {
         if assigned_upvalues & (1 << index) != 0 {
-            upvalues.get(index)?.set(locals[slot].into_value()?);
+            upvalues.get(index)?.check_assignment(true).ok()?;
+            locals[slot].into_value()?;
+        }
+    }
+    for (index, &slot) in received_upvalue_slots.iter().enumerate() {
+        if assigned_upvalues & (1 << index) != 0 {
+            upvalues
+                .get(index)?
+                .assign(locals[slot].into_value()?, true)
+                .ok()?;
         }
     }
     Some(())

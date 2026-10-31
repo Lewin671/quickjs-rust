@@ -2,8 +2,8 @@
 //! remain their only authority. Storage borrows end before observable hooks.
 use super::{Context, Realm};
 use crate::{
-    Bytecode, Function, JsString, ObjectRef, Value, binding::DynamicBindings,
-    function::BindingCell, private::PrivateEnvironment,
+    Bytecode, JsString, ObjectRef, Value, binding::DynamicBindings, function::BindingCell,
+    private::PrivateEnvironment,
 };
 use qjs_parser::EvalParseContext;
 use std::rc::Rc;
@@ -227,7 +227,7 @@ impl Context<'_> {
         // that was live immediately before removal.
         let removed = self.creation_context_ref().realm.get_value(name);
         if let Some(cell) = self.creation_context_ref().realm.cell(name) {
-            cell.set(Value::Function(Function::uninitialized_lexical_marker()));
+            cell.invalidate_object_route();
         }
         self.creation_context_ref().realm.remove_value(name);
         self.creation_context_ref()
@@ -249,7 +249,9 @@ impl Context<'_> {
         value: Value,
         cell: &BindingCell,
     ) -> bool {
-        cell.set(value.clone());
+        if !cell.publish_object_value(value.clone()) {
+            return false;
+        }
         self.creation_context_ref()
             .realm
             .sync_dynamic_function_realm_binding(name, Some(&value));
