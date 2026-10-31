@@ -91,6 +91,8 @@ declare_counters! {
     typed_variable_identities,
     /// Rc allocations for nonempty typed native closure payloads.
     native_capture_payload_allocations,
+    /// Actual slot-to-cell authority transfers at first exposure.
+    binding_promotions,
     /// Retired CallEnv construction event; no counting site remains.
     call_env_constructions,
     /// Retired CallEnv Clone event; no counting site remains.

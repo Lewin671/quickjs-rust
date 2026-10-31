@@ -134,18 +134,25 @@ impl Vm<'_, '_> {
                 }
             }
         }
-        let dynamic = bytecode.has_dynamic_scope_tree()
-            || env.scope_cursor().is_some()
-            || bytecode.contains_with();
-        let static_slots = if dynamic {
-            &bytecode.binding_plan.dynamic_cell_slots
-        } else {
-            &bytecode.binding_plan.cell_slots
-        };
-        let mut module_slots = Vec::new();
-        let cell_slots = if env.has_module_live_bindings() {
-            module_slots.extend_from_slice(static_slots);
-            module_slots.extend(
+        // Own captured/eval-visible declarations stay in slots until their
+        // first actual capture/exposure. Arguments recipes and module exports
+        // already require canonical entry cells.
+        let cell_slots: Vec<_> = bytecode
+            .binding_plan
+            .cell_slots
+            .iter()
+            .copied()
+            .filter(|&slot| {
+                bytecode.binding_plan.arguments_slot == Some(slot)
+                    || bytecode
+                        .binding_plan
+                        .arguments_body_copy
+                        .is_some_and(|(_, target)| target == slot)
+                    || env
+                        .module_live_binding_cell(&bytecode.locals[slot].name)
+                        .is_some()
+            })
+            .chain(
                 bytecode
                     .binding_plan
                     .module_live_candidates
@@ -155,14 +162,9 @@ impl Vm<'_, '_> {
                         env.module_live_binding_cell(&bytecode.locals[slot].name)
                             .is_some()
                     }),
-            );
-            module_slots.sort_unstable();
-            module_slots.dedup();
-            &module_slots
-        } else {
-            static_slots
-        };
-        for &slot in cell_slots {
+            )
+            .collect();
+        for slot in cell_slots {
             let Some(local) = bytecode.locals.get(slot) else {
                 continue;
             };
@@ -188,16 +190,10 @@ impl Vm<'_, '_> {
                 local_upvalues[slot] = Some(upvalue);
                 continue;
             }
-            let value = _locals
-                .get(slot)
-                .and_then(Option::as_ref)
-                .cloned()
-                .unwrap_or_else(
-                    || Value::Function(crate::Function::uninitialized_lexical_marker()),
-                );
-            local_upvalues[slot] = Some(bytecode.binding_meta(slot).map_or_else(
-                || BindingCell::new(value.clone()),
-                |meta| BindingCell::with_metadata(meta, Some(value.clone())),
+            let value = _locals.get(slot).and_then(Option::as_ref).cloned();
+            local_upvalues[slot] = Some(BindingCell::with_metadata(
+                bytecode.binding_meta(slot).expect("entry binding metadata"),
+                value,
             ));
         }
         local_upvalues

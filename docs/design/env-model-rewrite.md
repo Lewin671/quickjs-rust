@@ -3,8 +3,7 @@
 The runtime uses slot-indexed locals and shared cells. This is a protected
 boundary: ordinary calls must not copy a name-to-value environment. Source paths
 below are under `crates/qjs-runtime/src/`; tests are under `tests/` there.
-The service-view migration belongs to [T077 S3b](../../tasks/proposals/T077-s3b-brief.md).
-
+Migration: [T077 S3b](../../tasks/proposals/T077-s3b-brief.md).
 ## Compiled authority
 
 `bytecode/binding_plan.rs` owns one immutable BindingPlan per body. The existing
@@ -23,7 +22,7 @@ parameter leaf bindings are parameters too; raw pattern inputs are not bindings.
 
 1. **Private locals use slots.** `FrameState.locals[slot]` is an Option<Value>;
    None is uninitialized. The authoritative-slot mask selects direct indexed
-   access. A cell route takes precedence over a legacy slot projection.
+   access. Capture/eval exposure moves value or TDZ into its cell and clears the slot.
 2. **Captured bindings share identity.** `binding/cell.rs::BindingCell` owns
    immutable declaration metadata and Uninitialized/Initialized state. The
    declaring frame, sibling closures and descendants retain the same Rc cell.
@@ -35,7 +34,7 @@ parameter leaf bindings are parameters too; raw pattern inputs are not bindings.
 4. **Fresh lexical entry preserves metadata.** Loop/catch re-entry replaces the
    frame's cell handle without modifying escaped cells. Fresh cells retain the
    declaration's policy and TDZ state. Per-iteration copying reads the current
-   cell rather than an older slot projection. Tests: `closure_state.rs` loop cells.
+   cell, never a slot copy. Scope re-entry also separates escaped TDZ cells. Tests: `closure_state.rs` loop cells.
 5. **Arguments is a lexical binding.** Its parameter descriptor owns an initialized
    lazy recipe, including eval demand; first read creates the object, assignment
    can discard it unread. Arrows inherit the binding; parameters/lexicals shadow
@@ -140,7 +139,8 @@ NativeSite borrows call info, target and eval sources; callee realm is lazy.
 Vm/tiers own callee state; no caller-equality proof or empty-env factory remains.
 RuntimeGroup shares AtomDomain/weak realm registry; host/agent services stay canonical.
 Dynamic Function reuses its callee Realm/live globals without execution projections.
-Unchecked cell publishers and lazy exposure/verification remain migration work.
+Own cells are promoted at capture/eval/reference exposure; entry keeps only
+received/module/global/mapped-arguments cells. Stress controls/publisher audit remain.
 Class keys execute inline. A cold continuation owns the partial class/private
 context across yield/await; handlers restore regions and mode to their entry.
 Heritage validation precedes keys; each method installs before the next key.

@@ -172,6 +172,7 @@ pub(super) fn eval_direct_call_bytecode(
 pub(super) struct FrameState<'a> {
     pub(super) reference_hooks: bool,
     pub(super) active_reference_count: usize,
+    pub(super) binding_scope: Option<crate::binding::ScopeId>,
     pub(super) scope_instances: RefCell<Option<Box<super::vm_scopes::ScopeInstances>>>,
     pub(super) bytecode: FrameBytecode<'a>,
     /// Whether this frame may run the lowered stream that also virtualizes
@@ -499,10 +500,11 @@ impl<'a, 's> Vm<'a, 's> {
         // what lets a frame own its bytecode instead of borrowing it from a
         // lifetime that outlives the whole VM.
         //
-        // Deriving here is correct because the selection inputs cannot change
-        // during an activation: `refresh_virtual_object_execution` runs only
-        // during generator setup and resume, before this loop starts.
+        // Promotion ends this dispatch interval with RefreshBindings. The next
+        // interval derives its stream from the new authority mask; no JS
+        // instruction or observable reference selection is replayed.
         let owner = self.current.bytecode.clone();
+        let authority_at_entry = self.current.authoritative_slots;
         let program = FrameProgramView::new(
             &owner,
             self.current.authoritative_slots,
@@ -520,6 +522,13 @@ impl<'a, 's> Vm<'a, 's> {
         let mut event_cursor = references.events.partition_point(|event| event.pc < pc);
         let mut expected_pc = pc;
         loop {
+            if self.current.binding_scope.is_some() {
+                self.update_binding_scope(pc);
+                if self.current.authoritative_slots != authority_at_entry {
+                    self.current.ip = pc;
+                    return Ok(FrameExit::RefreshBindings);
+                }
+            }
             if self.current.reference_hooks {
                 if pc != expected_pc {
                     event_cursor = references.events.partition_point(|event| event.pc < pc);
@@ -543,6 +552,10 @@ impl<'a, 's> Vm<'a, 's> {
                         }
                     }
                 }
+            }
+            if self.current.authoritative_slots != authority_at_entry {
+                self.current.ip = pc;
+                return Ok(FrameExit::RefreshBindings);
             }
             let Some(op) = code.get(pc) else {
                 self.current.ip = pc;
@@ -894,6 +907,9 @@ impl<'a, 's> Vm<'a, 's> {
             match self.run_general_op(op, &program)? {
                 Some(exit) => return Ok(exit),
                 None => pc = self.current.ip,
+            }
+            if self.current.authoritative_slots != authority_at_entry {
+                return Ok(FrameExit::RefreshBindings);
             }
         }
     }

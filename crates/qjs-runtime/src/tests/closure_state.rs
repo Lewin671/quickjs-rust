@@ -949,3 +949,13 @@ fn sloppy_self_string_compound_assignment_preserves_expression_value() {
         Ok(Value::String("ns:1:function".into()))
     );
 }
+
+#[test]
+fn escaped_uninitialized_block_cells_survive_later_iteration_initialization() {
+    assert_eq!(
+        eval(
+            "(function() { const reads = []; for (let i = 0; i < 2; i++) { reads.push(() => value); if (i === 0) continue; let value = 7; } return reads.map(read => { try { return read(); } catch(error) { return error.name; } }).join(':'); })();"
+        ),
+        Ok(Value::String("ReferenceError:7".into()))
+    );
+}

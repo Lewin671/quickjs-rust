@@ -791,3 +791,28 @@ self assignment still returns the computed value without changing the binding.
 The feature suite passes **2,645 tests**, and all **295 serial NG scripts**
 pass. The fresh staged gate passes **2,592 default tests and 65 Test262 cases**.
 Final S3b remains open.
+
+
+## B3b3 lazy slot promotion and scope-instance authority
+
+Over `fe437a9a`, private captured/eval-visible declarations remain in indexed
+slots until the first actual capture, saved reference or scope exposure. The
+promotion moves the value/TDZ state, clears the slot and reuses that cell for
+later exposure. Canonical incoming/module/global/mapped-arguments cells retain
+their identities; entry and every checked local store clear their slot copies.
+String literal append operates directly on a checked shared cell without a raw
+slot refresh/writeback. Iteration cell replacement copies typed state directly.
+
+Scope re-entry drops only private frame routes, preserving escaped cells even
+when the earlier instance never initialized. Declaration Init in the same scope
+keeps an earlier closure's cell. A driver RefreshBindings boundary reselects the
+existing instruction stream after promotion, without replaying instructions,
+reference HasProperty or hooks. Existing SRA analysis excludes captured/dynamic
+slots; unrelated admitted virtual values and tiers remain enabled. Snapshot
+restore reconstructs the active scope position and canonical routes.
+
+The new lowest-layer test checks absent entry cells, moved value/TDZ and ptr_eq
+capture with no retained slot. A permanent runtime/NG case separates an escaped
+uninitialized iteration from the later initialized instance. All **2,647 feature
+runtime tests**, **296 serial NG scripts**, and the fresh staged gate
+(**2,594 default tests + 65 Test262 cases**) pass. Final S3b remains open.

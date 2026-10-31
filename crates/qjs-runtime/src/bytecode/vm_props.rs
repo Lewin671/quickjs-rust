@@ -120,7 +120,7 @@ impl Vm<'_, '_> {
                 if !synced {
                     self.env.insert_realm(name.to_owned(), value.clone());
                 }
-                self.locals[slot] = Some(value.clone());
+                self.locals[slot] = None;
                 self.sync_marked_dynamic_global(name);
                 Some(Ok(()))
             }

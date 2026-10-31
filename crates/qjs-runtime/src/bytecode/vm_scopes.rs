@@ -19,6 +19,60 @@ pub(super) struct ScopeInstances {
 }
 
 impl Vm<'_, '_> {
+    /// Re-entry creates new private lexical locations even when the previous
+    /// instance escaped while still in TDZ. Declaration Init does not replace
+    /// a cell already captured in this same scope instance.
+    pub(super) fn update_binding_scope(&mut self, pc: usize) {
+        let Some(next) = self.bytecode.binding_plan.pc_scopes.get(pc).copied() else {
+            return;
+        };
+        let Some(previous) = self.binding_scope else {
+            return;
+        };
+        if previous == next {
+            return;
+        }
+        let owner = self.bytecode.clone();
+        let scopes = &owner.binding_plan.scopes;
+        let mut current = Some(next);
+        while let Some(id) = current {
+            let mut old = Some(previous);
+            let mut common = false;
+            while let Some(prior) = old {
+                if prior == id {
+                    common = true;
+                    break;
+                }
+                old = scopes[prior.0].parent;
+            }
+            if common {
+                break;
+            }
+            current = scopes[id.0].parent;
+            if !matches!(
+                scopes[id.0].kind,
+                ScopeKind::Block | ScopeKind::Catch | ScopeKind::Loop | ScopeKind::ClassName
+            ) {
+                continue;
+            }
+            for binding in &scopes[id.0].declarations {
+                let meta = &owner.binding_plan.bindings[binding.0];
+                let slot = meta.slot.0;
+                if owner.locals[slot].from_env || owner.locals[slot].compiler_temporary {
+                    continue;
+                }
+                self.locals[slot] = None;
+                if let Some(route) = self.local_upvalues.get_mut(slot) {
+                    *route = None;
+                }
+                if slot < u128::BITS as usize {
+                    self.authoritative_slots |= 1_u128 << slot;
+                }
+            }
+        }
+        self.binding_scope = Some(next);
+    }
+
     pub(super) fn read_global_binding(
         &mut self,
         name: &str,
@@ -205,7 +259,7 @@ impl Vm<'_, '_> {
         reference.assign(value, strict, &mut self.context())
     }
 
-    pub(super) fn prepare_scope_cursor(&self) -> Option<ScopeCursor> {
+    pub(super) fn prepare_scope_cursor(&mut self) -> Option<ScopeCursor> {
         let id = self
             .bytecode
             .binding_plan
@@ -216,7 +270,7 @@ impl Vm<'_, '_> {
         self.prepare_scope_cursor_at(id)
     }
 
-    pub(super) fn prepare_scope_cursor_at(&self, id: ScopeId) -> Option<ScopeCursor> {
+    pub(super) fn prepare_scope_cursor_at(&mut self, id: ScopeId) -> Option<ScopeCursor> {
         if !self.bytecode.has_dynamic_scope_tree()
             && self.env.scope_cursor().is_none()
             && self.with_stack().is_empty()
@@ -237,6 +291,27 @@ impl Vm<'_, '_> {
                 })
         {
             return None;
+        }
+        // Promote before borrowing lease storage. The lease owns only cells;
+        // no pointer into the declaring frame can escape.
+        let mut scope = Some(id);
+        while let Some(id) = scope {
+            let owner = self.bytecode.clone();
+            let descriptor = &owner.binding_plan.scopes[id.0];
+            for binding in &descriptor.declarations {
+                let meta = &owner.binding_plan.bindings[binding.0];
+                if self.local_upvalue_cell(meta.slot.0).is_none()
+                    && !(descriptor.kind == ScopeKind::Eval
+                        && matches!(
+                            meta.kind,
+                            crate::binding::BindingKind::Var
+                                | crate::binding::BindingKind::Function
+                        ))
+                {
+                    self.ensure_upvalue_for_parent_slot(meta.slot.0);
+                }
+            }
+            scope = descriptor.parent;
         }
         let mut storage = self.scope_instances.borrow_mut();
         let instances = storage.get_or_insert_with(|| {
@@ -266,7 +341,10 @@ impl Vm<'_, '_> {
         Some(ScopeCursor { head, variable })
     }
 
-    pub(super) fn closure_scope_cursor(&self, child: &super::ir::Bytecode) -> Option<ScopeCursor> {
+    pub(super) fn closure_scope_cursor(
+        &mut self,
+        child: &super::ir::Bytecode,
+    ) -> Option<ScopeCursor> {
         if child.has_dynamic_scope_tree()
             || self.env.scope_cursor().is_some()
             || !self.with_stack().is_empty()

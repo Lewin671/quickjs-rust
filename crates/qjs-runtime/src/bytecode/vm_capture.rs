@@ -1,6 +1,6 @@
 //! Indexed shared-upvalue construction for nested functions.
 
-use crate::{Function, Value, function::BindingCell};
+use crate::function::BindingCell;
 
 use super::ir::Bytecode;
 use super::vm::Vm;
@@ -87,22 +87,29 @@ impl Vm<'_, '_> {
                 return upvalue.clone();
             }
         }
-        let value = self
-            .locals
-            .get(slot)
-            .and_then(Option::as_ref)
-            .cloned()
-            .unwrap_or_else(|| Value::Function(Function::uninitialized_lexical_marker()));
-        let upvalue = self.bytecode.binding_meta(slot).map_or_else(
-            || BindingCell::new(value.clone()),
-            |meta| BindingCell::with_metadata(meta, Some(value.clone())),
+        let value = self.locals.get_mut(slot).and_then(Option::take);
+        let upvalue = crate::binding::BindingCell::with_metadata(
+            self.bytecode
+                .binding_meta(slot)
+                .expect("exposed declaration metadata"),
+            value,
         );
-        if let Some(local_upvalue) = self.local_upvalues.get_mut(slot) {
-            *local_upvalue = Some(upvalue.clone());
+        if self.local_upvalues.len() <= slot {
+            self.local_upvalues.resize_with(slot + 1, || None);
         }
+        self.local_upvalues[slot] = Some(upvalue.clone());
         if slot < u128::BITS as usize {
             self.authoritative_slots &= !(1_u128 << slot);
         }
+        if self.binding_scope.is_none() {
+            self.binding_scope = self
+                .bytecode
+                .binding_plan
+                .pc_scopes
+                .get(self.ip.saturating_sub(1))
+                .copied();
+        }
+        crate::diagnostics::count!(binding_promotions);
         upvalue
     }
 
@@ -111,5 +118,39 @@ impl Vm<'_, '_> {
             .binding_plan
             .prologue_end
             .is_some_and(|end| self.ip <= end)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Value;
+
+    #[test]
+    fn capture_moves_the_value_and_tdz_without_retaining_a_slot_copy() {
+        for source in [
+            "function f() { let value = 4; return () => value; } f;",
+            "function f() { return () => value; let value = 4; } f;",
+        ] {
+            let Value::Function(function) = crate::eval(source).unwrap() else {
+                panic!("function");
+            };
+            let bytecode = function.bytecode.as_ref().unwrap();
+            let slot = bytecode.local_slot("value").unwrap();
+            let activation = crate::function::enter_indexed_activation(&function);
+            let mut runtime = crate::context::RuntimeServices::for_realm(activation.realm());
+            let mut vm = Vm::new_with_globals(bytecode, &mut runtime, activation);
+            assert!(vm.local_upvalue_cell(slot).is_none());
+            let Value::Function(closure) = vm.run().unwrap() else {
+                panic!("closure");
+            };
+            let cell = vm.local_upvalue_cell(slot).unwrap();
+            assert!(cell.ptr_eq(&closure.upvalues[0]));
+            assert!(vm.locals[slot].is_none());
+            assert_eq!(
+                cell.is_initialized(),
+                source.contains("let value = 4; return")
+            );
+        }
     }
 }

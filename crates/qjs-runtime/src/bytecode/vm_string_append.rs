@@ -237,91 +237,44 @@ impl Vm<'_, '_> {
                 thrown: None,
                 message: "bytecode local index out of bounds".to_owned(),
             })?;
-        if !local_meta.mutable
-            || self.env.has_module_import(&local_meta.name)
-            || self.env.is_immutable_lexical_binding(&local_meta.name)
-            || self.local_upvalue_cell(slot).is_some_and(|cell| {
-                cell.metadata().strict_write != crate::binding::WritePolicy::Mutable
-            })
+        if let Some(cell) = self.local_upvalue_cell(slot)
+            && !self.env.is_realm_binding_cell(&local_meta.name, cell)
+            && !self.env.has_module_import(&local_meta.name)
+            && let Some(result) = cell.try_assign_in_place(
+                self.execution_is_strict(),
+                |value| matches!(value, Value::String(_)),
+                |value| {
+                    let Value::String(string) = value else {
+                        unreachable!("admitted string")
+                    };
+                    crate::string::push_js_str(string.make_mut(), suffix);
+                    value.clone()
+                },
+            )?
         {
-            let left = self.load_local(slot)?;
-            let mut context = self.context();
-            let result = operations::eval_binary(
-                left,
-                BinaryOp::Add,
-                Value::String(suffix.to_owned().into()),
-                &mut context,
-            )?;
-            self.assign_local(slot, result.clone())?;
             return Ok(result);
         }
-        // The append opcode mutates the local string in place as a fast path.
-        // A received capture's authoritative value is its shared cell, not the
-        // compatibility slot snapshot left from function entry; refresh that
-        // one slot before taking the mutable string reference.
-        let shared_value = self.upvalue_slot_value(slot);
-        if shared_value.is_none()
-            && let Some(Some(Value::String(current))) = self.locals.get(slot)
-            && !current.is_unique()
-        {
-            let expected = current.clone();
-            self.release_dead_completion_copies(&expected);
-        }
-        let local = self.locals.get_mut(slot).ok_or_else(|| RuntimeError {
-            thrown: None,
-            message: "bytecode local index out of bounds".to_owned(),
-        })?;
-        if let Some(value) = shared_value {
-            *local = Some(value);
-        }
-        let Some(value) = local else {
-            return Err(RuntimeError {
-                thrown: None,
-                message: format!("ReferenceError: undefined identifier `{}`", local_meta.name),
-            });
-        };
-        let Value::String(string) = value else {
-            let left = value.clone();
-            let mut env = self.context();
-            let result = operations::eval_binary(
-                left,
-                BinaryOp::Add,
-                Value::String(suffix.to_owned().into()),
-                &mut env,
-            )?;
-            self.assign_local(slot, result.clone())?;
-            return Ok(result);
-        };
-        crate::string::push_js_str(string.make_mut(), suffix);
-        let result = Value::String(string.clone());
-        if let Some(upvalue) = self.local_upvalues.get(slot).and_then(Option::as_ref) {
-            upvalue.assign(result.clone(), self.execution_is_strict())?;
-        }
-
-        let syncs_global_var = (local_meta.from_env && !local_meta.hoisted)
-            || (self.bytecode.global_scope
-                && self.bytecode.local_is_body_hoist_only(slot)
-                && !self.bytecode.local_is_compiler_temporary(slot));
-        let global_this = syncs_global_var
-            .then(|| self.cached_global_this())
-            .flatten();
-        if let Some(global_this) = global_this
-            && global_this.has_own_property(&local_meta.name)
-        {
-            global_this
-                .append_string_property(&local_meta.name, suffix)
-                .unwrap_or_else(|| {
-                    global_this.set(local_meta.name.clone(), result.clone());
-                    result.clone()
-                });
-            if self.realm.contains(&local_meta.name) {
-                // A top-level reader may already hold the realm binding's
-                // shared cell even when this older from-env frame still uses a
-                // compatibility slot. Route the mirror through crate::context::ActivationContext so the
-                // cell cannot retain the pre-append string.
-                self.env.insert_realm(local_meta.name, result.clone());
+        if local_meta.mutable && self.slot_is_authoritative(slot) {
+            if let Some(Some(Value::String(current))) = self.locals.get(slot)
+                && !current.is_unique()
+            {
+                let expected = current.clone();
+                self.release_dead_completion_copies(&expected);
+            }
+            if let Some(Some(Value::String(string))) = self.locals.get_mut(slot) {
+                crate::string::push_js_str(string.make_mut(), suffix);
+                return Ok(Value::String(string.clone()));
             }
         }
+        let left = self.load_local(slot)?;
+        let mut context = self.context();
+        let result = operations::eval_binary(
+            left,
+            BinaryOp::Add,
+            Value::String(suffix.to_owned().into()),
+            &mut context,
+        )?;
+        self.assign_local(slot, result.clone())?;
         Ok(result)
     }
 

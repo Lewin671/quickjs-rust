@@ -93,8 +93,11 @@ impl BindingCell {
     pub(crate) fn fresh_uninitialized(&self) -> Self {
         Self::with_metadata(self.0.meta.clone(), None)
     }
-    pub(crate) fn fresh_with_value(&self, value: Value) -> Self {
-        Self::with_metadata(self.0.meta.clone(), Some(value))
+    pub(crate) fn fresh_for_iteration(&self) -> Self {
+        Self(Rc::new(CellStorage {
+            meta: self.0.meta.clone(),
+            state: RefCell::new(self.0.state.borrow().clone()),
+        }))
     }
 
     pub(crate) fn metadata(&self) -> &BindingMeta {
@@ -263,9 +266,6 @@ impl BindingCell {
 
     pub(crate) fn ptr_eq(&self, other: &Self) -> bool {
         Rc::ptr_eq(&self.0, &other.0)
-    }
-    pub(crate) fn is_shared(&self) -> bool {
-        Rc::strong_count(&self.0) > 1
     }
 }
 

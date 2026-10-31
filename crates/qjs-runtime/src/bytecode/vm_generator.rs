@@ -243,6 +243,12 @@ fn run_from_yield(
     vm.stack.replace(snapshot.stack);
     vm.locals = snapshot.locals;
     vm.local_upvalues = snapshot.local_upvalues;
+    vm.binding_scope = vm
+        .bytecode
+        .binding_plan
+        .pc_scopes
+        .get(vm.ip.saturating_sub(1))
+        .copied();
     vm.refresh_authoritative_slots();
     {
         let cold = vm.cold_mut();

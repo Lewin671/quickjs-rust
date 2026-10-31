@@ -1,0 +1,1 @@
+(function() { const reads = []; for (let i = 0; i < 2; i++) { reads.push(() => value); if (i === 0) continue; let value = 7; } return reads.map(read => { try { return read(); } catch(error) { return error.name; } }).join(':'); })()

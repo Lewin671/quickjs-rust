@@ -4,11 +4,9 @@
 //! A local slot is *authoritative* (a bit in `authoritative_slots`) when no
 //! name-addressed state can supersede it; such a slot is read and written
 //! directly, and the accelerator tiers rely on that bit. Every other slot --
-//! one captured in an upvalue cell, a realm global, a module binding, a
-//! sloppy-global fallback, anything under direct eval or `with` -- takes the
-//! slow path, which keeps the slot, its cell and the realm in step.
-//! `refresh_authoritative_slots` recomputes the masks after a frame's cells
-//! or environment change.
+//! one captured in a cell or selected through a realm/module/dynamic route --
+//! uses that canonical location. Promotion clears the old slot and changes the
+//! mask at an instruction boundary before execution continues.
 
 use crate::{
     GLOBAL_THIS_BINDING, Property, RuntimeError, Value, function::BindingCell, property_value,
@@ -634,7 +632,7 @@ impl Vm<'_, '_> {
         {
             debug_assert!(self.env.is_realm_binding_cell(&target.name, &target.cell));
             target.cell.set(value.clone());
-            self.locals[target.slot] = Some(value);
+            self.locals[target.slot] = None;
             return true;
         }
         self.write_typed_loop_sloppy_global_slow(target, value)
@@ -662,7 +660,7 @@ impl Vm<'_, '_> {
             replaced,
             "prepared sloppy-global cell must remain canonical"
         );
-        self.locals[target.slot] = Some(value);
+        self.locals[target.slot] = None;
         true
     }
 
@@ -811,7 +809,6 @@ impl Vm<'_, '_> {
                 message: "TypeError: assignment to constant variable".to_owned(),
             });
         }
-        *local = Some(value.clone());
         let uses_shared_cell = if let Some(upvalue) = self.local_upvalue_cell(slot) {
             if upvalue.is_initialized() {
                 upvalue.assign(value.clone(), self.execution_is_strict())?;
@@ -821,6 +818,11 @@ impl Vm<'_, '_> {
             true
         } else {
             false
+        };
+        self.locals[slot] = if uses_shared_cell {
+            None
+        } else {
+            Some(value.clone())
         };
         // `shared_realm_cell` only matters through the first `syncs_global_var`
         // disjunct, which is unreachable when `hoisted` (its `!hoisted` term is
@@ -1024,7 +1026,7 @@ impl Vm<'_, '_> {
                     if !self.env.replace_existing_realm(name, value.clone()) {
                         self.env.insert_realm(name.to_owned(), value.clone());
                     }
-                    self.locals[slot] = Some(value);
+                    self.locals[slot] = self.local_upvalue_cell(slot).is_none().then_some(value);
                     self.sync_marked_dynamic_global(name);
                     return Ok(());
                 }
@@ -1077,36 +1079,29 @@ impl Vm<'_, '_> {
     }
 
     pub(super) fn clear_local(&mut self, slot: usize) -> Result<(), RuntimeError> {
-        let local_is_some = self
-            .locals
-            .get(slot)
-            .ok_or_else(|| RuntimeError {
+        if slot >= self.locals.len() {
+            return Err(RuntimeError {
                 thrown: None,
-                message: "bytecode local index out of bounds".to_owned(),
-            })?
-            .is_some();
+                message: "bytecode local index out of bounds".into(),
+            });
+        }
         let refresh_upvalue = self
             .bytecode
             .locals
             .get(slot)
             .is_some_and(|local| !local.from_env)
-            && self
-                .local_upvalues
-                .get(slot)
-                .and_then(Option::as_ref)
-                .is_some_and(|upvalue| local_is_some || !upvalue.is_shared());
+            && self.local_upvalue_cell(slot).is_some_and(|cell| {
+                let name = &self.bytecode.locals[slot].name;
+                cell.is_initialized()
+                    && !self.env.is_realm_binding_cell(name, cell)
+                    && !self
+                        .env
+                        .module_live_binding_cell(name)
+                        .is_some_and(|canonical| canonical.ptr_eq(cell))
+            });
         self.locals[slot] = None;
         if refresh_upvalue && let Some(upvalue) = self.local_upvalues.get_mut(slot) {
             *upvalue = upvalue.as_ref().map(BindingCell::fresh_uninitialized);
-        }
-        if let Some(_name) = self.current.bytecode.local_name_at(slot) {
-            if self
-                .current
-                .bytecode
-                .locals
-                .get(slot)
-                .is_some_and(|local| local.catch_binding)
-            {}
         }
         Ok(())
     }
@@ -1244,12 +1239,10 @@ impl Vm<'_, '_> {
             if !self.local_upvalues.get(slot).is_some_and(Option::is_some) {
                 continue;
             }
-            let value = self.local_slot_value(slot).unwrap_or_else(|| {
-                Value::Function(crate::Function::uninitialized_lexical_marker())
-            });
             if let Some(upvalue) = self.local_upvalues.get_mut(slot) {
-                *upvalue = upvalue.as_ref().map(|cell| cell.fresh_with_value(value));
+                *upvalue = upvalue.as_ref().map(BindingCell::fresh_for_iteration);
             }
+            self.locals[slot] = None;
         }
     }
 

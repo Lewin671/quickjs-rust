@@ -33,6 +33,8 @@ use super::vm_result::Completion;
 /// what drops the view, and the driver installs the frame afterwards.
 pub(super) enum FrameExit {
     Completed(Completion),
+    /// Binding promotion changed the instruction-stream authority inputs.
+    RefreshBindings,
     /// The current frame asked to enter the frame it recorded on the VM.
     #[allow(dead_code)]
     EnterFrame,
@@ -78,6 +80,7 @@ impl<'a, 's> Vm<'a, 's> {
     pub(super) fn run_completion(&mut self) -> Result<Completion, RuntimeError> {
         loop {
             match self.run_current_activation() {
+                Ok(FrameExit::RefreshBindings) => continue,
                 Ok(FrameExit::EnterFrame) => {
                     let (frame, continuation) = self
                         .pending_frame_entry

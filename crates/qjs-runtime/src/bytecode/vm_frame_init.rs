@@ -244,6 +244,12 @@ impl<'a, 's> Vm<'a, 's> {
                 .initialize_arguments(recipe)
                 .expect("fresh arguments binding");
         }
+        // A cell route owns the value; slots never retain a second copy.
+        for (slot, cell) in local_upvalues.iter().enumerate() {
+            if cell.is_some() {
+                locals[slot] = None;
+            }
+        }
         let authoritative_slots =
             Self::initial_authoritative_slots(bytecode, &local_upvalues, &env)
                 & !direct_readonly_upvalue_slots;
@@ -272,6 +278,7 @@ impl<'a, 's> Vm<'a, 's> {
             current: FrameState {
                 reference_hooks: !handle.binding_plan.references.can_skip(&env),
                 active_reference_count: 0,
+                binding_scope: None,
                 scope_instances: Default::default(),
                 bytecode: handle,
                 ip: 0,

@@ -78,8 +78,8 @@ impl From<Rc<Bytecode>> for FrameBytecode<'_> {
 ///
 /// Deliberately only the stream. Deriving it is cheap -- every compiled
 /// artifact is behind a `OnceCell` the first activation fills -- but it is not
-/// done per instruction, because the selection inputs cannot change during an
-/// activation and re-deriving would cost a probe per dispatch.
+/// done per instruction. Binding promotion requests a driver boundary before
+/// deriving the next stream from changed authority inputs.
 ///
 /// The loop accelerators are *not* here. A call-heavy workload reaches a
 /// backward edge in a small minority of its frames, and holding the two plan
