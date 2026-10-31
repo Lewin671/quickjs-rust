@@ -351,3 +351,10 @@ ordinary-seed/publication round trip: Empty authorities require canonical roots
 by invariant, so request root_for directly and retain the existing compact edge
 memo. No temporary NamedStore, cold guard or unused neutral seed is needed.
 Test that construction remains Empty, can guard directly and creates no seed.
+
+
+Direct compact factory `76fbd142`, job
+`20261031T135516Z-t077-s2fu-r2-compact-direct`: focused ratios are lodash
+0.999272, meriyah 0.999697, diff 0.999261, date-tofte 1.002786, dynamic read
+0.974129 and string churn 0.998686. Apply its default-set order (482 symbols)
+and require all four full lanes, rather than extrapolating the focused cases.
