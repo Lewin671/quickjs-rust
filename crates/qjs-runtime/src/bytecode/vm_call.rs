@@ -379,25 +379,6 @@ impl Vm<'_, '_> {
     }
 }
 
-pub(super) fn native_error_message(message: &str) -> (&'static str, String) {
-    for name in [
-        "EvalError",
-        "RangeError",
-        "ReferenceError",
-        "SyntaxError",
-        "TypeError",
-        "URIError",
-    ] {
-        if let Some(message) = message
-            .strip_prefix(name)
-            .and_then(|rest| rest.strip_prefix(": "))
-        {
-            return (name, message.to_owned());
-        }
-    }
-    ("TypeError", message.to_owned())
-}
-
 pub(super) fn try_fast_global_native_call(
     callee: &Value,
     this_value: &Value,
@@ -639,7 +620,7 @@ pub(super) fn try_fast_global_native_call(
         }
         _ => return None,
     };
-    Some(result)
+    Some(result.map_err(|error| crate::error::capture_error_origin(error, context)))
 }
 
 fn fast_primitive_unary_math(native: NativeFunction, arguments: &[Value]) -> Option<f64> {

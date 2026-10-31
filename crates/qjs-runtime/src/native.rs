@@ -62,5 +62,12 @@ pub(crate) fn call_native_function(
     env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let mut native = env.with_native(&info, target, direct_eval);
-    entry(&mut native, info, argument_values)
+    entry(&mut native, info, argument_values).map_err(|error| {
+        // The private wide-register TDZ sentinel has no callable realm.
+        // Its installed rejecting entry belongs to the active activation.
+        if info.callee.native_kind() == Some(NativeFunction::UninitializedLexical) {
+            native.native = None;
+        }
+        crate::error::capture_error_origin(error, &native)
+    })
 }

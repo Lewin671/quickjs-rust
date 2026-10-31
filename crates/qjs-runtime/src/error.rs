@@ -411,6 +411,27 @@ pub(crate) fn runtime_error_to_value(
     Value::String(message.to_owned().into())
 }
 
+/// Preserve the intrinsic realm while its originating execution context is live.
+/// Explicit thrown values retain their original identity.
+#[cold]
+#[inline(never)]
+pub(crate) fn capture_error_origin(
+    mut error: RuntimeError,
+    context: &crate::context::Context<'_>,
+) -> RuntimeError {
+    if error.thrown.is_none() {
+        let value = runtime_error_to_value(
+            RuntimeError {
+                thrown: None,
+                message: error.message.clone(),
+            },
+            context,
+        );
+        error.thrown = Some(Box::new(value));
+    }
+    error
+}
+
 /// Pure error materialization: message is already a JS string and no options
 /// are supplied, so this performs no coercion, property Get or native call.
 pub(crate) fn intrinsic_error_from_creation(

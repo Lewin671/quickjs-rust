@@ -889,3 +889,22 @@ no test/fixture or Test262 exclusion is added. All **297 serial NG scripts** pas
 in each verify+IC-verify, force, poison and combined+IC-off configuration.
 The fresh staged gate passes **2,598 default tests + 117 Test262 cases**.
 Final full/exact/counter/depth/public86 and lead formal acceptance remain open.
+
+
+## B4e4 preserve intrinsic error origin across context release
+
+Over `281b005d`, actual two-realm tests reproduce foreign native RangeError and
+foreign JavaScript TypeError acquiring the caller's intrinsic prototype after
+return. Native entries, specialized native calls, VM error propagation and both
+retained tier unwind paths now materialize internal errors while the originating
+callee Context is live. Explicit thrown values keep their identity; the pure
+intrinsic builder invokes no public constructor or JS hook. The private wide
+TDZ sentinel has no callable realm and uses its active activation's error origin.
+The duplicate VM message-to-constructor path is removed.
+
+Three permanent ownership tests cover native toFixed, a dynamically created
+foreign function and a foreign decodeURI invoked through a caller-defined body.
+The first two fail before the fix; the specialized-call test protects the native
+shortcut as well. All **2,654 feature tests**, **297 serial NG scripts** and the
+fresh staged gate (**2,601 default tests + 65 Test262 cases**) pass. Final S3b
+acceptance remains open.

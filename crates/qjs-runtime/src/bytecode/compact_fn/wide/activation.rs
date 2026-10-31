@@ -1188,14 +1188,14 @@ fn run_frames(
                     ExitOutcome::Finished(Ok(value)) => Action::Return(value),
                     ExitOutcome::Finished(Err(error)) => {
                         unwind(registers, frames, current_base + current_len);
-                        return Err(error);
+                        return Err(crate::error::capture_error_origin(error, env));
                     }
                 }
             }
             Ok(action) => action,
             Err(error) => {
                 unwind(registers, frames, current_base + current_len);
-                return Err(error);
+                return Err(crate::error::capture_error_origin(error, env));
             }
         };
         if let Action::New {
@@ -1231,7 +1231,7 @@ fn run_frames(
                 Ok(Some(callee)) => callee,
                 Err(error) => {
                     unwind(registers, frames, current_base + current_len);
-                    return Err(error);
+                    return Err(crate::error::capture_error_origin(error, env));
                 }
             };
             let arguments = &registers[callee_index + 1..callee_index + 1 + argc as usize];
@@ -1243,7 +1243,7 @@ fn run_frames(
                 }
                 Err(error) => {
                     unwind(registers, frames, current_base + current_len);
-                    return Err(error);
+                    return Err(crate::error::capture_error_origin(error, env));
                 }
             }
         }
@@ -1418,7 +1418,7 @@ fn run_frames(
             }
             Err(error) => {
                 unwind(registers, frames, current_base + current_len);
-                return Err(error);
+                return Err(crate::error::capture_error_origin(error, env));
             }
         }
     }

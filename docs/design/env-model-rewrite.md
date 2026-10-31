@@ -56,7 +56,7 @@ parameter leaf bindings are parameters too; raw pattern inputs are not bindings.
    separate typed state. Tests: `global.rs`, `closure_state.rs`, `binding/cell.rs`.
 9. **Intrinsics are not mutable global bindings.** Set-once realm intrinsic fields
    own Object/Array/Function, primitive/error prototypes and well-known symbols.
-   Internal errors use these identities without looking up public constructors.
+   Internal errors capture their originating callee realm before unwinding.
 10. **Modules retain live cells.** Import routes attach exporting cells and reject
     writes through import access policy. Top-level slots, hoists and namespaces
     share cells established before linking; no settled import/export copies.

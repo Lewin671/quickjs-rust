@@ -264,3 +264,110 @@ fn independent_derived_activations_never_share_their_this_cell() {
             .ptr_eq(&second.derived_this_cell().unwrap())
     );
 }
+
+#[test]
+fn native_internal_errors_keep_the_callee_realm_across_the_borrow_boundary() {
+    let mut foreign = HostRoot::script();
+    let expected = foreign
+        .activation
+        .realm()
+        .error_prototype(ErrorKind::RangeError)
+        .unwrap();
+    let number = foreign.context().get("Number").unwrap();
+    let prototype = crate::property_value(number, "prototype", &mut foreign.context()).unwrap();
+    let method = crate::property_value(prototype, "toFixed", &mut foreign.context()).unwrap();
+    let mut caller = HostRoot::script();
+    let error = crate::call_function(
+        method,
+        Value::Number(1.0),
+        vec![Value::Number(101.0)],
+        &mut caller.context(),
+        false,
+    )
+    .unwrap_err();
+    let Value::Object(error) = crate::error::runtime_error_to_value(error, &caller.context())
+    else {
+        panic!("error object");
+    };
+    assert!(
+        matches!(error.prototype_slot(), Some(crate::Prototype::Object(prototype)) if prototype.ptr_eq(&expected))
+    );
+}
+
+#[test]
+fn javascript_internal_errors_keep_the_defining_realm_after_returning() {
+    let mut foreign = HostRoot::script();
+    let expected = foreign
+        .activation
+        .realm()
+        .error_prototype(ErrorKind::TypeError)
+        .unwrap();
+    let constructor = foreign.context().get("Function").unwrap();
+    let function = crate::call_function(
+        constructor,
+        Value::Undefined,
+        vec![Value::String("return null.missing;".into())],
+        &mut foreign.context(),
+        false,
+    )
+    .unwrap();
+    let mut caller = HostRoot::script();
+    let error = crate::call_function(
+        function,
+        Value::Undefined,
+        Vec::new(),
+        &mut caller.context(),
+        false,
+    )
+    .unwrap_err();
+    let Value::Object(error) = crate::error::runtime_error_to_value(error, &caller.context())
+    else {
+        panic!("error object");
+    };
+    assert!(
+        matches!(error.prototype_slot(), Some(crate::Prototype::Object(prototype)) if prototype.ptr_eq(&expected))
+    );
+}
+
+#[test]
+fn specialized_native_errors_keep_the_foreign_realm_inside_a_caller_body() {
+    let mut foreign = HostRoot::script();
+    let expected = foreign
+        .activation
+        .realm()
+        .error_prototype(ErrorKind::UriError)
+        .unwrap();
+    let decode = foreign.context().get("decodeURI").unwrap();
+    let mut caller = HostRoot::script();
+    let Value::Object(global) = caller.activation.global_this().unwrap() else {
+        panic!("global");
+    };
+    global.set("foreignDecode".into(), decode.clone());
+    caller
+        .context()
+        .insert_realm("foreignDecode".into(), decode);
+    let constructor = caller.context().get("Function").unwrap();
+    let function = crate::call_function(
+        constructor,
+        Value::Undefined,
+        vec![Value::String("return foreignDecode('%');".into())],
+        &mut caller.context(),
+        false,
+    )
+    .unwrap();
+    let error = crate::call_function(
+        function,
+        Value::Undefined,
+        Vec::new(),
+        &mut caller.context(),
+        false,
+    )
+    .unwrap_err();
+    let Value::Object(error) = crate::error::runtime_error_to_value(error, &caller.context())
+    else {
+        panic!("error object");
+    };
+    assert!(
+        matches!(error.prototype_slot(), Some(crate::Prototype::Object(prototype)) if prototype.ptr_eq(&expected))
+    );
+}

@@ -573,7 +573,7 @@ fn run_frames(
             Ok(action) => action,
             Err(error) => {
                 unwind(registers, frames, current_base + current_len);
-                return Err(error);
+                return Err(crate::error::capture_error_origin(error, env));
             }
         };
         match action {
@@ -675,7 +675,7 @@ fn run_frames(
                     }
                     Err(error) => {
                         unwind(registers, frames, current_base + current_len);
-                        return Err(error);
+                        return Err(crate::error::capture_error_origin(error, env));
                     }
                 }
             }
