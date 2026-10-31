@@ -388,3 +388,16 @@ passed to linked_layout. Move that edge into NamedStore as well and remove the
 weak-reacquiring slot wrapper. Private dictionary copies still initialize their
 own metadata/version; cache layouts continue owning only weak prototype links.
 The external limit remains unchanged; measure both bulk-construction checkpoints.
+
+
+Literal-owned prototype `1634dcca`, job
+`20261031T144202Z-t077-s2fu-r2-literal-prototype`, improves meriyah to
+0.998372 and diff to 0.997625; constructor-heavy external residuals remain.
+All matches_prototype callers are construction caches: empty_cached publishes
+before caching, literal links use layout(), DataSequence publishes predictions,
+and constructor capture uses shared_layout(). Therefore cached inputs cannot be
+neutral seeds. Keep this precondition as a debug assertion, inline the guard,
+and directly match optional weak/actual identities without building Option
+identity tuples. This removes the follow-up's seed branch from this second
+hot guard family while preserving flavor/domain/prototype identity checks and
+all publication requirements at admission. No function/env consumer is edited.
