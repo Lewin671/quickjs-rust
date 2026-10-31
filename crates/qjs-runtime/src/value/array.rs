@@ -2,7 +2,8 @@
 //!
 //! Indexed elements live in a dense Vec with separate logical length. Holes
 //! stay cold; a realm-shared empty seed owns the explicit prototype/layout.
-//! Mutation moves the authority cold. Pure probes allocate nothing, and dense
+//! Named mutation moves the authority cold; holes alone keep their own payload.
+//! Pure probes allocate nothing, and dense
 //! reads must exclude holes.
 
 mod named;
@@ -94,42 +95,45 @@ impl Drop for ArrayData {
     }
 }
 
+#[derive(Default)]
 struct ArrayColdData {
-    named: RefCell<super::layout::NamedStore>,
+    named: OnceCell<Box<RefCell<super::layout::NamedStore>>>,
     holes: RefCell<BTreeSet<usize>>,
-}
-
-impl ArrayColdData {
-    fn new(named: super::layout::NamedStore) -> Self {
-        Self {
-            named: RefCell::new(named),
-            holes: RefCell::default(),
-        }
-    }
 }
 
 impl ArrayData {
     fn cold(&self) -> &ArrayColdData {
         self.cold.get_or_init(|| {
-            let seed = self.seed.take().expect("array seed before first mutation");
-            crate::diagnostics::count!(property_array_seed_releases);
             crate::diagnostics::count!(property_array_cold_stores);
-            Box::new(ArrayColdData::new(seed.fork_empty_store()))
+            Box::default()
         })
     }
-    fn named_store(&self) -> Ref<'_, super::layout::NamedStore> {
-        self.cold
-            .get()
-            .expect("materialized array authority")
-            .named
-            .borrow()
+    fn materialized_named(&self) -> Option<&RefCell<super::layout::NamedStore>> {
+        self.cold.get()?.named.get().map(Box::as_ref)
+    }
+    fn named_store(&self) -> Option<Ref<'_, super::layout::NamedStore>> {
+        self.materialized_named().map(RefCell::borrow)
+    }
+    fn named_text_keys(&self) -> Vec<String> {
+        self.named_store()
+            .map_or_else(Vec::new, |store| store.text_keys())
     }
     fn named_store_mut(&self) -> RefMut<'_, super::layout::NamedStore> {
-        self.cold().named.borrow_mut()
+        self.cold()
+            .named
+            .get_or_init(|| {
+                let seed = self.seed.take().expect("array seed before named mutation");
+                crate::diagnostics::count!(property_array_seed_releases);
+                crate::diagnostics::count!(property_array_named_materializations);
+                Box::new(RefCell::new(seed.fork_empty_store()))
+            })
+            .borrow_mut()
     }
     fn defer_named_children(&mut self, pending: &mut Vec<Value>) {
         if let Some(cold) = self.cold.get_mut() {
-            cold.named.get_mut().defer_children(pending);
+            if let Some(named) = cold.named.get_mut() {
+                named.get_mut().defer_children(pending);
+            }
         }
         if let Some(seed) = self.seed.get_mut().take() {
             crate::diagnostics::count!(property_array_seed_releases);
@@ -161,19 +165,17 @@ impl ArrayData {
     }
 
     fn properties_are_empty(&self) -> bool {
-        self.cold_if_present()
-            .is_none_or(|_cold| self.named_store().is_empty())
+        self.named_store().is_none_or(|store| store.is_empty())
     }
 
     #[inline(always)]
     fn has_property_at_index(&self, index: usize) -> bool {
-        self.cold.get().is_some() && self.named_property_at_index(index)
+        self.materialized_named().is_some() && self.named_property_at_index(index)
     }
 
     #[inline(never)]
     fn named_property_at_index(&self, index: usize) -> bool {
-        self.cold_if_present().is_some_and(|_cold| {
-            let properties = self.named_store();
+        self.named_store().is_some_and(|properties| {
             if properties.is_empty() {
                 return false;
             }
@@ -200,8 +202,8 @@ impl ArrayData {
     }
 
     fn prototype_override(&self) -> Option<Option<Prototype>> {
-        Some(if let Some(cold) = self.cold.get() {
-            cold.named.borrow().prototype()
+        Some(if let Some(named) = self.materialized_named() {
+            named.borrow().prototype()
         } else {
             self.with_seed(|seed| seed.prototype())
         })
@@ -332,8 +334,7 @@ impl ArrayRef {
         if let Some(_cold) = self.0.cold_if_present() {
             indices.extend(
                 self.0
-                    .named_store()
-                    .text_keys()
+                    .named_text_keys()
                     .into_iter()
                     .filter_map(|key| array_index_property_key(&key))
                     .filter(|index| *index < len),
@@ -362,7 +363,9 @@ impl ArrayRef {
         self.0.state.set_length(index);
         if let Some(cold) = self.0.cold_if_present() {
             cold.holes.borrow_mut().remove(&index);
-            self.0.named_store_mut().remove_text(&index.to_string());
+            if let Some(named) = self.0.materialized_named() {
+                named.borrow_mut().remove_text(&index.to_string());
+            }
         }
         if index + 1 == elements.len() {
             elements.pop()
@@ -393,7 +396,7 @@ impl ArrayRef {
     pub(crate) fn replace_dense_elements(&self, values: &[Value]) -> bool {
         let plain_cold = self.0.cold_if_present().is_none_or(|cold| {
             cold.holes.try_borrow().is_ok_and(|holes| holes.is_empty())
-                && self.0.named_store().is_empty()
+                && self.0.properties_are_empty()
         });
         if !plain_cold || self.0.state.frozen() {
             return false;
@@ -418,7 +421,7 @@ impl ArrayRef {
     pub(crate) fn define_plain_elements(&self, start: usize, values: &[Value]) -> bool {
         let plain_cold = self.0.cold_if_present().is_none_or(|cold| {
             cold.holes.try_borrow().is_ok_and(|holes| holes.is_empty())
-                && self.0.named_store().is_empty()
+                && self.0.properties_are_empty()
         });
         if !plain_cold
             || !self.0.state.extensible()
@@ -453,8 +456,8 @@ impl ArrayRef {
     /// explicitly, while array literals normally use the implicit default
     /// slot; both representations have ordinary array prototype semantics.
     pub(crate) fn uses_prototype_object(&self, prototype: &ObjectRef) -> bool {
-        if let Some(cold) = self.0.cold.get() {
-            cold.named.borrow().prototype_is_object(prototype)
+        if let Some(named) = self.0.materialized_named() {
+            named.borrow().prototype_is_object(prototype)
         } else {
             self.0.with_seed(|seed| seed.prototype_is_object(prototype))
         }
@@ -603,7 +606,7 @@ impl ArrayRef {
         if self.0.state.frozen()
             || self.0.cold_if_present().is_some_and(|cold| {
                 !cold.holes.try_borrow().is_ok_and(|holes| holes.is_empty())
-                    || !self.0.named_store().is_empty()
+                    || !self.0.properties_are_empty()
             })
         {
             return None;
@@ -631,7 +634,7 @@ impl ArrayRef {
                 || array.0.state.frozen()
                 || array.0.cold_if_present().is_some_and(|cold| {
                     !cold.holes.try_borrow().is_ok_and(|holes| holes.is_empty())
-                        || !array.0.named_store().is_empty()
+                        || !array.0.properties_are_empty()
                 })
             {
                 return None;
@@ -683,7 +686,7 @@ impl ArrayRef {
         }
         if writer.0.cold_if_present().is_some_and(|cold| {
             !cold.holes.try_borrow().is_ok_and(|holes| holes.is_empty())
-                || !writer.0.named_store().is_empty()
+                || !writer.0.properties_are_empty()
         }) {
             return None;
         }
@@ -693,7 +696,7 @@ impl ArrayRef {
             }
             if array.0.cold_if_present().is_some_and(|cold| {
                 !cold.holes.try_borrow().is_ok_and(|holes| holes.is_empty())
-                    || !array.0.named_store().is_empty()
+                    || !array.0.properties_are_empty()
             }) {
                 return None;
             }
@@ -733,7 +736,7 @@ impl ArrayRef {
     ) -> Option<R> {
         if self.0.cold_if_present().is_some_and(|cold| {
             !cold.holes.try_borrow().is_ok_and(|holes| holes.is_empty())
-                || !self.0.named_store().is_empty()
+                || !self.0.properties_are_empty()
         }) {
             return None;
         }
@@ -756,7 +759,7 @@ impl ArrayRef {
         for array in arrays {
             if array.0.cold_if_present().is_some_and(|cold| {
                 !cold.holes.try_borrow().is_ok_and(|holes| holes.is_empty())
-                    || !array.0.named_store().is_empty()
+                    || !array.0.properties_are_empty()
             }) {
                 return None;
             }
@@ -771,6 +774,27 @@ impl ArrayRef {
             elements.push(lease);
         }
         Some(read(&elements))
+    }
+
+    /// An existing own dense writable data element shadows every prototype.
+    /// A target hole or named indexed descriptor retains ordinary [[Set]].
+    pub(crate) fn try_overwrite_dense_index(&self, index: usize, value: &Value) -> bool {
+        if index > MAX_ARRAY_INDEX
+            || self.0.state.frozen()
+            || index >= self.0.state.length()
+            || self.0.has_hole(index)
+            || self.0.has_property_at_index(index)
+        {
+            return false;
+        }
+        let Ok(mut elements) = self.0.elements.try_borrow_mut() else {
+            return false;
+        };
+        let Some(target) = elements.get_mut(index) else {
+            return false;
+        };
+        *target = value.clone();
+        true
     }
 
     pub(crate) fn dense_index_store_eligible(&self, index: usize) -> bool {
@@ -791,8 +815,9 @@ impl ArrayRef {
             return false;
         }
         self.0.cold_if_present().is_none_or(|_cold| {
-            let properties = self.0.named_store();
-            properties.is_empty() || !properties.contains_text(&index.to_string())
+            self.0.named_store().is_none_or(|properties| {
+                properties.is_empty() || !properties.contains_text(&index.to_string())
+            })
         })
     }
 
@@ -812,8 +837,9 @@ impl ArrayRef {
             return false;
         }
         self.0.cold_if_present().is_none_or(|_cold| {
-            let properties = self.0.named_store();
-            properties.is_empty() || !properties.contains_text(&index.to_string())
+            self.0.named_store().is_none_or(|properties| {
+                properties.is_empty() || !properties.contains_text(&index.to_string())
+            })
         })
     }
 
@@ -857,8 +883,8 @@ impl ArrayRef {
 
     pub(crate) fn delete_index(&self, index: usize) -> bool {
         let key = index.to_string();
-        if let Some(_cold) = self.0.cold_if_present() {
-            let mut properties = self.0.named_store_mut();
+        if let Some(named) = self.0.materialized_named() {
+            let mut properties = named.borrow_mut();
             if properties
                 .get_text(&key)
                 .is_some_and(|property| !property.configurable)
@@ -891,8 +917,7 @@ impl ArrayRef {
 
         let mut sparse_indices: Vec<_> = self.0.cold_if_present().map_or_else(Vec::new, |_cold| {
             self.0
-                .named_store()
-                .text_keys()
+                .named_text_keys()
                 .into_iter()
                 .filter_map(|key| array_index_property_key(&key))
                 .filter(|index| *index >= length && *index <= MAX_ARRAY_INDEX)
@@ -956,10 +981,10 @@ impl ArrayRef {
         if key == "length" {
             return false;
         }
-        let Some(_cold) = self.0.cold_if_present() else {
+        let Some(named) = self.0.materialized_named() else {
             return true;
         };
-        let mut properties = self.0.named_store_mut();
+        let mut properties = named.borrow_mut();
         if properties
             .get_text(key)
             .is_some_and(|property| !property.configurable)
@@ -974,7 +999,8 @@ impl ArrayRef {
         self.0.cold_if_present().map_or_else(Vec::new, |_cold| {
             self.0
                 .named_store()
-                .key_enumerability()
+                .map(|store| store.key_enumerability())
+                .unwrap_or_default()
                 .into_iter()
                 .filter(|(key, enumerable)| key.symbol().is_none() && *enumerable)
                 .map(|(key, _)| key.as_str().to_owned())
@@ -985,7 +1011,7 @@ impl ArrayRef {
     pub(crate) fn property_names(&self) -> Vec<String> {
         self.0
             .cold_if_present()
-            .map_or_else(Vec::new, |_cold| self.0.named_store().text_keys())
+            .map_or_else(Vec::new, |_cold| self.0.named_text_keys())
     }
 
     pub(crate) fn set_len(&self, length: usize) {
@@ -1012,15 +1038,17 @@ impl ArrayRef {
             let mut sparse_indices: Vec<_> =
                 self.0.cold_if_present().map_or_else(Vec::new, |_cold| {
                     self.0
-                        .named_store()
-                        .text_keys()
+                        .named_text_keys()
                         .into_iter()
                         .filter_map(|key| array_index_property_key(&key))
                         .filter(|index| *index >= length && *index <= MAX_ARRAY_INDEX)
                         .collect()
                 });
             sparse_indices.sort_unstable_by(|left, right| right.cmp(left));
-            let mut properties = self.0.named_store_mut();
+            let Some(named) = self.0.materialized_named() else {
+                return;
+            };
+            let mut properties = named.borrow_mut();
             for index in sparse_indices {
                 let key = index.to_string();
                 if properties
@@ -1057,8 +1085,8 @@ impl ArrayRef {
 
     pub(crate) fn seal(&self) {
         self.prevent_extensions();
-        if let Some(_cold) = self.0.cold_if_present() {
-            self.0.named_store_mut().transform_descriptors(false);
+        if let Some(named) = self.0.materialized_named() {
+            named.borrow_mut().transform_descriptors(false);
         }
         self.0.state.set_sealed(true);
     }
@@ -1069,8 +1097,8 @@ impl ArrayRef {
 
     pub(crate) fn freeze(&self) {
         self.seal();
-        if let Some(_cold) = self.0.cold_if_present() {
-            self.0.named_store_mut().transform_descriptors(true);
+        if let Some(named) = self.0.materialized_named() {
+            named.borrow_mut().transform_descriptors(true);
         }
         self.0.state.set_frozen(true);
         self.0.state.set_length_writable(false);
@@ -1093,17 +1121,16 @@ impl ArrayRef {
     }
 
     pub(crate) fn own_symbol_property(&self, symbol: &ObjectRef) -> Option<Property> {
-        let cold = self.0.cold.get()?;
-        let store = cold.named.borrow();
+        let store = self.0.named_store()?;
         let key = store.domain().find_symbol(symbol)?;
         store.get(&key).expect("own domain")
     }
 
     pub(crate) fn delete_own_symbol_property(&self, symbol: &ObjectRef) -> bool {
-        let Some(_cold) = self.0.cold_if_present() else {
+        let Some(named) = self.0.materialized_named() else {
             return true;
         };
-        let mut store = self.0.named_store_mut();
+        let mut store = named.borrow_mut();
         let Some(key) = store.domain().find_symbol(symbol) else {
             return true;
         };
@@ -1122,7 +1149,8 @@ impl ArrayRef {
         self.0.cold_if_present().map_or_else(Vec::new, |_cold| {
             self.0
                 .named_store()
-                .keys()
+                .map(|store| store.keys())
+                .unwrap_or_default()
                 .into_iter()
                 .filter_map(|key| key.symbol().cloned())
                 .collect()
@@ -1192,7 +1220,7 @@ fn same_prototype_slot(left: Option<&Prototype>, right: Option<&Prototype>) -> b
 #[cfg(target_pointer_width = "64")]
 const _: () = {
     assert!(std::mem::size_of::<ArrayData>() == 56);
-    assert!(std::mem::size_of::<ArrayColdData>() == 104);
+    assert!(std::mem::size_of::<ArrayColdData>() == 40);
 };
 
 #[cfg(test)]
@@ -1210,7 +1238,7 @@ mod tests {
             mem::size_of::<super::ArrayColdData>()
         );
         assert_eq!(mem::size_of::<ArrayData>(), 56);
-        assert_eq!(mem::size_of::<super::ArrayColdData>(), 104);
+        assert_eq!(mem::size_of::<super::ArrayColdData>(), 40);
         let array = ArrayRef::new_in_domain(&crate::property::atom::AtomDomain::new(), Vec::new());
         let cloned = array.clone();
 
@@ -1620,5 +1648,59 @@ mod packed_length_tests {
             ),
             Ok(crate::Value::Boolean(true))
         );
+    }
+}
+
+#[cfg(test)]
+mod lazy_named_tests {
+    use super::*;
+    #[test]
+    fn holes_keep_the_seed_and_named_mutation_alone_forks_the_authority() {
+        let domain = crate::property::atom::AtomDomain::new();
+        let array = ArrayRef::new_in_domain(&domain, Vec::new());
+        array.set_len(5);
+        array.set(2, Value::Number(2.0));
+        let cold = array.0.cold.get().unwrap();
+        assert!(cold.named.get().is_none());
+        assert!(
+            array
+                .0
+                .seed
+                .take()
+                .map(|seed| {
+                    array.0.seed.set(Some(seed));
+                    true
+                })
+                .unwrap_or(false)
+        );
+        assert!(array.property("absent").is_none());
+        assert!(array.own_property_symbols().is_empty());
+        array.delete_property("absent");
+        assert!(cold.named.get().is_none());
+        assert!(array.try_overwrite_dense_index(2, &Value::Number(3.0)));
+        assert!(!array.try_overwrite_dense_index(1, &Value::Number(4.0)));
+        array.define_property("named".into(), Property::enumerable(Value::Boolean(true)));
+        assert!(cold.named.get().is_some());
+        assert!(array.0.seed.take().is_none());
+        assert_eq!(array.get(2), Some(Value::Number(3.0)));
+        assert_eq!(array.property("named").unwrap().value, Value::Boolean(true));
+    }
+    #[test]
+    fn owned_dense_overwrites_ignore_other_holes_and_respect_live_descriptors() {
+        let domain = crate::property::atom::AtomDomain::new();
+        let array = ArrayRef::new_in_domain(&domain, vec![Value::Number(1.0), Value::Number(2.0)]);
+        array.delete_index(0);
+        array.prevent_extensions();
+        assert!(array.try_overwrite_dense_index(1, &Value::Number(-0.0)));
+        assert!(array.get(1).unwrap().same_value(&Value::Number(-0.0)));
+        assert!(!array.try_overwrite_dense_index(0, &Value::Number(3.0)));
+        array.freeze();
+        assert!(!array.try_overwrite_dense_index(1, &Value::Number(4.0)));
+        let other = ArrayRef::new_in_domain(&domain, vec![Value::Number(1.0)]);
+        other.define_property(
+            "0".into(),
+            Property::data(Value::Number(5.0), true, false, true),
+        );
+        assert!(!other.try_overwrite_dense_index(0, &Value::Number(6.0)));
     }
 }

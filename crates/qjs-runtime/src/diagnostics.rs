@@ -52,6 +52,7 @@ declare_counters! {
     property_array_seed_headers,
     property_array_seed_releases,
     property_array_cold_stores,
+    property_array_named_materializations,
     property_constructor_prototype_hits,
     property_constructor_prototype_misses,
     property_arguments_template_hits,

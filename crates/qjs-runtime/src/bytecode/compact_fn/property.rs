@@ -276,6 +276,7 @@ pub(super) fn try_plain_set_prop(
                 _ => None,
             };
             match index {
+                Some(index) if elements.try_overwrite_dense_index(index, value) => true,
                 Some(index)
                     if elements.dense_index_store_eligible(index)
                         && array_access_is_plain(elements, env) =>
@@ -327,10 +328,13 @@ pub(super) fn try_plain_set_index(
     let (obj, value_register) = (obj as usize, value as usize);
     let stored = match (&registers[obj], &registers[value_register]) {
         (Value::Array(elements), value) => {
-            elements.dense_index_store_eligible(index) && array_access_is_plain(elements, env) && {
-                elements.set(index, value.clone());
-                true
-            }
+            elements.try_overwrite_dense_index(index, value)
+                || (elements.dense_index_store_eligible(index)
+                    && array_access_is_plain(elements, env)
+                    && {
+                        elements.set(index, value.clone());
+                        true
+                    })
         }
         (Value::Object(object), value) if crate::typed_array::is_typed_array_object(object) => {
             crate::typed_array::try_set_integer_indexed_primitive_element(object, index, value)

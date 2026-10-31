@@ -1108,6 +1108,14 @@ impl<'a> Vm<'a> {
         };
         if let Some(index) = array_index
             && let Some(Value::Array(elements)) = self.stack.last()
+            && elements.try_overwrite_dense_index(index, &value)
+        {
+            self.pop()?;
+            self.stack.push(value);
+            return Ok(());
+        }
+        if let Some(index) = array_index
+            && let Some(Value::Array(elements)) = self.stack.last()
             && elements.dense_index_store_eligible(index)
         {
             let elements = elements.clone();
@@ -1166,6 +1174,12 @@ impl<'a> Vm<'a> {
         let value = self.pop()?;
         let object = self.pop()?;
 
+        if let Value::Array(elements) = &object
+            && elements.try_overwrite_dense_index(index, &value)
+        {
+            self.stack.push(value);
+            return Ok(());
+        }
         if let Value::Array(elements) = &object
             && elements.dense_index_store_eligible(index)
         {

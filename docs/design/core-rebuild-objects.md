@@ -44,7 +44,7 @@ slice/key lease share a 24-byte payload, with no extra allocation. No receiver/d
 | `ShapeEntry` | `key:u32, slot:u32, order:u32, attrs:u16, reserved:u16` = 16 bytes |
 | `NamedStore` | `layout:Rc<Layout>` 8, `values:ValueSlots` 32, `accessors:Option<Box<AccessorSlots>>` 8, `epoch:u64` 8, strong prototype owner 8 = 64 bytes; `RefCell` wrapper 72 |
 | Ordinary hot payload | `named:RefCell<NamedStore>` 72, tagged cold pointer 16, index count 4, packed flags/edit count/padding 4 = 96 bytes, excluding RC header |
-| Array hot/cold payload | 56-byte header: dense Vec RefCell 32, packed length/flags 8, scoped seed owner 8, cold pointer 8. Optional cold payload 104: NamedStore RefCell 72 and holes RefCell 32. Realm shares the default empty seed; probes allocate nothing. |
+| Array hot/cold payload | 56-byte header: dense Vec RefCell 32, packed length/flags 8, scoped seed owner 8, cold pointer 8. Optional hole payload 40: holes RefCell 32 and lazy named pointer 8; a separate NamedStore RefCell 72 is created only on named/prototype mutation. Realm shares the default empty seed; probes allocate nothing. |
 | `Slot` | One owning `Value`: initially 16 bytes, S5 target 8; TDZ/hole state separate from ordinary data |
 | `Layout` | Immutable shape or unique dictionary; ID/domain, owned entries/key leases and one key-ID lookup index; transition cache is cold |
 | `Dictionary` | Private identity + `u64` structural version; key-ID index, attributes/order and slot allocation are its sole authority |
@@ -140,7 +140,7 @@ rate independent of the operations/programs measured.
 
 Arrays share a realm-owned empty authority and explicit prototype; mutation
 forks the same NamedStore into cold storage. Array headers are 56 bytes, cold
-NamedStore/holes data 104; functions embed a 32-byte lazy authority and have
+holes data 40 with a separate lazy 72-byte named payload; functions embed a 32-byte lazy authority and have
 304-byte headers, excluding RC headers. Named probes allocate no array cold data.
 Original lazy property order is reserved before later keys. Function virtual
 state is part of layout flavor; hooks publish into the authority when observed.

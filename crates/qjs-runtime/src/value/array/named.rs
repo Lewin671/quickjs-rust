@@ -1,4 +1,4 @@
-//! Pure array named probes use the shared seed until cold storage exists.
+//! Pure array named probes use the shared seed until named storage exists.
 //! Mutations materialize one NamedStore; no callback may cross a storage read.
 use super::*;
 pub(super) struct SeedRead<'a> {
@@ -16,8 +16,8 @@ impl ArrayRef {
         &self,
         read: impl FnOnce(Option<&super::super::layout::NamedStore>) -> R,
     ) -> R {
-        if let Some(cold) = self.0.cold.get() {
-            read(Some(&cold.named.borrow()))
+        if let Some(named) = self.0.materialized_named() {
+            read(Some(&named.borrow()))
         } else {
             read(None)
         }
@@ -32,8 +32,8 @@ impl ArrayRef {
         &self,
         read: impl FnOnce(&crate::property::atom::AtomDomain) -> R,
     ) -> R {
-        if let Some(cold) = self.0.cold.get() {
-            read(cold.named.borrow().domain())
+        if let Some(named) = self.0.materialized_named() {
+            read(named.borrow().domain())
         } else {
             self.0.with_seed(|seed| read(seed.domain()))
         }
@@ -42,8 +42,8 @@ impl ArrayRef {
         self.with_key_domain(|domain| domain.ic_policy())
     }
     pub(crate) fn named_version(&self) -> super::super::layout::LayoutVersion {
-        if let Some(cold) = self.0.cold.get() {
-            cold.named.borrow().version()
+        if let Some(named) = self.0.materialized_named() {
+            named.borrow().version()
         } else {
             self.0
                 .with_seed(|seed| seed.version().expect("array layout"))
@@ -54,29 +54,29 @@ impl ArrayRef {
         v: &super::super::layout::LayoutVersion,
         slot: u32,
     ) -> Option<Value> {
-        if let Some(cold) = self.0.cold.get() {
-            cold.named.borrow().first_prototype_data(v, slot)
+        if let Some(named) = self.0.materialized_named() {
+            named.borrow().first_prototype_data(v, slot)
         } else {
             self.0.with_seed(|seed| seed.first_prototype_data(v, slot))
         }
     }
     pub(crate) fn named_matches(&self, v: &super::super::layout::LayoutVersion) -> bool {
-        if let Some(cold) = self.0.cold.get() {
-            cold.named.borrow().matches_version(v)
+        if let Some(named) = self.0.materialized_named() {
+            named.borrow().matches_version(v)
         } else {
             self.0.with_seed(|seed| seed.matches(v))
         }
     }
     pub(crate) fn chain_dependency(&self) -> Option<super::super::layout::StructuralDependency> {
-        if let Some(cold) = self.0.cold.get() {
-            cold.named.borrow().chain_dependency()
+        if let Some(named) = self.0.materialized_named() {
+            named.borrow().chain_dependency()
         } else {
             self.0.with_seed(|seed| seed.chain_dependency())
         }
     }
     pub(crate) fn prototype_slot(&self) -> Option<Prototype> {
-        if let Some(cold) = self.0.cold.get() {
-            cold.named.borrow().prototype()
+        if let Some(named) = self.0.materialized_named() {
+            named.borrow().prototype()
         } else {
             self.0.with_seed(|seed| seed.prototype())
         }
