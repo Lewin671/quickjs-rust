@@ -704,7 +704,7 @@ pub struct Bytecode {
     received_upvalue_slots: Vec<usize>,
     /// Whether direct-call frame setup may need per-local upvalue storage for
     /// an outer capture or sloppy global fallback. Module imports are tracked
-    /// by `CallEnv` and checked separately at call time.
+    /// by `crate::context::ActivationContext` and checked separately at call time.
     has_direct_local_upvalue_routes: bool,
     /// Received-upvalue slots that can share the callee's immutable upvalue
     /// vector for a direct leaf frame. Every admitted slot is below 128 and

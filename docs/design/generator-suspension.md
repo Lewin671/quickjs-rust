@@ -29,13 +29,13 @@ never freed.
 ## What a suspended frame owns
 
 `GeneratorSnapshot` owns the `Rc<Bytecode>`, `ip`, operand stack, `locals`,
-`local_upvalues`, received `upvalues`, `CallEnv` with its creation/activation contexts and typed lexical owner,
+`local_upvalues`, received `upvalues`, owned ActivationContext/creation and lexical owner,
 retained scope instances/holders,
 selected binding references, partial class-definition regions/private overlays,
-`with_stack`, the immutable
-function name, the try stack, disposable scopes, the pending
+active own `with_stack`, function-name cells in leases, the try stack, disposable scopes,
+the pending
 throw/return/jump of an in-flight `finally`, and the suspension kind. Resume
-builds a fresh `Vm` over the held bytecode, moves these back, and recomputes
+borrows RuntimeServices, builds a `Vm` over the held bytecode, restores state, and recomputes
 the derived slot masks (`refresh_authoritative_slots`).
 
 1. **Cell identity survives.** The snapshot holds the same `BindingCell` cells

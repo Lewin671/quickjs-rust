@@ -1,10 +1,10 @@
 //! Operation entries for core; bound once when a native is created.
 
 use super::CallInfo;
-use crate::{CallEnv, RuntimeError, Value, bigint, boolean, global, symbol};
+use crate::{RuntimeError, Value, bigint, boolean, global, symbol};
 
 pub(super) fn boolean(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -17,7 +17,7 @@ pub(super) fn boolean(
 }
 
 pub(super) fn boolean_prototype_to_string(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -25,7 +25,7 @@ pub(super) fn boolean_prototype_to_string(
 }
 
 pub(super) fn boolean_prototype_value_of(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -33,7 +33,7 @@ pub(super) fn boolean_prototype_value_of(
 }
 
 pub(super) fn decode_uri(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -41,7 +41,7 @@ pub(super) fn decode_uri(
 }
 
 pub(super) fn decode_uri_component(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -49,7 +49,7 @@ pub(super) fn decode_uri_component(
 }
 
 pub(super) fn encode_uri(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -57,7 +57,7 @@ pub(super) fn encode_uri(
 }
 
 pub(super) fn encode_uri_component(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -65,7 +65,7 @@ pub(super) fn encode_uri_component(
 }
 
 pub(super) fn global_is_finite(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -73,7 +73,7 @@ pub(super) fn global_is_finite(
 }
 
 pub(super) fn global_is_na_n(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -81,7 +81,7 @@ pub(super) fn global_is_na_n(
 }
 
 pub(super) fn test262_assert_same_value(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -89,7 +89,7 @@ pub(super) fn test262_assert_same_value(
 }
 
 pub(super) fn test262_verify_property(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -97,7 +97,7 @@ pub(super) fn test262_verify_property(
 }
 
 pub(super) fn test262_build_string(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -105,7 +105,7 @@ pub(super) fn test262_build_string(
 }
 
 pub(super) fn test262_to_numbers(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -113,7 +113,7 @@ pub(super) fn test262_to_numbers(
 }
 
 pub(super) fn test262_compare_array(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -121,7 +121,7 @@ pub(super) fn test262_compare_array(
 }
 
 pub(super) fn test262_assert_iterator_result(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -129,7 +129,7 @@ pub(super) fn test262_assert_iterator_result(
 }
 
 pub(super) fn test262_assert_packed_array(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -137,7 +137,7 @@ pub(super) fn test262_assert_packed_array(
 }
 
 pub(super) fn test262_assert_null_proto_mutable_object(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -145,7 +145,7 @@ pub(super) fn test262_assert_null_proto_mutable_object(
 }
 
 pub(super) fn test262_assert_native_fn(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -153,7 +153,7 @@ pub(super) fn test262_assert_native_fn(
 }
 
 pub(super) fn test262_assert_reg_exp_source_loop(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -161,7 +161,7 @@ pub(super) fn test262_assert_reg_exp_source_loop(
 }
 
 pub(super) fn test262_assert_reg_exp_whitespace_loop(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -169,7 +169,7 @@ pub(super) fn test262_assert_reg_exp_whitespace_loop(
 }
 
 pub(super) fn test262_assert_uri_loop(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -177,7 +177,7 @@ pub(super) fn test262_assert_uri_loop(
 }
 
 pub(super) fn test262_assert_string_substr_number_loop(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -185,7 +185,7 @@ pub(super) fn test262_assert_string_substr_number_loop(
 }
 
 pub(super) fn test262_assert_array_buffer_slice_to_immutable_argument_coercion(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -193,7 +193,7 @@ pub(super) fn test262_assert_array_buffer_slice_to_immutable_argument_coercion(
 }
 
 pub(super) fn test262_assert_line_comment_unicode_loop(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -201,7 +201,7 @@ pub(super) fn test262_assert_line_comment_unicode_loop(
 }
 
 pub(super) fn print(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -209,7 +209,7 @@ pub(super) fn print(
 }
 
 pub(super) fn is_html_dda(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -217,7 +217,7 @@ pub(super) fn is_html_dda(
 }
 
 pub(super) fn big_int(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -225,7 +225,7 @@ pub(super) fn big_int(
 }
 
 pub(super) fn big_int_as_int_n(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -233,7 +233,7 @@ pub(super) fn big_int_as_int_n(
 }
 
 pub(super) fn big_int_as_uint_n(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -241,7 +241,7 @@ pub(super) fn big_int_as_uint_n(
 }
 
 pub(super) fn big_int_prototype_to_string(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -249,7 +249,7 @@ pub(super) fn big_int_prototype_to_string(
 }
 
 pub(super) fn big_int_prototype_to_locale_string(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -257,7 +257,7 @@ pub(super) fn big_int_prototype_to_locale_string(
 }
 
 pub(super) fn big_int_prototype_value_of(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -265,7 +265,7 @@ pub(super) fn big_int_prototype_value_of(
 }
 
 pub(super) fn eval(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -273,7 +273,7 @@ pub(super) fn eval(
 }
 
 pub(super) fn eval_script(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -281,7 +281,7 @@ pub(super) fn eval_script(
 }
 
 pub(super) fn proxy(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -289,7 +289,7 @@ pub(super) fn proxy(
 }
 
 pub(super) fn proxy_revocable(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -297,7 +297,7 @@ pub(super) fn proxy_revocable(
 }
 
 pub(super) fn proxy_revoke(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -305,7 +305,7 @@ pub(super) fn proxy_revoke(
 }
 
 pub(super) fn escape(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -313,7 +313,7 @@ pub(super) fn escape(
 }
 
 pub(super) fn unescape(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -321,7 +321,7 @@ pub(super) fn unescape(
 }
 
 pub(super) fn symbol(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -329,7 +329,7 @@ pub(super) fn symbol(
 }
 
 pub(super) fn symbol_for(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -337,7 +337,7 @@ pub(super) fn symbol_for(
 }
 
 pub(super) fn symbol_key_for(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -345,7 +345,7 @@ pub(super) fn symbol_key_for(
 }
 
 pub(super) fn symbol_prototype_description(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -353,7 +353,7 @@ pub(super) fn symbol_prototype_description(
 }
 
 pub(super) fn symbol_prototype_to_primitive(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -361,7 +361,7 @@ pub(super) fn symbol_prototype_to_primitive(
 }
 
 pub(super) fn symbol_prototype_to_string(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -369,7 +369,7 @@ pub(super) fn symbol_prototype_to_string(
 }
 
 pub(super) fn symbol_prototype_value_of(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -377,7 +377,7 @@ pub(super) fn symbol_prototype_value_of(
 }
 
 pub(super) fn function(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -391,7 +391,7 @@ pub(super) fn function(
 }
 
 pub(super) fn function_prototype(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -399,7 +399,7 @@ pub(super) fn function_prototype(
 }
 
 pub(super) fn generator_function(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -407,7 +407,7 @@ pub(super) fn generator_function(
 }
 
 pub(super) fn async_function(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -415,7 +415,7 @@ pub(super) fn async_function(
 }
 
 pub(super) fn async_generator_function(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -423,7 +423,7 @@ pub(super) fn async_generator_function(
 }
 
 pub(super) fn function_prototype_apply(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -431,7 +431,7 @@ pub(super) fn function_prototype_apply(
 }
 
 pub(super) fn function_prototype_bind(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -439,7 +439,7 @@ pub(super) fn function_prototype_bind(
 }
 
 pub(super) fn function_prototype_call(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -447,7 +447,7 @@ pub(super) fn function_prototype_call(
 }
 
 pub(super) fn function_prototype_has_instance(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -459,7 +459,7 @@ pub(super) fn function_prototype_has_instance(
 }
 
 pub(super) fn iterator_prototype_iterator(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -467,7 +467,7 @@ pub(super) fn iterator_prototype_iterator(
 }
 
 pub(super) fn species_getter(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -475,7 +475,7 @@ pub(super) fn species_getter(
 }
 
 pub(super) fn function_prototype_to_string(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -483,7 +483,7 @@ pub(super) fn function_prototype_to_string(
 }
 
 pub(super) fn mapped_argument_get(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -491,7 +491,7 @@ pub(super) fn mapped_argument_get(
 }
 
 pub(super) fn mapped_argument_set(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -499,7 +499,7 @@ pub(super) fn mapped_argument_set(
 }
 
 pub(super) fn throw_type_error(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -507,7 +507,7 @@ pub(super) fn throw_type_error(
 }
 
 pub(super) fn realm_throw_type_error(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {

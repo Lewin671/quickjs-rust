@@ -1,10 +1,9 @@
-use crate::CallEnv;
 use crate::reflect::target::ensure_reflect_object_target;
 use crate::{RuntimeError, Value, has_property_key, property_value_key_with_receiver};
 
 pub(crate) fn native_reflect_get(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     ensure_reflect_object_target(&target, "Reflect.get")?;
@@ -36,7 +35,7 @@ pub(crate) fn native_reflect_get(
 
 pub(crate) fn native_reflect_has(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     ensure_reflect_object_target(&target, "Reflect.has")?;

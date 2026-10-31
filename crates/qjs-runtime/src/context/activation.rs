@@ -3,7 +3,7 @@
 //! cells and holders to that identity. Views retain identity, never slot values.
 use super::{CreationContext, LexicalCallContext, OwnerKind};
 use crate::binding::{ScopeCursor, ScopeId, ScopeLease, VariableEnvIdentity};
-use std::{cell::RefCell, rc::Rc};
+use std::rc::Rc;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ExecutionMode {
@@ -27,18 +27,23 @@ impl From<OwnerKind> for ExecutionMode {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum GlobalCodeMode {
+    Script,
+    Eval,
+}
+
 #[derive(Clone, Default)]
 pub(crate) struct ScopeRoots {
     pub(crate) module_root: bool,
     pub(crate) cursor: Option<ScopeCursor>,
     pub(crate) entry: Option<Rc<ScopeLease>>,
+    pub(crate) global: Option<GlobalCodeMode>,
 }
 
 pub(crate) struct ActivationContext {
     pub(crate) creation: Rc<CreationContext>,
-    // CallEnv's temporary Clone API promotes through &self. B5 removes this
-    // RefCell together with CallEnv, using Context's mutable activation borrow.
-    pub(crate) call: RefCell<LexicalCallContext>,
+    pub(crate) call: LexicalCallContext,
     pub(crate) scopes: ScopeRoots,
     pub(crate) variable: VariableEnvIdentity,
     pub(crate) mode: ExecutionMode,
@@ -49,7 +54,7 @@ impl ActivationContext {
         let activation = creation.realm.atoms().next_variable_identity();
         Self {
             creation,
-            call: RefCell::default(),
+            call: LexicalCallContext::default(),
             scopes: ScopeRoots::default(),
             variable: VariableEnvIdentity {
                 activation,
@@ -59,22 +64,16 @@ impl ActivationContext {
             strict: false,
         }
     }
-    pub(crate) fn retained_view(&self) -> Self {
+
+    pub(crate) fn retain_continuation(&mut self) -> Self {
         Self {
             creation: self.creation.clone(),
-            call: RefCell::new(self.call.borrow_mut().shared_view()),
+            call: self.call.shared_view(),
             scopes: self.scopes.clone(),
             variable: self.variable,
             mode: self.mode,
             strict: self.strict,
         }
-    }
-    pub(crate) fn fresh_function(&self) -> Self {
-        let mut creation = self.creation.clone();
-        if !matches!(creation.global, super::GlobalSelection::Default) {
-            Rc::make_mut(&mut creation).global = super::GlobalSelection::Default;
-        }
-        Self::new(creation, ExecutionMode::Function)
     }
 }
 
@@ -89,10 +88,9 @@ mod tests {
         let atoms = AtomDomain::new();
         let realm = new_realm_sharing_atoms(HashMap::new(), atoms.clone());
         let root = ActivationContext::new(CreationContext::root(realm), ExecutionMode::Script);
-        let first = root.fresh_function();
-        let second = root.fresh_function();
+        let first = ActivationContext::new(root.creation.clone(), ExecutionMode::Function);
+        let second = ActivationContext::new(root.creation.clone(), ExecutionMode::Function);
         assert_ne!(first.variable, second.variable);
-        assert_eq!(first.variable, first.retained_view().variable);
         assert!(first.scopes.cursor.is_none());
         assert!(second.scopes.cursor.is_none());
         let other_realm = new_realm_sharing_atoms(HashMap::new(), atoms);

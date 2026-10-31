@@ -81,14 +81,21 @@ declare_counters! {
     /// Always zero: no counting site exists, because no call routes through
     /// the frame-stack driver (`bytecode/frame_stack.rs`).
     same_vm_frame_entries,
+    /// Successful numeric-plan root executions (already attributed at entry).
+    numeric_plan_roots,
+    /// Numeric-plan internal call probes, including discarded speculation.
+    numeric_plan_call_probes,
+    /// Internal callee entries retained by a successful numeric plan; root excluded.
+    numeric_plan_call_entries,
+    /// Actual non-recycled variable-identity tokens minted in the atom domain.
+    typed_variable_identities,
     /// Rc allocations for nonempty typed native closure payloads.
     native_capture_payload_allocations,
-    /// Actual construction of the temporary owned CallEnv, excluding Clone.
-    /// Retained at zero after the borrowed Context migration.
+    /// Retired CallEnv construction event; no counting site remains.
     call_env_constructions,
-    /// Actual Clone::clone entries, counted separately from construction.
+    /// Retired CallEnv Clone event; no counting site remains.
     call_env_clones,
-    /// Caller/callee compatibility proof attempts in indexed tier entry.
+    /// Retired caller/callee environment equality proof; no counting site remains.
     call_env_equality_proofs,
     /// Retired direct-eval marker scrub event, retained during the Context
     /// migration audit. Typed eval sites have no counting site for this event.

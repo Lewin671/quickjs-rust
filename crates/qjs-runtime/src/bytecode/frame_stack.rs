@@ -55,7 +55,7 @@ pub(super) struct SuspendedFrame<'a> {
     continuation: FrameContinuation,
 }
 
-impl<'a> Vm<'a> {
+impl<'a, 's> Vm<'a, 's> {
     /// Suspends the current frame and installs `frame` above it.
     ///
     /// The caller's program view must already have been dropped: replacing the
@@ -178,8 +178,14 @@ mod tests {
         let inner = parse_script("41 + 1;").expect("inner parses");
         let inner = compile_script(&inner).expect("inner compiles");
 
-        let mut vm = Vm::new(&outer).expect("root frame");
-        let inner_frame = Vm::new(&inner).expect("second frame").into_frame();
+        let (mut vm_services, vm_activation) = crate::context::HostRoot::script().into_parts();
+
+        let mut vm = Vm::new(&outer, &mut vm_services, vm_activation).expect("root frame");
+        let (mut inner_frame_services, inner_frame_activation) =
+            crate::context::HostRoot::script().into_parts();
+        let inner_frame = Vm::new(&inner, &mut inner_frame_services, inner_frame_activation)
+            .expect("second frame")
+            .into_frame();
         vm.push_frame(inner_frame, FrameContinuation::PushResult);
         assert_eq!(vm.callers.len(), 1);
 
@@ -198,8 +204,14 @@ mod tests {
             parse_script("throw new TypeError('from the frame above');").expect("inner parses");
         let inner = compile_script(&inner).expect("inner compiles");
 
-        let mut vm = Vm::new(&outer).expect("root frame");
-        let inner_frame = Vm::new(&inner).expect("second frame").into_frame();
+        let (mut vm_services, vm_activation) = crate::context::HostRoot::script().into_parts();
+
+        let mut vm = Vm::new(&outer, &mut vm_services, vm_activation).expect("root frame");
+        let (mut inner_frame_services, inner_frame_activation) =
+            crate::context::HostRoot::script().into_parts();
+        let inner_frame = Vm::new(&inner, &mut inner_frame_services, inner_frame_activation)
+            .expect("second frame")
+            .into_frame();
         vm.push_frame(inner_frame, FrameContinuation::PushResult);
 
         let error = match vm.run_completion() {
@@ -225,12 +237,18 @@ mod tests {
         let inner = parse_script("throw new TypeError('claimed');").expect("inner parses");
         let inner = compile_script(&inner).expect("inner compiles");
 
-        let mut vm = Vm::new(&outer).expect("root frame");
+        let (mut vm_services, vm_activation) = crate::context::HostRoot::script().into_parts();
+
+        let mut vm = Vm::new(&outer, &mut vm_services, vm_activation).expect("root frame");
         // Park the caller inside a try whose catch is the end of its own code,
         // which is where an ordinary `try { f(); } catch {}` would leave it.
         let catch_target = outer.code.len() - 1;
         vm.enter_try(Some(catch_target), None, None, Vec::new());
-        let inner_frame = Vm::new(&inner).expect("second frame").into_frame();
+        let (mut inner_frame_services, inner_frame_activation) =
+            crate::context::HostRoot::script().into_parts();
+        let inner_frame = Vm::new(&inner, &mut inner_frame_services, inner_frame_activation)
+            .expect("second frame")
+            .into_frame();
         vm.push_frame(inner_frame, FrameContinuation::PushResult);
 
         let completion = match vm.run_completion() {
@@ -258,10 +276,13 @@ mod tests {
         let inner = Rc::new(compile_script(&inner).expect("inner compiles"));
         let observer = Rc::downgrade(&inner);
 
-        let mut vm = Vm::new(&outer).expect("root frame");
-        let env = vm.env.clone();
+        let (mut vm_services, vm_activation) = crate::context::HostRoot::script().into_parts();
+
+        let mut vm = Vm::new(&outer, &mut vm_services, vm_activation).expect("root frame");
+        let env = vm.env.retain_continuation();
         let callee = Vm::with_frame_bytecode(
             FrameBytecode::Shared(Rc::clone(&inner)),
+            vm.runtime,
             env,
             Vec::new(),
             Vec::new(),
@@ -292,8 +313,14 @@ mod tests {
         let inner = parse_script("0;").expect("inner parses");
         let inner = compile_script(&inner).expect("inner compiles");
 
-        let mut vm = Vm::new(&outer).expect("root frame");
-        let inner_frame = Vm::new(&inner).expect("second frame").into_frame();
+        let (mut vm_services, vm_activation) = crate::context::HostRoot::script().into_parts();
+
+        let mut vm = Vm::new(&outer, &mut vm_services, vm_activation).expect("root frame");
+        let (mut inner_frame_services, inner_frame_activation) =
+            crate::context::HostRoot::script().into_parts();
+        let inner_frame = Vm::new(&inner, &mut inner_frame_services, inner_frame_activation)
+            .expect("second frame")
+            .into_frame();
         vm.push_frame(inner_frame, FrameContinuation::PushResult);
         let caller = vm.callers.pop().expect("one caller");
         let error = match vm.resume_caller(caller, Completion::Yield(Value::Undefined)) {

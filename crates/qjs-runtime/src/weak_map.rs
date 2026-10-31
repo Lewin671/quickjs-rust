@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use crate::CallEnv;
 use crate::{
     Function, NativeFunction, ObjectRef, RuntimeError, Value,
     array::for_each_iterable_value_with_env, call_function, property_value, symbol,
@@ -10,7 +9,7 @@ const WEAK_MAP_ENTRIES: &str = "\0weak_map_entries";
 const WEAK_MAP_BRAND: &str = "\0weak_map";
 
 pub(crate) fn install_weak_map(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     global_this: &Value,
     object_prototype: ObjectRef,
 ) {
@@ -87,7 +86,7 @@ pub(crate) fn native_weak_map(
     function: &Function,
     argument_values: &[Value],
     is_construct: bool,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if !is_construct {
         return Err(RuntimeError {
@@ -137,7 +136,10 @@ pub(crate) fn native_weak_map(
     Ok(weak_map)
 }
 
-fn weak_map_entry(entry: Value, env: &mut CallEnv) -> Result<(Value, Value), RuntimeError> {
+fn weak_map_entry(
+    entry: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<(Value, Value), RuntimeError> {
     match entry {
         Value::Object(_)
         | Value::Array(_)
@@ -188,7 +190,7 @@ pub(crate) fn native_weak_map_prototype_get(
 pub(crate) fn native_weak_map_prototype_get_or_insert(
     this_value: Value,
     argument_values: &[Value],
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let object = weak_map_object(&this_value)?;
     let key = argument_values.first().cloned().unwrap_or(Value::Undefined);
@@ -209,7 +211,7 @@ pub(crate) fn native_weak_map_prototype_get_or_insert(
 pub(crate) fn native_weak_map_prototype_get_or_insert_computed(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let object = weak_map_object(&this_value)?;
     let key = argument_values.first().cloned().unwrap_or(Value::Undefined);
@@ -250,7 +252,7 @@ pub(crate) fn native_weak_map_prototype_has(
 pub(crate) fn native_weak_map_prototype_set(
     this_value: Value,
     argument_values: &[Value],
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let object = weak_map_object(&this_value)?;
     let key = argument_values.first().cloned().unwrap_or(Value::Undefined);
@@ -306,7 +308,7 @@ fn weak_map_set(
     object: ObjectRef,
     key: Value,
     value: Value,
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     if !can_be_held_weakly(&key, env) {
         return Err(RuntimeError {
@@ -329,7 +331,7 @@ fn is_weak_map_key(value: &Value) -> bool {
     )
 }
 
-fn can_be_held_weakly(value: &Value, env: &CallEnv) -> bool {
+fn can_be_held_weakly(value: &Value, env: &crate::context::Context<'_>) -> bool {
     match value {
         Value::Object(object) if symbol::is_symbol_primitive(object) => {
             !symbol::is_registered_symbol(object, env)

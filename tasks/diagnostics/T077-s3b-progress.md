@@ -731,3 +731,50 @@ Promise.all/allSettled/any with a generic synchronous constructor. Source audit
 finds zero NativeContext/native_context/insert_native_context references under
 runtime src. The staged gate passes **2,594 default tests + 52 Test262 cases**;
 the atomic Context ABI cut remains.
+
+
+## B5 atomic borrowed Context ABI
+
+Implementation over `eda5e1cb`: NativeEntry and all runtime consumer families use
+Context borrowing RuntimeServices and an actual ActivationContext. NativeSite
+borrows CallInfo, distinct target and direct-eval scope/private sources. Native
+entry allocates/clones no activation, creation record or realm; the focused
+128-call counter test verifies zero old construction/clone/equality events and
+zero variable tokens. Native realm/target/caller ownership has separate identity
+and Rc-owner assertions. Direct eval no longer mutates/restores caller site state.
+
+Vm borrows services; compact/wide stacks save each callee activation, creation,
+strictness and variable identity. All caller-environment equality proof/entry
+APIs are removed. Numeric-plan internal frames now have fresh logical identities;
+probe counts include rejected speculation, while successful retained callee counts
+alone join ordinary attempts. The recursive 31/63-call receipts still count the
+actual call tree. Numeric/this closed leaves mint their logical token too.
+RuntimeGroup uses the existing AtomDomain boundary and weak global/realm metadata,
+with amortized cleanup; global notifications find communicating foreign realms.
+Host/referrer and agent services keep their canonical owners, without new queues.
+
+Removed: CallEnv definition/Clone/Debug/re-exports, function/env.rs and its
+owned-view tests, vm_call_env factories (vm_context now only borrows), inherited
+function with-stack copies, construct-target setter/restoration and OwnedCallInputs.
+Generator prologues/initial async execution consume borrowed inputs synchronously;
+no extra async snapshot was added. Snapshot/by-value continuation reconstruction
+remains S3c/S3e-owned and retains typed owner/lease identity, never Context.
+EvalOutcome retains services plus creation for host-controlled job drains.
+
+Twelve tests for retired owned env/view APIs are replaced by eight typed ownership
+checks plus a native-boundary counter proof; required JS regression tests remain.
+Two eval-cache tests move to direct_eval/cache.rs to preserve the global test-file
+budget. No dependencies, unsafe, new executor, new depth limit or benchmark-shaped
+admission was added. Protected S2 owner paths are unchanged.
+
+Verified over `eda5e1cb`: **2,590 default runtime tests**, **2,643 agents/perf-counters
+tests**, **294 NG scripts** with COMPARE_QJS_JOBS=1, strict workspace feature
+Clippy and staged gate with **117 selected Test262 cases** all pass. No runtime
+consumer retains CallEnv, FrameBindings, an owned native environment factory or
+a caller-env equality entry. Only retired event descriptions name CallEnv.
+Separate TZ=UTC module comparisons all exit 0 with identical stdout. Main output
+hashes: deferred-key-arguments `8b839ca4974d1086d3d9105322e1372606c8d146d0053541eb6b65527c295ac8`;
+s3b-context-imports `bb0199327236bb286b72263d3b5678affe852f0cb0fe2f392782e88533301da5`.
+Source hashes/commands remain as recorded above; dependency module stdout is empty.
+Raw cell publisher retirement, default lazy promotion, stress/deletion/counter
+receipts and the final full/exact/public86 matrix remain before S3b exit.

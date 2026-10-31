@@ -195,6 +195,7 @@ pub(crate) struct IcPolicy {
 
 struct DomainState {
     next_variable: Cell<u64>,
+    runtime_group: RefCell<Weak<crate::context::GroupState>>,
     ic_policy: IcPolicy,
     table: RefCell<AtomTable>,
     free_ids: RefCell<Vec<KeyId>>,
@@ -215,6 +216,7 @@ impl AtomDomain {
             std::process::abort();
         };
         self.0.next_variable.set(next);
+        crate::diagnostics::count!(typed_variable_identities);
         current
     }
 
@@ -230,6 +232,7 @@ impl AtomDomain {
     fn with_limit(limit: u32) -> Self {
         Self(Rc::new(DomainState {
             next_variable: Cell::new(1),
+            runtime_group: RefCell::new(Weak::new()),
             ic_policy: IcPolicy {
                 enabled: std::env::var_os("QJS_DISABLE_IC").is_none(),
                 verify: cfg!(debug_assertions) && std::env::var_os("QJS_VERIFY_IC").is_some(),
@@ -370,6 +373,10 @@ impl AtomDomain {
     pub(crate) fn ic_policy(&self) -> IcPolicy {
         self.0.ic_policy
     }
+    pub(crate) fn runtime_group(&self) -> &RefCell<Weak<crate::context::GroupState>> {
+        &self.0.runtime_group
+    }
+
     pub(crate) fn shape_owner(&self) -> &RefCell<Weak<crate::value::layout::OwnerState>> {
         &self.0.shape_owner
     }

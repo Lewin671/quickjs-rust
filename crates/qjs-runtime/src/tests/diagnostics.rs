@@ -83,7 +83,8 @@ fn every_call_attempt_is_attributed_to_exactly_one_tier() {
         + counters.direct_leaf_frames
         + counters.generic_call_frames
         + counters.compact_direct_calls
-        + counters.compact_caller_env_calls;
+        + counters.compact_caller_env_calls
+        + counters.numeric_plan_call_entries;
     assert_eq!(
         counters.ordinary_call_attempts, attributed,
         "a bytecode call must be counted by exactly one execution tier"
@@ -232,24 +233,15 @@ fn recursion_builds_slot_seeded_frames_and_receiver_arithmetic_builds_none() {
          tree(5, 3);",
     );
     assert_eq!(recursion.ordinary_call_attempts, 63);
-    // The outermost call is the only one reached from the ordinary
-    // interpreter, and even it builds no frame: the compact tier runs it in
-    // the script's own environment. The other 62 are compact bodies calling a
-    // compact body: borrowed environment, register file, no frame and no
-    // environment construction at all.
-    assert_eq!(recursion.direct_leaf_frames, 0);
-    assert_eq!(recursion.compact_caller_env_calls, 1);
-    assert_eq!(recursion.compact_direct_calls, 62);
+    // The callee owns one typed entry; its pure numeric plan retains the
+    // remaining logical calls without VM construction or caller-env sharing.
+    assert_eq!(recursion.direct_leaf_frames, 1);
+    assert_eq!(recursion.compact_caller_env_calls, 0);
+    assert_eq!(recursion.compact_direct_calls, 0);
+    assert_eq!(recursion.numeric_plan_roots, 1);
+    assert_eq!(recursion.numeric_plan_call_entries, 62);
     assert_eq!(recursion.generic_call_frames, 0);
-    // Every one of the 63 calls runs compact, and exactly *one* activation is
-    // built for all of them: the compact tier's frame stack runs an admitted
-    // callee in a window of the caller's own register stack, so entering a
-    // callee reserves registers rather than constructing an activation. This
-    // assertion has tightened twice -- it first read `nested_vm_constructions
-    // >= 63`, then `compact_standalone_activations == 63` -- and each value is
-    // exact rather than a bound so that a body falling back to the ordinary
-    // frame, or to a per-call activation, fails here.
-    assert_eq!(recursion.compact_standalone_activations, 1);
+    assert_eq!(recursion.compact_standalone_activations, 0);
     assert_eq!(recursion.nested_vm_constructions, 1);
     assert_eq!(recursion.same_vm_frame_entries, 0);
 

@@ -9,14 +9,13 @@ use super::{
     array_like::array_like_length,
     mutation::{delete_array_like_property, set_array_like_property},
 };
-use crate::CallEnv;
 
 const MAX_ARRAY_LENGTH: usize = u32::MAX as usize;
 
 pub(crate) fn native_array_prototype_sort(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let comparator = array_sort_comparator(argument_values, "Array.prototype.sort")?;
     let source = array_like_length(this_value, "Array.prototype.sort", env)?;
@@ -33,7 +32,7 @@ pub(crate) fn native_array_prototype_sort(
 pub(crate) fn native_array_prototype_to_sorted(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let comparator = array_sort_comparator(argument_values, "Array.prototype.toSorted")?;
     let values = to_sorted_array_like_values(this_value, env)?;
@@ -43,7 +42,7 @@ pub(crate) fn native_array_prototype_to_sorted(
 
 fn to_sorted_array_like_values(
     this_value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Vec<Value>, RuntimeError> {
     let source = array_like_length(this_value, "Array.prototype.toSorted", env)?;
     if source.length > MAX_ARRAY_LENGTH {
@@ -66,7 +65,7 @@ fn to_sorted_array_like_values(
 fn sorted_array_values(
     values: Vec<Value>,
     comparator: Option<&Function>,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Vec<Value>, RuntimeError> {
     let mut defined = Vec::new();
     let mut undefined_count = 0;
@@ -87,7 +86,7 @@ fn sorted_present_array_like_values(
     receiver: Value,
     length: usize,
     comparator: Option<&Function>,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Vec<Value>, RuntimeError> {
     // A fully dense array's elements are all present own data values, so the
     // per-index HasProperty/Get pairs read exactly its storage.
@@ -113,7 +112,7 @@ fn write_sorted_array_like_values(
     receiver: Value,
     length: usize,
     values: Vec<Value>,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     // Writing every index of a fully dense, writable array whose indices no
     // setter or read-only descriptor intercepts is replacing its storage.
@@ -156,7 +155,7 @@ fn array_sort_comparator(
 fn merge_sort(
     values: &mut Vec<Value>,
     comparator: Option<&Function>,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     let len = values.len();
     if len <= 1 {
@@ -187,7 +186,7 @@ fn merge_runs(
     mid: usize,
     right: usize,
     comparator: Option<&Function>,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     let mut i = left;
     let mut j = mid;
@@ -221,7 +220,7 @@ fn compare_values(
     left: &Value,
     right: &Value,
     comparator: Option<&Function>,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Ordering, RuntimeError> {
     if let Some(function) = comparator {
         let callee = Value::Function(function.clone());
@@ -231,9 +230,6 @@ fn compare_values(
                 Value::Undefined,
                 &[left.clone(), right.clone()],
                 env,
-                env.module_host(),
-                #[cfg(feature = "agents")]
-                env.agent_context(),
             )?
         } else {
             call_function(

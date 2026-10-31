@@ -1,10 +1,10 @@
 //! Operation entries for sets; bound once when a native is created.
 
 use super::CallInfo;
-use crate::{CallEnv, RuntimeError, Value, set};
+use crate::{RuntimeError, Value, set};
 
 pub(super) fn set(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -12,7 +12,7 @@ pub(super) fn set(
 }
 
 pub(super) fn set_prototype_add(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -20,7 +20,7 @@ pub(super) fn set_prototype_add(
 }
 
 pub(super) fn set_prototype_clear(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -28,7 +28,7 @@ pub(super) fn set_prototype_clear(
 }
 
 pub(super) fn set_prototype_delete(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -36,7 +36,7 @@ pub(super) fn set_prototype_delete(
 }
 
 pub(super) fn set_prototype_difference(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -44,7 +44,7 @@ pub(super) fn set_prototype_difference(
 }
 
 pub(super) fn set_prototype_entries(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -52,7 +52,7 @@ pub(super) fn set_prototype_entries(
 }
 
 pub(super) fn set_prototype_for_each(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -60,7 +60,7 @@ pub(super) fn set_prototype_for_each(
 }
 
 pub(super) fn set_prototype_has(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -68,7 +68,7 @@ pub(super) fn set_prototype_has(
 }
 
 pub(super) fn set_prototype_intersection(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -76,7 +76,7 @@ pub(super) fn set_prototype_intersection(
 }
 
 pub(super) fn set_prototype_is_disjoint_from(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -84,7 +84,7 @@ pub(super) fn set_prototype_is_disjoint_from(
 }
 
 pub(super) fn set_prototype_is_subset_of(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -92,7 +92,7 @@ pub(super) fn set_prototype_is_subset_of(
 }
 
 pub(super) fn set_prototype_is_superset_of(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -100,7 +100,7 @@ pub(super) fn set_prototype_is_superset_of(
 }
 
 pub(super) fn set_prototype_size(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -108,7 +108,7 @@ pub(super) fn set_prototype_size(
 }
 
 pub(super) fn set_prototype_symmetric_difference(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -116,7 +116,7 @@ pub(super) fn set_prototype_symmetric_difference(
 }
 
 pub(super) fn set_prototype_union(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -124,7 +124,7 @@ pub(super) fn set_prototype_union(
 }
 
 pub(super) fn set_prototype_values(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -132,7 +132,7 @@ pub(super) fn set_prototype_values(
 }
 
 pub(super) fn set_iterator_prototype_next(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {

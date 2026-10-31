@@ -31,22 +31,15 @@ use super::execute;
 use super::execute::Action;
 use crate::bytecode::DirectCallSlots;
 use crate::bytecode::ir::Bytecode;
-use crate::function::{BindingCell, CallEnv, Function};
+use crate::function::{BindingCell, Function};
 use crate::{RuntimeError, Value};
 
 /// Everything an admitted body needs to run, and nothing a `FrameState`
 /// carries for the general interpreter's sake.
-pub(super) struct CompactActivation<'a> {
+pub(super) struct CompactActivation<'a, 's> {
     pub(super) bytecode: &'a Bytecode,
-    /// The environment this body runs in, borrowed rather than owned.
-    ///
-    /// It is still the callee's own environment in the sense that matters --
-    /// see `shares_caller_environment`, which proves that what
-    /// `direct_leaf_function_env` would build for an admitted callee is equal
-    /// field for field to what its compact caller already holds. Borrowing it
-    /// is therefore not "reusing the caller's environment"; it is skipping the
-    /// reconstruction of an identical one.
-    pub(super) env: &'a CallEnv,
+    /// A borrow of services and this callee's actual typed activation.
+    pub(super) env: &'a mut crate::context::Context<'s>,
     /// The function whose upvalue vector backs this body's received cells.
     /// Reads resolve through it by bytecode slot, keeping cell identity live.
     /// The frame stack owns it; an activation is rebuilt per frame switch and
@@ -55,7 +48,7 @@ pub(super) struct CompactActivation<'a> {
     upvalue_slots: u128,
 }
 
-impl<'a> CompactActivation<'a> {
+impl<'a, 's> CompactActivation<'a, 's> {
     /// Returns the live cell for a received-upvalue slot.
     pub(super) fn upvalue_cell(&self, slot: usize) -> Option<&BindingCell> {
         let owner = self.upvalue_owner.as_ref()?;
@@ -94,13 +87,13 @@ impl<'a> CompactActivation<'a> {
     /// so an empty realm frame is both correct and what the interpreter's own
     /// path uses.
     pub(super) fn eval_binary(
-        &self,
+        &mut self,
         left: Value,
         op: BinaryOp,
         right: Value,
     ) -> Result<Value, RuntimeError> {
-        let mut env = self.env.empty_frame();
-        crate::operations::eval_binary(left, op, right, &mut env)
+        let env = &mut *self.env;
+        crate::operations::eval_binary(left, op, right, env)
     }
 }
 
@@ -145,45 +138,6 @@ fn admit<'a>(
     })
 }
 
-/// Whether an environment can host an admitted body at all.
-fn environment_is_slot_only(env: &CallEnv) -> bool {
-    env.supplies_no_named_binding()
-        && !env.has_module_imports()
-        && env.scope_cursor().is_none()
-        && !env.has_dynamic_function_realm_global()
-}
-
-/// Whether `direct_leaf_function_env` would build, for this callee, an
-/// environment equal field for field to the one its compact caller holds.
-///
-/// `new_direct_leaf_function_frame` derives realm, the global-lexical handles,
-/// the immutable bindings, the module host, and the agent context from its
-/// parent, and sets everything else to a fresh empty value. So two direct-leaf
-/// frames in one realm differ only through what the four remaining steps of
-/// `direct_leaf_function_env` add: a `this` binding, a marked call realm, a
-/// module host, and a private environment. Excluding all four -- and empty
-/// module imports, which the caller's environment is already known to have --
-/// leaves the two environments indistinguishable.
-fn shares_caller_environment(function: &Function, bytecode: &Bytecode, env: &CallEnv) -> bool {
-    crate::diagnostics::count!(call_env_equality_proofs);
-    // `direct_leaf_function_env` installs the callee's own module host over
-    // the one the frame inherited from its parent. When they are the same
-    // handle -- which is the ordinary case, since a script's functions all
-    // carry the host of the environment that created them -- that install is
-    // idempotent and the two environments still agree.
-    let host_agrees = match (function.module_host_ref(), env.module_host_ref()) {
-        (None, _) => true,
-        (Some(callee), Some(caller)) => std::rc::Rc::ptr_eq(callee, caller),
-        (Some(_), None) => false,
-    };
-    host_agrees
-        && !bytecode.uses_lexical_this()
-        && !function.has_dynamic_function_realm
-        && !function.has_dynamic_function_realm_override.get()
-        && !function.has_module_imports()
-        && !function.has_cold_lexical_state()
-}
-
 /// One suspended compact activation.
 ///
 /// The *running* frame is not in this list: its fields live in the driver
@@ -197,6 +151,7 @@ struct CompactFrame {
     callee: Value,
     upvalue_owner: Option<Function>,
     upvalue_slots: u128,
+    activation: crate::context::ActivationContext,
     /// First register of this frame's window in the shared register stack.
     base: usize,
     /// Width of the window.
@@ -299,6 +254,7 @@ struct InlineCallee {
     upvalue_owner: Option<Function>,
     upvalue_slots: u128,
     register_count: usize,
+    activation: crate::context::ActivationContext,
 }
 
 /// Proves a callee may run on the caller's own loop, in the caller's window.
@@ -308,32 +264,24 @@ struct InlineCallee {
 /// seeding parameters into slots safe for this callee at all -- default
 /// parameter prologues and `arguments` objects are among the shapes it
 /// rejects, and the compact program's own admission does not subsume it.
-fn inline_callee(callee: &Value, env: &CallEnv) -> Option<InlineCallee> {
+fn inline_callee(callee: &Value) -> Option<InlineCallee> {
     let Value::Function(function) = callee else {
         return None;
     };
     let facts = fixed_inline_facts(callee, function);
     if facts & FACTS_ELIGIBLE == 0
-        || !function
-            .bytecode
-            .as_ref()?
-            .binding_plan
-            .references
-            .can_skip(env)
+        || function.has_dynamic_function_realm_override.get()
+        || function.has_cold_lexical_state()
     {
         return None;
     }
-    crate::diagnostics::count!(call_env_equality_proofs);
-    // The parts of `shares_caller_environment` that can change after the
-    // function is created, or depend on the caller.
-    let host_agrees = match (function.module_host_ref(), env.module_host_ref()) {
-        (None, _) => true,
-        (Some(callee), Some(caller)) => std::rc::Rc::ptr_eq(callee, caller),
-        (Some(_), None) => false,
-    };
-    if !host_agrees
-        || function.has_dynamic_function_realm_override.get()
-        || function.has_cold_lexical_state()
+    let activation = crate::function::enter_indexed_activation(function);
+    if !function
+        .bytecode
+        .as_ref()?
+        .binding_plan
+        .references
+        .can_skip(&activation)
     {
         return None;
     }
@@ -348,6 +296,7 @@ fn inline_callee(callee: &Value, env: &CallEnv) -> Option<InlineCallee> {
         (Some(function.clone()), slots)
     };
     Some(InlineCallee {
+        activation,
         register_count: (facts >> FACTS_REGISTER_SHIFT) as usize,
         upvalue_owner,
         upvalue_slots,
@@ -417,7 +366,8 @@ fn compute_fixed_inline_facts(callee: &Value, function: &Function) -> u32 {
 /// Runs an admitted body in `env`, together with every admitted body it calls.
 fn run(
     bytecode: &Bytecode,
-    env: &CallEnv,
+    mut activation: crate::context::ActivationContext,
+    runtime: &mut crate::context::RuntimeServices,
     entry: CompactEntry<'_>,
     parameter_slots: &[usize],
     arguments: &[Value],
@@ -427,9 +377,14 @@ fn run(
     // body that calls out to native code that calls back into this tier finds
     // an empty storage and builds its own, instead of meeting a live borrow.
     let mut storage = FRAME_STORAGE.with(|cell| cell.take());
+    let mut env = crate::context::Context {
+        runtime,
+        activation: &mut activation,
+        native: None,
+    };
     let result = run_frames(
         bytecode,
-        env,
+        &mut env,
         entry,
         parameter_slots,
         arguments,
@@ -452,7 +407,7 @@ fn run(
 /// than one activation exists and keeps its zero-based register window.
 fn run_frames(
     root_bytecode: &Bytecode,
-    env: &CallEnv,
+    env: &mut crate::context::Context<'_>,
     entry: CompactEntry<'_>,
     parameter_slots: &[usize],
     arguments: &[Value],
@@ -505,7 +460,7 @@ fn run_frames(
                 unwind(registers, frames, current_base + current_len);
                 return Err(missing_program());
             };
-            let activation = CompactActivation {
+            let mut activation = CompactActivation {
                 bytecode,
                 env,
                 upvalue_owner: &current_owner,
@@ -625,6 +580,7 @@ fn run_frames(
                 let Some(caller) = frames.pop() else {
                     return Ok(value);
                 };
+                *env.activation = caller.activation;
                 current_callee = caller.callee;
                 current_owner = caller.upvalue_owner;
                 current_slots = caller.upvalue_slots;
@@ -646,7 +602,7 @@ fn run_frames(
                 let argument_index = callee_index + 1;
                 let argument_count = argc as usize;
 
-                if let Some(inline) = inline_callee(&callee, env) {
+                if let Some(inline) = inline_callee(&callee) {
                     if frames.len() >= MAX_FRAMES {
                         unwind(registers, frames, current_base + current_len);
                         return Err(call_stack_exhausted());
@@ -683,6 +639,7 @@ fn run_frames(
                         }
                     }
                     frames.push(CompactFrame {
+                        activation: std::mem::replace(env.activation, inline.activation),
                         callee: std::mem::replace(&mut current_callee, callee),
                         upvalue_owner: current_owner,
                         upvalue_slots: current_slots,
@@ -700,14 +657,14 @@ fn run_frames(
                 }
 
                 let outcome = {
-                    let activation = CompactActivation {
+                    let mut activation = CompactActivation {
                         bytecode: running_bytecode(&current_callee, root_bytecode),
                         env,
                         upvalue_owner: &current_owner,
                         upvalue_slots: current_slots,
                     };
                     let arguments = &registers[argument_index..argument_index + argument_count];
-                    call_from_activation(&activation, callee, arguments)
+                    call_from_activation(&mut activation, callee, arguments)
                 };
                 match outcome {
                     Ok(value) => {
@@ -757,13 +714,14 @@ fn call_stack_exhausted() -> RuntimeError {
 /// before any of them is consumed and before any observable work.
 pub(in crate::bytecode) fn try_run_standalone(
     bytecode: &Bytecode,
-    env: &mut Option<CallEnv>,
+    env: &mut Option<crate::context::ActivationContext>,
+    runtime: &mut crate::context::RuntimeServices,
     slots: &mut Option<DirectCallSlots<'_>>,
 ) -> Option<Result<Value, RuntimeError>> {
     // This tier resolves every name by slot index. An environment that can
     // still answer a name, that carries deoptimized dynamic bindings, or that
     // overrides the realm global belongs on the general path.
-    if !environment_is_slot_only(env.as_ref()?)
+    if !env.as_ref()?.indexed_bindings_only()
         || !bytecode.binding_plan.references.can_skip(env.as_ref()?)
     {
         return None;
@@ -771,9 +729,9 @@ pub(in crate::bytecode) fn try_run_standalone(
     // A body outside this tier's numeric set may still be one the wide tier
     // runs; that tier re-checks admission on its own program.
     let Some(entry) = admit(bytecode, slots.as_ref()?.upvalues) else {
-        return super::wide::try_run_standalone(bytecode, env, slots);
+        return super::wide::try_run_standalone(bytecode, env, runtime, slots);
     };
-    if let Some(value) = run_numeric_plan(bytecode, slots.as_ref()?) {
+    if let Some(value) = run_numeric_plan(bytecode, slots.as_ref()?, env.as_ref()?) {
         return Some(Ok(value));
     }
     // Admitted. From here on the caller's `env` and `slots` are ours.
@@ -781,7 +739,8 @@ pub(in crate::bytecode) fn try_run_standalone(
     let call_slots = slots.take()?;
     Some(run(
         bytecode,
-        &call_env,
+        call_env,
+        runtime,
         entry,
         call_slots.parameter_slots,
         call_slots.arguments,
@@ -791,7 +750,11 @@ pub(in crate::bytecode) fn try_run_standalone(
 /// Runs an admitted body's numeric plan (`numeric_plan`), when it has one
 /// and every argument is a number; `None` leaves the call to the tier.
 #[inline(never)]
-fn run_numeric_plan(bytecode: &Bytecode, slots: &DirectCallSlots<'_>) -> Option<Value> {
+fn run_numeric_plan(
+    bytecode: &Bytecode,
+    slots: &DirectCallSlots<'_>,
+    entry: &crate::context::ActivationContext,
+) -> Option<Value> {
     let plan = super::numeric_plan::plan_for(bytecode)?;
     let mut numbers = [0.0; super::compile::MAX_CALL_ARITY];
     if slots.arguments.len() > numbers.len() {
@@ -808,44 +771,8 @@ fn run_numeric_plan(bytecode: &Bytecode, slots: &DirectCallSlots<'_>) -> Option<
         bytecode,
         slots.upvalues.as_slice(),
         &numbers[..slots.arguments.len()],
+        entry,
     )
-}
-
-/// Runs a direct-leaf callee on a compact tier in the caller's own
-/// environment, without building the callee a frame environment first.
-///
-/// `direct_leaf_function_env` builds, for every direct-leaf call, a frame
-/// environment the compact tiers then never read beyond its realm: an
-/// admitted body resolves every name by slot. `shares_caller_environment` is
-/// the proof, already relied on by the in-loop inline path, that the frame
-/// `direct_leaf_function_env` would build is field for field the caller's
-/// own environment, so the caller's can stand in for it. A body neither tier
-/// admits returns `None` before anything is consumed, and the ordinary frame
-/// is built as before.
-pub(crate) fn try_run_in_caller_env(
-    function: &Function,
-    bytecode: &Bytecode,
-    arguments: &[Value],
-    env: &CallEnv,
-) -> Option<Result<Value, RuntimeError>> {
-    if !environment_is_slot_only(env)
-        || !shares_caller_environment(function, bytecode, env)
-        || !bytecode.binding_plan.references.can_skip(env)
-    {
-        return None;
-    }
-    let upvalues = crate::bytecode::DirectCallUpvalues::Function(function);
-    if let Some(entry) = admit(bytecode, upvalues) {
-        crate::diagnostics::count!(compact_caller_env_calls);
-        return Some(run(
-            bytecode,
-            env,
-            entry,
-            bytecode.parameter_slots(),
-            arguments,
-        ));
-    }
-    super::wide::try_run_in_caller_env(bytecode, upvalues, arguments, env)
 }
 
 /// Runs one call the driver could not inline.
@@ -857,7 +784,7 @@ pub(crate) fn try_run_in_caller_env(
 /// one implementation.
 #[inline(never)]
 fn call_from_activation(
-    activation: &CompactActivation<'_>,
+    activation: &mut CompactActivation<'_, '_>,
     callee: Value,
     arguments: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -867,11 +794,8 @@ fn call_from_activation(
             Value::Undefined,
             arguments,
             activation.env,
-            activation.env.module_host(),
-            #[cfg(feature = "agents")]
-            activation.env.agent_context(),
         );
     }
-    let mut env = activation.env.empty_frame();
-    crate::function::call_function_slice(&callee, Value::Undefined, arguments, &mut env)
+    let env = &mut *activation.env;
+    crate::function::call_function_slice(&callee, Value::Undefined, arguments, env)
 }

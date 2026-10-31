@@ -10,9 +10,7 @@ use std::{
 
 use qjs_ast::FunctionParams;
 
-use crate::CallEnv;
 use crate::function::{BindingCell, Realm};
-use crate::module::ModuleHostRef;
 use crate::{Bytecode, NativeFunction, ObjectRef, Property, PropertyKey, Prototype, Value};
 
 const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
@@ -208,7 +206,6 @@ pub struct FunctionData {
     /// The compact tier's counterpart: whether its admission proof, as far as
     /// it depends on the function alone, holds, and the register count.
     pub(crate) compact_inline_facts: Cell<u32>,
-    pub(crate) with_stack: Vec<Value>,
     pub(crate) upvalues: Vec<BindingCell>,
     /// Received-upvalue slots backed by the function creation realm. The cells
     /// stay live; this mask only avoids rediscovering their identity by name on
@@ -369,7 +366,6 @@ pub(crate) struct CompiledUserFunction {
     pub(crate) home_object: Option<Value>,
     pub(crate) super_constructor: Option<Value>,
     pub(crate) lexical_scope: Option<crate::binding::ScopeCursor>,
-    pub(crate) with_stack: Vec<Value>,
     pub(crate) upvalues: Vec<BindingCell>,
 }
 
@@ -441,7 +437,6 @@ impl Function {
             home_object,
             super_constructor,
             lexical_scope,
-            with_stack,
             upvalues,
         } = compiled;
         let self_name = has_name_binding.then(|| {
@@ -491,7 +486,6 @@ impl Function {
             direct_construct_eligible: Cell::new(None),
             wide_inline_facts: Cell::new(0),
             compact_inline_facts: Cell::new(0),
-            with_stack,
             upvalues,
             realm_upvalue_slots,
             local_names,
@@ -579,11 +573,6 @@ impl Function {
     pub(crate) fn creation_realm(&self) -> &Realm {
         &self.creation_context().realm
     }
-    pub(crate) fn module_host_ref(&self) -> Option<&ModuleHostRef> {
-        self.creation
-            .as_ref()
-            .and_then(|creation| creation.referrer.host())
-    }
 
     pub(crate) fn has_module_imports(&self) -> bool {
         self.creation
@@ -670,7 +659,6 @@ impl Function {
             direct_construct_eligible: Cell::new(None),
             wide_inline_facts: Cell::new(0),
             compact_inline_facts: Cell::new(0),
-            with_stack: Vec::new(),
             upvalues: Vec::new(),
             realm_upvalue_slots: 0,
             local_names: Rc::new(Vec::new()),
@@ -728,7 +716,6 @@ impl Function {
             direct_construct_eligible: Cell::new(None),
             wide_inline_facts: Cell::new(0),
             compact_inline_facts: Cell::new(0),
-            with_stack: Vec::new(),
             upvalues: Vec::new(),
             realm_upvalue_slots: 0,
             local_names: Rc::new(Vec::new()),
@@ -792,7 +779,11 @@ impl Function {
         )
     }
 
-    pub(crate) fn symbol_property(&self, symbol: &ObjectRef, _env: &CallEnv) -> Option<Property> {
+    pub(crate) fn symbol_property(
+        &self,
+        symbol: &ObjectRef,
+        _env: &crate::context::Context<'_>,
+    ) -> Option<Property> {
         self.own_symbol_property(symbol)
             .or_else(|| match self.effective_internal_prototype() {
                 Some(Prototype::Object(prototype)) => prototype.symbol_property(symbol),

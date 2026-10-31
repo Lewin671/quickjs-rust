@@ -1,8 +1,7 @@
 mod arguments;
-pub(crate) use arguments::{ArgumentsRecipe, CallInputs, LazyArguments, OwnedCallInputs};
+pub(crate) use arguments::{ArgumentsRecipe, CallInputs, LazyArguments};
 mod call;
 mod call_frame;
-mod env;
 mod install;
 mod intrinsic_construct;
 mod local_names;
@@ -57,7 +56,6 @@ pub(crate) use crate::context::Realm;
 #[cfg(test)]
 pub(crate) use crate::context::new_realm;
 pub(crate) use crate::context::new_realm_sharing_atoms;
-pub(crate) use env::CallEnv;
 pub(crate) use install::install_function;
 pub(crate) use local_names::{
     collect_function_local_names, parameter_argument_binding_name, parameter_binding_name,
@@ -77,3 +75,5 @@ pub(crate) use value::{
     CompiledUserFunction, Function, FunctionWeakRef, InstanceElementInitializer,
     InstanceFieldInitializer, InstancePrivateElement, PrivateFieldInit,
 };
+
+pub(crate) use call::enter_indexed_activation;

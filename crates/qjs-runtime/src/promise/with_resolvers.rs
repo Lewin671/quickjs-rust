@@ -1,14 +1,13 @@
 use crate::{Function, ObjectRef, RuntimeError, Value};
 
 use super::capability::new_promise_capability;
-use crate::CallEnv;
 
 /// `Promise.withResolvers` (ES2024 27.2.4.8): builds a capability from the
 /// `this` constructor and returns `{ promise, resolve, reject }`.
 pub(crate) fn native_promise_with_resolvers(
     function: &Function,
     this_value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let capability = new_promise_capability(&this_value, env)?;
     let result = ObjectRef::with_ordered_prototype(

@@ -12,8 +12,8 @@ impl JsonParser<'_> {
         }
         let mut properties = DataSequence::new(
             self.sequences[depth].take(),
-            self.env.realm().atoms(),
-            object_prototype(self.env).map(crate::Prototype::Object),
+            self.realm.atoms(),
+            self.prototype.clone().map(crate::Prototype::Object),
         );
         self.skip_whitespace();
         if !self.consume_byte(b'}') {

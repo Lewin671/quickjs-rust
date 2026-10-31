@@ -1,9 +1,12 @@
-use crate::{CallEnv, RuntimeError, Value};
+use crate::{RuntimeError, Value};
 
 /// `[[IsExtensible]]` over any value: ordinary objects report their slot, an
 /// exotic Proxy consults its `isExtensible` trap (with the target-identity
 /// invariant), and primitives are never extensible.
-pub(crate) fn value_is_extensible(value: &Value, env: &mut CallEnv) -> Result<bool, RuntimeError> {
+pub(crate) fn value_is_extensible(
+    value: &Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<bool, RuntimeError> {
     Ok(match value {
         Value::Object(object) => object.is_extensible(),
         Value::Map(map) => map.object().is_extensible(),
@@ -73,7 +76,7 @@ pub(crate) fn ordinary_prevent_extensions(value: &Value) -> bool {
 
 pub(crate) fn native_object_is_extensible(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     Ok(Value::Boolean(match argument_values.first() {
         Some(value) => value_is_extensible(value, env)?,
@@ -83,7 +86,7 @@ pub(crate) fn native_object_is_extensible(
 
 pub(crate) fn native_object_prevent_extensions(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if let Value::Proxy(proxy) = &target {
@@ -106,7 +109,7 @@ pub(crate) fn native_object_prevent_extensions(
 
 pub(crate) fn native_object_is_sealed(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     Ok(Value::Boolean(match argument_values.first() {
         Some(Value::Object(object)) if crate::typed_array::is_typed_array_object(object) => {
@@ -134,7 +137,7 @@ pub(crate) fn native_object_is_sealed(
 
 pub(crate) fn native_object_is_frozen(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     Ok(Value::Boolean(match argument_values.first() {
         Some(Value::Object(object))
@@ -173,7 +176,7 @@ enum IntegrityLevel {
 
 pub(crate) fn native_object_seal(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if let Value::Proxy(proxy) = &target {
@@ -198,7 +201,7 @@ pub(crate) fn native_object_seal(
 
 pub(crate) fn native_object_freeze(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if let Value::Proxy(proxy) = &target {
@@ -276,7 +279,7 @@ fn set_integrity_level_on_proxy(
     proxy: crate::proxy::ProxyRef,
     proxy_value: &Value,
     level: IntegrityLevel,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<bool, RuntimeError> {
     use crate::object::{PropertyDescriptor, define_property_descriptor_on_value_key};
 
@@ -321,7 +324,7 @@ fn set_integrity_level_on_proxy(
 fn test_integrity_level_on_proxy(
     proxy: crate::proxy::ProxyRef,
     level: IntegrityLevel,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<bool, RuntimeError> {
     if crate::proxy::proxy_is_extensible(proxy.clone(), env)? {
         return Ok(false);
@@ -349,7 +352,7 @@ fn test_integrity_level_on_proxy(
 fn freeze_typed_array_object(
     object: crate::ObjectRef,
     target: &Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     use crate::object::{PropertyDescriptor, define_property_descriptor_on_value_key};
 

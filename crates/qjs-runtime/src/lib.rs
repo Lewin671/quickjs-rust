@@ -64,10 +64,10 @@ pub(crate) use conversion::{
     to_length_with_env, to_number_with_env, to_primitive_with_env, to_primitive_with_hint,
     to_uint16_with_env, to_uint32_number, to_uint32_with_env,
 };
-pub(crate) use function::{
-    CallEnv, call_field_initializer, call_function, construct_function, ensure_constructor,
-};
 use function::{Function, NativeFunction};
+pub(crate) use function::{
+    call_field_initializer, call_function, construct_function, ensure_constructor,
+};
 pub(crate) use property::{
     PropertyKey, array_as_prototype_slot, array_has_own_property, array_own_property_descriptor,
     array_own_property_keys, array_own_property_names, array_prototype,

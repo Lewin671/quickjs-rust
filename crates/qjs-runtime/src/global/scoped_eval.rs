@@ -6,12 +6,12 @@ use crate::binding::{
     AccessPolicy, BindingCell, BindingKind, CellReference, ScopeCursor, ScopeDescriptorRef,
     ScopeId, ScopeLease, VarHolder, VariableEnvIdentity,
 };
-use crate::{Bytecode, CallEnv, RuntimeError, Value};
+use crate::{Bytecode, RuntimeError, Value};
 use std::rc::Rc;
 
 pub(super) fn evaluate(
     bytecode: &Bytecode,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     strict: bool,
 ) -> Result<Value, RuntimeError> {
     let caller = env.scope_cursor().cloned();
@@ -88,7 +88,23 @@ pub(super) fn evaluate(
         (Some(caller), false) => caller.variable.clone(),
         _ => root.clone(),
     };
-    let mut selected = env.scope_service_view();
+    let mut creation = env.creation_context();
+    let private = env.private_environment();
+    let same_private = match (&creation.private, &private) {
+        (None, None) => true,
+        (Some(left), Some(right)) => left.same(right),
+        _ => false,
+    };
+    if !same_private {
+        Rc::make_mut(&mut creation).private = private;
+    }
+    let owner = env.capture_call_owner();
+    let mut selected =
+        crate::context::ActivationContext::new(creation, crate::context::ExecutionMode::Eval);
+    if let Some(owner) = owner {
+        selected.inherit_call_owner(owner);
+    }
+    selected.strict = strict;
     selected.set_eval_scope(
         ScopeCursor {
             head: root,
@@ -96,10 +112,18 @@ pub(super) fn evaluate(
         },
         global,
     );
-    crate::bytecode::eval_bytecode_with_env_ephemeral_global_lexicals(bytecode, selected).value
+    crate::bytecode::eval_bytecode_with_env_ephemeral_global_lexicals(
+        bytecode,
+        selected,
+        env.runtime,
+    )
+    .value
 }
 
-fn prepare_global_declarations(bytecode: &Bytecode, env: &mut CallEnv) -> Result<(), RuntimeError> {
+fn prepare_global_declarations(
+    bytecode: &Bytecode,
+    env: &mut crate::context::Context<'_>,
+) -> Result<(), RuntimeError> {
     let Some(Value::Object(object)) = env.selected_global_this() else {
         for meta in bytecode.scope_declarations(ScopeId(0)) {
             if matches!(meta.kind, BindingKind::Var | BindingKind::Function)

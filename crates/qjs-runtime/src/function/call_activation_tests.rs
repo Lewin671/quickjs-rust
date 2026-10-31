@@ -1,23 +1,24 @@
 //! Observable binding/context contracts for prepared synchronous calls.
-use super::{FunctionCallEnv, function_env};
-use crate::{Bytecode, CallEnv, Value, eval};
+use super::{PreparedFunctionActivation, enter_function_activation};
+use crate::{Bytecode, Value, eval};
 
-fn inspect(source: &str, check: impl FnOnce(&FunctionCallEnv<'_>, &Bytecode)) {
+fn inspect(source: &str, check: impl FnOnce(&PreparedFunctionActivation<'_>, &Bytecode)) {
     let callee = eval(source).expect("function source evaluates");
     let Value::Function(function) = &callee else {
         panic!("expected function");
     };
     let code = function.bytecode.as_ref().unwrap();
-    let env = CallEnv::new(function.realm().unwrap().clone());
+    let mut root = crate::context::HostRoot::new(function.realm().unwrap().clone());
+    let mut env = root.context();
     let arguments = [Value::Number(7.0)];
-    let prepared = function_env(
+    let prepared = enter_function_activation(
         function,
         code,
         &callee,
         Value::Undefined,
         &arguments,
-        &env,
-        false,
+        &mut env,
+        None,
     );
     check(&prepared, code);
 }
@@ -26,17 +27,17 @@ fn inspect(source: &str, check: impl FnOnce(&FunctionCallEnv<'_>, &Bytecode)) {
 fn positional_entry_omits_parameter_names_and_static_eval_marker() {
     inspect(
         "(function ({x}, y = x + 1, ...tail) { return function () { return x + y + tail[0]; }; })",
-        |prepared, code| {
+        |prepared, _code| {
             assert!(prepared.direct_call_slots.is_none());
             assert!(prepared.call_inputs.is_some());
-            for name in code
-                .parameter_slots()
-                .iter()
-                .map(|&slot| code.local_name_at(slot).unwrap())
-            {
-                assert!(!prepared.env.has_frame_binding(name), "{name}");
+            assert!(prepared.env.scope_cursor().is_none());
+            for name in ["x", "y", "tail"] {
+                assert!(!prepared.env.realm_contains(name));
             }
-            assert!(!prepared.env.has_frame_binding("tail"));
+            assert_eq!(
+                prepared.call_inputs.as_ref().unwrap().arguments,
+                &[Value::Number(7.0)]
+            );
             assert_eq!(
                 prepared.env.owner_kind(),
                 Some(crate::context::OwnerKind::Function)
@@ -61,7 +62,7 @@ fn mapped_dynamic_and_suspended_parameters_use_positional_inputs() {
         inspect(source, |prepared, _| {
             assert!(prepared.call_inputs.is_some(), "{source}");
             if prepared.direct_call_slots.is_none() {
-                assert_eq!(prepared.env.get_local("value"), None, "{source}");
+                assert!(prepared.env.scope_cursor().is_none(), "{source}");
             }
         });
     }

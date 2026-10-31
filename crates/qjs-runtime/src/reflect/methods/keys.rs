@@ -1,9 +1,9 @@
 use crate::reflect::target::ensure_reflect_object_target;
-use crate::{CallEnv, PropertyKey, RuntimeError, Value};
+use crate::{PropertyKey, RuntimeError, Value};
 
 pub(crate) fn native_reflect_own_keys(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     ensure_reflect_object_target(&target, "Reflect.ownKeys")?;

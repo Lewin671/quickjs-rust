@@ -6,11 +6,10 @@ use crate::{
 };
 
 use super::raw_json_value;
-use crate::CallEnv;
 
 pub(crate) fn native_json_stringify(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let replacer = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
@@ -52,7 +51,7 @@ struct StringifyContext {
 
 fn build_property_list(
     replacer: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Option<Vec<String>>, RuntimeError> {
     if is_callable(&replacer) || !is_array_like(&replacer, env)? {
         return Ok(None);
@@ -82,7 +81,10 @@ fn build_property_list(
     Ok(Some(list))
 }
 
-fn stringify_gap(space: Value, env: &mut CallEnv) -> Result<String, RuntimeError> {
+fn stringify_gap(
+    space: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<String, RuntimeError> {
     match space {
         Value::Object(object) if wrapper_number_value(&object).is_some() => {
             let number = to_number_with_env(Value::Object(object), env)?;
@@ -114,7 +116,7 @@ fn serialize_json_property_into(
     key: &str,
     holder: Value,
     ctx: &mut StringifyContext,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     output: &mut String,
 ) -> Result<bool, RuntimeError> {
     let value = property_value(holder.clone(), key, env)?;
@@ -128,7 +130,7 @@ fn serialize_json_value_into(
     holder: Value,
     mut value: Value,
     ctx: &mut StringifyContext,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     output: &mut String,
 ) -> Result<bool, RuntimeError> {
     if matches!(
@@ -223,7 +225,7 @@ fn serialize_json_value_into(
 fn serialize_json_array_into(
     value: Value,
     ctx: &mut StringifyContext,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     output: &mut String,
 ) -> Result<(), RuntimeError> {
     push_stack(value.clone(), ctx)?;
@@ -275,7 +277,7 @@ fn serialize_json_array_into(
 fn serialize_json_object_into(
     value: Value,
     ctx: &mut StringifyContext,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     output: &mut String,
 ) -> Result<(), RuntimeError> {
     push_stack(value.clone(), ctx)?;
@@ -320,7 +322,7 @@ fn serialize_json_object_into(
 
 fn enumerable_own_string_keys(
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Vec<String>, RuntimeError> {
     let keys = own_property_keys(value.clone(), env)?;
     let mut strings = Vec::new();
@@ -337,7 +339,10 @@ fn enumerable_own_string_keys(
     Ok(strings)
 }
 
-fn own_property_keys(value: Value, env: &mut CallEnv) -> Result<Vec<PropertyKey>, RuntimeError> {
+fn own_property_keys(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<Vec<PropertyKey>, RuntimeError> {
     match value {
         Value::Proxy(proxy) => crate::proxy::proxy_own_keys(proxy, env),
         Value::Object(_) | Value::Map(_) | Value::Set(_) | Value::Function(_) | Value::Array(_) => {
@@ -357,7 +362,7 @@ fn own_property_keys(value: Value, env: &mut CallEnv) -> Result<Vec<PropertyKey>
 fn own_property_descriptor(
     value: Value,
     key: &PropertyKey,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Option<Property>, RuntimeError> {
     match value {
         Value::Proxy(proxy) => {
@@ -392,7 +397,10 @@ fn same_json_object(left: &Value, right: &Value) -> bool {
     }
 }
 
-fn unbox_json_wrapper(value: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
+fn unbox_json_wrapper(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<Value, RuntimeError> {
     match value {
         Value::Object(object) if wrapper_number_value(&object).is_some() => Ok(Value::Number(
             to_number_with_env(Value::Object(object), env)?,
@@ -450,7 +458,10 @@ fn is_callable(value: &Value) -> bool {
     }
 }
 
-fn is_array_like(value: &Value, env: &mut CallEnv) -> Result<bool, RuntimeError> {
+fn is_array_like(
+    value: &Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<bool, RuntimeError> {
     match value {
         Value::Array(_) => Ok(true),
         Value::Proxy(proxy) => crate::proxy::proxy_target_is_array_result(proxy),

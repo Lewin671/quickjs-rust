@@ -16,9 +16,8 @@ use super::ir::{
     ClassFieldDef, ClassFieldInitializerDef, ClassMethodDef, ClassMethodKind, ClassStaticBlockDef,
 };
 use super::vm::Vm;
-use crate::CallEnv;
 
-impl Vm<'_> {
+impl Vm<'_, '_> {
     /// Builds and installs a single method/accessor on the prototype (instance)
     /// or the constructor (static).
     pub(super) fn install_method(
@@ -58,7 +57,6 @@ impl Vm<'_> {
             home_object: Some(home_object.clone()),
             super_constructor: None,
             lexical_scope: self.prepare_scope_cursor(),
-            with_stack: self.with_stack().to_vec(),
             upvalues: self.captured_upvalues_for_function_with_override(
                 &method.bytecode,
                 &method.lexical_captures,
@@ -68,7 +66,7 @@ impl Vm<'_> {
         if method.is_generator && method.is_async {
             crate::async_generator::wire_async_generator_function_intrinsics(
                 &method_function,
-                &self.env,
+                &self.context(),
             );
         } else if method.is_generator {
             self.wire_generator_function_intrinsics(&method_function);
@@ -100,7 +98,7 @@ impl Vm<'_> {
 
         // Member definition only needs realm access (array length coercion on
         // concrete values); no frame bindings can change here.
-        let mut prop_env = self.realm_env();
+        let mut prop_env = self.context();
         let success = object::define_property_on_value_key(target, key, descriptor, &mut prop_env)?;
         if !success {
             return Err(RuntimeError {
@@ -153,7 +151,6 @@ impl Vm<'_> {
             home_object: Some(home_object),
             super_constructor: None,
             lexical_scope: self.prepare_scope_cursor(),
-            with_stack: self.with_stack().to_vec(),
             upvalues: self.captured_upvalues_for_function_with_override(
                 bytecode,
                 lexical_captures,
@@ -198,7 +195,6 @@ impl Vm<'_> {
             home_object: Some(Value::Function(constructor_function.clone())),
             super_constructor: None,
             lexical_scope: self.prepare_scope_cursor(),
-            with_stack: self.with_stack().to_vec(),
             upvalues: self.captured_upvalues_for_function_with_override(
                 bytecode,
                 lexical_captures,
@@ -216,7 +212,7 @@ impl Vm<'_> {
         thunk: &Function,
         this_value: Value,
     ) -> Result<Value, RuntimeError> {
-        let mut env = self.current_env();
+        let mut env = self.context();
 
         call_field_initializer(thunk, this_value, &mut env)
     }
@@ -246,7 +242,7 @@ impl Vm<'_> {
                     .to_owned(),
             });
         }
-        let mut env = self.current_env();
+        let mut env = self.context();
         let value = property_value_key_with_receiver(lookup_base, key, receiver, &mut env)?;
         Ok(value)
     }
@@ -288,7 +284,7 @@ impl Vm<'_> {
                     .to_owned(),
             });
         }
-        let mut env = self.current_env();
+        let mut env = self.context();
         let wrote =
             crate::reflect::ordinary_set(lookup_base, &key, value.clone(), receiver, &mut env)?;
         if !wrote && is_strict {
@@ -356,7 +352,7 @@ impl Vm<'_> {
         let Some(Value::Function(constructor)) = self.env.active_constructor() else {
             return Ok(Value::Undefined);
         };
-        let mut env = self.current_env();
+        let mut env = self.context();
         let result =
             crate::function::initialize_instance_fields(&constructor, this_value, &mut env);
         result.map(|()| Value::Undefined)
@@ -375,13 +371,13 @@ impl Vm<'_> {
             .lexical_new_target()
             .unwrap_or_else(|| super_constructor.clone());
 
-        let mut env = self.current_env();
+        let mut env = self.context();
         let result = construct_function(super_constructor, new_target, arguments, &mut env);
         let value = result?;
         // A repeated `super(...)` still performs the parent construction after
         // argument evaluation, then fails while trying to initialize `this`.
         let this_is_bound = self.env.derived_this_cell().map_or_else(
-            || self.env.has_local_binding("this"),
+            || self.env.owner_kind().is_some(),
             |cell| !cell.with_value(Value::is_uninitialized_lexical_marker),
         );
         if this_is_bound {
@@ -393,9 +389,9 @@ impl Vm<'_> {
         Ok(value)
     }
 
-    fn current_super_constructor(&self) -> Result<Option<Value>, RuntimeError> {
+    fn current_super_constructor(&mut self) -> Result<Option<Value>, RuntimeError> {
         if let Some(active_constructor) = self.env.active_constructor()
-            && let Some(prototype) = value_prototype_slot(active_constructor, &self.env)
+            && let Some(prototype) = value_prototype_slot(active_constructor, &self.context())
         {
             return Ok(Some(prototype.to_value()));
         }
@@ -408,14 +404,14 @@ impl Vm<'_> {
 
     /// Returns the lookup base for `super` property access: the [[Prototype]]
     /// of the current method's home object.
-    fn super_lookup_base(&self) -> Result<Value, RuntimeError> {
+    fn super_lookup_base(&mut self) -> Result<Value, RuntimeError> {
         let Some(home) = self.env.home_object() else {
             return Err(RuntimeError {
                 thrown: None,
                 message: "SyntaxError: 'super' keyword unexpected here".to_owned(),
             });
         };
-        match value_prototype_slot(home, &self.env) {
+        match value_prototype_slot(home, &self.context()) {
             Some(prototype) => Ok(prototype.to_value()),
             None => Ok(Value::Undefined),
         }
@@ -425,15 +421,15 @@ impl Vm<'_> {
     /// chain: its [[Prototype]] becomes `%GeneratorFunction.prototype%`, and its
     /// own `prototype` property's [[Prototype]] becomes `%GeneratorPrototype%`
     /// so generator instances inherit `next`/`return`/`throw`.
-    pub(super) fn wire_generator_function_intrinsics(&self, function: &Function) {
-        crate::generator::wire_generator_function_intrinsics(function, &self.env);
+    pub(super) fn wire_generator_function_intrinsics(&mut self, function: &Function) {
+        crate::generator::wire_generator_function_intrinsics(function, &self.context());
     }
 
     /// Wires a freshly created async function into the async intrinsic chain:
     /// its `[[Prototype]]` becomes `%AsyncFunction.prototype%`. Async functions
     /// are non-constructable and carry no own `prototype` property.
-    pub(super) fn wire_async_function_intrinsics(&self, function: &Function) {
-        crate::async_function::wire_async_function_intrinsics(function, &self.env);
+    pub(super) fn wire_async_function_intrinsics(&mut self, function: &Function) {
+        crate::async_function::wire_async_function_intrinsics(function, &self.context());
     }
 }
 
@@ -450,12 +446,15 @@ pub(super) struct ClassHeritageParent {
     pub(super) prototype: Option<crate::Prototype>,
 }
 
-pub(super) fn function_prototype_value(env: &CallEnv) -> Option<Value> {
+pub(super) fn function_prototype_value(env: &crate::context::Context<'_>) -> Option<Value> {
     env.realm().function_prototype().map(|p| p.to_value())
 }
 
 impl ClassHeritage {
-    pub(super) fn resolve(value: Value, env: &mut CallEnv) -> Result<Self, RuntimeError> {
+    pub(super) fn resolve(
+        value: Value,
+        env: &mut crate::context::Context<'_>,
+    ) -> Result<Self, RuntimeError> {
         match value {
             Value::Null => Ok(Self::Null),
             Value::Function(function) if function.constructable => {
@@ -479,7 +478,7 @@ impl ClassHeritage {
 
 fn class_heritage_prototype_slot(
     value: Value,
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> Result<Option<crate::Prototype>, RuntimeError> {
     match value {
         Value::Null => Ok(None),
@@ -540,7 +539,7 @@ pub(crate) fn install_field_value(
     target: &Value,
     key: PropertyKey,
     value: Value,
-    env: &mut crate::CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     let descriptor = Property::data(value, true, true, true);
     let success = object::define_property_on_value_key(target.clone(), key, descriptor, env)?;

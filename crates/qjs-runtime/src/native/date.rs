@@ -1,10 +1,10 @@
 //! Operation entries for date; bound once when a native is created.
 
 use super::CallInfo;
-use crate::{CallEnv, RuntimeError, Value, date};
+use crate::{RuntimeError, Value, date};
 
 pub(super) fn date(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -18,7 +18,7 @@ pub(super) fn date(
 }
 
 pub(super) fn date_now(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -26,7 +26,7 @@ pub(super) fn date_now(
 }
 
 pub(super) fn date_parse(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -34,7 +34,7 @@ pub(super) fn date_parse(
 }
 
 pub(super) fn date_utc(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -42,7 +42,7 @@ pub(super) fn date_utc(
 }
 
 pub(super) fn date_prototype_get_timezone_offset(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -50,7 +50,7 @@ pub(super) fn date_prototype_get_timezone_offset(
 }
 
 pub(super) fn date_prototype_get_year(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -58,7 +58,7 @@ pub(super) fn date_prototype_get_year(
 }
 
 pub(super) fn date_prototype_get_utc_date(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -66,7 +66,7 @@ pub(super) fn date_prototype_get_utc_date(
 }
 
 pub(super) fn date_prototype_get_utc_day(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -74,7 +74,7 @@ pub(super) fn date_prototype_get_utc_day(
 }
 
 pub(super) fn date_prototype_get_utc_full_year(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -82,7 +82,7 @@ pub(super) fn date_prototype_get_utc_full_year(
 }
 
 pub(super) fn date_prototype_get_utc_hours(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -90,7 +90,7 @@ pub(super) fn date_prototype_get_utc_hours(
 }
 
 pub(super) fn date_prototype_get_utc_milliseconds(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -98,7 +98,7 @@ pub(super) fn date_prototype_get_utc_milliseconds(
 }
 
 pub(super) fn date_prototype_get_utc_minutes(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -106,7 +106,7 @@ pub(super) fn date_prototype_get_utc_minutes(
 }
 
 pub(super) fn date_prototype_get_utc_month(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -114,7 +114,7 @@ pub(super) fn date_prototype_get_utc_month(
 }
 
 pub(super) fn date_prototype_get_utc_seconds(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -122,7 +122,7 @@ pub(super) fn date_prototype_get_utc_seconds(
 }
 
 pub(super) fn date_prototype_get_time(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -130,7 +130,7 @@ pub(super) fn date_prototype_get_time(
 }
 
 pub(super) fn date_prototype_set_year(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -138,7 +138,7 @@ pub(super) fn date_prototype_set_year(
 }
 
 pub(super) fn date_prototype_set_time(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -146,7 +146,7 @@ pub(super) fn date_prototype_set_time(
 }
 
 pub(super) fn date_prototype_set_utc_date(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -154,7 +154,7 @@ pub(super) fn date_prototype_set_utc_date(
 }
 
 pub(super) fn date_prototype_set_utc_full_year(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -162,7 +162,7 @@ pub(super) fn date_prototype_set_utc_full_year(
 }
 
 pub(super) fn date_prototype_set_utc_hours(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -170,7 +170,7 @@ pub(super) fn date_prototype_set_utc_hours(
 }
 
 pub(super) fn date_prototype_set_utc_milliseconds(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -178,7 +178,7 @@ pub(super) fn date_prototype_set_utc_milliseconds(
 }
 
 pub(super) fn date_prototype_set_utc_minutes(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -186,7 +186,7 @@ pub(super) fn date_prototype_set_utc_minutes(
 }
 
 pub(super) fn date_prototype_set_utc_month(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -194,7 +194,7 @@ pub(super) fn date_prototype_set_utc_month(
 }
 
 pub(super) fn date_prototype_set_utc_seconds(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -202,7 +202,7 @@ pub(super) fn date_prototype_set_utc_seconds(
 }
 
 pub(super) fn date_prototype_to_date_string(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -210,7 +210,7 @@ pub(super) fn date_prototype_to_date_string(
 }
 
 pub(super) fn date_prototype_to_iso_string(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -218,7 +218,7 @@ pub(super) fn date_prototype_to_iso_string(
 }
 
 pub(super) fn date_prototype_to_json(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -230,7 +230,7 @@ pub(super) fn date_prototype_to_json(
 }
 
 pub(super) fn date_prototype_to_primitive(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -242,7 +242,7 @@ pub(super) fn date_prototype_to_primitive(
 }
 
 pub(super) fn date_prototype_to_string(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -250,7 +250,7 @@ pub(super) fn date_prototype_to_string(
 }
 
 pub(super) fn date_prototype_to_time_string(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -258,7 +258,7 @@ pub(super) fn date_prototype_to_time_string(
 }
 
 pub(super) fn date_prototype_to_utc_string(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -266,7 +266,7 @@ pub(super) fn date_prototype_to_utc_string(
 }
 
 pub(super) fn date_prototype_value_of(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {

@@ -5,7 +5,7 @@ use crate::{Function, Value, function::BindingCell};
 use super::ir::Bytecode;
 use super::vm::Vm;
 
-impl Vm<'_> {
+impl Vm<'_, '_> {
     pub(super) fn captured_upvalues_for_function(
         &mut self,
         function_bytecode: &Bytecode,
@@ -62,9 +62,11 @@ impl Vm<'_> {
                 if self.bytecode.is_global_scope() {
                     return self.env.realm_binding_cell(&local.name);
                 }
-                self.env
-                    .module_live_binding_cell(&local.name)
-                    .or_else(|| self.env.frame_binding_cell(&local.name))
+                self.env.module_live_binding_cell(&local.name).or_else(|| {
+                    (local.name == "this")
+                        .then(|| self.env.derived_this_cell())
+                        .flatten()
+                })
             })
             .collect()
     }

@@ -10,7 +10,7 @@
 //! jumps, calls and returns (`CompactOp`). `numeric_plan` lowers an admitted
 //! body further, to `f64` registers, and `wide` is a second executor for
 //! bodies that also touch properties, call methods, or loop. Entry points are
-//! `try_run_in_caller_env` and `try_run_standalone` (`activation`).
+//! `try_run_standalone` (`activation`); every frame owns its callee state.
 //!
 //! Deliberate boundaries, which are what make the tier safe:
 //!
@@ -39,7 +39,6 @@ pub(in crate::bytecode) mod wide;
 pub(in crate::bytecode) use property::field_initializer_member_read;
 pub(in crate::bytecode) use wide::{hands_back_at, resumes_at};
 
-pub(crate) use activation::try_run_in_caller_env;
 pub(super) use activation::try_run_standalone;
 pub(in crate::bytecode) use numeric_plan::NumericPlan;
 

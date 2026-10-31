@@ -30,8 +30,8 @@ source text -> qjs-lexer (tokens with spans) -> qjs-parser (qjs-ast)
 - `qjs-runtime`: compiles the AST to bytecode and executes it. It never
   evaluates AST nodes, and re-parses (for `eval`, `Function`) only through
   the parser's public API. `value` holds values, objects and property
-  descriptors; `function` holds functions, calls and the temporary `CallEnv` ABI.
-  `context` owns creation/activation metadata and lexical call owners;
+  descriptors; `function` owns function identity, calls and typed native captures.
+  `context` owns creation/activation metadata, lexical owners and borrowed services;
   `bytecode` holds the compiler, IR and executors. Other modules are builtins.
 - `qjs-cli`: thin command-line wrapper; no engine semantics.
 
@@ -51,8 +51,8 @@ at a time. Everything below is an optional faster route to the same
 semantics. Admission precedes observable work; declined paths use the interpreter.
 
 **Native entries.** `native/entry.rs` binds each operation at installation. `CallInfo`
-borrows callee/receiver and records construct mode; CallEnv supplies lazy realm/
-new.target services until S3b. Host/callback and compact/wide entries borrow slices.
+borrows callee/receiver and records construct mode; Context/NativeSite borrow
+services, caller state and target. Host/callback and tier entries borrow slices.
 Generic VM calls/construct detach their operand owner through return/throw,
 restoring it before exception handling. Fixed-arity JS admission keeps its order.
 Retained values/forwarding lists own references. S3d owns stack policy; S3a adds no limit. No Executor/RefCell borrow crosses callbacks.
@@ -71,10 +71,9 @@ in order:
    2. the this-property leaf, a closed-form evaluation of a body that only
       combines own data properties of its receiver or arguments
       (`bytecode/vm_this_property_leaf.rs`);
-   3. a compact tier in the caller's own environment, when that environment
-      equals the one the callee's frame would get (`try_run_in_caller_env`,
-      `bytecode/compact_fn/activation.rs`): the numeric compact tier, then
-      the wide tier;
+   3. a callee-owned compact activation: numeric plan/compact, then wide
+      (`bytecode/compact_fn/activation.rs`); each frame retains creation/identity
+      and borrows runtime services, without caller-context substitution;
    4. a slot-seeded frame (`eval_direct_call_bytecode`, `bytecode/vm.rs`).
       It first offers the body to the compact tiers standalone: the numeric
       compact tier, which tries its `f64` plan

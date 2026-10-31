@@ -13,7 +13,6 @@
 use std::rc::Rc;
 
 use crate::bytecode::named_property_cache::NamedPropertyCache;
-use crate::function::CallEnv;
 use crate::value::{OwnDataPropertyRead, OwnDataPropertyWrite};
 use crate::{PropertyKey, RuntimeError, Value};
 
@@ -39,7 +38,7 @@ pub(super) fn get_prop_named(
     object: &Value,
     key: &Rc<str>,
     cache: &NamedPropertyCache,
-    env: &CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if key.as_ref() == "length" {
         match object {
@@ -56,26 +55,19 @@ pub(super) fn get_prop_named(
         return match outcome {
             crate::bytecode::named_property_cache::ReadOutcome::Value(v) => Ok(v),
             crate::bytecode::named_property_cache::ReadOutcome::Accessor(p) => {
-                let mut call_env = env.empty_frame();
-                crate::property::property_descriptor_value(Some(p), object.clone(), &mut call_env)
+                let call_env = &mut *env;
+                crate::property::property_descriptor_value(Some(p), object.clone(), call_env)
             }
         };
     }
     if let Some(value) = prototype_receiver_named_value(object, key, cache, env) {
         return Ok(value);
     }
-    if let Some(result) = crate::bytecode::vm_props::direct_leaf_getter(
-        object,
-        key,
-        env,
-        env.module_host(),
-        #[cfg(feature = "agents")]
-        env.agent_context(),
-    ) {
+    if let Some(result) = crate::bytecode::vm_props::direct_leaf_getter(object, key, env) {
         return result;
     }
-    let mut call_env = env.empty_frame();
-    crate::bytecode::vm_props::get_property(object.clone(), key, &mut call_env)
+    let call_env = &mut *env;
+    crate::bytecode::vm_props::get_property(object.clone(), key, call_env)
 }
 
 /// A named read on a primitive string or number, or an array: `length`, an
@@ -92,7 +84,7 @@ fn prototype_receiver_named_value(
     object: &Value,
     key: &Rc<str>,
     cache: &NamedPropertyCache,
-    env: &CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Option<Value> {
     let prototype = match object {
         // A function's own data property -- `String.fromCharCode`,
@@ -149,7 +141,7 @@ pub(super) fn set_prop_named_hot(
     object: &Value,
     cache: Option<&NamedPropertyCache>,
     value: &Value,
-    env: &CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> bool {
     if is_global_object(env, object) {
         return false;
@@ -173,7 +165,7 @@ pub(super) fn set_prop_named(
     cache: Option<&NamedPropertyCache>,
     is_strict: bool,
     value: Value,
-    env: &CallEnv,
+    env: &mut crate::context::Context<'_>,
     creation: Option<&super::creation_cache::CreationCache>,
 ) -> Result<Value, RuntimeError> {
     let updates_global_binding = is_global_object(env, object);
@@ -226,12 +218,12 @@ pub(super) fn set_prop_named(
     // The general fallback mirrors `Vm::set_property_value`: the named key is
     // always a string, so a Symbol-primitive receiver reaches the ordinary
     // primitive-property semantics below rather than the symbol-key check.
-    let mut call_env = env.empty_frame();
+    let call_env = &mut *env;
     let wrote_data = crate::bytecode::vm_set::set_property_key(
         object.clone(),
         PropertyKey::String(key.to_string()),
         value.clone(),
-        &mut call_env,
+        call_env,
     )?;
     if !wrote_data && is_strict {
         return Err(read_only_set_error());
@@ -255,7 +247,7 @@ pub(super) fn set_prop_named(
 
 /// Whether `object` is the realm's global object, matching
 /// `Vm::is_global_object` without a VM-local cache.
-fn is_global_object(env: &CallEnv, object: &Value) -> bool {
+fn is_global_object(env: &mut crate::context::Context<'_>, object: &Value) -> bool {
     matches!(object, Value::Object(object_ref) if env.is_realm_global_object(object_ref))
 }
 
@@ -275,7 +267,7 @@ pub(super) fn try_plain_set_prop(
     obj: u16,
     key: u16,
     value: u16,
-    env: &CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> bool {
     let (obj, key_register, value_register) = (obj as usize, key as usize, value as usize);
     let (object, key, value) = (
@@ -340,7 +332,7 @@ pub(super) fn try_plain_set_index(
     obj: u16,
     value: u16,
     index: usize,
-    env: &CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> bool {
     let (obj, value_register) = (obj as usize, value as usize);
     let stored = match (&registers[obj], &registers[value_register]) {
@@ -368,7 +360,10 @@ pub(super) fn try_plain_set_index(
 /// Whether an element access on `array` meets no index accessor or exotic
 /// object on its prototype chain: `Vm::array_uses_realm_prototype` and
 /// `Vm::array_prototype_chain_has_index_hazard` without the VM's caches.
-pub(in crate::bytecode) fn array_access_is_plain(array: &crate::ArrayRef, env: &CallEnv) -> bool {
+pub(in crate::bytecode) fn array_access_is_plain(
+    array: &crate::ArrayRef,
+    env: &mut crate::context::Context<'_>,
+) -> bool {
     let Some(array_prototype) = crate::property::array_prototype(env) else {
         return false;
     };
@@ -386,7 +381,7 @@ pub(in crate::bytecode) fn array_access_is_plain(array: &crate::ArrayRef, env: &
 pub(super) fn object_data_literal(
     shape: &Rc<crate::value::ObjectLiteralShape>,
     registers: &mut [Value],
-    env: &CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Value {
     let values: Vec<Value> = registers
         .iter_mut()
@@ -439,7 +434,7 @@ fn read_only_set_error() -> RuntimeError {
 pub(super) fn get_prop_element(
     object: &mut Value,
     key: Value,
-    env: &CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if let (Value::Array(elements), Value::Number(number)) = (&*object, &key)
         && let Some(index) = crate::bytecode::vm_props::array_index_from_number(*number)
@@ -469,7 +464,7 @@ pub(super) fn get_prop_string_own(object: &Value, key: &Value) -> Option<Value> 
 pub(super) fn get_prop_element_of(
     object: &Value,
     key: Value,
-    env: &CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if let (Value::Array(elements), Value::Number(number)) = (object, &key)
         && let Some(index) = crate::bytecode::vm_props::array_index_from_number(*number)
@@ -492,7 +487,7 @@ pub(super) fn get_prop_element_of(
 pub(super) fn get_prop_index(
     object: &Value,
     index: u16,
-    env: &CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if let Value::Array(elements) = object
         && let Some(value) = elements.plain_dense_index_value(usize::from(index))
@@ -514,7 +509,7 @@ pub(super) fn get_prop_index(
 pub(super) fn get_prop_computed(
     object: Value,
     key_value: Value,
-    env: &CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if matches!(object, Value::Null | Value::Undefined) {
         let object_name = if matches!(object, Value::Null) {
@@ -596,12 +591,12 @@ pub(super) fn get_prop_computed(
             Ok(DirectPropertyRead::NeedsSlowPath) | Err(_) => {}
         }
     }
-    let mut call_env = env.empty_frame();
+    let call_env = &mut *env;
     let key = match crate::property::try_to_property_key_without_coercion(key_value) {
         Ok(key) => key,
-        Err(value) => crate::to_property_key_value(value, &mut call_env)?,
+        Err(value) => crate::to_property_key_value(value, call_env)?,
     };
-    crate::bytecode::vm_props::get_property_key(object, &key, &mut call_env)
+    crate::bytecode::vm_props::get_property_key(object, &key, call_env)
 }
 
 /// Reads a global name from a slot-only environment, exactly as
@@ -610,7 +605,10 @@ pub(super) fn get_prop_computed(
 /// immutable function name: the realm binding, then an own property of
 /// `globalThis` (invoking its getter), then the ReferenceError.
 #[inline(never)]
-pub(in crate::bytecode) fn load_global(name: &str, env: &CallEnv) -> Result<Value, RuntimeError> {
+pub(in crate::bytecode) fn load_global(
+    name: &str,
+    env: &mut crate::context::Context<'_>,
+) -> Result<Value, RuntimeError> {
     if !env.can_cache_realm_globals() {
         let Some(global) = env.selected_global_this() else {
             return Err(undefined_identifier(name));
@@ -623,8 +621,8 @@ pub(in crate::bytecode) fn load_global(name: &str, env: &CallEnv) -> Result<Valu
         if !crate::property::has_property(global.clone(), env, name)? {
             return Err(undefined_identifier(name));
         }
-        let mut access = env.clone();
-        return crate::property_value(global, name, &mut access);
+        let access = &mut *env;
+        return crate::property_value(global, name, access);
     }
     if let Some(value) = env.get(name) {
         if value.is_uninitialized_lexical_marker() {
@@ -635,8 +633,8 @@ pub(in crate::bytecode) fn load_global(name: &str, env: &CallEnv) -> Result<Valu
     if let Some(Value::Object(global_this)) = env.global_this()
         && global_this.has_own_property(name)
     {
-        let mut call_env = env.empty_frame();
-        return crate::property_value(Value::Object(global_this), name, &mut call_env);
+        let call_env = &mut *env;
+        return crate::property_value(Value::Object(global_this), name, call_env);
     }
     Err(undefined_identifier(name))
 }
@@ -662,22 +660,23 @@ pub(in crate::bytecode) struct GlobalReadSite(
 pub(in crate::bytecode) fn load_global_cached(
     name: &str,
     site: &GlobalReadSite,
-    env: &CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
-    let Some(realm) = env.realm_read_layer() else {
-        return load_global(name, env);
-    };
-    if let Some((bindings, generation, cell)) = &*site.0.borrow()
-        && bindings.ptr_eq(realm)
-        && *generation == realm.generation()
-    {
-        let value = cell.get();
-        if !value.is_uninitialized_lexical_marker() {
-            return Ok(value);
+    if let Some(realm) = env.realm_read_layer() {
+        if let Some((bindings, generation, cell)) = &*site.0.borrow()
+            && bindings.ptr_eq(realm)
+            && *generation == realm.generation()
+        {
+            let value = cell.get();
+            if !value.is_uninitialized_lexical_marker() {
+                return Ok(value);
+            }
         }
     }
     let value = load_global(name, env)?;
-    if let Some(cell) = realm.cell(name) {
+    if let Some(realm) = env.realm_read_layer()
+        && let Some(cell) = realm.cell(name)
+    {
         *site.0.borrow_mut() = Some((realm.clone(), realm.generation(), cell));
     }
     Ok(value)
@@ -701,7 +700,11 @@ fn undefined_identifier(name: &str) -> RuntimeError {
 /// without a realm binding, or a mirror that disagrees with its binding --
 /// which the caller leaves to the interpreter.
 #[inline(never)]
-pub(super) fn try_store_global_var(name: &str, value: &Value, env: &CallEnv) -> bool {
+pub(super) fn try_store_global_var(
+    name: &str,
+    value: &Value,
+    env: &mut crate::context::Context<'_>,
+) -> bool {
     match plain_global_var(name, env) {
         Some(GlobalVar::Absent(global_this)) => {
             // The first assignment of an undeclared name creates it, as the
@@ -740,7 +743,7 @@ pub(super) fn try_append_global_var(
     name: &str,
     left: &mut Value,
     right: &mut Value,
-    env: &CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> bool {
     // A numeric accumulator (`total += n`) takes the same exit; its sum is
     // stored like any other plain global assignment.
@@ -812,7 +815,7 @@ fn mirrors(property: &Value, binding: &Value) -> bool {
 /// property without a realm binding -- which the interpreter handles. An
 /// accessor, read-only or out-of-sync property behind a realm binding is
 /// refused by the store itself (`GlobalVar::Bound`).
-fn plain_global_var(name: &str, env: &CallEnv) -> Option<GlobalVar> {
+fn plain_global_var(name: &str, env: &mut crate::context::Context<'_>) -> Option<GlobalVar> {
     if env.is_global_lexical_binding(name)
         || env.is_immutable_lexical_binding(name)
         || env.has_module_import(name)
@@ -838,7 +841,7 @@ fn plain_global_var(name: &str, env: &CallEnv) -> Option<GlobalVar> {
 /// binding is initialized. `None` leaves the thunk to the ordinary call.
 pub(in crate::bytecode) fn field_initializer_member_read(
     thunk: &crate::Function,
-    env: &CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Option<Result<Value, RuntimeError>> {
     let bytecode = thunk.bytecode.as_ref()?;
     let [

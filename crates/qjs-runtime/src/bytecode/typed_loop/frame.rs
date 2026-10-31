@@ -9,12 +9,12 @@
 
 use super::super::vm::Vm;
 use super::super::vm_bindings::TypedLoopSloppyGlobalWrite;
-use crate::function::CallEnv;
 use crate::{ArrayRef, Property, RuntimeError, Value};
 
 pub(in crate::bytecode) trait LoopFrame {
     /// The environment calls and realm lookups made by the program use.
-    fn loop_env(&self) -> &CallEnv;
+    fn loop_context(&mut self) -> crate::context::Context<'_>;
+    fn loop_activation(&self) -> &crate::context::ActivationContext;
     /// Whether the frame evaluates direct eval code with a live operand
     /// stack, which no program may enter.
     fn direct_eval_with_stack(&self) -> bool;
@@ -61,9 +61,12 @@ pub(in crate::bytecode) trait LoopFrame {
     fn bytecode_op(&self, ip: usize) -> Option<&super::super::ir::Op>;
 }
 
-impl LoopFrame for Vm<'_> {
+impl LoopFrame for Vm<'_, '_> {
     #[inline]
-    fn loop_env(&self) -> &CallEnv {
+    fn loop_context(&mut self) -> crate::context::Context<'_> {
+        self.context()
+    }
+    fn loop_activation(&self) -> &crate::context::ActivationContext {
         &self.env
     }
 

@@ -3,7 +3,7 @@ use crate::{RuntimeError, Value, error};
 use super::vm::Vm;
 use super::vm_call::native_error_message;
 
-impl Vm<'_> {
+impl Vm<'_, '_> {
     pub(super) fn handle_call_result(
         &mut self,
         result: Result<Value, RuntimeError>,

@@ -31,7 +31,7 @@ use crate::bytecode::util::{stack_underflow, typeof_value};
 use crate::{RuntimeError, Value, is_truthy};
 use qjs_ast::{BinaryOp, UnaryOp, UpdateOp};
 
-impl Vm<'_> {
+impl Vm<'_, '_> {
     /// Runs one opcode the dispatch loop did not answer inline.
     ///
     /// `Ok(None)` continues the activation; `Ok(Some(exit))` is the exit the

@@ -1,10 +1,10 @@
 //! Operation entries for errors; bound once when a native is created.
 
 use super::CallInfo;
-use crate::{CallEnv, RuntimeError, Value, error};
+use crate::{RuntimeError, Value, error};
 
 pub(super) fn error(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -18,7 +18,7 @@ pub(super) fn error(
 }
 
 pub(super) fn aggregate_error(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -32,7 +32,7 @@ pub(super) fn aggregate_error(
 }
 
 pub(super) fn suppressed_error(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -46,7 +46,7 @@ pub(super) fn suppressed_error(
 }
 
 pub(super) fn error_is_error(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -54,7 +54,7 @@ pub(super) fn error_is_error(
 }
 
 pub(super) fn error_prototype_to_string(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -62,7 +62,7 @@ pub(super) fn error_prototype_to_string(
 }
 
 pub(super) fn eval_error(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -76,7 +76,7 @@ pub(super) fn eval_error(
 }
 
 pub(super) fn range_error(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -90,7 +90,7 @@ pub(super) fn range_error(
 }
 
 pub(super) fn reference_error(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -104,7 +104,7 @@ pub(super) fn reference_error(
 }
 
 pub(super) fn syntax_error(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -118,7 +118,7 @@ pub(super) fn syntax_error(
 }
 
 pub(super) fn type_error(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -132,7 +132,7 @@ pub(super) fn type_error(
 }
 
 pub(super) fn uri_error(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {

@@ -27,6 +27,7 @@ const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
 /// sync, which the old two-map design required on every store.
 pub(crate) struct RealmState {
     bindings: DynamicBindings,
+    group: super::RuntimeGroup,
     root_creation: RefCell<std::rc::Weak<crate::context::CreationContext>>,
     /// Stable realm intrinsics are separate from the mutable global bindings.
     /// Rebinding `Object` or `Array` must not change the default prototype used
@@ -72,6 +73,10 @@ pub(crate) struct RealmState {
 
 impl RealmState {
     /// Canonical realm cell table; callers never copy its values into frames.
+    pub(crate) fn group(&self) -> &super::RuntimeGroup {
+        &self.group
+    }
+
     pub(crate) fn binding_cells(&self) -> &DynamicBindings {
         &self.bindings
     }
@@ -133,6 +138,7 @@ impl RealmState {
                 });
         Self {
             bindings: DynamicBindings::from_values(bindings),
+            group: super::RuntimeGroup::for_atoms(&atoms),
             root_creation: RefCell::default(),
             object_prototype: OnceCell::new(),
             array_prototype: OnceCell::new(),
@@ -381,8 +387,9 @@ impl fmt::Debug for RealmState {
 pub(crate) type Realm = Rc<RealmState>;
 
 /// A realm for an independent root, with its own atom domain.
+#[cfg(test)]
 pub(crate) fn new_realm(bindings: HashMap<String, Value>) -> Realm {
-    Rc::new(RealmState::new(bindings, AtomDomain::new()))
+    new_realm_sharing_atoms(bindings, AtomDomain::new())
 }
 
 /// A realm that exchanges objects with code using `atoms`, and so shares it.
@@ -390,5 +397,7 @@ pub(crate) fn new_realm_sharing_atoms(
     bindings: HashMap<String, Value>,
     atoms: AtomDomain,
 ) -> Realm {
-    Rc::new(RealmState::new(bindings, atoms))
+    let realm = Rc::new(RealmState::new(bindings, atoms));
+    realm.group.register(&realm);
+    realm
 }

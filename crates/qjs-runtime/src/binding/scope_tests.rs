@@ -149,8 +149,9 @@ fn selected_holder_recreates_its_own_deleted_binding_without_selecting_a_parent(
     let inner = cursor(Some(outer.head.clone()), 2);
     let old = inner.declare_var("value");
     old.assign(Value::Number(2.0), false).unwrap();
-    let mut services =
-        crate::CallEnv::new(crate::context::new_realm(std::collections::HashMap::new()));
+    let mut services_root =
+        crate::context::HostRoot::new(crate::context::new_realm(std::collections::HashMap::new()));
+    let mut services = services_root.context();
     let selected = inner.resolve("value", false, &mut services).unwrap();
     assert!(selected.delete(&mut services).unwrap());
     selected
@@ -170,8 +171,9 @@ fn selected_holder_uses_redeclared_own_binding_and_strict_missing_does_not_creat
         .declare_var("value")
         .assign(Value::Number(1.0), false)
         .unwrap();
-    let mut services =
-        crate::CallEnv::new(crate::context::new_realm(std::collections::HashMap::new()));
+    let mut services_root =
+        crate::context::HostRoot::new(crate::context::new_realm(std::collections::HashMap::new()));
+    let mut services = services_root.context();
     let selected = scope.resolve("value", false, &mut services).unwrap();
     assert!(selected.delete(&mut services).unwrap());
     assert!(

@@ -1,10 +1,10 @@
 //! Operation entries for regexp; bound once when a native is created.
 
 use super::CallInfo;
-use crate::{CallEnv, RuntimeError, Value, regexp};
+use crate::{RuntimeError, Value, regexp};
 
 pub(super) fn reg_exp(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -18,7 +18,7 @@ pub(super) fn reg_exp(
 }
 
 pub(super) fn reg_exp_escape(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -26,7 +26,7 @@ pub(super) fn reg_exp_escape(
 }
 
 pub(super) fn reg_exp_prototype_compile(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -34,7 +34,7 @@ pub(super) fn reg_exp_prototype_compile(
 }
 
 pub(super) fn reg_exp_prototype_dot_all(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -42,7 +42,7 @@ pub(super) fn reg_exp_prototype_dot_all(
 }
 
 pub(super) fn reg_exp_prototype_exec(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -50,7 +50,7 @@ pub(super) fn reg_exp_prototype_exec(
 }
 
 pub(super) fn reg_exp_prototype_flags(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -58,7 +58,7 @@ pub(super) fn reg_exp_prototype_flags(
 }
 
 pub(super) fn reg_exp_prototype_global(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -66,7 +66,7 @@ pub(super) fn reg_exp_prototype_global(
 }
 
 pub(super) fn reg_exp_prototype_has_indices(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -74,7 +74,7 @@ pub(super) fn reg_exp_prototype_has_indices(
 }
 
 pub(super) fn reg_exp_prototype_ignore_case(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -82,7 +82,7 @@ pub(super) fn reg_exp_prototype_ignore_case(
 }
 
 pub(super) fn reg_exp_prototype_match(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -90,7 +90,7 @@ pub(super) fn reg_exp_prototype_match(
 }
 
 pub(super) fn reg_exp_prototype_match_all(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -98,7 +98,7 @@ pub(super) fn reg_exp_prototype_match_all(
 }
 
 pub(super) fn reg_exp_prototype_multiline(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -106,7 +106,7 @@ pub(super) fn reg_exp_prototype_multiline(
 }
 
 pub(super) fn reg_exp_prototype_replace(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -114,7 +114,7 @@ pub(super) fn reg_exp_prototype_replace(
 }
 
 pub(super) fn reg_exp_prototype_search(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -122,7 +122,7 @@ pub(super) fn reg_exp_prototype_search(
 }
 
 pub(super) fn reg_exp_prototype_split(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -130,7 +130,7 @@ pub(super) fn reg_exp_prototype_split(
 }
 
 pub(super) fn reg_exp_prototype_source(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -138,7 +138,7 @@ pub(super) fn reg_exp_prototype_source(
 }
 
 pub(super) fn reg_exp_prototype_sticky(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -146,7 +146,7 @@ pub(super) fn reg_exp_prototype_sticky(
 }
 
 pub(super) fn reg_exp_prototype_test(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -154,7 +154,7 @@ pub(super) fn reg_exp_prototype_test(
 }
 
 pub(super) fn reg_exp_prototype_to_string(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -162,7 +162,7 @@ pub(super) fn reg_exp_prototype_to_string(
 }
 
 pub(super) fn reg_exp_prototype_unicode(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -170,7 +170,7 @@ pub(super) fn reg_exp_prototype_unicode(
 }
 
 pub(super) fn reg_exp_prototype_unicode_sets(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -178,7 +178,7 @@ pub(super) fn reg_exp_prototype_unicode_sets(
 }
 
 pub(super) fn reg_exp_string_iterator_prototype_next(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {

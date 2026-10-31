@@ -1,8 +1,6 @@
 //! VM support for private class names: installing private elements when a class
 //! is built, and the `GetPrivate`/`SetPrivate`/`PrivateIn` operations.
 
-use crate::CallEnv;
-
 use crate::{
     Function, ObjectRef, RuntimeError, Value, call_field_initializer, call_function,
     function::{CompiledUserFunction, InstancePrivateElement, PrivateFieldInit},
@@ -13,7 +11,7 @@ use super::ir::{ClassMethodDef, ClassMethodKind, ClassPrivateElementDef};
 use super::vm::Vm;
 use super::vm_class::class_method_function_name_with_base;
 
-impl Vm<'_> {
+impl Vm<'_, '_> {
     /// Installs the private elements of a class. Methods and accessors become
     /// shared function values registered in the private environment; instances
     /// are branded with them at construction. Private fields register an
@@ -187,7 +185,6 @@ impl Vm<'_> {
             home_object: Some(home_object),
             super_constructor: None,
             lexical_scope: self.prepare_scope_cursor(),
-            with_stack: self.with_stack().to_vec(),
             upvalues: self.captured_upvalues_for_function_with_override(
                 &def.bytecode,
                 &def.lexical_captures,
@@ -195,7 +192,10 @@ impl Vm<'_> {
             ),
         });
         if def.is_generator && def.is_async {
-            crate::async_generator::wire_async_generator_function_intrinsics(&function, &self.env);
+            crate::async_generator::wire_async_generator_function_intrinsics(
+                &function,
+                &self.context(),
+            );
         } else if def.is_generator {
             self.wire_generator_function_intrinsics(&function);
         } else if def.is_async {
@@ -241,7 +241,6 @@ impl Vm<'_> {
             home_object: Some(home_object),
             super_constructor: None,
             lexical_scope: self.prepare_scope_cursor(),
-            with_stack: self.with_stack().to_vec(),
             upvalues: self.captured_upvalues_for_function_with_override(
                 &definition.bytecode,
                 &definition.lexical_captures,
@@ -329,7 +328,7 @@ impl Vm<'_> {
         thunk: &Function,
         this_value: Value,
     ) -> Result<Value, RuntimeError> {
-        let mut env = self.current_env();
+        let mut env = self.context();
 
         call_field_initializer(thunk, this_value, &mut env)
     }
@@ -430,7 +429,7 @@ impl Vm<'_> {
         argument: Option<Value>,
     ) -> Result<Value, RuntimeError> {
         let arguments = argument.into_iter().collect();
-        let mut env = self.current_env();
+        let mut env = self.context();
 
         call_function(accessor, this_value, arguments, &mut env, false)
     }
@@ -473,7 +472,7 @@ pub(crate) fn apply_instance_private_element(
     constructor: &Function,
     this_value: &Value,
     element: &InstancePrivateElement,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     let storage = match instance_private_storage(this_value) {
         Some(storage) => storage,
@@ -540,7 +539,7 @@ fn private_storage_of(value: &Value) -> Option<PrivateStorage> {
     instance_private_storage(value)
 }
 
-fn private_error_prototype(env: &CallEnv) -> Option<ObjectRef> {
+fn private_error_prototype(env: &crate::context::ActivationContext) -> Option<ObjectRef> {
     let kind = crate::context::ErrorKind::TypeError;
     env.creation_context_ref().intrinsics.errors[kind.index()]
         .clone()

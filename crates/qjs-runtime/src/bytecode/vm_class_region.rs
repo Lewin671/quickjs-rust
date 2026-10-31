@@ -35,7 +35,7 @@ enum PendingStaticItem {
     Block(usize),
 }
 
-impl Vm<'_> {
+impl Vm<'_, '_> {
     pub(super) fn execution_is_strict(&self) -> bool {
         self.env.execution_state().1
     }
@@ -87,8 +87,9 @@ impl Vm<'_> {
         // Resolve the parent
         // constructor and the prototype the new class prototype inherits from.
         let heritage = if has_heritage {
-            let mut heritage_env = self.current_env();
-            let heritage = ClassHeritage::resolve(self.pop()?, &mut heritage_env)?;
+            let value = self.pop()?;
+            let mut heritage_env = self.context();
+            let heritage = ClassHeritage::resolve(value, &mut heritage_env)?;
             Some(heritage)
         } else {
             None
@@ -101,7 +102,7 @@ impl Vm<'_> {
 
         let super_constructor = match &heritage {
             Some(ClassHeritage::Parent(parent)) => Some(parent.constructor.clone()),
-            Some(ClassHeritage::Null) => function_prototype_value(&self.env),
+            Some(ClassHeritage::Null) => function_prototype_value(&self.context()),
             _ => None,
         };
         let private = self.prepare_class_private_environment(&definition.private_elements);
@@ -141,7 +142,6 @@ impl Vm<'_> {
             home_object: None,
             super_constructor: super_constructor.clone(),
             lexical_scope: self.prepare_scope_cursor(),
-            with_stack: self.with_stack().to_vec(),
             upvalues: constructor_upvalues,
         });
         // Static-side inheritance: a subclass constructor inherits the parent
@@ -157,7 +157,7 @@ impl Vm<'_> {
                 _ => None,
             },
             Some(ClassHeritage::Null) => {
-                function_prototype_value(&self.env).and_then(|value| match value {
+                function_prototype_value(&self.context()).and_then(|value| match value {
                     Value::Object(parent) => Some(crate::Prototype::Object(parent)),
                     _ => None,
                 })
@@ -193,7 +193,7 @@ impl Vm<'_> {
         })
     }
 
-    pub(super) fn current_creation_context(&self) -> Rc<crate::context::CreationContext> {
+    pub(super) fn current_creation_context(&mut self) -> Rc<crate::context::CreationContext> {
         self.cold()
             .and_then(|cold| {
                 cold.class_regions
@@ -237,7 +237,7 @@ impl Vm<'_> {
             Some(ClassMemberKeyDef::Literal(key)) => Some(PropertyKey::String(key.clone())),
             Some(ClassMemberKeyDef::Computed) => {
                 let value = self.pop()?;
-                let mut env = self.current_env();
+                let mut env = self.context();
                 let key = to_property_key_value(value, &mut env)?;
                 Some(key)
             }
@@ -319,7 +319,7 @@ impl Vm<'_> {
     }
 
     pub(super) fn class_inner_upvalue(
-        &self,
+        &mut self,
         constructor: &Function,
         name: Option<&str>,
     ) -> Option<BindingCell> {
@@ -369,7 +369,7 @@ impl Vm<'_> {
                         &Value::Function(constructor.clone()),
                         key,
                         value,
-                        &mut self.realm_env(),
+                        &mut self.context(),
                     )?;
                 }
                 PendingStaticItem::Private(index) => {

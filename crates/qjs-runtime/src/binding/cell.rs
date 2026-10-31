@@ -378,7 +378,7 @@ mod policy_tests {
 #[cfg(test)]
 mod arguments_tests {
     use super::*;
-    use crate::{CallEnv, Function};
+    use crate::Function;
 
     fn arguments_cell(function: &Function) -> &BindingCell {
         function
@@ -441,7 +441,8 @@ mod arguments_tests {
             *cell.0.state.borrow(),
             BindingState::LazyArguments(_)
         ));
-        let mut root = CallEnv::new(read.creation_realm().clone());
+        let mut root_root = crate::context::HostRoot::new(read.creation_realm().clone());
+        let mut root = root_root.context();
         let next = crate::property_value(values[1].clone(), "next", &mut root).unwrap();
         crate::call_function(next, values[1].clone(), Vec::new(), &mut root, false).unwrap();
         assert!(matches!(

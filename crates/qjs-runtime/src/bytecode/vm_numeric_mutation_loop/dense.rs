@@ -1059,7 +1059,7 @@ impl DenseNumericMutationLoopPlan {
         }
     }
 
-    pub(super) fn try_run(&self, vm: &mut Vm<'_>) -> DenseNumericMutationLoopRun {
+    pub(super) fn try_run(&self, vm: &mut Vm<'_, '_>) -> DenseNumericMutationLoopRun {
         match &self.kind {
             DensePlanKind::LegacyDynamic(plan) => plan.try_run(vm, self.exit),
             DensePlanKind::LegacySuppressingDynamic(plan) => {
@@ -1208,7 +1208,7 @@ impl DynamicDensePlan {
 
     fn try_run_hole_tail_append(
         &self,
-        vm: &mut Vm<'_>,
+        vm: &mut Vm<'_, '_>,
         arrays: &[ArrayRef],
         locals: &mut [f64; MAX_DENSE_LOCALS],
         invariant_numbers: &[f64],
@@ -1253,7 +1253,7 @@ impl DynamicDensePlan {
     }
 
     #[inline(never)]
-    fn try_run(&self, vm: &mut Vm<'_>, exit: usize) -> DenseNumericMutationLoopRun {
+    fn try_run(&self, vm: &mut Vm<'_, '_>, exit: usize) -> DenseNumericMutationLoopRun {
         if vm.direct_eval_with_stack {
             return DenseNumericMutationLoopRun::Declined;
         }
@@ -1499,13 +1499,13 @@ fn apply_unary(operation: UnaryOp, value: f64) -> Option<f64> {
     })
 }
 
-fn local_number(vm: &Vm<'_>, slot: usize) -> Option<f64> {
+fn local_number(vm: &Vm<'_, '_>, slot: usize) -> Option<f64> {
     match vm.local_slot_value(slot)? {
         Value::Number(value) => Some(value),
         _ => None,
     }
 }
 
-fn set_local_number(vm: &mut Vm<'_>, slot: usize, value: f64) {
+fn set_local_number(vm: &mut Vm<'_, '_>, slot: usize, value: f64) {
     vm.locals[slot] = Some(Value::Number(value));
 }

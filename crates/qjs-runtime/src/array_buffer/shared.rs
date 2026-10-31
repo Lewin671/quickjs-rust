@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    CallEnv, Function, NativeFunction, ObjectRef, Property, RuntimeError, Value,
-    construct_function, symbol,
+    Function, NativeFunction, ObjectRef, Property, RuntimeError, Value, construct_function, symbol,
 };
 
 use super::{
@@ -11,7 +10,7 @@ use super::{
 };
 
 pub(crate) fn install_shared_array_buffer(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     global_this: &Value,
     object_prototype: ObjectRef,
 ) {
@@ -93,7 +92,7 @@ pub(crate) fn native_shared_array_buffer(
     function: &Function,
     argument_values: &[Value],
     is_construct: bool,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if !is_construct {
         return Err(RuntimeError {
@@ -155,7 +154,7 @@ pub(crate) fn native_shared_array_buffer_prototype_growable(
 pub(crate) fn native_shared_array_buffer_prototype_grow(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let object = object(&this_value)?;
     let Some(max_byte_length) = max_byte_length(&object) else {
@@ -190,7 +189,7 @@ pub(crate) fn native_shared_array_buffer_prototype_grow(
 pub(crate) fn native_shared_array_buffer_prototype_slice(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let source_object = object(&this_value)?;
     let length = buffer_bytes(&source_object).len();
@@ -293,7 +292,7 @@ pub(crate) fn backing_parts(
 /// memory the main agent shared. `max` makes the buffer growable.
 #[cfg(feature = "agents")]
 pub(crate) fn from_backing(
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
     backing: crate::array_buffer::SharedBackingRef,
     max: Option<usize>,
 ) -> ObjectRef {

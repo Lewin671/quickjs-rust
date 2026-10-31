@@ -6,14 +6,14 @@ use num_bigint::BigInt;
 use qjs_ast::{BinaryOp, UnaryOp, UpdateOp};
 
 use crate::{
-    ArrayRef, CallEnv, PreferredType, RuntimeError, Value, error, is_truthy, operations,
-    to_number_with_env, to_primitive_with_hint,
+    ArrayRef, PreferredType, RuntimeError, Value, error, is_truthy, operations, to_number_with_env,
+    to_primitive_with_hint,
 };
 
 use super::vm_props::{enumerable_keys, fast_number_binary, fast_number_unary};
 use super::{enumerate_keys_cache::EnumerateKeysCache, vm::Vm};
 
-impl Vm<'_> {
+impl Vm<'_, '_> {
     pub(super) fn eval_binary(&mut self, op: BinaryOp) -> Result<Value, RuntimeError> {
         let right = self.pop()?;
         let left = self.pop()?;
@@ -74,7 +74,7 @@ impl Vm<'_> {
         // effects are shared through the realm, so materializing every caller
         // slot as a name-keyed compatibility frame is both unnecessary and
         // observably the dominant cost in comparison-heavy external workloads.
-        let mut env = self.realm_env();
+        let mut env = self.context();
         if op == BinaryOp::Instanceof
             && matches!(
                 &right,
@@ -91,7 +91,7 @@ impl Vm<'_> {
         // Neither logical-not nor void performs user-observable coercion. In
         // particular, objects stay truthy without consulting valueOf,
         // Symbol.toPrimitive, or the caller environment. Keep these ubiquitous
-        // operators on the VM value path instead of materializing a CallEnv.
+        // operators on the VM value path instead of materializing a crate::context::ActivationContext.
         match op {
             UnaryOp::Not => return Ok(Value::Boolean(!is_truthy(&value))),
             UnaryOp::Void => return Ok(Value::Undefined),
@@ -100,7 +100,7 @@ impl Vm<'_> {
         if let Some(value) = fast_number_unary(op, &value) {
             return Ok(value);
         }
-        let mut env = self.current_env();
+        let mut env = self.context();
 
         operations::eval_unary(op, value, &mut env)
     }
@@ -110,7 +110,7 @@ impl Vm<'_> {
         if matches!(value, Value::Number(_) | Value::BigInt(_)) {
             return Ok(value);
         }
-        let mut env = self.current_env();
+        let mut env = self.context();
         let primitive = to_primitive_with_hint(value, PreferredType::Number, &mut env)?;
         let result = match primitive {
             Value::BigInt(_) => primitive,
@@ -138,7 +138,7 @@ impl Vm<'_> {
             }
             value => value,
         };
-        let mut env = self.current_env();
+        let mut env = self.context();
         let primitive = to_primitive_with_hint(value, PreferredType::Number, &mut env)?;
         let result = match primitive {
             Value::BigInt(value) => {
@@ -165,7 +165,7 @@ impl Vm<'_> {
         cache: &EnumerateKeysCache,
     ) -> Result<(), RuntimeError> {
         let value = self.pop()?;
-        let keys = enumerate_keys_cached(&value, cache, &mut self.env)?;
+        let keys = enumerate_keys_cached(&value, cache, &mut self.context())?;
         self.stack.push(Value::Array(keys));
         Ok(())
     }
@@ -179,7 +179,7 @@ impl Vm<'_> {
                 message: "for-in key must be a string".to_owned(),
             });
         };
-        let enumerable = for_in_property_is_enumerable(target, &key, &mut self.env)?;
+        let enumerable = for_in_property_is_enumerable(target, &key, &mut self.context())?;
         self.stack.push(Value::Boolean(enumerable));
         Ok(())
     }
@@ -190,7 +190,7 @@ impl Vm<'_> {
 pub(in crate::bytecode) fn enumerate_keys_cached(
     value: &Value,
     cache: &EnumerateKeysCache,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<ArrayRef, RuntimeError> {
     if let Some(keys) = enumerate_keys_from_cache(value, cache) {
         return Ok(keys);
@@ -245,7 +245,7 @@ pub(in crate::bytecode) fn for_in_ordinary_property_is_enumerable(
 pub(in crate::bytecode) fn for_in_property_is_enumerable(
     target: Value,
     key: &str,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<bool, RuntimeError> {
     // Ordinary objects answer from their own storage: no owned key, no
     // descriptor clone, no environment. `for (c in table)` inside a hot

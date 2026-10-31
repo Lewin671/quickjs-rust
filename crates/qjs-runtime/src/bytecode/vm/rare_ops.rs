@@ -24,7 +24,7 @@ use crate::{
 };
 use std::rc::Rc;
 
-impl Vm<'_> {
+impl Vm<'_, '_> {
     /// Runs one opcode the dispatch loop routed here.
     ///
     /// `Ok(None)` continues the activation; `Ok(Some(exit))` is the exit the
@@ -210,13 +210,12 @@ impl Vm<'_> {
                     home_object: None,
                     super_constructor: None,
                     lexical_scope: self.closure_scope_cursor(bytecode),
-                    with_stack: self.with_stack().to_vec(),
                     upvalues,
                 });
                 if *is_generator && *is_async {
                     crate::async_generator::wire_async_generator_function_intrinsics(
                         &function,
-                        &self.realm_env(),
+                        &self.context(),
                     );
                 } else if *is_generator {
                     self.wire_generator_function_intrinsics(&function);
@@ -312,7 +311,7 @@ impl Vm<'_> {
             }
             Op::ToString => {
                 let value = self.pop()?;
-                let mut env = self.callee_env();
+                let mut env = self.context();
                 let result = to_js_string_with_env(value, &mut env);
                 // Route a throwing toString/Symbol.toPrimitive through the
                 // try-handler stack so `` `${bad}` `` is catchable, instead of

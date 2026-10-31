@@ -1,5 +1,5 @@
 use crate::{ArrayRef, Function, ObjectRef, Property, Value, symbol};
-use crate::{CallEnv, NativeFunction, RuntimeError};
+use crate::{NativeFunction, RuntimeError};
 
 const CROSS_REALM_MAP_PROTOTYPE: &str = "__quickjsRustRealmMapPrototype";
 const CROSS_REALM_OBJECT_PROTOTYPE: &str = "__quickjsRustRealmObjectPrototype";
@@ -7,13 +7,16 @@ const CROSS_REALM_SET_PROTOTYPE: &str = "__quickjsRustRealmSetPrototype";
 const CROSS_REALM_WEAK_MAP_PROTOTYPE: &str = "__quickjsRustRealmWeakMapPrototype";
 const CROSS_REALM_WEAK_SET_PROTOTYPE: &str = "__quickjsRustRealmWeakSetPrototype";
 
-pub(crate) fn constructor_prototype(callee: &Value, env: &CallEnv) -> Option<crate::Prototype> {
+pub(crate) fn constructor_prototype(
+    callee: &Value,
+    env: &crate::context::Context<'_>,
+) -> Option<crate::Prototype> {
     constructor_prototype_slot(callee, env)
 }
 
 pub(crate) fn native_construct_prototype_slot(
     function: &Function,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Option<crate::Prototype>, RuntimeError> {
     let fallback = function_prototype(function).map(crate::Prototype::Object);
     let Some(new_target) = env.construct_target() else {
@@ -48,7 +51,7 @@ fn native_construct_realm_prototype_marker(native: Option<NativeFunction>) -> Op
 fn marked_realm_prototype_slot(
     new_target: &Value,
     marker: &str,
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> Option<crate::Prototype> {
     match new_target {
         Value::Function(function) => function
@@ -66,7 +69,7 @@ fn marked_realm_prototype_slot(
 /// `prototype` property, preserving a function-valued prototype.
 pub(crate) fn constructor_prototype_slot(
     callee: &Value,
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> Option<crate::Prototype> {
     let Value::Function(function) = callee else {
         return None;
@@ -91,7 +94,10 @@ pub(crate) fn constructor_prototype_slot(
     }
 }
 
-fn prototype_value_to_slot(value: Value, env: &CallEnv) -> Option<crate::Prototype> {
+fn prototype_value_to_slot(
+    value: Value,
+    env: &crate::context::Context<'_>,
+) -> Option<crate::Prototype> {
     match value {
         Value::Object(prototype) if !symbol::is_symbol_primitive(&prototype) => {
             Some(crate::Prototype::Object(prototype))
@@ -105,7 +111,7 @@ fn prototype_value_to_slot(value: Value, env: &CallEnv) -> Option<crate::Prototy
     }
 }
 
-pub(crate) fn object_prototype(env: &CallEnv) -> Option<ObjectRef> {
+pub(crate) fn object_prototype(env: &crate::context::Context<'_>) -> Option<ObjectRef> {
     if let Some(prototype) = env.object_prototype_intrinsic_override() {
         return Some(prototype);
     }
@@ -126,7 +132,7 @@ pub(crate) fn object_prototype(env: &CallEnv) -> Option<ObjectRef> {
     function_prototype(&object_function)
 }
 
-pub(crate) fn array_prototype(env: &CallEnv) -> Option<ObjectRef> {
+pub(crate) fn array_prototype(env: &crate::context::Context<'_>) -> Option<ObjectRef> {
     if let Some(prototype) = env.array_prototype_intrinsic_override() {
         return Some(prototype);
     }
@@ -154,7 +160,7 @@ fn marked_global_constructor_prototype(global: &ObjectRef, name: &str) -> Option
     function_prototype(&constructor)
 }
 
-pub(crate) fn string_prototype(env: &CallEnv) -> Option<ObjectRef> {
+pub(crate) fn string_prototype(env: &crate::context::Context<'_>) -> Option<ObjectRef> {
     env.primitive_prototype("String")
 }
 
@@ -162,12 +168,16 @@ pub(crate) fn string_prototype(env: &CallEnv) -> Option<ObjectRef> {
 /// `%GeneratorFunction%`, `%AsyncFunction%`, and `%AsyncGeneratorFunction%`
 /// constructors are subclasses of `Function`, so their `[[Prototype]]` is the
 /// `Function` constructor itself (not `%Function.prototype%`).
-pub(crate) fn function_constructor_as_prototype_slot(env: &CallEnv) -> Option<crate::Prototype> {
+pub(crate) fn function_constructor_as_prototype_slot(
+    env: &crate::context::Context<'_>,
+) -> Option<crate::Prototype> {
     env.realm()
         .function_constructor()
         .map(crate::Prototype::Function)
 }
-pub(crate) fn function_intrinsic_prototype_slot(env: &CallEnv) -> Option<crate::Prototype> {
+pub(crate) fn function_intrinsic_prototype_slot(
+    env: &crate::context::Context<'_>,
+) -> Option<crate::Prototype> {
     env.realm().function_prototype()
 }
 
@@ -184,14 +194,20 @@ pub(crate) fn function_prototype(function: &Function) -> Option<ObjectRef> {
 /// Preserve an array's live identity when it is installed in a [[Prototype]]
 /// slot. The array retains its own explicit prototype; no contextual wrapper
 /// or descriptor snapshot is created.
-pub(crate) fn array_as_prototype_slot(array: &ArrayRef, _env: &CallEnv) -> crate::Prototype {
+pub(crate) fn array_as_prototype_slot(
+    array: &ArrayRef,
+    _env: &crate::context::Context<'_>,
+) -> crate::Prototype {
     crate::Prototype::array(array.clone())
 }
 
 /// The immediate [[Prototype]] slot of `value`, preserving a function
 /// prototype. Falls back to the relevant intrinsic when a function or array has
 /// no explicit override.
-pub(crate) fn value_prototype_slot(value: Value, env: &CallEnv) -> Option<crate::Prototype> {
+pub(crate) fn value_prototype_slot(
+    value: Value,
+    env: &crate::context::Context<'_>,
+) -> Option<crate::Prototype> {
     match value {
         Value::Object(object) => object.prototype_slot(),
         Value::Map(map) => map.object().prototype_slot(),
@@ -207,11 +223,14 @@ pub(crate) fn value_prototype_slot(value: Value, env: &CallEnv) -> Option<crate:
     }
 }
 
-fn object_prototype_descriptor(env: &CallEnv, key: &str) -> Option<Property> {
+fn object_prototype_descriptor(env: &crate::context::Context<'_>, key: &str) -> Option<Property> {
     object_prototype(env).and_then(|prototype| prototype.property(key))
 }
 
-pub(crate) fn inherited_object_prototype_descriptor(env: &CallEnv, key: &str) -> Option<Property> {
+pub(crate) fn inherited_object_prototype_descriptor(
+    env: &crate::context::Context<'_>,
+    key: &str,
+) -> Option<Property> {
     if matches!(
         key,
         "hasOwnProperty"
@@ -230,7 +249,7 @@ pub(crate) fn inherited_object_prototype_descriptor(env: &CallEnv, key: &str) ->
 /// descriptor `key`, resolving the implicit default to %Function.prototype%.
 pub(crate) fn function_prototype_chain_descriptor(
     function: &Function,
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
     key: &str,
 ) -> Option<Property> {
     match function.internal_prototype_slot() {
@@ -274,12 +293,15 @@ pub(crate) fn function_prototype_chain_descriptor(
     }
 }
 
-pub(crate) fn constructor_named_prototype(env: &CallEnv, name: &str) -> Option<ObjectRef> {
+pub(crate) fn constructor_named_prototype(
+    env: &crate::context::Context<'_>,
+    name: &str,
+) -> Option<ObjectRef> {
     env.primitive_prototype(name)
 }
 
 pub(crate) fn inherited_primitive_prototype_descriptor(
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
     constructor_name: &str,
     key: &str,
 ) -> Option<Property> {
@@ -289,7 +311,7 @@ pub(crate) fn inherited_primitive_prototype_descriptor(
 }
 
 pub(crate) fn inherited_primitive_prototype_symbol_descriptor(
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
     constructor_name: &str,
     symbol: &ObjectRef,
 ) -> Option<Property> {

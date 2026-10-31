@@ -31,7 +31,6 @@ mod peephole;
 #[cfg(test)]
 mod tests;
 
-pub(super) use activation::try_run_in_caller_env;
 pub(in crate::bytecode) use activation::try_run_standalone;
 
 /// Register-addressed form of the subset of `Op` this tier admits.

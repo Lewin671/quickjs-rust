@@ -26,7 +26,7 @@ use super::{
 };
 use crate::{
     Function, ObjectRef, PropertyKey, RuntimeError, Value,
-    function::{BindingCell, CallEnv, Realm},
+    function::{BindingCell, Realm},
     is_truthy,
     property::try_to_property_key_without_coercion,
     to_property_key_value,
@@ -52,23 +52,27 @@ use super::frame_stack::FrameExit;
 use super::operand_stack::OperandStack;
 
 pub(super) fn eval_bytecode(bytecode: &Bytecode) -> Result<Value, RuntimeError> {
-    let mut vm = Vm::new(bytecode)?;
+    let (mut runtime, activation) = crate::context::HostRoot::script().into_parts();
+    let mut vm = Vm::new(bytecode, &mut runtime, activation)?;
     let value = vm.run()?;
     vm.drain_promise_jobs()?;
     Ok(value)
 }
+#[allow(clippy::too_many_arguments)]
 pub(super) fn eval_function_bytecode(
     bytecode: &Bytecode,
-    env: CallEnv,
+    env: crate::context::ActivationContext,
+    runtime: &mut crate::context::RuntimeServices,
     upvalues: Vec<BindingCell>,
     with_stack: Vec<Value>,
     persist_global_lexicals: bool,
     direct_call_slots: Option<DirectCallSlots<'_>>,
     call_inputs: Option<crate::function::CallInputs<'_>>,
 ) -> FunctionBytecodeResult {
-    let direct_eval_with_stack = !env.direct_eval_with_stack().is_empty();
+    let direct_eval_with_stack = false;
     let mut vm = Vm::with_frame_bytecode(
         FrameBytecode::Borrowed(bytecode),
+        runtime,
         env,
         upvalues,
         with_stack,
@@ -95,14 +99,16 @@ pub(super) fn eval_function_bytecode(
 /// their shared cells, whose identities are never pooled.
 pub(super) fn eval_call_bytecode(
     bytecode: &Bytecode,
-    env: CallEnv,
+    env: crate::context::ActivationContext,
+    runtime: &mut crate::context::RuntimeServices,
     upvalues: Vec<BindingCell>,
     with_stack: Vec<Value>,
     call_inputs: Option<crate::function::CallInputs<'_>>,
 ) -> Result<Value, RuntimeError> {
-    let direct_eval_with_stack = !env.direct_eval_with_stack().is_empty();
+    let direct_eval_with_stack = false;
     let mut vm = Vm::with_frame_bytecode(
         FrameBytecode::Borrowed(bytecode),
+        runtime,
         env,
         upvalues,
         with_stack,
@@ -122,7 +128,8 @@ pub(super) fn eval_call_bytecode(
 /// Runs a guarded direct call and drops its completed frame in place.
 pub(super) fn eval_direct_call_bytecode(
     bytecode: &Bytecode,
-    env: CallEnv,
+    env: crate::context::ActivationContext,
+    runtime: &mut crate::context::RuntimeServices,
     direct_call_slots: DirectCallSlots<'_>,
 ) -> Result<Value, RuntimeError> {
     // A body the compact tier admits runs without a `Vm` at all: it has no
@@ -132,9 +139,12 @@ pub(super) fn eval_direct_call_bytecode(
     // builds exactly the frame it always did.
     let mut pending_env = Some(env);
     let mut pending_slots = Some(direct_call_slots);
-    if let Some(result) =
-        super::compact_fn::try_run_standalone(bytecode, &mut pending_env, &mut pending_slots)
-    {
+    if let Some(result) = super::compact_fn::try_run_standalone(
+        bytecode,
+        &mut pending_env,
+        runtime,
+        &mut pending_slots,
+    ) {
         return result;
     }
     let env = pending_env.expect("a declined standalone activation consumes nothing");
@@ -142,6 +152,7 @@ pub(super) fn eval_direct_call_bytecode(
         pending_slots.expect("a declined standalone activation consumes nothing");
     let mut vm = Vm::new_with_globals_upvalues_with_stack_and_direct_call_slots(
         bytecode,
+        runtime,
         env,
         Vec::new(),
         Vec::new(),
@@ -193,18 +204,16 @@ pub(super) struct FrameState<'a> {
     pub(super) realm_binding_slots: u128,
     pub(super) upvalues: Vec<BindingCell>,
     /// Shared realm plus this frame's internal/caller-scope bindings.
-    pub(super) env: CallEnv,
+    pub(super) env: crate::context::ActivationContext,
     /// Ordinary leaf calls can keep their receiver here instead of
     /// materializing a name-keyed frame binding. Functions that compile an
     /// own `this` local store it in `locals` and leave this empty.
     pub(super) direct_this: Option<Value>,
     pub(super) realm: Realm,
-    /// Dynamic-import host copied into every `CallEnv` this VM creates.
+    /// Dynamic-import host copied into every `crate::context::ActivationContext` this VM creates.
     pub(super) module_host: Option<crate::module::ModuleHostRef>,
-    /// Test262 `$262.agent` context stamped onto every `CallEnv` this VM builds
+    /// Test262 `$262.agent` context stamped onto every `crate::context::ActivationContext` this VM builds
     /// (via `attach_host`), so native `Atomics`/`$262.agent` hooks reach it.
-    #[cfg(feature = "agents")]
-    pub(super) agent_context: Option<crate::agent::AgentContextRef>,
     /// Cached realm Array.prototype for the `a[i] = x` fast path.
     pub(super) array_prototype_cache: Option<ObjectRef>,
     /// Cached intrinsic Object.prototype for object-literal construction.
@@ -407,7 +416,8 @@ impl<'a> FrameState<'a> {
     }
 }
 
-pub(super) struct Vm<'a> {
+pub(super) struct Vm<'a, 's> {
+    pub(super) runtime: &'s mut crate::context::RuntimeServices,
     pub(super) current: FrameState<'a>,
     /// Frames waiting for the one above them to finish. Empty until ordinary
     /// calls are routed onto this VM; the driver in `frame_stack` is what
@@ -418,13 +428,13 @@ pub(super) struct Vm<'a> {
     pub(super) pending_frame_entry: Option<(FrameState<'a>, super::frame_stack::FrameContinuation)>,
 }
 
-impl<'a> Vm<'a> {
+impl<'a, 's> Vm<'a, 's> {
     pub(super) fn into_frame(self) -> FrameState<'a> {
         self.current
     }
 }
 
-impl<'a> Deref for Vm<'a> {
+impl<'a, 's> Deref for Vm<'a, 's> {
     type Target = FrameState<'a>;
 
     fn deref(&self) -> &Self::Target {
@@ -432,13 +442,13 @@ impl<'a> Deref for Vm<'a> {
     }
 }
 
-impl DerefMut for Vm<'_> {
+impl DerefMut for Vm<'_, '_> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.current
     }
 }
 
-impl<'a> Vm<'a> {
+impl<'a, 's> Vm<'a, 's> {
     pub(super) fn coerce_property_key(
         &mut self,
         value: Value,
@@ -453,12 +463,12 @@ impl<'a> Vm<'a> {
             | Value::Array(_)
             | Value::Map(_)
             | Value::Set(_) => {
-                let mut key_env = self.callee_env();
+                let mut key_env = self.context();
                 let key = to_property_key_value(value, &mut key_env)?;
                 Ok(key)
             }
             value => {
-                let mut key_env = self.callee_env();
+                let mut key_env = self.context();
                 to_property_key_value(value, &mut key_env)
             }
         }
@@ -968,7 +978,7 @@ impl<'a> Vm<'a> {
         {
             result?
         } else {
-            let mut env = self.callee_env();
+            let mut env = self.context();
 
             get_property_key(object, &key, &mut env)?
         };
@@ -985,17 +995,36 @@ impl<'a> Vm<'a> {
         let object = if let Some(slot) = cache.local_slot() {
             let direct_eval_lookup =
                 self.direct_eval_with_stack && self.bytecode.local_is_from_env(slot);
-            if self.slot_is_authoritative(slot)
-                && !direct_eval_lookup
-                && let Some(Some(object)) = self.locals.get(slot)
-                && !matches!(
-                    object,
-                    Value::Function(function) if function.is_uninitialized_lexical_marker()
-                )
-                && let Some(value) = self.try_cached_get_named(object, name, cache)
-            {
-                self.stack.push(value);
-                return Ok(());
+            if self.slot_is_authoritative(slot) && !direct_eval_lookup {
+                let cached = {
+                    let frame = &mut self.current;
+                    match frame.locals.get(slot).and_then(Option::as_ref) {
+                        Some(object) if !object.is_uninitialized_lexical_marker() => {
+                            if let Some(value) = object.unconditional_named_hook(name.as_str()) {
+                                Some(value)
+                            } else if let Value::Object(receiver) = object
+                                && receiver.is_typed_array_exotic()
+                                && name.as_str() == "length"
+                            {
+                                Self::cached_typed_array_length(object, receiver, cache)
+                            } else {
+                                let context = crate::context::Context {
+                                    runtime: self.runtime,
+                                    activation: &mut frame.env,
+                                    native: None,
+                                };
+                                cache
+                                    .get_value(object, Some(&context))
+                                    .or_else(|| cache.read_value(object, name, Some(&context)))
+                            }
+                        }
+                        _ => None,
+                    }
+                };
+                if let Some(value) = cached {
+                    self.stack.push(value);
+                    return Ok(());
+                }
             }
             self.load_local(slot)?
         } else {
@@ -1017,13 +1046,13 @@ impl<'a> Vm<'a> {
         let value = if let Some(value) = self.try_cached_get_named(&object, name, cache) {
             value
         } else if let Some(property) = cache.accessor(&object) {
-            let mut env = self.callee_env();
+            let mut env = self.context();
 
             crate::property::property_descriptor_value(Some(property), object, &mut env)?
         } else if let Some(result) = self.try_direct_leaf_getter(&object, key) {
             result?
         } else {
-            let mut env = self.callee_env();
+            let mut env = self.context();
 
             get_property(object, key, &mut env)?
         };
@@ -1087,7 +1116,7 @@ impl<'a> Vm<'a> {
         let value = if let Some(value) = self.try_direct_get(&object, &key) {
             value
         } else {
-            let mut env = self.callee_env();
+            let mut env = self.context();
 
             get_property_key(object, &key, &mut env)?
         };
@@ -1234,7 +1263,7 @@ impl<'a> Vm<'a> {
         ) {
             Some(written) => written,
             None => {
-                let mut env = self.callee_env();
+                let mut env = self.context();
 
                 crate::typed_array::set_integer_indexed_element(
                     object,
@@ -1297,7 +1326,7 @@ impl<'a> Vm<'a> {
                 OwnDataPropertyWrite::NeedsSlowPath => {}
             }
         }
-        let mut env = self.callee_env();
+        let mut env = self.context();
         let wrote_data = set_property_key(object, key.clone(), value.clone(), &mut env)?;
         if !wrote_data && is_strict {
             return Err(RuntimeError {
@@ -1373,7 +1402,7 @@ impl<'a> Vm<'a> {
                 Value::Function(function) if function.native_kind() == Some(crate::NativeFunction::Date)
             )
         {
-            let mut env = self.realm_env();
+            let mut env = self.context();
             let result =
                 crate::date::fast_construct_date_from_number(callee.clone(), *date_value, &mut env);
             return result;
@@ -1381,36 +1410,16 @@ impl<'a> Vm<'a> {
         // An ordinary bytecode constructor admitted by the direct-leaf
         // predicate builds its receiver and runs on a slot-seeded frame, the
         // same activation an ordinary call gets, instead of the general
-        // construct path's name-keyed compatibility frame.
+        // construct path; both borrow the same runtime services.
         if let Some(result) = crate::function::try_construct_direct_leaf_function(
             &callee,
             arguments,
-            &self.env,
-            self.module_host.clone(),
-            #[cfg(feature = "agents")]
-            self.agent_context.clone(),
+            &mut self.context(),
         ) {
             return result;
         }
-        // A native constructor, like a native call, does not inherit the
-        // caller's lexical environment. Any coercion hooks or callbacks it
-        // invokes carry their own closure cells, while realm writes are shared
-        // directly. Avoid materializing and writing back a dynamic caller
-        // frame solely because construction happened beneath direct eval or a
-        // closure-creating function.
-        let frame_independent_native = matches!(
-            &callee,
-            Value::Function(function) if function.native.is_some() && function.bound.is_none()
-        );
-        let mut env = if frame_independent_native {
-            self.realm_env()
-        } else {
-            self.call_env(&callee)
-        };
-        let result =
-            crate::function::construct_function_slice(callee.clone(), callee, arguments, &mut env);
-        drop(env);
-        result
+        let mut env = self.context();
+        crate::function::construct_function_slice(callee.clone(), callee, arguments, &mut env)
     }
 
     pub(super) fn pop_arguments(&mut self, argc: usize) -> Result<Vec<Value>, RuntimeError> {
@@ -1426,7 +1435,7 @@ impl<'a> Vm<'a> {
         let value = self.pop()?;
         // Spreading walks the iterable's own iterator protocol, so it runs on
         // the callee's behalf rather than in the caller's lexical scope.
-        let mut env = self.callee_env();
+        let mut env = self.context();
         let arguments = crate::array::array_like_values_with_env(value, context, &mut env)?;
         Ok(arguments)
     }

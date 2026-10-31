@@ -1,10 +1,7 @@
 //! A selected global environment base, including its original resolvability.
 //! Put consults the current declarative/object subrecord of that same base;
 //! an originally unresolvable sloppy write targets only the global object.
-use crate::{
-    RuntimeError, Value,
-    function::{CallEnv, Realm},
-};
+use crate::{RuntimeError, Value, function::Realm};
 use std::rc::Rc;
 
 #[derive(Clone, Debug)]
@@ -18,7 +15,11 @@ pub(crate) struct GlobalReference {
 }
 
 impl GlobalReference {
-    pub(crate) fn select(name: &str, strict: bool, env: &CallEnv) -> Result<Self, RuntimeError> {
+    pub(crate) fn select(
+        name: &str,
+        strict: bool,
+        env: &mut crate::context::Context<'_>,
+    ) -> Result<Self, RuntimeError> {
         let object = env.selected_global_this();
         let declarative = env.can_cache_realm_globals();
         let lexical = declarative && env.is_global_lexical_binding(name);
@@ -50,7 +51,10 @@ impl GlobalReference {
             .filter(|cell| cell.metadata().kind == super::BindingKind::Lexical)
     }
 
-    pub(crate) fn read(&self, env: &mut CallEnv) -> Result<Value, RuntimeError> {
+    pub(crate) fn read(
+        &self,
+        env: &mut crate::context::Context<'_>,
+    ) -> Result<Value, RuntimeError> {
         if !self.bound {
             return Err(self.missing());
         }
@@ -72,7 +76,11 @@ impl GlobalReference {
             .ok_or_else(|| self.missing())
     }
 
-    pub(crate) fn assign(&self, value: Value, env: &mut CallEnv) -> Result<(), RuntimeError> {
+    pub(crate) fn assign(
+        &self,
+        value: Value,
+        env: &mut crate::context::Context<'_>,
+    ) -> Result<(), RuntimeError> {
         if !self.bound && self.strict {
             return Err(self.missing());
         }
@@ -119,7 +127,10 @@ impl GlobalReference {
         Ok(())
     }
 
-    pub(crate) fn delete(&self, env: &mut CallEnv) -> Result<bool, RuntimeError> {
+    pub(crate) fn delete(
+        &self,
+        env: &mut crate::context::Context<'_>,
+    ) -> Result<bool, RuntimeError> {
         if !self.bound {
             return Ok(true);
         }

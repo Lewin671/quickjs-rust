@@ -387,7 +387,7 @@ fn execute<F: LoopFrame>(
                     &program.names[name as usize],
                     &mut shape_caches[cache as usize],
                     &intrinsics,
-                    Some(vm.loop_env()),
+                    Some(&vm.loop_context()),
                 ) else {
                     deopt_here!(op);
                 };
@@ -404,7 +404,7 @@ fn execute<F: LoopFrame>(
                     &program.names[name as usize],
                     &boxed[value as usize],
                     &mut shape_caches[cache as usize],
-                    vm.loop_env(),
+                    &mut vm.loop_context(),
                 ) {
                     deopt_here!(op);
                 }
@@ -440,7 +440,7 @@ fn execute<F: LoopFrame>(
                     &program.names[name as usize],
                     &mut shape_caches[cache as usize],
                     &intrinsics,
-                    Some(vm.loop_env()),
+                    Some(&vm.loop_context()),
                 )
                 .as_ref()
                 .and_then(Typed::from_value) else {
@@ -458,7 +458,7 @@ fn execute<F: LoopFrame>(
                 // inline numeric read.
                 if let (Value::Object(receiver), Typed::Number(number)) =
                     (&boxed[object as usize], registers[reg(value)])
-                    && !vm.loop_env().is_realm_global_object(receiver)
+                    && !vm.loop_context().is_realm_global_object(receiver)
                     && shape_caches[cache as usize].write_number(receiver, number)
                 {
                     continue;
@@ -468,7 +468,7 @@ fn execute<F: LoopFrame>(
                     &program.names[name as usize],
                     &registers[reg(value)].to_value(),
                     &mut shape_caches[cache as usize],
-                    vm.loop_env(),
+                    &mut vm.loop_context(),
                 ) {
                     deopt_here!(op);
                 }
@@ -515,10 +515,10 @@ fn execute<F: LoopFrame>(
                 let written = match (&boxed[receiver as usize], &boxed[key as usize]) {
                     (Value::Object(object), Value::String(name)) => {
                         let value = &boxed[value as usize];
-                        if vm.loop_env().is_realm_global_object(object) {
+                        if vm.loop_context().is_realm_global_object(object) {
                             deopt_here!(op);
                         }
-                        let domain = vm.loop_env().realm().atoms();
+                        let domain = vm.loop_activation().realm().atoms();
                         let lease = name
                             .property_key_lease(domain)
                             .unwrap_or_else(|| domain.intern(name.as_str()));
@@ -587,7 +587,7 @@ fn execute<F: LoopFrame>(
                         let value = &boxed[value as usize];
                         // The same dense append the native takes, with the
                         // same prototype-chain and descriptor checks.
-                        array.with_plain_dense_mutation(vm.loop_env(), 1, |elements| {
+                        array.with_plain_dense_mutation(&vm.loop_context(), 1, |elements| {
                             elements.push(value.clone());
                             elements.len()
                         })
@@ -617,7 +617,8 @@ fn execute<F: LoopFrame>(
                 registers[reg(dst)] = value;
             }
             TypedOp::CallClosedFormLeaf { dst, .. } => {
-                let Some(value) = call_leaf(program, vm.loop_env(), &registers[..], boxed, op)
+                let Some(value) =
+                    call_leaf(program, &mut vm.loop_context(), &registers[..], boxed, op)
                 else {
                     deopt_here!(op);
                 };
@@ -825,7 +826,7 @@ fn perform_hoisted_reads<F: LoopFrame>(
             &program.names[name as usize],
             shape_caches.get_mut(cache as usize)?,
             &intrinsics,
-            Some(vm.loop_env()),
+            Some(&vm.loop_context()),
         )?;
         if matches!(read, TypedOp::GetNamedTyped { .. }) {
             *registers.get_mut(dst as usize)? = Typed::from_value(&value)?;
@@ -842,7 +843,7 @@ fn perform_hoisted_reads<F: LoopFrame>(
 #[inline(never)]
 fn call_leaf(
     program: &TypedLoopProgram,
-    env: &crate::function::CallEnv,
+    env: &mut crate::context::Context<'_>,
     registers: &[Typed],
     boxed: &[Value],
     op: &TypedOp,
@@ -883,7 +884,7 @@ fn call_leaf(
 
 /// A call through the fast native table with boxed arguments.
 fn call_native_boxed(
-    env: &crate::function::CallEnv,
+    env: &mut crate::context::Context<'_>,
     boxed: &[Value],
     callee: u16,
     args: &[u16; super::helper_graph::MAX_HELPER_ARITY],
@@ -904,7 +905,7 @@ fn call_native_boxed(
         callee_value,
         &Value::Undefined,
         &arguments[..usize::from(arity)],
-        &|| env.empty_frame(),
+        env,
     ) {
         Some(Ok(value)) => Some(value),
         Some(Err(_)) | None => None,
@@ -1081,7 +1082,7 @@ fn call_number_only_leaf(
 
 fn call_closed_form_leaf(
     program: &TypedLoopProgram,
-    env: &crate::function::CallEnv,
+    env: &mut crate::context::Context<'_>,
     callee: &Value,
     receiver: &Value,
     args: &[Typed],
@@ -1112,10 +1113,7 @@ fn call_closed_form_leaf(
             });
         let arguments = arguments.get(..usize::from(arity))?;
         return match super::super::vm_call::try_fast_global_native_call(
-            callee,
-            receiver,
-            arguments,
-            &|| env.empty_frame(),
+            callee, receiver, arguments, env,
         ) {
             Some(Ok(value)) => Some(value),
             Some(Err(_)) | None => None,
@@ -1183,7 +1181,10 @@ struct Intrinsics {
 }
 
 impl Intrinsics {
-    fn array_prototype(&self, env: Option<&crate::function::CallEnv>) -> Option<&crate::ObjectRef> {
+    fn array_prototype(
+        &self,
+        env: Option<&crate::context::Context<'_>>,
+    ) -> Option<&crate::ObjectRef> {
         self.array_prototype
             .get_or_init(|| env.and_then(crate::array_prototype))
             .as_ref()
@@ -1191,7 +1192,7 @@ impl Intrinsics {
 
     fn string_prototype(
         &self,
-        env: Option<&crate::function::CallEnv>,
+        env: Option<&crate::context::Context<'_>>,
     ) -> Option<&crate::ObjectRef> {
         self.string_prototype
             .get_or_init(|| env.and_then(crate::string_prototype))
@@ -1216,7 +1217,7 @@ fn get_named(
     name: &Rc<str>,
     shapes: &mut super::ShapeWays,
     intrinsics: &Intrinsics,
-    env: Option<&crate::function::CallEnv>,
+    env: Option<&crate::context::Context<'_>>,
 ) -> Option<Value> {
     // Unconditional own exotic lengths do not consult ordinary named storage.
     if name.as_ref() == "length" {
@@ -1327,7 +1328,7 @@ fn set_named(
     name: &Rc<str>,
     value: &Value,
     shapes: &mut super::ShapeWays,
-    env: &crate::CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> bool {
     use crate::value::OwnDataPropertyWrite;
 
@@ -1377,7 +1378,7 @@ fn set_named_typed_miss(
     name: &Rc<str>,
     value: &Value,
     shapes: &mut super::ShapeWays,
-    env: &crate::CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> bool {
     set_named(receiver, name, value, shapes, env)
 }

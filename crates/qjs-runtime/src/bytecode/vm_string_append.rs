@@ -13,7 +13,7 @@ use crate::{RuntimeError, Value, operations};
 
 use super::{ir::Op, vm::Vm};
 
-impl Vm<'_> {
+impl Vm<'_, '_> {
     /// Drops only engine-internal mirrors before a compound string assignment.
     /// The following store bytecode restores the binding immediately, with an
     /// optional preceding `Dup` when the assignment value remains observable.
@@ -270,7 +270,7 @@ impl Vm<'_> {
         };
         let Value::String(string) = value else {
             let left = value.clone();
-            let mut env = self.current_env();
+            let mut env = self.context();
             let result = operations::eval_binary(
                 left,
                 BinaryOp::Add,
@@ -305,7 +305,7 @@ impl Vm<'_> {
             if self.realm.contains(&local_meta.name) {
                 // A top-level reader may already hold the realm binding's
                 // shared cell even when this older from-env frame still uses a
-                // compatibility slot. Route the mirror through CallEnv so the
+                // compatibility slot. Route the mirror through crate::context::ActivationContext so the
                 // cell cannot retain the pre-append string.
                 self.env.insert_realm(local_meta.name, result.clone());
             }
@@ -359,7 +359,7 @@ impl Vm<'_> {
         is_strict: bool,
     ) -> Result<Value, RuntimeError> {
         let left = self.load_global(name)?;
-        let mut env = self.current_env();
+        let mut env = self.context();
         let result = operations::eval_binary(
             left,
             BinaryOp::Add,

@@ -1,7 +1,7 @@
 //! Native ABI and synchronous entry boundary. Installation binds one operation
 //! entry; calls borrow immutable arguments and return owning values. Semantic
-//! implementations stay in their builtin families. CallEnv is the service
-//! authority until S3b replaces its parameter with Context.
+//! implementations stay in their builtin families. Context borrows services and
+//! caller state; NativeSite borrows call info and the distinct construct target.
 
 #[cfg(feature = "agents")]
 mod agent;
@@ -33,16 +33,14 @@ mod entry;
 #[cfg(test)]
 mod tests;
 
-use crate::{CallEnv, Function, NativeFunction, RuntimeError, Value};
+use crate::{Function, NativeFunction, RuntimeError, Value};
 
 /// A native borrows the invocation metadata and arguments only for this call.
 pub(crate) type NativeEntry =
-    fn(&mut CallEnv, CallInfo<'_>, &[Value]) -> Result<Value, RuntimeError>;
+    fn(&mut crate::context::Context<'_>, CallInfo<'_>, &[Value]) -> Result<Value, RuntimeError>;
 
-/// Immutable call metadata. CallEnv supplies the active caller context;
-/// callee retains captures and cross-realm intrinsic metadata.
-/// Call versus construct is recorded without looking up new.target. Semantic
-/// constructor helpers read its actual value from CallEnv only when needed.
+/// Immutable invocation metadata. Callee and receiver remain borrowed from their
+/// S3a owners; NativeSite selects callee realm and target only when queried.
 #[derive(Clone, Copy)]
 pub(crate) struct CallInfo<'a> {
     pub(crate) callee: &'a Function,
@@ -57,16 +55,12 @@ pub(crate) fn bind(native: NativeFunction) -> NativeEntry {
 #[inline(always)]
 pub(crate) fn call_native_function(
     entry: NativeEntry,
-    function: &Function,
-    this_value: &Value,
+    info: CallInfo<'_>,
     argument_values: &[Value],
-    is_construct: bool,
-    env: &mut CallEnv,
+    target: Option<&Value>,
+    direct_eval: Option<&crate::context::DirectEvalSite<'_>>,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
-    let info = CallInfo {
-        callee: function,
-        this_value,
-        is_construct,
-    };
-    entry(env, info, argument_values)
+    let mut native = env.with_native(&info, target, direct_eval);
+    entry(&mut native, info, argument_values)
 }

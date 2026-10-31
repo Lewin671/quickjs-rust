@@ -4,16 +4,16 @@
 //! can use a smaller representation, including a retained function for
 //! statically read-only received cells.
 
-use crate::function::{BindingCell, CallEnv};
+use crate::function::BindingCell;
 
 use super::{ir::Bytecode, vm::Vm};
 
-impl Vm<'_> {
+impl Vm<'_, '_> {
     pub(super) fn initial_direct_local_upvalues(
         bytecode: &Bytecode,
         upvalues: &[BindingCell],
         received_realm_binding_slots: u128,
-        env: &CallEnv,
+        env: &crate::context::ActivationContext,
     ) -> (Vec<Option<BindingCell>>, Option<u128>) {
         // Most direct leaf calls have no captured, module, or sloppy-global
         // cells. An empty vector represents the all-None state for those
@@ -23,7 +23,7 @@ impl Vm<'_> {
         if !bytecode.has_direct_local_upvalue_routes() && !env.has_module_imports() {
             return (Vec::new(), Some(0));
         }
-        let direct_eval_frame = env.direct_eval_site().is_some();
+        let _direct_eval_frame = bytecode.is_direct_eval_code();
         let mut next_received = 0;
         let has_module_imports = env.has_module_imports();
         let mut realm_binding_slots = 0_u128;
@@ -41,10 +41,6 @@ impl Vm<'_> {
                 continue;
             }
             if local.sloppy_global_fallback {
-                if direct_eval_frame && let Some(upvalue) = env.local_binding_cell(&local.name) {
-                    local_upvalues.push(Some(upvalue));
-                    continue;
-                }
                 let upvalue = env.realm_binding_cell(&local.name);
                 if upvalue.is_some() && slot < u128::BITS as usize {
                     realm_binding_slots |= 1_u128 << slot;

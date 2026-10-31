@@ -27,7 +27,7 @@ enum DisposeHint {
     Async,
 }
 
-impl Vm<'_> {
+impl Vm<'_, '_> {
     /// Dispatches the three `using` disposal ops, routing register/dispose
     /// failures through the throw machinery so a `try` can catch them.
     pub(super) fn run_disposal_op(&mut self, op: &super::ir::Op) -> Result<(), RuntimeError> {
@@ -85,7 +85,7 @@ impl Vm<'_> {
                 message: "TypeError: `using` value is not an object".to_owned(),
             });
         }
-        let mut env = self.current_env();
+        let mut env = self.context();
         let method = resolve_dispose_method(value.clone(), hint, &mut env)?;
         if matches!(method, Value::Null | Value::Undefined) {
             return Err(RuntimeError {
@@ -127,7 +127,7 @@ impl Vm<'_> {
             let result = if matches!(resource.method, Value::Undefined) {
                 Ok(Value::Undefined)
             } else {
-                let mut env = self.current_env();
+                let mut env = self.context();
 
                 call_function(resource.method, resource.value, Vec::new(), &mut env, false)
             };
@@ -168,12 +168,12 @@ impl Vm<'_> {
         error: RuntimeError,
         pending: Option<Value>,
     ) -> Result<Value, RuntimeError> {
-        let env = self.current_env();
+        let env = self.context();
         let thrown = runtime_error_to_value(error, &env);
         match pending {
             None => Ok(thrown),
             Some(previous) => {
-                let mut env = self.current_env();
+                let mut env = self.context();
                 let suppressed = create_suppressed_error(thrown, previous, &mut env)?;
                 Ok(suppressed)
             }
@@ -197,7 +197,7 @@ fn async_dispose_rejection(value: &Value) -> Option<RuntimeError> {
 fn resolve_dispose_method(
     value: Value,
     hint: DisposeHint,
-    env: &mut crate::CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if hint == DisposeHint::Async {
         let Some(async_dispose_symbol) = symbol::async_dispose_symbol(env) else {

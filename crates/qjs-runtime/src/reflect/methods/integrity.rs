@@ -1,10 +1,10 @@
 use crate::object::{ordinary_prevent_extensions, value_is_extensible};
 use crate::reflect::target::ensure_reflect_object_target;
-use crate::{CallEnv, RuntimeError, Value};
+use crate::{RuntimeError, Value};
 
 pub(crate) fn native_reflect_is_extensible(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     ensure_reflect_object_target(&target, "Reflect.isExtensible")?;
@@ -13,7 +13,7 @@ pub(crate) fn native_reflect_is_extensible(
 
 pub(crate) fn native_reflect_prevent_extensions(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     ensure_reflect_object_target(&target, "Reflect.preventExtensions")?;

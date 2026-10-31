@@ -1,4 +1,3 @@
-use crate::CallEnv;
 use crate::{
     PropertyKey, RuntimeError, Value, call_function, date, number, property_value,
     property_value_key, symbol,
@@ -13,7 +12,7 @@ pub(crate) enum PreferredType {
 
 pub(crate) fn to_js_string_with_env(
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<String, RuntimeError> {
     match value {
         Value::Number(number) => Ok(number::number_to_js_string(number)),
@@ -42,7 +41,7 @@ pub(crate) fn to_js_string_with_env(
 /// observable step is that of [`to_js_string_with_env`].
 pub(crate) fn to_js_string_value_with_env(
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<crate::JsString, RuntimeError> {
     match value {
         Value::String(value) => Ok(value),
@@ -101,7 +100,10 @@ fn object_constructor_name(object: &crate::ObjectRef) -> Option<String> {
     function.name.clone().filter(|name| !name.is_empty())
 }
 
-pub(crate) fn to_number_with_env(value: Value, env: &mut CallEnv) -> Result<f64, RuntimeError> {
+pub(crate) fn to_number_with_env(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<f64, RuntimeError> {
     match value {
         Value::Number(number) => Ok(number),
         Value::BigInt(_) => Err(RuntimeError {
@@ -126,7 +128,7 @@ pub(crate) fn to_number_with_env(value: Value, env: &mut CallEnv) -> Result<f64,
 
 pub(crate) fn to_primitive_with_env(
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     match value {
         Value::Object(object) if symbol::is_symbol_primitive(&object) => Ok(Value::Object(object)),
@@ -240,7 +242,7 @@ fn parse_radix_string_number(digits: &str, radix: u32) -> f64 {
 pub(crate) fn to_primitive_with_hint(
     value: Value,
     hint: PreferredType,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     // ToPrimitive step 1: a non-Object input is returned unchanged. (Symbol
     // primitives are stored as objects but excluded by `is_object_like`, so
@@ -301,7 +303,7 @@ fn ordinary_chain_lacks_symbol(value: &Value, symbol: &crate::ObjectRef) -> bool
 pub(crate) fn ordinary_to_primitive(
     value: Value,
     hint: PreferredType,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if let Some(text) = intrinsic_string_wrapper_primitive(&value, hint) {
         return Ok(Value::String(text));
@@ -364,12 +366,18 @@ fn intrinsic_string_wrapper_primitive(
     .then_some(text)
 }
 
-fn object_to_number(value: Value, env: &mut CallEnv) -> Result<f64, RuntimeError> {
+fn object_to_number(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<f64, RuntimeError> {
     let primitive = to_primitive_with_hint(value, PreferredType::Number, env)?;
     to_number_with_env(primitive, env)
 }
 
-fn object_to_string(value: Value, env: &mut CallEnv) -> Result<String, RuntimeError> {
+fn object_to_string(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<String, RuntimeError> {
     let primitive = to_primitive_with_hint(value, PreferredType::String, env)?;
     to_js_string_with_env(primitive, env)
 }
@@ -402,11 +410,17 @@ impl PreferredType {
     }
 }
 
-pub(crate) fn to_int32_with_env(value: Value, env: &mut CallEnv) -> Result<i32, RuntimeError> {
+pub(crate) fn to_int32_with_env(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<i32, RuntimeError> {
     to_number_with_env(value, env).map(to_int32_number)
 }
 
-pub(crate) fn to_uint32_with_env(value: Value, env: &mut CallEnv) -> Result<u32, RuntimeError> {
+pub(crate) fn to_uint32_with_env(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<u32, RuntimeError> {
     to_number_with_env(value, env).map(to_uint32_number)
 }
 
@@ -433,7 +447,10 @@ pub(crate) fn to_uint32_number(number: f64) -> u32 {
     number.trunc().rem_euclid(TWO_32) as u32
 }
 
-pub(crate) fn to_uint16_with_env(value: Value, env: &mut CallEnv) -> Result<u16, RuntimeError> {
+pub(crate) fn to_uint16_with_env(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<u16, RuntimeError> {
     let number = to_number_with_env(value, env)?;
     if !number.is_finite() || number == 0.0 {
         return Ok(0);
@@ -442,7 +459,10 @@ pub(crate) fn to_uint16_with_env(value: Value, env: &mut CallEnv) -> Result<u16,
     Ok(number.trunc().rem_euclid(TWO_16) as u16)
 }
 
-pub(crate) fn to_length_with_env(value: Value, env: &mut CallEnv) -> Result<usize, RuntimeError> {
+pub(crate) fn to_length_with_env(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<usize, RuntimeError> {
     const MAX_SAFE_INTEGER_LENGTH: usize = 9_007_199_254_740_991;
     let number = to_number_with_env(value, env)?;
     if number.is_nan() || number <= 0.0 {

@@ -1,10 +1,12 @@
-use crate::CallEnv;
 use crate::{
     JsString, RuntimeError, Value, string_prototype, to_js_string_value_with_env,
     to_number_with_env,
 };
 
-pub(super) fn this_string_value(value: Value, env: &mut CallEnv) -> Result<String, RuntimeError> {
+pub(super) fn this_string_value(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<String, RuntimeError> {
     this_js_string_value(value, env).map(JsString::into_string)
 }
 
@@ -13,7 +15,7 @@ pub(super) fn this_string_value(value: Value, env: &mut CallEnv) -> Result<Strin
 /// copy. Any other receiver goes through the ordinary ToString hooks.
 pub(super) fn this_js_string_value(
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<JsString, RuntimeError> {
     match value {
         Value::String(value) => Ok(value),
@@ -34,7 +36,10 @@ pub(super) fn this_js_string_value(
     }
 }
 
-pub(super) fn to_string_position(value: Value, env: &mut CallEnv) -> Result<usize, RuntimeError> {
+pub(super) fn to_string_position(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<usize, RuntimeError> {
     let number = to_number_with_env(value, env)?;
     if number.is_nan() || number <= 0.0 {
         Ok(0)
@@ -45,7 +50,10 @@ pub(super) fn to_string_position(value: Value, env: &mut CallEnv) -> Result<usiz
     }
 }
 
-pub(super) fn to_char_code_position(value: Value, env: &mut CallEnv) -> Result<f64, RuntimeError> {
+pub(super) fn to_char_code_position(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<f64, RuntimeError> {
     let number = to_number_with_env(value, env)?;
     if number.is_nan() {
         Ok(0.0)
@@ -57,7 +65,7 @@ pub(super) fn to_char_code_position(value: Value, env: &mut CallEnv) -> Result<f
 pub(super) fn relative_string_code_unit_index(
     length: usize,
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Option<usize>, RuntimeError> {
     let number = match value {
         Value::Undefined => 0.0,
@@ -79,7 +87,7 @@ pub(super) fn relative_string_code_unit_index(
 pub(super) fn string_search_start(
     length: usize,
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<usize, RuntimeError> {
     Ok(to_string_position(value, env)?.min(length))
 }
@@ -87,7 +95,7 @@ pub(super) fn string_search_start(
 pub(super) fn string_last_search_position(
     length: usize,
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<usize, RuntimeError> {
     if matches!(value, Value::Undefined) {
         return Ok(length);
@@ -107,7 +115,7 @@ pub(super) fn string_last_search_position(
 pub(super) fn string_end_position(
     length: usize,
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<usize, RuntimeError> {
     if matches!(value, Value::Undefined) {
         return Ok(length);
@@ -119,7 +127,7 @@ pub(super) fn string_slice_index(
     length: usize,
     value: Value,
     default: usize,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<usize, RuntimeError> {
     if matches!(value, Value::Undefined) {
         return Ok(default);
@@ -140,7 +148,7 @@ pub(super) fn string_substring_index(
     length: usize,
     value: Value,
     default: usize,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<usize, RuntimeError> {
     if matches!(value, Value::Undefined) {
         return Ok(default);

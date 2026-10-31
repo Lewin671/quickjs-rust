@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 
-use crate::CallEnv;
 use crate::{
     Function, NativeFunction, ObjectRef, Property, RuntimeError, Value, array_buffer, symbol,
     to_number_with_env,
@@ -50,7 +49,7 @@ impl ElementType {
 }
 
 pub(crate) fn install_data_view(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     global_this: &Value,
     object_prototype: ObjectRef,
 ) {
@@ -168,7 +167,7 @@ pub(crate) fn native_data_view(
     this_value: Value,
     argument_values: &[Value],
     is_construct: bool,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if !is_construct {
         return Err(type_error("Constructor DataView requires 'new'"));
@@ -332,7 +331,7 @@ pub(crate) fn native_data_view_prototype_get(
     native: NativeFunction,
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let element = element_type_for(native);
     get_view_value(
@@ -348,7 +347,7 @@ pub(crate) fn native_data_view_prototype_set(
     native: NativeFunction,
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let element = element_type_for(native);
     set_view_value(
@@ -367,7 +366,7 @@ fn get_view_value(
     request_index: Value,
     is_little_endian: Value,
     element: ElementType,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     // Step 1-2: RequireInternalSlot.
     let object = data_view_receiver(&this_value)?;
@@ -408,7 +407,7 @@ fn set_view_value(
     value: Value,
     is_little_endian: Value,
     element: ElementType,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     // Step 1-2: RequireInternalSlot.
     let object = data_view_receiver(&this_value)?;
@@ -765,7 +764,7 @@ fn data_view_byte_offset(object: &ObjectRef) -> usize {
 // --- ToIndex / errors --------------------------------------------------------
 
 /// ToIndex: a non-negative integer in `[0, 2^53 - 1]`, RangeError otherwise.
-fn to_index(value: Value, env: &mut CallEnv) -> Result<usize, RuntimeError> {
+fn to_index(value: Value, env: &mut crate::context::Context<'_>) -> Result<usize, RuntimeError> {
     let number = to_number_with_env(value, env)?;
     let integer = if number.is_nan() { 0.0 } else { number.trunc() };
     if integer < 0.0 || !integer.is_finite() || integer > 9_007_199_254_740_991.0 {

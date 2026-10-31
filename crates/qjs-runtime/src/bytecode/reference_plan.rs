@@ -159,11 +159,16 @@ impl ReferencePlan {
         plan
     }
 
-    pub(super) fn can_skip(&self, env: &crate::CallEnv) -> bool {
+    pub(super) fn can_skip(&self, env: &crate::context::ActivationContext) -> bool {
         self.explicit.is_empty() && self.sites.iter().all(|site| self.stable(site, env))
     }
 
-    pub(super) fn can_skip_range(&self, start: usize, end: usize, env: &crate::CallEnv) -> bool {
+    pub(super) fn can_skip_range(
+        &self,
+        start: usize,
+        end: usize,
+        env: &crate::context::ActivationContext,
+    ) -> bool {
         let first = self.sites.partition_point(|site| site.start < start);
         self.sites[first..]
             .iter()
@@ -176,7 +181,11 @@ impl ReferencePlan {
                 .all(|life| life.start > end || life.end <= start)
     }
 
-    pub(super) fn stable(&self, site: &ReferenceSite, env: &crate::CallEnv) -> bool {
+    pub(super) fn stable(
+        &self,
+        site: &ReferenceSite,
+        env: &crate::context::ActivationContext,
+    ) -> bool {
         if matches!(
             site.target,
             ReferenceTarget::With | ReferenceTarget::EvalVariable | ReferenceTarget::Parameter

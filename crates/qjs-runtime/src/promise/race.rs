@@ -4,7 +4,6 @@ use super::{
     capability::PromiseCapability,
     perform::{self, ElementHandler},
 };
-use crate::CallEnv;
 
 /// `Promise.race` (ES2023 27.2.4.5): settles with the first input promise to
 /// settle. Each element's `then` simply forwards to the result capability's
@@ -13,7 +12,7 @@ use crate::CallEnv;
 pub(crate) fn native_promise_race(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let iterable = argument_values.first().cloned().unwrap_or(Value::Undefined);
     perform::run_combinator(this_value, iterable, "Promise.race", RaceHandler, env)
@@ -26,7 +25,7 @@ impl ElementHandler for RaceHandler {
         &mut self,
         _index: usize,
         capability: &PromiseCapability,
-        _env: &mut CallEnv,
+        _env: &mut crate::context::Context<'_>,
     ) -> Result<(Value, Value), RuntimeError> {
         Ok((capability.resolve.clone(), capability.reject.clone()))
     }
@@ -35,7 +34,7 @@ impl ElementHandler for RaceHandler {
         &mut self,
         _count: usize,
         _capability: &PromiseCapability,
-        _env: &mut CallEnv,
+        _env: &mut crate::context::Context<'_>,
     ) -> Result<(), RuntimeError> {
         Ok(())
     }

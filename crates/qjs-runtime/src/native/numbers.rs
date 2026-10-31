@@ -1,10 +1,10 @@
 //! Operation entries for numbers; bound once when a native is created.
 
 use super::CallInfo;
-use crate::{CallEnv, RuntimeError, Value, number};
+use crate::{RuntimeError, Value, number};
 
 pub(super) fn number(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -18,7 +18,7 @@ pub(super) fn number(
 }
 
 pub(super) fn number_is_finite(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -26,7 +26,7 @@ pub(super) fn number_is_finite(
 }
 
 pub(super) fn number_is_integer(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -34,7 +34,7 @@ pub(super) fn number_is_integer(
 }
 
 pub(super) fn number_is_na_n(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -42,7 +42,7 @@ pub(super) fn number_is_na_n(
 }
 
 pub(super) fn number_is_safe_integer(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -50,7 +50,7 @@ pub(super) fn number_is_safe_integer(
 }
 
 pub(super) fn number_prototype_to_exponential(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -58,7 +58,7 @@ pub(super) fn number_prototype_to_exponential(
 }
 
 pub(super) fn number_prototype_to_fixed(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -66,7 +66,7 @@ pub(super) fn number_prototype_to_fixed(
 }
 
 pub(super) fn number_prototype_to_precision(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -74,7 +74,7 @@ pub(super) fn number_prototype_to_precision(
 }
 
 pub(super) fn number_prototype_to_string(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -82,7 +82,7 @@ pub(super) fn number_prototype_to_string(
 }
 
 pub(super) fn number_prototype_to_locale_string(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -90,7 +90,7 @@ pub(super) fn number_prototype_to_locale_string(
 }
 
 pub(super) fn number_prototype_value_of(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -98,7 +98,7 @@ pub(super) fn number_prototype_value_of(
 }
 
 pub(super) fn parse_float(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -106,7 +106,7 @@ pub(super) fn parse_float(
 }
 
 pub(super) fn parse_int(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {

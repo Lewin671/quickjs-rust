@@ -5,13 +5,14 @@ use std::collections::HashMap;
 use super::*;
 use crate::function::{call_function_slice, construct_function_slice, new_realm};
 
-fn empty_env() -> CallEnv {
-    CallEnv::new(new_realm(HashMap::new()))
+fn empty_root() -> crate::context::HostRoot {
+    crate::context::HostRoot::new(new_realm(HashMap::new()))
 }
 
 #[test]
 fn retained_native_arguments_outlive_the_host_slice() {
-    let mut env = empty_env();
+    let mut root = empty_root();
+    let mut env = root.context();
     let object = crate::ObjectRef::new(HashMap::new(), env.realm().atoms());
     let native = Value::Function(Function::new_native(
         None,
@@ -33,7 +34,8 @@ fn retained_native_arguments_outlive_the_host_slice() {
 
 #[test]
 fn native_bound_arguments_retain_values_after_the_host_list_drops() {
-    let mut env = empty_env();
+    let mut root = empty_root();
+    let mut env = root.context();
     let bind = Value::Function(Function::new_native(
         None,
         1,
@@ -120,8 +122,10 @@ fn retained_async_reaction_arguments_survive_native_reentry() {
 
 #[test]
 fn native_constructor_slice_preserves_a_cross_realm_new_target() {
-    let mut env = empty_env();
-    let mut foreign_env = empty_env();
+    let mut root = empty_root();
+    let mut env = root.context();
+    let mut foreign_root = empty_root();
+    let mut foreign_env = foreign_root.context();
     let foreign_global = Value::Object(crate::ObjectRef::new(
         HashMap::new(),
         foreign_env.realm().atoms(),
@@ -136,7 +140,10 @@ fn native_constructor_slice_preserves_a_cross_realm_new_target() {
         true,
         env.realm(),
     ));
-    env.set_construct_target(Some(previous.clone()));
+    let mut owner =
+        crate::context::CallOwner::root(Value::Undefined, crate::context::OwnerKind::Function);
+    owner.new_target = Some(previous.clone());
+    env.set_call_owner(owner);
     let result = construct_function_slice(
         target,
         new_target.clone(),
@@ -147,7 +154,12 @@ fn native_constructor_slice_preserves_a_cross_realm_new_target() {
     let prototype = crate::property_value(new_target, "prototype", &mut env).unwrap();
     let actual = crate::object::native_object_get_prototype_of(&[result], &mut env).unwrap();
     assert!(actual.same_value(&prototype));
-    assert!(env.construct_target().unwrap().same_value(&previous));
+    assert!(
+        env.caller()
+            .lexical_new_target()
+            .unwrap()
+            .same_value(&previous)
+    );
 }
 
 #[test]
@@ -178,6 +190,7 @@ fn new_target_is_restored_when_prototype_lookup_throws() {
 #[test]
 fn uninitialized_lexical_has_an_installed_throwing_entry() {
     let native = Value::Function(Function::uninitialized_lexical_marker());
-    let error = call_function_slice(&native, Value::Undefined, &[], &mut empty_env()).unwrap_err();
+    let error = call_function_slice(&native, Value::Undefined, &[], &mut empty_root().context())
+        .unwrap_err();
     assert!(error.message.starts_with("ReferenceError:"));
 }

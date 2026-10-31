@@ -5,7 +5,6 @@
 use qjs_parser::{EvalParseContext, parse_direct_eval_wtf16_script, parse_eval_script};
 use std::{collections::HashSet, rc::Rc};
 
-use crate::CallEnv;
 use crate::{
     ArrayRef, Function, GLOBAL_THIS_BINDING, NativeFunction, ObjectRef, Property, RuntimeError,
     Value,
@@ -29,7 +28,7 @@ use uri::{UriDecodeKind, UriEncodeKind, decode_uri, encode_uri};
 
 const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
 
-pub(super) fn install_globals(env: &mut CallEnv, global_this: &Value) {
+pub(super) fn install_globals(env: &mut crate::context::Context<'_>, global_this: &Value) {
     env.insert_realm("NaN".to_owned(), Value::Number(f64::NAN));
     env.insert_realm("Infinity".to_owned(), Value::Number(f64::INFINITY));
     env.insert_realm("undefined".to_owned(), Value::Undefined);
@@ -221,7 +220,7 @@ pub(super) fn install_globals(env: &mut CallEnv, global_this: &Value) {
 /// agent and each worker). The host shim and worker prelude reference these by
 /// name to build the `$262.agent` object.
 #[cfg(feature = "agents")]
-fn install_agent_globals(env: &mut CallEnv, global_this: &Value) {
+fn install_agent_globals(env: &mut crate::context::Context<'_>, global_this: &Value) {
     for (key, length, native) in [
         ("__quickjsRustAgentStart", 1, NativeFunction::AgentStart),
         (
@@ -253,7 +252,7 @@ fn install_agent_globals(env: &mut CallEnv, global_this: &Value) {
 }
 
 fn define_global_function(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     global_this: &Value,
     key: &str,
     length: usize,
@@ -272,7 +271,7 @@ fn define_global_function(
     }
 }
 
-fn define_is_html_dda(env: &mut CallEnv, global_this: &Value) {
+fn define_is_html_dda(env: &mut crate::context::Context<'_>, global_this: &Value) {
     let key = "__quickjsRustIsHTMLDDA";
     let value = Value::Function(crate::html_dda::new_is_html_dda_function(
         env.realm(),
@@ -290,7 +289,7 @@ fn define_is_html_dda(env: &mut CallEnv, global_this: &Value) {
 /// async `$DONE` channel; the runtime stays unaware of Test262 conventions.
 pub(super) fn native_global_print(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let mut line = String::new();
     for (index, value) in argument_values.iter().enumerate() {
@@ -329,7 +328,7 @@ pub(crate) fn native_test262_assert_same_value(
 
 pub(crate) fn native_test262_verify_property(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if argument_values.len() < 3 {
         return verify_property_failure(
@@ -457,7 +456,7 @@ pub(crate) fn native_test262_to_numbers(
 
 pub(crate) fn native_test262_compare_array(
     argument_values: &[Value],
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let (Some(Value::Array(actual)), Some(Value::Array(expected))) =
         (argument_values.first(), argument_values.get(1))
@@ -481,7 +480,7 @@ pub(crate) fn native_test262_compare_array(
 
 pub(crate) fn native_test262_assert_iterator_result(
     argument_values: &[Value],
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let Some(Value::Object(object)) = argument_values.first() else {
         return Ok(Value::Boolean(false));
@@ -521,7 +520,7 @@ pub(crate) fn native_test262_assert_iterator_result(
 
 pub(crate) fn native_test262_assert_packed_array(
     argument_values: &[Value],
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let Some(Value::Array(array)) = argument_values.first() else {
         return Ok(Value::Boolean(false));
@@ -563,7 +562,10 @@ pub(crate) fn native_test262_assert_null_proto_mutable_object(
     )))
 }
 
-fn object_uses_default_object_prototype(object: &ObjectRef, env: &CallEnv) -> bool {
+fn object_uses_default_object_prototype(
+    object: &ObjectRef,
+    env: &crate::context::Context<'_>,
+) -> bool {
     match (object.prototype_slot(), crate::object_prototype(env)) {
         (Some(crate::Prototype::Object(actual)), Some(expected)) => actual.ptr_eq(&expected),
         _ => false,
@@ -611,7 +613,7 @@ fn is_string_key_enumerable(target: &Value, key: &str) -> bool {
 fn is_string_key_writable(
     target: &Value,
     key: &str,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<bool, RuntimeError> {
     let had_value = crate::object::own_property_descriptor_key(
         target.clone(),
@@ -646,7 +648,7 @@ fn is_string_key_configurable(
     target: &Value,
     key: &str,
     original: &Property,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<bool, RuntimeError> {
     let deleted = delete_string_key(target, key);
     let configurable = crate::object::own_property_descriptor_key(
@@ -683,7 +685,7 @@ fn delete_string_key(target: &Value, key: &str) -> bool {
 
 pub(crate) fn native_test262_build_string(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let args = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let lone_code_points = property_value(args.clone(), "loneCodePoints", env)?;
@@ -712,7 +714,7 @@ pub(crate) fn native_test262_build_string(
 fn append_code_point_list(
     result: &mut String,
     values: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     let length = array_like_len(values.clone(), env)?;
     for index in 0..length {
@@ -724,14 +726,20 @@ fn append_code_point_list(
     Ok(())
 }
 
-fn array_like_len(value: Value, env: &mut CallEnv) -> Result<usize, RuntimeError> {
+fn array_like_len(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<usize, RuntimeError> {
     match value {
         Value::Array(array) => Ok(array.len()),
         value => to_length_with_env(property_value(value, "length", env)?, env),
     }
 }
 
-fn code_point_from_value(value: Value, env: &mut CallEnv) -> Result<u32, RuntimeError> {
+fn code_point_from_value(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<u32, RuntimeError> {
     let number = to_number_with_env(value, env)?;
     if !number.is_finite() || number < 0.0 || number > 0x10FFFF as f64 || number.trunc() != number {
         return Err(RuntimeError {
@@ -746,7 +754,7 @@ fn code_point_from_value(value: Value, env: &mut CallEnv) -> Result<u32, Runtime
 
 pub(super) fn native_global_is_finite(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     Ok(Value::Boolean(to_number_with_env(value, env)?.is_finite()))
@@ -754,7 +762,7 @@ pub(super) fn native_global_is_finite(
 
 pub(super) fn native_global_is_nan(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     Ok(Value::Boolean(to_number_with_env(value, env)?.is_nan()))
@@ -762,7 +770,7 @@ pub(super) fn native_global_is_nan(
 
 pub(super) fn native_global_encode_uri(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let source = to_js_string_with_env(value, env)?;
@@ -771,7 +779,7 @@ pub(super) fn native_global_encode_uri(
 
 pub(super) fn native_global_encode_uri_component(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let source = to_js_string_with_env(value, env)?;
@@ -780,7 +788,7 @@ pub(super) fn native_global_encode_uri_component(
 
 pub(super) fn native_global_decode_uri(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let source = to_js_string_with_env(value, env)?;
@@ -789,7 +797,7 @@ pub(super) fn native_global_decode_uri(
 
 pub(super) fn native_global_decode_uri_component(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let source = to_js_string_with_env(value, env)?;
@@ -814,7 +822,7 @@ pub(crate) fn encode_uri_component_string(source: &str) -> Result<String, Runtim
 
 pub(super) fn native_global_eval(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let Value::String(source) = value else {
@@ -858,15 +866,17 @@ pub(super) fn native_global_eval(
             bytecode
         }
     };
-    let mut selected = if direct_eval {
-        env.scope_service_view()
+    if direct_eval {
+        scoped_eval::evaluate(&bytecode, env, bytecode.is_strict())
     } else {
-        indirect_eval_frame(env)
-    };
-    // The direct site's parse facts are consumed above. Declaration validation
-    // still needs its parameter boundary, without a binding-name marker.
-    selected.set_direct_eval_site(env.direct_eval_site().filter(|_| direct_eval));
-    scoped_eval::evaluate(&bytecode, &mut selected, bytecode.is_strict())
+        let mut activation = enter_indirect_eval(env);
+        let mut selected = crate::context::Context {
+            runtime: env.runtime,
+            activation: &mut activation,
+            native: None,
+        };
+        scoped_eval::evaluate(&bytecode, &mut selected, bytecode.is_strict())
+    }
 }
 
 pub(crate) fn eval_source_is_only_comments_and_whitespace(source: &str) -> bool {
@@ -930,8 +940,12 @@ fn is_js_line_terminator(ch: char) -> bool {
     matches!(ch, '\u{000A}' | '\u{000D}' | '\u{2028}' | '\u{2029}')
 }
 
-fn indirect_eval_frame(env: &CallEnv) -> CallEnv {
-    let mut eval_env = env.indirect_eval_frame();
+fn enter_indirect_eval(env: &crate::context::Context<'_>) -> crate::context::ActivationContext {
+    let mut creation = crate::context::CreationContext::root(env.realm_rc());
+    Rc::make_mut(&mut creation).referrer = env.caller().creation.referrer.clone();
+    let mut eval_env =
+        crate::context::ActivationContext::new(creation, crate::context::ExecutionMode::Eval);
+    eval_env.select_global_bindings(true);
     let Some(global) = marked_dynamic_realm_global(env) else {
         return eval_env;
     };
@@ -943,7 +957,7 @@ fn indirect_eval_frame(env: &CallEnv) -> CallEnv {
     eval_env
 }
 
-fn marked_dynamic_realm_global(env: &CallEnv) -> Option<ObjectRef> {
+fn marked_dynamic_realm_global(env: &crate::context::Context<'_>) -> Option<ObjectRef> {
     env.dynamic_function_realm_value()
         .and_then(object_value)
         .or_else(|| {
@@ -971,7 +985,7 @@ fn object_value(value: Value) -> Option<ObjectRef> {
 /// declarations reach the global var environment). Used by the Test262 harness.
 pub(super) fn native_eval_script(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let Value::String(source) = value else {
@@ -983,7 +997,7 @@ pub(super) fn native_eval_script(
     })?;
     let mut bytecode = compile_direct_eval_script(&script, false)?;
     bytecode.mark_script_lexical_routes();
-    let mut eval_env = env.empty_frame();
+    let mut eval_env = enter_indirect_eval(env);
     eval_env.select_script_bindings();
     validate_eval_global_lexical_bindings(&bytecode, env, true, true)?;
     // $262.evalScript runs GlobalDeclarationInstantiation: a var/function
@@ -1002,13 +1016,20 @@ pub(super) fn native_eval_script(
             true,
         )?;
     }
-    initialize_eval_script_bindings(&bytecode, &mut eval_env);
-    eval_bytecode_with_env(&bytecode, eval_env).value
+    initialize_eval_script_bindings(
+        &bytecode,
+        &mut crate::context::Context {
+            runtime: env.runtime,
+            activation: &mut eval_env,
+            native: None,
+        },
+    );
+    eval_bytecode_with_env(&bytecode, eval_env, env.runtime).value
 }
 
 pub(crate) fn try_eval_regexp_literal_source(
     source: &str,
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> Result<Option<Value>, RuntimeError> {
     let source = source.trim();
     if !source.starts_with('/') || source.starts_with("//") || source.starts_with("/*") {
@@ -1074,7 +1095,7 @@ fn is_line_terminator(ch: char) -> bool {
     matches!(ch, '\n' | '\r' | '\u{2028}' | '\u{2029}')
 }
 
-pub(crate) fn direct_eval_parse_context(env: &CallEnv) -> EvalParseContext {
+pub(crate) fn direct_eval_parse_context(env: &crate::context::Context<'_>) -> EvalParseContext {
     EvalParseContext {
         strict: env.direct_eval_site().is_some_and(|site| site.strict),
         in_function: env
@@ -1093,7 +1114,7 @@ pub(crate) fn direct_eval_parse_context(env: &CallEnv) -> EvalParseContext {
 
 fn validate_eval_global_lexical_bindings(
     bytecode: &crate::bytecode::Bytecode,
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
     include_captured_global_lexicals: bool,
     check_lexical_conflict: bool,
 ) -> Result<(), RuntimeError> {
@@ -1139,7 +1160,7 @@ fn validate_eval_global_lexical_bindings(
 
 fn validate_sloppy_global_eval_declarations(
     bytecode: &crate::bytecode::Bytecode,
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
     caller_locals: &HashSet<String>,
     function_names: &HashSet<String>,
     include_captured_global_lexicals: bool,
@@ -1154,9 +1175,7 @@ fn validate_sloppy_global_eval_declarations(
         if is_internal_binding_name(name) {
             continue;
         }
-        if (caller_locals.contains(name)
-            && !env.is_catch_binding(name)
-            && !global_this.has_own_property(name))
+        if (caller_locals.contains(name) && !global_this.has_own_property(name))
             || has_global_lexical_binding(env, &global_this, name, include_captured_global_lexicals)
         {
             return Err(RuntimeError {
@@ -1200,18 +1219,16 @@ fn is_internal_binding_name(name: &str) -> bool {
 }
 
 fn has_global_lexical_binding(
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
     global_this: &ObjectRef,
     name: &str,
-    include_captured_global_lexicals: bool,
+    _include_captured_global_lexicals: bool,
 ) -> bool {
     if is_marked_dynamic_realm_global(env, global_this) {
         return false;
     }
     !global_this.has_own_property(name)
-        && (env.is_global_lexical_binding(name)
-            || env.realm_contains(name)
-            || (include_captured_global_lexicals && env.has_local_binding(name)))
+        && (env.is_global_lexical_binding(name) || env.realm_contains(name))
 }
 
 fn can_declare_global_var(global_this: &ObjectRef, name: &str) -> bool {
@@ -1225,8 +1242,11 @@ fn can_declare_global_function(global_this: &ObjectRef, name: &str) -> bool {
     existing.configurable || (!existing.is_accessor() && existing.writable && existing.enumerable)
 }
 
-fn initialize_eval_script_bindings(bytecode: &crate::bytecode::Bytecode, env: &mut CallEnv) {
-    if !env.has_local_binding("this")
+fn initialize_eval_script_bindings(
+    bytecode: &crate::bytecode::Bytecode,
+    env: &mut crate::context::Context<'_>,
+) {
+    if env.owner_kind().is_none()
         && let Some(value) = env.selected_global_this().or_else(|| env.get("this"))
     {
         env.set_call_owner(crate::context::CallOwner::root(
@@ -1258,7 +1278,11 @@ fn initialize_eval_script_bindings(bytecode: &crate::bytecode::Bytecode, env: &m
     }
 }
 
-fn create_eval_script_global_var_binding(env: &mut CallEnv, name: &str, value: Value) {
+fn create_eval_script_global_var_binding(
+    env: &mut crate::context::Context<'_>,
+    name: &str,
+    value: Value,
+) {
     let global_this = env.get(GLOBAL_THIS_BINDING).and_then(|value| match value {
         Value::Object(object) => Some(object),
         _ => None,
@@ -1281,7 +1305,10 @@ fn create_eval_script_global_var_binding(env: &mut CallEnv, name: &str, value: V
     env.insert_realm(name.to_owned(), value);
 }
 
-fn is_marked_dynamic_realm_global(env: &CallEnv, global_this: &ObjectRef) -> bool {
+fn is_marked_dynamic_realm_global(
+    env: &crate::context::Context<'_>,
+    global_this: &ObjectRef,
+) -> bool {
     env.explicit_global_selection_value()
         .is_some_and(|value| matches!(value, Value::Object(global) if global.ptr_eq(global_this)))
         || global_this
@@ -1293,7 +1320,7 @@ fn is_marked_dynamic_realm_global(env: &CallEnv, global_this: &ObjectRef) -> boo
 
 pub(super) fn native_global_escape(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let source = to_js_string_with_env(value, env)?;
@@ -1317,7 +1344,7 @@ fn is_escape_unescaped(code_unit: u16) -> bool {
 
 pub(super) fn native_global_unescape(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let source = to_js_string_with_env(value, env)?;

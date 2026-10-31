@@ -3,7 +3,6 @@ use std::{collections::HashMap, rc::Rc};
 use qjs_ast::Stmt;
 use qjs_parser::parse_dynamic_function_wtf16_script;
 
-use crate::CallEnv;
 use crate::function::CompiledUserFunction;
 use crate::{
     Function, NativeFunction, Property, Prototype, RuntimeError, Value,
@@ -47,7 +46,7 @@ pub(crate) fn native_function(
     _this_value: Value,
     argument_values: &[Value],
     is_construct: bool,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let created = build_dynamic_function(
         constructor,
@@ -78,7 +77,7 @@ pub(crate) fn native_function(
 pub(crate) fn native_generator_function(
     constructor: &Function,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let created = build_dynamic_function(
         constructor,
@@ -102,7 +101,7 @@ pub(crate) fn native_generator_function(
 pub(crate) fn native_async_function_constructor(
     constructor: &Function,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let created = build_dynamic_function(
         constructor,
@@ -126,7 +125,7 @@ pub(crate) fn native_async_function_constructor(
 pub(crate) fn native_async_generator_function_constructor(
     constructor: &Function,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let created = build_dynamic_function(
         constructor,
@@ -155,7 +154,7 @@ fn build_dynamic_function(
     is_generator: bool,
     is_async: bool,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Function, RuntimeError> {
     let (params, body) = function_source_parts(argument_values, env)?;
     let source = format!("{function_prefix} anonymous({params}\n) {{\n{body}\n}}");
@@ -225,7 +224,6 @@ fn build_dynamic_function(
         home_object: None,
         super_constructor: None,
         lexical_scope: None,
-        with_stack: Vec::new(),
         upvalues: Vec::new(),
     });
     Ok(created)
@@ -233,14 +231,14 @@ fn build_dynamic_function(
 
 fn generator_construct_prototype_slot(
     constructor: &Function,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Option<Prototype>, RuntimeError> {
     construct_prototype_slot_with_realm_marker(constructor, env, GENERATOR_FUNCTION_REALM_PROTOTYPE)
 }
 
 fn async_generator_construct_prototype_slot(
     constructor: &Function,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Option<Prototype>, RuntimeError> {
     construct_prototype_slot_with_realm_marker(
         constructor,
@@ -251,7 +249,7 @@ fn async_generator_construct_prototype_slot(
 
 fn construct_prototype_slot_with_realm_marker(
     constructor: &Function,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     marker: &str,
 ) -> Result<Option<Prototype>, RuntimeError> {
     if let Some(Value::Function(new_target)) = env.construct_target()
@@ -277,7 +275,7 @@ fn is_construct_prototype_value(value: &Value) -> bool {
 
 fn dynamic_function_construct_prototype_slot(
     constructor: &Function,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Option<Prototype>, RuntimeError> {
     if let Some(Value::Function(new_target)) = env.construct_target()
         && let Some(realm_prototype) = new_target
@@ -295,7 +293,10 @@ fn dynamic_function_construct_prototype_slot(
     crate::native_construct_prototype_slot(constructor, env)
 }
 
-fn dynamic_prototype_slot_from_value(value: Value, env: &CallEnv) -> Option<Prototype> {
+fn dynamic_prototype_slot_from_value(
+    value: Value,
+    env: &crate::context::Context<'_>,
+) -> Option<Prototype> {
     match value {
         Value::Object(prototype) => Some(Prototype::Object(prototype)),
         Value::Function(prototype) => Some(Prototype::Function(prototype)),
@@ -307,7 +308,7 @@ fn dynamic_prototype_slot_from_value(value: Value, env: &CallEnv) -> Option<Prot
 
 fn dynamic_function_creation(
     constructor: &Function,
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> Rc<crate::context::CreationContext> {
     let mut creation = crate::context::CreationContext::root(constructor.creation_realm().clone());
     let global = env.dynamic_function_realm_global();
@@ -338,7 +339,7 @@ fn dynamic_function_creation(
 
 fn function_source_parts(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(String, String), RuntimeError> {
     let Some((body, params)) = argument_values.split_last() else {
         return Ok((String::new(), String::new()));
@@ -357,7 +358,7 @@ fn function_source_parts(
 pub(crate) fn native_function_prototype_apply(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if !matches!(this_value, Value::Function(_) | Value::Proxy(_)) {
         return Err(RuntimeError {
@@ -389,7 +390,7 @@ pub(crate) fn native_function_prototype_apply(
 pub(crate) fn apply_dense_native_fast_path(
     target: &Value,
     argument_values: &[Value],
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> Option<Result<Value, RuntimeError>> {
     let Value::Function(function) = target else {
         return None;
@@ -406,7 +407,10 @@ pub(crate) fn apply_dense_native_fast_path(
     })?
 }
 
-fn apply_argument_list(arg_array: Value, env: &mut CallEnv) -> Result<Vec<Value>, RuntimeError> {
+fn apply_argument_list(
+    arg_array: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<Vec<Value>, RuntimeError> {
     match arg_array {
         Value::Null | Value::Undefined => Ok(Vec::new()),
         Value::Array(array) => {
@@ -454,7 +458,7 @@ fn apply_argument_list_type_error() -> RuntimeError {
 pub(crate) fn native_function_prototype_call(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if !matches!(this_value, Value::Function(_) | Value::Proxy(_)) {
         return Err(RuntimeError {
@@ -475,7 +479,7 @@ pub(crate) fn native_function_prototype_call(
 pub(crate) fn native_function_prototype_bind(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if !matches!(this_value, Value::Function(_)) {
         return Err(RuntimeError {
@@ -555,7 +559,7 @@ fn copy_cross_realm_function_markers(source: &Value, target: &Function) {
 pub(crate) fn native_function_prototype_has_instance(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if !matches!(this_value, Value::Function(_)) {
         return Ok(Value::Boolean(false));
@@ -640,7 +644,11 @@ pub(crate) fn native_realm_throw_type_error(
     })
 }
 
-pub(crate) fn function_call_this(this_arg: Option<Value>, env: &CallEnv, is_strict: bool) -> Value {
+pub(crate) fn function_call_this(
+    this_arg: Option<Value>,
+    env: &crate::context::Context<'_>,
+    is_strict: bool,
+) -> Value {
     let this_value = this_arg.unwrap_or(Value::Undefined);
     match this_value {
         Value::Null | Value::Undefined if !is_strict => {

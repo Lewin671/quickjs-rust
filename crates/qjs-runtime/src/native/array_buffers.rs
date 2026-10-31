@@ -1,10 +1,10 @@
 //! Operation entries for array buffers; bound once when a native is created.
 
 use super::CallInfo;
-use crate::{CallEnv, RuntimeError, Value, array_buffer};
+use crate::{RuntimeError, Value, array_buffer};
 
 pub(super) fn array_buffer(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -18,7 +18,7 @@ pub(super) fn array_buffer(
 }
 
 pub(super) fn array_buffer_is_view(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -26,7 +26,7 @@ pub(super) fn array_buffer_is_view(
 }
 
 pub(super) fn array_buffer_prototype_byte_length(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -34,7 +34,7 @@ pub(super) fn array_buffer_prototype_byte_length(
 }
 
 pub(super) fn array_buffer_prototype_max_byte_length(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -42,7 +42,7 @@ pub(super) fn array_buffer_prototype_max_byte_length(
 }
 
 pub(super) fn array_buffer_prototype_resizable(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -50,7 +50,7 @@ pub(super) fn array_buffer_prototype_resizable(
 }
 
 pub(super) fn array_buffer_prototype_detached(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -58,7 +58,7 @@ pub(super) fn array_buffer_prototype_detached(
 }
 
 pub(super) fn array_buffer_prototype_immutable(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -66,7 +66,7 @@ pub(super) fn array_buffer_prototype_immutable(
 }
 
 pub(super) fn array_buffer_prototype_resize(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -78,7 +78,7 @@ pub(super) fn array_buffer_prototype_resize(
 }
 
 pub(super) fn array_buffer_prototype_slice(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -86,7 +86,7 @@ pub(super) fn array_buffer_prototype_slice(
 }
 
 pub(super) fn array_buffer_prototype_slice_to_immutable(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -98,7 +98,7 @@ pub(super) fn array_buffer_prototype_slice_to_immutable(
 }
 
 pub(super) fn array_buffer_prototype_transfer(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -110,7 +110,7 @@ pub(super) fn array_buffer_prototype_transfer(
 }
 
 pub(super) fn array_buffer_prototype_transfer_to_fixed_length(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -122,7 +122,7 @@ pub(super) fn array_buffer_prototype_transfer_to_fixed_length(
 }
 
 pub(super) fn array_buffer_prototype_transfer_to_immutable(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -134,7 +134,7 @@ pub(super) fn array_buffer_prototype_transfer_to_immutable(
 }
 
 pub(super) fn shared_array_buffer(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -142,7 +142,7 @@ pub(super) fn shared_array_buffer(
 }
 
 pub(super) fn shared_array_buffer_prototype_byte_length(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -150,7 +150,7 @@ pub(super) fn shared_array_buffer_prototype_byte_length(
 }
 
 pub(super) fn shared_array_buffer_prototype_max_byte_length(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -158,7 +158,7 @@ pub(super) fn shared_array_buffer_prototype_max_byte_length(
 }
 
 pub(super) fn shared_array_buffer_prototype_growable(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -166,7 +166,7 @@ pub(super) fn shared_array_buffer_prototype_growable(
 }
 
 pub(super) fn shared_array_buffer_prototype_grow(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -178,7 +178,7 @@ pub(super) fn shared_array_buffer_prototype_grow(
 }
 
 pub(super) fn shared_array_buffer_prototype_slice(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -190,7 +190,7 @@ pub(super) fn shared_array_buffer_prototype_slice(
 }
 
 pub(super) fn detach_array_buffer(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {

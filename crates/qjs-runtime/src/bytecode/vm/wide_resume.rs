@@ -15,7 +15,6 @@ use crate::bytecode::ir::Bytecode;
 use crate::bytecode::vm_loop_dispatch::LoopPlanView;
 use crate::bytecode::vm_result::Completion;
 use crate::bytecode::{DirectCallSlots, compact_fn};
-use crate::function::CallEnv;
 use crate::{RuntimeError, Value};
 
 /// How an interpreter continuation of a wide activation ended.
@@ -78,7 +77,8 @@ pub(in crate::bytecode) enum ResumeFrom {
 /// probed backedge whose accelerators decline.
 pub(in crate::bytecode) fn resume_direct_call_bytecode(
     bytecode: &Bytecode,
-    env: CallEnv,
+    env: crate::context::ActivationContext,
+    runtime: &mut crate::context::RuntimeServices,
     direct_call_slots: DirectCallSlots<'_>,
     ip: usize,
     registers: WideRegisters<'_>,
@@ -86,6 +86,7 @@ pub(in crate::bytecode) fn resume_direct_call_bytecode(
 ) -> Resumed {
     let mut vm = Vm::new_with_globals_upvalues_with_stack_and_direct_call_slots(
         bytecode,
+        runtime,
         env,
         Vec::new(),
         Vec::new(),
@@ -148,7 +149,7 @@ pub(in crate::bytecode) fn resume_direct_call_bytecode(
     resumed
 }
 
-fn run(vm: &mut Vm<'_>) -> Resumed {
+fn run(vm: &mut Vm<'_, '_>) -> Resumed {
     match vm.run_completion() {
         Ok(Completion::Return(value)) => Resumed::Finished(Ok(value)),
         Ok(_) => match vm
@@ -166,7 +167,7 @@ fn run(vm: &mut Vm<'_>) -> Resumed {
     }
 }
 
-fn hand_back(vm: &mut Vm<'_>, registers: WideRegisters<'_>) {
+fn hand_back(vm: &mut Vm<'_, '_>, registers: WideRegisters<'_>) {
     for (slot, register) in registers.locals.iter_mut().enumerate() {
         if !is_own(registers.own_locals, slot) {
             continue;
@@ -185,7 +186,7 @@ fn is_own(own_locals: u128, slot: usize) -> bool {
     slot < u128::BITS as usize && own_locals & (1_u128 << slot) != 0
 }
 
-impl Vm<'_> {
+impl Vm<'_, '_> {
     /// After an ordinary backward jump from `backedge` that no accelerator
     /// claimed: whether this frame hands the loop back to the wide tier.
     /// It does when it was resumed at a probed backedge, is the only frame on

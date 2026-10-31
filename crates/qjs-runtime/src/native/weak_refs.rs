@@ -1,10 +1,10 @@
 //! Operation entries for weak refs; bound once when a native is created.
 
 use super::CallInfo;
-use crate::{CallEnv, RuntimeError, Value, weak_ref};
+use crate::{RuntimeError, Value, weak_ref};
 
 pub(super) fn weak_ref(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -12,7 +12,7 @@ pub(super) fn weak_ref(
 }
 
 pub(super) fn weak_ref_prototype_deref(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {

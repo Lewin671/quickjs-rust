@@ -5,8 +5,6 @@ use crate::{
     object_prototype, property_value, property_value_key, symbol, to_property_key_value,
 };
 
-use crate::CallEnv;
-
 /// `Object.fromEntries ( iterable )` -- ES2025 20.1.2.8
 ///
 /// Drives the iterator protocol manually so that:
@@ -20,7 +18,7 @@ use crate::CallEnv;
 ///   -> `Get(entry, "1")` -> `ToPropertyKey(key)` -> `CreateDataPropertyOrThrow`.
 pub(crate) fn native_object_from_entries(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let iterable = argument_values.first().cloned().unwrap_or(Value::Undefined);
 
@@ -130,7 +128,7 @@ fn is_object_like(value: &Value) -> bool {
 fn iterator_close_on_throw(
     iterator: &Value,
     error: RuntimeError,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> RuntimeError {
     if let Ok(return_method) = property_value(iterator.clone(), "return", env)
         && !matches!(return_method, Value::Null | Value::Undefined)

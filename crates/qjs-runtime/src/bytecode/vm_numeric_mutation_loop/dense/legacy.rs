@@ -104,7 +104,7 @@ impl ArraySource {
         }
     }
 
-    fn resolve_read_only(&self, vm: &Vm<'_>) -> Option<ArrayRef> {
+    fn resolve_read_only(&self, vm: &Vm<'_, '_>) -> Option<ArrayRef> {
         match self {
             Self::Local(slot) => match vm.locals.get(*slot) {
                 Some(Some(Value::Array(array))) => Some(array.clone()),
@@ -864,7 +864,7 @@ impl LegacyDynamicDensePlan {
 
     fn try_run_hole_tail_append(
         &self,
-        vm: &mut Vm<'_>,
+        vm: &mut Vm<'_, '_>,
         arrays: &[ArrayRef],
         locals: &mut [f64; MAX_DENSE_LOCALS],
         registers: &mut [f64],
@@ -903,7 +903,7 @@ impl LegacyDynamicDensePlan {
     }
 
     #[inline(never)]
-    pub(super) fn try_run(&self, vm: &mut Vm<'_>, exit: usize) -> DenseNumericMutationLoopRun {
+    pub(super) fn try_run(&self, vm: &mut Vm<'_, '_>, exit: usize) -> DenseNumericMutationLoopRun {
         debug_assert!(self.store_count <= 1);
         #[cfg(test)]
         let mut run_guard = CompactRunGuard::new();
@@ -1118,7 +1118,7 @@ impl LegacyDynamicDensePlan {
     #[inline(never)]
     pub(super) fn try_run_suppressing(
         &self,
-        vm: &mut Vm<'_>,
+        vm: &mut Vm<'_, '_>,
         exit: usize,
     ) -> DenseNumericMutationLoopRun {
         debug_assert!(self.store_count > 1);

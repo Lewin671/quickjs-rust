@@ -23,7 +23,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::array_buffer::SharedBackingRef;
-use crate::{CallEnv, RuntimeError, Value, call_function, to_js_string_with_env};
+use crate::{RuntimeError, Value, call_function, to_js_string_with_env};
 
 /// A `SharedArrayBuffer` handed from the main agent to a worker: the shared
 /// backing plus the resizable maximum (so the worker rebuilds a growable buffer
@@ -133,7 +133,7 @@ impl AgentContext {
 
 /// Reads the current agent context, erroring if `$262.agent` is used outside an
 /// agent (i.e. the engine was not entered through the harness).
-fn agent_context(env: &CallEnv) -> Result<AgentContextRef, RuntimeError> {
+fn agent_context(env: &crate::context::Context<'_>) -> Result<AgentContextRef, RuntimeError> {
     env.agent_context().ok_or_else(|| RuntimeError {
         thrown: None,
         message: "TypeError: $262.agent is not available in this context".to_owned(),
@@ -144,7 +144,7 @@ fn agent_context(env: &CallEnv) -> Result<AgentContextRef, RuntimeError> {
 /// `source`, sharing this agent's cluster.
 pub(crate) fn native_agent_start(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let context = agent_context(env)?;
     let source = to_js_string_with_env(
@@ -162,7 +162,7 @@ pub(crate) fn native_agent_start(
 /// `$262.agent.broadcast(sab)`: delivers `sab`'s shared backing to every worker.
 pub(crate) fn native_agent_broadcast(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let context = agent_context(env)?;
     let Some(Value::Object(object)) = argument_values.first() else {
@@ -187,7 +187,9 @@ pub(crate) fn native_agent_broadcast(
 }
 
 /// `$262.agent.getReport()`: pops the oldest worker report, or `null`.
-pub(crate) fn native_agent_get_report(env: &mut CallEnv) -> Result<Value, RuntimeError> {
+pub(crate) fn native_agent_get_report(
+    env: &mut crate::context::Context<'_>,
+) -> Result<Value, RuntimeError> {
     let context = agent_context(env)?;
     Ok(match context.cluster.pop_report() {
         Some(report) => Value::String(report.into()),
@@ -198,7 +200,7 @@ pub(crate) fn native_agent_get_report(env: &mut CallEnv) -> Result<Value, Runtim
 /// `$262.agent.report(value)`: appends a report string for the main agent.
 pub(crate) fn native_agent_report(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let context = agent_context(env)?;
     let report = to_js_string_with_env(
@@ -212,7 +214,7 @@ pub(crate) fn native_agent_report(
 /// `$262.agent.sleep(ms)`: blocks this agent's thread for `ms` milliseconds.
 pub(crate) fn native_agent_sleep(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let ms = crate::to_number_with_env(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
@@ -225,7 +227,9 @@ pub(crate) fn native_agent_sleep(
 }
 
 /// `$262.agent.monotonicNow()`: milliseconds since the cluster started.
-pub(crate) fn native_agent_monotonic_now(env: &mut CallEnv) -> Result<Value, RuntimeError> {
+pub(crate) fn native_agent_monotonic_now(
+    env: &mut crate::context::Context<'_>,
+) -> Result<Value, RuntimeError> {
     let context = agent_context(env)?;
     Ok(Value::Number(context.cluster.monotonic_now_ms()))
 }
@@ -235,7 +239,7 @@ pub(crate) fn native_agent_monotonic_now(env: &mut CallEnv) -> Result<Value, Run
 /// `SharedArrayBuffer` wrapping the shared backing.
 pub(crate) fn native_agent_receive_broadcast(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let context = agent_context(env)?;
     let callback = argument_values.first().cloned().unwrap_or(Value::Undefined);

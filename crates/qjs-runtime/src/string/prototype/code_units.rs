@@ -7,9 +7,11 @@ use crate::{
 use super::super::indexing::{
     relative_string_code_unit_index, this_string_value, to_char_code_position,
 };
-use crate::CallEnv;
 
-fn shared_string_value(value: Value, env: &mut CallEnv) -> Result<JsString, RuntimeError> {
+fn shared_string_value(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<JsString, RuntimeError> {
     match value {
         Value::String(value) => Ok(value),
         value => this_string_value(value, env).map(JsString::from),
@@ -19,7 +21,7 @@ fn shared_string_value(value: Value, env: &mut CallEnv) -> Result<JsString, Runt
 pub(crate) fn native_string_prototype_at(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let value = shared_string_value(this_value, env)?;
     let Some(index) = relative_string_code_unit_index(
@@ -40,7 +42,7 @@ pub(crate) fn native_string_prototype_at(
 pub(crate) fn native_string_prototype_char_at(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let value = shared_string_value(this_value, env)?;
     let position = to_char_code_position(
@@ -62,7 +64,7 @@ pub(crate) fn native_string_prototype_char_at(
 pub(crate) fn native_string_prototype_char_code_at(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let value = shared_string_value(this_value, env)?;
     let position = to_char_code_position(
@@ -82,7 +84,7 @@ pub(crate) fn native_string_prototype_char_code_at(
 pub(crate) fn native_string_prototype_code_point_at(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let value = shared_string_value(this_value, env)?;
     let position = to_char_code_position(

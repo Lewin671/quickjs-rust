@@ -12,12 +12,12 @@
 use crate::bytecode::ir::Bytecode;
 use crate::bytecode::typed_loop::LoopFrame;
 use crate::bytecode::vm_bindings::TypedLoopSloppyGlobalWrite;
-use crate::function::{BindingCell, CallEnv};
+use crate::function::BindingCell;
 use crate::{ArrayRef, ObjectRef, Property, RuntimeError, Value};
 
-pub(super) struct WideLoopFrame<'a> {
+pub(super) struct WideLoopFrame<'a, 's> {
     pub(super) bytecode: &'a Bytecode,
-    pub(super) env: &'a CallEnv,
+    pub(super) env: &'a mut crate::context::Context<'s>,
     /// Registers `0..locals.len()` of the activation.
     pub(super) locals: &'a mut [Value],
     pub(super) own_locals: u128,
@@ -44,11 +44,11 @@ pub(super) struct WideLoopFrame<'a> {
     array_prototype: Option<Option<(ObjectRef, bool)>>,
 }
 
-impl<'a> WideLoopFrame<'a> {
+impl<'a, 's> WideLoopFrame<'a, 's> {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn new(
         bytecode: &'a Bytecode,
-        env: &'a CallEnv,
+        env: &'a mut crate::context::Context<'s>,
         locals: &'a mut [Value],
         own_locals: u128,
         upvalues: &'a [BindingCell],
@@ -89,9 +89,12 @@ impl<'a> WideLoopFrame<'a> {
     }
 }
 
-impl LoopFrame for WideLoopFrame<'_> {
-    fn loop_env(&self) -> &CallEnv {
-        self.env
+impl LoopFrame for WideLoopFrame<'_, '_> {
+    fn loop_context(&mut self) -> crate::context::Context<'_> {
+        self.env.reborrow()
+    }
+    fn loop_activation(&self) -> &crate::context::ActivationContext {
+        self.env.activation
     }
 
     fn direct_eval_with_stack(&self) -> bool {
@@ -153,7 +156,7 @@ impl LoopFrame for WideLoopFrame<'_> {
     }
 
     fn array_access_is_plain(&mut self, array: &ArrayRef) -> bool {
-        let env = self.env;
+        let env = &mut *self.env;
         let resolved = self.array_prototype.get_or_insert_with(|| {
             let prototype = crate::property::array_prototype(env)?;
             let hazard = crate::bytecode::vm_props::prototype_chain_has_index_hazard(Some(

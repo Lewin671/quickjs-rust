@@ -13,10 +13,9 @@ use super::ir_class::{ClassElementDef, ClassPrivateElementDef};
 pub(super) enum InitialSlot {
     Empty,
     Undefined,
-    Frame,
+    Receiver,
     Arguments,
-    FrameOrUndefined,
-    Incoming,
+    ReceiverOrUndefined,
     IncomingOrUndefined,
     IncomingOrRealm,
 }
@@ -98,15 +97,15 @@ impl BindingPlan {
                     InitialSlot::Empty
                 } else if !local.from_env && crate::function::is_call_frame_binding(&local.name) {
                     if local.hoisted {
-                        InitialSlot::FrameOrUndefined
+                        InitialSlot::ReceiverOrUndefined
                     } else {
-                        InitialSlot::Frame
+                        InitialSlot::Receiver
                     }
                 } else if local.from_env {
                     if local.hoisted {
                         InitialSlot::IncomingOrUndefined
                     } else if crate::function::is_call_frame_binding(&local.name) {
-                        InitialSlot::Incoming
+                        InitialSlot::Receiver
                     } else {
                         InitialSlot::IncomingOrRealm
                     }

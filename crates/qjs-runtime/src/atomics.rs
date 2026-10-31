@@ -4,7 +4,7 @@ use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 
 use crate::{
-    CallEnv, Function, NativeFunction, ObjectRef, RuntimeError, Value, symbol, to_number_with_env,
+    Function, NativeFunction, ObjectRef, RuntimeError, Value, symbol, to_number_with_env,
     typed_array,
 };
 
@@ -18,7 +18,11 @@ pub(crate) enum AtomicOp {
     Xor,
 }
 
-pub(crate) fn install_atomics(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
+pub(crate) fn install_atomics(
+    env: &mut crate::context::Context<'_>,
+    global_this: &Value,
+    object_prototype: ObjectRef,
+) {
     let atomics =
         ObjectRef::with_prototype(HashMap::new(), Some(object_prototype), env.realm().atoms());
     atomics.set_to_string_tag("Atomics");
@@ -59,7 +63,7 @@ pub(crate) fn install_atomics(env: &mut CallEnv, global_this: &Value, object_pro
 
 pub(crate) fn native_atomics_is_lock_free(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let size = to_number_with_env(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
@@ -72,7 +76,7 @@ pub(crate) fn native_atomics_is_lock_free(
 
 pub(crate) fn native_atomics_load(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let access = validate_atomic_access(argument_values, AccessMode::Read, env)?;
     Ok(typed_array::get_view_element(&access.object, access.index))
@@ -80,7 +84,7 @@ pub(crate) fn native_atomics_load(
 
 pub(crate) fn native_atomics_store(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let access = validate_atomic_access(argument_values, AccessMode::Write, env)?;
     let value = to_atomic_store_value(
@@ -109,7 +113,7 @@ pub(crate) fn native_atomics_pause(argument_values: &[Value]) -> Result<Value, R
 
 pub(crate) fn native_atomics_notify(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let (object, length) = typed_array::validate_typed_array(&target)?;
@@ -162,7 +166,7 @@ pub(crate) fn native_atomics_notify(
 
 pub(crate) fn native_atomics_wait(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let (object, length) = typed_array::validate_typed_array(&target)?;
@@ -264,7 +268,7 @@ pub(crate) fn native_atomics_wait(
 pub(crate) fn native_atomics_read_modify_write(
     argument_values: &[Value],
     op: AtomicOp,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let access = validate_atomic_access(argument_values, AccessMode::Write, env)?;
     let value = coerce_atomic_value(
@@ -305,7 +309,7 @@ fn shared_backing_and_offset(
 
 pub(crate) fn native_atomics_compare_exchange(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let access = validate_atomic_access(argument_values, AccessMode::Write, env)?;
     let expected = coerce_atomic_value(
@@ -352,7 +356,7 @@ struct AtomicAccess {
 fn validate_atomic_access(
     argument_values: &[Value],
     access_mode: AccessMode,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<AtomicAccess, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let (object, length) = match access_mode {
@@ -383,7 +387,10 @@ fn validate_atomic_access(
     })
 }
 
-fn to_atomic_index(value: Value, env: &mut CallEnv) -> Result<usize, RuntimeError> {
+fn to_atomic_index(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<usize, RuntimeError> {
     let number = to_number_with_env(value, env)?;
     let integer = if number.is_nan() { 0.0 } else { number.trunc() };
     if integer < 0.0 || !integer.is_finite() || integer > usize::MAX as f64 {
@@ -419,7 +426,7 @@ fn is_waitable_kind(kind: NativeFunction) -> bool {
 fn coerce_atomic_value(
     kind: NativeFunction,
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     typed_array::coerce_element(kind, value, env)
 }
@@ -427,7 +434,7 @@ fn coerce_atomic_value(
 fn to_atomic_store_value(
     kind: NativeFunction,
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if typed_array::is_big_int_kind(kind) {
         return crate::bigint::to_bigint(value, env).map(Value::bigint);

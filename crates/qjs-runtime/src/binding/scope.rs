@@ -286,7 +286,7 @@ impl ScopeCursor {
         &self,
         name: &str,
         strict: bool,
-        env: &mut crate::CallEnv,
+        env: &mut crate::context::Context<'_>,
     ) -> Result<ResolvedReference, RuntimeError> {
         let mut scope = Some(self.head.clone());
         while let Some(lease) = scope {
@@ -340,7 +340,10 @@ impl ScopeCursor {
 }
 
 impl ResolvedReference {
-    pub(crate) fn read(&self, env: &mut crate::CallEnv) -> Result<Value, RuntimeError> {
+    pub(crate) fn read(
+        &self,
+        env: &mut crate::context::Context<'_>,
+    ) -> Result<Value, RuntimeError> {
         match self {
             Self::Global(reference) => reference.read(env),
             Self::Cell { binding } => binding.read(),
@@ -372,7 +375,7 @@ impl ResolvedReference {
         &self,
         value: Value,
         strict: bool,
-        env: &mut crate::CallEnv,
+        env: &mut crate::context::Context<'_>,
     ) -> Result<(), RuntimeError> {
         match self {
             Self::Global(reference) => reference.assign(value, env),
@@ -413,7 +416,10 @@ impl ResolvedReference {
             }),
         }
     }
-    pub(crate) fn delete(&self, env: &mut crate::CallEnv) -> Result<bool, RuntimeError> {
+    pub(crate) fn delete(
+        &self,
+        env: &mut crate::context::Context<'_>,
+    ) -> Result<bool, RuntimeError> {
         match self {
             Self::Global(reference) => reference.delete(env),
             Self::Holder { holder, name } => Ok(holder.delete(name)),

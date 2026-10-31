@@ -6,14 +6,13 @@ use crate::{
 };
 
 use super::push_code_point;
-use crate::CallEnv;
 
 pub(crate) fn native_string(
     function: &Function,
     this_value: Value,
     argument_values: &[Value],
     is_construct: bool,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let value = match argument_values.first().cloned() {
         // `String(symbol)` (non-construct) returns the descriptive string;
@@ -46,7 +45,7 @@ pub(crate) fn native_string(
 pub(crate) fn construct_string_wrapper(
     function: &Function,
     argument_values: &[Value],
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> Option<Value> {
     let text = match argument_values.first()? {
         Value::String(text) => text.clone(),
@@ -63,7 +62,7 @@ pub(crate) fn construct_string_wrapper(
 
 pub(crate) fn native_string_from_char_code(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let mut result = String::new();
     for value in argument_values.iter().cloned() {
@@ -75,7 +74,7 @@ pub(crate) fn native_string_from_char_code(
 
 pub(crate) fn native_string_from_code_point(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if let Some(result) = string_from_code_point_numbers(argument_values) {
         return result.map(|s| Value::String(s.into()));
@@ -116,7 +115,7 @@ pub(crate) fn string_from_code_point_numbers(
 
 pub(crate) fn native_string_raw(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let template = require_object_coercible(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
@@ -145,7 +144,7 @@ pub(crate) fn native_string_raw(
     Ok(Value::String(result.into()))
 }
 
-fn to_code_point(value: Value, env: &mut CallEnv) -> Result<u32, RuntimeError> {
+fn to_code_point(value: Value, env: &mut crate::context::Context<'_>) -> Result<u32, RuntimeError> {
     let number = to_number_with_env(value, env)?;
     code_point_from_number(number)
 }
@@ -178,7 +177,11 @@ fn require_object_coercible(value: Value, context: &str) -> Result<Value, Runtim
 /// Installs a String object's internal data and `length`, and defers its
 /// ordinary non-writable index properties, one per UTF-16 code unit, until
 /// its property table is first read (`ObjectRef::properties`).
-pub(crate) fn define_string_data(object: &ObjectRef, value: &crate::JsString, env: &CallEnv) {
+pub(crate) fn define_string_data(
+    object: &ObjectRef,
+    value: &crate::JsString,
+    env: &crate::context::Context<'_>,
+) {
     let keys = env.realm().string_object_keys();
     object.set_string_data(value.clone());
     object.defer_string_indices();

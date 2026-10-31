@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use crate::CallEnv;
 use crate::{
     Function, NativeFunction, ObjectRef, Property, RuntimeError, Value, function_prototype,
     is_truthy,
@@ -8,7 +7,11 @@ use crate::{
 
 pub(crate) const BOOLEAN_DATA_PROPERTY: &str = "\0BooleanData";
 
-pub(super) fn install_boolean(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
+pub(super) fn install_boolean(
+    env: &mut crate::context::Context<'_>,
+    global_this: &Value,
+    object_prototype: ObjectRef,
+) {
     let boolean_prototype =
         ObjectRef::with_prototype(HashMap::new(), Some(object_prototype), env.realm().atoms());
     env.realm().initialize_other_primitive_prototype(

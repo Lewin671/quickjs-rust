@@ -16,9 +16,9 @@
 
 use std::rc::Rc;
 
+use crate::RuntimeError;
 use crate::bytecode::{Bytecode, DirectCallSlots};
 use crate::value::Value;
-use crate::{CallEnv, RuntimeError};
 
 use crate::binding::BindingCell;
 
@@ -54,7 +54,7 @@ impl CallCompletionPolicy {
 /// call is* from *how it is dispatched and executed* is this one.
 pub(crate) struct PreparedBytecodeCall<'a> {
     pub(crate) bytecode: Rc<Bytecode>,
-    pub(crate) env: CallEnv,
+    pub(crate) env: crate::context::ActivationContext,
     /// The direct-leaf entry contract: receiver, parameters and received cells
     /// can use the compact tiers and the minimal frame initializer.
     pub(crate) slots: Option<DirectCallSlots<'a>>,

@@ -2,7 +2,6 @@
 //! receiver kind, including primitives, functions, arrays, Proxies and
 //! setters found on the prototype chain.
 
-use crate::CallEnv;
 use crate::{
     ObjectRef, Property, PropertyKey, RuntimeError, Value, array_prototype, call_function,
     function_own_property_descriptor, function_prototype_chain_descriptor,
@@ -18,7 +17,7 @@ pub(crate) fn set_property(
     object: Value,
     key: String,
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<bool, RuntimeError> {
     match object {
         Value::Object(object) => {
@@ -255,7 +254,7 @@ fn set_primitive_property(
     receiver: Value,
     key: String,
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<bool, RuntimeError> {
     let Some(prototype) = primitive_constructor_prototype(env, constructor_name) else {
         return Ok(false);
@@ -275,7 +274,10 @@ fn set_primitive_property(
     }
 }
 
-fn primitive_constructor_prototype(env: &CallEnv, constructor_name: &str) -> Option<ObjectRef> {
+fn primitive_constructor_prototype(
+    env: &crate::context::Context<'_>,
+    constructor_name: &str,
+) -> Option<ObjectRef> {
     // A primitive's wrapper prototype belongs to the active execution realm,
     // not to a same-named lexical binding in the current frame. In particular,
     // Test262's cross-realm eval host installs the realm intrinsics on its
@@ -286,7 +288,10 @@ fn primitive_constructor_prototype(env: &CallEnv, constructor_name: &str) -> Opt
         .or_else(|| crate::constructor_named_prototype(env, constructor_name))
 }
 
-fn marked_global_constructor_prototype(env: &CallEnv, constructor_name: &str) -> Option<ObjectRef> {
+fn marked_global_constructor_prototype(
+    env: &crate::context::Context<'_>,
+    constructor_name: &str,
+) -> Option<ObjectRef> {
     let global = env
         .get("__quickjsRustDynamicFunctionRealm")
         .and_then(|value| match value {
@@ -314,7 +319,7 @@ pub(super) fn set_property_key(
     object: Value,
     key: PropertyKey,
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<bool, RuntimeError> {
     match key {
         PropertyKey::String(key) => set_property(object, key, value, env),
@@ -326,7 +331,7 @@ fn set_symbol_property(
     object: Value,
     symbol: ObjectRef,
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<bool, RuntimeError> {
     match object {
         Value::Object(object) => {
@@ -367,7 +372,7 @@ fn set_function_symbol_property(
     receiver: Value,
     symbol: ObjectRef,
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<bool, RuntimeError> {
     crate::reflect::ordinary_set(
         Value::Function(function),
@@ -383,7 +388,7 @@ fn set_object_symbol_property(
     receiver: Value,
     symbol: ObjectRef,
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<bool, RuntimeError> {
     let inherited = match ordinary_chain_symbol_property(&object, &symbol) {
         Err(ProxyInChain) => {
@@ -420,7 +425,7 @@ fn set_array_symbol_property(
     receiver: Value,
     symbol: ObjectRef,
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<bool, RuntimeError> {
     crate::reflect::ordinary_set(
         Value::Array(array),
@@ -448,7 +453,7 @@ fn apply_set_step(
     property: Option<Property>,
     receiver: Value,
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<SetStep, RuntimeError> {
     let Some(property) = property else {
         return Ok(SetStep::WriteData);
@@ -483,7 +488,7 @@ fn ordinary_set_object(
     receiver: Value,
     key: String,
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<bool, RuntimeError> {
     // A canonical numeric index whose chain reaches a typed array is governed by
     // that array's exotic [[Set]] (an invalid index returns true without writing
@@ -547,11 +552,19 @@ fn ordinary_set_object(
     }
 }
 
-pub(super) fn property_set_uses_setter(object: &Value, key: &PropertyKey, env: &CallEnv) -> bool {
+pub(super) fn property_set_uses_setter(
+    object: &Value,
+    key: &PropertyKey,
+    env: &crate::context::Context<'_>,
+) -> bool {
     property_for_set(object, key, env).is_some_and(|property| property.setter().is_some())
 }
 
-fn property_for_set(object: &Value, key: &PropertyKey, env: &CallEnv) -> Option<Property> {
+fn property_for_set(
+    object: &Value,
+    key: &PropertyKey,
+    env: &crate::context::Context<'_>,
+) -> Option<Property> {
     let PropertyKey::String(key) = key else {
         return symbol_property_for_set(object, key, env);
     };
@@ -574,14 +587,18 @@ fn property_for_set(object: &Value, key: &PropertyKey, env: &CallEnv) -> Option<
 
 fn function_property_for_set(
     function: &crate::Function,
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
     key: &str,
 ) -> Option<Property> {
     function_own_property_descriptor(function, key)
         .or_else(|| function_prototype_chain_descriptor(function, env, key))
 }
 
-fn symbol_property_for_set(object: &Value, key: &PropertyKey, env: &CallEnv) -> Option<Property> {
+fn symbol_property_for_set(
+    object: &Value,
+    key: &PropertyKey,
+    env: &crate::context::Context<'_>,
+) -> Option<Property> {
     let PropertyKey::Symbol(symbol) = key else {
         unreachable!("symbol property helper should only receive symbol keys");
     };

@@ -7,7 +7,7 @@ use super::{
 };
 use crate::{RuntimeError, Value, binding::ResolvedReference};
 
-impl Vm<'_> {
+impl Vm<'_, '_> {
     pub(super) fn save_reference(
         &mut self,
         bank: usize,
@@ -99,7 +99,7 @@ impl Vm<'_> {
                         left,
                         qjs_ast::BinaryOp::Add,
                         Value::String(suffix.clone().into()),
-                        &mut self.current_env(),
+                        &mut self.context(),
                     )?;
                     self.assign_scope_binding(&reference, value.clone(), site.strict)?;
                     if !discard {

@@ -1,4 +1,3 @@
-use crate::CallEnv;
 use crate::string::advance_string_index;
 use crate::{
     ArrayRef, Function, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value,
@@ -6,7 +5,10 @@ use crate::{
     to_length_with_env, to_number_with_env, to_uint32_number, to_uint32_with_env,
 };
 
-pub(crate) fn install_regexp_prototype_split(env: &CallEnv, prototype: &ObjectRef) {
+pub(crate) fn install_regexp_prototype_split(
+    env: &crate::context::Context<'_>,
+    prototype: &ObjectRef,
+) {
     if let Some(symbol) = symbol::split_symbol(env) {
         prototype.define_symbol_property(
             symbol,
@@ -24,7 +26,7 @@ pub(crate) fn install_regexp_prototype_split(env: &CallEnv, prototype: &ObjectRe
 pub(crate) fn native_regexp_prototype_split(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if !is_object_value(&this_value) {
         return Err(RuntimeError {
@@ -107,7 +109,10 @@ pub(crate) fn native_regexp_prototype_split(
     Ok(Value::Array(ArrayRef::new(env.realm(), parts)))
 }
 
-fn split_regexp_clone(value: Value, env: &mut CallEnv) -> Result<(Value, bool), RuntimeError> {
+fn split_regexp_clone(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<(Value, bool), RuntimeError> {
     let constructor = super::regexp_species_constructor(value.clone(), env)?;
     let _ = super::regexp_is_regexp_with_env(value.clone(), env)?;
     let flags = to_js_string_with_env(property_value(value.clone(), "flags", env)?, env)?;
@@ -128,7 +133,7 @@ fn split_regexp_clone(value: Value, env: &mut CallEnv) -> Result<(Value, bool), 
 fn regexp_exec(
     splitter: Value,
     input: &crate::JsString,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let exec = property_value(splitter.clone(), "exec", env)?;
     call_function(
@@ -144,7 +149,7 @@ fn append_captures(
     result: Value,
     parts: &mut Vec<Value>,
     limit: usize,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     let length = to_length_with_env(property_value(result.clone(), "length", env)?, env)?;
     for index in 1..length {
@@ -167,11 +172,14 @@ fn ensure_exec_result_object(value: Value) -> Result<Value, RuntimeError> {
     }
 }
 
-fn regexp_last_index(value: Value, env: &mut CallEnv) -> Result<usize, RuntimeError> {
+fn regexp_last_index(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<usize, RuntimeError> {
     to_length_with_env(property_value(value, "lastIndex", env)?, env)
 }
 
-fn split_limit(value: Value, env: &mut CallEnv) -> Result<usize, RuntimeError> {
+fn split_limit(value: Value, env: &mut crate::context::Context<'_>) -> Result<usize, RuntimeError> {
     if matches!(value, Value::Undefined) {
         return Ok(u32::MAX as usize);
     }
@@ -183,7 +191,11 @@ fn split_limit(value: Value, env: &mut CallEnv) -> Result<usize, RuntimeError> {
     }
 }
 
-fn set_last_index(receiver: Value, value: Value, env: &mut CallEnv) -> Result<(), RuntimeError> {
+fn set_last_index(
+    receiver: Value,
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<(), RuntimeError> {
     if reflect::ordinary_set(
         receiver.clone(),
         &PropertyKey::String("lastIndex".to_owned()),

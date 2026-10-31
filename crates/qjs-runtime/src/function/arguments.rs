@@ -5,7 +5,7 @@ use crate::{
     Function, NativeFunction, Property, Prototype, RuntimeError, Value, object_prototype, symbol,
 };
 
-use super::{BindingCell, CallEnv};
+use super::BindingCell;
 
 const CROSS_REALM_FUNCTION_PROTOTYPE: &str = "__quickjsRustRealmFunctionPrototype";
 
@@ -69,7 +69,7 @@ impl ArgumentsRecipe {
         bytecode: &crate::Bytecode,
         locals: &[Option<Value>],
         cells: &mut [Option<BindingCell>],
-        env: &CallEnv,
+        env: &crate::context::Context<'_>,
     ) -> Self {
         crate::diagnostics::count!(arguments_recipes);
         let function = inputs.function;
@@ -216,7 +216,7 @@ fn mapped_argument_setter(
     Value::Function(setter)
 }
 
-fn restricted_callee_value(function: &Function, env: &CallEnv) -> Value {
+fn restricted_callee_value(function: &Function, env: &crate::context::Context<'_>) -> Value {
     // Reuse the realm's shared %ThrowTypeError% so the strict `callee` poison
     // getter is the same object as `Function.prototype.arguments`/`caller`'s.
     cross_realm_throw_type_error(function).unwrap_or_else(|| {
@@ -288,7 +288,7 @@ fn cross_realm_function_prototype(value: &Value) -> Option<Prototype> {
     Some(Prototype::Function(prototype.clone()))
 }
 
-fn arguments_iterator_property(function: &Function, env: &CallEnv) -> Property {
+fn arguments_iterator_property(function: &Function, env: &crate::context::Context<'_>) -> Property {
     // Reuse the shared %Array.prototype.values% so `arguments[Symbol.iterator]`
     // has the same identity as `Array.prototype.values`, falling back to a fresh
     // native if the realm intrinsic is somehow absent.
@@ -349,26 +349,4 @@ pub(crate) fn native_mapped_argument_set(
 pub(crate) struct CallInputs<'a> {
     pub(crate) function: &'a Function,
     pub(crate) arguments: &'a [Value],
-}
-
-/// Suspension owns actual inputs only until the prologue builds its frame.
-pub(crate) struct OwnedCallInputs {
-    function: Function,
-    arguments: Vec<Value>,
-}
-impl CallInputs<'_> {
-    pub(crate) fn into_owned(self) -> OwnedCallInputs {
-        OwnedCallInputs {
-            function: self.function.clone(),
-            arguments: self.arguments.to_vec(),
-        }
-    }
-}
-impl OwnedCallInputs {
-    pub(crate) fn as_borrowed(&self) -> CallInputs<'_> {
-        CallInputs {
-            function: &self.function,
-            arguments: &self.arguments,
-        }
-    }
 }

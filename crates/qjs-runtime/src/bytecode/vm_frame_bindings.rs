@@ -9,33 +9,26 @@ use super::{
     ir::Bytecode,
     vm::{Slot, Vm},
 };
-use crate::{
-    Value,
-    function::{BindingCell, CallEnv},
-};
+use crate::{Value, function::BindingCell};
 
-impl Vm<'_> {
-    pub(super) fn initial_slots(bytecode: &Bytecode, env: &CallEnv) -> Vec<Slot> {
+impl Vm<'_, '_> {
+    pub(super) fn initial_slots(
+        bytecode: &Bytecode,
+        env: &crate::context::ActivationContext,
+    ) -> Vec<Slot> {
         let mut locals = bytecode.take_local_slots(bytecode.locals.len());
         for (slot, route) in bytecode.binding_plan.initial_slots.iter().enumerate() {
             let name = &bytecode.locals[slot].name;
-            let incoming = || {
-                env.get_local(name).filter(|value| {
-                    !matches!(value,
-                Value::Function(function) if function.is_uninitialized_lexical_marker())
-                })
-            };
             locals[slot] = match route {
                 InitialSlot::Empty => None,
                 InitialSlot::Undefined => Some(Value::Undefined),
-                InitialSlot::Frame => env.get_local(name),
+                InitialSlot::Receiver => env.receiver_seed(),
                 InitialSlot::Arguments => None,
-                InitialSlot::FrameOrUndefined => {
-                    Some(env.get_local(name).unwrap_or(Value::Undefined))
+                InitialSlot::ReceiverOrUndefined => {
+                    Some(env.receiver_seed().unwrap_or(Value::Undefined))
                 }
-                InitialSlot::Incoming => incoming(),
-                InitialSlot::IncomingOrUndefined => Some(incoming().unwrap_or(Value::Undefined)),
-                InitialSlot::IncomingOrRealm => incoming().or_else(|| env.get_realm(name)),
+                InitialSlot::IncomingOrUndefined => Some(Value::Undefined),
+                InitialSlot::IncomingOrRealm => env.get_realm(name),
             };
         }
         locals
@@ -45,11 +38,11 @@ impl Vm<'_> {
         bytecode: &Bytecode,
         _locals: &[Slot],
         upvalues: &[BindingCell],
-        env: &CallEnv,
+        env: &crate::context::ActivationContext,
     ) -> Vec<Option<BindingCell>> {
         let mut next_received = 0;
         let mut local_upvalues = vec![None; bytecode.locals.len()];
-        let direct_eval_frame = env.direct_eval_site().is_some();
+        let direct_eval_frame = bytecode.is_direct_eval_code();
         if !bytecode.global_scope
             && !env.has_global_binding_root()
             && !bytecode.binding_plan.has_realm_lexicals
@@ -122,17 +115,6 @@ impl Vm<'_> {
                     }
                     continue;
                 }
-                // A direct-eval program is compiled as a global-scope bytecode,
-                // but its imported `var` slots can still name the caller's local
-                // binding. Preserve that binding identity before considering the
-                // same-named realm cell.
-                if direct_eval_frame
-                    && local.hoisted
-                    && let Some(upvalue) = env.local_binding_cell(&local.name)
-                {
-                    local_upvalues[slot] = Some(upvalue);
-                    continue;
-                }
                 if bytecode.global_scope
                     && local.hoisted
                     && let Some(upvalue) = env.realm_binding_cell(&local.name)
@@ -141,12 +123,7 @@ impl Vm<'_> {
                     continue;
                 }
                 if local.sloppy_global_fallback {
-                    local_upvalues[slot] = if direct_eval_frame {
-                        env.local_binding_cell(&local.name)
-                            .or_else(|| env.realm_binding_cell(&local.name))
-                    } else {
-                        env.realm_binding_cell(&local.name)
-                    };
+                    local_upvalues[slot] = env.realm_binding_cell(&local.name);
                     continue;
                 }
                 if local.is_received_upvalue() {
@@ -229,7 +206,7 @@ impl Vm<'_> {
     pub(super) fn initial_authoritative_slots(
         bytecode: &Bytecode,
         local_upvalues: &[Option<BindingCell>],
-        env: &CallEnv,
+        env: &crate::context::ActivationContext,
     ) -> u128 {
         if !(bytecode.global_scope
             || bytecode.is_direct_eval_code() && env.scope_cursor().is_none())
@@ -261,7 +238,7 @@ impl Vm<'_> {
         // the whole mask from the bytecode. Asking the environment about every
         // local's name, as the general path must, is what made building a frame
         // scale with its local count.
-        if env.supplies_no_named_binding() {
+        if env.indexed_bindings_only() {
             let occupied = local_upvalues
                 .iter()
                 .take(u128::BITS as usize)
@@ -280,7 +257,7 @@ impl Vm<'_> {
                 (!local.sloppy_global_fallback
                     && local_upvalues.get(slot).is_none_or(Option::is_none)
                     && (local.compiler_temporary
-                        || !bytecode.global_scope && env.slot_is_authoritative(&local.name)))
+                        || !bytecode.global_scope && env.permits_owned_slots()))
                 .then_some(1_u128 << slot)
             })
             .fold(0, |slots, slot| slots | slot)
@@ -289,7 +266,7 @@ impl Vm<'_> {
     pub(super) fn initial_realm_binding_slots(
         bytecode: &Bytecode,
         local_upvalues: &[Option<BindingCell>],
-        env: &CallEnv,
+        env: &crate::context::ActivationContext,
     ) -> u128 {
         bytecode
             .locals

@@ -3,7 +3,7 @@
 //! A call takes one of three routes: a guarded native fast path
 //! (`try_fast_global_native_call`), the direct-leaf path
 //! (`function::call_direct_leaf_function`), or the general
-//! `function::call_function` with a `CallEnv` built by `vm_call_env.rs`.
+//! `function::call_function` with a `crate::context::ActivationContext` built by `vm_call_env.rs`.
 //! The direct-leaf path hands the callee no caller bindings, so only a
 //! callee passing `is_direct_leaf_function` may take it.
 
@@ -11,7 +11,7 @@
 use std::cell::Cell;
 
 use crate::{
-    CallEnv, Function, NativeFunction, RuntimeError, Value,
+    NativeFunction, RuntimeError, Value,
     function::{call_direct_leaf_function, is_direct_leaf_function},
     to_int32_number,
 };
@@ -34,7 +34,7 @@ pub(super) fn guarded_math_unary_hits() -> usize {
     GUARDED_MATH_UNARY_HITS.with(Cell::get)
 }
 
-impl Vm<'_> {
+impl Vm<'_, '_> {
     pub(super) fn require_callable(&self) -> Result<(), RuntimeError> {
         let callee = self.stack.last().ok_or_else(stack_underflow)?;
         if matches!(callee, Value::Function(_))
@@ -197,7 +197,7 @@ impl Vm<'_> {
             // frame is built only by the arms that need one instead of once
             // per native call.
             if let Some(result) =
-                try_fast_global_native_call(&callee, &this_value, arguments, &|| self.realm_env())
+                try_fast_global_native_call(&callee, &this_value, arguments, &mut self.context())
             {
                 return result;
             }
@@ -214,51 +214,42 @@ impl Vm<'_> {
             Value::Function(function)
                 if function.native == Some(NativeFunction::FunctionPrototypeApply)
         ) && let Some(result) =
-            crate::function::apply_dense_native_fast_path(&this_value, arguments, &self.realm_env())
+            crate::function::apply_dense_native_fast_path(&this_value, arguments, &self.context())
         {
             return result;
         }
         if !direct_eval && is_direct_leaf_function(&callee) {
-            return call_direct_leaf_function(
-                callee,
-                this_value,
-                arguments,
-                &self.env,
-                self.module_host.clone(),
-                #[cfg(feature = "agents")]
-                self.agent_context.clone(),
-            );
+            return call_direct_leaf_function(callee, this_value, arguments, &mut self.context());
         }
         let effective_direct_eval = direct_eval
-            && matches!(&callee, Value::Function(function) if function.native == Some(NativeFunction::Eval));
-        let in_parameter_scope = effective_direct_eval && self.in_parameter_prologue();
-        // Native functions do not inherit their caller's lexical environment.
-        // Any user callbacks they invoke already carry their own upvalue cells,
-        // while realm writes are shared through the realm itself. Only a direct
-        // eval call needs the active frame's dynamic-name view.
-        let frame_independent_native = !effective_direct_eval
-            && matches!(&callee, Value::Function(function) if function.native.is_some());
-        let mut env = if effective_direct_eval {
-            self.current_env()
-        } else if frame_independent_native {
-            self.realm_env()
-        } else {
-            self.call_env(&callee)
-        };
-        env.set_direct_eval_site(
-            effective_direct_eval.then_some(crate::context::DirectEvalSite {
-                strict: direct_eval_strict,
-                in_parameters: in_parameter_scope,
-            }),
-        );
+            && matches!(&callee, Value::Function(function) if function.native == Some(NativeFunction::Eval)
+                && std::rc::Rc::ptr_eq(function.creation_realm(), self.env.realm()));
         if effective_direct_eval {
-            env.set_direct_eval_with_stack(self.with_stack().to_vec());
+            let scope = self.prepare_scope_cursor();
+            let private = self.current_private_environment();
+            let site = crate::context::DirectEvalSite {
+                strict: direct_eval_strict,
+                in_parameters: self.in_parameter_prologue(),
+                scope: scope.as_ref(),
+                private: private.as_ref(),
+            };
+            let Value::Function(function) = &callee else {
+                unreachable!("direct eval function");
+            };
+            return crate::native::call_native_function(
+                function.native_entry.expect("eval entry"),
+                crate::native::CallInfo {
+                    callee: function,
+                    this_value: &this_value,
+                    is_construct: false,
+                },
+                arguments,
+                None,
+                Some(&site),
+                &mut self.context(),
+            );
         }
-        let result = crate::function::call_function_slice(&callee, this_value, arguments, &mut env);
-        env.set_direct_eval_site(None);
-        env.set_direct_eval_with_stack(Vec::new());
-        drop(env);
-        result
+        crate::function::call_function_slice(&callee, this_value, arguments, &mut self.context())
     }
 
     pub(super) fn call_spread(&mut self) -> Result<(), RuntimeError> {
@@ -380,33 +371,11 @@ impl Vm<'_> {
         this_value: Value,
         arguments: &[Value],
     ) -> Result<(), RuntimeError> {
-        let result = call_direct_leaf_function(
-            callee,
-            this_value,
-            arguments,
-            &self.env,
-            self.module_host.clone(),
-            #[cfg(feature = "agents")]
-            self.agent_context.clone(),
-        );
+        let result = call_direct_leaf_function(callee, this_value, arguments, &mut self.context());
         if let Some(value) = self.handle_call_result(result)? {
             self.stack.push(value);
         }
         Ok(())
-    }
-}
-
-pub(super) fn user_bytecode_function(value: &Value) -> Option<&Function> {
-    let Value::Function(function) = value else {
-        return None;
-    };
-    if let Some(bound) = &function.bound {
-        return user_bytecode_function(&bound.target);
-    }
-    if function.native.is_none() && function.bytecode.is_some() {
-        Some(function)
-    } else {
-        None
     }
 }
 
@@ -433,12 +402,19 @@ pub(super) fn try_fast_global_native_call(
     callee: &Value,
     this_value: &Value,
     arguments: &[Value],
-    realm_env: &dyn Fn() -> CallEnv,
+    context: &mut crate::context::Context<'_>,
 ) -> Option<Result<Value, RuntimeError>> {
     let Value::Function(function) = callee else {
         return None;
     };
     let native = function.native?;
+    let info = crate::native::CallInfo {
+        callee: function,
+        this_value,
+        is_construct: false,
+    };
+    let mut site = context.with_native(&info, None, None);
+    let context = &mut site;
     let result = match native {
         NativeFunction::DecodeUri
         | NativeFunction::DecodeUriComponent
@@ -526,9 +502,7 @@ pub(super) fn try_fast_global_native_call(
         NativeFunction::MathPow => Ok(Value::Number(fast_primitive_math_pow(arguments)?)),
         NativeFunction::MathRandom if arguments.is_empty() => crate::math::native_math_random(),
         NativeFunction::ArrayPrototypeIndexOf => Ok(crate::array::fast_dense_array_index_of(
-            this_value,
-            arguments,
-            &realm_env(),
+            this_value, arguments, context,
         )?),
         NativeFunction::Eval => {
             let Some(Value::String(source)) = arguments.first() else {
@@ -537,7 +511,7 @@ pub(super) fn try_fast_global_native_call(
             if crate::global::eval_source_is_only_comments_and_whitespace(source) {
                 return Some(Ok(Value::Undefined));
             }
-            match crate::global::try_eval_regexp_literal_source(source, &realm_env()) {
+            match crate::global::try_eval_regexp_literal_source(source, context) {
                 Ok(Some(value)) => Ok(value),
                 Ok(None) => return None,
                 Err(error) => Err(error),
@@ -604,13 +578,13 @@ pub(super) fn try_fast_global_native_call(
             {
                 return None;
             }
-            let mut env = realm_env();
-            crate::date::native_date_prototype_set_time(this_value.clone(), arguments, &mut env)
+            let env = &mut *context;
+            crate::date::native_date_prototype_set_time(this_value.clone(), arguments, env)
         }
         NativeFunction::StringPrototypeSlice
         | NativeFunction::StringPrototypeSubstr
         | NativeFunction::StringPrototypeSubstring => {
-            fast_string_sequence_native(native, this_value, arguments, realm_env)?
+            fast_string_sequence_native(native, this_value, arguments, context)?
         }
         NativeFunction::StringPrototypeCharAt => {
             let Value::String(text) = this_value else {
@@ -648,8 +622,8 @@ pub(super) fn try_fast_global_native_call(
             {
                 return None;
             }
-            let mut env = realm_env();
-            crate::string::native_string_prototype_concat(this_value.clone(), arguments, &mut env)
+            let env = &mut *context;
+            crate::string::native_string_prototype_concat(this_value.clone(), arguments, env)
         }
         NativeFunction::RegExpPrototypeTest => {
             if !matches!(this_value, Value::Object(_))
@@ -657,8 +631,8 @@ pub(super) fn try_fast_global_native_call(
             {
                 return None;
             }
-            let mut env = realm_env();
-            crate::regexp::native_regexp_prototype_test(this_value.clone(), arguments, &mut env)
+            let env = &mut *context;
+            crate::regexp::native_regexp_prototype_test(this_value.clone(), arguments, env)
         }
         NativeFunction::Test262AssertSameValue => {
             crate::global::native_test262_assert_same_value(arguments)
@@ -737,7 +711,7 @@ fn fast_string_sequence_native(
     native: NativeFunction,
     this_value: &Value,
     arguments: &[Value],
-    realm_env: &dyn Fn() -> CallEnv,
+    context: &mut crate::context::Context<'_>,
 ) -> Option<Result<Value, RuntimeError>> {
     if !matches!(this_value, Value::String(_)) {
         return None;
@@ -748,20 +722,16 @@ fn fast_string_sequence_native(
     {
         return None;
     }
-    let mut env = realm_env();
+    let env = &mut *context;
     let result = match native {
         NativeFunction::StringPrototypeSlice => {
-            crate::string::native_string_prototype_slice(this_value.clone(), arguments, &mut env)
+            crate::string::native_string_prototype_slice(this_value.clone(), arguments, env)
         }
         NativeFunction::StringPrototypeSubstr => {
-            crate::string::native_string_prototype_substr(this_value.clone(), arguments, &mut env)
+            crate::string::native_string_prototype_substr(this_value.clone(), arguments, env)
         }
         NativeFunction::StringPrototypeSubstring => {
-            crate::string::native_string_prototype_substring(
-                this_value.clone(),
-                arguments,
-                &mut env,
-            )
+            crate::string::native_string_prototype_substring(this_value.clone(), arguments, env)
         }
         _ => unreachable!("string sequence native fast path only accepts sequence natives"),
     };

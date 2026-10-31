@@ -16,7 +16,7 @@ pub(super) struct TryFrame {
     class_depth: usize,
 }
 
-impl Vm<'_> {
+impl Vm<'_, '_> {
     pub(super) fn enter_try(
         &mut self,
         catch: Option<usize>,

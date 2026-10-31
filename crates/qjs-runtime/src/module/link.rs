@@ -315,9 +315,10 @@ impl ModuleGraph {
     }
 
     fn insert_bytes_module(&mut self, key: String, bytes: Vec<u8>) {
-        let env = crate::CallEnv::new(self.realm.clone());
+        let mut root = crate::context::HostRoot::new(self.realm.clone());
         let value = Value::Object(crate::typed_array::create_immutable_uint8_array(
-            &bytes, &env,
+            &bytes,
+            &root.context(),
         ));
         let mut exports = HashMap::new();
         exports.insert("default".to_owned(), value);
@@ -325,12 +326,15 @@ impl ModuleGraph {
     }
 
     fn insert_json_module(&mut self, key: String, source: &str) -> Result<(), LinkError> {
-        let env = crate::CallEnv::new(self.realm.clone());
-        let value = crate::json::parse_host_json_text(source, &env).map_err(|error| LinkError {
-            kind: LinkErrorKind::Parse,
-            message: error.message,
-            thrown: error.thrown,
-        })?;
+        let mut root = crate::context::HostRoot::new(self.realm.clone());
+        let value =
+            crate::json::parse_host_json_text(source, &root.context()).map_err(|error| {
+                LinkError {
+                    kind: LinkErrorKind::Parse,
+                    message: error.message,
+                    thrown: error.thrown,
+                }
+            })?;
         let mut exports = HashMap::new();
         exports.insert("default".to_owned(), value);
         self.insert_synthetic_default_module(key, exports);
@@ -635,7 +639,8 @@ impl ModuleGraph {
     }
 
     fn settle_started_async_dependencies(&self, include_dynamic: bool) -> Result<(), RuntimeError> {
-        let mut drain_env = crate::CallEnv::new(self.realm.clone());
+        let mut root = crate::context::HostRoot::new(self.realm.clone());
+        let mut drain_env = root.context();
         if let Some(host) = &self.host {
             drain_env.set_module_host(host.clone());
         }
@@ -735,10 +740,9 @@ impl ModuleGraph {
         if let Some(namespace) = &self.modules[key].namespace {
             return namespace.clone();
         }
-        let env = crate::CallEnv::new(self.realm.clone());
         let live_bindings =
             ModuleNamespaceBindings::new(self.modules[key].live_lexical.clone(), HashMap::new());
-        let namespace = empty_namespace(live_bindings, env.realm().atoms());
+        let namespace = empty_namespace(live_bindings, self.realm.atoms());
         self.modules.get_mut(key).expect("module exists").namespace =
             Some(Value::Object(namespace.clone()));
 
@@ -773,7 +777,7 @@ impl ModuleGraph {
         let live_bindings =
             ModuleNamespaceBindings::new(self.modules[key].live_lexical.clone(), aliases);
         namespace.set_module_namespace_bindings(live_bindings);
-        populate_namespace(&namespace, &mut bindings, &env);
+        populate_namespace(&namespace, &mut bindings, &self.realm);
         Value::Object(namespace)
     }
 

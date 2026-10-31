@@ -6,14 +6,13 @@ use super::{
     array_like::array_like_length,
     species::{array_species_create, create_data_property_or_throw},
 };
-use crate::CallEnv;
 
 const MAX_SAFE_LENGTH: usize = (1usize << 53) - 1;
 
 pub(crate) fn native_array_prototype_flat(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let source = array_like_length(this_value, "Array.prototype.flat", env)?;
     let depth = flat_depth(
@@ -35,7 +34,7 @@ pub(crate) fn native_array_prototype_flat(
 pub(crate) fn native_array_prototype_flat_map(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let source = array_like_length(this_value, "Array.prototype.flatMap", env)?;
     let callback = argument_values.first().cloned().unwrap_or(Value::Undefined);
@@ -67,7 +66,7 @@ pub(crate) fn native_array_prototype_flat_map(
     Ok(result)
 }
 
-fn flat_depth(value: Value, env: &mut CallEnv) -> Result<usize, RuntimeError> {
+fn flat_depth(value: Value, env: &mut crate::context::Context<'_>) -> Result<usize, RuntimeError> {
     let number = match value {
         Value::Undefined => return Ok(1),
         value => to_number_with_env(value, env)?,
@@ -88,7 +87,7 @@ fn flatten_source_into_result(
     receiver: Value,
     length: usize,
     depth: usize,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<usize, RuntimeError> {
     for source_index in 0..length {
         let key = source_index.to_string();
@@ -125,7 +124,7 @@ fn flatten_value_into_result(
     target_index: usize,
     value: Value,
     depth: usize,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<usize, RuntimeError> {
     if should_flatten(value.clone(), depth)? {
         let element_length = flattenable_length(value.clone(), env)?;
@@ -160,7 +159,10 @@ fn should_flatten(value: Value, depth: usize) -> Result<bool, RuntimeError> {
     }
 }
 
-fn flattenable_length(value: Value, env: &mut CallEnv) -> Result<usize, RuntimeError> {
+fn flattenable_length(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<usize, RuntimeError> {
     match value {
         Value::Array(array) => Ok(array.len()),
         value => to_length_with_env(property_value(value, "length", env)?, env),

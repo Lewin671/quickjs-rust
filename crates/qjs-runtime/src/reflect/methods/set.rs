@@ -1,4 +1,3 @@
-use crate::CallEnv;
 use crate::reflect::target::ensure_reflect_object_target;
 use crate::{
     ObjectRef, Property, PropertyKey, RuntimeError, Value, call_function,
@@ -9,7 +8,7 @@ use crate::{
 
 pub(crate) fn native_reflect_set(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     ensure_reflect_object_target(&target, "Reflect.set")?;
@@ -33,7 +32,7 @@ pub(crate) fn ordinary_set(
     key: &PropertyKey,
     value: Value,
     receiver: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<bool, RuntimeError> {
     if let Value::Proxy(proxy) = &target {
         return crate::proxy::proxy_set(proxy.clone(), key, value, receiver, env);
@@ -97,7 +96,7 @@ fn ordinary_set_with_descriptor(
     key: &PropertyKey,
     value: Value,
     receiver: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<bool, RuntimeError> {
     if property.is_accessor() {
         let (_, setter) = property
@@ -119,7 +118,7 @@ fn set_receiver_data_property(
     receiver: Value,
     key: &PropertyKey,
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<bool, RuntimeError> {
     let PropertyKey::String(key) = key else {
         return set_receiver_symbol_data_property(receiver, key, value, env);
@@ -257,7 +256,7 @@ fn set_receiver_symbol_data_property(
     receiver: Value,
     key: &PropertyKey,
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<bool, RuntimeError> {
     let PropertyKey::Symbol(symbol) = key else {
         unreachable!("symbol set helper should only receive symbol keys");
@@ -316,7 +315,7 @@ fn set_proxy_receiver_data_property(
     proxy: crate::proxy::ProxyRef,
     key: PropertyKey,
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<bool, RuntimeError> {
     let receiver = Value::Proxy(proxy.clone());
     let existing =

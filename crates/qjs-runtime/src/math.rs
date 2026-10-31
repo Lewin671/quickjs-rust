@@ -4,13 +4,16 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use crate::CallEnv;
 use crate::{
     Function, NativeFunction, ObjectRef, Property, RuntimeError, Value,
     array::for_each_iterable_value_with_env, symbol, to_number_with_env, to_uint32_number,
 };
 
-pub(super) fn install_math(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
+pub(super) fn install_math(
+    env: &mut crate::context::Context<'_>,
+    global_this: &Value,
+    object_prototype: ObjectRef,
+) {
     let math_object =
         ObjectRef::with_prototype(HashMap::new(), Some(object_prototype), env.realm().atoms());
     math_object.set_to_string_tag("Math");
@@ -264,7 +267,7 @@ fn define_math_function(
 pub(super) fn native_math_unary(
     argument_values: &[Value],
     operation: fn(f64) -> f64,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let argument = argument_values.first().cloned().unwrap_or(Value::Undefined);
     Ok(Value::Number(operation(to_number_with_env(argument, env)?)))
@@ -272,7 +275,7 @@ pub(super) fn native_math_unary(
 
 pub(super) fn native_math_atan2(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let y = to_number_with_env(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
@@ -287,7 +290,7 @@ pub(super) fn native_math_atan2(
 
 pub(super) fn native_math_fround(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let number = to_number_with_env(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
@@ -298,7 +301,7 @@ pub(super) fn native_math_fround(
 
 pub(super) fn native_math_f16round(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let number = to_number_with_env(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
@@ -309,7 +312,7 @@ pub(super) fn native_math_f16round(
 
 pub(super) fn native_math_hypot(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let mut coerced = Vec::with_capacity(argument_values.len());
     for value in argument_values.iter().cloned() {
@@ -338,7 +341,7 @@ pub(super) fn native_math_hypot(
 
 pub(super) fn native_math_max(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if argument_values.is_empty() {
         return Ok(Value::Number(f64::NEG_INFINITY));
@@ -363,7 +366,7 @@ pub(super) fn native_math_max(
 
 pub(super) fn native_math_min(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if argument_values.is_empty() {
         return Ok(Value::Number(f64::INFINITY));
@@ -388,7 +391,7 @@ pub(super) fn native_math_min(
 
 pub(super) fn native_math_pow(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let base = to_number_with_env(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
@@ -409,7 +412,7 @@ pub(super) fn native_math_random() -> Result<Value, RuntimeError> {
 
 pub(super) fn native_math_round(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let number = to_number_with_env(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
@@ -440,7 +443,7 @@ pub(crate) fn round_number(number: f64) -> f64 {
 
 pub(super) fn native_math_sign(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let number = to_number_with_env(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
@@ -457,7 +460,7 @@ pub(super) fn native_math_sign(
 
 pub(super) fn native_math_clz32(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let number = to_number_with_env(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
@@ -470,7 +473,7 @@ pub(super) fn native_math_clz32(
 
 pub(super) fn native_math_imul(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let left = to_number_with_env(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
@@ -486,7 +489,7 @@ pub(super) fn native_math_imul(
 
 pub(super) fn native_math_sum_precise(
     items: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let mut sum = SumPrecise::new();
     for_each_iterable_value_with_env(items, "Math.sumPrecise", env, |value, _| {

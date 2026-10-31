@@ -18,7 +18,7 @@ pub(super) struct ScopeInstances {
     with_base: usize,
 }
 
-impl Vm<'_> {
+impl Vm<'_, '_> {
     pub(super) fn read_global_binding(
         &mut self,
         name: &str,
@@ -48,8 +48,8 @@ impl Vm<'_> {
         {
             return Ok(Some(base));
         }
-        let mut env = self.realm_env();
-        if !crate::property::has_property(base.clone(), &env, name)? {
+        let mut env = self.context();
+        if !crate::property::has_property(base.clone(), &mut env, name)? {
             return Ok(None);
         }
         crate::property_value(base, name, &mut env).map(Some)
@@ -99,8 +99,8 @@ impl Vm<'_> {
                 crate::value::OwnDataPropertyWrite::NeedsSlowPath => {}
             }
         }
-        let mut env = self.realm_env();
-        if strict && !crate::property::has_property(base.clone(), &env, name)? {
+        let mut env = self.context();
+        if strict && !crate::property::has_property(base.clone(), &mut env, name)? {
             return Err(crate::RuntimeError {
                 thrown: None,
                 message: format!("ReferenceError: undefined identifier `{name}`"),
@@ -131,18 +131,18 @@ impl Vm<'_> {
     }
 
     pub(super) fn resolve_scope_binding(
-        &self,
+        &mut self,
         name: &str,
         strict: bool,
     ) -> Result<Option<crate::binding::ResolvedReference>, crate::RuntimeError> {
         let Some(cursor) = self.prepare_scope_cursor() else {
             return Ok(None);
         };
-        let mut env = self.realm_env();
+        let mut env = self.context();
         match cursor.resolve(name, strict, &mut env)? {
             crate::binding::ResolvedReference::Unresolvable => {
-                if !self.env.has_global_binding_root()
-                    && let Some(cell) = self.env.module_import_cell(name)
+                if !env.has_global_binding_root()
+                    && let Some(cell) = env.module_import_cell(name)
                 {
                     return Ok(Some(crate::binding::ResolvedReference::Cell {
                         binding: CellReference {
@@ -151,7 +151,7 @@ impl Vm<'_> {
                         },
                     }));
                 }
-                let reference = crate::binding::GlobalReference::select(name, strict, &self.env)?;
+                let reference = crate::binding::GlobalReference::select(name, strict, &mut env)?;
                 Ok(reference
                     .is_bound()
                     .then_some(crate::binding::ResolvedReference::Global(reference)))
@@ -161,20 +161,21 @@ impl Vm<'_> {
     }
 
     pub(super) fn select_binding_reference(
-        &self,
+        &mut self,
         name: &str,
         strict: bool,
         scope: ScopeId,
     ) -> Result<crate::binding::ResolvedReference, crate::RuntimeError> {
-        let mut services = self.realm_env();
-        if let Some(cursor) = self.prepare_scope_cursor_at(scope) {
+        let cursor = self.prepare_scope_cursor_at(scope);
+        let mut services = self.context();
+        if let Some(cursor) = cursor {
             let reference = cursor.resolve(name, strict, &mut services)?;
             if !matches!(reference, crate::binding::ResolvedReference::Unresolvable) {
                 return Ok(reference);
             }
         }
-        if !self.env.has_global_binding_root()
-            && let Some(cell) = self.env.module_import_cell(name)
+        if !services.has_global_binding_root()
+            && let Some(cell) = services.module_import_cell(name)
         {
             return Ok(crate::binding::ResolvedReference::Cell {
                 binding: CellReference {
@@ -184,24 +185,24 @@ impl Vm<'_> {
             });
         }
         Ok(crate::binding::ResolvedReference::Global(
-            crate::binding::GlobalReference::select(name, strict, &self.env)?,
+            crate::binding::GlobalReference::select(name, strict, &mut services)?,
         ))
     }
 
     pub(super) fn read_scope_binding(
-        &self,
+        &mut self,
         reference: &crate::binding::ResolvedReference,
     ) -> Result<crate::Value, crate::RuntimeError> {
-        reference.read(&mut self.realm_env())
+        reference.read(&mut self.context())
     }
 
     pub(super) fn assign_scope_binding(
-        &self,
+        &mut self,
         reference: &crate::binding::ResolvedReference,
         value: crate::Value,
         strict: bool,
     ) -> Result<(), crate::RuntimeError> {
-        reference.assign(value, strict, &mut self.realm_env())
+        reference.assign(value, strict, &mut self.context())
     }
 
     pub(super) fn prepare_scope_cursor(&self) -> Option<ScopeCursor> {
@@ -317,7 +318,11 @@ impl Vm<'_> {
                 let cell = self
                     .local_upvalue_cell(meta.slot.0)
                     .cloned()
-                    .or_else(|| self.env.frame_binding_cell(&meta.name))
+                    .or_else(|| {
+                        (meta.name == "this")
+                            .then(|| self.env.derived_this_cell())
+                            .flatten()
+                    })
                     .unwrap_or_else(|| {
                         if descriptor.kind == ScopeKind::Eval
                             && matches!(

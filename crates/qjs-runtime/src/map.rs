@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use crate::CallEnv;
 use crate::{
     ArrayRef, Function, MapRef, NativeFunction, ObjectRef, Property, RuntimeError, Value,
     array::{for_each_iterable_value_with_env, iterable_values_with_env},
@@ -15,7 +14,11 @@ const MAP_ITERATOR_KIND_KEY: &str = "key";
 const MAP_ITERATOR_KIND_VALUE: &str = "value";
 const MAP_ITERATOR_KIND_KEY_VALUE: &str = "key+value";
 
-pub(crate) fn install_map(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
+pub(crate) fn install_map(
+    env: &mut crate::context::Context<'_>,
+    global_this: &Value,
+    object_prototype: ObjectRef,
+) {
     let map_prototype =
         ObjectRef::with_prototype(HashMap::new(), Some(object_prototype), env.realm().atoms());
     map_prototype.set_to_string_tag("Map");
@@ -136,7 +139,7 @@ pub(crate) fn native_map(
     function: &Function,
     argument_values: &[Value],
     is_construct: bool,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if !is_construct {
         return Err(RuntimeError {
@@ -170,7 +173,7 @@ pub(crate) fn native_map(
 
 pub(crate) fn native_map_group_by(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let items = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let callback = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
@@ -198,7 +201,10 @@ pub(crate) fn native_map_group_by(
     Ok(Value::Map(map))
 }
 
-fn map_entry(entry: Value, env: &mut CallEnv) -> Result<(Value, Value), RuntimeError> {
+fn map_entry(
+    entry: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<(Value, Value), RuntimeError> {
     match entry {
         Value::Object(object) if symbol::is_symbol_primitive(&object) => Err(RuntimeError {
             thrown: None,
@@ -272,7 +278,7 @@ pub(crate) fn native_map_prototype_get_or_insert(
 pub(crate) fn native_map_prototype_get_or_insert_computed(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let map = this_map(this_value)?;
     let key = argument_values.first().cloned().unwrap_or(Value::Undefined);
@@ -302,7 +308,7 @@ pub(crate) fn native_map_prototype_get_or_insert_computed(
 
 pub(crate) fn native_map_prototype_entries(
     this_value: Value,
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     map_iterator(this_value, env, MAP_ITERATOR_KIND_KEY_VALUE)
 }
@@ -310,7 +316,7 @@ pub(crate) fn native_map_prototype_entries(
 pub(crate) fn native_map_prototype_for_each(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let map = this_map(this_value.clone())?;
     let callback = argument_values.first().cloned().unwrap_or(Value::Undefined);
@@ -351,7 +357,7 @@ pub(crate) fn native_map_prototype_has(
 
 pub(crate) fn native_map_prototype_keys(
     this_value: Value,
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     map_iterator(this_value, env, MAP_ITERATOR_KIND_KEY)
 }
@@ -369,7 +375,7 @@ pub(crate) fn native_map_prototype_set(
 
 pub(crate) fn native_map_prototype_values(
     this_value: Value,
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     map_iterator(this_value, env, MAP_ITERATOR_KIND_VALUE)
 }
@@ -445,7 +451,11 @@ fn this_map(this_value: Value) -> Result<MapRef, RuntimeError> {
     }
 }
 
-fn map_iterator(this_value: Value, env: &CallEnv, kind: &str) -> Result<Value, RuntimeError> {
+fn map_iterator(
+    this_value: Value,
+    env: &crate::context::Context<'_>,
+    kind: &str,
+) -> Result<Value, RuntimeError> {
     this_map(this_value.clone())?;
     let prototype =
         crate::iterator::builtin_iterator_prototype(env, crate::iterator::BuiltinIteratorKind::Map);
@@ -522,7 +532,7 @@ fn append_map_group(realm: &crate::function::Realm, map: &MapRef, key: Value, va
     }
 }
 
-fn map_prototype(env: &CallEnv) -> Option<ObjectRef> {
+fn map_prototype(env: &crate::context::Context<'_>) -> Option<ObjectRef> {
     match env.get("Map") {
         Some(Value::Function(function)) => crate::function_prototype(&function),
         _ => None,

@@ -6,7 +6,7 @@
 //! or deleted. Export data descriptors read their value from the module's live
 //! binding map when queried.
 
-use crate::{CallEnv, ModuleNamespaceBindings, ObjectRef, Property, Value};
+use crate::{ModuleNamespaceBindings, ObjectRef, Property, Value};
 
 pub(super) fn empty_namespace(
     live_bindings: ModuleNamespaceBindings,
@@ -22,7 +22,7 @@ pub(super) fn empty_namespace(
 pub(super) fn populate_namespace(
     namespace: &ObjectRef,
     bindings: &mut Vec<(String, Value)>,
-    env: &CallEnv,
+    realm: &crate::function::Realm,
 ) {
     bindings.sort_by(|(left, _), (right, _)| left.cmp(right));
     for (name, value) in bindings.drain(..) {
@@ -34,7 +34,7 @@ pub(super) fn populate_namespace(
     // (writable:false, enumerable:false, configurable:false) — unlike the
     // configurable form on ordinary prototypes. The internal slot below also
     // keeps `Object.prototype.toString` reporting "[object Module]".
-    if let Some(symbol) = crate::symbol::to_string_tag_symbol(env) {
+    if let Some(symbol) = crate::symbol::realm_to_string_tag_symbol(realm) {
         namespace.define_symbol_property(
             symbol,
             Property::data(

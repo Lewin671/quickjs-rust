@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use crate::CallEnv;
 use crate::{
     Function, NativeFunction, ObjectRef, RuntimeError, Value,
     array::for_each_iterable_value_with_env, call_function, property_value, symbol,
@@ -10,7 +9,7 @@ const WEAK_SET_ENTRIES: &str = "\0weak_set_entries";
 const WEAK_SET_BRAND: &str = "\0weak_set";
 
 pub(crate) fn install_weak_set(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     global_this: &Value,
     object_prototype: ObjectRef,
 ) {
@@ -66,7 +65,7 @@ pub(crate) fn native_weak_set(
     function: &Function,
     argument_values: &[Value],
     is_construct: bool,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if !is_construct {
         return Err(RuntimeError {
@@ -114,7 +113,7 @@ pub(crate) fn native_weak_set(
 pub(crate) fn native_weak_set_prototype_add(
     this_value: Value,
     argument_values: &[Value],
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let object = weak_set_object(&this_value)?;
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
@@ -179,7 +178,11 @@ fn weak_set_has(object: ObjectRef, value: &Value) -> bool {
     weak_set_entries(&object).is_ok_and(|entries| entries.has(value))
 }
 
-fn weak_set_add(object: ObjectRef, value: Value, env: &CallEnv) -> Result<(), RuntimeError> {
+fn weak_set_add(
+    object: ObjectRef,
+    value: Value,
+    env: &crate::context::Context<'_>,
+) -> Result<(), RuntimeError> {
     if !can_be_held_weakly(&value, env) {
         return Err(RuntimeError {
             thrown: None,
@@ -201,7 +204,7 @@ fn is_weak_set_value(value: &Value) -> bool {
     )
 }
 
-fn can_be_held_weakly(value: &Value, env: &CallEnv) -> bool {
+fn can_be_held_weakly(value: &Value, env: &crate::context::Context<'_>) -> bool {
     match value {
         Value::Object(object) if symbol::is_symbol_primitive(object) => {
             !symbol::is_registered_symbol(object, env)

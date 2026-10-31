@@ -1,10 +1,10 @@
 //! Operation entries for typed arrays; bound once when a native is created.
 
 use super::CallInfo;
-use crate::{CallEnv, NativeFunction, RuntimeError, Value, typed_array};
+use crate::{NativeFunction, RuntimeError, Value, typed_array};
 
 pub(super) fn typed_array(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -19,7 +19,7 @@ pub(super) fn typed_array(
 }
 
 pub(super) fn uint8_array(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -34,7 +34,7 @@ pub(super) fn uint8_array(
 }
 
 pub(super) fn int8_array(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -49,7 +49,7 @@ pub(super) fn int8_array(
 }
 
 pub(super) fn uint8_clamped_array(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -64,7 +64,7 @@ pub(super) fn uint8_clamped_array(
 }
 
 pub(super) fn uint16_array(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -79,7 +79,7 @@ pub(super) fn uint16_array(
 }
 
 pub(super) fn int16_array(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -94,7 +94,7 @@ pub(super) fn int16_array(
 }
 
 pub(super) fn uint32_array(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -109,7 +109,7 @@ pub(super) fn uint32_array(
 }
 
 pub(super) fn int32_array(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -124,7 +124,7 @@ pub(super) fn int32_array(
 }
 
 pub(super) fn float32_array(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -139,7 +139,7 @@ pub(super) fn float32_array(
 }
 
 pub(super) fn float64_array(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -154,7 +154,7 @@ pub(super) fn float64_array(
 }
 
 pub(super) fn big_int64_array(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -169,7 +169,7 @@ pub(super) fn big_int64_array(
 }
 
 pub(super) fn big_uint64_array(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -184,7 +184,7 @@ pub(super) fn big_uint64_array(
 }
 
 pub(super) fn typed_array_from(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -192,7 +192,7 @@ pub(super) fn typed_array_from(
 }
 
 pub(super) fn typed_array_of(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -200,7 +200,7 @@ pub(super) fn typed_array_of(
 }
 
 pub(super) fn uint8_array_from_base64(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -208,7 +208,7 @@ pub(super) fn uint8_array_from_base64(
 }
 
 pub(super) fn uint8_array_from_hex(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -216,7 +216,7 @@ pub(super) fn uint8_array_from_hex(
 }
 
 pub(super) fn typed_array_prototype_buffer(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -224,7 +224,7 @@ pub(super) fn typed_array_prototype_buffer(
 }
 
 pub(super) fn typed_array_prototype_byte_length(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -232,7 +232,7 @@ pub(super) fn typed_array_prototype_byte_length(
 }
 
 pub(super) fn typed_array_prototype_byte_offset(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -240,7 +240,7 @@ pub(super) fn typed_array_prototype_byte_offset(
 }
 
 pub(super) fn typed_array_prototype_length(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -248,7 +248,7 @@ pub(super) fn typed_array_prototype_length(
 }
 
 pub(super) fn typed_array_prototype_to_string_tag(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -256,7 +256,7 @@ pub(super) fn typed_array_prototype_to_string_tag(
 }
 
 pub(super) fn typed_array_prototype_at(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -264,7 +264,7 @@ pub(super) fn typed_array_prototype_at(
 }
 
 pub(super) fn typed_array_prototype_index_of(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -276,7 +276,7 @@ pub(super) fn typed_array_prototype_index_of(
 }
 
 pub(super) fn typed_array_prototype_last_index_of(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -288,7 +288,7 @@ pub(super) fn typed_array_prototype_last_index_of(
 }
 
 pub(super) fn typed_array_prototype_includes(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -300,7 +300,7 @@ pub(super) fn typed_array_prototype_includes(
 }
 
 pub(super) fn typed_array_prototype_join(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -308,7 +308,7 @@ pub(super) fn typed_array_prototype_join(
 }
 
 pub(super) fn typed_array_prototype_keys(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -316,7 +316,7 @@ pub(super) fn typed_array_prototype_keys(
 }
 
 pub(super) fn typed_array_prototype_values(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -324,7 +324,7 @@ pub(super) fn typed_array_prototype_values(
 }
 
 pub(super) fn typed_array_prototype_entries(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -332,7 +332,7 @@ pub(super) fn typed_array_prototype_entries(
 }
 
 pub(super) fn typed_array_prototype_for_each(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -344,7 +344,7 @@ pub(super) fn typed_array_prototype_for_each(
 }
 
 pub(super) fn typed_array_prototype_some(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -352,7 +352,7 @@ pub(super) fn typed_array_prototype_some(
 }
 
 pub(super) fn typed_array_prototype_every(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -360,7 +360,7 @@ pub(super) fn typed_array_prototype_every(
 }
 
 pub(super) fn typed_array_prototype_find(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -368,7 +368,7 @@ pub(super) fn typed_array_prototype_find(
 }
 
 pub(super) fn typed_array_prototype_find_index(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -380,7 +380,7 @@ pub(super) fn typed_array_prototype_find_index(
 }
 
 pub(super) fn typed_array_prototype_find_last(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -392,7 +392,7 @@ pub(super) fn typed_array_prototype_find_last(
 }
 
 pub(super) fn typed_array_prototype_find_last_index(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -404,7 +404,7 @@ pub(super) fn typed_array_prototype_find_last_index(
 }
 
 pub(super) fn typed_array_prototype_map(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -412,7 +412,7 @@ pub(super) fn typed_array_prototype_map(
 }
 
 pub(super) fn typed_array_prototype_filter(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -420,7 +420,7 @@ pub(super) fn typed_array_prototype_filter(
 }
 
 pub(super) fn typed_array_prototype_reduce(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -428,7 +428,7 @@ pub(super) fn typed_array_prototype_reduce(
 }
 
 pub(super) fn typed_array_prototype_reduce_right(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -440,7 +440,7 @@ pub(super) fn typed_array_prototype_reduce_right(
 }
 
 pub(super) fn typed_array_prototype_slice(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -448,7 +448,7 @@ pub(super) fn typed_array_prototype_slice(
 }
 
 pub(super) fn typed_array_prototype_subarray(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -460,7 +460,7 @@ pub(super) fn typed_array_prototype_subarray(
 }
 
 pub(super) fn typed_array_prototype_to_string(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -472,7 +472,7 @@ pub(super) fn typed_array_prototype_to_string(
 }
 
 pub(super) fn typed_array_prototype_to_locale_string(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -484,7 +484,7 @@ pub(super) fn typed_array_prototype_to_locale_string(
 }
 
 pub(super) fn typed_array_prototype_set(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -492,7 +492,7 @@ pub(super) fn typed_array_prototype_set(
 }
 
 pub(super) fn typed_array_prototype_fill(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -500,7 +500,7 @@ pub(super) fn typed_array_prototype_fill(
 }
 
 pub(super) fn typed_array_prototype_copy_within(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -512,7 +512,7 @@ pub(super) fn typed_array_prototype_copy_within(
 }
 
 pub(super) fn typed_array_prototype_reverse(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -520,7 +520,7 @@ pub(super) fn typed_array_prototype_reverse(
 }
 
 pub(super) fn typed_array_prototype_sort(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -528,7 +528,7 @@ pub(super) fn typed_array_prototype_sort(
 }
 
 pub(super) fn typed_array_prototype_to_reversed(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -540,7 +540,7 @@ pub(super) fn typed_array_prototype_to_reversed(
 }
 
 pub(super) fn typed_array_prototype_to_sorted(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -552,7 +552,7 @@ pub(super) fn typed_array_prototype_to_sorted(
 }
 
 pub(super) fn typed_array_prototype_with(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -560,7 +560,7 @@ pub(super) fn typed_array_prototype_with(
 }
 
 pub(super) fn uint8_array_prototype_to_base64(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -572,7 +572,7 @@ pub(super) fn uint8_array_prototype_to_base64(
 }
 
 pub(super) fn uint8_array_prototype_to_hex(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -580,7 +580,7 @@ pub(super) fn uint8_array_prototype_to_hex(
 }
 
 pub(super) fn uint8_array_prototype_set_from_base64(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -592,7 +592,7 @@ pub(super) fn uint8_array_prototype_set_from_base64(
 }
 
 pub(super) fn uint8_array_prototype_set_from_hex(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {

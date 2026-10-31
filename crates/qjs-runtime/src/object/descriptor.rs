@@ -11,11 +11,10 @@ use super::{
     },
     enumeration::enumerable_property_entries_with_symbols,
 };
-use crate::CallEnv;
 
 pub(crate) fn native_object_define_property(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let key = to_property_key_value(
@@ -37,7 +36,7 @@ pub(crate) fn native_object_define_property(
 
 pub(crate) fn native_object_define_properties(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     ensure_define_property_target(&target)?;
@@ -60,7 +59,10 @@ pub(crate) fn native_object_define_properties(
     Ok(target)
 }
 
-fn to_object_for_define_properties(value: Value, env: &CallEnv) -> Result<Value, RuntimeError> {
+fn to_object_for_define_properties(
+    value: Value,
+    env: &crate::context::Context<'_>,
+) -> Result<Value, RuntimeError> {
     match value {
         value @ (Value::Array(_)
         | Value::Object(_)
@@ -81,7 +83,7 @@ fn to_object_for_define_properties(value: Value, env: &CallEnv) -> Result<Value,
 pub(crate) fn own_property_descriptor_key(
     value: Value,
     key: &PropertyKey,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Option<Property>, RuntimeError> {
     match value {
         Value::Object(object)
@@ -137,7 +139,7 @@ pub(crate) fn define_property_descriptor_on_value_key(
     target: Value,
     key: PropertyKey,
     descriptor: PropertyDescriptor,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<bool, RuntimeError> {
     let key = match key {
         PropertyKey::String(key) => key,
@@ -291,7 +293,7 @@ pub(crate) fn define_property_descriptor_on_value_key(
 fn define_array_length_property(
     elements: &crate::ArrayRef,
     descriptor: PropertyDescriptor,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<bool, RuntimeError> {
     let new_len = descriptor
         .value
@@ -383,7 +385,7 @@ fn is_mapped_argument_accessor(value: &Value, native: NativeFunction) -> bool {
 fn mapped_argument_descriptor(
     mut descriptor: PropertyDescriptor,
     mapped_argument: Option<&MappedArgumentAccessors>,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<PropertyDescriptor, RuntimeError> {
     if let Some(mapped_argument) = mapped_argument {
         if descriptor.is_accessor_descriptor() {
@@ -404,7 +406,7 @@ fn mapped_argument_descriptor(
 
 fn mapped_argument_external_descriptor(
     property: Option<Property>,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Option<Property>, RuntimeError> {
     let Some(property) = property else {
         return Ok(None);
@@ -448,7 +450,7 @@ fn resolve_mapped_argument_non_writable_definition(
 
 fn get_mapped_argument_value(
     mapped_argument: &MappedArgumentAccessors,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     call_function(
         mapped_argument.get.clone(),
@@ -462,7 +464,7 @@ fn get_mapped_argument_value(
 fn set_mapped_argument_value(
     mapped_argument: &MappedArgumentAccessors,
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     call_function(
         mapped_argument.set.clone(),
@@ -477,7 +479,7 @@ fn set_mapped_argument_value(
 pub(crate) fn define_array_length_value(
     elements: &crate::ArrayRef,
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<bool, RuntimeError> {
     define_array_length_property(elements, PropertyDescriptor::data_value(value), env)
 }
@@ -493,7 +495,7 @@ fn array_length_property(elements: &crate::ArrayRef) -> Property {
 
 pub(super) fn array_length_from_array_set_length_value(
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<usize, RuntimeError> {
     let length = crate::to_uint32_number(crate::to_number_with_env(value.clone(), env)?);
     let number = crate::to_number_with_env(value, env)?;
@@ -508,7 +510,7 @@ pub(super) fn array_length_from_array_set_length_value(
 
 pub(crate) fn array_length_from_descriptor_value(
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<usize, RuntimeError> {
     let number = crate::to_number_with_env(value, env)?;
     let length = crate::to_uint32_number(number);
@@ -529,7 +531,7 @@ fn define_symbol_property_descriptor_on_value(
     target: Value,
     symbol: ObjectRef,
     descriptor: PropertyDescriptor,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<bool, RuntimeError> {
     match &target {
         Value::Object(object) => {
@@ -665,7 +667,7 @@ pub(crate) fn define_property_on_value_key(
     target: Value,
     key: PropertyKey,
     descriptor: Property,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<bool, RuntimeError> {
     let key = match key {
         PropertyKey::String(key) => key,
@@ -792,7 +794,7 @@ fn define_symbol_property_on_value(
     target: Value,
     symbol: ObjectRef,
     descriptor: Property,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<bool, RuntimeError> {
     match &target {
         Value::Object(object) => {
@@ -916,13 +918,14 @@ mod tests {
     use std::collections::HashMap;
 
     use super::define_property_on_value_key;
-    use crate::{ArrayRef, CallEnv, Property, PropertyKey, Value, function::new_realm};
+    use crate::{ArrayRef, Property, PropertyKey, Value, function::new_realm};
 
     #[test]
     fn default_array_index_definitions_use_dense_storage() {
         let array =
             ArrayRef::new_with_length_in_domain(&crate::property::atom::AtomDomain::new(), 2);
-        let mut env = CallEnv::new(new_realm(HashMap::new()));
+        let mut env_root = crate::context::HostRoot::new(new_realm(HashMap::new()));
+        let mut env = env_root.context();
 
         for (index, value) in [3.0, 5.0].into_iter().enumerate() {
             assert_eq!(

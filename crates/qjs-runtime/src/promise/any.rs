@@ -9,7 +9,6 @@ use super::{
     capability::{self, PromiseCapability},
     perform::{self, ElementHandler},
 };
-use crate::CallEnv;
 
 /// `Promise.any` (ES2023 27.2.4.3): fulfils with the first input to fulfil, or
 /// rejects with an `AggregateError` collecting every rejection reason.
@@ -17,7 +16,7 @@ pub(crate) fn native_promise_any(
     function: &Function,
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let iterable = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let aggregate_error = function
@@ -43,7 +42,7 @@ impl ElementHandler for AnyHandler {
         &mut self,
         index: usize,
         capability: &PromiseCapability,
-        _env: &mut CallEnv,
+        _env: &mut crate::context::Context<'_>,
     ) -> Result<(Value, Value), RuntimeError> {
         self.errors.set(index, Value::Undefined);
         perform::increment_remaining(&self.remaining);
@@ -73,7 +72,7 @@ impl ElementHandler for AnyHandler {
         &mut self,
         _count: usize,
         capability: &PromiseCapability,
-        env: &mut CallEnv,
+        env: &mut crate::context::Context<'_>,
     ) -> Result<(), RuntimeError> {
         if perform::decrement_remaining(&self.remaining) == 0.0 {
             let error = build_aggregate_error(self.aggregate_error.clone(), &self.errors, env);
@@ -89,7 +88,7 @@ impl ElementHandler for AnyHandler {
 pub(crate) fn native_promise_any_reject_element(
     function: &Function,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if already_called(function) {
         return Ok(Value::Undefined);
@@ -119,7 +118,7 @@ pub(crate) fn native_promise_any_reject_element(
 fn build_aggregate_error(
     constructor: Option<Value>,
     errors: &ArrayRef,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Value {
     let errors_value = Value::Array(errors.clone());
     let message = Value::String("All promises were rejected".to_owned().into());

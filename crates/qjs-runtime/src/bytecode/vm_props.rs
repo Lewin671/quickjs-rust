@@ -22,10 +22,9 @@ use super::vm::Vm;
 
 use super::ir::NamedPropertyCache;
 use super::vm_set::property_set_uses_setter;
-use crate::CallEnv;
 use std::rc::Rc;
 
-impl Vm<'_> {
+impl Vm<'_, '_> {
     /// Stores a statically named property, reusing the paired read cache only
     /// after it has proved an ordinary own data-property slot.
     pub(super) fn set_named_prop(
@@ -134,14 +133,6 @@ impl Vm<'_> {
         }
     }
 
-    fn primitive_prototype_env(&self) -> CallEnv {
-        if self.env.has_dynamic_function_realm_global() {
-            self.current_env()
-        } else {
-            self.realm_env()
-        }
-    }
-
     /// Whether an indexed property or exotic object anywhere above an ordinary
     /// array could intercept `array[index] = value`.
     ///
@@ -158,10 +149,10 @@ impl Vm<'_> {
     /// stable realm intrinsics.
     pub(super) fn array_prototype_chain_has_index_hazard(&mut self) -> Option<bool> {
         if self.array_prototype_cache.is_none() {
-            self.array_prototype_cache = array_prototype(&self.env);
+            self.array_prototype_cache = array_prototype(&self.context());
         }
         if self.object_prototype_cache.is_none() {
-            self.object_prototype_cache = crate::object_prototype(&self.env);
+            self.object_prototype_cache = crate::object_prototype(&self.context());
         }
         let array_prototype = self.array_prototype_cache.as_ref()?;
         let object_prototype = self.object_prototype_cache.as_ref()?;
@@ -188,7 +179,7 @@ impl Vm<'_> {
     /// intrinsic `new Array(...)` constructor.
     pub(super) fn array_uses_realm_prototype(&mut self, array: &crate::ArrayRef) -> bool {
         if self.array_prototype_cache.is_none() {
-            self.array_prototype_cache = array_prototype(&self.env);
+            self.array_prototype_cache = array_prototype(&self.context());
         }
         self.array_prototype_cache
             .as_ref()
@@ -200,13 +191,13 @@ impl Vm<'_> {
     /// resolved once and never invalidated by mutable global rebinding.
     pub(super) fn cached_object_prototype(&mut self) -> Option<ObjectRef> {
         if self.object_prototype_cache.is_none() {
-            self.object_prototype_cache = crate::object_prototype(&self.env);
+            self.object_prototype_cache = crate::object_prototype(&self.context());
         }
         self.object_prototype_cache.clone()
     }
 
     pub(super) fn symbol_primitive_set_fails(
-        &self,
+        &mut self,
         object: &Value,
         key: &crate::PropertyKey,
     ) -> bool {
@@ -219,7 +210,7 @@ impl Vm<'_> {
         if matches!(key, crate::PropertyKey::String(_)) {
             return false;
         }
-        let env = self.current_env();
+        let env = self.context();
         if property_set_uses_setter(object, key, &env) {
             return false;
         }
@@ -244,7 +235,7 @@ impl Vm<'_> {
         let key_value = self.pop()?;
         let key = self.coerce_property_key(key_value)?;
         let object = self.pop()?;
-        let mut env = self.current_env();
+        let mut env = self.context();
         let result = delete_property_key(object, &key, &mut env)?;
         // Strict-mode `delete` of a non-configurable property is a TypeError.
         if is_strict && matches!(result, Value::Boolean(false)) {
@@ -268,18 +259,18 @@ impl Vm<'_> {
     /// path retains the complete frame view. Ordinary frame bindings named
     /// `String`, `Number`, and so on cannot affect a primitive value's
     /// intrinsic prototype.
-    pub(super) fn try_direct_get(&self, object: &Value, key: &PropertyKey) -> Option<Value> {
+    pub(super) fn try_direct_get(&mut self, object: &Value, key: &PropertyKey) -> Option<Value> {
         match key {
             PropertyKey::String(name) => self.try_direct_get_string(object, name),
             PropertyKey::Symbol(symbol) => self.try_direct_get_symbol(object, symbol),
         }
     }
 
-    pub(super) fn try_direct_get_string(&self, object: &Value, key: &str) -> Option<Value> {
+    pub(super) fn try_direct_get_string(&mut self, object: &Value, key: &str) -> Option<Value> {
         match object {
             Value::Object(object) => {
                 if symbol::is_symbol_primitive(object) {
-                    let env = self.primitive_prototype_env();
+                    let env = self.context();
                     return data_property_value(inherited_primitive_prototype_descriptor(
                         &env, "Symbol", key,
                     ));
@@ -309,7 +300,7 @@ impl Vm<'_> {
                         crate::regexp::default_regexp_source_accessor_value(
                             object,
                             key,
-                            &self.realm_env(),
+                            &self.context(),
                         )
                     }
                 }
@@ -339,7 +330,7 @@ impl Vm<'_> {
                 if descriptor.is_some() {
                     return data_property_value(descriptor);
                 }
-                match elements.effective_prototype_slot(&self.realm_env()) {
+                match elements.effective_prototype_slot(&self.context()) {
                     Some(crate::Prototype::Object(prototype)) => {
                         match ordinary_chain_data_value(&prototype, key) {
                             Err(ProxyInChain) | Ok(DirectPropertyRead::NeedsSlowPath) => None,
@@ -380,7 +371,7 @@ impl Vm<'_> {
                     if let Some(property) = function_own_property_descriptor(function, key) {
                         Ok(Some(property))
                     } else {
-                        let env = self.realm_env();
+                        let env = self.context();
                         let prototype = match function.internal_prototype_slot() {
                             Some(prototype) => prototype,
                             None => crate::function_intrinsic_prototype_slot(&env),
@@ -406,7 +397,7 @@ impl Vm<'_> {
                 }
                 // Ordinary realms own a stable `%String.prototype%` slot. Walk
                 // that live object directly so primitive method reads do not
-                // rebuild a CallEnv and rediscover the mutable String binding
+                // rebuild a crate::context::ActivationContext and rediscover the mutable String binding
                 // on every iteration. Accessors, Proxies, and exotic links
                 // decline before observable work and replay the generic path.
                 if !self.env.has_dynamic_function_realm_global()
@@ -418,25 +409,25 @@ impl Vm<'_> {
                         Err(ProxyInChain) | Ok(DirectPropertyRead::NeedsSlowPath) => None,
                     };
                 }
-                let env = self.primitive_prototype_env();
+                let env = self.context();
                 data_property_value(inherited_primitive_prototype_descriptor(
                     &env, "String", key,
                 ))
             }
             Value::Number(_) => {
-                let env = self.primitive_prototype_env();
+                let env = self.context();
                 data_property_value(inherited_primitive_prototype_descriptor(
                     &env, "Number", key,
                 ))
             }
             Value::Boolean(_) => {
-                let env = self.primitive_prototype_env();
+                let env = self.context();
                 data_property_value(inherited_primitive_prototype_descriptor(
                     &env, "Boolean", key,
                 ))
             }
             Value::BigInt(_) => {
-                let env = self.primitive_prototype_env();
+                let env = self.context();
                 data_property_value(inherited_primitive_prototype_descriptor(
                     &env, "BigInt", key,
                 ))
@@ -453,23 +444,16 @@ impl Vm<'_> {
     /// live through the function object. Accessors outside that contract and
     /// any exotic or Proxy-bearing chain retain the generic path.
     pub(super) fn try_direct_leaf_getter(
-        &self,
+        &mut self,
         receiver: &Value,
         key: &str,
     ) -> Option<Result<Value, RuntimeError>> {
-        direct_leaf_getter(
-            receiver,
-            key,
-            &self.env,
-            self.module_host.clone(),
-            #[cfg(feature = "agents")]
-            self.agent_context.clone(),
-        )
+        direct_leaf_getter(receiver, key, &mut self.context())
     }
 
     #[inline(always)]
     pub(super) fn try_cached_get_named(
-        &self,
+        &mut self,
         object: &Value,
         name: &crate::property::atom::Atom,
         cache: &NamedPropertyCache,
@@ -481,17 +465,16 @@ impl Vm<'_> {
             && receiver.is_typed_array_exotic()
             && name.as_str() == "length"
         {
-            return self.cached_typed_array_length(object, receiver, cache);
+            return Self::cached_typed_array_length(object, receiver, cache);
         }
         cache
-            .get_value(object, Some(&self.env))
+            .get_value(object, Some(&self.context()))
             .or_else(|| self.cached_get_named_miss(object, name, cache))
     }
     /// The IC proves the current accessor before this side-effect-free builtin
     /// shortcut; custom accessors still execute through the ordinary call path.
     #[inline(never)]
-    fn cached_typed_array_length(
-        &self,
+    pub(super) fn cached_typed_array_length(
         value: &Value,
         object: &ObjectRef,
         cache: &NamedPropertyCache,
@@ -510,17 +493,17 @@ impl Vm<'_> {
     #[cold]
     #[inline(never)]
     fn cached_get_named_miss(
-        &self,
+        &mut self,
         object: &Value,
         name: &crate::property::atom::Atom,
         cache: &NamedPropertyCache,
     ) -> Option<Value> {
         cache
-            .read_value(object, name, Some(&self.env))
+            .read_value(object, name, Some(&self.context()))
             .or_else(|| self.try_direct_get_string(object, name.as_str()))
     }
 
-    fn try_direct_get_symbol(&self, object: &Value, symbol: &ObjectRef) -> Option<Value> {
+    fn try_direct_get_symbol(&mut self, object: &Value, symbol: &ObjectRef) -> Option<Value> {
         match object {
             Value::Object(object) => match ordinary_chain_symbol_property(object, symbol) {
                 Err(ProxyInChain) => None,
@@ -538,7 +521,7 @@ impl Vm<'_> {
                 if let Some(property) = elements.symbol_property(symbol) {
                     return data_property_value(Some(property));
                 }
-                match elements.effective_prototype_slot(&self.realm_env()) {
+                match elements.effective_prototype_slot(&self.context()) {
                     Some(crate::Prototype::Object(prototype)) => {
                         match ordinary_chain_symbol_property(&prototype, symbol) {
                             Err(ProxyInChain) => None,
@@ -591,7 +574,7 @@ impl Vm<'_> {
         if self.env.has_global_binding_root() {
             return self.store_global_binding(name, value, true);
         }
-        self.check_dynamic_assignment(name, true)?;
+
         if self.env.has_module_import(name) {
             return Err(RuntimeError {
                 thrown: None,
@@ -720,7 +703,7 @@ impl Vm<'_> {
         if self.env.has_global_binding_root() {
             return self.store_global_binding(name, value, false);
         }
-        self.check_dynamic_assignment(name, false)?;
+
         if self.env.has_module_import(name) {
             return Err(RuntimeError {
                 thrown: None,
@@ -803,7 +786,7 @@ impl Vm<'_> {
     /// marked realm object while the engine's intrinsic realm remains shared.
     /// Keep that object's existing globals live at the write site; generator
     /// suspension no longer performs a later name-based writeback pass.
-    pub(super) fn sync_marked_dynamic_global(&self, name: &str) {
+    pub(super) fn sync_marked_dynamic_global(&mut self, name: &str) {
         // Typed selection names the actual global object. Never enumerate its
         // values into an activation before/after callbacks.
         let Some(global) = self.env.dynamic_function_realm_global() else {
@@ -909,9 +892,7 @@ pub(super) fn ordinary_chain_data_value(
 pub(super) fn direct_leaf_getter(
     receiver: &Value,
     key: &str,
-    env: &CallEnv,
-    module_host: Option<crate::module::ModuleHostRef>,
-    #[cfg(feature = "agents")] agent_context: Option<crate::agent::AgentContextRef>,
+    env: &mut crate::context::Context<'_>,
 ) -> Option<Result<Value, RuntimeError>> {
     let Value::Object(object) = receiver else {
         return None;
@@ -933,9 +914,6 @@ pub(super) fn direct_leaf_getter(
         receiver.clone(),
         &[],
         env,
-        module_host,
-        #[cfg(feature = "agents")]
-        agent_context,
     ))
 }
 
@@ -956,7 +934,7 @@ pub(super) fn ordinary_chain_property(
 fn prototype_chain_property(
     mut current: Option<crate::Prototype>,
     key: &str,
-    function_env: Option<&CallEnv>,
+    function_env: Option<&crate::context::Context<'_>>,
 ) -> Result<Option<Property>, ProxyInChain> {
     loop {
         match current {
@@ -1283,7 +1261,7 @@ pub(super) fn ordinary_chain_symbol_property(
 pub(super) fn get_property(
     object: Value,
     key: &str,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     match object {
         Value::Array(elements) if key == "length" => Ok(Value::Number(elements.len() as f64)),
@@ -1329,7 +1307,7 @@ pub(super) fn get_property(
 pub(super) fn get_property_key(
     object: Value,
     key: &PropertyKey,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     match key {
         PropertyKey::String(key) => get_property(object, key, env),
@@ -1340,7 +1318,7 @@ pub(super) fn get_property_key(
 pub(super) fn delete_property_key(
     object: Value,
     key: &PropertyKey,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     match key {
         PropertyKey::String(key) => delete_property(object, key, env),
@@ -1348,7 +1326,11 @@ pub(super) fn delete_property_key(
     }
 }
 
-fn delete_property(object: Value, key: &str, env: &mut CallEnv) -> Result<Value, RuntimeError> {
+fn delete_property(
+    object: Value,
+    key: &str,
+    env: &mut crate::context::Context<'_>,
+) -> Result<Value, RuntimeError> {
     match object {
         Value::Object(object) => {
             if crate::typed_array::is_typed_array_object(&object)
@@ -1399,7 +1381,7 @@ fn delete_property(object: Value, key: &str, env: &mut CallEnv) -> Result<Value,
 fn delete_symbol_property(
     object: Value,
     symbol: &ObjectRef,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     match object {
         Value::Object(object) => Ok(Value::Boolean(object.delete_own_symbol_property(symbol))),
@@ -1426,7 +1408,10 @@ fn delete_symbol_property(
     }
 }
 
-pub(super) fn enumerable_keys(value: Value, env: &mut CallEnv) -> Result<Vec<Value>, RuntimeError> {
+pub(super) fn enumerable_keys(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<Vec<Value>, RuntimeError> {
     // EnumerateObjectProperties walks the prototype chain, collecting each
     // layer's enumerable own string keys (shadowing already-seen names). An
     // exotic Proxy in the chain is consulted through its ownKeys /
@@ -1551,7 +1536,7 @@ fn proxy_enumerable_layer(
     proxy: crate::proxy::ProxyRef,
     keys: &mut Vec<Rc<str>>,
     seen: &mut crate::value::name_hash::NameSet<Rc<str>>,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     for key in crate::proxy::proxy_own_keys(proxy.clone(), env)? {
         let PropertyKey::String(name) = key else {

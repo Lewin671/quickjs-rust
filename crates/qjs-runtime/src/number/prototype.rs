@@ -9,14 +9,13 @@ use crate::{
 };
 
 use super::{NUMBER_DATA_PROPERTY, formatting::number_to_js_string};
-use crate::CallEnv;
 
 pub(crate) fn native_number(
     function: &Function,
     this_value: Value,
     argument_values: &[Value],
     is_construct: bool,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let number = match argument_values.first() {
         Some(Value::BigInt(value)) => value.to_f64().unwrap_or_else(|| {
@@ -48,7 +47,7 @@ pub(crate) fn native_number(
 pub(crate) fn native_number_prototype_to_string(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut crate::CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let number = this_number_value(this_value)?;
     let radix = number_to_string_radix(
@@ -61,7 +60,7 @@ pub(crate) fn native_number_prototype_to_string(
 pub(crate) fn native_number_prototype_to_fixed(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let number = this_number_value(this_value)?;
     let fraction_digits = fraction_digits(
@@ -76,7 +75,7 @@ pub(crate) fn native_number_prototype_to_fixed(
 pub(crate) fn native_number_prototype_to_exponential(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let number = this_number_value(this_value)?;
     let fraction_digits = optional_digit_number(
@@ -103,7 +102,7 @@ pub(crate) fn native_number_prototype_to_exponential(
 pub(crate) fn native_number_prototype_to_precision(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let number = this_number_value(this_value)?;
     if matches!(argument_values.first(), None | Some(Value::Undefined)) {
@@ -151,7 +150,10 @@ fn this_number_value(value: Value) -> Result<f64, RuntimeError> {
     }
 }
 
-fn number_to_string_radix(value: Value, env: &mut crate::CallEnv) -> Result<u32, RuntimeError> {
+fn number_to_string_radix(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<u32, RuntimeError> {
     if matches!(value, Value::Undefined) {
         return Ok(10);
     }
@@ -165,7 +167,10 @@ fn number_to_string_radix(value: Value, env: &mut crate::CallEnv) -> Result<u32,
     Ok(radix as u32)
 }
 
-fn fraction_digits(value: Value, env: &mut CallEnv) -> Result<usize, RuntimeError> {
+fn fraction_digits(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<usize, RuntimeError> {
     match optional_digits(
         value,
         0,
@@ -183,7 +188,7 @@ fn optional_digits(
     min: usize,
     max: usize,
     range_message: &str,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Option<usize>, RuntimeError> {
     let Some(digits) = optional_digit_number(value, env)? else {
         return Ok(None);
@@ -191,7 +196,10 @@ fn optional_digits(
     Ok(Some(validate_digits(digits, min, max, range_message)?))
 }
 
-fn optional_digit_number(value: Value, env: &mut CallEnv) -> Result<Option<f64>, RuntimeError> {
+fn optional_digit_number(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<Option<f64>, RuntimeError> {
     if matches!(value, Value::Undefined) {
         return Ok(None);
     }

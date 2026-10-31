@@ -8,9 +8,7 @@
 use std::{collections::HashMap, rc::Rc};
 
 use crate::{
-    GLOBAL_THIS_BINDING, ObjectRef, RuntimeError, Value,
-    function::{CallEnv, Realm},
-    initialize_builtins,
+    GLOBAL_THIS_BINDING, ObjectRef, RuntimeError, Value, function::Realm, initialize_builtins,
 };
 
 use super::ir::Bytecode;
@@ -28,8 +26,12 @@ use super::{ModuleBindings, ModuleEvaluation};
 pub(super) fn eval_prelude_script(bytecode: &Bytecode, realm: &Realm) -> Result<(), RuntimeError> {
     Vm::initialize_script_global_bindings(bytecode, realm)?;
     realm.refresh_dynamic_function_realm_global();
-    let env = CallEnv::new(Rc::clone(realm));
-    let mut vm = Vm::new_with_globals(bytecode, env);
+    let env = crate::context::ActivationContext::new(
+        crate::context::CreationContext::root(realm.clone()),
+        crate::context::ExecutionMode::Module,
+    );
+    let mut runtime = crate::context::RuntimeServices::for_realm(realm);
+    let mut vm = Vm::new_with_globals(bytecode, &mut runtime, env);
     vm.run()?;
     vm.drain_promise_jobs()?;
     Ok(())
@@ -44,8 +46,19 @@ pub(super) fn new_module_realm() -> Realm {
     globals.insert(GLOBAL_THIS_BINDING.to_owned(), global_this.clone());
     globals.insert("undefined".to_owned(), Value::Undefined);
     let realm: Realm = crate::function::new_realm_sharing_atoms(globals, atoms);
-    let mut env = CallEnv::new(Rc::clone(&realm));
-    initialize_builtins(&mut env, &global_this);
+    let mut env = crate::context::ActivationContext::new(
+        crate::context::CreationContext::root(realm.clone()),
+        crate::context::ExecutionMode::Module,
+    );
+    let mut runtime = crate::context::RuntimeServices::for_realm(&realm);
+    initialize_builtins(
+        &mut crate::context::Context {
+            runtime: &mut runtime,
+            activation: &mut env,
+            native: None,
+        },
+        &global_this,
+    );
     realm
 }
 
@@ -65,7 +78,10 @@ pub(super) fn eval_module_body(
         Vm::initialize_script_global_bindings(bytecode, realm)?;
     }
     realm.refresh_dynamic_function_realm_global();
-    let mut env = CallEnv::new(Rc::clone(realm));
+    let mut env = crate::context::ActivationContext::new(
+        crate::context::CreationContext::root(realm.clone()),
+        crate::context::ExecutionMode::Module,
+    );
     // Module this is initialized undefined, including when an arrow captures
     // it into a positional cell before the first computed key runs.
     env.set_call_owner(crate::context::CallOwner::root(
@@ -87,7 +103,8 @@ pub(super) fn eval_module_body(
         env.set_module_import(import.local_name, import.bindings, import.binding_name);
     }
     env.set_module_live_bindings(module_bindings.bindings.clone());
-    let mut vm = Vm::new_with_globals(bytecode, env);
+    let mut runtime = crate::context::RuntimeServices::for_realm(realm);
+    let mut vm = Vm::new_with_globals(bytecode, &mut runtime, env);
     vm.run()?;
     // The dynamic-import path defers job draining to the outer queue loop so the
     // module graph (borrowed while this body runs) is not re-borrowed by a
@@ -106,7 +123,10 @@ pub(super) fn eval_module_function_hoists(
     host: Option<crate::module::ModuleHostRef>,
     module_bindings: ModuleBindings,
 ) -> Result<(), RuntimeError> {
-    let mut env = CallEnv::new(Rc::clone(realm));
+    let mut env = crate::context::ActivationContext::new(
+        crate::context::CreationContext::root(realm.clone()),
+        crate::context::ExecutionMode::Module,
+    );
     // Module this is initialized undefined, including when an arrow captures
     // it into a positional cell before the first computed key runs.
     env.set_call_owner(crate::context::CallOwner::root(
@@ -120,7 +140,8 @@ pub(super) fn eval_module_function_hoists(
         env.set_module_import(import.local_name, import.bindings, import.binding_name);
     }
     env.set_module_live_bindings(module_bindings.bindings.clone());
-    let mut vm = Vm::new_with_globals(bytecode, env);
+    let mut runtime = crate::context::RuntimeServices::for_realm(realm);
+    let mut vm = Vm::new_with_globals(bytecode, &mut runtime, env);
     vm.run()?;
     Ok(())
 }
@@ -137,7 +158,7 @@ pub(super) fn eval_module_function_hoists(
 ///
 fn eval_async_module_body(
     bytecode: &Bytecode,
-    mut env: CallEnv,
+    mut env: crate::context::ActivationContext,
     module_bindings: ModuleBindings,
     drain: bool,
 ) -> Result<ModuleEvaluation, RuntimeError> {
@@ -146,24 +167,35 @@ fn eval_async_module_body(
     }
     // Suspension retains the same module cells that declaration instantiation used.
     env.set_module_live_bindings(module_bindings.bindings.clone());
-    let function_env = env.clone();
+    let creation = env.creation_context();
+    let mut runtime = crate::context::RuntimeServices::for_realm(env.realm());
     let context = ObjectRef::new(HashMap::new(), env.realm().atoms());
     *context.generator_state().borrow_mut() =
         Some(GeneratorState::SuspendedStart(Box::new(GeneratorStart {
             bytecode: Rc::new(bytecode.clone()),
-            env: function_env,
-            inputs: None,
+            env,
             upvalues: Vec::new(),
             with_stack: Vec::new(),
         })));
 
-    let result_promise = crate::async_function::drive_async_module(&context, &mut env);
+    let mut job_activation =
+        crate::context::ActivationContext::new(creation, crate::context::ExecutionMode::Module);
+    job_activation.set_call_owner(crate::context::CallOwner::root(
+        Value::Undefined,
+        crate::context::OwnerKind::Module,
+    ));
+    let mut services = crate::context::Context {
+        runtime: &mut runtime,
+        activation: &mut job_activation,
+        native: None,
+    };
+    let result_promise = crate::async_function::drive_async_module(&context, &mut services);
     // Resume ordinary `await`s and reactions when this module body is allowed
     // to settle immediately. Static graph evaluation starts async dependencies
     // without draining them so sibling modules in the same dependency list can
     // run before a top-level await resumes.
     if drain {
-        crate::promise::drain_promise_jobs_until_dynamic_import(&mut env)?;
+        crate::promise::drain_promise_jobs_until_dynamic_import(&mut services)?;
     }
     if let Some(Err(reason)) = crate::promise::settled_outcome(&result_promise) {
         return Err(RuntimeError {

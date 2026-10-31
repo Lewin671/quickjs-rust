@@ -1,10 +1,10 @@
 //! Operation entries for promises; bound once when a native is created.
 
 use super::CallInfo;
-use crate::{CallEnv, RuntimeError, Value, promise};
+use crate::{RuntimeError, Value, promise};
 
 pub(super) fn promise(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -18,7 +18,7 @@ pub(super) fn promise(
 }
 
 pub(super) fn promise_all(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -26,7 +26,7 @@ pub(super) fn promise_all(
 }
 
 pub(super) fn promise_any(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -34,7 +34,7 @@ pub(super) fn promise_any(
 }
 
 pub(super) fn promise_any_reject_element(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -42,7 +42,7 @@ pub(super) fn promise_any_reject_element(
 }
 
 pub(super) fn promise_all_settled(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -50,7 +50,7 @@ pub(super) fn promise_all_settled(
 }
 
 pub(super) fn promise_all_settled_reject_element(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -62,7 +62,7 @@ pub(super) fn promise_all_settled_reject_element(
 }
 
 pub(super) fn promise_all_settled_resolve_element(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -74,7 +74,7 @@ pub(super) fn promise_all_settled_resolve_element(
 }
 
 pub(super) fn promise_all_resolve_element(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -82,7 +82,7 @@ pub(super) fn promise_all_resolve_element(
 }
 
 pub(super) fn promise_get_capabilities_executor(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -90,7 +90,7 @@ pub(super) fn promise_get_capabilities_executor(
 }
 
 pub(super) fn promise_prototype_catch(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -98,7 +98,7 @@ pub(super) fn promise_prototype_catch(
 }
 
 pub(super) fn promise_prototype_finally(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -106,7 +106,7 @@ pub(super) fn promise_prototype_finally(
 }
 
 pub(super) fn promise_prototype_finally_fulfilled(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -114,7 +114,7 @@ pub(super) fn promise_prototype_finally_fulfilled(
 }
 
 pub(super) fn promise_prototype_finally_rejected(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -122,7 +122,7 @@ pub(super) fn promise_prototype_finally_rejected(
 }
 
 pub(super) fn promise_prototype_finally_value_thunk(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -130,7 +130,7 @@ pub(super) fn promise_prototype_finally_value_thunk(
 }
 
 pub(super) fn promise_prototype_finally_thrower_thunk(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -138,7 +138,7 @@ pub(super) fn promise_prototype_finally_thrower_thunk(
 }
 
 pub(super) fn promise_prototype_then(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -146,7 +146,7 @@ pub(super) fn promise_prototype_then(
 }
 
 pub(super) fn promise_race(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -154,7 +154,7 @@ pub(super) fn promise_race(
 }
 
 pub(super) fn promise_reject(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -162,7 +162,7 @@ pub(super) fn promise_reject(
 }
 
 pub(super) fn promise_resolve(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -170,7 +170,7 @@ pub(super) fn promise_resolve(
 }
 
 pub(super) fn promise_try(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -178,7 +178,7 @@ pub(super) fn promise_try(
 }
 
 pub(super) fn promise_with_resolvers(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -190,7 +190,7 @@ pub(super) fn promise_with_resolvers(
 }
 
 pub(super) fn promise_reject_function(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -198,7 +198,7 @@ pub(super) fn promise_reject_function(
 }
 
 pub(super) fn promise_resolve_function(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {

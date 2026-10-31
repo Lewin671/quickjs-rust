@@ -18,7 +18,6 @@ use super::vm::{ColdFrame, Slot, Vm};
 use super::vm_dispose::DisposeResource;
 use super::vm_result::Completion;
 use super::vm_try::TryFrame;
-use crate::CallEnv;
 
 /// The lifecycle state of a generator object (ES2023 27.5.3 [[GeneratorState]]).
 pub(crate) enum GeneratorState {
@@ -36,8 +35,7 @@ pub(crate) enum GeneratorState {
 /// The captured call frame for a not-yet-started generator.
 pub(crate) struct GeneratorStart {
     pub(crate) bytecode: Rc<Bytecode>,
-    pub(crate) env: CallEnv,
-    pub(crate) inputs: Option<crate::function::OwnedCallInputs>,
+    pub(crate) env: crate::context::ActivationContext,
     pub(crate) upvalues: Vec<crate::function::BindingCell>,
     pub(crate) with_stack: Vec<Value>,
 }
@@ -54,7 +52,7 @@ pub(crate) struct GeneratorSnapshot {
     locals: Vec<Slot>,
     local_upvalues: Vec<Option<crate::function::BindingCell>>,
     upvalues: Vec<crate::function::BindingCell>,
-    env: CallEnv,
+    env: crate::context::ActivationContext,
     with_stack: Vec<Value>,
     sloppy_global_names: Vec<String>,
     try_stack: Vec<TryFrame>,
@@ -120,7 +118,7 @@ pub(crate) fn is_suspended_at_plain_yield(generator: &ObjectRef) -> bool {
     )
 }
 
-impl Vm<'_> {
+impl Vm<'_, '_> {
     /// Captures the running generator body's state at a `yield`.
     fn into_snapshot(
         self,
@@ -163,24 +161,23 @@ impl Vm<'_> {
 /// observable, instead of on the first `next`.
 pub(crate) fn start_suspended_at_body(
     start: GeneratorStart,
-    _caller_env: &mut CallEnv,
+    inputs: Option<crate::function::CallInputs<'_>>,
+    _caller_env: &mut crate::context::Context<'_>,
 ) -> Result<GeneratorState, RuntimeError> {
     let GeneratorStart {
         bytecode,
         env,
-        inputs,
         upvalues,
         with_stack,
     } = start;
     let mut vm = Vm::with_frame_bytecode(
         super::frame_program::FrameBytecode::Borrowed(&bytecode),
+        _caller_env.runtime,
         env,
         upvalues,
         with_stack,
         None,
-        inputs
-            .as_ref()
-            .map(crate::function::OwnedCallInputs::as_borrowed),
+        inputs,
     );
     vm.stop_at_prologue = true;
     let result = vm.run_completion();
@@ -205,24 +202,23 @@ pub(crate) fn start_suspended_at_body(
 /// Drives a generator from `SuspendedStart`: builds the body VM and runs it.
 fn run_from_start(
     start: GeneratorStart,
-    _caller_env: &mut CallEnv,
+    inputs: Option<crate::function::CallInputs<'_>>,
+    _caller_env: &mut crate::context::Context<'_>,
 ) -> Result<(GeneratorState, GeneratorOutcome), RuntimeError> {
     let GeneratorStart {
         bytecode,
         env,
-        inputs,
         upvalues,
         with_stack,
     } = start;
     let mut vm = Vm::with_frame_bytecode(
         super::frame_program::FrameBytecode::Borrowed(&bytecode),
+        _caller_env.runtime,
         env,
         upvalues,
         with_stack,
         None,
-        inputs
-            .as_ref()
-            .map(crate::function::OwnedCallInputs::as_borrowed),
+        inputs,
     );
     let result = vm.run_completion();
     drive(result, vm, &bytecode)
@@ -232,11 +228,12 @@ fn run_from_start(
 fn run_from_yield(
     snapshot: GeneratorSnapshot,
     resume: Resume,
-    _caller_env: &mut CallEnv,
+    _caller_env: &mut crate::context::Context<'_>,
 ) -> Result<(GeneratorState, GeneratorOutcome), RuntimeError> {
     let bytecode = snapshot.bytecode.clone();
     let mut vm = Vm::new_with_globals_upvalues_and_with_stack(
         &bytecode,
+        _caller_env.runtime,
         snapshot.env,
         snapshot.upvalues,
         snapshot.with_stack,
@@ -384,7 +381,7 @@ fn run_from_yield(
 /// name-based capture write-back.
 fn drive(
     result: Result<Completion, RuntimeError>,
-    vm: Vm<'_>,
+    vm: Vm<'_, '_>,
     bytecode: &Rc<Bytecode>,
 ) -> Result<(GeneratorState, GeneratorOutcome), RuntimeError> {
     match result {
@@ -460,7 +457,7 @@ fn drive(
 
 fn drive_with_return_already_awaited(
     result: Result<Completion, RuntimeError>,
-    vm: Vm<'_>,
+    vm: Vm<'_, '_>,
     bytecode: &Rc<Bytecode>,
 ) -> Result<(GeneratorState, GeneratorOutcome), RuntimeError> {
     match result {
@@ -478,7 +475,28 @@ fn drive_with_return_already_awaited(
 pub(crate) fn resume_generator(
     generator: &ObjectRef,
     resume: Resume,
-    caller_env: &mut CallEnv,
+    caller_env: &mut crate::context::Context<'_>,
+) -> Result<GeneratorOutcome, RuntimeError> {
+    resume_with_inputs(generator, resume, None, caller_env)
+}
+
+pub(crate) fn start_with_call_inputs(
+    generator: &ObjectRef,
+    inputs: Option<crate::function::CallInputs<'_>>,
+    caller_env: &mut crate::context::Context<'_>,
+) -> Result<GeneratorOutcome, RuntimeError> {
+    resume_with_inputs(
+        generator,
+        Resume::Next(Value::Undefined),
+        inputs,
+        caller_env,
+    )
+}
+fn resume_with_inputs(
+    generator: &ObjectRef,
+    resume: Resume,
+    inputs: Option<crate::function::CallInputs<'_>>,
+    caller_env: &mut crate::context::Context<'_>,
 ) -> Result<GeneratorOutcome, RuntimeError> {
     // Take the state out behind the re-entrancy guard: a nested `next` while the
     // body runs observes `Executing` and is rejected, and we never hold a borrow
@@ -515,7 +533,7 @@ pub(crate) fn resume_generator(
             // completes the generator without running the body; a `throw(v)`
             // before start completes it and rethrows.
             match resume {
-                Resume::Next(_) => finish(generator, run_from_start(*start, caller_env)),
+                Resume::Next(_) => finish(generator, run_from_start(*start, inputs, caller_env)),
                 Resume::Return(value) => {
                     *generator.generator_state().borrow_mut() = Some(GeneratorState::Completed);
                     Ok(GeneratorOutcome::Return(value))

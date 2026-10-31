@@ -1,6 +1,5 @@
 use crate::{
-    ArrayRef, CallEnv, Function, Prototype, RuntimeError, Value, array_prototype, property_value,
-    symbol,
+    ArrayRef, Function, Prototype, RuntimeError, Value, array_prototype, property_value, symbol,
 };
 
 const CROSS_REALM_ARRAY_PROTOTYPE: &str = "__quickjsRustRealmArrayPrototype";
@@ -15,7 +14,7 @@ pub(super) fn array_with_prototype(array: ArrayRef, prototype: Option<Prototype>
 pub(super) fn array_constructor_prototype_slot(
     function: &Function,
     is_construct: bool,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Option<Prototype>, RuntimeError> {
     if !is_construct {
         return Ok(None);
@@ -33,7 +32,10 @@ pub(super) fn array_constructor_prototype_slot(
     Ok(array_prototype(env).map(Prototype::Object))
 }
 
-fn array_prototype_slot_from_value(value: Value, env: &CallEnv) -> Option<Prototype> {
+fn array_prototype_slot_from_value(
+    value: Value,
+    env: &crate::context::Context<'_>,
+) -> Option<Prototype> {
     match value {
         Value::Object(prototype) if !symbol::is_symbol_primitive(&prototype) => {
             Some(Prototype::Object(prototype))
@@ -47,7 +49,7 @@ fn array_prototype_slot_from_value(value: Value, env: &CallEnv) -> Option<Protot
 
 fn cross_realm_array_prototype_slot(
     new_target: Value,
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> Result<Option<Prototype>, RuntimeError> {
     match new_target {
         Value::Function(function) => Ok(function

@@ -44,7 +44,7 @@ pub(super) fn exit_to_interpreter(
     depth: u16,
     resume_pc: usize,
     window: &mut [Value],
-    env: &CallEnv,
+    env: &mut crate::context::Context<'_>,
     this_value: Option<Value>,
 ) -> ExitOutcome {
     let bytecode = running_bytecode(callee, root_bytecode);
@@ -95,11 +95,9 @@ pub(super) fn exit_to_interpreter(
                     return ExitOutcome::Continue { pc };
                 }
                 let target = std::mem::replace(&mut window[top - 1], Value::Undefined);
-                let mut call_env = env.empty_frame();
+                let call_env = &mut *env;
                 return match crate::bytecode::vm_ops::enumerate_keys_cached(
-                    &target,
-                    cache,
-                    &mut call_env,
+                    &target, cache, call_env,
                 ) {
                     Ok(keys) => {
                         window[top - 1] = Value::Array(keys);
@@ -127,11 +125,9 @@ pub(super) fn exit_to_interpreter(
                 let key = key.clone();
                 let target = std::mem::replace(&mut window[top - 2], Value::Undefined);
                 execute::store(&mut window[top - 1], Value::Undefined);
-                let mut call_env = env.empty_frame();
+                let call_env = &mut *env;
                 return match crate::bytecode::vm_ops::for_in_property_is_enumerable(
-                    target,
-                    &key,
-                    &mut call_env,
+                    target, &key, call_env,
                 ) {
                     Ok(enumerable) => {
                         window[top - 2] = Value::Boolean(enumerable);
@@ -267,7 +263,7 @@ fn resume_in_interpreter(
     depth: u16,
     from: ResumeFrom,
     window: &mut [Value],
-    env: &CallEnv,
+    env: &mut crate::context::Context<'_>,
     this_value: Option<Value>,
 ) -> ExitOutcome {
     let local_registers = program.local_registers as usize;
@@ -288,7 +284,8 @@ fn resume_in_interpreter(
     };
     match crate::bytecode::vm::resume_direct_call_bytecode(
         bytecode,
-        env.clone(),
+        env.activation.retain_continuation(),
+        env.runtime,
         slots,
         ip as usize,
         registers,
@@ -345,7 +342,7 @@ fn enter_loop_at_header(
     depth: u16,
     resume_pc: usize,
     window: &mut [Value],
-    env: &CallEnv,
+    env: &mut crate::context::Context<'_>,
     this_value: Option<Value>,
 ) -> ExitOutcome {
     let ready = u32::try_from(backedge)

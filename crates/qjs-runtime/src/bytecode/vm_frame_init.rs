@@ -11,65 +11,64 @@ use super::frame_program::FrameBytecode;
 use super::ir::Bytecode;
 use super::operand_stack::OperandStack;
 use super::vm::{ColdFrame, FrameState, Slot, Vm};
-use crate::{
-    GLOBAL_THIS_BINDING, ObjectRef, RuntimeError, Value,
-    function::{BindingCell, CallEnv, Realm},
-    initialize_builtins,
-};
-use std::collections::HashMap;
-use std::rc::Rc;
+use crate::{RuntimeError, Value, function::BindingCell};
 
-impl<'a> Vm<'a> {
-    pub(super) fn new(bytecode: &'a Bytecode) -> Result<Self, RuntimeError> {
-        let mut globals = HashMap::new();
-        let atoms = crate::property::atom::AtomDomain::new();
-        let global_this = Value::Object(ObjectRef::new(HashMap::new(), &atoms));
-        globals.insert(GLOBAL_THIS_BINDING.to_owned(), global_this.clone());
-        globals.insert("undefined".to_owned(), Value::Undefined);
-        // The realm cell is live before builtin installation: every `install_*`
-        // runs against a `CallEnv` over it and writes intrinsics straight to the
-        // shared cell (`insert_realm`), so no install-vs-runtime signature split
-        // is needed.
-        let realm: Realm = crate::function::new_realm_sharing_atoms(globals, atoms);
-        let mut env = CallEnv::new(Rc::clone(&realm));
-        initialize_builtins(&mut env, &global_this);
-        Self::initialize_script_global_bindings(bytecode, &realm)?;
-        realm.refresh_dynamic_function_realm_global();
-        Ok(Self::new_with_globals(bytecode, env))
+impl<'a, 's> Vm<'a, 's> {
+    pub(super) fn new(
+        bytecode: &'a Bytecode,
+        runtime: &'s mut crate::context::RuntimeServices,
+        env: crate::context::ActivationContext,
+    ) -> Result<Self, RuntimeError> {
+        Self::initialize_script_global_bindings(bytecode, env.realm())?;
+        Ok(Self::new_with_globals(bytecode, runtime, env))
     }
 
-    pub(super) fn new_with_globals(bytecode: &'a Bytecode, env: CallEnv) -> Self {
-        Self::new_with_globals_and_with_stack(bytecode, env, Vec::new())
+    pub(super) fn new_with_globals(
+        bytecode: &'a Bytecode,
+        runtime: &'s mut crate::context::RuntimeServices,
+        env: crate::context::ActivationContext,
+    ) -> Self {
+        Self::new_with_globals_and_with_stack(bytecode, runtime, env, Vec::new())
     }
 
     pub(super) fn new_with_globals_and_with_stack(
         bytecode: &'a Bytecode,
-        env: CallEnv,
+        runtime: &'s mut crate::context::RuntimeServices,
+        env: crate::context::ActivationContext,
         with_stack: Vec<Value>,
     ) -> Self {
-        Self::new_with_globals_upvalues_and_with_stack(bytecode, env, Vec::new(), with_stack)
+        Self::new_with_globals_upvalues_and_with_stack(
+            bytecode,
+            runtime,
+            env,
+            Vec::new(),
+            with_stack,
+        )
     }
 
     pub(super) fn new_with_globals_upvalues_and_with_stack(
         bytecode: &'a Bytecode,
-        env: CallEnv,
+        runtime: &'s mut crate::context::RuntimeServices,
+        env: crate::context::ActivationContext,
         upvalues: Vec<BindingCell>,
         with_stack: Vec<Value>,
     ) -> Self {
         Self::new_with_globals_upvalues_with_stack_and_direct_call_slots(
-            bytecode, env, upvalues, with_stack, None,
+            bytecode, runtime, env, upvalues, with_stack, None,
         )
     }
 
     pub(super) fn new_with_globals_upvalues_with_stack_and_direct_call_slots(
         bytecode: &'a Bytecode,
-        env: CallEnv,
+        runtime: &'s mut crate::context::RuntimeServices,
+        env: crate::context::ActivationContext,
         upvalues: Vec<BindingCell>,
         with_stack: Vec<Value>,
         direct_call_slots: Option<DirectCallSlots<'_>>,
     ) -> Self {
         Self::with_frame_bytecode(
             FrameBytecode::Borrowed(bytecode),
+            runtime,
             env,
             upvalues,
             with_stack,
@@ -86,7 +85,8 @@ impl<'a> Vm<'a> {
     /// borrow.
     pub(super) fn with_frame_bytecode(
         handle: FrameBytecode<'a>,
-        mut env: CallEnv,
+        runtime: &'s mut crate::context::RuntimeServices,
+        mut env: crate::context::ActivationContext,
         upvalues: Vec<BindingCell>,
         with_stack: Vec<Value>,
         direct_call_slots: Option<DirectCallSlots<'_>>,
@@ -145,10 +145,14 @@ impl<'a> Vm<'a> {
         let module_host = env.module_host();
         let array_literal_prototype_override = env
             .has_dynamic_function_realm_global()
-            .then(|| crate::array_prototype(&env))
+            .then(|| {
+                crate::array_prototype(&crate::context::Context {
+                    runtime,
+                    activation: &mut env,
+                    native: None,
+                })
+            })
             .flatten();
-        #[cfg(feature = "agents")]
-        let agent_context = env.agent_context();
         let is_direct_call = direct_call_slots.is_some();
         let mut locals = if is_direct_call {
             Self::initial_direct_call_slots(bytecode)
@@ -168,7 +172,11 @@ impl<'a> Vm<'a> {
                         .collect(),
                 );
                 if env.has_dynamic_function_realm_global()
-                    && let Some(prototype) = crate::array_prototype(&env)
+                    && let Some(prototype) = crate::array_prototype(&crate::context::Context {
+                        runtime,
+                        activation: &mut env,
+                        native: None,
+                    })
                 {
                     array
                         .set_prototype_slot(Some(crate::Prototype::Object(prototype)))
@@ -224,7 +232,11 @@ impl<'a> Vm<'a> {
                 bytecode,
                 &locals,
                 &mut local_upvalues,
-                &env,
+                &crate::context::Context {
+                    runtime,
+                    activation: &mut env,
+                    native: None,
+                },
             );
             local_upvalues[slot]
                 .as_ref()
@@ -256,6 +268,7 @@ impl<'a> Vm<'a> {
                 })
             });
         Self {
+            runtime,
             current: FrameState {
                 reference_hooks: !handle.binding_plan.references.can_skip(&env),
                 active_reference_count: 0,
@@ -277,8 +290,6 @@ impl<'a> Vm<'a> {
                 direct_this,
                 realm,
                 module_host,
-                #[cfg(feature = "agents")]
-                agent_context,
                 stop_at_prologue: false,
                 array_prototype_cache: None,
                 object_prototype_cache: None,
@@ -321,14 +332,6 @@ impl<'a> Vm<'a> {
         }
         locals
     }
-
-    /// Retains typed scope ownership; no slot/name/value projection is made.
-    pub(super) fn frame_call_env(&self) -> CallEnv {
-        let mut env = self.attach_host(self.env.scope_service_view());
-        env.set_scope_cursor(self.prepare_scope_cursor());
-        env.set_private_environment(self.current_private_environment());
-        env
-    }
 }
 
 #[cfg(test)]
@@ -354,9 +357,13 @@ mod tests {
     }
 
     use crate::function::{DynamicBindings, new_realm};
+    use std::collections::HashMap;
 
-    fn empty_env() -> CallEnv {
-        CallEnv::new(new_realm(HashMap::new()))
+    fn empty_env() -> crate::context::ActivationContext {
+        crate::context::ActivationContext::new(
+            crate::context::CreationContext::root(new_realm(HashMap::new())),
+            crate::context::ExecutionMode::Function,
+        )
     }
 
     #[test]
@@ -400,7 +407,10 @@ mod tests {
             "captured".to_owned(),
             Value::Number(42.0),
         )]));
-        let env = CallEnv::new(realm);
+        let env = crate::context::ActivationContext::new(
+            crate::context::CreationContext::root(realm),
+            crate::context::ExecutionMode::Function,
+        );
         let captured = env.realm_binding_cell("captured").unwrap();
 
         let (local_upvalues, realm_binding_slots) =
@@ -430,9 +440,12 @@ mod tests {
             .received_upvalue_slots()
             .first()
             .expect("function should receive captured cell");
+        let activation = empty_env();
+        let mut runtime = crate::context::RuntimeServices::for_realm(activation.realm());
         let mut vm = Vm::new_with_globals_upvalues_with_stack_and_direct_call_slots(
             bytecode,
-            empty_env(),
+            &mut runtime,
+            activation,
             Vec::new(),
             Vec::new(),
             Some(DirectCallSlots {
@@ -497,7 +510,9 @@ mod tests {
                 .hoisted_local_names()
                 .all(|name| !name.starts_with("\0\0"))
         );
-        let vm = Vm::new(&bytecode).expect("top-level VM should initialize");
+        let (mut vm_services, vm_activation) = crate::context::HostRoot::script().into_parts();
+        let vm = Vm::new(&bytecode, &mut vm_services, vm_activation)
+            .expect("top-level VM should initialize");
         for (slot, local) in bytecode.locals.iter().enumerate() {
             if !local.compiler_temporary {
                 continue;

@@ -4,14 +4,13 @@ use super::{
     array_like::array_like_length,
     indexing::{array_slice_end, array_slice_start},
 };
-use crate::CallEnv;
 
 const MAX_SAFE_INTEGER_LENGTH: usize = 9_007_199_254_740_991;
 
 pub(crate) fn native_array_prototype_fill(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let source = array_like_length(this_value, "Array.prototype.fill", env)?;
     let receiver = source.receiver;
@@ -36,7 +35,7 @@ pub(crate) fn native_array_prototype_fill(
 pub(crate) fn native_array_prototype_copy_within(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let source = array_like_length(this_value, "Array.prototype.copyWithin", env)?;
     let receiver = source.receiver;
@@ -84,7 +83,7 @@ pub(super) fn set_array_like_property(
     receiver: Value,
     key: String,
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     set_array_like_property_with_error(receiver, key, value, env, copy_within_set_error)
 }
@@ -92,7 +91,7 @@ pub(super) fn set_array_like_property(
 pub(super) fn delete_array_like_property(
     receiver: Value,
     key: &str,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     delete_array_like_property_with_error(receiver, key, env, copy_within_delete_error)
 }
@@ -101,7 +100,7 @@ pub(super) fn set_array_like_property_with_error(
     receiver: Value,
     key: String,
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     error: fn() -> RuntimeError,
 ) -> Result<(), RuntimeError> {
     if crate::bytecode::set_object_property(receiver, key, value, env)? {
@@ -114,7 +113,7 @@ pub(super) fn set_array_like_property_with_error(
 pub(super) fn delete_array_like_property_with_error(
     receiver: Value,
     key: &str,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     error: fn() -> RuntimeError,
 ) -> Result<(), RuntimeError> {
     if crate::bytecode::delete_object_property(receiver, &PropertyKey::String(key.to_owned()), env)?
@@ -142,7 +141,7 @@ fn copy_within_delete_error() -> RuntimeError {
 pub(crate) fn native_array_prototype_push(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if matches!(this_value, Value::String(_)) {
         return Err(push_length_error());
@@ -178,12 +177,16 @@ fn push_set_property(
     receiver: Value,
     index: usize,
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     set_array_like_property_with_error(receiver, index.to_string(), value, env, push_property_error)
 }
 
-fn push_set_length(receiver: Value, length: usize, env: &mut CallEnv) -> Result<(), RuntimeError> {
+fn push_set_length(
+    receiver: Value,
+    length: usize,
+    env: &mut crate::context::Context<'_>,
+) -> Result<(), RuntimeError> {
     set_array_like_property_with_error(
         receiver,
         "length".to_owned(),
@@ -209,7 +212,7 @@ fn push_length_error() -> RuntimeError {
 
 pub(crate) fn native_array_prototype_pop(
     this_value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if matches!(this_value, Value::String(_)) {
         return Err(pop_length_error());
@@ -240,11 +243,19 @@ pub(crate) fn native_array_prototype_pop(
     Ok(element)
 }
 
-fn pop_delete_property(receiver: Value, key: &str, env: &mut CallEnv) -> Result<(), RuntimeError> {
+fn pop_delete_property(
+    receiver: Value,
+    key: &str,
+    env: &mut crate::context::Context<'_>,
+) -> Result<(), RuntimeError> {
     delete_array_like_property_with_error(receiver, key, env, pop_delete_error)
 }
 
-fn pop_set_length(receiver: Value, length: usize, env: &mut CallEnv) -> Result<(), RuntimeError> {
+fn pop_set_length(
+    receiver: Value,
+    length: usize,
+    env: &mut crate::context::Context<'_>,
+) -> Result<(), RuntimeError> {
     set_array_like_property_with_error(
         receiver,
         "length".to_owned(),
@@ -270,7 +281,7 @@ fn pop_length_error() -> RuntimeError {
 
 pub(crate) fn native_array_prototype_reverse(
     this_value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let source = array_like_length(this_value, "Array.prototype.reverse", env)?;
     let receiver = source.receiver;

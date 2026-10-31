@@ -18,7 +18,7 @@ use super::util::stack_underflow;
 use super::vm::Vm;
 use super::vm_class::function_name_from_property_key;
 
-impl Vm<'_> {
+impl Vm<'_, '_> {
     pub(super) fn new_array(&mut self, elements: &[ArrayElementKind]) -> Result<(), RuntimeError> {
         let value_count = elements
             .iter()
@@ -53,7 +53,7 @@ impl Vm<'_> {
                 }
                 ArrayElementKind::Spread => {
                     let value = next_value.next().ok_or_else(stack_underflow)?;
-                    let mut env = self.callee_env();
+                    let mut env = self.context();
                     let result = iterable_values_with_env(value, "array spread", &mut env);
                     // Route an iterator error through the try-handler stack so a
                     // throw during `[...iterable]` is catchable, instead of
@@ -201,7 +201,7 @@ impl Vm<'_> {
     ) -> Result<(), RuntimeError> {
         let value = self.pop()?;
         let key_value = self.pop()?;
-        let mut key_env = self.callee_env();
+        let mut key_env = self.context();
         let key = to_property_key_value(key_value, &mut key_env)?;
         if let Value::Function(ref function) = value {
             let base = function_name_from_property_key(&key).unwrap_or_default();
@@ -228,7 +228,7 @@ impl Vm<'_> {
         let key_value = self.pop()?;
         let object = self.object_literal_target()?;
         if meta.is_proto_setter {
-            apply_object_literal_proto(&object, value, &self.env)?;
+            apply_object_literal_proto(&object, value, &self.context())?;
             return Ok(());
         }
         // Methods defined on object literals need their home object set so
@@ -238,10 +238,10 @@ impl Vm<'_> {
                 function.set_home_object(Value::Object(object.clone()));
             }
         }
-        let mut key_env = self.callee_env();
+        let mut key_env = self.context();
         let key = to_property_key_value(key_value, &mut key_env)?;
         let descriptor = object_property_descriptor(meta.kind, value)?;
-        define_object_literal_property(&object, key, descriptor, &mut self.realm_env())
+        define_object_literal_property(&object, key, descriptor, &mut self.context())
     }
 
     pub(super) fn copy_object_spread(&mut self) -> Result<(), RuntimeError> {
@@ -251,7 +251,7 @@ impl Vm<'_> {
             return Ok(());
         }
         let object = self.object_literal_target()?;
-        let mut env = self.callee_env();
+        let mut env = self.context();
         let result = object::enumerable_property_entries_with_symbols(source, &mut env);
         // A getter invoked while gathering `{...source}` properties may throw;
         // route it through the try-handler stack so it is catchable.
@@ -263,7 +263,7 @@ impl Vm<'_> {
                 &object,
                 key,
                 Property::enumerable(value),
-                &mut self.realm_env(),
+                &mut self.context(),
             )?;
         }
         Ok(())
@@ -298,7 +298,7 @@ fn object_property_descriptor(
 fn apply_object_literal_proto(
     object: &ObjectRef,
     proto: Value,
-    env: &crate::CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     let prototype = match proto {
         Value::Null => Some(None),
@@ -326,7 +326,7 @@ fn define_object_literal_property(
     object: &ObjectRef,
     key: PropertyKey,
     mut descriptor: Property,
-    env: &mut crate::CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     if descriptor.is_accessor()
         && let Some(existing) = match &key {

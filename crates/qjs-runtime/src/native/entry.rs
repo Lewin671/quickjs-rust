@@ -818,7 +818,7 @@ pub(super) fn bind(native: NativeFunction) -> NativeEntry {
 }
 
 fn uninitialized_lexical(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     _args: &[Value],
 ) -> Result<Value, RuntimeError> {

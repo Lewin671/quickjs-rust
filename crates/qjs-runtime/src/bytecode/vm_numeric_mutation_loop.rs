@@ -79,7 +79,7 @@ impl SpecialPlan {
     }
 
     #[inline(never)]
-    fn try_run(&self, vm: &mut Vm<'_>) -> NumericMutationLoopRun {
+    fn try_run(&self, vm: &mut Vm<'_, '_>) -> NumericMutationLoopRun {
         match self {
             Self::PredicateScan(plan) => match plan.try_run(vm) {
                 PredicateScanRun::Handled => NumericMutationLoopRun::Handled,
@@ -196,7 +196,7 @@ impl NumericMutationLoopPlan {
         })
     }
 
-    fn try_run(&self, vm: &mut Vm<'_>) -> NumericMutationLoopRun {
+    fn try_run(&self, vm: &mut Vm<'_, '_>) -> NumericMutationLoopRun {
         match &self.kind {
             NumericMutationLoopKind::Dense(plan) => match plan.try_run(vm) {
                 DenseNumericMutationLoopRun::Handled => NumericMutationLoopRun::Handled,
@@ -218,7 +218,7 @@ enum NumericMutationLoopRun {
 }
 
 pub(super) fn try_run_numeric_mutation_loop(
-    vm: &mut Vm<'_>,
+    vm: &mut Vm<'_, '_>,
     plans: super::vm_loop_dispatch::LoopPlanView<'_>,
     header: usize,
     backedge: usize,

@@ -34,8 +34,8 @@ pub(super) struct TypedLoopSloppyGlobalWrite {
     property_slot: Option<(usize, crate::value::layout::LayoutVersion)>,
 }
 
-impl Vm<'_> {
-    /// Realm `globalThis` object handle. `CallEnv::global_this` already
+impl Vm<'_, '_> {
+    /// Realm `globalThis` object handle. `crate::context::ActivationContext::global_this` already
     /// resolves this from a plain `Option<Value>` field set once at realm
     /// construction (see `RealmState::new`), so this is just the `Value` ->
     /// `ObjectRef` narrowing — no `RefCell` borrow or `HashMap` lookup, unlike
@@ -277,7 +277,7 @@ impl Vm<'_> {
         if !global_this.has_own_property(name) {
             return Ok(None);
         }
-        let mut env = self.current_env();
+        let mut env = self.context();
         let value = property_value(Value::Object(global_this), name, &mut env)?;
         Ok(Some(value))
     }
@@ -313,7 +313,7 @@ impl Vm<'_> {
                 Ok(())
             });
         };
-        let mut env = self.current_env();
+        let mut env = self.context();
         let result = crate::call_function(
             setter,
             Value::Object(global_this),
@@ -421,10 +421,10 @@ impl Vm<'_> {
                 .is_some_and(|scope| scope.variable_target.0 == 1)
     }
 
-    fn reference_binding_name(&self, slot: usize) -> &str {
-        self.bytecode.binding_plan.local_bindings[slot]
-            .map_or(self.bytecode.locals[slot].name.as_str(), |id| {
-                self.bytecode.binding_plan.bindings[id.0].name.as_str()
+    fn reference_binding_name(bytecode: &super::ir::Bytecode, slot: usize) -> &str {
+        bytecode.binding_plan.local_bindings[slot]
+            .map_or(bytecode.locals[slot].name.as_str(), |id| {
+                bytecode.binding_plan.bindings[id.0].name.as_str()
             })
     }
 
@@ -467,7 +467,8 @@ impl Vm<'_> {
             && (self.bytecode.contains_direct_eval() || self.env.scope_cursor().is_some()))
             || self.parameter_binding_crosses_body(slot)
         {
-            let name = self.reference_binding_name(slot);
+            let owner = self.bytecode.clone();
+            let name = Self::reference_binding_name(&owner, slot);
             if let Some(reference) = self.resolve_scope_binding(name, self.execution_is_strict())? {
                 return self.read_scope_binding(&reference);
             }
@@ -917,7 +918,8 @@ impl Vm<'_> {
             && (self.bytecode.contains_direct_eval() || self.env.scope_cursor().is_some()))
             || self.parameter_binding_crosses_body(slot)
         {
-            let name = self.reference_binding_name(slot);
+            let owner = self.bytecode.clone();
+            let name = Self::reference_binding_name(&owner, slot);
             if let Some(reference) = self.resolve_scope_binding(name, self.execution_is_strict())? {
                 return self.assign_scope_binding(&reference, value, self.execution_is_strict());
             }
@@ -1026,17 +1028,6 @@ impl Vm<'_> {
         slot < u128::BITS as usize && self.realm_binding_slots & (1_u128 << slot) != 0
     }
 
-    pub(super) fn check_dynamic_assignment(
-        &self,
-        name: &str,
-        strict: bool,
-    ) -> Result<(), RuntimeError> {
-        if let Some(cell) = self.env.local_binding_cell(name) {
-            cell.check_assignment(strict)?;
-        }
-        Ok(())
-    }
-
     pub(super) fn store_local_or_global_sloppy(
         &mut self,
         slot: usize,
@@ -1049,7 +1040,7 @@ impl Vm<'_> {
         if self.uses_selected_object_binding(name) {
             return self.store_global_binding(name, value, false);
         }
-        self.check_dynamic_assignment(name, false)?;
+
         if self.env.has_module_import(name) {
             return Err(RuntimeError {
                 thrown: None,
@@ -1145,16 +1136,14 @@ impl Vm<'_> {
         if refresh_upvalue && let Some(upvalue) = self.local_upvalues.get_mut(slot) {
             *upvalue = upvalue.as_ref().map(BindingCell::fresh_uninitialized);
         }
-        if let Some(name) = self.current.bytecode.local_name_at(slot) {
+        if let Some(_name) = self.current.bytecode.local_name_at(slot) {
             if self
                 .current
                 .bytecode
                 .locals
                 .get(slot)
                 .is_some_and(|local| local.catch_binding)
-            {
-                self.current.env.unmark_catch_binding(name);
-            }
+            {}
         }
         Ok(())
     }
@@ -1212,7 +1201,7 @@ impl Vm<'_> {
     /// returns true.
     pub(super) fn delete_ident(&mut self, name: &str) -> Result<bool, RuntimeError> {
         if let Some(reference) = self.resolve_scope_binding(name, false)? {
-            return reference.delete(&mut self.realm_env());
+            return reference.delete(&mut self.context());
         }
         if self.prepare_scope_cursor().is_some() {
             return Ok(true);
@@ -1224,7 +1213,7 @@ impl Vm<'_> {
             return crate::bytecode::delete_object_property(
                 base,
                 &crate::PropertyKey::String(name.to_owned()),
-                &mut self.realm_env(),
+                &mut self.context(),
             );
         }
         let deleted = (|| {
@@ -1243,9 +1232,6 @@ impl Vm<'_> {
                 }
                 // Non-global frame locals (e.g. captured from outer function scope)
                 // are also undeletable.
-                if self.env.get_local(name).is_some() {
-                    return false;
-                }
             }
             // For globals, check the globalThis property descriptor. Only
             // configurable properties (bare assignments like `x = 1`) can be
@@ -1305,7 +1291,7 @@ impl Vm<'_> {
     }
 
     pub(super) fn drain_promise_jobs(&mut self) -> Result<(), RuntimeError> {
-        let mut env = self.current_env();
+        let mut env = self.context();
         crate::promise::drain_promise_jobs(&mut env)?;
         Ok(())
     }

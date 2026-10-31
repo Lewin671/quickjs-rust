@@ -685,7 +685,8 @@ fn internal_rejection_error_materialization_constructs_no_execution_context() {
         .realm
         .error_prototype(crate::context::ErrorKind::TypeError)
         .unwrap();
-    let env = crate::CallEnv::new(creation.realm.clone());
+    let mut root = crate::context::HostRoot::new(creation.realm.clone());
+    let env = root.context();
     env.insert_realm("TypeError".into(), Value::Undefined);
     crate::reset_counters();
     let error = crate::RuntimeError {

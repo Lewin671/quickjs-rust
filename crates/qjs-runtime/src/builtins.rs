@@ -1,11 +1,11 @@
 use crate::{
-    CallEnv, Value, array, array_buffer, async_function, async_generator, atomics, bigint, boolean,
+    Value, array, array_buffer, async_function, async_generator, atomics, bigint, boolean,
     data_view, date, disposable_stack, error, finalization_registry, generator, global, iterator,
     json, map, math, number, object, promise, proxy, reflect, regexp, set, string, symbol,
     typed_array, weak_map, weak_ref, weak_set,
 };
 
-pub(crate) fn initialize_builtins(env: &mut CallEnv, global_this: &Value) {
+pub(crate) fn initialize_builtins(env: &mut crate::context::Context<'_>, global_this: &Value) {
     let object_prototype = object::install_object(env, global_this);
     if let Value::Object(global_object) = global_this {
         let _ = global_object.set_prototype(Some(object_prototype.clone()));

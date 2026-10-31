@@ -19,7 +19,6 @@ use std::{
 };
 
 use super::{ObjectRef, Property, Prototype, Value};
-use crate::CallEnv;
 
 pub(crate) const MAX_DENSE_STORAGE_LENGTH: usize = 1_000_000;
 const MAX_ARRAY_INDEX: usize = u32::MAX as usize - 1;
@@ -469,13 +468,16 @@ impl ArrayRef {
     /// element vector with no holes), no own indexed/length descriptors that
     /// could intercept the read, the default prototype, and that prototype owning
     /// no indexed property whose value an absent element would inherit.
-    pub(crate) fn dense_argument_values(&self, env: &CallEnv) -> Option<Vec<Value>> {
+    pub(crate) fn dense_argument_values(
+        &self,
+        env: &crate::context::Context<'_>,
+    ) -> Option<Vec<Value>> {
         self.with_dense_argument_elements(env, |elements| elements.to_vec())
     }
 
     pub(crate) fn with_dense_argument_elements<R>(
         &self,
-        _env: &CallEnv,
+        _env: &crate::context::Context<'_>,
         read: impl FnOnce(&[Value]) -> R,
     ) -> Option<R> {
         let elements = self.0.elements.borrow();
@@ -504,7 +506,7 @@ impl ArrayRef {
     /// cannot intercept the new indexed properties.
     pub(crate) fn with_plain_dense_mutation<R>(
         &self,
-        env: &CallEnv,
+        env: &crate::context::Context<'_>,
         growth: usize,
         mutate: impl FnOnce(&mut Vec<Value>) -> R,
     ) -> Option<R> {
@@ -1115,7 +1117,10 @@ impl ArrayRef {
     /// The effective [[Prototype]] slot, preserving array/function/proxy
     /// identities and resolving the implicit realm Array.prototype only when
     /// no explicit override is present.
-    pub(crate) fn effective_prototype_slot(&self, env: &CallEnv) -> Option<Prototype> {
+    pub(crate) fn effective_prototype_slot(
+        &self,
+        env: &crate::context::Context<'_>,
+    ) -> Option<Prototype> {
         self.prototype_slot_override()
             .unwrap_or_else(|| crate::array_prototype(env).map(Prototype::Object))
     }

@@ -43,7 +43,7 @@ impl<'a> LoopPlanView<'a> {
     }
 }
 
-impl Vm<'_> {
+impl Vm<'_, '_> {
     /// Frame-local numeric mutation loop plans, materialized from the shared
     /// bytecode plans on first deoptimization. Suppressing or rewriting a plan
     /// must not affect other invocations of the same function, so the frame

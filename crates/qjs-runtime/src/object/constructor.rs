@@ -8,11 +8,10 @@ use crate::{
 
 use super::descriptor::native_object_define_properties;
 use super::enumeration::enumerable_property_entries_with_symbols;
-use crate::CallEnv;
 
 pub(crate) fn native_object_assign(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let target = match argument_values.first().cloned().unwrap_or(Value::Undefined) {
         Value::Object(object) if symbol::is_symbol_primitive(&object) => {
@@ -51,7 +50,7 @@ pub(crate) fn native_object(
     this_value: Value,
     argument_values: &[Value],
     is_construct: bool,
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     // Object([value]) step 1: when NewTarget is a subclass (not the active
     // Object constructor), return OrdinaryCreateFromConstructor(NewTarget,
@@ -88,7 +87,7 @@ pub(crate) fn native_object(
     }
 }
 
-pub(crate) fn boxed_primitive(value: Value, env: &CallEnv) -> Option<Value> {
+pub(crate) fn boxed_primitive(value: Value, env: &crate::context::Context<'_>) -> Option<Value> {
     match value {
         Value::Boolean(value) => Some(boxed_boolean(value, env)),
         Value::BigInt(value) => Some(boxed_bigint(std::rc::Rc::unwrap_or_clone(value), env)),
@@ -101,7 +100,7 @@ pub(crate) fn boxed_primitive(value: Value, env: &CallEnv) -> Option<Value> {
     }
 }
 
-fn boxed_bigint(value: num_bigint::BigInt, env: &CallEnv) -> Value {
+fn boxed_bigint(value: num_bigint::BigInt, env: &crate::context::Context<'_>) -> Value {
     let object = ObjectRef::with_prototype(
         HashMap::new(),
         constructor_prototype("BigInt", env),
@@ -111,7 +110,7 @@ fn boxed_bigint(value: num_bigint::BigInt, env: &CallEnv) -> Value {
     Value::Object(object)
 }
 
-fn boxed_boolean(value: bool, env: &CallEnv) -> Value {
+fn boxed_boolean(value: bool, env: &crate::context::Context<'_>) -> Value {
     let object = ObjectRef::with_prototype(
         HashMap::new(),
         constructor_prototype("Boolean", env),
@@ -121,7 +120,7 @@ fn boxed_boolean(value: bool, env: &CallEnv) -> Value {
     Value::Object(object)
 }
 
-fn boxed_number(value: f64, env: &CallEnv) -> Value {
+fn boxed_number(value: f64, env: &crate::context::Context<'_>) -> Value {
     let object = ObjectRef::with_prototype(
         HashMap::new(),
         constructor_prototype("Number", env),
@@ -131,7 +130,7 @@ fn boxed_number(value: f64, env: &CallEnv) -> Value {
     Value::Object(object)
 }
 
-fn boxed_string(value: &str, env: &CallEnv) -> Value {
+fn boxed_string(value: &str, env: &crate::context::Context<'_>) -> Value {
     let object = ObjectRef::with_prototype(
         HashMap::new(),
         constructor_prototype("String", env),
@@ -141,13 +140,13 @@ fn boxed_string(value: &str, env: &CallEnv) -> Value {
     Value::Object(object)
 }
 
-fn constructor_prototype(name: &str, env: &CallEnv) -> Option<ObjectRef> {
+fn constructor_prototype(name: &str, env: &crate::context::Context<'_>) -> Option<ObjectRef> {
     env.primitive_prototype(name)
 }
 
 pub(crate) fn native_object_create(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let object = match argument_values.first() {
         Some(Value::Object(prototype)) => Value::Object(ObjectRef::with_prototype_slot(
@@ -211,7 +210,7 @@ fn assign_property(
     target: Value,
     key: PropertyKey,
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     if crate::reflect::ordinary_set(target.clone(), &key, value, target, env)? {
         return Ok(());
