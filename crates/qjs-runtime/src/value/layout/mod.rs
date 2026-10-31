@@ -232,7 +232,7 @@ impl NamedStore {
         if !key.belongs_to(self.domain()) {
             return Err(ForeignKey);
         }
-        Ok(self.layout.position(key.id()))
+        Ok(self.layout.probe(key.id()).position)
     }
     pub(crate) fn lookup<'a>(&'a mut self, key: &'a KeyLease) -> Result<Lookup<'a>, ForeignKey> {
         if !key.belongs_to(self.domain()) {

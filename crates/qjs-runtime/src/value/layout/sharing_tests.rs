@@ -27,6 +27,33 @@ fn branches_and_prefixes_never_expose_the_shared_tail() {
 }
 
 #[test]
+fn prefix_forks_preserve_keys_and_descriptors_across_index_promotion() {
+    let owner = owner();
+    let keys: Vec<_> = ["a", "b", "c", "d", "e"]
+        .map(|key| owner.domain().intern(key))
+        .into();
+    let mut prefix = owner.empty_store();
+    let mut longer = owner.empty_store();
+    for key in &keys[..4] {
+        prefix.define(key, data()).unwrap();
+        longer.define(key, data()).unwrap();
+    }
+    longer.define(&keys[4], data()).unwrap();
+    assert!(Rc::ptr_eq(&prefix.layout.data, &longer.layout.data));
+    assert!(prefix.get(&keys[4]).unwrap().is_none());
+    prefix
+        .define(&keys[4], Property::non_enumerable(Value::Number(9.0)))
+        .unwrap();
+    assert_eq!(prefix.keys(), keys);
+    assert!(!prefix.get(&keys[4]).unwrap().unwrap().enumerable);
+    assert!(longer.get(&keys[4]).unwrap().unwrap().enumerable);
+    assert_eq!(
+        prefix.get(&keys[4]).unwrap().unwrap().value,
+        Value::Number(9.0)
+    );
+}
+
+#[test]
 fn bulk_integrity_preserves_accessors_and_shares_shapes() {
     for frozen in [false, true] {
         let owner = owner();

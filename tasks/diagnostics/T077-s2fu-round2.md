@@ -1,7 +1,7 @@
 # T077 S2 follow-up, lead feedback round 2
 
 - Status: active; B–D implemented, A performance repair still open; final qualification paused pending instruction acceptance.
-- Implementation: A–D present with 80-byte bound nodes/shared tiny data, published reusable templates, allocation-free cycle checks, live-root reuse/dead-root sweeps, cached hash width and position-only read probes. A acceptance remains open.
+- Implementation: A–D present with 80-byte bound nodes/shared tiny data, published reusable templates, allocation-free cycle checks, live-root reuse/dead-root sweeps, cached hash width and four-field linear buffers. A acceptance remains open.
 - Verified at: staged fast gate passes 2,520 runtime tests; `b731ea83` passes all 268 NG fixtures in cached/off/verify. `4e788129` native/x86 mem3 passes. Older full gates are revision-bound; final exact/performance/resource gates remain due.
 - Evidence: this record and the named job/artifact receipts below; [round 1](T077-s2-followup.md) is historical.
 - Unresolved: final per-lane instruction/wall limits, exact cached/off with burndown, complete native/x86 resource gates.
@@ -279,3 +279,15 @@ return only Option<usize>; tiny reads remain linear. Exclusive writes keep
 IdProbe and one probe per insertion. Prefix bounds and probe counters stay
 unchanged. Existing collision/delete/reinsert/growth tests will exercise the
 read path as well as insertion proofs before another instruction replay.
+
+
+Position-only source `ebd7421c`, job
+`20261031T125244Z-t077-s2fu-r2-position-read`, leaves dynamic-read unchanged
+at 1.036172 and worsens string churn to 1.006811; the duplicate read loop is
+removed. Its native full check and all 268 NG fixtures in three modes pass,
+but it is not performance accepted. Next use the same linear mechanism through
+four fields, promoting the fifth field to an index; interning remains through
+two fields. This removes hashing for all narrow layouts, independent of source
+or access sequence. A focused prefix test crosses promotion and then forks a
+four-field prefix with a different fifth descriptor, exercising proof refresh
+and hidden-tail rejection. Final instructions/resources still decide acceptance.

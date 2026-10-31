@@ -1,7 +1,6 @@
 //! Key-ID index with consumable vacant-bucket proofs.
 //!
-//! A write lookup yields a bucket proof; read lookups return only positions.
-//! Full index copies preserve that proof;
+//! A lookup yields a bucket proof. Full index copies preserve that proof;
 //! prefix forks rebuild and consume a new proof as cold structural work.
 //! Each insertion reserves space for the next one; index rebuilds are counted
 //! separately from operation probes. Shared-tail admission lives in storage.
@@ -80,20 +79,6 @@ impl IdIndex {
         crate::diagnostics::count!(property_id_probes);
         self.probe_uncounted(key)
     }
-    /// A read needs neither a vacant bucket nor an insertion-capacity proof.
-    #[inline]
-    pub(super) fn position(&self, key: KeyId) -> Option<usize> {
-        let mask = self.buckets.len() - 1;
-        let mut bucket = (key.get().wrapping_mul(0x9e37_79b1) >> self.hash_shift) as usize;
-        loop {
-            let entry = self.buckets[bucket];
-            match entry.key {
-                Some(candidate) if candidate == key => return Some(entry.position as usize),
-                None if entry.position != TOMBSTONE => return None,
-                _ => bucket = (bucket + 1) & mask,
-            }
-        }
-    }
     pub(super) fn probe_uncounted(&self, key: KeyId) -> IdProbe {
         let mask = self.buckets.len() - 1;
         let mut bucket = (key.get().wrapping_mul(0x9e37_79b1) >> self.hash_shift) as usize;
@@ -127,8 +112,7 @@ impl IdIndex {
     }
     #[cfg(test)]
     pub(super) fn get(&self, key: KeyId) -> Option<usize> {
-        crate::diagnostics::count!(property_id_probes);
-        self.position(key)
+        self.probe(key).position
     }
     pub(super) fn insert_at(&mut self, proof: IdProbe, position: usize) {
         assert_eq!(proof.capacity, self.buckets.len(), "stale index proof");
