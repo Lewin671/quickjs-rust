@@ -199,7 +199,6 @@ fn eval_async_module_body(
             env: function_env,
             upvalues: Vec::new(),
             with_stack: Vec::new(),
-            immutable_function_name: None,
         })));
 
     let result_promise = crate::async_function::drive_async_module(&context, &mut env);

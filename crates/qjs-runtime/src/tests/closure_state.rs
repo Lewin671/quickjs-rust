@@ -913,3 +913,13 @@ fn closures_made_beside_a_direct_eval_see_every_rebinding() {
         Ok(Value::String("1,2,0,11,22,5,5,7|1,2,0,11,22,5,5,7".into()))
     );
 }
+
+#[test]
+fn mutable_parameter_capture_does_not_inherit_an_unrelated_global_const_policy() {
+    assert_eq!(
+        eval(
+            "const x = 1; function outer(x) { return () => ++x; } const write = outer(8); write() + ':' + write() + ':' + x;"
+        ),
+        Ok(Value::String("9:10:1".into()))
+    );
+}

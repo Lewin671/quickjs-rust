@@ -491,7 +491,6 @@ pub(crate) struct CallEnv {
     global_binding_root: bool,
     global_function_configurable: bool,
     catch_bindings: Option<Rc<HashSet<String>>>,
-    immutable_function_name: Option<String>,
     direct_eval_var_conflicts: Option<Rc<HashSet<String>>>,
     direct_eval_with_stack: Vec<Value>,
     #[cfg(feature = "agents")]
@@ -508,7 +507,6 @@ impl Clone for CallEnv {
             global_binding_root: self.global_binding_root,
             global_function_configurable: self.global_function_configurable,
             catch_bindings: self.catch_bindings.clone(),
-            immutable_function_name: self.immutable_function_name.clone(),
             direct_eval_var_conflicts: self.direct_eval_var_conflicts.clone(),
             direct_eval_with_stack: self.direct_eval_with_stack.clone(),
             #[cfg(feature = "agents")]
@@ -563,7 +561,6 @@ impl CallEnv {
             global_binding_root: false,
             global_function_configurable: true,
             catch_bindings: None,
-            immutable_function_name: None,
             direct_eval_var_conflicts: None,
             direct_eval_with_stack: Vec::new(),
             #[cfg(feature = "agents")]
@@ -689,7 +686,6 @@ impl CallEnv {
             global_binding_root: false,
             global_function_configurable: true,
             catch_bindings: None,
-            immutable_function_name: None,
             direct_eval_var_conflicts: None,
             direct_eval_with_stack: Vec::new(),
             #[cfg(feature = "agents")]
@@ -874,7 +870,6 @@ impl CallEnv {
             global_binding_root: false,
             global_function_configurable: true,
             catch_bindings: self.catch_bindings.clone(),
-            immutable_function_name: None,
             direct_eval_var_conflicts: self.direct_eval_var_conflicts.clone(),
             direct_eval_with_stack: self.direct_eval_with_stack.clone(),
             #[cfg(feature = "agents")]
@@ -957,22 +952,6 @@ impl CallEnv {
         self.catch_bindings
             .as_ref()
             .is_some_and(|bindings| bindings.contains(name))
-    }
-
-    /// Marks `name` as this frame's immutable named-function-expression binding.
-    pub(crate) fn set_immutable_function_name(&mut self, name: String) {
-        self.immutable_function_name = Some(name);
-    }
-
-    /// Returns true when `name` is this frame's immutable function-expression
-    /// name binding, so an assignment to it must be rejected (a silent no-op in
-    /// sloppy mode, a TypeError in strict mode).
-    pub(crate) fn is_immutable_function_name(&self, name: &str) -> bool {
-        self.immutable_function_name.as_deref() == Some(name)
-    }
-
-    pub(crate) fn immutable_function_name(&self) -> Option<&str> {
-        self.immutable_function_name.as_deref()
     }
 
     pub(crate) fn clear_direct_eval_var_conflicts(&mut self) {
@@ -1529,7 +1508,6 @@ impl CallEnv {
             && self.deopt_bindings.is_none()
             && self.activation.creation.imports().is_empty()
             && !self.has_module_live_bindings()
-            && self.immutable_function_name.is_none()
     }
 
     /// Whether this environment can supply a value for *any* name, which is
@@ -1546,7 +1524,6 @@ impl CallEnv {
             && self.deopt_bindings.is_none()
             && self.activation.creation.imports().is_empty()
             && !self.has_module_live_bindings()
-            && self.immutable_function_name.is_none()
     }
 
     pub(crate) fn frame_binding_cell(&self, name: &str) -> Option<BindingCell> {

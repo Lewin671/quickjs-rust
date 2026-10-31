@@ -1472,18 +1472,4 @@ impl<'a> Vm<'a> {
     pub(super) fn pop(&mut self) -> Result<Value, RuntimeError> {
         self.stack.pop().ok_or_else(stack_underflow)
     }
-
-    fn captured_immutable_function_name(
-        &self,
-        bytecode: &Bytecode,
-        local_names: &[String],
-    ) -> Option<String> {
-        let name = self.env.immutable_function_name()?;
-        if local_names.iter().any(|local| local == name) {
-            return None;
-        }
-        let references_name = bytecode.local_slot(name).is_some()
-            || bytecode.global_names().iter().any(|global| global == name);
-        references_name.then(|| name.to_owned())
-    }
 }

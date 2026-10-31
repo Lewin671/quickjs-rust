@@ -207,9 +207,6 @@ fn build_dynamic_function(
     let created = Function::new_user_compiled(CompiledUserFunction {
         name: Some(name),
         has_name_binding: false,
-        immutable_name_binding: false,
-        immutable_env_binding: None,
-        immutable_env_value: None,
         params: Rc::new(params),
         creation,
         bytecode: Rc::new(bytecode),

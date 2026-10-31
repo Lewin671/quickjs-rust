@@ -6,9 +6,7 @@
 use super::{
     ir::{ClassDefinition, ClassElementDef, ClassMemberKeyDef, ClassPrivateElementDef},
     vm::Vm,
-    vm_class::{
-        ClassHeritage, class_inner_name_binding, function_prototype_value, install_field_value,
-    },
+    vm_class::{ClassHeritage, function_prototype_value, install_field_value},
 };
 use crate::{
     Function, ObjectRef, PropertyKey, RuntimeError, Value,
@@ -126,13 +124,6 @@ impl Vm<'_> {
         let constructor_function = Function::new_user_compiled(CompiledUserFunction {
             name: constructor.name.clone(),
             has_name_binding: false,
-            immutable_name_binding: false,
-            immutable_env_binding: class_inner_name_binding(
-                name,
-                &constructor.bytecode,
-                &constructor.local_names,
-            ),
-            immutable_env_value: None,
             params: std::rc::Rc::new(constructor.params.clone()),
             creation: creation.clone(),
             bytecode: constructor.bytecode.clone(),

@@ -173,9 +173,6 @@ impl Vm<'_> {
         let function = Function::new_user_compiled(CompiledUserFunction {
             name: class_method_function_name_with_base(def.method_kind, def.name.clone()),
             has_name_binding: false,
-            immutable_name_binding: false,
-            immutable_env_binding: name.map(str::to_owned),
-            immutable_env_value: None,
             params: std::rc::Rc::new(def.params.clone()),
             creation: self.current_creation_context(),
             bytecode: def.bytecode.clone(),
@@ -231,9 +228,6 @@ impl Vm<'_> {
         Function::new_user_compiled(CompiledUserFunction {
             name: None,
             has_name_binding: false,
-            immutable_name_binding: false,
-            immutable_env_binding: name.map(str::to_owned),
-            immutable_env_value: None,
             params: std::rc::Rc::new(qjs_ast::FunctionParams::positional(Vec::new())),
             creation: self.current_creation_context(),
             bytecode: definition.bytecode.clone(),

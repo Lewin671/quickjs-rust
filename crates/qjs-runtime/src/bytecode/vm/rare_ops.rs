@@ -19,8 +19,7 @@ use crate::bytecode::vm_iter::DelegateStep;
 use crate::bytecode::vm_props::array_index_from_number;
 use crate::bytecode::vm_result::Completion;
 use crate::{
-    Function, PropertyKey, RuntimeError, Value,
-    function::{BindingCell, CompiledUserFunction},
+    Function, PropertyKey, RuntimeError, Value, function::CompiledUserFunction,
     to_js_string_with_env,
 };
 use std::rc::Rc;
@@ -172,7 +171,6 @@ impl Vm<'_> {
             Op::NewFunction {
                 name,
                 has_name_binding,
-                immutable_name_binding,
                 params,
                 local_names,
                 lexical_captures,
@@ -191,12 +189,6 @@ impl Vm<'_> {
                     None
                 };
                 let upvalues = self.captured_upvalues_for_function(bytecode, lexical_captures);
-                let immutable_env_binding =
-                    self.captured_immutable_function_name(bytecode, local_names);
-                let immutable_env_value = immutable_env_binding
-                    .as_deref()
-                    .and_then(|name| self.env.get(name))
-                    .map(BindingCell::new);
                 let deopt_bindings = self.frame_deopt_bindings_memoized();
                 let scope_use = deopt_bindings.as_ref().map(|bindings| {
                     self.closure_scope_use(bytecode, *lexical_this || *lexical_arguments, bindings)
@@ -214,9 +206,6 @@ impl Vm<'_> {
                 let function = Function::new_user_compiled(CompiledUserFunction {
                     name: name.clone(),
                     has_name_binding: *has_name_binding,
-                    immutable_name_binding: *immutable_name_binding,
-                    immutable_env_binding,
-                    immutable_env_value,
                     params: Rc::clone(params),
                     creation: self.current_creation_context(),
                     bytecode: Rc::clone(bytecode),

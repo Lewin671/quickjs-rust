@@ -815,7 +815,6 @@ fn mirrors(property: &Value, binding: &Value) -> bool {
 fn plain_global_var(name: &str, env: &CallEnv) -> Option<GlobalVar> {
     if env.is_global_lexical_binding(name)
         || env.is_immutable_lexical_binding(name)
-        || env.is_immutable_function_name(name)
         || env.has_module_import(name)
         || env.module_live_binding_cell(name).is_some()
     {

@@ -229,7 +229,6 @@ impl<'a> Vm<'a> {
         let virtual_function_context_safe = env.scope_cursor().is_none()
             && !bytecode.has_dynamic_scope_tree()
             && env.deopt_bindings().is_none()
-            && env.immutable_function_name().is_none()
             && with_stack.is_empty();
         // Keep cold virtual candidates allocation-free. Their first
         // initializer grows this bank only as far as the candidate needs.

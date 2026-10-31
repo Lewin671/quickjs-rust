@@ -18,36 +18,6 @@ use super::ir::{
 use super::vm::Vm;
 use crate::CallEnv;
 
-/// The class inner-name binding a class member actually needs.
-///
-/// A class body's inner name is in scope for every member, but a member that
-/// never mentions it does not need the binding -- and carrying one excludes
-/// the member from the slot-seeded direct call path, which is why an ordinary
-/// class method used to cost more than the identical function assigned to a
-/// prototype. The binding is kept whenever the member could reach the name by
-/// a route the compiler does not record as a reference: a nested closure that
-/// captures it, a direct `eval`, or a `with` body. Those are exactly the
-/// members the direct call path declines anyway, so nothing that could benefit
-/// is affected.
-pub(super) fn class_inner_name_binding(
-    name: Option<&str>,
-    bytecode: &super::ir::Bytecode,
-    local_names: &[String],
-) -> Option<String> {
-    let name = name?;
-    if bytecode.creates_closures() || bytecode.contains_direct_eval() || bytecode.contains_with() {
-        return Some(name.to_owned());
-    }
-    if local_names.iter().any(|local| local == name) {
-        return None;
-    }
-    // A class member's bytecode declares the inner name as a slot whether or
-    // not the member mentions it, so slot existence is not a reference test.
-    let references_name = bytecode.uses_local_binding(name)
-        || bytecode.global_names().iter().any(|global| global == name);
-    references_name.then(|| name.to_owned())
-}
-
 impl Vm<'_> {
     /// Builds and installs a single method/accessor on the prototype (instance)
     /// or the constructor (static).
@@ -70,13 +40,6 @@ impl Vm<'_> {
         let method_function = Function::new_user_compiled(CompiledUserFunction {
             name: class_method_function_name(method, &key),
             has_name_binding: false,
-            immutable_name_binding: false,
-            immutable_env_binding: class_inner_name_binding(
-                name,
-                &method.bytecode,
-                &method.local_names,
-            ),
-            immutable_env_value: None,
             params: std::rc::Rc::new(method.params.clone()),
             creation: self.current_creation_context(),
             bytecode: method.bytecode.clone(),
@@ -173,9 +136,6 @@ impl Vm<'_> {
         Some(Function::new_user_compiled(CompiledUserFunction {
             name: None,
             has_name_binding: false,
-            immutable_name_binding: false,
-            immutable_env_binding: class_inner_name_binding(name, bytecode, local_names),
-            immutable_env_value: None,
             params: std::rc::Rc::new(qjs_ast::FunctionParams::positional(Vec::new())),
             creation: self.current_creation_context(),
             bytecode: bytecode.clone(),
@@ -222,9 +182,6 @@ impl Vm<'_> {
         let thunk = Function::new_user_compiled(CompiledUserFunction {
             name: None,
             has_name_binding: false,
-            immutable_name_binding: false,
-            immutable_env_binding: class_inner_name_binding(name, bytecode, local_names),
-            immutable_env_value: None,
             params: std::rc::Rc::new(qjs_ast::FunctionParams::positional(Vec::new())),
             creation: self.current_creation_context(),
             bytecode: bytecode.clone(),

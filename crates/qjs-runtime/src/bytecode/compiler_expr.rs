@@ -627,7 +627,6 @@ impl Compiler {
                 self.emit(Op::NewFunction {
                     name: name.clone(),
                     has_name_binding: needs_name_binding,
-                    immutable_name_binding: needs_name_binding,
                     params: Rc::new(params.clone()),
                     local_names: Rc::new(local_names),
                     lexical_captures,
@@ -784,7 +783,6 @@ impl Compiler {
                 self.emit(Op::NewFunction {
                     name: Some(name.to_owned()),
                     has_name_binding: false,
-                    immutable_name_binding: false,
                     params: Rc::new(params.clone()),
                     local_names: Rc::new(local_names),
                     lexical_captures,
@@ -844,7 +842,6 @@ impl Compiler {
         self.emit(Op::NewFunction {
             name: Some(display_name.to_owned()),
             has_name_binding: false,
-            immutable_name_binding: false,
             params: Rc::new(params.clone()),
             local_names: Rc::new(local_names),
             lexical_captures,

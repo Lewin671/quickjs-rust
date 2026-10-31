@@ -141,9 +141,6 @@ impl fmt::Debug for FunctionWeakRef {
 }
 
 impl Function {
-    pub(crate) fn immutable_env_binding(&self) -> Option<&str> {
-        self.immutable_env_binding.as_deref().map(String::as_str)
-    }
     pub(crate) fn is_last_reference(&self) -> bool {
         Rc::strong_count(&self.0) == 1
     }
@@ -172,22 +169,6 @@ pub struct FunctionData {
     /// Whether `name` also creates the function body's internal name binding.
     /// Method definitions have a name property but no inner binding.
     pub(crate) has_name_binding: bool,
-    /// Whether the internal name binding is the *immutable* binding of a named
-    /// function expression (`var f = function g() {}`). Assigning to `g` inside
-    /// the body is a silent no-op in sloppy mode and a TypeError in strict mode.
-    /// False for function declarations (whose name is an ordinary mutable outer
-    /// binding) and for methods.
-    pub(crate) immutable_name_binding: bool,
-    /// An immutable binding supplied through the captured environment rather
-    /// than the function's own name, currently used for class inner names.
-    // Absent from ordinary closures; indirection keeps their Rc allocation
-    // within the 320-byte CLI size class. The binding cell remains separate.
-    #[allow(clippy::box_collection)]
-    immutable_env_binding: Option<Box<String>>,
-    /// Value for the rare immutable outer name that is not represented by a
-    /// compiler-generated received-upvalue slot (notably the self binding of a
-    /// named function expression referenced only by a nested function).
-    pub(crate) immutable_env_value: Option<BindingCell>,
     /// Parameter names. Held behind `Rc` so the frequent `Function` value
     /// clones (every property read, capture sync, and call setup) only bump a
     /// refcount instead of deep-cloning the parameter AST, which dominated call
@@ -455,9 +436,6 @@ pub(crate) struct BoundFunction {
 pub(crate) struct CompiledUserFunction {
     pub(crate) name: Option<String>,
     pub(crate) has_name_binding: bool,
-    pub(crate) immutable_name_binding: bool,
-    pub(crate) immutable_env_binding: Option<String>,
-    pub(crate) immutable_env_value: Option<BindingCell>,
     pub(crate) params: Rc<FunctionParams>,
     pub(crate) creation: Rc<crate::context::CreationContext>,
     pub(crate) bytecode: Rc<Bytecode>,
@@ -528,9 +506,6 @@ impl Function {
         let CompiledUserFunction {
             name,
             has_name_binding,
-            immutable_name_binding,
-            immutable_env_binding,
-            immutable_env_value,
             params,
             creation,
             bytecode,
@@ -572,7 +547,6 @@ impl Function {
         } else {
             lexical_scope
         };
-        let immutable_env_value = self_name.clone().or(immutable_env_value);
         let realm = &creation.realm;
         let realm_upvalue_slots = bytecode
             .received_upvalue_slots()
@@ -591,9 +565,6 @@ impl Function {
         let auxiliary = FunctionAuxiliaryState::new(home_object, super_constructor);
         let function = Self(Rc::new(FunctionData {
             has_name_binding,
-            immutable_name_binding,
-            immutable_env_binding: immutable_env_binding.map(Box::new),
-            immutable_env_value,
             name,
             params,
             native_context: NativeContext::default(),
@@ -797,9 +768,6 @@ impl Function {
         let function = Self(Rc::new(FunctionData {
             name: Some(name),
             has_name_binding: false,
-            immutable_name_binding: false,
-            immutable_env_binding: None,
-            immutable_env_value: None,
             params: Rc::new(FunctionParams::positional(vec![String::new(); length])),
             native_context: NativeContext::from_map(HashMap::new(), Some(domain)),
             creation: callable_creation(&target),
@@ -863,9 +831,6 @@ impl Function {
         let auxiliary = FunctionAuxiliaryState::new(None, None);
         let function = Self(Rc::new(FunctionData {
             has_name_binding: false,
-            immutable_name_binding: false,
-            immutable_env_binding: None,
-            immutable_env_value: None,
             name,
             params: Rc::new(FunctionParams::positional(params)),
             native_context: NativeContext::from_map(env, domain),

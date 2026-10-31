@@ -239,10 +239,7 @@ impl Vm<'_> {
                 message: format!("ReferenceError: undefined identifier `{name}`"),
             });
         }
-        if name != "this"
-            && self.env.scope_cursor().is_some()
-            && !self.env.is_immutable_function_name(name)
-        {
+        if name != "this" && self.env.scope_cursor().is_some() {
             if let Some(value) = self.env.module_import_value(name) {
                 return if value.is_uninitialized_lexical_marker() {
                     Err(RuntimeError {
@@ -268,11 +265,6 @@ impl Vm<'_> {
         }
         if name == "this" {
             return self.env.this_value();
-        }
-        if self.env.is_immutable_function_name(name)
-            && let Some(value) = self.env.get_local(name)
-        {
-            return Ok(value);
         }
         let deoptimized_sloppy_global = if !self.bytecode.global_scope
             && let Some(slot) = self.bytecode.local_slot(name)
@@ -644,7 +636,6 @@ impl Vm<'_> {
             || self.env.has_module_import(name)
             || self.env.is_global_lexical_binding(name)
             || self.env.is_immutable_lexical_binding(name)
-            || self.env.is_immutable_function_name(name)
         {
             return None;
         }
@@ -871,7 +862,7 @@ impl Vm<'_> {
         // never clones the `Local` (its owned `name` would be a heap
         // allocation on every assignment); the binding name is resolved by
         // reference, and only on the cold capture/global-sync paths.
-        let (mutable, from_env, hoisted, module_import, immutable_env_binding) = {
+        let (mutable, from_env, hoisted, module_import) = {
             let local_meta = self.bytecode.locals.get(slot).ok_or_else(|| RuntimeError {
                 thrown: None,
                 message: "bytecode local index out of bounds".to_owned(),
@@ -880,12 +871,10 @@ impl Vm<'_> {
                 local_meta.mutable,
                 local_meta.from_env,
                 local_meta.hoisted,
-                self.env.has_module_import(&local_meta.name),
-                local_meta.from_env
-                    && !local_meta.parameter
-                    && !local_meta.hoisted
-                    && (self.env.is_immutable_lexical_binding(&local_meta.name)
-                        || self.env.is_immutable_function_name(&local_meta.name)),
+                self.env
+                    .module_import_cell(&local_meta.name)
+                    .zip(self.local_upvalue_cell(slot))
+                    .is_some_and(|(import, selected)| import.ptr_eq(selected)),
             )
         };
         if module_import {
@@ -896,24 +885,12 @@ impl Vm<'_> {
         }
         let upvalue_initialized = self
             .local_upvalue_cell(slot)
-            .map(|upvalue| upvalue.get())
-            .is_some_and(|value| {
-                !matches!(
-                    value,
-                    Value::Function(function) if function.is_uninitialized_lexical_marker()
-                )
-            });
+            .is_some_and(BindingCell::is_initialized);
         let local = self.locals.get_mut(slot).ok_or_else(|| RuntimeError {
             thrown: None,
             message: "bytecode local index out of bounds".to_owned(),
         })?;
         if !mutable && (local.is_some() || upvalue_initialized) {
-            return Err(RuntimeError {
-                thrown: None,
-                message: "TypeError: assignment to constant variable".to_owned(),
-            });
-        }
-        if (local.is_some() || upvalue_initialized) && immutable_env_binding {
             return Err(RuntimeError {
                 thrown: None,
                 message: "TypeError: assignment to constant variable".to_owned(),
@@ -1149,11 +1126,6 @@ impl Vm<'_> {
                 thrown: None,
                 message: "TypeError: assignment to constant variable".to_owned(),
             });
-        }
-        // The inner name of a named function expression is immutable; a sloppy
-        // assignment to it is a silent no-op.
-        if self.env.is_immutable_function_name(name) {
-            return Ok(());
         }
         let is_sloppy_global_fallback = self
             .bytecode

@@ -39,7 +39,6 @@ pub(crate) struct GeneratorStart {
     pub(crate) env: CallEnv,
     pub(crate) upvalues: Vec<crate::function::BindingCell>,
     pub(crate) with_stack: Vec<Value>,
-    pub(crate) immutable_function_name: Option<String>,
 }
 
 /// A snapshot of a generator body's VM state, taken at a `yield`.
@@ -55,7 +54,6 @@ pub(crate) struct GeneratorSnapshot {
     upvalues: Vec<crate::function::BindingCell>,
     env: CallEnv,
     with_stack: Vec<Value>,
-    immutable_function_name: Option<String>,
     sloppy_global_names: Vec<String>,
     try_stack: Vec<TryFrame>,
     disposable_scopes: Vec<Vec<DisposeResource>>,
@@ -128,7 +126,6 @@ impl Vm<'_> {
         suspension: SuspensionKind,
     ) -> GeneratorSnapshot {
         let mut frame = self.into_frame();
-        let immutable_function_name = frame.env.immutable_function_name().map(str::to_owned);
         let cold = frame
             .cold
             .take()
@@ -145,7 +142,6 @@ impl Vm<'_> {
             upvalues: frame.upvalues,
             env: frame.env,
             with_stack: cold.with_stack,
-            immutable_function_name,
             sloppy_global_names: cold.sloppy_global_names,
             try_stack: cold.try_stack,
             disposable_scopes: cold.disposable_scopes,
@@ -171,13 +167,8 @@ pub(crate) fn start_suspended_at_body(
         env,
         upvalues,
         with_stack,
-        immutable_function_name,
     } = start;
     let mut vm = Vm::new_with_globals_upvalues_and_with_stack(&bytecode, env, upvalues, with_stack);
-    if let Some(name) = immutable_function_name {
-        vm.env.set_immutable_function_name(name);
-        vm.refresh_authoritative_slots();
-    }
     vm.stop_at_prologue = true;
     let result = vm.run_completion();
     match result {
@@ -208,13 +199,8 @@ fn run_from_start(
         env,
         upvalues,
         with_stack,
-        immutable_function_name,
     } = start;
     let mut vm = Vm::new_with_globals_upvalues_and_with_stack(&bytecode, env, upvalues, with_stack);
-    if let Some(name) = immutable_function_name {
-        vm.env.set_immutable_function_name(name);
-        vm.refresh_authoritative_slots();
-    }
     let result = vm.run_completion();
     drive(result, vm, &bytecode)
 }
@@ -232,9 +218,6 @@ fn run_from_yield(
         snapshot.upvalues,
         snapshot.with_stack,
     );
-    if let Some(name) = snapshot.immutable_function_name {
-        vm.env.set_immutable_function_name(name);
-    }
     *vm.scope_instances.borrow_mut() = snapshot.scope_instances;
     vm.ip = snapshot.ip;
     vm.stack.replace(snapshot.stack);

@@ -344,3 +344,17 @@ Module import routing types live with CreationContext. The obsolete Object/Array
 intrinsic snapshot-handoff reader/constants are deleted; typed creation records
 supply those identities. The legacy env file now owns only the remaining ABI
 compatibility to retire, rather than also owning Realm semantics.
+
+
+## B2c1 selected-cell policy retirement
+
+Deleted FunctionData/CompiledUserFunction immutable-name/environment-name/value
+compatibility fields, the extra NewFunction policy flag, generator snapshot name
+strings, class-name copies into FrameBindings and the associated admission guards.
+FunctionNamePlan/ScopeLease and the selected BindingCell now supply self/class
+write policy. Global lexical metadata cannot veto a mutable captured parameter
+with the same name. Positional captures take precedence over module import-name
+routing; an import's readonly policy applies only to that selected canonical cell.
+Runtime and module regressions cover both homonyms. Initialization probes inspect
+cell state without reading its value. All **2,565 runtime tests**, 286 NG fixtures,
+Clippy and the staged gate including 117 selected Test262 cases pass. Borrowed Context and removal of named call inputs remain.

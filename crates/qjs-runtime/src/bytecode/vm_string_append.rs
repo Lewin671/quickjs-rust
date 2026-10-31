@@ -50,7 +50,6 @@ impl Vm<'_> {
         if !local_meta.mutable
             || self.env.has_module_import(name)
             || self.env.is_immutable_lexical_binding(name)
-            || self.env.is_immutable_function_name(name)
             || self.local_slot_targets_non_writable_global(slot, name)
         {
             return false;
@@ -152,7 +151,6 @@ impl Vm<'_> {
     fn detach_matching_realm_string(&mut self, name: &str, expected: &crate::JsString) -> bool {
         if self.env.has_module_import(name)
             || self.env.is_immutable_lexical_binding(name)
-            || self.env.is_immutable_function_name(name)
             || self.env.has_local_binding(name)
             || self
                 .bytecode

@@ -1270,11 +1270,6 @@ pub(crate) fn call_async_generator_function(
             env: function_env,
             upvalues: function.upvalues.clone(),
             with_stack: function.with_stack.clone(),
-            immutable_function_name: function
-                .immutable_name_binding
-                .then(|| function.name.clone())
-                .flatten()
-                .or_else(|| function.immutable_env_binding().map(str::to_owned)),
         },
         env,
     )

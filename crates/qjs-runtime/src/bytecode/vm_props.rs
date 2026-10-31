@@ -607,12 +607,6 @@ impl Vm<'_> {
         }
         // The inner name of a named function expression is immutable; a strict
         // assignment to it is a TypeError.
-        if self.env.is_immutable_function_name(name) {
-            return Err(RuntimeError {
-                thrown: None,
-                message: "TypeError: assignment to constant variable".to_owned(),
-            });
-        }
         // A caller-scope binding carried in this frame's locals layer is written
         // there (and propagated back to the caller on return); only a true realm
         // global goes to the shared cell.
@@ -758,9 +752,6 @@ impl Vm<'_> {
         }
         // The inner name of a named function expression is immutable; a sloppy
         // assignment to it is a silent no-op, even from a nested function.
-        if self.env.is_immutable_function_name(name) {
-            return Ok(());
-        }
         if let Some(slot) = slot {
             if let Some(result) = self.try_store_indexed_realm_global(slot, name, &value, false) {
                 return result;

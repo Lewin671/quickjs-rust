@@ -1657,3 +1657,9 @@ fn private_class_keys_preserve_module_receiver_and_absent_arguments() {
         Value::String("undefined:undefined:undefined:undefined:function:function".into())
     );
 }
+
+#[test]
+fn mutable_parameter_capture_shadows_an_import_with_the_same_name() {
+    let namespace = run("import { x } from 'dep'; function outer(x) { return () => ++x; } const write = outer(8); export const result = write() + ':' + write() + ':' + x;", &[("dep", "export let x = 1;")]).unwrap();
+    assert_eq!(export(&namespace, "result"), Value::String("9:10:1".into()));
+}

@@ -174,11 +174,6 @@ fn call_with_arguments(
                     env: function_env.env,
                     upvalues: function.upvalues.clone(),
                     with_stack: function.with_stack.clone(),
-                    immutable_function_name: function
-                        .immutable_name_binding
-                        .then(|| function.name.clone())
-                        .flatten()
-                        .or_else(|| function.immutable_env_binding().map(str::to_owned)),
                 },
                 env,
             );
@@ -1313,24 +1308,6 @@ fn function_env<'a>(
             Value::Boolean(true),
         );
     }
-    if let Some(name) = function.immutable_env_binding() {
-        let captured_value = received_upvalue_value(function, bytecode, name)
-            .or_else(|| function.immutable_env_value.as_ref().map(|cell| cell.get()));
-        if let Some(value) = captured_value {
-            frame_env.insert(name.to_owned(), value);
-        }
-    }
-    if function.immutable_name_binding
-        && let Some(name) = &function.name
-    {
-        frame_env.set_immutable_function_name(name.to_owned());
-    } else if let Some(name) = function.immutable_env_binding() {
-        frame_env.set_immutable_function_name(name.to_owned());
-    } else if function.lexical_this
-        && let Some(name) = env.immutable_function_name()
-    {
-        frame_env.set_immutable_function_name(name.to_owned());
-    }
     if let Some(bindings) = &function.deopt_bindings
         && !function.scope_bypassed.get()
     {
@@ -1380,20 +1357,6 @@ fn can_seed_positional_call(function: &Function, bytecode: &Bytecode, env: &Call
             .realm()
             .is_none_or(|realm| Rc::ptr_eq(realm, env.realm()))
         && !function.has_module_imports()
-        && [
-            function
-                .name
-                .as_deref()
-                .filter(|_| function.has_name_binding),
-            function.immutable_env_binding(),
-        ]
-        .into_iter()
-        .flatten()
-        .all(|name| {
-            bytecode
-                .local_slot(name)
-                .is_none_or(|slot| !bytecode.local_is_parameter(slot))
-        })
 }
 
 fn can_seed_direct_leaf_call(function: &Function, bytecode: &Bytecode) -> bool {
@@ -1426,14 +1389,6 @@ fn can_seed_slot_backed_call(function: &Function, bytecode: &Bytecode) -> bool {
         && !function.is_generator
         && !function.is_async
         && !function.has_name_binding
-        && !function.immutable_name_binding
-        // A class's inner name reaches a method as a read-only cell; the
-        // immutable frame binding that normally accompanies it only serves
-        // the assignment diagnostic, so a body that never assigns the name
-        // can run without the binding.
-        && (function.immutable_env_binding().is_none_or(|name| {
-            function.owner_kind.forbids_arguments() || bytecode.reads_immutable_env_binding_through_cell(name)
-        }))
         && function.dynamic_scope_bypassed()
         && function.with_stack.is_empty()
         && bytecode.has_direct_seedable_parameters()
@@ -1443,13 +1398,6 @@ fn can_seed_slot_backed_call(function: &Function, bytecode: &Bytecode) -> bool {
         && !bytecode.contains_with()
         && !bytecode.contains_super_operation()
         && !bytecode.creates_capturing_closures()
-}
-
-fn received_upvalue_value(function: &Function, bytecode: &Bytecode, name: &str) -> Option<Value> {
-    bytecode
-        .received_upvalue_names()
-        .zip(&function.upvalues)
-        .find_map(|(candidate, upvalue)| (candidate == name).then(|| upvalue.get()))
 }
 
 /// A function owns its immutable creation metadata. An explicit host override

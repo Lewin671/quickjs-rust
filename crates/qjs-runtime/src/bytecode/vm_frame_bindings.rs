@@ -81,6 +81,15 @@ impl Vm<'_> {
                 if local.compiler_temporary {
                     continue;
                 }
+                // Positional captures name their source cell. Import tables
+                // cannot replace a nearer parameter/lexical homonym.
+                if local.is_received_upvalue()
+                    && let Some(cell) = upvalues.get(next_received)
+                {
+                    next_received += 1;
+                    local_upvalues[slot] = Some(cell.clone());
+                    continue;
+                }
                 if env.has_global_binding_root()
                     && env.can_cache_realm_globals()
                     && local.hoisted
@@ -105,7 +114,14 @@ impl Vm<'_> {
                     local_upvalues[slot] = env.realm_binding_cell(&local.name);
                     continue;
                 }
-                if let Some(upvalue) = env.module_import_cell(&local.name) {
+                let module_root_binding = env.has_module_live_bindings()
+                    && bytecode.binding_plan.scopes[0]
+                        .lookup
+                        .get(&local.name)
+                        .is_some_and(|id| bytecode.binding_plan.bindings[id.0].slot.0 == slot);
+                if (local.is_received_upvalue() || module_root_binding)
+                    && let Some(upvalue) = env.module_import_cell(&local.name)
+                {
                     local_upvalues[slot] = Some(upvalue);
                     if local.is_received_upvalue() {
                         next_received += 1;

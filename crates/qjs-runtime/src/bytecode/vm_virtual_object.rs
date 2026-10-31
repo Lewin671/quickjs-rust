@@ -42,9 +42,8 @@ impl<'a> Vm<'a> {
         // live `FrameProgramView` must never have code replaced underneath it.
         // Every caller runs during generator setup or resume, before the
         // dispatch loop starts, so there is no live view to invalidate.
-        self.current.virtual_function_context_safe = self.env.deopt_bindings().is_none()
-            && self.env.immutable_function_name().is_none()
-            && self.with_stack().is_empty();
+        self.current.virtual_function_context_safe =
+            self.env.deopt_bindings().is_none() && self.with_stack().is_empty();
         self.virtual_values.clear();
     }
 

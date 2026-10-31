@@ -316,7 +316,11 @@ impl Vm<'_> {
                             )
                         }
                     });
-                let access = if self.env.has_module_import(&meta.name) {
+                let access = if self
+                    .env
+                    .module_import_cell(&meta.name)
+                    .is_some_and(|import| import.ptr_eq(&cell))
+                {
                     AccessPolicy::Import
                 } else {
                     AccessPolicy::Mutable
