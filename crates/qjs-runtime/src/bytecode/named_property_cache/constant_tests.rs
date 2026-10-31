@@ -245,16 +245,22 @@ fn weak_accessor_constants_release_the_pair_and_its_getter() {
 
 #[test]
 fn virtual_properties_are_rejected_before_constant_fetch() {
-    let domain = AtomDomain::new();
-    let function = Function::new_native_in_domain(
-        Some("constructor"),
-        0,
-        NativeFunction::Object,
-        true,
-        &domain,
-    );
+    let Value::Function(function) = crate::eval("(function Constructor() {})").unwrap() else {
+        panic!("user function");
+    };
+    crate::Prototype::Function(function.clone())
+        .enter_prototype_mode()
+        .unwrap();
     let holder = WeakTarget::Function(function.downgrade());
-    let before = function.virtual_named_probe("prototype");
+    assert_eq!(
+        function.virtual_named_probe("prototype"),
+        Some(Virtual::FunctionPrototype)
+    );
+    let before = function.named_version();
     assert!(Constant::admit(&holder, Probe::Virtual(Virtual::FunctionPrototype)).is_none());
-    assert_eq!(function.virtual_named_probe("prototype"), before);
+    assert_eq!(
+        function.virtual_named_probe("prototype"),
+        Some(Virtual::FunctionPrototype)
+    );
+    assert_eq!(function.named_version(), before);
 }

@@ -46,3 +46,20 @@ all runtime targets and `-D warnings` passes. Shared append plans now execute
 the common invalidation barrier, including when an existing receiver becomes
 a prototype after the plan was admitted. Physical assertions remain 64-byte
 NamedStore, 72-byte RefCell and 96-byte ordinary payload.
+
+## Frozen candidate qualification (in progress)
+
+Production source `6a9c615d`, integration base `1e6e2a2b`, review reference
+`d38f30a7`. Isolated release `agents` CLI SHA-256
+`759a0896898b5e98dbf52428f31fa1fc03be53d623d0a1ca8ec0ca702059333c`;
+actual `--agent` smoke prints `agent-ready`. All 268 NG fixtures pass in each
+of release cached, release IC-off, and debug IC-verify modes. The five new
+prototype tests pass on arm64 and x86_64 (local Rosetta); this checks both
+representations but is not iMac performance evidence. A stronger virtual
+admission test uses a genuinely lazy user-function prototype with an installed
+validity state, and proves both laziness and the named version remain unchanged.
+
+The iMac queue was read successfully and was idle; local clock there was
+2026-10-31 13:58 CST, outside the prohibited window. No runner job has been
+submitted: `imac-bench.sh` uses `git push` internally, and the explicit no-push
+instruction remains in force pending the requested clarification.
