@@ -22,7 +22,7 @@ fields = '''r2_objects_created r2_arrays_created r2_store_adds r2_slot_allocs
 r2_slot_reallocs r2_slot_capacity_bytes r2_slot_adopted_buffers
 r2_schema_acquires r2_schema_clones r2_schema_drops r2_schema_upgrades
 r2_lease_clones r2_lease_drops r2_lease_upgrades r2_ref_reads r2_ref_writes
-r2_hashes r2_store_ic_probes r2_inline_pairs r2_ic_reads r2_ic_writes r2_ic_headers r2_ic_payload_bytes'''.split()
+r2_hashes r2_store_ic_probes r2_inline_pairs r2_ic_reads r2_ic_writes r2_ic_headers r2_ic_payload_bytes r2_ic_owned_sites r2_ic_owned_payload_bytes r2_ic_local_slot_reads r2_array_seed_reads'''.split()
 diag = src / 'diagnostics.rs'
 s = diag.read_text().replace('declare_counters! {', 'declare_counters! {\n'+''.join('    '+f+',\n' for f in fields), 1)
 s += '''
@@ -146,12 +146,25 @@ if 'impl Default for NamedPropertyCache' not in cache_text:
 payload = 'CacheData' if 'struct CacheData {' in cache_text else ('RefCell<State>' if 'struct State {' in cache_text else 'RefCell<NamedPropertyCacheState>')
 cache_text = count_body(cache_text, 'fn default()', 'r2_ic_headers')
 cache_text = cache_text.replace('crate::diagnostics::count!(r2_ic_headers);', 'crate::diagnostics::count!(r2_ic_headers); crate::diagnostics::update(|c| c.r2_ic_payload_bytes += std::mem::size_of::<'+payload+'>() as u64);')
+if 'Self(Rc::new(CacheData {' in cache_text:
+    cache_text = count_body(cache_text, 'fn for_local(', 'r2_ic_headers')
+    # Same shared payload as default(), but this constructor bypasses it.
+    at = cache_text.index('fn for_local(')
+    cache_text = cache_text[:at] + cache_text[at:].replace('crate::diagnostics::count!(r2_ic_headers);', 'crate::diagnostics::count!(r2_ic_headers); crate::diagnostics::update(|c| c.r2_ic_payload_bytes += std::mem::size_of::<CacheData>() as u64);', 1)
+if 'fn local_site()' in cache_text:
+    cache_text = count_body(cache_text, 'fn local_site()', 'r2_ic_owned_sites')
+    cache_text = cache_text.replace('crate::diagnostics::count!(r2_ic_owned_sites);', 'crate::diagnostics::count!(r2_ic_owned_sites); crate::diagnostics::update(|c| c.r2_ic_owned_payload_bytes += std::mem::size_of::<CacheData>() as u64);')
+if 'fn local_slot(' in cache_text:
+    cache_text = count_body(cache_text, 'fn local_slot(', 'r2_ic_local_slot_reads')
 cache_file.write_text(cache_text)
 for p in [cache_file, src/'bytecode/named_property_cache/stores.rs']:
     if not p.exists(): continue
     text = p.read_text()
-    text = re.sub(r'((?:self|cache)\s*\.\s*0(?:\s*\.\s*state)?)\s*\.borrow(_mut)?\(\)', lambda m: C+('::ic_write(&' if m[2] else '::ic_read(&')+re.sub(r'\s+', '', m[1])+')', text)
+    text = re.sub(r'((?:self|cache)\s*\.\s*(?:0(?:\s*\.\s*state)?|state))\s*\.borrow(_mut)?\(\)', lambda m: C+('::ic_write(&' if m[2] else '::ic_read(&')+re.sub(r'\s+', '', m[1])+')', text)
     p.write_text(text)
+
+if 'fn with_seed<' in (src/'value/array.rs').read_text():
+    edit('value/array.rs',lambda s:count_body(s,'fn with_seed<', 'r2_array_seed_reads'))
 
 # Hash completion counts a table hash once, including resize rehashing.
 edit('value/name_hash.rs',lambda s:count_body(s,'fn finish(&self)', 'r2_hashes'))

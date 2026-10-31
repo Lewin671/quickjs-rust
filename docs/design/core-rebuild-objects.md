@@ -95,7 +95,7 @@ The first mono entry is immutable after publication; its hot guard reads no
 mutable IC metadata. Replacement disables it before using cold mono/four-way
 state. One inactive weak token may remain until site destruction, with no fifth
 active way, value or receiver pin. Clear/reuse never reactivates that token.
-The implemented entry is 32 bytes: weak layout/version 16, slot 4, kind and padding 4, optional cold chain pointer
+Shared bytecode handles are 8 bytes; loop-owned sites embed the same 96-byte data in their program vector. The implemented entry is 32 bytes: weak layout/version 16, slot 4, kind and padding 4, optional cold chain pointer
 8; four-way storage is allocated only when a second guard is admitted. A fifth
 independent live guard makes the site permanently megamorphic. Shared-own poly
 hits compare four identities in parallel; numeric consumers load a live f64

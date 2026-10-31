@@ -55,3 +55,8 @@ allocator rounding; bytes/header gives the actual production Rust type size.
 diagnosis of measured public regressions: nbody, nsieve, date-format-xparb,
 3d-morph, 3d-raytrace, JetStream gaussian-blur and Kraken json-stringify. It does
 not replace or change the frozen 24-case construction inventory.
+
+Owned-cache cohorts count inline site construction/bytes separately from shared
+Rc payload headers; local code clones start fresh metadata and retain only their
+immutable slot configuration. Additional counters partition local-slot queries
+and default-array seed reads, which were absent from earlier frozen records.

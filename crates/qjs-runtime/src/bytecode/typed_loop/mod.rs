@@ -497,7 +497,7 @@ impl fmt::Debug for TypedLoopScratch {
 }
 
 /// Every tier uses the same bounded weak shape IC implementation.
-pub(super) type ShapeWays = super::named_property_cache::NamedPropertyCache;
+pub(super) type ShapeWays = super::named_property_cache::CacheData;
 
 /// Marks a `CallClosedFormLeaf` whose arguments are boxed registers.
 const BOXED_ARGUMENTS: u8 = 0x80;

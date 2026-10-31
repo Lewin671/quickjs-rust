@@ -7,7 +7,7 @@ pub(super) struct AddEntry {
     recipe: AppendRecipe,
     validity: Option<StructuralDependency>,
 }
-impl NamedPropertyCache {
+impl CacheData {
     pub(in crate::bytecode) fn record_data_slot(
         &self,
         object: &ObjectRef,
@@ -45,7 +45,7 @@ impl NamedPropertyCache {
             None
         };
         if let Some(recipe) = object.with_named(|s| s.append_recipe(before, slot)) {
-            self.0.state.borrow_mut().add = Some(Box::new(AddEntry { recipe, validity }));
+            self.state.borrow_mut().add = Some(Box::new(AddEntry { recipe, validity }));
         }
     }
     /// Caller excludes the realm global; the entry proves own writable data.
@@ -62,11 +62,11 @@ impl NamedPropertyCache {
     }
     #[inline(never)]
     fn write_number_other(&self, object: &ObjectRef, number: f64) -> bool {
-        let state = self.0.state.borrow();
+        let state = self.state.borrow();
         object.with_named_mut(|store| {
             let entry = match &state.entries {
                 Entries::MonoFirst | Entries::Mono(_) => {
-                    state.entries.mono(&self.0.first).expect("mono")
+                    state.entries.mono(&self.first).expect("mono")
                 }
                 Entries::Poly(entries) | Entries::SharedOwnPoly(entries) => {
                     let Some(entry) = entries
@@ -97,12 +97,12 @@ impl NamedPropertyCache {
         value: &Value,
         allow_add: bool,
     ) -> Option<OwnDataPropertyWrite> {
-        let state = self.0.state.borrow();
+        let state = self.state.borrow();
         if let NamedTarget::Object(object) = target {
             let mut appended = None;
             let result = object.with_named_mut(|store| {
                 let entry = match &state.entries {
-                    Entries::MonoFirst | Entries::Mono(_) => state.entries.mono(&self.0.first),
+                    Entries::MonoFirst | Entries::Mono(_) => state.entries.mono(&self.first),
                     Entries::Poly(es) | Entries::SharedOwnPoly(es) => {
                         es.iter().find(|e| store.matches_version(&e.version))
                     }
@@ -143,7 +143,7 @@ impl NamedPropertyCache {
             }
             return result;
         }
-        let entry = state.entries.find(target, &self.0.first)?;
+        let entry = state.entries.find(target, &self.first)?;
         if entry.flags & (7 | OWN | WRITE_FORBIDDEN) != DATA | OWN {
             return None;
         }

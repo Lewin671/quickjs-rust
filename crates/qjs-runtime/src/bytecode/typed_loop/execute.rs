@@ -786,7 +786,7 @@ fn seed_registers<F: LoopFrame>(
     program
         .shape_caches
         .borrow_mut()
-        .resize_with(program.cache_count, super::ShapeWays::default);
+        .resize_with(program.cache_count, super::ShapeWays::local_site);
     Some(())
 }
 

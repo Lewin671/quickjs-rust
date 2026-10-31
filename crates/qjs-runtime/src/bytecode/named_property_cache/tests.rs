@@ -572,3 +572,37 @@ fn boxed_string_length_is_ordinary_data_while_indices_stay_exotic() {
     assert!(indices.read_object(&object, "0").is_none());
     assert_eq!(object.get("0"), Some(Value::String("a".into())));
 }
+
+#[test]
+fn owned_and_shared_sites_use_the_same_live_slots_and_clear_protocol() {
+    let domain = AtomDomain::new();
+    let object = object(&domain, "x", 1.0);
+    let shared = NamedPropertyCache::for_local(7);
+    let owned = CacheData {
+        local_slot: Some(7),
+        ..CacheData::local_site()
+    };
+    for cache in [&*shared, &owned] {
+        cache.update(&object, "x", &Value::Undefined);
+    }
+    assert!(owned.write_number(&object, -0.0));
+    assert!(shared.get_number(&object).unwrap().is_sign_negative());
+    let cloned = owned.clone();
+    assert_eq!(cloned.local_slot(), Some(7));
+    assert!(
+        cloned.hot_mono().is_none(),
+        "a code clone learns fresh local feedback"
+    );
+    for cache in [&*shared, &owned] {
+        cache.clear();
+        assert_eq!(cache.local_slot(), Some(7));
+        assert!(cache.get(&object).is_none());
+    }
+    let weak = object.downgrade();
+    drop(object);
+    assert!(weak.upgrade().is_none());
+    assert_eq!(
+        std::mem::size_of::<NamedPropertyCache>(),
+        std::mem::size_of::<Rc<()>>()
+    );
+}

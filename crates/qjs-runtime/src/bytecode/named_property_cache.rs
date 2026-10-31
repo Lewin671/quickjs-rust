@@ -3,6 +3,8 @@
 //! generation plus a live holder slot. No IC subscriptions or cached Values.
 //! The first mono entry is immutable. Disable its marker before replacement;
 //! its inactive weak metadata survives only until this bounded site is dropped.
+//! Shared bytecode sites use Rc handles; loop-owned sites keep this same data
+//! inline in their existing program vector. Code clones start local sites cold.
 use crate::property::atom::{KeyLease, WeakKeyLease};
 use crate::value::{
     OwnDataPropertyWrite,
@@ -12,6 +14,7 @@ use crate::value::{
 use crate::{CallEnv, ObjectRef, Property, Value};
 use std::{
     cell::{Cell, OnceCell, RefCell},
+    ops::Deref,
     rc::Rc,
 };
 mod stores;
@@ -21,15 +24,15 @@ use stores::AddEntry;
 #[derive(Clone, Debug)]
 pub(super) struct NamedPropertyCache(Rc<CacheData>);
 #[derive(Debug, Default)]
-struct CacheData {
+pub(super) struct CacheData {
     first: OnceCell<Entry>,
     first_active: Cell<bool>,
     state: RefCell<State>,
+    local_slot: Option<usize>,
 }
 #[derive(Debug, Default)]
 struct State {
     entries: Entries,
-    local_slot: Option<usize>,
     key: Option<WeakKeyLease>,
     add: Option<Box<AddEntry>>,
     #[cfg(debug_assertions)]
@@ -68,6 +71,8 @@ const VERIFY: u32 = 1 << 6;
 const FIRST_HOLDER: u32 = 1 << 7;
 #[cfg(target_pointer_width = "64")]
 const _: () = assert!(std::mem::size_of::<Entry>() == 32);
+#[cfg(all(target_pointer_width = "64", not(debug_assertions)))]
+const _: () = assert!(std::mem::size_of::<CacheData>() == 96);
 #[derive(Debug)]
 pub(super) enum ReadOutcome {
     Value(Value),
@@ -122,6 +127,30 @@ fn fetch_probe(target: NamedTarget<'_>, probe: Probe) -> Option<ReadOutcome> {
 impl Default for NamedPropertyCache {
     fn default() -> Self {
         Self(Rc::new(CacheData::default()))
+    }
+}
+impl Deref for NamedPropertyCache {
+    type Target = CacheData;
+    #[inline(always)]
+    fn deref(&self) -> &CacheData {
+        &self.0
+    }
+}
+impl NamedPropertyCache {
+    pub(super) fn for_local(slot: usize) -> Self {
+        Self(Rc::new(CacheData {
+            local_slot: Some(slot),
+            ..CacheData::default()
+        }))
+    }
+}
+impl Clone for CacheData {
+    /// A code clone keeps its immutable configuration and learns its own sites.
+    fn clone(&self) -> Self {
+        Self {
+            local_slot: self.local_slot,
+            ..Self::local_site()
+        }
     }
 }
 impl Entry {
@@ -268,40 +297,36 @@ impl Entries {
     }
 }
 
-impl NamedPropertyCache {
+impl CacheData {
+    /// Fresh metadata owned directly by one compiled program site.
+    pub(super) fn local_site() -> Self {
+        Self::default()
+    }
     #[inline(always)]
     fn hot_mono(&self) -> Option<&Entry> {
-        if self.0.first_active.get() {
-            self.0.first.get()
+        if self.first_active.get() {
+            self.first.get()
         } else {
             None
         }
     }
     #[cfg(debug_assertions)]
     fn verify_hot(&self, entry: &Entry, target: NamedTarget<'_>) {
-        assert!(self.0.first_active.get());
-        assert!(std::ptr::eq(
-            entry,
-            self.0.first.get().expect("active first")
-        ));
+        assert!(self.first_active.get());
+        assert!(std::ptr::eq(entry, self.first.get().expect("active first")));
         if entry.flags & VERIFY != 0 {
-            self.verify_entry(&self.0.state.borrow(), entry, target);
+            self.verify_entry(&self.state.borrow(), entry, target);
         }
     }
-    pub(super) fn for_local(slot: usize) -> Self {
-        let cache = Self::default();
-        cache.0.state.borrow_mut().local_slot = Some(slot);
-        cache
-    }
     pub(super) fn local_slot(&self) -> Option<usize> {
-        self.0.state.borrow().local_slot
+        self.local_slot
     }
     fn cached(&self, target: NamedTarget<'_>, accessor: bool) -> Option<ReadOutcome> {
-        let state = self.0.state.borrow();
+        let state = self.state.borrow();
         // The monomorphic own-data path has one authority borrow: token compare
         // and a slot load, without Weak creation or descriptor/index access.
         if !accessor
-            && let Some(entry) = state.entries.mono(&self.0.first)
+            && let Some(entry) = state.entries.mono(&self.first)
             && entry.flags & 7 == DATA
             && entry.flags & OWN != 0
         {
@@ -314,7 +339,7 @@ impl NamedPropertyCache {
             count_event(target, Event::Hit);
             return Some(ReadOutcome::Value(value));
         }
-        let Some(entry) = state.entries.find(target, &self.0.first) else {
+        let Some(entry) = state.entries.find(target, &self.first) else {
             count_event(target, Event::Miss);
             return None;
         };
@@ -377,8 +402,8 @@ impl NamedPropertyCache {
     }
     #[inline(never)]
     fn data_value_other(&self, target: NamedTarget<'_>) -> Option<Value> {
-        let state = self.0.state.borrow();
-        if let Some(entry) = state.entries.mono(&self.0.first)
+        let state = self.state.borrow();
+        if let Some(entry) = state.entries.mono(&self.first)
             && entry.flags & (7 | OWN) == DATA | OWN
         {
             let value = target.load_matched_data(&entry.version, entry.slot);
@@ -396,7 +421,7 @@ impl NamedPropertyCache {
             );
             return value;
         }
-        if let Some(entry) = state.entries.mono(&self.0.first)
+        if let Some(entry) = state.entries.mono(&self.first)
             && entry.flags & (7 | FIRST_HOLDER) == DATA | FIRST_HOLDER
             && entry.chain.as_ref().is_some_and(|c| c.validity.is_valid())
             && let Some(value) = target.first_prototype_data(&entry.version, entry.slot)
@@ -465,7 +490,7 @@ impl NamedPropertyCache {
     }
     #[inline(never)]
     fn data_value_slow(&self, state: &State, target: NamedTarget<'_>) -> Option<Value> {
-        let Some(entry) = state.entries.find(target, &self.0.first) else {
+        let Some(entry) = state.entries.find(target, &self.first) else {
             count_event(target, Event::Miss);
             return None;
         };
@@ -529,15 +554,15 @@ impl NamedPropertyCache {
     }
     #[inline(never)]
     fn get_number_other(&self, object: &ObjectRef) -> Option<f64> {
-        let state = self.0.state.borrow();
+        let state = self.state.borrow();
         let value = object.with_named(|store| {
             let entry = match &state.entries {
                 Entries::MonoFirst | Entries::Mono(_)
-                    if state.entries.mono(&self.0.first).is_some_and(|e| {
+                    if state.entries.mono(&self.first).is_some_and(|e| {
                         e.flags & (7 | OWN) == DATA | OWN && store.matches_version(&e.version)
                     }) =>
                 {
-                    state.entries.mono(&self.0.first).expect("mono guard")
+                    state.entries.mono(&self.first).expect("mono guard")
                 }
                 Entries::SharedOwnPoly(ways) => {
                     let mask = u32::from(store.matches_shared_identity(&ways[0].version))
@@ -626,7 +651,6 @@ impl NamedPropertyCache {
             return resolve(target, name, Some(key));
         }
         let cached = self
-            .0
             .state
             .borrow()
             .key
@@ -638,7 +662,7 @@ impl NamedPropertyCache {
         } else {
             count_event(target, Event::Hash);
             let key = target.find_key(name);
-            self.0.state.borrow_mut().key = key.as_ref().map(KeyLease::downgrade);
+            self.state.borrow_mut().key = key.as_ref().map(KeyLease::downgrade);
             key
         };
         resolve(target, name, key.as_ref())
@@ -649,7 +673,7 @@ impl NamedPropertyCache {
         name: &str,
         key: Option<&KeyLease>,
     ) -> Option<ReadOutcome> {
-        if matches!(self.0.state.borrow().entries, Entries::Mega) {
+        if matches!(self.state.borrow().entries, Entries::Mega) {
             return self.resolve_read(target, name, key)?.fetch(target);
         }
         if let Some(value) = self.cached(target, false) {
@@ -663,7 +687,7 @@ impl NamedPropertyCache {
         resolution.fetch(target)
     }
     fn record_resolution(&self, target: NamedTarget<'_>, name: &str, resolution: &Resolution) {
-        if matches!(self.0.state.borrow().entries, Entries::Mega) {
+        if matches!(self.state.borrow().entries, Entries::Mega) {
             return;
         }
         let policy = target.policy();
@@ -720,12 +744,12 @@ impl NamedPropertyCache {
         } else {
             None
         };
-        let mut state = self.0.state.borrow_mut();
+        let mut state = self.state.borrow_mut();
         #[cfg(debug_assertions)]
         if policy.verify {
             state.name = Some(name.to_owned())
         }
-        self.0.first_active.set(false);
+        self.first_active.set(false);
         state.entries.record(
             Entry {
                 version,
@@ -733,10 +757,9 @@ impl NamedPropertyCache {
                 flags,
                 chain,
             },
-            &self.0.first,
+            &self.first,
         );
-        self.0
-            .first_active
+        self.first_active
             .set(matches!(state.entries, Entries::MonoFirst));
     }
     pub(super) fn update(&self, object: &ObjectRef, name: &str, _value: &Value) {
@@ -747,8 +770,8 @@ impl NamedPropertyCache {
     }
     #[cfg(test)]
     pub(super) fn clear(&self) {
-        let mut state = self.0.state.borrow_mut();
-        self.0.first_active.set(false);
+        let mut state = self.state.borrow_mut();
+        self.first_active.set(false);
         state.entries = Entries::Empty;
         state.key = None;
         state.add = None;
