@@ -7,7 +7,8 @@ pub(crate) struct StringWrapperLayout {
 }
 impl StringWrapperLayout {
     pub(crate) fn new(domain: &AtomDomain, prototype: crate::ObjectRef) -> Self {
-        let store = NamedStore::string_wrapper(domain, Some(prototype), 0.0);
+        let mut store = NamedStore::string_wrapper(domain, Some(prototype), 0.0);
+        store.materialize_layout();
         Self {
             layout: store.layout,
             prototype: store.prototype.map(Rc::new),

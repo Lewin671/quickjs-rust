@@ -144,10 +144,16 @@ impl DataSequence {
     }
     pub(crate) fn finish(self) -> (NamedStore, Option<Rc<Layout>>, usize) {
         let seen = self.seen;
-        let (store, indices) = self.finish_store();
-        let prediction =
-            (store.len() == seen && !store.layout.dictionary && store.domain().ic_policy().enabled)
-                .then(|| store.layout.clone());
+        let (mut store, indices) = self.finish_store();
+        let prediction = if store.len() == seen
+            && !store.layout.dictionary
+            && store.domain().ic_policy().enabled
+        {
+            store.materialize_layout();
+            Some(store.layout.clone())
+        } else {
+            None
+        };
         (store, prediction, indices)
     }
 }

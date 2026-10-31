@@ -130,3 +130,24 @@ and the reported 100,000-deep function-target stack-overflow case.
 C passes 2,517 runtime tests and its fast gate, including 52 selected function Test262 cases.
 
 D now documents the cleared/rebased Full-array/function seed case and its cold-guard fallback; it does not claim every empty authority is already published.
+
+## B public86 and template publication repair
+
+B job `20261031T111429Z-t077-s2fu-r2-b-public86` (`3a7e0a79`): 430 valid,
+zero invalid/heavy pairs, verdict likely loss. Wall/instruction ratios:
+development 1.014732/1.001395; external 1.001043/1.004772;
+broad 0.988278/1.002776; sentinel 0.993556/0.998313. Limits remain open.
+Counter job `20261031T111430Z-t077-s2fu-r2-b-counters` shows diff metadata
+recovery: shape creations 125,800 base / 37,096 B; retained nodes 37/329;
+block allocations 15,683,620/15,288,420. But ID probes increase
+9,094,831/10,389,811. Reusable sequence and String-wrapper templates had kept
+transient layouts; their instances repeatedly missed canonical own guards.
+Publish these templates before retaining predictions/minting instances. Two
+focused tests prove canonical prediction reuse and shared String template IDs.
+The repair's fast gate passes 2,519 runtime tests (no mapped curated slice).
+
+The B wall-over-instruction signature triggered the required default order
+regeneration. Job `20261031T112639Z-t077-s2fu-r2-order` profiles the declared
+default external/sentinel/broad set on frozen `c0f99d4e`, producing 464 symbols.
+That intermediate order is retained; regenerate against the repaired template
+source before final adoption rather than treating an old-image pin as current.
