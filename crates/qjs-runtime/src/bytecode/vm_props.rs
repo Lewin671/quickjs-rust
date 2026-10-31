@@ -468,7 +468,20 @@ impl Vm<'_> {
         )
     }
 
+    #[inline(always)]
     pub(super) fn try_cached_get_named(
+        &self,
+        object: &Value,
+        name: &crate::property::atom::Atom,
+        cache: &NamedPropertyCache,
+    ) -> Option<Value> {
+        cache
+            .get_value(object, Some(&self.env))
+            .or_else(|| self.cached_get_named_miss(object, name, cache))
+    }
+    #[cold]
+    #[inline(never)]
+    fn cached_get_named_miss(
         &self,
         object: &Value,
         name: &crate::property::atom::Atom,

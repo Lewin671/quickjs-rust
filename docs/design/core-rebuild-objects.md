@@ -61,8 +61,7 @@ entry points accept only empty input, keeping S2 empty creation sites compatible
 
 ## Shapes and edits
 
-The [shape contract](core-rebuild-shapes.md) owns live transitions, append-shared
-metadata, byte-bounded retention, dictionary edits and integrity transitions.
+The [shape contract](core-rebuild-shapes.md) owns transitions, metadata retention, dictionary edits and integrity transitions.
 
 ## Shared semantic API
 
@@ -87,8 +86,9 @@ array/function/Map/Set identity (`value/object.rs::Prototype`), never copied des
 
 ## Inline caches
 
-One cache per named site, mono first, bounded four-way poly then megamorphic
-generic lookup. Own-data guard: domain + kind + shape ID (dictionary ID/version)
+One cache per named site, mono first, bounded four-way poly then megamorphic lookup.
+Only guards/hits inline into dispatch; miss, update, poly/mega and verification
+functions are cold and never inlined. Own-data guard: domain + kind + shape ID (dictionary ID/version)
 + descriptor bits + slot. It does not guard the property's value or receiver
 address. Entries hold weak layout tokens, never a strong receiver. Own-data hits always load live; inherited data/accessors may cache cell-protected constants with weak RC payloads.
 The first mono entry is immutable after publication; its hot guard reads no

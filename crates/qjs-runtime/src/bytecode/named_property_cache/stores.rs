@@ -8,6 +8,8 @@ pub(super) struct AddEntry {
     validity: Option<StructuralDependency>,
 }
 impl CacheData {
+    #[cold]
+    #[inline(never)]
     pub(in crate::bytecode) fn record_data_slot(
         &self,
         object: &ObjectRef,
@@ -60,6 +62,7 @@ impl CacheData {
         }
         self.write_number_other(object, number)
     }
+    #[cold]
     #[inline(never)]
     fn write_number_other(&self, object: &ObjectRef, number: f64) -> bool {
         let state = self.state.borrow();
@@ -84,13 +87,24 @@ impl CacheData {
                 && store.overwrite_guarded_number(entry.slot as usize, number)
         })
     }
+    #[inline(always)]
     pub(in crate::bytecode) fn write_value(
         &self,
         value: &Value,
         new: &Value,
     ) -> Option<OwnDataPropertyWrite> {
-        value.with_named_target(|t| self.write_target(t, new, true))?
+        value.with_named_target(|t| {
+            if let Some(entry) = self.hot_mono()
+                && entry.flags & (7 | OWN | WRITABLE | WRITE_FORBIDDEN) == DATA | OWN | WRITABLE
+                && let Some(result) = t.write_matched_data(&entry.version, entry.slot, new)
+            {
+                return Some(result);
+            }
+            self.write_target(t, new, true)
+        })?
     }
+    #[cold]
+    #[inline(never)]
     fn write_target(
         &self,
         target: NamedTarget<'_>,
@@ -160,12 +174,20 @@ impl CacheData {
     ) -> Option<OwnDataPropertyWrite> {
         self.write_target(NamedTarget::Object(object), value, true)
     }
+    #[inline(always)]
     pub(in crate::bytecode) fn write_hot(
         &self,
         object: &ObjectRef,
         value: &Value,
     ) -> Option<OwnDataPropertyWrite> {
         // Typed-loop hoisting requires writes to preserve property structure.
+        if let Some(entry) = self.hot_mono()
+            && entry.flags & (7 | OWN | WRITABLE | WRITE_FORBIDDEN) == DATA | OWN | WRITABLE
+            && let Some(result) =
+                NamedTarget::Object(object).write_matched_data(&entry.version, entry.slot, value)
+        {
+            return Some(result);
+        }
         self.write_target(NamedTarget::Object(object), value, false)
     }
 }

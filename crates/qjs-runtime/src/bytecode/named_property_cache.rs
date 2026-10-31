@@ -19,6 +19,7 @@ use std::{
     rc::Rc,
 };
 mod constants;
+mod misses;
 mod stores;
 use constants::Constant;
 #[cfg(test)]
@@ -320,6 +321,8 @@ impl CacheData {
         }
     }
     #[cfg(debug_assertions)]
+    #[cold]
+    #[inline(never)]
     fn verify_hot(&self, entry: &Entry, target: NamedTarget<'_>) {
         assert!(self.first_active.get());
         assert!(std::ptr::eq(entry, self.first.get().expect("active first")));
@@ -361,6 +364,8 @@ impl CacheData {
         entry.fetch(target)
     }
     #[cfg(debug_assertions)]
+    #[cold]
+    #[inline(never)]
     fn verify_entry(&self, state: &State, entry: &Entry, target: NamedTarget<'_>) {
         if entry.flags & VERIFY == 0 {
             return;
@@ -443,6 +448,7 @@ impl CacheData {
         }
         self.data_value_other(target)
     }
+    #[cold]
     #[inline(never)]
     fn data_value_other(&self, target: NamedTarget<'_>) -> Option<Value> {
         let state = self.state.borrow();
@@ -496,6 +502,7 @@ impl CacheData {
         }
         self.data_value_multiple(&state, target)
     }
+    #[cold]
     #[inline(never)]
     fn data_value_multiple(&self, state: &State, target: NamedTarget<'_>) -> Option<Value> {
         if let Entries::SharedOwnPoly(entries) = &state.entries {
@@ -551,6 +558,7 @@ impl CacheData {
         }
         self.data_value_slow(state, target)
     }
+    #[cold]
     #[inline(never)]
     fn data_value_slow(&self, state: &State, target: NamedTarget<'_>) -> Option<Value> {
         let Some(entry) = state.entries.find(target, &self.first) else {
@@ -618,6 +626,7 @@ impl CacheData {
         }
         self.get_number_other(object)
     }
+    #[cold]
     #[inline(never)]
     fn get_number_other(&self, object: &ObjectRef) -> Option<f64> {
         let state = self.state.borrow();
@@ -666,17 +675,22 @@ impl CacheData {
             _ => None,
         })?
     }
+    #[inline(always)]
     pub(super) fn read_value(
         &self,
         value: &Value,
         key: &KeyLease,
         _env: Option<&CallEnv>,
     ) -> Option<Value> {
+        self.get_value(value, _env)
+            .or_else(|| self.read_key_slow(value, key))
+    }
+    #[cold]
+    #[inline(never)]
+    fn read_key_slow(&self, value: &Value, key: &KeyLease) -> Option<Value> {
         value.with_named_target(|t| {
-            self.data_value(t).or_else(|| {
-                self.read_target(t, key.as_str(), Some(key))
-                    .and_then(ReadOutcome::value)
-            })
+            self.read_target(t, key.as_str(), Some(key))
+                .and_then(ReadOutcome::value)
         })?
     }
     #[inline(always)]
@@ -707,137 +721,6 @@ impl CacheData {
         self.read_target(NamedTarget::Object(object), name, None)
             .and_then(ReadOutcome::value)
     }
-    fn resolve_read(
-        &self,
-        target: NamedTarget<'_>,
-        name: &str,
-        key: Option<&KeyLease>,
-    ) -> Option<Resolution> {
-        if let Some(key) = key {
-            return resolve(target, name, Some(key));
-        }
-        let cached = self
-            .state
-            .borrow()
-            .key
-            .as_ref()
-            .and_then(WeakKeyLease::upgrade)
-            .filter(|key| target.owns_key(key));
-        let key = if let Some(key) = cached {
-            Some(key)
-        } else {
-            count_event(target, Event::Hash);
-            let key = target.find_key(name);
-            self.state.borrow_mut().key = key.as_ref().map(KeyLease::downgrade);
-            key
-        };
-        resolve(target, name, key.as_ref())
-    }
-    fn read_target(
-        &self,
-        target: NamedTarget<'_>,
-        name: &str,
-        key: Option<&KeyLease>,
-    ) -> Option<ReadOutcome> {
-        if matches!(self.state.borrow().entries, Entries::Mega) {
-            return self.resolve_read(target, name, key)?.fetch(target);
-        }
-        if let Some(value) = self.cached(target, false) {
-            return Some(value);
-        }
-        if let Some(value) = self.cached(target, true) {
-            return Some(value);
-        }
-        let resolution = self.resolve_read(target, name, key)?;
-        self.record_resolution(target, name, &resolution);
-        resolution.fetch(target)
-    }
-    fn record_resolution(&self, target: NamedTarget<'_>, name: &str, resolution: &Resolution) {
-        if matches!(self.state.borrow().entries, Entries::Mega) {
-            return;
-        }
-        let policy = target.policy();
-        if !policy.enabled {
-            return;
-        }
-        let Some(version) = target.version() else {
-            return;
-        };
-        let mut flags = if resolution.inherited { 0 } else { OWN };
-        if resolution.first_holder {
-            flags |= FIRST_HOLDER;
-        }
-        let slot = match resolution.probe {
-            Probe::Data { slot, writable } => {
-                flags |= DATA | if writable { WRITABLE } else { 0 };
-                slot
-            }
-            Probe::Accessor { slot } => {
-                flags |= ACCESSOR;
-                slot
-            }
-            Probe::Missing => {
-                flags |= MISSING;
-                0
-            }
-            Probe::Virtual(h) => {
-                flags |= VIRTUAL;
-                match h {
-                    Virtual::ArrayLength => 0,
-                    Virtual::FunctionName => 1,
-                    Virtual::FunctionLength => 2,
-                    Virtual::FunctionPrototype => 3,
-                    Virtual::FunctionCaller => 4,
-                    Virtual::FunctionArguments => 5,
-                }
-            }
-            Probe::Exotic => return,
-        };
-        if name == "globalThis" || name == "__quickjsRustDynamicFunctionRealm" {
-            flags |= WRITE_FORBIDDEN
-        }
-        if policy.verify {
-            flags |= VERIFY
-        }
-        let chain = if resolution.inherited {
-            let Some(validity) = target.chain_dependency() else {
-                return;
-            };
-            Some(Box::new(Chain {
-                holder: resolution.holder.clone(),
-                constant: resolution
-                    .holder
-                    .as_ref()
-                    .and_then(|h| Constant::admit(h, resolution.probe)),
-                validity,
-            }))
-        } else {
-            None
-        };
-        let mut state = self.state.borrow_mut();
-        #[cfg(debug_assertions)]
-        if policy.verify {
-            state.name = Some(name.to_owned())
-        }
-        self.first_active.set(false);
-        state.entries.record(
-            Entry {
-                version,
-                slot,
-                flags,
-                chain,
-            },
-            &self.first,
-        );
-        self.first_active
-            .set(matches!(state.entries, Entries::MonoFirst));
-    }
-    pub(super) fn update(&self, object: &ObjectRef, name: &str, _value: &Value) {
-        let target = NamedTarget::Object(object);
-        if let Some(r) = self.resolve_read(target, name, None) {
-            self.record_resolution(target, name, &r)
-        }
-    }
     #[cfg(test)]
     pub(super) fn clear(&self) {
         let mut state = self.state.borrow_mut();
@@ -849,6 +732,8 @@ impl CacheData {
 }
 /// One pure chain walk on a miss. No cell construction/registration, getters,
 /// coercion, lazy installation, storage allocation or interning is permitted.
+#[cold]
+#[inline(never)]
 fn resolve(target: NamedTarget<'_>, name: &str, key: Option<&KeyLease>) -> Option<Resolution> {
     count_event(target, Event::Probe);
     if key.is_none() {

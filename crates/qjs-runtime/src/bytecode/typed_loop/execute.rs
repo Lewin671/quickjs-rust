@@ -1206,6 +1206,8 @@ fn prototype_method(
     shapes.read_object(prototype, name)
 }
 
+#[cold]
+#[inline(never)]
 fn get_named(
     receiver: &Value,
     name: &Rc<str>,
@@ -1272,6 +1274,7 @@ fn get_named(
     get_named_object(object, name, shapes)
 }
 
+#[cold]
 #[inline(never)]
 fn get_named_object(
     object: &crate::ObjectRef,
@@ -1315,6 +1318,7 @@ pub(super) fn ordinary_data_property(object: &crate::ObjectRef, name: &str) -> O
 /// built by the same code site takes the cached slot without a name scan. A
 /// numeric field update per iteration otherwise paid a linear string
 /// comparison over the object's properties.
+#[inline(always)]
 fn set_named(
     receiver: &Value,
     name: &Rc<str>,
@@ -1338,6 +1342,17 @@ fn set_named(
     ) {
         return true;
     }
+    set_named_slow(object, name, value, shapes)
+}
+#[cold]
+#[inline(never)]
+fn set_named_slow(
+    object: &crate::ObjectRef,
+    name: &Rc<str>,
+    value: &Value,
+    shapes: &mut super::ShapeWays,
+) -> bool {
+    use crate::value::OwnDataPropertyWrite;
     if name.as_ref() == "globalThis" {
         return false;
     }
