@@ -401,3 +401,10 @@ and directly match optional weak/actual identities without building Option
 identity tuples. This removes the follow-up's seed branch from this second
 hot guard family while preserving flavor/domain/prototype identity checks and
 all publication requirements at admission. No function/env consumer is edited.
+
+
+Forced-inline guard `7f453e84`, job `20261031T144922Z-t077-s2fu-r2-bound-guard`,
+adds work broadly (lod 1.014941, meriyah 1.006394, captured write 1.028319).
+Remove forced inlining and restore the prior comparison expression, keeping
+only the release seed-check removal and debug cache-admission assertion.
+This isolates the redundant flag test without expanding constructor callers.

@@ -202,18 +202,14 @@ impl Layout {
         })
     }
     /// Construction caches admit only bound layouts, never neutral seeds.
-    #[inline(always)]
     pub(crate) fn matches_prototype(&self, prototype: Option<&Prototype>, flavor: u16) -> bool {
         debug_assert!(
             !self.deferred_seed,
             "cached layout must have a bound prototype"
         );
         self.flavor == flavor
-            && match (&self.prototype, prototype) {
-                (Some(expected), Some(actual)) => expected.identity() == actual.identity(),
-                (None, None) => true,
-                _ => false,
-            }
+            && self.prototype.as_ref().map(WeakPrototype::identity)
+                == prototype.map(Prototype::identity)
     }
 }
 impl NamedStore {
