@@ -38,7 +38,6 @@ impl<'a> Vm<'a> {
     fn needs_scope_view(&self) -> bool {
         self.bytecode.has_dynamic_scope_tree()
             || !self.with_stack().is_empty()
-            || self.env.deopt_bindings().is_some()
             || self.bytecode.creates_closures() && self.env.has_realm_override_context()
     }
 

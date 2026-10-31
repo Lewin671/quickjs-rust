@@ -13,7 +13,7 @@ use super::operand_stack::OperandStack;
 use super::vm::{ColdFrame, FrameState, Slot, Vm};
 use crate::{
     GLOBAL_THIS_BINDING, ObjectRef, RuntimeError, Value,
-    function::{BindingCell, CallEnv, DynamicBindings, Realm},
+    function::{BindingCell, CallEnv, Realm},
     initialize_builtins,
 };
 use std::collections::HashMap;
@@ -134,9 +134,6 @@ impl<'a> Vm<'a> {
                 eprintln!("CFVMCODE {:?}", bytecode.code);
             }
         }
-        if env.scope_cursor().is_some() {
-            env.clear_deopt_bindings();
-        }
         if bytecode.binding_plan.has_realm_lexicals {
             for (slot, &lexical) in bytecode.binding_plan.realm_lexical_slots.iter().enumerate() {
                 if lexical && let Some(meta) = bytecode.binding_meta(slot) {
@@ -256,7 +253,6 @@ impl<'a> Vm<'a> {
         // function literals materialized in a frame that needs those captures.
         let virtual_function_context_safe = env.scope_cursor().is_none()
             && !bytecode.has_dynamic_scope_tree()
-            && env.deopt_bindings().is_none()
             && with_stack.is_empty();
         // Keep cold virtual candidates allocation-free. Their first
         // initializer grows this bank only as far as the candidate needs.
@@ -342,137 +338,6 @@ impl<'a> Vm<'a> {
         env.set_private_environment(self.current_private_environment());
         env
     }
-
-    pub(super) fn frame_deopt_bindings(&self) -> Option<DynamicBindings> {
-        let bindings = self.env.deopt_bindings()?.clone();
-        self.for_each_deopt_overlay_cell(|slot, upvalue| {
-            bindings.overlay_cell(&self.bytecode.locals[slot].name, upvalue);
-        });
-        Some(bindings)
-    }
-
-    /// Each live frame cell `frame_deopt_bindings` overlays, with its slot,
-    /// in overlay order.
-    fn for_each_deopt_overlay_cell(&self, mut visit: impl FnMut(usize, &BindingCell)) {
-        for (slot, local) in self.bytecode.locals.iter().enumerate() {
-            if self.bytecode.local_is_compiler_temporary(slot)
-                || local.sloppy_global_fallback
-                || (self.bytecode.is_global_scope()
-                    && self.bytecode.local_is_body_hoist_only(slot)
-                    && !self.bytecode.local_is_compiler_temporary(slot))
-            {
-                continue;
-            }
-            if self.locals.get(slot).is_none_or(Option::is_none)
-                && !(self.in_parameter_prologue() && local.from_env)
-            {
-                continue;
-            }
-            if let Some(upvalue) = self.local_upvalue_cell(slot) {
-                visit(slot, upvalue);
-            }
-        }
-    }
-
-    /// How a function literal this frame evaluates may treat the frame's
-    /// dynamic scope `bindings`. Without it, the closure is called through
-    /// the slot-seeded direct path and the compact tiers, which host no
-    /// dynamic scope.
-    ///
-    /// The closure must not reach the scope another way -- no `eval` or
-    /// `with`, no nested function to hand it on, its own `this` and
-    /// `arguments` -- and nothing it resolves by name may be in the scope
-    /// now. Then:
-    ///
-    /// - In a direct eval's top-level code with no `eval` or `with` of its
-    ///   own, the scope is a fork only that code writes, and its `var`s are
-    ///   in it from the start: no name can appear later, so the closure drops
-    ///   it (`Drop`). A formatter assigned in eval'd source, `format0 =
-    ///   function () { return this.getFullYear() + ... }`, is the case.
-    /// - In a function body that has a direct `eval`, a later `eval` there
-    ///   can add a `var` the closure would then have to see, so the closure
-    ///   keeps the scope but bypasses it until the scope next changes which
-    ///   names it binds (`Bypass`; `DynamicBindings::bypass`). A frame that
-    ///   can suspend is left alone: its `eval` could run while one of these
-    ///   closures is mid-call. Helper closures created inside a function
-    ///   that also calls `eval` are the case.
-    pub(super) fn closure_scope_use(
-        &self,
-        closure: &Bytecode,
-        inherits_frame: bool,
-        bindings: &DynamicBindings,
-    ) -> ClosureScopeUse {
-        let frame: &Bytecode = &self.bytecode;
-        if inherits_frame
-            || !self.with_stack().is_empty()
-            || frame.contains_with()
-            || closure.contains_direct_eval()
-            || closure.contains_with()
-            || closure.creates_closures()
-            || closure
-                .names_resolved_by_name()
-                .any(|name| name != "this" && bindings.contains_key(name))
-        {
-            return ClosureScopeUse::Keep;
-        }
-        if frame.is_direct_eval_code() {
-            return if frame.contains_direct_eval() {
-                ClosureScopeUse::Keep
-            } else {
-                ClosureScopeUse::Drop
-            };
-        }
-        if frame.is_global_scope() || frame.suspends() {
-            return ClosureScopeUse::Keep;
-        }
-        ClosureScopeUse::Bypass
-    }
-
-    /// `frame_deopt_bindings` for a frame that asks repeatedly -- every
-    /// closure a body with a direct `eval` creates. The overlay is skipped
-    /// when it would change nothing: the environment is the one last
-    /// overlaid, no name has been remapped since (its generation), and the
-    /// frame would overlay exactly the same cells in the same order. The
-    /// check walks the frame's locals but hashes no name, where the overlay
-    /// hashes every one.
-    pub(super) fn frame_deopt_bindings_memoized(&mut self) -> Option<DynamicBindings> {
-        let bindings = self.env.deopt_bindings()?.clone();
-        if let Some(memo) = self
-            .current
-            .cold()
-            .and_then(|cold| cold.deopt_overlay_memo.as_ref())
-            && memo.bindings == bindings.identity()
-            && memo.generation == bindings.generation()
-        {
-            let mut expected = memo.cells.iter();
-            let mut same = true;
-            self.for_each_deopt_overlay_cell(|slot, upvalue| {
-                same &= expected.next() == Some(&(slot, upvalue.identity()));
-            });
-            if same && expected.next().is_none() {
-                return Some(bindings);
-            }
-        }
-        let mut cells = Vec::new();
-        self.for_each_deopt_overlay_cell(|slot, upvalue| {
-            bindings.overlay_cell(&self.bytecode.locals[slot].name, upvalue);
-            cells.push((slot, upvalue.identity()));
-        });
-        self.current.cold_mut().deopt_overlay_memo = Some(super::vm::DeoptOverlayMemo {
-            bindings: bindings.identity(),
-            generation: bindings.generation(),
-            cells,
-        });
-        Some(bindings)
-    }
-}
-
-/// What a new closure does with its creating frame's dynamic scope
-/// (`Vm::closure_scope_use`).
-pub(super) enum ClosureScopeUse {
-    Keep,
-    Drop,
-    Bypass,
 }
 
 #[cfg(test)]
@@ -497,7 +362,7 @@ mod tests {
         }
     }
 
-    use crate::function::new_realm;
+    use crate::function::{DynamicBindings, new_realm};
 
     fn empty_env() -> CallEnv {
         CallEnv::new(new_realm(HashMap::new()))

@@ -13,3 +13,6 @@ pub(crate) use scope::*;
 
 #[cfg(test)]
 mod scope_tests;
+
+mod table;
+pub(crate) use table::DynamicBindings;

@@ -48,73 +48,11 @@ impl Vm<'_> {
         }
     }
 
-    pub(super) fn enter_body_deopt_scope(&mut self) {
+    pub(super) fn enter_function_body(&mut self) {
         if let Some(scope) = self.bytecode.binding_plan.pc_scopes.get(self.ip) {
             let target = self.bytecode.binding_plan.scopes[scope.0].variable_target;
             self.env.select_variable_boundary(target);
         }
-        let Some(parameter_bindings) = self.env.deopt_bindings().cloned() else {
-            return;
-        };
-        self.split_body_deopt_scope(parameter_bindings);
-    }
-
-    /// Splits a direct eval's parameter environment from the body's.
-    ///
-    /// Out of line and cold: every frame in the program runs the check above,
-    /// and only a frame whose function has both parameters and a direct eval
-    /// reaches this.
-    #[cold]
-    #[inline(never)]
-    fn split_body_deopt_scope(&mut self, parameter_bindings: crate::function::DynamicBindings) {
-        // Every frame in a script that contains a direct eval anywhere reaches
-        // this, so the discovery below must not allocate when it finds nothing.
-        // Building the `PREFIX + name` marker for each local would allocate
-        // per local, usually to discover an empty set (a script that evals
-        // a JSON payload is the case). The bindings are the smaller side and
-        // already carry the marker, so strip the prefix from them instead.
-        let mut split_slots: Vec<usize> = Vec::new();
-        {
-            let bytecode = &self.current.bytecode;
-            parameter_bindings.for_each_prefixed_name(
-                crate::DIRECT_EVAL_PARAMETER_VAR_BINDING_PREFIX,
-                |name| {
-                    if let Some(slot) = bytecode.local_slot(name)
-                        && let Some(local) = bytecode.locals.get(slot)
-                        && local.hoisted
-                        && !local.parameter
-                    {
-                        split_slots.push(slot);
-                    }
-                },
-            );
-        }
-        if split_slots.is_empty() {
-            return;
-        }
-        // The old walk visited locals in slot order; keep that, since the
-        // cells published below are inserted in this order.
-        split_slots.sort_unstable();
-        split_slots.dedup();
-        let body_bindings = crate::function::DynamicBindings::new();
-        for (name, upvalue) in parameter_bindings.cells() {
-            if split_slots
-                .iter()
-                .any(|slot| self.bytecode.locals[*slot].name == name)
-            {
-                continue;
-            }
-            body_bindings.insert_cell(name, upvalue);
-        }
-        for slot in split_slots {
-            let name = self.bytecode.locals[slot].name.clone();
-            let value = Value::Undefined;
-            let upvalue = BindingCell::new(value.clone());
-            self.locals[slot] = Some(value);
-            self.local_upvalues[slot] = Some(upvalue.clone());
-            body_bindings.insert_cell(name, upvalue);
-        }
-        self.env.set_deopt_bindings(body_bindings);
     }
 
     pub(super) fn initialize_script_global_bindings(
@@ -623,7 +561,6 @@ impl Vm<'_> {
             || !self.with_stack().is_empty()
             || self.bytecode.contains_direct_eval()
             || self.bytecode.contains_with()
-            || self.env.deopt_bindings().is_some()
             || self.env.has_module_imports()
             || self.env.has_dynamic_function_realm_global()
             || self.env.has_local_binding(name)
@@ -1126,17 +1063,6 @@ impl Vm<'_> {
             .locals
             .get(slot)
             .is_some_and(|local| local.sloppy_global_fallback);
-        // A `var` a direct eval declared in this function shadows the global.
-        if is_sloppy_global_fallback
-            && self.env.has_local_binding(name)
-            && self.env.has_local_binding(&format!(
-                "{}{name}",
-                crate::DIRECT_EVAL_FUNCTION_VAR_BINDING_PREFIX
-            ))
-        {
-            self.env.insert(name.to_owned(), value.clone());
-            return self.store_local(slot, value);
-        }
         if is_sloppy_global_fallback
             && self.locals.get(slot).is_some_and(Option::is_some)
             && let Some(Value::Object(global_this)) = self.env.global_this()
@@ -1214,16 +1140,6 @@ impl Vm<'_> {
     }
 
     pub(super) fn clear_local(&mut self, slot: usize) -> Result<(), RuntimeError> {
-        let deactivated_cell = self
-            .local_upvalues
-            .get(slot)
-            .and_then(Option::as_ref)
-            .cloned();
-        let deactivates_lexical = self
-            .bytecode
-            .locals
-            .get(slot)
-            .is_some_and(|local| !local.hoisted);
         let local_is_some = self
             .locals
             .get(slot)
@@ -1247,9 +1163,6 @@ impl Vm<'_> {
             *upvalue = upvalue.as_ref().map(BindingCell::fresh_uninitialized);
         }
         if let Some(name) = self.current.bytecode.local_name_at(slot) {
-            if deactivates_lexical && let Some(cell) = &deactivated_cell {
-                self.current.env.remove_deopt_cell_if(name, cell);
-            }
             if self
                 .current
                 .bytecode

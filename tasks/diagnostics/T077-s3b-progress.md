@@ -482,3 +482,33 @@ Node v22.23.3 returns 11, as step 16 of the same ES2025 algorithm requires. The
 compatible NG fixture shadows the newly declared function name instead; a
 separate runtime test enforces restricted-property lexical shadowing. No NG
 wrong result is encoded as an engine expectation.
+
+
+## B3a4 deopt/bypass retirement
+
+Deleted the flattened deopt map from FunctionData, CompiledUserFunction and
+CallEnv; closure-scope Keep/Drop/Bypass, weak bypass registry/revocation, overlay
+memos and projection builders, per-parameter marker-prefix splitting and its
+capture shortcut are gone. The compiler's parameter/body variable boundary
+selects the typed identity directly. The unused suspend/name-resolution
+admission caches and execution snapshot/fork/visible-name APIs are deleted.
+Canonical global/module tables live in binding/table.rs with a non-wrapping
+mapping generation for the existing guarded scalar route cache; no execution
+frame owns such a table. The virtual-function context check now uses live scope
+and compiled dynamic-scope facts instead of the removed deopt-map proxy.
+
+All **2,571 runtime tests** and agents/perf-counters compilation pass. Two tests
+of the deleted overlay/enumeration API are retired; typed-view tests now verify
+that derived-this/module identities survive without copied compatibility
+bindings. Existing live-holder/lexical-shadow tests remain. The staged gate (117 selected
+Test262 cases), Clippy and all **288 NG scripts** pass.
+
+Complete exact eval slices at `eb846bf2`, production agents binary SHA-256
+`eb660d0e7ef3ad46cef87d27719e976df79bf5fc1fcbf47da1c4819ee65b926d`:
+language **347/347**, Annex B **469/469**, both engines pass every case; zero
+skips, gaps, timeouts or not-run. Summary/case-map SHA-256, respectively:
+language `1c00ef143a90bcdcb285b63273a76abda71c6df119f9f3c9ed61575b66130d31` /
+`bc445992d178afc14068a63bf52255c0f7508dc3fe8a2330d233a8e6f6b47419`;
+Annex B `5bf1e237e9391c74e6d39c7872e8b943a57b141f0c72e6087387f9240fd82b5c` /
+`383b164a4662190d414a5fe23677327ce096045ffdd930603ee9a5265e03df5d`.
+These filtered scans create no burndown record or final S3b acceptance.

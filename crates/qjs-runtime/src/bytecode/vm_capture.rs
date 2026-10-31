@@ -41,19 +41,6 @@ impl Vm<'_> {
                 {
                     return Some(upvalue.clone());
                 }
-                if self.in_parameter_prologue() {
-                    let marker_name = format!(
-                        "{}{}",
-                        crate::DIRECT_EVAL_PARAMETER_VAR_BINDING_PREFIX,
-                        local.name
-                    );
-                    if let Some(bindings) = self.env.deopt_bindings()
-                        && bindings.contains_key(&marker_name)
-                        && let Some(upvalue) = bindings.cell(&local.name)
-                    {
-                        return Some(upvalue);
-                    }
-                }
                 match function_bytecode.binding_plan.received[received] {
                     super::binding_captures::CaptureRoute::ParentLocal(slot) => {
                         if self.bytecode.is_global_scope()

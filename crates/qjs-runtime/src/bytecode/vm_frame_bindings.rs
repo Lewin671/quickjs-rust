@@ -57,7 +57,6 @@ impl Vm<'_> {
             && !env.has_module_imports()
             && env.entry_scope().is_none()
             && env.derived_this_cell().is_none()
-            && env.deopt_bindings().is_none()
             && !env.has_module_live_bindings()
         {
             for (index, &slot) in bytecode
@@ -153,11 +152,6 @@ impl Vm<'_> {
                 if local.is_received_upvalue() {
                     if let Some(upvalue) = upvalues.get(next_received) {
                         local_upvalues[slot] = Some(upvalue.clone());
-                    } else if env.deopt_bindings().is_some() {
-                        local_upvalues[slot] = env
-                            .deopt_bindings()
-                            .and_then(|bindings| bindings.cell(&local.name))
-                            .or_else(|| env.frame_binding_cell(&local.name));
                     }
                     next_received += 1;
                 }
@@ -165,8 +159,7 @@ impl Vm<'_> {
         }
         let dynamic = bytecode.has_dynamic_scope_tree()
             || env.scope_cursor().is_some()
-            || bytecode.contains_with()
-            || env.deopt_bindings().is_some();
+            || bytecode.contains_with();
         let static_slots = if dynamic {
             &bytecode.binding_plan.dynamic_cell_slots
         } else {
@@ -214,20 +207,6 @@ impl Vm<'_> {
             }
             if bytecode.local_slot(&local.name) == Some(slot)
                 && let Some(upvalue) = env.module_live_binding_cell(&local.name)
-            {
-                local_upvalues[slot] = Some(upvalue);
-                continue;
-            }
-            if direct_eval_frame
-                && local.hoisted
-                && !bytecode
-                    .global_lexical_names()
-                    .iter()
-                    .any(|name| name == &local.name)
-                && !env.has_frame_binding(&local.name)
-                && let Some(upvalue) = env
-                    .deopt_bindings()
-                    .and_then(|bindings| bindings.cell(&local.name))
             {
                 local_upvalues[slot] = Some(upvalue);
                 continue;

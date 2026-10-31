@@ -98,11 +98,7 @@ pub use bytecode::{
 };
 
 pub(crate) const GLOBAL_THIS_BINDING: &str = "\0global_this";
-pub(crate) const DIRECT_EVAL_PARAMETER_VAR_BINDING_PREFIX: &str = "\0\0direct_eval_parameter_var:";
-/// Marks a function-scope `var` that a direct eval declared under the name of
-/// a sloppy-global fallback local: later assignments in the function write
-/// that variable, not the global of the same name.
-pub(crate) const DIRECT_EVAL_FUNCTION_VAR_BINDING_PREFIX: &str = "\0\0direct_eval_function_var:";
+
 /// Runtime error.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RuntimeError {

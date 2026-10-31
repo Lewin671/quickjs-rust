@@ -189,20 +189,6 @@ impl Vm<'_> {
                     None
                 };
                 let upvalues = self.captured_upvalues_for_function(bytecode, lexical_captures);
-                let deopt_bindings = self.frame_deopt_bindings_memoized();
-                let scope_use = deopt_bindings.as_ref().map(|bindings| {
-                    self.closure_scope_use(bytecode, *lexical_this || *lexical_arguments, bindings)
-                });
-                let deopt_bindings = match scope_use {
-                    Some(crate::bytecode::vm_frame_init::ClosureScopeUse::Drop) => None,
-                    _ => deopt_bindings,
-                };
-                let bypass_scope = deopt_bindings.clone().filter(|_| {
-                    matches!(
-                        scope_use,
-                        Some(crate::bytecode::vm_frame_init::ClosureScopeUse::Bypass)
-                    )
-                });
                 let function = Function::new_user_compiled(CompiledUserFunction {
                     name: name.clone(),
                     has_name_binding: *has_name_binding,
@@ -224,13 +210,9 @@ impl Vm<'_> {
                     home_object: None,
                     super_constructor: None,
                     lexical_scope: self.closure_scope_cursor(bytecode),
-                    deopt_bindings,
                     with_stack: self.with_stack().to_vec(),
                     upvalues,
                 });
-                if let Some(bindings) = bypass_scope {
-                    bindings.bypass(&function);
-                }
                 if *is_generator && *is_async {
                     crate::async_generator::wire_async_generator_function_intrinsics(
                         &function,
@@ -384,7 +366,7 @@ impl Vm<'_> {
                 });
             }
             Op::FunctionPrologueEnd => {
-                self.enter_body_deopt_scope();
+                self.enter_function_body();
                 if self.stop_at_prologue {
                     self.stop_at_prologue = false;
                     return Ok(Some(FrameExit::Completed(Completion::PrologueEnd)));

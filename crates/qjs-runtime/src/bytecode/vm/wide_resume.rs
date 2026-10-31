@@ -91,7 +91,7 @@ pub(in crate::bytecode) fn resume_direct_call_bytecode(
         Vec::new(),
         Some(direct_call_slots),
     );
-    vm.enter_body_deopt_scope();
+    vm.enter_function_body();
     for (slot, register) in registers.locals.iter_mut().enumerate() {
         if !is_own(registers.own_locals, slot) {
             continue;

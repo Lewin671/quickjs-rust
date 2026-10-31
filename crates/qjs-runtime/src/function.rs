@@ -45,6 +45,7 @@ pub(crate) fn is_call_frame_binding(name: &str) -> bool {
     matches!(name, crate::GLOBAL_THIS_BINDING | "this" | "arguments")
 }
 pub(crate) use crate::binding::BindingCell;
+pub(crate) use crate::binding::DynamicBindings;
 #[cfg(test)]
 pub(crate) use crate::context::ModuleImports;
 pub(crate) use crate::context::Realm;
@@ -52,7 +53,7 @@ pub(crate) use crate::context::Realm;
 #[cfg(test)]
 pub(crate) use crate::context::new_realm;
 pub(crate) use crate::context::new_realm_sharing_atoms;
-pub(crate) use env::{CallEnv, DynamicBindings};
+pub(crate) use env::CallEnv;
 pub(crate) use install::install_function;
 pub(crate) use local_names::{
     collect_function_local_names, parameter_argument_binding_name, parameter_binding_name,

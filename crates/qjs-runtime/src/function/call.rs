@@ -1247,11 +1247,6 @@ fn function_env<'a>(
             kind: function.owner_kind,
         });
     }
-    if let Some(bindings) = &function.deopt_bindings
-        && !function.scope_bypassed.get()
-    {
-        frame_env.set_deopt_bindings(bindings.clone());
-    }
     let direct_call_slots = use_direct_call_slots.then(|| DirectCallSlots {
         this_value: direct_this_value,
         parameter_slots: bytecode.parameter_slots(),
@@ -1299,7 +1294,6 @@ fn can_seed_slot_backed_call(function: &Function, bytecode: &Bytecode) -> bool {
         && !function.is_generator
         && !function.is_async
         && !function.has_name_binding
-        && function.dynamic_scope_bypassed()
         && function.with_stack.is_empty()
         && bytecode.has_direct_seedable_parameters()
         && !bytecode.needs_arguments_object()

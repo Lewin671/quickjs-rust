@@ -6,7 +6,7 @@ use crate::{ObjectRef, Value};
 use std::{collections::HashMap, rc::Rc};
 
 #[test]
-fn derived_this_forks_share_only_the_implicit_cell() {
+fn typed_views_retain_derived_this_without_copying_bindings() {
     let domain = crate::property::atom::AtomDomain::new();
     let mut env = CallEnv::detached();
     let this = BindingCell::new(Value::Function(
@@ -19,15 +19,16 @@ fn derived_this_forks_share_only_the_implicit_cell() {
     env.set_call_owner(owner);
     env.insert_frame_cell("local".to_owned(), local.clone());
     let clone = env.clone();
-    let fork = env.fork_current_frame_values();
+    let fork = env.scope_service_view();
     assert!(this.ptr_eq(&clone.derived_this_cell().unwrap()));
     assert!(this.ptr_eq(&fork.derived_this_cell().unwrap()));
-    assert!(!local.ptr_eq(&fork.frame_binding_cell("local").unwrap()));
+    assert!(fork.frame_binding_cell("local").is_none());
     this.initialize(Value::Object(ObjectRef::new(HashMap::new(), &domain)))
         .unwrap();
     assert_eq!(env.get_local("this"), fork.get_local("this"));
     local.set(Value::Number(2.0));
-    assert_eq!(fork.get_local("local"), Some(Value::Number(1.0)));
+    assert_eq!(fork.get_local("local"), None);
+    assert_eq!(env.get_local("local"), Some(Value::Number(2.0)));
 }
 
 #[test]
@@ -39,7 +40,7 @@ fn ordinary_undefined_this_is_not_a_derived_cell() {
     ));
     assert!(env.derived_this_cell().is_none());
     let first = env.capture_call_owner().unwrap();
-    let fork = env.fork_current_frame_values();
+    let fork = env.scope_service_view();
     let retained = fork.capture_call_owner().unwrap();
     assert!(Rc::ptr_eq(&first, &retained));
     assert!(fork.frame_binding_cell("this").is_none());
@@ -150,68 +151,6 @@ fn typed_call_metadata_does_not_disable_an_authoritative_slot() {
     assert!(env.slot_is_authoritative("value"));
     assert!(env.frame_bindings.is_empty());
     assert_eq!(env.this_value(), Ok(Value::Undefined));
-
-    env.set_deopt_bindings(DynamicBindings::new());
-    assert!(!env.slot_is_authoritative("value"));
-}
-
-#[test]
-fn dynamic_cell_overlay_skips_only_the_identical_cell() {
-    let bindings = DynamicBindings::new();
-    let first = BindingCell::new(Value::Number(1.0));
-    assert!(bindings.overlay_cell("value", &first));
-    assert!(!bindings.overlay_cell("value", &first));
-
-    first.set(Value::Number(2.0));
-    assert!(matches!(bindings.get("value"), Some(Value::Number(2.0))));
-
-    let shadow = BindingCell::new(Value::Number(2.0));
-    assert!(bindings.overlay_cell("value", &shadow));
-    assert!(
-        bindings
-            .cell("value")
-            .is_some_and(|binding| binding.ptr_eq(&shadow))
-    );
-    assert!(!bindings.overlay_cell("value", &shadow));
-}
-
-#[test]
-fn visible_local_scans_skip_shadowed_bindings() {
-    let mut env = CallEnv::new(new_realm(HashMap::new()));
-    let deopt = DynamicBindings::new();
-    deopt.insert("deopt-only".to_owned(), Value::Number(3.0));
-    deopt.insert("shadowed".to_owned(), Value::Number(1.0));
-    env.set_deopt_bindings(deopt);
-    env.frame_bindings
-        .push("shadowed".to_owned(), Value::Number(2.0));
-    env.frame_bindings
-        .push("shadowed".to_owned(), Value::Number(4.0));
-    env.frame_bindings
-        .push("frame-only".to_owned(), Value::Number(5.0));
-
-    let mut visited = Vec::new();
-    env.for_each_visible_local_value(|value| {
-        if let Value::Number(number) = value {
-            visited.push(*number as i32);
-        }
-    });
-    visited.sort_unstable();
-
-    assert_eq!(visited, vec![3, 4, 5]);
-
-    let names = env.visible_local_names();
-    assert_eq!(names.len(), 3);
-    assert!(names.contains("deopt-only"));
-    assert!(names.contains("shadowed"));
-    assert!(names.contains("frame-only"));
-
-    let entries = env
-        .visible_local_entries()
-        .into_iter()
-        .collect::<HashMap<_, _>>();
-    assert_eq!(entries.get("deopt-only"), Some(&Value::Number(3.0)));
-    assert_eq!(entries.get("shadowed"), Some(&Value::Number(4.0)));
-    assert_eq!(entries.get("frame-only"), Some(&Value::Number(5.0)));
 }
 
 #[test]
@@ -276,7 +215,7 @@ fn module_root_cell_routes_survive_temporary_class_key_mode() {
     env.set_execution_state(crate::context::ExecutionMode::ClassKey, true);
     assert!(env.module_live_binding_cell("value").unwrap().ptr_eq(&cell));
     assert!(
-        env.fork_current_frame_values()
+        env.scope_service_view()
             .module_live_binding_cell("value")
             .unwrap()
             .ptr_eq(&cell)

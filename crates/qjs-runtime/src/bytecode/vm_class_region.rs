@@ -141,7 +141,6 @@ impl Vm<'_> {
             home_object: None,
             super_constructor: super_constructor.clone(),
             lexical_scope: self.prepare_scope_cursor(),
-            deopt_bindings: self.frame_deopt_bindings(),
             with_stack: self.with_stack().to_vec(),
             upvalues: constructor_upvalues,
         });

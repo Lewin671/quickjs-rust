@@ -11,7 +11,7 @@ use std::{
 use qjs_ast::FunctionParams;
 
 use crate::CallEnv;
-use crate::function::{BindingCell, DynamicBindings, Realm};
+use crate::function::{BindingCell, Realm};
 use crate::module::ModuleHostRef;
 use crate::{
     Bytecode, NativeFunction, ObjectRef, Property, PropertyKey, Prototype, Value, object_prototype,
@@ -210,12 +210,6 @@ pub struct FunctionData {
     /// The compact tier's counterpart: whether its admission proof, as far as
     /// it depends on the function alone, holds, and the register count.
     pub(crate) compact_inline_facts: Cell<u32>,
-    pub(crate) deopt_bindings: Option<DynamicBindings>,
-    /// Whether calls may ignore `deopt_bindings`: set when the closure was
-    /// created resolving none of that scope's names, and revoked by the scope
-    /// itself as soon as a name is added, removed or remapped there
-    /// (`DynamicBindings::bypass`).
-    pub(crate) scope_bypassed: Cell<bool>,
     pub(crate) with_stack: Vec<Value>,
     pub(crate) upvalues: Vec<BindingCell>,
     /// Received-upvalue slots backed by the function creation realm. The cells
@@ -450,7 +444,6 @@ pub(crate) struct CompiledUserFunction {
     pub(crate) home_object: Option<Value>,
     pub(crate) super_constructor: Option<Value>,
     pub(crate) lexical_scope: Option<crate::binding::ScopeCursor>,
-    pub(crate) deopt_bindings: Option<DynamicBindings>,
     pub(crate) with_stack: Vec<Value>,
     pub(crate) upvalues: Vec<BindingCell>,
 }
@@ -520,7 +513,6 @@ impl Function {
             home_object,
             super_constructor,
             lexical_scope,
-            deopt_bindings,
             with_stack,
             upvalues,
         } = compiled;
@@ -571,8 +563,6 @@ impl Function {
             direct_construct_eligible: Cell::new(None),
             wide_inline_facts: Cell::new(0),
             compact_inline_facts: Cell::new(0),
-            scope_bypassed: Cell::new(false),
-            deopt_bindings,
             with_stack,
             upvalues,
             realm_upvalue_slots,
@@ -724,22 +714,6 @@ impl Function {
         FunctionWeakRef(Rc::downgrade(&self.0))
     }
 
-    /// Whether this function's calls may run without its dynamic scope.
-    pub(crate) fn dynamic_scope_bypassed(&self) -> bool {
-        self.deopt_bindings.is_none() || self.scope_bypassed.get()
-    }
-
-    /// Ends a bypass of the dynamic scope, forgetting every call-path fact
-    /// derived while it held.
-    pub(crate) fn revoke_scope_bypass(&self) {
-        if self.scope_bypassed.replace(false) {
-            self.direct_leaf_call_eligible.set(None);
-            self.direct_construct_eligible.set(None);
-            self.wide_inline_facts.set(0);
-            self.compact_inline_facts.set(0);
-        }
-    }
-
     pub(crate) fn is_uninitialized_lexical_marker(&self) -> bool {
         matches!(self.native, Some(NativeFunction::UninitializedLexical))
     }
@@ -776,8 +750,6 @@ impl Function {
             direct_construct_eligible: Cell::new(None),
             wide_inline_facts: Cell::new(0),
             compact_inline_facts: Cell::new(0),
-            scope_bypassed: Cell::new(false),
-            deopt_bindings: None,
             with_stack: Vec::new(),
             upvalues: Vec::new(),
             realm_upvalue_slots: 0,
@@ -837,8 +809,6 @@ impl Function {
             direct_construct_eligible: Cell::new(None),
             wide_inline_facts: Cell::new(0),
             compact_inline_facts: Cell::new(0),
-            scope_bypassed: Cell::new(false),
-            deopt_bindings: None,
             with_stack: Vec::new(),
             upvalues: Vec::new(),
             realm_upvalue_slots: 0,
