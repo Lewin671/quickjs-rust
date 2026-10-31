@@ -1,0 +1,23 @@
+{
+  "source": "2cccf17d",
+  "runtime": "a8e7709f",
+  "off_scan_documentation_revision": "148dd485",
+  "input_identity_proof": "git diff --quiet 2cccf17d 148dd485 -- crates scripts Cargo.toml Cargo.lock .cargo rust-toolchain.toml: exit 0",
+  "cli_build_feature": "agents (CLI and runtime; not dependency-only feature)",
+  "pinned_build_target": "target/t077-s3-feedback/agent-cli-build",
+  "pins": {
+    "release": {
+      "path": "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s2/target/t077-s3-feedback/pinned-2cccf17d/release-qjs",
+      "sha256": "38c3c19799bff90a6996c3073c9dc4a8f514ccbaba0fa3d96c6cd33e7eca359c",
+      "agent_smoke_stdout": "agent-ready\n",
+      "build_command": "cargo build -p qjs-cli --release --features agents --target-dir target/t077-s3-feedback/agent-cli-build"
+    },
+    "debug": {
+      "path": "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s2/target/t077-s3-feedback/pinned-2cccf17d/debug-qjs",
+      "sha256": "c6118e6ce58464a93a019d2454842c13e9394e973a9e9581cec7044860ded326",
+      "agent_smoke_stdout": "agent-ready\n",
+      "build_command": "cargo build -p qjs-cli --features agents --target-dir target/t077-s3-feedback/agent-cli-build"
+    }
+  },
+  "debug_fuzz_template_sha256": "fc68035a176d9a7d27edffc46b28c275233b1c4c71745d8d4ff74b467d602130"
+}
