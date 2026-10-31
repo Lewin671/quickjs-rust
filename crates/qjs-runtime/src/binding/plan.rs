@@ -21,6 +21,7 @@ pub(crate) enum ScopeKind {
     Eval,
     Parameters,
     FunctionBody,
+    FunctionName,
     Block,
     Catch,
     Loop,
@@ -37,6 +38,7 @@ pub(crate) enum BindingKind {
     Lexical,
     Catch,
     Received,
+    FunctionName,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -50,6 +52,7 @@ pub(crate) enum InitPolicy {
 pub(crate) enum WritePolicy {
     Mutable,
     Throw,
+    IgnoreSloppy,
 }
 
 #[derive(Clone, Debug)]
@@ -72,6 +75,31 @@ pub(crate) struct ScopeDescriptor {
     pub(crate) declarations: Box<[BindingId]>,
     pub(crate) lookup: NameMap<String, BindingId>,
     pub(crate) variable_target: ScopeId,
+}
+
+/// The expression's immutable self environment, compiled once per body.
+#[derive(Clone, Debug)]
+pub(crate) struct FunctionNamePlan {
+    pub(crate) binding: BindingMetaRef,
+    pub(crate) scopes: std::rc::Rc<super::ScopeDescriptors>,
+}
+impl FunctionNamePlan {
+    pub(crate) fn compile(name: String) -> std::rc::Rc<Self> {
+        let binding = BindingMetaRef::function_name(name.clone());
+        let id = ScopeId(0);
+        let descriptor = ScopeDescriptor {
+            id,
+            parent: None,
+            kind: ScopeKind::FunctionName,
+            declarations: vec![binding.id].into_boxed_slice(),
+            lookup: [(name, binding.id)].into_iter().collect(),
+            variable_target: id,
+        };
+        std::rc::Rc::new(Self {
+            binding,
+            scopes: std::rc::Rc::new(super::ScopeDescriptors(vec![descriptor].into_boxed_slice())),
+        })
+    }
 }
 
 #[derive(Clone, Debug)]

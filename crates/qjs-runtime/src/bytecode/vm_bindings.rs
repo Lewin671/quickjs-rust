@@ -199,7 +199,7 @@ impl Vm<'_> {
 
     pub(super) fn load_global(&mut self, name: &str) -> Result<Value, RuntimeError> {
         if name != "this"
-            && let Some(reference) = self.resolve_scope_binding(name, self.bytecode.is_strict())?
+            && let Some(reference) = self.resolve_scope_binding(name, self.execution_is_strict())?
         {
             return self.read_scope_binding(&reference);
         }
@@ -548,7 +548,7 @@ impl Vm<'_> {
                     .is_some_and(|scope| scope.variable_target.0 == 1))
         {
             let name = &self.bytecode.locals[slot].name;
-            if let Some(reference) = self.resolve_scope_binding(name, self.bytecode.is_strict())? {
+            if let Some(reference) = self.resolve_scope_binding(name, self.execution_is_strict())? {
                 return self.read_scope_binding(&reference);
             }
         }
@@ -877,7 +877,7 @@ impl Vm<'_> {
                 }
                 return Ok(());
             }
-            return self.store_global_binding(&name, value, self.bytecode.is_strict());
+            return self.store_global_binding(&name, value, self.execution_is_strict());
         }
         // Read only the `Copy` slot metadata up front so the hot local write
         // never clones the `Local` (its owned `name` would be a heap
@@ -934,7 +934,7 @@ impl Vm<'_> {
         *local = Some(value.clone());
         let uses_shared_cell = if let Some(upvalue) = self.local_upvalue_cell(slot) {
             if upvalue.is_initialized() {
-                upvalue.assign(value.clone(), self.bytecode.is_strict())?;
+                upvalue.assign(value.clone(), self.execution_is_strict())?;
             } else {
                 upvalue.initialize(value.clone())?;
             }
@@ -1038,8 +1038,8 @@ impl Vm<'_> {
                     .is_some_and(|scope| scope.variable_target.0 == 1))
         {
             let name = &self.bytecode.locals[slot].name;
-            if let Some(reference) = self.resolve_scope_binding(name, self.bytecode.is_strict())? {
-                return self.assign_scope_binding(&reference, value, self.bytecode.is_strict());
+            if let Some(reference) = self.resolve_scope_binding(name, self.execution_is_strict())? {
+                return self.assign_scope_binding(&reference, value, self.execution_is_strict());
             }
         }
         if self.slot_is_authoritative(slot)

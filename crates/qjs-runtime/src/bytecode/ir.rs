@@ -989,6 +989,10 @@ impl Bytecode {
         bytecode
     }
 
+    pub(crate) fn self_name_binding(&self) -> Option<&crate::binding::FunctionNamePlan> {
+        self.binding_plan.self_name.as_deref()
+    }
+
     pub(crate) fn is_strict(&self) -> bool {
         self.strict
     }

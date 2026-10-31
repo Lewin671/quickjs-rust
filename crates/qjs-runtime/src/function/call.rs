@@ -32,9 +32,7 @@ use crate::{
     symbol,
 };
 
-use super::call_frame::{
-    CallCompletionPolicy, PreparedBytecodeCall, apply_completion_to_caller, missing_bytecode_body,
-};
+use super::call_frame::{CallCompletionPolicy, PreparedBytecodeCall, missing_bytecode_body};
 use super::{
     CROSS_REALM_TYPE_ERROR_PROTOTYPE, CallEnv, InstanceElementInitializer,
     arguments::arguments_object, function_call_this,
@@ -242,7 +240,7 @@ fn call_with_arguments(
             env,
             is_construct,
         );
-        return run_prepared_bytecode_call(prepared, env);
+        return run_prepared_bytecode_call(prepared);
     }
 
     Err(missing_bytecode_body())
@@ -298,9 +296,6 @@ fn prepare_bytecode_call<'a>(
         env,
         is_construct,
     );
-    // Captured before the callee runs, because a named function expression
-    // shadows this binding for the duration of the call.
-    let restored_caller_binding = immutable_name_caller_value(function, env);
     PreparedBytecodeCall {
         bytecode: Rc::clone(bytecode),
         env: call_env,
@@ -308,18 +303,12 @@ fn prepare_bytecode_call<'a>(
         positional_arguments,
         upvalues: function.upvalues.clone(),
         with_stack: function.with_stack.clone(),
-        completion: CallCompletionPolicy::new(
-            restored_caller_binding,
-            function.is_derived_constructor && is_construct,
-        ),
+        completion: CallCompletionPolicy::new(function.is_derived_constructor && is_construct),
     }
 }
 
 /// Runs a prepared call and settles what its caller is owed.
-fn run_prepared_bytecode_call(
-    prepared: PreparedBytecodeCall<'_>,
-    caller_env: &mut CallEnv,
-) -> Result<Value, RuntimeError> {
+fn run_prepared_bytecode_call(prepared: PreparedBytecodeCall<'_>) -> Result<Value, RuntimeError> {
     let slot_seeded = prepared.is_slot_seeded();
     let PreparedBytecodeCall {
         bytecode,
@@ -328,17 +317,15 @@ fn run_prepared_bytecode_call(
         positional_arguments,
         upvalues,
         with_stack,
-        mut completion,
+        completion,
     } = prepared;
     if slot_seeded {
         let slots = slots.expect("a slot-seeded call carries its slots");
         let result = eval_direct_call_bytecode(&bytecode, env, slots);
-        apply_completion_to_caller(&mut completion, caller_env);
         return result;
     }
     if !completion.finishes_derived_construct() {
         let value = eval_call_bytecode(&bytecode, env, upvalues, with_stack, positional_arguments);
-        apply_completion_to_caller(&mut completion, caller_env);
         return value;
     }
     let result = eval_function_bytecode(
@@ -349,7 +336,6 @@ fn run_prepared_bytecode_call(
         true,
         positional_arguments,
     );
-    apply_completion_to_caller(&mut completion, caller_env);
     if completion.finishes_derived_construct() {
         return finish_derived_construct(result);
     }
@@ -692,14 +678,6 @@ fn class_constructor_call_error(function: &Function) -> RuntimeError {
         thrown: None,
         message,
     }
-}
-
-fn immutable_name_caller_value(function: &Function, env: &CallEnv) -> Option<(String, Value)> {
-    let name = function.name.as_ref()?;
-    if !function.immutable_name_binding {
-        return None;
-    }
-    env.get(name).map(|value| (name.clone(), value))
 }
 
 /// Runs a class constructor's instance-field initializers, in definition
@@ -1286,12 +1264,6 @@ fn function_env<'a>(
     // the function's creation realm.
     insert_marked_call_realm(function, &mut frame_env);
     let mut direct_this_value = None;
-    if function.has_name_binding
-        && let Some(name) = &function.name
-        && !function_name_is_shadowed_by_body_var(function, bytecode, name)
-    {
-        frame_env.insert(name.clone(), callee.clone());
-    }
     // A derived class constructor needs its own constructor value at hand so
     // that `super(...)` can initialize the instance fields once `this` exists.
     if function.is_class_constructor && function.is_derived_constructor && is_construct {
@@ -1616,17 +1588,6 @@ fn insert_marked_call_realm(function: &Function, frame_env: &mut CallEnv) {
             frame_env.insert(name, property.value);
         }
     }
-}
-
-fn function_name_is_shadowed_by_body_var(
-    function: &Function,
-    bytecode: &Bytecode,
-    name: &str,
-) -> bool {
-    function.immutable_name_binding
-        && bytecode
-            .local_slot(name)
-            .is_some_and(|slot| bytecode.local_is_body_hoist_only(slot))
 }
 
 fn callee_this_realm_env(function: &Function, caller_env: &CallEnv) -> Option<CallEnv> {

@@ -98,6 +98,18 @@ Compiled eval caches retain plans and parse context only. Every invocation uses
 its current chain; the old selected-name cached execution view is deleted.
 Permanent NG fixture: `s3b-scope-live-leases.js`.
 
+## Immutable names and imports
+
+A named function expression compiles one self-name descriptor/metadata plan.
+Each function instance owns one initialized cell in a lease outside its parameter
+and body scopes. Calls and escaping children retain that cell; body vars/eval
+additions shadow it in their own holder. Its write policy ignores sloppy Assign
+and rejects strict Assign; const/class names always reject Assign. Named calls
+never snapshot or restore a same-named caller binding. Dynamic Function names
+are display names and introduce no self environment. Import routes reject Assign
+without reading an exporter's possibly uninitialized cell; reads still observe
+that cell's TDZ. Tests: `direct_eval/self_binding.rs`, `binding/scope_tests.rs`.
+
 ## Lexical call context and remaining compatibility
 
 Derived constructor this uses one marker-initialized shared cell through the

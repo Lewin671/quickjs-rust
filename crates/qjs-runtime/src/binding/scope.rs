@@ -101,7 +101,7 @@ impl VarHolder {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum AccessPolicy {
     Mutable,
-    ReadOnly,
+    Import,
 }
 
 #[derive(Clone, Debug)]
@@ -114,9 +114,9 @@ impl CellReference {
         self.cell.read()
     }
     pub(crate) fn assign(&self, value: Value, strict: bool) -> Result<(), RuntimeError> {
-        if self.access == AccessPolicy::ReadOnly {
-            // TDZ precedes the immutable-write error.
-            self.cell.read()?;
+        if self.access == AccessPolicy::Import {
+            // An indirect import binding rejects writes without reading the
+            // exporter's cell; its TDZ is observable only through GetBindingValue.
             return Err(RuntimeError {
                 thrown: None,
                 message: "TypeError: assignment to constant variable".to_owned(),
@@ -161,6 +161,35 @@ pub(crate) struct ScopeCursor {
     pub(crate) variable: Rc<ScopeLease>,
 }
 impl ScopeCursor {
+    /// An expression's self name belongs outside its parameter environment.
+    /// Calls and escaping descendants share its cell; ordinary body bindings
+    /// can shadow it without changing it.
+    pub(crate) fn with_function_name(
+        parent: Option<Self>,
+        cell: BindingCell,
+        plan: &super::FunctionNamePlan,
+    ) -> Self {
+        let id = ScopeId(0);
+        let lease = Rc::new(ScopeLease {
+            descriptor: ScopeDescriptorRef {
+                owner: plan.scopes.clone(),
+                id,
+            },
+            parent: parent.as_ref().map(|cursor| cursor.head.clone()),
+            cells: vec![CellReference {
+                cell,
+                access: AccessPolicy::Mutable,
+            }]
+            .into_boxed_slice(),
+            object: None,
+            own_vars: None,
+        });
+        Self {
+            head: lease.clone(),
+            variable: parent.map_or(lease, |cursor| cursor.variable),
+        }
+    }
+
     /// Declaration ownership never follows a lookup into a parent holder.
     pub(crate) fn declare_var(&self, name: &str) -> BindingCell {
         debug_assert_eq!(

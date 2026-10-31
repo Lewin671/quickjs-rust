@@ -316,8 +316,8 @@ impl Vm<'_> {
                             )
                         }
                     });
-                let access = if self.env.has_module_import(&meta.name) || !meta.mutable {
-                    AccessPolicy::ReadOnly
+                let access = if self.env.has_module_import(&meta.name) {
+                    AccessPolicy::Import
                 } else {
                     AccessPolicy::Mutable
                 };

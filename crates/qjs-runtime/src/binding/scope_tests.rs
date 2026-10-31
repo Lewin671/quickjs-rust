@@ -84,3 +84,59 @@ fn a_preselected_cell_survives_deletion_and_never_reselects_the_parent() {
     assert_eq!(parent.read(), Ok(Value::Number(1.0)));
     assert!(inner.lookup("value").unwrap().cell.ptr_eq(&parent));
 }
+
+#[test]
+fn import_assignment_does_not_read_the_exporters_tdz() {
+    let cell = BindingCell::with_metadata(
+        BindingMetaRef::dynamic("exported".into(), true, false),
+        None,
+    );
+    let import = CellReference {
+        cell: cell.clone(),
+        access: AccessPolicy::Import,
+    };
+    assert!(
+        import
+            .assign(Value::Number(2.0), false)
+            .unwrap_err()
+            .message
+            .starts_with("TypeError")
+    );
+    assert!(!cell.is_initialized());
+    assert!(
+        import
+            .read()
+            .unwrap_err()
+            .message
+            .starts_with("ReferenceError")
+    );
+    cell.initialize(Value::Number(3.0)).unwrap();
+    assert_eq!(import.read(), Ok(Value::Number(3.0)));
+    assert!(import.assign(Value::Number(4.0), true).is_err());
+    assert_eq!(cell.read(), Ok(Value::Number(3.0)));
+}
+
+#[test]
+fn self_scope_retains_its_cell_outside_the_call_variable_holder() {
+    let plan = FunctionNamePlan::compile("self".into());
+    let cell = BindingCell::with_metadata(plan.binding.clone(), None);
+    cell.initialize(Value::Number(3.0)).unwrap();
+    let name = ScopeCursor::with_function_name(None, cell.clone(), &plan);
+    let body = cursor(Some(name.head.clone()), 42);
+    let selected = body.lookup("self").unwrap();
+    assert!(selected.cell.ptr_eq(&cell));
+    let own = body.declare_var("self");
+    own.assign(Value::Number(8.0), false).unwrap();
+    assert!(!own.ptr_eq(&cell));
+    assert!(body.lookup("self").unwrap().cell.ptr_eq(&own));
+    selected.assign(Value::Number(9.0), false).unwrap();
+    assert_eq!(cell.read(), Ok(Value::Number(3.0)));
+    assert!(selected.assign(Value::Number(9.0), true).is_err());
+    assert_eq!(own.read(), Ok(Value::Number(8.0)));
+    let other = BindingCell::with_metadata(plan.binding.clone(), Some(Value::Number(4.0)));
+    let other_scope = ScopeCursor::with_function_name(None, other, &plan);
+    assert!(Rc::ptr_eq(
+        &name.head.descriptor.owner,
+        &other_scope.head.descriptor.owner
+    ));
+}

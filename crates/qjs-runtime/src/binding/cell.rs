@@ -51,6 +51,22 @@ impl BindingMetaRef {
     }
 }
 
+impl BindingMetaRef {
+    pub(crate) fn function_name(name: String) -> Self {
+        let mut meta = Self::dynamic(name, false, false).owner[0].clone();
+        meta.kind = BindingKind::FunctionName;
+        meta.strict_write = WritePolicy::IgnoreSloppy;
+        meta.initialization = InitPolicy::Uninitialized;
+        Self {
+            owner: Rc::new(BindingMetadata(
+                vec![meta].into_boxed_slice(),
+                super::MetadataOrigin::Compiled,
+            )),
+            id: BindingId(0),
+        }
+    }
+}
+
 impl BindingCell {
     pub(crate) fn new(value: Value) -> Self {
         Self::with_metadata(
@@ -115,11 +131,13 @@ impl BindingCell {
         Ok(())
     }
 
-    pub(crate) fn check_assignment(&self, _strict: bool) -> Result<(), RuntimeError> {
+    pub(crate) fn check_assignment(&self, strict: bool) -> Result<(), RuntimeError> {
         if !self.is_initialized() {
             return Err(self.tdz_error());
         }
-        if !self.metadata().mutable {
+        if self.metadata().strict_write == WritePolicy::Throw
+            || strict && self.metadata().strict_write == WritePolicy::IgnoreSloppy
+        {
             return Err(RuntimeError {
                 thrown: None,
                 message: "TypeError: assignment to constant variable".to_owned(),
@@ -130,6 +148,9 @@ impl BindingCell {
 
     pub(crate) fn assign(&self, value: Value, strict: bool) -> Result<(), RuntimeError> {
         self.check_assignment(strict)?;
+        if self.metadata().strict_write == WritePolicy::IgnoreSloppy {
+            return Ok(());
+        }
         *self.0.state.borrow_mut() = BindingState::Initialized(value);
         Ok(())
     }

@@ -176,5 +176,38 @@ Separate module comparison: `TZ=UTC target/debug/qjs --module
 print `undefined:undefined:undefined:undefined` then `function:function`.
 Module fixture SHA-256:
 `44d067f0257e9b40cef5a3838377079788427c86466992e22bea359fa9d6a499`.
-Staged gate pending; no complete exact scan at this code, no final S3b exit or
-performance standing.
+Staged gate passes at `ecdacbda`, including 65 selected Test262 cases. No complete
+exact scan at this code, no final S3b exit or performance standing.
+
+## B2b self-name and import policies
+
+Named expressions compile one immutable name plan. Creation initializes its
+cell once and retains its lease outside parameter/body environments; call entry
+no longer inserts a name/value copy. Deleted immutable_name_caller_value and
+apply_completion_to_caller, the saved caller binding and shadow-name body scan.
+A callback's legitimate write to a caller homonym now survives return/throw.
+WritePolicy distinguishes IgnoreSloppy from always-throw const/class bindings;
+class key regions supply strictness for surrounding sloppy bodies. Import
+references reject writes before reading exporter TDZ. Function constructors'
+`anonymous` display name no longer invents a lexical self binding.
+
+Oracle audit (NG `f7830186`, Node v22.23.3): new runtime self-name tests follow
+[ES2025 named expressions](https://tc39.es/ecma262/2025/multipage/ecmascript-language-functions-and-classes.html#sec-runtime-semantics-instantiateordinaryfunctionexpression),
+[SetMutableBinding](https://tc39.es/ecma262/2025/multipage/executable-code-and-execution-contexts.html#sec-declarative-environment-records-setmutablebinding-n-v-s),
+and [CreateDynamicFunction](https://tc39.es/ecma262/2025/multipage/fundamental-objects.html#sec-createdynamicfunction).
+Observed independent scripts, run with Rust `--raw -e`, NG `--script -e
+'console.log(expr)'`, and Node `-e 'console.log(expr)'`:
+
+| Runtime test in direct_eval/self_binding.rs | Rust / Node | NG |
+| --- | --- | --- |
+| strict eval self assignment | TypeError caught = true | false |
+| strict class-key self assignment in sloppy function | TypeError caught = true | false |
+| own eval var shadows self for an earlier arrow | number:8 | function:self source |
+| Function body typeof anonymous in fresh realm | undefined | function |
+
+These NG differences are recorded, not copied into runtime expectations. The new
+NG script fixture covers caller homonym writes, sloppy immutable writes and
+parameter shadowing where the independent oracle agrees. No Test262 exclusion
+or expected-failure change is made. Full runtime tests pass (2,546 before the
+last identity test); all five lowest-layer scope tests and 280 NG fixtures pass.
+Agents/perf-counters compilation and Clippy pass. Final staged gate pending.

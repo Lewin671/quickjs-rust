@@ -36,6 +36,13 @@ enum PendingStaticItem {
 }
 
 impl Vm<'_> {
+    pub(super) fn execution_is_strict(&self) -> bool {
+        self.bytecode.is_strict()
+            || self
+                .cold()
+                .is_some_and(|cold| !cold.class_regions.is_empty())
+    }
+
     pub(super) fn enter_class(&mut self, definition: Rc<ClassDefinition>) {
         let name_cell = definition
             .name_slot

@@ -629,12 +629,8 @@ impl Function {
             object_prototype(&crate::CallEnv::new(Rc::clone(&realm))),
             realm.atoms(),
         );
-        let local_names = collect_function_local_names(
-            name.as_ref(),
-            &params,
-            &body,
-            !lexical_bindings.arguments,
-        );
+        let local_names =
+            collect_function_local_names(None, &params, &body, !lexical_bindings.arguments);
         let is_strict = is_strict_function_body(&body);
         let bytecode = match bytecode {
             Some(bytecode) => bytecode,
@@ -642,7 +638,7 @@ impl Function {
         };
         let auxiliary = FunctionAuxiliaryState::new(None, None);
         let function = Self(Rc::new(FunctionData {
-            has_name_binding: name.is_some(),
+            has_name_binding: false,
             immutable_name_binding: false,
             immutable_env_binding: None,
             immutable_env_value: None,
@@ -735,6 +731,26 @@ impl Function {
             with_stack,
             upvalues,
         } = compiled;
+        let self_name = has_name_binding.then(|| {
+            BindingCell::with_metadata(
+                bytecode
+                    .self_name_binding()
+                    .expect("compiled self-name metadata")
+                    .binding
+                    .clone(),
+                None,
+            )
+        });
+        let lexical_scope = if let Some(cell) = &self_name {
+            Some(crate::binding::ScopeCursor::with_function_name(
+                lexical_scope,
+                cell.clone(),
+                bytecode.self_name_binding().expect("self name plan"),
+            ))
+        } else {
+            lexical_scope
+        };
+        let immutable_env_value = self_name.clone().or(immutable_env_value);
         let realm_upvalue_slots = bytecode
             .received_upvalue_slots()
             .iter()
@@ -790,6 +806,10 @@ impl Function {
             bound: None,
             named: RefCell::new(crate::value::layout::NamedStorage::Sentinel),
         }));
+        if let Some(cell) = self_name {
+            cell.initialize(Value::Function(function.clone()))
+                .expect("fresh self binding");
+        }
         if let Some(scope) = lexical_scope {
             function
                 .auxiliary

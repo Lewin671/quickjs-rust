@@ -221,7 +221,7 @@ impl Vm<'_> {
         name: &str,
         object_slot: usize,
     ) -> Result<(), RuntimeError> {
-        if let Some(reference) = self.resolve_scope_binding(name, self.bytecode.is_strict())? {
+        if let Some(reference) = self.resolve_scope_binding(name, self.execution_is_strict())? {
             let object = match &reference {
                 crate::binding::ResolvedReference::Property {
                     base,

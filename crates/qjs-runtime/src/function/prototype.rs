@@ -207,8 +207,7 @@ fn build_dynamic_function(
     }
 
     let is_strict = crate::function::is_strict_function_body(&body);
-    let local_names =
-        crate::function::collect_function_local_names(Some(&name), &params, &body, true);
+    let local_names = crate::function::collect_function_local_names(None, &params, &body, true);
     let bytecode = crate::bytecode::compile_function_body_with_kind(
         &params,
         &body,
@@ -219,7 +218,7 @@ fn build_dynamic_function(
     let env_snapshot = dynamic_function_scope_snapshot(env);
     let created = Function::new_user_compiled(CompiledUserFunction {
         name: Some(name),
-        has_name_binding: true,
+        has_name_binding: false,
         immutable_name_binding: false,
         immutable_env_binding: None,
         immutable_env_value: None,

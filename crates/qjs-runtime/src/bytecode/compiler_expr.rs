@@ -631,6 +631,11 @@ impl Compiler {
                         || bytecode.uses_local_binding(name)
                         || bytecode.global_names().iter().any(|global| global == name)
                 });
+                if needs_name_binding {
+                    bytecode.binding_plan.self_name = name
+                        .as_ref()
+                        .map(|name| crate::binding::FunctionNamePlan::compile(name.clone()));
+                }
                 self.emit(Op::NewFunction {
                     name: name.clone(),
                     has_name_binding: needs_name_binding,
