@@ -97,7 +97,31 @@ evidence: an independent S3b release build started at 2026-10-30 23:26:48 PDT
 during collection. Its raw report remains local at
 `target/t077-followup/review-arm64-seeds.json`; no timings are pooled into a
 replacement. The retained collector now requires an initially quiet host and
-monitors external compilers/qjs processes every 0.5 seconds, excluding its own
+monitors external compilers/qjs and known test runners every 0.5 seconds, excluding its own
 process tree. Any observed overlap marks the whole report disturbed. Complete
 cached and IC-off exact scans run first; final timings will be collected after
 their load ends. Runtime source stays frozen at `3dc2a684`.
+
+
+Both initial unsharded exact commands were deliberately stopped during metadata
+queue construction (exit 143), with no execution pass claim or burndown row.
+Their partial logs remain in `target/t077-followup/exact-{cached,off}`. The
+replacement uses the unchanged baseline harness `--all --engine both --shard
+I/4`, I=1..4, with one worker per shard and four workers per mode in total.
+This is an exact partition of the full corpus, with the same configuration,
+20-second timeout and pinned `agents` CLI; no sampling or exclusion change.
+Only the four-summary complete set per mode can qualify its burndown row.
+
+
+Order-file scope note: `crates/qjs-cli/hot-functions-x86_64.order:253` still
+names `ConstantValue::load`, whose arm64 release symbol is absent after
+inlining. The x86 release image has not been built/audited here; its canonical
+order needs lead verification/regeneration with the iMac gates. The order file
+is outside this owner's allowed runtime paths and has not been edited.
+
+
+Collector validation: Python AST parsing passes; a direct load query detects
+both active exact runner parents; invoking the collector during those scans
+exits 1 with `host busy before collection` and creates no measurement report.
+Known shell test runners are recognized by their script argv rather than by
+arbitrary command text, so a reader/tool shell is not treated as test load.

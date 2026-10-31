@@ -22,19 +22,22 @@ if args.output.exists():
 
 
 def competing_processes():
-    snapshot = subprocess.run(['ps', '-axo', 'pid=,ppid=,stat=,comm='],
+    snapshot = subprocess.run(['ps', '-axo', 'pid=,ppid=,stat=,comm=,args='],
         capture_output=True, text=True, check=True, timeout=5)
     processes = {}
     for line in snapshot.stdout.splitlines():
-        fields = line.split(None, 3)
-        if len(fields) == 4:
-            pid, parent, state, command = fields
-            processes[int(pid)] = (int(parent), state, Path(command).name)
+        fields = line.split(None, 4)
+        if len(fields) == 5 and fields[0].isdigit() and fields[1].isdigit():
+            pid, parent, state, command, arguments = fields
+            processes[int(pid)] = (int(parent), state, Path(command).name, arguments)
     busy = []
     names = {'cargo', 'rustc', 'clang', 'clang++', 'cc', 'gcc', 'ld', 'lld',
              'cmake', 'make', 'qjs'}
-    for pid, (_, state, name) in processes.items():
-        if name not in names or state.startswith('Z'):
+    runners = {'test262-baseline.sh', 'test262-subset.sh', 'compare-qjs.sh', 'check.sh'}
+    for pid, (_, state, name, arguments) in processes.items():
+        argv = arguments.split()
+        runner = name in {'bash', 'sh'} and len(argv) > 1 and Path(argv[1]).name in runners
+        if (name not in names and not runner) or state.startswith('Z'):
             continue
         ancestor = pid
         seen = set()
@@ -55,7 +58,7 @@ def watch_load():
     while not stopped.is_set():
         try:
             busy = competing_processes()
-        except (OSError, subprocess.SubprocessError) as error:
+        except (OSError, subprocess.SubprocessError, ValueError) as error:
             load_events.append({'monitor_error': str(error)})
             return
         if busy and busy != previous:
