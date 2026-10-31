@@ -1,0 +1,24 @@
+{
+  "candidate": "fc3deef7f899b519db82848a531cc09011b8a2cf",
+  "runtime": "dc710e4b",
+  "order": "4098ee67",
+  "test262_dir": "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/third_party/test262",
+  "test262_revision": "4249661388e5d3f92a85186213da140a6481490f",
+  "scripts": {
+    "find-qjsng-gaps.sh": {
+      "frozen_sha256": "748f15ebf239958215f83b3cc0141e20972e2c6a2910c196dcdef2549a351349",
+      "routed_sha256": "6aabe8543894f7ec265219f0283f4dfd6e4f7c2f99272af0401f78ff7b508b69",
+      "path_only_diff": "--- frozen/scripts/find-qjsng-gaps.sh\n+++ temporary/find-qjsng-gaps.sh\n@@ -1,9 +1,9 @@\n #!/usr/bin/env bash\n set -euo pipefail\n \n-ROOT_DIR=\"$(cd \"$(dirname \"${BASH_SOURCE[0]}\")/..\" && pwd)\"\n-BASELINE=\"$ROOT_DIR/scripts/test262-baseline.sh\"\n-TEST262_DIR=\"$ROOT_DIR/third_party/test262\"\n+ROOT_DIR=\"/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s2\"\n+BASELINE=\"/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s2/target/t077-s2-freeze/routed-harness/test262-baseline.sh\"\n+TEST262_DIR=\"${TEST262_DIR:-$ROOT_DIR/third_party/test262}\"\n QUICKJS_NG_DIR=\"$ROOT_DIR/third_party/quickjs-ng\"\n RUN_LIMIT=\"${TEST262_GAP_LIMIT:-100}\"\n FILTER_PREFIX=\"\"\n"
+    },
+    "test262-baseline.sh": {
+      "frozen_sha256": "25def9257874abc09770cdd3621a2688bf56699d2a4310b49a8d65f795371e6e",
+      "routed_sha256": "2d79e20c888ddee4c3e34076edb9408068de45e8eb13beb8551f90bf814fdb19",
+      "path_only_diff": "--- frozen/scripts/test262-baseline.sh\n+++ temporary/test262-baseline.sh\n@@ -1,9 +1,9 @@\n #!/usr/bin/env bash\n set -euo pipefail\n \n-ROOT_DIR=\"$(cd \"$(dirname \"${BASH_SOURCE[0]}\")/..\" && pwd)\"\n+ROOT_DIR=\"/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s2\"\n . \"$ROOT_DIR/scripts/lib.sh\"\n-TEST262_DIR=\"$ROOT_DIR/third_party/test262\"\n+TEST262_DIR=\"${TEST262_DIR:-$ROOT_DIR/third_party/test262}\"\n . \"$ROOT_DIR/scripts/test262-upstream-amendments.sh\"\n QUICKJS_NG_DIR=\"$ROOT_DIR/third_party/quickjs-ng\"\n QUICKJS_NG_RUNNER=\"$QUICKJS_NG_DIR/build/run-test262\"\n"
+    },
+    "test262-burndown.sh": {
+      "frozen_sha256": "400249ef038925befea27110bd4f1772300f3ea00462f7847700754ff3cd56c1",
+      "routed_sha256": "737c6aa42db76c86234821e04e5f9a44699c21cfc80d88aae0168d01b24d837d",
+      "path_only_diff": "--- frozen/scripts/test262-burndown.sh\n+++ temporary/test262-burndown.sh\n@@ -1,8 +1,8 @@\n #!/usr/bin/env bash\n set -euo pipefail\n \n-ROOT_DIR=\"$(cd \"$(dirname \"${BASH_SOURCE[0]}\")/..\" && pwd)\"\n-TEST262_DIR=\"$ROOT_DIR/third_party/test262\"\n+ROOT_DIR=\"/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s2\"\n+TEST262_DIR=\"${TEST262_DIR:-$ROOT_DIR/third_party/test262}\"\n BURNDOWN_FILE=\"$ROOT_DIR/docs/conformance/burndown.jsonl\"\n \n REPORT_DIR=\"\"\n"
+    }
+  }
+}

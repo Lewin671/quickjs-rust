@@ -1,10 +1,11 @@
 # S2 round4 handoff: stop at the lead gate
 
-**External remains 1.001593 versus main dcee3c56; the required <1.00 target is
-not met.** This is a diagnostic point estimate, not a formal precision result.
-The owner stops here under feedback-s2-4: no further runtime changes, tuning,
-complete exact scans or held-out collection. S1+S2 is not accepted for landing.
-Typed-loop static size also remains above the requested base size.
+The lead's post-round4 decision treats external 1.001593 as within five-pair
+triage noise and is running formal 30-block, held-out and RSS acceptance for
+fc3deef7 against dcee3c56. This owner is running the complete cached/off
+[freeze correctness qualification](T077-s2-freeze-qualification.md) with the
+specified shared Test262 corpus. Runtime code is frozen; no iMac jobs are
+submitted by this owner. Typed static size remains a reported gap.
 
 Runtime source **dc710e4b**, x86 order candidate **4098ee67**. Later commits are
 records only. Canonical x86 SHA
@@ -86,9 +87,10 @@ Fuzz adds stable prototype constants, write routes, accessor replacements and
 instability transitions. Release/debug CLIs use the CLI agents feature and
 both pass the actual --agent smoke. No new dependencies, unsafe or exclusions.
 
-Complete configured cached/off exact Test262 qualification **was not run for
-this candidate**, because the performance gate failed and the lead ordered
-stop. The round3 scans were intentionally interrupted; no partial scan has a
+At the initial round4 handoff, complete configured cached/off exact Test262
+qualification had not run because the owner followed the earlier stop rule.
+The post-round4 lead decision now requests it; results are recorded in the
+[freeze qualification](T077-s2-freeze-qualification.md). The round3 scans were intentionally interrupted; no partial scan has a
 burndown row. Last qualified complete cached/off scans remain 061e7f28, 42,672
 passes each/zero gaps; those historical results do not qualify this source.
 
@@ -117,5 +119,5 @@ dc710e4b (final outlining), 4098ee67 (order) remain on this owner branch.
 
 No push to origin, merge into main, formal or held-out run. The tracked corpus
 pointer is unchanged; pre-existing untracked harness files were left alone.
-Next action belongs to the lead: review the remaining external/typed-size gap
-and choose re-scope or further authorized work. No acceptance claim is made.
+The lead now measures formal acceptance while this owner completes frozen-source
+exact qualification and burndown. No acceptance claim is made.
