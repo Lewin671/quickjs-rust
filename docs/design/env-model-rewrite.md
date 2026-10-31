@@ -58,8 +58,8 @@ parameter leaf bindings are parameters too; raw pattern inputs are not bindings.
    own Object/Array/Function and primitive prototypes, plus well-known symbols.
    Rebinding a public constructor does not redefine those identities.
 10. **Modules retain live cells.** Import routes attach exporting cells and reject
-    writes through import access policy. Module top-level slots attach canonical
-    instantiation cells. Tests: `modules.rs`, direct module frame tests.
+    writes through import access policy. Top-level slots, hoists and namespaces
+    share cells established before linking; no settled import/export copies.
 11. **Suspension retains locations.** Snapshots own the same cells, scope leases,
     holders and selected references across yield/await, not copies of their values.
     See [generator suspension](generator-suspension.md).

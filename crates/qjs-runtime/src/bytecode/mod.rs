@@ -42,8 +42,6 @@
 //! `named_property_cache.rs` and `enumerate_keys_cache.rs`;
 //! `vm_string_append.rs` appends in place to a uniquely held string.
 
-use std::collections::HashMap;
-
 mod binding_captures;
 mod binding_metadata;
 mod binding_plan;
@@ -411,15 +409,11 @@ pub fn eval_bytecode_keep_jobs(bytecode: &Bytecode) -> Result<EvalOutcome, Runti
 pub(crate) type ModuleRealm = crate::function::Realm;
 
 pub(crate) struct ModuleEvaluation {
-    pub(crate) env: crate::CallEnv,
-    pub(crate) live_bindings: crate::function::DynamicBindings,
     pub(crate) async_result_promise: Option<crate::ObjectRef>,
 }
 
-pub(crate) struct ModuleLiveExports {
-    pub(crate) names: Vec<String>,
+pub(crate) struct ModuleBindings {
     pub(crate) bindings: crate::function::DynamicBindings,
-    pub(crate) seed_tdz_markers: bool,
     pub(crate) imports: Vec<ModuleLiveImport>,
 }
 
@@ -468,35 +462,44 @@ pub(crate) fn eval_prelude_script(
 }
 
 /// Evaluates a module body against the shared graph realm seeded with the
-/// module's resolved imports. Returns the module's frame environment so the
-/// caller can read its exported bindings. See [`vm_module::eval_module_body`].
+/// module's canonical cells. See [`vm_module::eval_module_body`].
 pub(crate) fn eval_module_body(
     bytecode: &Bytecode,
     realm: &ModuleRealm,
-    imports: HashMap<String, Value>,
     host: Option<crate::module::ModuleHostRef>,
-    live_exports: ModuleLiveExports,
+    module_bindings: ModuleBindings,
     drain: bool,
 ) -> Result<ModuleEvaluation, RuntimeError> {
-    vm_module::eval_module_body(bytecode, realm, imports, host, live_exports, drain)
+    vm_module::eval_module_body(bytecode, realm, host, module_bindings, drain)
 }
 
 pub(crate) fn eval_module_function_hoists(
     bytecode: &Bytecode,
     realm: &ModuleRealm,
     host: Option<crate::module::ModuleHostRef>,
-    live_exports: ModuleLiveExports,
+    module_bindings: ModuleBindings,
 ) -> Result<(), RuntimeError> {
-    vm_module::eval_module_function_hoists(bytecode, realm, host, live_exports)
+    vm_module::eval_module_function_hoists(bytecode, realm, host, module_bindings)
 }
 
-pub(crate) fn seed_module_live_bindings(bytecode: &Bytecode, live_exports: &ModuleLiveExports) {
-    vm_module::seed_live_bindings(
-        &live_exports.bindings,
-        bytecode,
-        live_exports.names.clone(),
-        live_exports.seed_tdz_markers,
-    );
+/// Establish canonical declaration cells before linking namespaces or imports.
+pub(crate) fn initialize_module_cells(
+    bytecode: &Bytecode,
+    bindings: &crate::function::DynamicBindings,
+    imported_names: &[String],
+) {
+    for meta in bytecode.scope_declarations(crate::binding::ScopeId(0)) {
+        if imported_names.contains(&meta.name) {
+            continue;
+        }
+        let value = (meta.initialization == crate::binding::InitPolicy::Undefined)
+            .then_some(Value::Undefined);
+        let name = meta.name.clone();
+        bindings.insert_cell(
+            name,
+            crate::binding::BindingCell::with_metadata(meta, value),
+        );
+    }
 }
 
 pub(crate) fn eval_bytecode_with_env(

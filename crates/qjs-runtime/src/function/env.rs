@@ -299,17 +299,6 @@ impl DynamicBindings {
         }))
     }
 
-    pub(crate) fn borrow(&self) -> BindingSnapshot {
-        BindingSnapshot(self.snapshot())
-    }
-
-    pub(crate) fn borrow_mut(&self) -> DynamicBindingsMut<'_> {
-        DynamicBindingsMut {
-            bindings: self,
-            values: self.snapshot(),
-        }
-    }
-
     pub(crate) fn get(&self, name: &str) -> Option<Value> {
         self.0.map.borrow().get(name).map(BindingCell::get)
     }
@@ -425,39 +414,6 @@ impl DynamicBindings {
 /// need to enumerate a frame. The authoritative storage is a name-to-cell map;
 /// this value snapshot never participates in binding identity or write-back.
 pub(crate) struct BindingSnapshot(HashMap<String, Value>);
-
-pub(crate) struct DynamicBindingsMut<'a> {
-    bindings: &'a DynamicBindings,
-    values: HashMap<String, Value>,
-}
-
-impl Deref for DynamicBindingsMut<'_> {
-    type Target = HashMap<String, Value>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.values
-    }
-}
-
-impl std::ops::DerefMut for DynamicBindingsMut<'_> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.values
-    }
-}
-
-impl Drop for DynamicBindingsMut<'_> {
-    fn drop(&mut self) {
-        let retained = self.values.keys().cloned().collect::<HashSet<_>>();
-        for name in self.bindings.names() {
-            if !retained.contains(&name) {
-                self.bindings.remove(&name);
-            }
-        }
-        for (name, value) in &self.values {
-            self.bindings.insert(name.clone(), value.clone());
-        }
-    }
-}
 
 impl Deref for BindingSnapshot {
     type Target = HashMap<String, Value>;

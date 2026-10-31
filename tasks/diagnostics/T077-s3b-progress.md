@@ -356,8 +356,9 @@ write policy. Global lexical metadata cannot veto a mutable captured parameter
 with the same name. Positional captures take precedence over module import-name
 routing; an import's readonly policy applies only to that selected canonical cell.
 Runtime and module regressions cover both homonyms. Initialization probes inspect
-cell state without reading its value. All **2,565 runtime tests**, 286 NG fixtures,
-Clippy and the staged gate including 117 selected Test262 cases pass. Borrowed Context and removal of named call inputs remain.
+cell state without reading its value. All **2,565 runtime tests**, Clippy and the staged gate including
+117 selected Test262 cases pass. The separate NG run in B2c4 corrects the two
+new fixtures to the comparison runner's expression-only contract. Borrowed Context and removal of named call inputs remain.
 
 
 ## B2c2 arguments demand boundaries
@@ -391,3 +392,25 @@ mapped aliases across callbacks/storage reuse. Clippy and the staged gate with
 117 selected Test262 cases also pass. Implicit arguments is temporarily
 published as its canonical cell in the compatibility view; B3/B5 delete that
 view and B2's lazy recipe will avoid materializing unread objects.
+
+
+## B2c4 canonical module declaration ownership
+
+Modules compile their body and create typed declaration cells before linking can
+publish a namespace/import route. Hoists and body frames attach to those same
+cells. Imported settled values no longer enter the shared Realm; Function and
+indirect eval therefore cannot see module import names. Namespace reexports
+are resolved to namespace identity even through an indirect export. Removed:
+import_bindings, module frame binding_snapshot/export apply-back, settled export
+maps and global/undefined fallback, top-level-await frame reconstruction from
+settled cells, and DynamicBindingsMut snapshot-on-borrow/apply-on-drop. Module
+completion returns only its async promise; routes remain canonical throughout.
+All **2,570 runtime tests** pass, including namespace alias identity, import
+isolation and an undefined export shadowing Object. The staged gate (117 selected
+Test262 cases), agents/perf-counters compilation and all **287 NG scripts** pass.
+Separate module fixture `s3b-context-imports.mjs` (SHA-256
+`91c9a512b922fb1dda4b9519a5c077863689c9469e265c05bd4121fa1c3a5b71`)
+prints `7:undefined:undefined:undefined` then `9:9` in both engines under TZ=UTC.
+The script runner requires expressions and flattens newlines; B2c1/c2 fixtures
+are corrected to IIFEs here (their runtime tests had already passed). This moves source-module compilation before linking;
+it preserves structured Syntax errors and retains the compiled body for reuse.

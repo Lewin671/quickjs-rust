@@ -1,23 +1,22 @@
 //! Module-body evaluation entry points for the bytecode VM.
 //!
 //! A module graph shares one realm (see [`new_module_realm`]) so that a
-//! function defined in one module resolves its free names — and a sibling
-//! cyclic module's hoisted functions — against the same bindings. The realm is
+//! function defined in one module retains that module's canonical cells. The realm is
 //! distinct from any script realm, so module code never leaks names to the
 //! process-wide `globalThis` used by [`crate::eval`].
 
 use std::{collections::HashMap, rc::Rc};
 
 use crate::{
-    Function, GLOBAL_THIS_BINDING, ObjectRef, RuntimeError, Value,
-    function::{CallEnv, DynamicBindings, Realm},
+    GLOBAL_THIS_BINDING, ObjectRef, RuntimeError, Value,
+    function::{CallEnv, Realm},
     initialize_builtins,
 };
 
 use super::ir::Bytecode;
 use super::vm::Vm;
 use super::vm_generator::{GeneratorStart, GeneratorState};
-use super::{ModuleEvaluation, ModuleLiveExports};
+use super::{ModuleBindings, ModuleEvaluation};
 
 /// Evaluates a prelude *script* against the shared graph `realm` before any
 /// module body runs. The prelude is ordinary (non-module) script code — for the
@@ -50,9 +49,7 @@ pub(super) fn new_module_realm() -> Realm {
     realm
 }
 
-/// Evaluates a module body against the shared graph `realm`, seeding `imports`
-/// as module-scope bindings first. Returns the module's frame environment so
-/// the linker can read its exports.
+/// Evaluates a module body against its canonical declaration and import cells.
 ///
 /// Synchronous and top-level-await module bodies keep top-level declarations
 /// in the module frame and shared module cells, so they do not become
@@ -60,16 +57,12 @@ pub(super) fn new_module_realm() -> Realm {
 pub(super) fn eval_module_body(
     bytecode: &Bytecode,
     realm: &Realm,
-    imports: HashMap<String, Value>,
     host: Option<crate::module::ModuleHostRef>,
-    live_exports: ModuleLiveExports,
+    module_bindings: ModuleBindings,
     drain: bool,
 ) -> Result<ModuleEvaluation, RuntimeError> {
     if bytecode.is_global_scope() {
         Vm::initialize_script_global_bindings(bytecode, realm)?;
-    }
-    for (name, value) in imports {
-        realm.insert_value(name, value);
     }
     realm.refresh_dynamic_function_realm_global();
     let mut env = CallEnv::new(Rc::clone(realm));
@@ -88,19 +81,12 @@ pub(super) fn eval_module_body(
     // (16.2.1.5.3 AsyncModuleExecution): it suspends at each `await` and resumes
     // through the realm job queue, settling a result promise on completion.
     if bytecode.contains_top_level_await() {
-        return eval_async_module_body(bytecode, env, live_exports, drain);
+        return eval_async_module_body(bytecode, env, module_bindings, drain);
     }
-    for import in live_exports.imports {
+    for import in module_bindings.imports {
         env.set_module_import(import.local_name, import.bindings, import.binding_name);
     }
-    seed_live_bindings(
-        &live_exports.bindings,
-        bytecode,
-        live_exports.names,
-        live_exports.seed_tdz_markers,
-    );
-    env.set_module_live_bindings(live_exports.bindings.clone());
-    let live_bindings = live_exports.bindings;
+    env.set_module_live_bindings(module_bindings.bindings.clone());
     let mut vm = Vm::new_with_globals(bytecode, env);
     vm.run()?;
     // The dynamic-import path defers job draining to the outer queue loop so the
@@ -110,8 +96,6 @@ pub(super) fn eval_module_body(
         vm.drain_promise_jobs()?;
     }
     Ok(ModuleEvaluation {
-        env: vm.current_env(),
-        live_bindings,
         async_result_promise: None,
     })
 }
@@ -120,7 +104,7 @@ pub(super) fn eval_module_function_hoists(
     bytecode: &Bytecode,
     realm: &Realm,
     host: Option<crate::module::ModuleHostRef>,
-    live_exports: ModuleLiveExports,
+    module_bindings: ModuleBindings,
 ) -> Result<(), RuntimeError> {
     let mut env = CallEnv::new(Rc::clone(realm));
     // Module this is initialized undefined, including when an arrow captures
@@ -132,16 +116,10 @@ pub(super) fn eval_module_function_hoists(
     if let Some(host) = host {
         env.set_module_host(host);
     }
-    for import in live_exports.imports {
+    for import in module_bindings.imports {
         env.set_module_import(import.local_name, import.bindings, import.binding_name);
     }
-    seed_live_bindings(
-        &live_exports.bindings,
-        bytecode,
-        live_exports.names,
-        live_exports.seed_tdz_markers,
-    );
-    env.set_module_live_bindings(live_exports.bindings.clone());
+    env.set_module_live_bindings(module_bindings.bindings.clone());
     let mut vm = Vm::new_with_globals(bytecode, env);
     vm.run()?;
     Ok(())
@@ -155,42 +133,19 @@ pub(super) fn eval_module_function_hoists(
 /// that settles during this pass is surfaced as a `RuntimeError` (carrying the
 /// rejection reason) so the linker propagates it to the caller / import promise.
 ///
-/// Every top-level module binding writes through to the shared module cells
-/// (see `Vm::store_local`); the returned `CallEnv` exposes their settled values
-/// so the linker can collect exports after the module has settled.
+/// Suspended frames and module namespaces retain the same canonical cells.
 ///
 fn eval_async_module_body(
     bytecode: &Bytecode,
     mut env: CallEnv,
-    live_exports: ModuleLiveExports,
+    module_bindings: ModuleBindings,
     drain: bool,
 ) -> Result<ModuleEvaluation, RuntimeError> {
-    let realm = env.realm_rc();
-    for import in live_exports.imports {
+    for import in module_bindings.imports {
         env.set_module_import(import.local_name, import.bindings, import.binding_name);
     }
-    // Seed the shared live-binding cell map with every top-level local name so
-    // each `store_local` after an `await` resumes writes through to it.
-    seed_live_bindings(
-        &live_exports.bindings,
-        bytecode,
-        live_exports.names,
-        live_exports.seed_tdz_markers,
-    );
-    env.set_module_live_bindings(live_exports.bindings.clone());
-    {
-        let mut captured = live_exports.bindings.borrow_mut();
-        for name in bytecode.local_names().filter(|name| {
-            bytecode
-                .local_slot(name)
-                .is_some_and(|slot| !bytecode.local_is_body_hoist_only(slot))
-        }) {
-            captured
-                .entry(name.to_owned())
-                .or_insert_with(|| Value::Function(Function::uninitialized_lexical_marker()));
-        }
-    }
-    let live_bindings = live_exports.bindings;
+    // Suspension retains the same module cells that declaration instantiation used.
+    env.set_module_live_bindings(module_bindings.bindings.clone());
     let function_env = env.clone();
     let context = ObjectRef::new(HashMap::new(), env.realm().atoms());
     *context.generator_state().borrow_mut() =
@@ -216,37 +171,7 @@ fn eval_async_module_body(
             message: "module top-level await rejected".to_owned(),
         });
     }
-    // Materialize the settled module frame from the shared cells retained by
-    // the suspended VM. Module bindings may shadow realm intrinsics, so no
-    // name-based realm filtering is valid here.
-    let locals: HashMap<String, Value> = live_bindings
-        .borrow()
-        .iter()
-        .map(|(name, value)| (name.clone(), value.clone()))
-        .collect();
     Ok(ModuleEvaluation {
-        env: CallEnv::with_locals(realm, locals),
-        live_bindings,
         async_result_promise: Some(result_promise),
     })
-}
-
-pub(super) fn seed_live_bindings(
-    live_bindings: &DynamicBindings,
-    bytecode: &Bytecode,
-    names: Vec<String>,
-    seed_tdz_markers: bool,
-) {
-    let mut bindings = live_bindings.borrow_mut();
-    for name in names {
-        let value = match bytecode.local_slot(&name) {
-            Some(slot) if bytecode.local_is_body_hoist_only(slot) => Value::Undefined,
-            Some(slot) if seed_tdz_markers || bytecode.local_is_mutable(slot) => {
-                Value::Function(Function::uninitialized_lexical_marker())
-            }
-            Some(_) => continue,
-            None => Value::Undefined,
-        };
-        bindings.entry(name).or_insert(value);
-    }
 }
