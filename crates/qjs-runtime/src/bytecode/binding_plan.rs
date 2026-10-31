@@ -25,11 +25,23 @@ pub(super) struct ParameterInfo {
     pub(super) direct_seedable: bool,
     pub(super) shadows_arguments: bool,
     pub(super) rest_slot: Option<usize>,
+    pub(super) mapped_slots: Box<[Option<usize>]>,
 }
 
 impl ParameterInfo {
     pub(super) fn compile(bytecode: &Bytecode, params: &FunctionParams) -> Self {
         Self {
+            mapped_slots: bytecode
+                .parameter_slots()
+                .iter()
+                .enumerate()
+                .map(|(index, &slot)| {
+                    (params.is_simple()
+                        && !bytecode.locals[slot].name.is_empty()
+                        && !bytecode.parameter_slots()[index + 1..].contains(&slot))
+                    .then_some(slot)
+                })
+                .collect(),
             direct_seedable: params.rest.is_none()
                 && params
                     .positional
@@ -50,7 +62,13 @@ impl ParameterInfo {
 }
 
 #[derive(Clone, Debug, Default)]
-pub(super) struct FrameInitPlan {
+pub(super) struct BindingPlan {
+    pub(super) scopes: Box<[crate::binding::ScopeDescriptor]>,
+    pub(super) bindings: Box<[crate::binding::BindingMeta]>,
+    pub(super) local_bindings: Box<[Option<crate::binding::BindingId>]>,
+    pub(super) exposure: crate::binding::EvalExposurePlan,
+    pub(super) received: Box<[super::binding_captures::CaptureRoute]>,
+    pub(super) received_indices: Box<[Option<usize>]>,
     pub(super) initial_slots: Vec<InitialSlot>,
     pub(super) cell_slots: Vec<usize>,
     pub(super) dynamic_cell_slots: Vec<usize>,
@@ -62,7 +80,7 @@ pub(super) struct FrameInitPlan {
     pub(super) reads_new_target: bool,
 }
 
-impl FrameInitPlan {
+impl BindingPlan {
     pub(super) fn compile(bytecode: &Bytecode) -> Self {
         let initial_slots = bytecode
             .locals
@@ -120,6 +138,22 @@ impl FrameInitPlan {
         dynamic_cell_slots.dedup();
         let dynamic_scope_tree = dynamic_tree(bytecode);
         Self {
+            scopes: Box::default(),
+            bindings: Box::default(),
+            local_bindings: Box::default(),
+            exposure: crate::binding::EvalExposurePlan::default(),
+            received: vec![
+                super::binding_captures::CaptureRoute::Named;
+                bytecode.received_upvalue_slots().len()
+            ]
+            .into_boxed_slice(),
+            received_indices: {
+                let mut indices = vec![None; bytecode.locals.len()];
+                for (index, &slot) in bytecode.received_upvalue_slots().iter().enumerate() {
+                    indices[slot] = Some(index);
+                }
+                indices.into_boxed_slice()
+            },
             initial_slots,
             cell_slots,
             dynamic_cell_slots,
@@ -236,3 +270,38 @@ fn private_dynamic(element: &ClassPrivateElementDef) -> bool {
         | ClassPrivateElementDef::Setter { def, .. } => def.bytecode.has_dynamic_scope_tree(),
     }
 }
+
+impl BindingPlan {
+    pub(super) fn validate(&self, slots: usize, code_len: usize) {
+        use crate::binding::{BindingKind, InitPolicy, WritePolicy};
+        for (index, binding) in self.bindings.iter().enumerate() {
+            debug_assert_eq!(binding.id.0, index);
+            debug_assert!(binding.slot.0 < slots);
+            debug_assert!(!binding.name.starts_with("\0\0"));
+            debug_assert_eq!(
+                binding.mutable,
+                binding.strict_write == WritePolicy::Mutable
+            );
+            debug_assert!(
+                !binding.deletable
+                    || matches!(binding.kind, BindingKind::Var | BindingKind::Function)
+            );
+            debug_assert_eq!(
+                binding.initialization == InitPolicy::Parameter,
+                binding.kind == BindingKind::Parameter
+            );
+        }
+        for (index, scope) in self.scopes.iter().enumerate() {
+            debug_assert_eq!(scope.id.0, index);
+            debug_assert!(scope.parent.is_none_or(|parent| parent.0 < index));
+            debug_assert!(scope.variable_target.0 < self.scopes.len());
+        }
+        for site in &self.exposure.sites {
+            debug_assert!(site.pc < code_len);
+            debug_assert!(site.scopes.iter().all(|scope| scope.0 < self.scopes.len()));
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests;

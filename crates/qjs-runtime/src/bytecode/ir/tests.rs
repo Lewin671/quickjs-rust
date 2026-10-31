@@ -103,9 +103,22 @@ fn a_recycler_handle_outlives_the_bytecode_it_came_from() {
 
 #[test]
 fn direct_parameter_slots_preserve_duplicate_positions() {
+    let locals = (0..8)
+        .map(|slot| Local {
+            name: format!("parameter{slot}"),
+            compiler_temporary: false,
+            hoisted: true,
+            hoisted_function: false,
+            parameter: true,
+            catch_binding: false,
+            mutable: true,
+            from_env: false,
+            sloppy_global_fallback: false,
+        })
+        .collect();
     let bytecode = Bytecode::new_function(
         Vec::new(),
-        Vec::new(),
+        locals,
         Vec::new(),
         vec![3, 3, 7],
         &qjs_ast::FunctionParams::positional(vec![]),

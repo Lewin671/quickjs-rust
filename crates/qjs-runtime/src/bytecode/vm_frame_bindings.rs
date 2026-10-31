@@ -1,11 +1,11 @@
 //! Frame-local slot and shared-cell initialization.
 //!
-//! Immutable routes come from `FrameInitPlan`; only runtime context selects
+//! Immutable routes come from `BindingPlan`; only runtime context selects
 //! realm/module/dynamic identities. Positional inputs are seeded before cells
 //! are created, so declaring frames and every escaping closure share one cell.
 
 use super::{
-    frame_init_plan::InitialSlot,
+    binding_plan::InitialSlot,
     ir::Bytecode,
     vm::{Slot, Vm},
 };
@@ -17,7 +17,7 @@ use crate::{
 impl Vm<'_> {
     pub(super) fn initial_slots(bytecode: &Bytecode, env: &CallEnv) -> Vec<Slot> {
         let mut locals = bytecode.take_local_slots(bytecode.locals.len());
-        for (slot, route) in bytecode.frame_init_plan.initial_slots.iter().enumerate() {
+        for (slot, route) in bytecode.binding_plan.initial_slots.iter().enumerate() {
             let name = &bytecode.locals[slot].name;
             let incoming = || {
                 env.get_local(name).filter(|value| {
@@ -70,7 +70,7 @@ impl Vm<'_> {
             {
                 local_upvalues[slot] = upvalues.get(index).cloned();
             }
-            for &slot in &bytecode.frame_init_plan.sloppy_global_slots {
+            for &slot in &bytecode.binding_plan.sloppy_global_slots {
                 local_upvalues[slot] = env.realm_binding_cell(&bytecode.locals[slot].name);
             }
         } else {
@@ -138,16 +138,16 @@ impl Vm<'_> {
             || bytecode.contains_with()
             || env.deopt_bindings().is_some();
         let static_slots = if dynamic {
-            &bytecode.frame_init_plan.dynamic_cell_slots
+            &bytecode.binding_plan.dynamic_cell_slots
         } else {
-            &bytecode.frame_init_plan.cell_slots
+            &bytecode.binding_plan.cell_slots
         };
         let mut module_slots = Vec::new();
         let cell_slots = if env.has_module_live_bindings() {
             module_slots.extend_from_slice(static_slots);
             module_slots.extend(
                 bytecode
-                    .frame_init_plan
+                    .binding_plan
                     .module_live_candidates
                     .iter()
                     .copied()

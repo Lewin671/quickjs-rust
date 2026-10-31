@@ -1438,8 +1438,8 @@ impl<'a> Vm<'a> {
     }
 
     pub(super) fn refresh_realm_backed_locals_from_realm(&mut self) {
-        for position in 0..self.bytecode.frame_init_plan.sloppy_global_slots.len() {
-            let index = self.bytecode.frame_init_plan.sloppy_global_slots[position];
+        for position in 0..self.bytecode.binding_plan.sloppy_global_slots.len() {
+            let index = self.bytecode.binding_plan.sloppy_global_slots[position];
             let Some(name) = self.current.bytecode.local_name_at(index) else {
                 continue;
             };

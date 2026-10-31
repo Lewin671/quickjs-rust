@@ -33,7 +33,7 @@ impl Compiler {
             return self.compile_class(None, body);
         };
 
-        self.with_lexical_scope(|compiler| {
+        self.with_scope_kind(crate::binding::ScopeKind::ClassName, |compiler| {
             let storage_name = format!("\0class_expr_inner:{}:{}", name, compiler.locals.len());
             let slot = compiler.declare_lexical_slot_with_storage_name(name, &storage_name, false);
             compiler.emit(Op::ClearLocal(slot));
@@ -715,11 +715,7 @@ fn compile_class_field_initializer(
         None => compiler.compile_expr(init)?,
     }
     compiler.emit(Op::Return);
-    Ok(super::ir::Bytecode::new(
-        compiler.constants,
-        compiler.locals,
-        compiler.code,
-    ))
+    Ok(Bytecode::from_compiler(compiler, None, Vec::new()))
 }
 
 /// Builds the implicit default constructor. A base class gets an empty body;
@@ -787,11 +783,10 @@ fn compile_default_derived_constructor_bytecode(
     compiler.emit(Op::Pop);
     compiler.emit_load_undefined();
     compiler.emit(Op::Return);
-    Ok(Bytecode::new_function(
-        compiler.constants,
-        compiler.locals,
-        compiler.code,
+    compiler.scope_plan.scopes[0].kind = crate::binding::ScopeKind::Parameters;
+    Ok(Bytecode::from_compiler(
+        compiler,
+        Some((Vec::new(), params)),
         Vec::new(),
-        params,
     ))
 }

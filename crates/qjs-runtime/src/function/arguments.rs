@@ -1,7 +1,5 @@
 //! Per-call arguments values/accessors with realm-owned shared descriptor schemas.
 //! Parameter cells, poison callee and iterator identity retain their existing paths.
-use qjs_ast::BindingPattern;
-
 use crate::{
     Function, NativeFunction, Property, Prototype, RuntimeError, Value, object_prototype, symbol,
 };
@@ -70,33 +68,7 @@ fn mapped_argument_parameter(function: &Function, index: usize) -> Option<&str> 
     if function.is_strict || !function.params.is_simple() {
         return None;
     }
-    let element = function.params.positional.get(index)?;
-    let BindingPattern::Identifier {
-        name: parameter_name,
-        ..
-    } = &element.binding
-    else {
-        return None;
-    };
-    if parameter_name.is_empty() {
-        return None;
-    }
-    if function
-        .params
-        .positional
-        .iter()
-        .skip(index + 1)
-        .any(|element| {
-            matches!(
-                &element.binding,
-                BindingPattern::Identifier { name, .. } if name == parameter_name
-            )
-        })
-    {
-        None
-    } else {
-        Some(parameter_name)
-    }
+    function.bytecode.as_ref()?.mapped_argument_parameter(index)
 }
 
 fn mapped_argument_property(

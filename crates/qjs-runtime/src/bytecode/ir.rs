@@ -694,7 +694,7 @@ pub struct Bytecode {
     parameter_slots: Vec<usize>,
     /// Entry-only vectors stay out of the bytecode's hot payload. This one
     /// allocation belongs to the body, not to any of its activations.
-    pub(super) frame_init_plan: Box<super::frame_init_plan::FrameInitPlan>,
+    pub(super) binding_plan: Box<super::binding_plan::BindingPlan>,
     received_upvalue_slots: Vec<usize>,
     /// Whether direct-call frame setup may need per-local upvalue storage for
     /// an outer capture or sloppy global fallback. Module imports are tracked
@@ -806,77 +806,8 @@ pub struct Bytecode {
 }
 
 impl Bytecode {
-    pub(super) fn new(constants: Vec<Value>, locals: Vec<Local>, code: Vec<Op>) -> Self {
-        Self::with_scope(constants, locals, code, false)
-    }
-
-    pub(super) fn new_function(
-        constants: Vec<Value>,
-        locals: Vec<Local>,
-        code: Vec<Op>,
-        parameter_slots: Vec<usize>,
-        params: &FunctionParams,
-    ) -> Self {
-        let mut bytecode = Self::with_scope_global_lexical_names_and_strict_with_parameter_slots(
-            constants,
-            locals,
-            code,
-            false,
-            Vec::new(),
-            false,
-            Some(parameter_slots),
-        );
-        bytecode.frame_init_plan.parameters =
-            super::frame_init_plan::ParameterInfo::compile(&bytecode, params);
-        bytecode
-    }
-
-    pub(super) fn with_scope(
-        constants: Vec<Value>,
-        locals: Vec<Local>,
-        code: Vec<Op>,
-        global_scope: bool,
-    ) -> Self {
-        Self::with_scope_and_global_lexical_names(constants, locals, code, global_scope, Vec::new())
-    }
-
-    pub(super) fn with_scope_and_global_lexical_names(
-        constants: Vec<Value>,
-        locals: Vec<Local>,
-        code: Vec<Op>,
-        global_scope: bool,
-        global_lexical_names: Vec<String>,
-    ) -> Self {
-        Self::with_scope_global_lexical_names_and_strict(
-            constants,
-            locals,
-            code,
-            global_scope,
-            global_lexical_names,
-            false,
-        )
-    }
-
-    pub(super) fn with_scope_global_lexical_names_and_strict(
-        constants: Vec<Value>,
-        locals: Vec<Local>,
-        code: Vec<Op>,
-        global_scope: bool,
-        global_lexical_names: Vec<String>,
-        strict: bool,
-    ) -> Self {
-        Self::with_scope_global_lexical_names_and_strict_with_parameter_slots(
-            constants,
-            locals,
-            code,
-            global_scope,
-            global_lexical_names,
-            strict,
-            None,
-        )
-    }
-
-    fn with_scope_global_lexical_names_and_strict_with_parameter_slots(
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn with_scope_global_lexical_names_and_strict_with_parameter_slots(
         constants: Vec<Value>,
         locals: Vec<Local>,
         mut code: Vec<Op>,
@@ -884,6 +815,7 @@ impl Bytecode {
         global_lexical_names: Vec<String>,
         strict: bool,
         parameter_slots: Option<Vec<usize>>,
+        scope_plan: Option<(crate::binding::ScopePlanBuilder, bool)>,
     ) -> Self {
         // Only a function body arrives with explicit parameter slots; script
         // and eval bodies derive them, and their completion values are
@@ -935,7 +867,7 @@ impl Bytecode {
             this_slot,
             constant_return,
             parameter_slots,
-            frame_init_plan: Box::default(),
+            binding_plan: Box::default(),
             received_upvalue_slots,
             has_direct_local_upvalue_routes,
             direct_readonly_received_upvalue_slots: 0,
@@ -1042,7 +974,10 @@ impl Bytecode {
         } else {
             bytecode.readonly_received_upvalue_slots
         };
-        *bytecode.frame_init_plan = super::frame_init_plan::FrameInitPlan::compile(&bytecode);
+        *bytecode.binding_plan = super::binding_plan::BindingPlan::compile(&bytecode);
+        let (scopes, eval) = scope_plan.unwrap_or_default();
+        bytecode.install_scope_plan(scopes, eval);
+        super::binding_captures::link_children(&mut bytecode.code, &bytecode.locals, global_scope);
         bytecode
     }
 
@@ -1859,3 +1794,7 @@ fn collect_sloppy_global_assignment_names_from_ops(code: &[Op], names: &mut BTre
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+#[path = "ir/test_construction.rs"]
+mod test_construction;

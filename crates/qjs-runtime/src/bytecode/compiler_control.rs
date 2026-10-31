@@ -31,8 +31,9 @@ impl Compiler {
                 ..
             }
         ) {
-            return self
-                .with_lexical_scope(|compiler| compiler.compile_for_in_scoped(left, right, body));
+            return self.with_scope_kind(crate::binding::ScopeKind::Loop, |compiler| {
+                compiler.compile_for_in_scoped(left, right, body)
+            });
         }
         self.compile_for_in_scoped(left, right, body)
     }
@@ -50,8 +51,9 @@ impl Compiler {
                 ..
             }
         ) {
-            return self
-                .with_lexical_scope(|compiler| compiler.compile_for_of_scoped(left, right, body));
+            return self.with_scope_kind(crate::binding::ScopeKind::Loop, |compiler| {
+                compiler.compile_for_of_scoped(left, right, body)
+            });
         }
         self.compile_for_of_scoped(left, right, body)
     }
@@ -69,7 +71,7 @@ impl Compiler {
                 ..
             }
         ) {
-            return self.with_lexical_scope(|compiler| {
+            return self.with_scope_kind(crate::binding::ScopeKind::Loop, |compiler| {
                 compiler.compile_for_await_of_scoped(left, right, body)
             });
         }
@@ -666,10 +668,12 @@ impl Compiler {
         // The completion value of a `with` is its body's completion value.
         self.compile_expr(object)?;
         self.emit(Op::EnterWith);
+        self.scope_plan.enter(crate::binding::ScopeKind::With);
         self.with_depth += 1;
         self.reset_current_loop_completion_to_undefined();
         let result = self.compile_stmt(body);
         self.with_depth -= 1;
+        self.scope_plan.exit();
         result?;
         self.emit(Op::ExitWith);
         Ok(())

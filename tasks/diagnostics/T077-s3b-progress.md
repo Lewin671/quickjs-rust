@@ -41,3 +41,22 @@ combined agents/perf-counters CLI compile passes; exact variable-statement slice
 passes 178/178 with zero gaps. This filtered scan is not a complete-suite scan
 and does not create a burndown entry. No complete correctness or timing standing
 is claimed for this preliminary repair.
+
+## B1 binding-plan migration
+
+BindingPlan replaces FrameInitPlan. The existing compiler records typed scope
+IDs and declarations (parameter/body/block/catch/loop/class-name/with), including
+future TDZ declarations in active scope descriptors. Exposure sites retain only
+their active scope IDs. Immutable metadata contains declaration kind, write/init
+policy and eval deletability; B2/B3 connect these to live cells and leases.
+Capture routes are linked at body compilation for functions and class families,
+with received order preserved and parent locals/upvalues addressed positionally.
+Mapped-arguments duplicate selection is compiled once instead of scanning the
+parameter AST on every arguments-object creation. Raw IR constructors are now
+test-only; production bodies consume compiler scope metadata in one preparation.
+No runtime ABI switch, CallEnv deletion or repaired T074 semantics is claimed
+at B1. Six plan/descriptor tests pass; default/agents/perf-counters compilation and
+269 NG fixtures pass. The fast gate exposed an old raw-IR test whose explicit
+parameter slots were out of bounds of its empty locals; the test now supplies
+valid parameter slots while preserving its duplicate-position assertion.
+Final fast gate is in progress.

@@ -62,7 +62,7 @@ impl Compiler {
                 self.emit_load_undefined();
                 return Ok(());
             }
-            return self.with_lexical_scope(|compiler| {
+            return self.with_scope_kind(crate::binding::ScopeKind::Block, |compiler| {
                 compiler
                     .with_annex_b_blocked_function_names(std::slice::from_ref(name), |compiler| {
                         compiler.compile_function_decl(stmt)
@@ -187,7 +187,7 @@ impl Compiler {
                 ..
             })
         ) {
-            return self.with_lexical_scope(|compiler| {
+            return self.with_scope_kind(crate::binding::ScopeKind::Loop, |compiler| {
                 compiler.compile_for_scoped(init, test, update, body)
             });
         }

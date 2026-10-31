@@ -36,6 +36,7 @@ impl Compiler {
             return *slot;
         }
         let slot = self.locals.len();
+        self.scope_plan.declare(name, slot, true);
         self.locals.push(Local {
             name: storage_name.to_owned(),
             compiler_temporary: false,
@@ -67,6 +68,7 @@ impl Compiler {
             return *slot;
         }
         let slot = self.locals.len();
+        self.scope_plan.declare(name, slot, true);
         self.locals.push(Local {
             name: storage_name.to_owned(),
             compiler_temporary: false,
@@ -145,9 +147,19 @@ impl Compiler {
         &mut self,
         compile: impl FnOnce(&mut Self) -> Result<T, RuntimeError>,
     ) -> Result<T, RuntimeError> {
+        self.with_scope_kind(crate::binding::ScopeKind::Block, compile)
+    }
+
+    pub(super) fn with_scope_kind<T>(
+        &mut self,
+        kind: crate::binding::ScopeKind,
+        compile: impl FnOnce(&mut Self) -> Result<T, RuntimeError>,
+    ) -> Result<T, RuntimeError> {
+        self.scope_plan.enter(kind);
         self.lexical_scopes
             .push(crate::value::name_hash::NameMap::default());
         let result = compile(self);
+        self.scope_plan.exit();
         self.lexical_scopes
             .pop()
             .expect("lexical scope stack should be balanced");

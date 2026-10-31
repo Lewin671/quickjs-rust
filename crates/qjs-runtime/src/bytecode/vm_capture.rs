@@ -17,7 +17,7 @@ impl Vm<'_> {
     pub(super) fn captured_upvalues_for_function_with_override(
         &mut self,
         function_bytecode: &Bytecode,
-        lexical_captures: &[(String, usize)],
+        _lexical_captures: &[(String, usize)],
         binding_override: Option<(&str, &Upvalue)>,
     ) -> Vec<Upvalue> {
         function_bytecode
@@ -29,7 +29,8 @@ impl Vm<'_> {
             // including one opportunistically when a same-named outer/global
             // binding exists shifts every later lexical upvalue.
             .filter(|local| local.is_received_upvalue())
-            .filter_map(|local| {
+            .enumerate()
+            .filter_map(|(received, local)| {
                 if local.name == "this"
                     && let Some(cell) = self.env.derived_this_cell()
                 {
@@ -53,25 +54,20 @@ impl Vm<'_> {
                         return Some(upvalue);
                     }
                 }
-                let parent_slot = lexical_captures
-                    .iter()
-                    .find(|(name, _)| name == &local.name)
-                    .map(|(_, slot)| *slot)
-                    .or_else(|| {
-                        self.bytecode.local_slot(&local.name).filter(|slot| {
-                            !(self.bytecode.local_is_compiler_temporary(*slot)
-                                || self.bytecode.is_global_scope()
-                                    && self.bytecode.local_is_body_hoist_only(*slot))
-                        })
-                    });
-                if let Some(slot) = parent_slot {
-                    debug_assert!(!self.bytecode.local_is_compiler_temporary(slot));
-                    if self.bytecode.is_global_scope()
-                        && self.bytecode.local_is_body_hoist_only(slot)
-                    {
-                        return self.env.realm_binding_cell(&local.name);
+                match function_bytecode.binding_plan.received[received] {
+                    super::binding_captures::CaptureRoute::ParentLocal(slot) => {
+                        if self.bytecode.is_global_scope()
+                            && self.bytecode.local_is_body_hoist_only(slot.0)
+                        {
+                            return self.env.realm_binding_cell(&local.name);
+                        }
+                        return Some(self.ensure_upvalue_for_parent_slot(slot.0));
                     }
-                    return Some(self.ensure_upvalue_for_parent_slot(slot));
+                    super::binding_captures::CaptureRoute::ParentUpvalue(index) => {
+                        let slot = self.bytecode.received_upvalue_slots()[index];
+                        return Some(self.ensure_upvalue_for_parent_slot(slot));
+                    }
+                    super::binding_captures::CaptureRoute::Named => {}
                 }
                 if let Some(upvalue) = self.env.module_import_cell(&local.name) {
                     return Some(upvalue);
@@ -96,10 +92,8 @@ impl Vm<'_> {
             .get(slot)
             .is_some_and(|local| local.is_received_upvalue())
         {
-            let index = self.bytecode.locals[..slot]
-                .iter()
-                .filter(|local| local.is_received_upvalue())
-                .count();
+            let index = self.bytecode.binding_plan.received_indices[slot]
+                .expect("received slot has a positional route");
             if let Some(upvalue) = self.upvalues.get(index) {
                 return upvalue.clone();
             }

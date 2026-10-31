@@ -2,7 +2,7 @@
 //!
 //! - Compiler (`compiler*.rs`): AST to `Bytecode`. `upvalue_resolver.rs`
 //!   decides which locals a frame boxes into shared cells.
-//!   `frame_init_plan.rs` caches the immutable parameter, cell and context
+//!   `binding_plan.rs` caches the immutable parameter, cell and context
 //!   requirements consumed by frame construction.
 //! - IR (`ir*.rs`): the `Op` set and `Bytecode`, which also caches every
 //!   tier's compiled program in a `OnceCell`. `linked_code.rs` owns a body's
@@ -44,6 +44,9 @@
 
 use std::collections::HashMap;
 
+mod binding_captures;
+mod binding_metadata;
+mod binding_plan;
 mod call_context;
 mod compact_fn;
 mod compiler;
@@ -59,7 +62,6 @@ mod compiler_pattern;
 mod compiler_try;
 mod compiler_values;
 mod enumerate_keys_cache;
-mod frame_init_plan;
 mod frame_program;
 mod frame_stack;
 mod ir;

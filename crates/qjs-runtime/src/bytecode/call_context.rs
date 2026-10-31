@@ -10,12 +10,12 @@ use super::ir::{Bytecode, Op};
 impl Bytecode {
     /// Whether the code reads `new.target`.
     pub(crate) fn reads_new_target(&self) -> bool {
-        self.frame_init_plan.reads_new_target
+        self.binding_plan.reads_new_target
     }
 
     /// Any direct eval/with in this body or its statically nested code.
     pub(crate) fn has_dynamic_scope_tree(&self) -> bool {
-        self.frame_init_plan.dynamic_scope_tree
+        self.binding_plan.dynamic_scope_tree
     }
 
     /// Positional inputs cannot depend on dynamic names or outlive call entry.
@@ -29,15 +29,25 @@ impl Bytecode {
     /// Includes separately compiled keys and lexical arrows using this call's
     /// receiver. Receiver-owning children are separate call-context boundaries.
     pub(crate) fn needs_call_receiver(&self) -> bool {
-        self.frame_init_plan.needs_receiver
+        self.binding_plan.needs_receiver
     }
 
     pub(crate) fn has_direct_seedable_parameters(&self) -> bool {
-        self.frame_init_plan.parameters.direct_seedable
+        self.binding_plan.parameters.direct_seedable
     }
 
     pub(crate) fn parameters_shadow_arguments(&self) -> bool {
-        self.frame_init_plan.parameters.shadows_arguments
+        self.binding_plan.parameters.shadows_arguments
+    }
+
+    pub(crate) fn mapped_argument_parameter(&self, index: usize) -> Option<&str> {
+        self.binding_plan
+            .parameters
+            .mapped_slots
+            .get(index)
+            .copied()
+            .flatten()
+            .map(|slot| self.locals[slot].name.as_str())
     }
 
     pub(crate) fn positional_parameter_bindings(&self) -> impl Iterator<Item = &str> {
@@ -47,7 +57,7 @@ impl Bytecode {
     }
 
     pub(crate) fn rest_parameter_binding(&self) -> Option<&str> {
-        self.frame_init_plan
+        self.binding_plan
             .parameters
             .rest_slot
             .map(|slot| self.locals[slot].name.as_str())

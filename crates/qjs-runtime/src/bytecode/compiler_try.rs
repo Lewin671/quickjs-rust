@@ -276,7 +276,7 @@ impl Compiler {
         self.emit_load_undefined();
         self.emit(Op::StoreLocal(result_slot));
         if let Some(param) = &handler.param {
-            let slots = self.with_lexical_scope(|compiler| {
+            let slots = self.with_scope_kind(crate::binding::ScopeKind::Catch, |compiler| {
                 let slots = compiler.compile_catch_param(param)?;
                 let blocked = catch_param_annex_b_blocked_names(Some(param));
                 compiler.with_annex_b_blocked_function_names(&blocked, |compiler| {

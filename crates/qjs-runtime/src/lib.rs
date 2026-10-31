@@ -10,6 +10,7 @@ mod async_function;
 mod async_generator;
 mod atomics;
 mod bigint;
+mod binding;
 mod boolean;
 mod builtins;
 mod bytecode;

@@ -42,6 +42,7 @@ pub(super) struct Compiler {
     pub(super) locals: Vec<Local>,
     pub(super) local_slots: NameMap<String, usize>,
     pub(super) lexical_scopes: Vec<NameMap<String, usize>>,
+    pub(super) scope_plan: crate::binding::ScopePlanBuilder,
     pub(super) code: Vec<Op>,
     loop_stack: Vec<LoopContext>,
     pending_labels: Vec<String>,
@@ -142,6 +143,7 @@ impl Default for Compiler {
             locals: Vec::new(),
             local_slots: NameMap::default(),
             lexical_scopes: vec![NameMap::default()],
+            scope_plan: crate::binding::ScopePlanBuilder::default(),
             code: Vec::new(),
             loop_stack: Vec::new(),
             pending_labels: Vec::new(),
@@ -216,14 +218,8 @@ pub(super) fn compile_module_function_hoists(script: &Script) -> Result<Bytecode
         compiler.compile_hoisted_function_decls(&script.body)
     })?;
     compiler.code.push(Op::Return);
-    Ok(Bytecode::with_scope_global_lexical_names_and_strict(
-        std::mem::take(&mut compiler.constants),
-        std::mem::take(&mut compiler.locals),
-        std::mem::take(&mut compiler.code),
-        false,
-        blocked,
-        compiler.strict,
-    ))
+    compiler.scope_plan.scopes[0].kind = crate::binding::ScopeKind::Module;
+    Ok(Bytecode::from_compiler(compiler, None, blocked))
 }
 
 pub(super) fn compile_function_body(
@@ -298,6 +294,13 @@ impl Compiler {
         script: &Script,
         instantiate_hoisted_functions: bool,
     ) -> Result<Bytecode, RuntimeError> {
+        self.scope_plan.scopes[0].kind = if self.direct_eval_source {
+            crate::binding::ScopeKind::Eval
+        } else if self.global_scope {
+            crate::binding::ScopeKind::Script
+        } else {
+            crate::binding::ScopeKind::Module
+        };
         self.source = script.source.clone();
         self.source_is_wtf16 = script.source_is_wtf16;
         self.strict = self.strict || is_strict_function_body(&script.body);
@@ -313,13 +316,10 @@ impl Compiler {
             Ok(())
         })?;
         self.code.push(Op::Return);
-        Ok(Bytecode::with_scope_global_lexical_names_and_strict(
-            std::mem::take(&mut self.constants),
-            std::mem::take(&mut self.locals),
-            std::mem::take(&mut self.code),
-            self.global_scope,
+        Ok(Bytecode::from_compiler(
+            std::mem::take(self),
+            None,
             global_lexical_names,
-            self.strict,
         ))
     }
 
@@ -333,6 +333,7 @@ impl Compiler {
         body: &[Stmt],
     ) -> Result<Bytecode, RuntimeError> {
         self.global_scope = false;
+        self.scope_plan.scopes[0].kind = crate::binding::ScopeKind::Parameters;
         self.tracks_completion_values = false;
         self.strict = self.strict || is_strict_function_body(body);
         let mut direct_parameter_slots = Vec::with_capacity(params.positional.len());
@@ -352,6 +353,8 @@ impl Compiler {
         // Mark the end of parameter instantiation: generators run the prologue
         // synchronously at the call and suspend here; others skip past it.
         self.emit(Op::FunctionPrologueEnd);
+        self.scope_plan
+            .enter(crate::binding::ScopeKind::FunctionBody);
         let param_blocked = function_param_names(params);
         self.with_annex_b_blocked_function_names(&param_blocked, |compiler| {
             compiler.collect_hoisted_locals(body, false);
@@ -378,12 +381,10 @@ impl Compiler {
         })?;
         self.emit_load_undefined();
         self.code.push(Op::Return);
-        Ok(Bytecode::new_function(
-            self.constants,
-            self.locals,
-            self.code,
-            direct_parameter_slots,
-            params,
+        Ok(Bytecode::from_compiler(
+            self,
+            Some((direct_parameter_slots, params)),
+            Vec::new(),
         ))
     }
 
@@ -543,6 +544,9 @@ impl Compiler {
             return *slot;
         }
         let slot = self.locals.len();
+        if !compiler_temporary && name != "this" && !name.starts_with('\0') {
+            self.scope_plan.declare(name, slot, false);
+        }
         self.locals.push(Local {
             name: name.to_owned(),
             compiler_temporary,
@@ -629,6 +633,15 @@ impl Compiler {
     }
 
     pub(super) fn emit(&mut self, op: Op) -> usize {
+        if matches!(
+            op,
+            Op::NewFunction { .. }
+                | Op::NewClass { .. }
+                | Op::CallDirectEval { .. }
+                | Op::CallDirectEvalSpread { .. }
+        ) {
+            self.scope_plan.exposure_site(self.code.len());
+        }
         self.code.push(op);
         self.code.len() - 1
     }
@@ -1030,7 +1043,7 @@ impl Compiler {
                 // Class declarations create a lexical (`let`-like) binding.
                 let slot = self.declare_lexical_slot(name, true);
                 self.emit(Op::ClearLocal(slot));
-                self.with_lexical_scope(|compiler| {
+                self.with_scope_kind(crate::binding::ScopeKind::ClassName, |compiler| {
                     let storage_name =
                         format!("\0class_decl_inner:{}:{}", name, compiler.locals.len());
                     let inner_slot =
