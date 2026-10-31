@@ -242,6 +242,7 @@ fn build_dynamic_function(
         is_field_initializer: false,
         home_object: None,
         super_constructor: None,
+        lexical_scope: None,
         deopt_bindings: None,
         with_stack: Vec::new(),
         upvalues: Vec::new(),

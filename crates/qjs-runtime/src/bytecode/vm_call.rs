@@ -39,16 +39,6 @@ pub(super) fn guarded_math_unary_hits() -> usize {
     GUARDED_MATH_UNARY_HITS.with(Cell::get)
 }
 
-fn direct_eval_selects_name(eval_bytecode: &super::Bytecode, name: &str) -> bool {
-    // `this` has a dedicated VM path in some bytecode shapes, so keep it even
-    // if it is not represented as an ordinary LoadGlobal name.
-    name == "this"
-        || eval_bytecode
-            .global_names()
-            .iter()
-            .any(|candidate| candidate == name)
-}
-
 impl Vm<'_> {
     pub(super) fn require_callable(&self) -> Result<(), RuntimeError> {
         let callee = self.stack.last().ok_or_else(stack_underflow)?;
@@ -155,130 +145,6 @@ impl Vm<'_> {
         self.call_stack_arguments(argc, false, true, is_strict)
     }
 
-    /// Rebuilds only the caller bindings a proven reusable direct-eval
-    /// blueprint can name.  A cached declaration-free eval has already paid
-    /// its parse/compile cost, but the ordinary direct-eval call path still
-    /// exports every live local and dynamic cell before executing a source
-    /// such as `Y()`.  The immutable bytecode's global-name list is the
-    /// complete set of dynamic lookups for this restricted shape, so retaining
-    /// that whole caller view is unnecessary.
-    ///
-    /// Cache misses and anything that can extend the dynamic scope retain
-    /// `frame_call_env`: declarations need eval-instantiation conflict state,
-    /// while nested eval and `with` can discover names after this outer
-    /// bytecode was compiled.  Parameter initializers are kept conservative
-    /// for their distinct eval environment as well.
-    ///
-    /// The flag is true when the eval writes and deletes no binding: nothing
-    /// in the returned environment then differs from the caller's frame after
-    /// it runs, and the write-back can be skipped.
-    fn cached_direct_eval_call_env(
-        &self,
-        source: &crate::JsString,
-        direct_eval_strict: bool,
-    ) -> Option<(CallEnv, bool)> {
-        if self.bytecode.contains_with()
-            || self.in_parameter_prologue()
-            || !self.with_stack().is_empty()
-        {
-            return None;
-        }
-
-        // Match `native_global_eval`'s cache key exactly without first
-        // materializing the current VM's slot-indexed locals.  The base
-        // environment preserves method/derived-constructor markers; refresh
-        // private names from the current home object just as `frame_call_env`
-        // does before direct eval runs.
-        let mut parse_env = self.env.fork_current_frame_values();
-        parse_env.insert(
-            crate::DIRECT_EVAL_STRICT_BINDING.to_owned(),
-            Value::Boolean(direct_eval_strict),
-        );
-        parse_env.set_private_environment(self.current_private_environment());
-        let parse_context = crate::global::direct_eval_parse_context(&parse_env);
-        let bytecode = self
-            .env
-            .cached_direct_eval_bytecode(source, &parse_context)?;
-        if !super::direct_eval_bytecode_is_cacheable(&bytecode)
-            || bytecode.contains_direct_eval()
-            || bytecode.contains_with()
-        {
-            return None;
-        }
-
-        Some((
-            self.selected_direct_eval_call_env(&bytecode),
-            !bytecode.writes_bindings(),
-        ))
-    }
-
-    /// Builds the ordinary direct-eval base context, then overlays only
-    /// bytecode-selected outer names in the same lexical order as
-    /// `frame_call_env`.  The base keeps call metadata such as `new.target`,
-    /// arguments, home-object state, and module routing; it deliberately
-    /// leaves the caller's full dynamic map behind.
-    fn selected_direct_eval_call_env(&self, eval_bytecode: &super::Bytecode) -> CallEnv {
-        let mut env = self.attach_host(self.env.fork_current_frame_values());
-        for index in 0..self.locals.len() {
-            if self.bytecode.local_is_compiler_temporary(index)
-                || self.bytecode.local_is_sloppy_global_fallback(index)
-                || (self.bytecode.is_global_scope()
-                    && self.bytecode.local_is_body_hoist_only(index)
-                    && !self.bytecode.local_is_compiler_temporary(index))
-            {
-                continue;
-            }
-            let name = &self.bytecode.locals[index].name;
-            if name == "this" && env.derived_this_cell().is_some() {
-                continue;
-            }
-            if !direct_eval_selects_name(eval_bytecode, name) {
-                continue;
-            }
-            if let Some(value) = self.local_slot_value(index) {
-                env.insert(name.clone(), value);
-            }
-        }
-        for (index, upvalue) in self.local_upvalues.iter().enumerate() {
-            let Some(upvalue) = upvalue else { continue };
-            if self.bytecode.local_is_compiler_temporary(index)
-                || self.bytecode.local_is_sloppy_global_fallback(index)
-                || (self.bytecode.is_global_scope()
-                    && self.bytecode.local_is_body_hoist_only(index)
-                    && !self.bytecode.local_is_compiler_temporary(index))
-            {
-                continue;
-            }
-            let name = &self.bytecode.locals[index].name;
-            if name == "this" && env.derived_this_cell().is_some() {
-                continue;
-            }
-            if direct_eval_selects_name(eval_bytecode, name)
-                && (self.locals.get(index).is_some_and(Option::is_some)
-                    || self.bytecode.locals[index].is_received_upvalue())
-            {
-                env.insert_frame_cell(name.clone(), upvalue.clone());
-            }
-        }
-
-        // A previous, declaration-bearing eval can introduce a dynamic `var`
-        // that this cached source later reads.  Retain that one live cell when
-        // selected, without carrying the entire caller deopt map into every
-        // cache hit.  A frame binding (including a local that shadows it)
-        // remains authoritative.
-        if let Some(bindings) = self.env.deopt_bindings() {
-            for name in eval_bytecode.global_names() {
-                if !env.has_frame_binding(name)
-                    && let Some(upvalue) = bindings.cell(name)
-                {
-                    env.insert_frame_cell(name.clone(), upvalue);
-                }
-            }
-        }
-        env.set_private_environment(self.current_private_environment());
-        env
-    }
-
     fn call_callee(
         &mut self,
         callee: Value,
@@ -377,25 +243,11 @@ impl Vm<'_> {
         // eval call needs the active frame's dynamic-name view.
         let frame_independent_native = !effective_direct_eval
             && matches!(&callee, Value::Function(function) if function.native.is_some());
-        let mut read_only_eval = false;
         let mut env = if effective_direct_eval {
-            let mut env = match arguments.first() {
-                Some(Value::String(source)) => self
-                    .cached_direct_eval_call_env(source, direct_eval_strict)
-                    .map(|(env, read_only)| {
-                        read_only_eval = read_only;
-                        VmCallEnv {
-                            env,
-                            origin: VmCallEnvOrigin::DirectEval,
-                        }
-                    })
-                    .unwrap_or_else(|| self.call_env(&callee)),
-                _ => self.call_env(&callee),
-            };
-            // Whatever environment a direct eval ends up with, it is about to
-            // carry the markers, so its provenance is DirectEval.
-            env.origin = VmCallEnvOrigin::DirectEval;
-            env
+            VmCallEnv {
+                env: self.current_env(),
+                origin: VmCallEnvOrigin::DirectEval,
+            }
         } else if frame_independent_native {
             VmCallEnv {
                 env: self.realm_env(),
@@ -440,15 +292,7 @@ impl Vm<'_> {
         env.env
             .remove(crate::DIRECT_EVAL_IN_PARAMETER_SCOPE_BINDING);
         env.env.set_direct_eval_with_stack(Vec::new());
-        if read_only_eval {
-            // The environment holds the caller's own values and cells, none
-            // written: writing it back would store each value where it came
-            // from. A realm write the eval made (through a function it
-            // called) still reaches the realm-backed slots.
-            self.refresh_realm_backed_locals_from_realm();
-        } else {
-            self.apply_call_env(env);
-        }
+        self.apply_call_env(env);
         if let Some(snapshot) = dynamic_realm_snapshot {
             self.restore_marked_dynamic_realm(snapshot);
         }

@@ -91,7 +91,6 @@ pub(super) fn eval_function_bytecode<'a>(
         env,
         locals,
         local_upvalues,
-        cold,
         ..
     } = vm.current;
     FunctionBytecodeResult {
@@ -100,7 +99,6 @@ pub(super) fn eval_function_bytecode<'a>(
         env,
         locals,
         local_upvalues,
-        sloppy_global_names: cold.map_or_else(Vec::new, |cold| cold.sloppy_global_names),
     }
 }
 
@@ -173,6 +171,7 @@ pub(super) fn eval_direct_call_bytecode(
 }
 
 pub(super) struct FrameState<'a> {
+    pub(super) scope_instances: RefCell<Option<Box<super::vm_scopes::ScopeInstances>>>,
     pub(super) bytecode: FrameBytecode<'a>,
     /// Whether this frame may run the lowered stream that also virtualizes
     /// function literals. It is a selection input rather than a selection:
@@ -250,6 +249,7 @@ pub(super) struct FrameState<'a> {
 /// until the first such operation materializes it.
 #[derive(Default)]
 pub(super) struct ColdFrame {
+    pub(super) resolved_bindings: Vec<Option<crate::binding::ResolvedReference>>,
     /// Frame-local override of the shared numeric mutation loop plans,
     /// materialized only when a deoptimization suppresses or rewrites one for
     /// this invocation.

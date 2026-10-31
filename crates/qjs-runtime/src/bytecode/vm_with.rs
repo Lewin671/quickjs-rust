@@ -221,6 +221,23 @@ impl Vm<'_> {
         name: &str,
         object_slot: usize,
     ) -> Result<(), RuntimeError> {
+        if let Some(reference) = self.resolve_scope_binding(name, self.bytecode.is_strict())? {
+            let object = match &reference {
+                crate::binding::ResolvedReference::Property {
+                    base,
+                    with_environment: true,
+                    ..
+                } => base.clone(),
+                _ => Value::Undefined,
+            };
+            self.store_local(object_slot, object)?;
+            let references = &mut self.cold_mut().resolved_bindings;
+            if references.len() <= object_slot {
+                references.resize_with(object_slot + 1, || None);
+            }
+            references[object_slot] = Some(reference);
+            return Ok(());
+        }
         let value = self.with_binding_object(name)?.unwrap_or(Value::Undefined);
         self.store_local(object_slot, value)
     }
@@ -232,6 +249,15 @@ impl Vm<'_> {
         object_slot: usize,
         is_strict: bool,
     ) -> Result<Value, RuntimeError> {
+        if let Some(reference) = self
+            .cold
+            .as_ref()
+            .and_then(|cold| cold.resolved_bindings.get(object_slot))
+            .and_then(Option::as_ref)
+            .cloned()
+        {
+            return self.read_scope_binding(&reference);
+        }
         match self.load_local(object_slot)? {
             Value::Undefined => match slot {
                 Some(slot) => self.load_local(slot),
@@ -266,6 +292,14 @@ impl Vm<'_> {
         is_strict: bool,
         value: Value,
     ) -> Result<(), RuntimeError> {
+        if let Some(reference) = self
+            .cold
+            .as_mut()
+            .and_then(|cold| cold.resolved_bindings.get_mut(object_slot))
+            .and_then(Option::take)
+        {
+            return self.assign_scope_binding(&reference, value, is_strict);
+        }
         match self.load_local(object_slot)? {
             Value::Undefined => match slot {
                 Some(slot) => self.assign_local(slot, value),
@@ -361,10 +395,10 @@ impl Vm<'_> {
                 if self.locals[s].is_some() {
                     false
                 } else {
-                    self.delete_ident(name)
+                    self.delete_ident(name)?
                 }
             } else {
-                self.delete_ident(name)
+                self.delete_ident(name)?
             };
             self.stack.push(Value::Boolean(result));
         }

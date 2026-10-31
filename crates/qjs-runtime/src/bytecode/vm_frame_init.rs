@@ -95,6 +95,9 @@ impl<'a> Vm<'a> {
     ) -> Self {
         crate::diagnostics::count!(nested_vm_constructions);
         let bytecode: &Bytecode = &handle;
+        if bytecode.global_scope {
+            env.select_script_bindings();
+        }
         // `QJS_CF_TRACE=1` names the body behind every general-path frame, so
         // a histogram of these lines ranks the callees no compact tier runs.
         #[cfg(feature = "perf-counters")]
@@ -108,8 +111,12 @@ impl<'a> Vm<'a> {
                 eprintln!("CFVMCODE {:?}", bytecode.code);
             }
         }
+        if env.scope_cursor().is_some() {
+            env.clear_deopt_bindings();
+        }
         if (bytecode.contains_direct_eval() || bytecode.contains_with())
             && env.deopt_bindings().is_none()
+            && env.scope_cursor().is_none()
         {
             env.set_deopt_bindings(DynamicBindings::new());
         }
@@ -176,6 +183,18 @@ impl<'a> Vm<'a> {
                     None,
                 )
             };
+        if bytecode.has_dynamic_scope_tree() {
+            for meta in bytecode
+                .binding_plan
+                .bindings
+                .iter()
+                .filter(|meta| meta.kind == crate::binding::BindingKind::Arguments)
+            {
+                if let Some(cell) = local_upvalues.get(meta.slot.0).and_then(Option::as_ref) {
+                    env.insert_frame_cell("arguments".to_owned(), cell.clone());
+                }
+            }
+        }
         let authoritative_slots =
             Self::initial_authoritative_slots(bytecode, &local_upvalues, &env)
                 & !direct_readonly_upvalue_slots;
@@ -184,7 +203,9 @@ impl<'a> Vm<'a> {
         // Ordinary function creation captures these runtime-only contexts.
         // The data-only variant keeps object/array SRA available while leaving
         // function literals materialized in a frame that needs those captures.
-        let virtual_function_context_safe = env.deopt_bindings().is_none()
+        let virtual_function_context_safe = env.scope_cursor().is_none()
+            && !bytecode.has_dynamic_scope_tree()
+            && env.deopt_bindings().is_none()
             && env.immutable_function_name().is_none()
             && with_stack.is_empty();
         // Keep cold virtual candidates allocation-free. Their first
@@ -201,6 +222,7 @@ impl<'a> Vm<'a> {
             });
         Self {
             current: FrameState {
+                scope_instances: Default::default(),
                 bytecode: handle,
                 ip: 0,
                 declined_typed_loop_programs: 0,
@@ -346,6 +368,7 @@ impl<'a> Vm<'a> {
                 env.mark_direct_eval_var_conflict(local.name.clone());
             }
         }
+        env.set_scope_cursor(self.prepare_scope_cursor());
         env.set_private_environment(self.current_private_environment());
         if let Some(bindings) = deopt_bindings {
             env.set_deopt_bindings(bindings);

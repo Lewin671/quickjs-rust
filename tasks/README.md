@@ -9,7 +9,7 @@ update the resume block in the commit that lands it. When a task closes, move it
 | --- | --- | --- |
 | [T077](T077-core-rebuild.md) core rebuild | active | Authorized rebuild; S3a and S1+S2 integrated (cumulative development 0.893, held-out 0.929 vs baseline); S2 follow-up and S3b in progress. |
 | [T073](T073-local-read-bimodal.md) local-read bimodality | active | Diagnosis complete: candidate text-layout CPU tails; T017 adopts case-health containment only. |
-| [T074](T074-direct-eval-scope-model.md) direct eval scope model | design needed | Architecture review before code; tracks eval visibility, declarations, mutability, context and suspension constraints. |
+| [T074](T074-direct-eval-scope-model.md) direct eval scope model | implementation (owner branch) | Approved model is being implemented under T077 S3b; context/suspension and verification cuts remain. |
 | [T057](T057-string-code-units.md) string code units | active | Stage 1 and UTF-16 correctness extraction integrated; stage 2 abandoned (0 attempts); linear-search follow-up awaits screening. |
 | [T018](T018-broad-performance.md) broad performance | active | The performance campaign contract and its targets against QuickJS-NG. Start performance work here, then follow [the workflow](../docs/performance-workflow.md). |
 | [T040](T040-imac-general-performance.md) x86_64 general optimization | active | Fresh current-main comparison and exact-binary profiles, followed by independent general runtime units. |

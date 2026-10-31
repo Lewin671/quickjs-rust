@@ -50,6 +50,9 @@ pub(super) struct Compiler {
     pub(super) next_template_site: usize,
     pub(super) strict: bool,
     pub(super) global_scope: bool,
+    pub(super) arguments_owner: bool,
+    body_var_split: bool,
+    parameter_copies: Vec<(usize, usize)>,
     /// Direct-eval source can introduce/delete function-environment `var` and
     /// Annex B bindings dynamically. These declarations use the explicit
     /// name-to-cell deopt map; ordinary lexical captures remain slot-indexed.
@@ -151,6 +154,9 @@ impl Default for Compiler {
             next_template_site: 0,
             strict: false,
             global_scope: true,
+            arguments_owner: true,
+            body_var_split: false,
+            parameter_copies: Vec::new(),
             direct_eval_source: false,
             global_hoisted: NameSet::default(),
             annex_b_blocked_function_names: Vec::new(),
@@ -347,6 +353,11 @@ impl Compiler {
         }
         let non_simple_params = !params.is_simple();
         if non_simple_params {
+            for name in params.names() {
+                self.parameter_slot(&name);
+            }
+        }
+        if non_simple_params {
             self.snapshot_non_simple_parameter_arguments(params)?;
         }
         self.compile_parameter_bindings(params, non_simple_params)?;
@@ -354,11 +365,16 @@ impl Compiler {
         // synchronously at the call and suspend here; others skip past it.
         self.emit(Op::FunctionPrologueEnd);
         self.scope_plan.enter_function_body(non_simple_params);
+        self.body_var_split = non_simple_params;
         let param_blocked = function_param_names(params);
         self.with_annex_b_blocked_function_names(&param_blocked, |compiler| {
             compiler.collect_hoisted_locals(body, false);
             Ok(())
         })?;
+        for (parameter, body) in std::mem::take(&mut self.parameter_copies) {
+            self.emit(Op::LoadLocal(parameter));
+            self.emit(Op::StoreLocal(body));
+        }
         let blocked = function_body_annex_b_blocked_names(params, body);
         self.with_annex_b_blocked_function_names(&blocked, |compiler| {
             compiler.predeclare_current_scope_lexicals(body);
@@ -378,6 +394,28 @@ impl Compiler {
             }
             Ok(())
         })?;
+        let argument_demand = super::binding_plan::dynamic_code(&self.code) || self.code.iter().any(|op| {
+            matches!(op, Op::LoadGlobal(name) | Op::TypeofGlobal(name) | Op::StoreGlobalStrict(name) if name == "arguments")
+                || matches!(op, Op::StoreGlobalSloppy { name, .. } | Op::StoreLocalOrGlobalSloppy { name, .. } if name == "arguments")
+        });
+        if self.arguments_owner
+            && !params.names().iter().any(|name| name == "arguments")
+            && self.scope_plan.implicit_arguments.is_none()
+            && argument_demand
+        {
+            let own_var = self
+                .local_slots
+                .get("arguments")
+                .copied()
+                .filter(|&slot| self.locals[slot].hoisted && !self.body_var_split);
+            let slot = own_var.unwrap_or_else(|| self.local_slot("\0implicit_arguments", false));
+            self.locals[slot].from_env = false;
+            let variable = self.scope_plan.variable;
+            self.scope_plan.variable = crate::binding::ScopeId(0);
+            self.scope_plan.declare("arguments", slot, false);
+            self.scope_plan.variable = variable;
+            self.scope_plan.implicit_arguments = Some(crate::binding::LocalSlot(slot));
+        }
         self.emit_load_undefined();
         self.code.push(Op::Return);
         Ok(Bytecode::from_compiler(
@@ -533,6 +571,19 @@ impl Compiler {
         if hoisted && self.global_scope && !compiler_temporary {
             self.global_hoisted.insert(name.to_owned());
         }
+        let parameter_copy = self.local_slots.get(name).copied().filter(|&slot| {
+            hoisted
+                && !compiler_temporary
+                && self.body_var_split
+                && (self.locals[slot].parameter
+                    || self
+                        .scope_plan
+                        .implicit_arguments
+                        .is_some_and(|implicit| implicit.0 == slot))
+        });
+        if parameter_copy.is_some() {
+            self.local_slots.remove(name);
+        }
         if let Some(slot) = self.local_slots.get(name) {
             if hoisted {
                 self.locals[*slot].hoisted = true;
@@ -558,6 +609,9 @@ impl Compiler {
             sloppy_global_fallback: false,
         });
         self.local_slots.insert(name.to_owned(), slot);
+        if let Some(parameter) = parameter_copy {
+            self.parameter_copies.push((parameter, slot));
+        }
         slot
     }
 
@@ -640,6 +694,7 @@ impl Compiler {
     }
 
     pub(super) fn emit(&mut self, op: Op) -> usize {
+        self.scope_plan.record_pc(self.code.len());
         if matches!(
             op,
             Op::NewFunction { .. }

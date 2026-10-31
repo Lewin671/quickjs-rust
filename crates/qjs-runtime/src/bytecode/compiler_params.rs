@@ -21,6 +21,7 @@ impl Compiler {
         &mut self,
         params: &FunctionParams,
     ) -> Result<(), RuntimeError> {
+        let mut cleared = Vec::new();
         for (index, element) in params.positional.iter().enumerate() {
             let BindingPattern::Identifier { name, .. } = &element.binding else {
                 continue;
@@ -32,6 +33,7 @@ impl Compiler {
             self.emit(Op::LoadLocalOrUndefined(slot));
             self.emit(Op::StoreLocal(raw_slot));
             self.emit(Op::ClearLocal(slot));
+            cleared.push(slot);
         }
         if let Some(rest) = &params.rest
             && let BindingPattern::Identifier { name, .. } = rest.as_ref()
@@ -43,6 +45,16 @@ impl Compiler {
             self.emit(Op::LoadLocalOrUndefined(slot));
             self.emit(Op::StoreLocal(raw_slot));
             self.emit(Op::ClearLocal(slot));
+            cleared.push(slot);
+        }
+        for name in params.names() {
+            let slot = self
+                .resolve_local_slot(&name)
+                .expect("parameter binding declared");
+            if !cleared.contains(&slot) {
+                self.emit(Op::ClearLocal(slot));
+                cleared.push(slot);
+            }
         }
         Ok(())
     }

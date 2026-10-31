@@ -1253,8 +1253,9 @@ fn function_env<'a>(
     env: &CallEnv,
     is_construct: bool,
 ) -> FunctionCallEnv<'a> {
-    let use_direct_call_slots = is_direct_leaf_function(callee)
-        || (is_construct && can_seed_base_class_constructor_slots(function, bytecode));
+    let use_direct_call_slots = (is_direct_leaf_function(callee)
+        || (is_construct && can_seed_base_class_constructor_slots(function, bytecode)))
+        && function.lexical_scope().is_none();
     let use_positional_arguments =
         !use_direct_call_slots && can_seed_positional_call(function, bytecode, env);
     let lexical_this = received_upvalue_value(function, bytecode, "this");
@@ -1278,6 +1279,7 @@ fn function_env<'a>(
             function.params.positional.len().saturating_add(4)
         })
     };
+    frame_env.set_scope_cursor(function.lexical_scope());
     // Install the synthetic realm snapshot before creating any real function
     // bindings. Parameters, `this`, `arguments`, and internal bindings then
     // shadow global names normally, while their intrinsic lookup already sees
@@ -1508,6 +1510,9 @@ fn can_seed_positional_call(function: &Function, bytecode: &Bytecode, env: &Call
 }
 
 fn can_seed_direct_leaf_call(function: &Function, bytecode: &Bytecode) -> bool {
+    if function.lexical_scope().is_some() {
+        return false;
+    }
     // This predicate feeds the ordinary direct-call dispatcher, which must
     // retain the TypeError for `ClassConstructor()`. Base class constructors
     // can separately reuse these slots only after `function_env` has proved
@@ -1546,6 +1551,7 @@ fn can_seed_slot_backed_call(function: &Function, bytecode: &Bytecode) -> bool {
         && function.with_stack.is_empty()
         && bytecode.has_direct_seedable_parameters()
         && !bytecode.needs_arguments_object()
+        && !bytecode.has_dynamic_scope_tree()
         && !bytecode.contains_direct_eval()
         && !bytecode.contains_with()
         && !bytecode.contains_super_operation()

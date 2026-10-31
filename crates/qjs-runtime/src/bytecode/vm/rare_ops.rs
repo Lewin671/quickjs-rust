@@ -52,6 +52,16 @@ impl Vm<'_> {
             }
             Op::TypeofGlobal(name) => {
                 let result: Result<Value, RuntimeError> = (|| {
+                    if let Some(reference) = self.resolve_scope_binding(name, false)? {
+                        return Ok(Value::String(typeof_value(
+                            self.read_scope_binding(&reference)?,
+                        )));
+                    }
+                    if self.env.has_global_binding_root() {
+                        return Ok(Value::String(typeof_value(
+                            self.read_global_binding(name)?.unwrap_or(Value::Undefined),
+                        )));
+                    }
                     if self.direct_eval_with_stack {
                         return self.typeof_ident_with(name, None);
                     }
@@ -141,7 +151,9 @@ impl Vm<'_> {
             }
             Op::DeleteIdent(name) => {
                 let result = self.delete_ident(name);
-                self.stack.push(Value::Boolean(result));
+                if let Some(deleted) = self.handle_runtime_result(result)? {
+                    self.stack.push(Value::Boolean(deleted));
+                }
             }
             Op::RequireCallable => {
                 let result = self.require_callable();
@@ -235,6 +247,7 @@ impl Vm<'_> {
                         ),
                     home_object,
                     super_constructor,
+                    lexical_scope: self.closure_scope_cursor(bytecode),
                     deopt_bindings,
                     with_stack: self.with_stack().to_vec(),
                     upvalues,

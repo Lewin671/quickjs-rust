@@ -583,6 +583,12 @@ impl Vm<'_> {
         name: &str,
         value: Value,
     ) -> Result<(), RuntimeError> {
+        if let Some(reference) = self.resolve_scope_binding(name, true)? {
+            return self.assign_scope_binding(&reference, value, true);
+        }
+        if self.env.has_global_binding_root() {
+            return self.store_global_binding(name, value, true);
+        }
         self.check_dynamic_assignment(name, true)?;
         if self.env.has_module_import(name) {
             return Err(RuntimeError {
@@ -725,6 +731,12 @@ impl Vm<'_> {
         name: &str,
         value: Value,
     ) -> Result<(), RuntimeError> {
+        if let Some(reference) = self.resolve_scope_binding(name, false)? {
+            return self.assign_scope_binding(&reference, value, false);
+        }
+        if self.env.has_global_binding_root() {
+            return self.store_global_binding(name, value, false);
+        }
         self.check_dynamic_assignment(name, false)?;
         if self.env.has_module_import(name) {
             return Err(RuntimeError {

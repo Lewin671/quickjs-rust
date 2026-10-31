@@ -29,7 +29,8 @@ never freed.
 ## What a suspended frame owns
 
 `GeneratorSnapshot` owns the `Rc<Bytecode>`, `ip`, operand stack, `locals`,
-`local_upvalues`, received `upvalues`, `CallEnv`, `with_stack`, the immutable
+`local_upvalues`, received `upvalues`, `CallEnv`, retained scope instances/holders,
+selected binding references, `with_stack`, the immutable
 function name, the try stack, disposable scopes, the pending
 throw/return/jump of an in-flight `finally`, and the suspension kind. Resume
 builds a fresh `Vm` over the held bytecode, moves these back, and recomputes

@@ -17,12 +17,14 @@ fn compile_with_captured_lexicals(
     captured_lexicals: &[(&str, &str, bool)],
     source: &std::rc::Rc<str>,
     source_is_wtf16: bool,
+    arguments_owner: bool,
 ) -> Result<Bytecode, RuntimeError> {
     let mut compiler = Compiler::function_compiler_with_base_with_depth(
         is_strict,
         is_generator && is_async,
         with_base_depth,
     );
+    compiler.arguments_owner = arguments_owner;
     compiler.source = source.clone();
     compiler.source_is_wtf16 = source_is_wtf16;
     for (name, storage_name, mutable) in captured_lexicals {
@@ -57,6 +59,7 @@ impl Compiler {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn compile_nested_function_body(
         &self,
         params: &FunctionParams,
@@ -65,6 +68,7 @@ impl Compiler {
         is_generator: bool,
         is_async: bool,
         local_names: &[String],
+        arguments_owner: bool,
     ) -> Result<(Bytecode, Vec<(String, usize)>), RuntimeError> {
         let mut bytecode = {
             // Inner functions are compiled by a fresh compiler; carry the source
@@ -79,6 +83,7 @@ impl Compiler {
             } else {
                 Compiler::function_compiler(is_strict, is_generator && is_async)
             };
+            compiler.arguments_owner = arguments_owner;
             compiler.source = self.source.clone();
             compiler.source_is_wtf16 = self.source_is_wtf16;
             compiler.compile_function(params, body)?
@@ -105,6 +110,7 @@ impl Compiler {
                 &captured_lexicals,
                 &self.source,
                 self.source_is_wtf16,
+                arguments_owner,
             )?;
             lexical_captures = self.active_lexical_captures(&bytecode, local_names);
         }

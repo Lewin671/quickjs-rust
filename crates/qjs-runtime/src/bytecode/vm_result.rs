@@ -11,7 +11,6 @@ pub(crate) struct FunctionBytecodeResult<'a> {
     pub(super) env: CallEnv,
     pub(super) locals: Vec<Option<Value>>,
     pub(super) local_upvalues: Vec<Option<BindingCell>>,
-    pub(crate) sloppy_global_names: Vec<String>,
 }
 
 /// How the bytecode loop exited: an ordinary/abrupt return value, or a

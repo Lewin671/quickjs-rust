@@ -29,6 +29,7 @@ impl Vm<'_> {
                 InitialSlot::Empty => None,
                 InitialSlot::Undefined => Some(Value::Undefined),
                 InitialSlot::Frame => env.get_local(name),
+                InitialSlot::Arguments => env.get_local("arguments"),
                 InitialSlot::FrameOrUndefined => {
                     Some(env.get_local(name).unwrap_or(Value::Undefined))
                 }
@@ -53,6 +54,7 @@ impl Vm<'_> {
             Some(Value::Boolean(true))
         );
         if !bytecode.global_scope
+            && !env.has_global_binding_root()
             && !bytecode.binding_plan.has_realm_lexicals
             && !direct_eval_frame
             && !env.has_module_imports()
@@ -77,6 +79,26 @@ impl Vm<'_> {
         } else {
             for (slot, local) in bytecode.locals.iter().enumerate() {
                 if local.compiler_temporary {
+                    continue;
+                }
+                if env.has_global_binding_root()
+                    && env.can_cache_realm_globals()
+                    && local.hoisted
+                    && !local.parameter
+                    && let Some(cell) = env.realm_binding_cell(&local.name)
+                {
+                    local_upvalues[slot] = Some(cell);
+                    continue;
+                }
+                if bytecode.is_direct_eval_code()
+                    && env.scope_cursor().is_some()
+                    && bytecode.binding_plan.scopes[0]
+                        .lookup
+                        .get(&local.name)
+                        .is_some_and(|id| bytecode.binding_plan.bindings[id.0].slot.0 == slot)
+                    && let Some(cell) = env.frame_binding_cell(&local.name)
+                {
+                    local_upvalues[slot] = Some(cell);
                     continue;
                 }
                 if bytecode.binding_plan.realm_lexical_slots[slot] {
@@ -139,7 +161,8 @@ impl Vm<'_> {
                 }
             }
         }
-        let dynamic = bytecode.contains_direct_eval()
+        let dynamic = bytecode.has_dynamic_scope_tree()
+            || env.scope_cursor().is_some()
             || bytecode.contains_with()
             || env.deopt_bindings().is_some();
         let static_slots = if dynamic {
@@ -174,6 +197,9 @@ impl Vm<'_> {
             if local.compiler_temporary {
                 continue;
             }
+            if local_upvalues[slot].is_some() {
+                continue;
+            }
             if (local.name == "this" || bytecode.binding_plan.realm_lexical_slots[slot])
                 && local_upvalues[slot].is_some()
             {
@@ -193,7 +219,15 @@ impl Vm<'_> {
                 && (bytecode.needs_arguments_object() || bytecode.has_dynamic_scope_tree())
                 && let Some(upvalue) = env.frame_binding_cell(&local.name)
             {
-                local_upvalues[slot] = Some(upvalue);
+                let cell = if upvalue.has_compiler_metadata() {
+                    upvalue
+                } else {
+                    let meta = bytecode.binding_meta(slot).expect("parameter metadata");
+                    let cell = BindingCell::with_metadata(meta, Some(upvalue.get()));
+                    env.insert_frame_cell(local.name.clone(), cell.clone());
+                    cell
+                };
+                local_upvalues[slot] = Some(cell);
                 continue;
             }
             if bytecode.local_slot(&local.name) == Some(slot)
@@ -236,6 +270,22 @@ impl Vm<'_> {
         local_upvalues: &[Option<BindingCell>],
         env: &CallEnv,
     ) -> u128 {
+        if !(bytecode.global_scope
+            || bytecode.is_direct_eval_code() && env.scope_cursor().is_none())
+        {
+            return bytecode
+                .locals
+                .iter()
+                .enumerate()
+                .take(u128::BITS as usize)
+                .filter_map(|(slot, local)| {
+                    (!local.sloppy_global_fallback
+                        && !local.is_received_upvalue()
+                        && local_upvalues.get(slot).is_none_or(Option::is_none))
+                    .then_some(1_u128 << slot)
+                })
+                .fold(0, |mask, slot| mask | slot);
+        }
         // A frame with no cells and an environment that supplies no name answers
         // the whole mask from the bytecode. Asking the environment about every
         // local's name, as the general path must, is what made building a frame

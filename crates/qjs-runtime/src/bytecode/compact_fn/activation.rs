@@ -150,6 +150,7 @@ fn environment_is_slot_only(env: &CallEnv) -> bool {
     env.supplies_no_named_binding()
         && !env.has_module_imports()
         && env.deopt_bindings().is_none()
+        && env.scope_cursor().is_none()
         && !env.has_dynamic_function_realm_global()
 }
 

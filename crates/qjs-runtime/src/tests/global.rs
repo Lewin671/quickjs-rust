@@ -135,7 +135,7 @@ fn native_calls_use_callback_cells_without_losing_direct_eval_scope() {
 fn repeated_declaration_free_direct_eval_uses_fresh_cached_blueprints() {
     let mut env = CallEnv::from_map(HashMap::new());
     env.insert(DIRECT_EVAL_BINDING.to_owned(), Value::Boolean(true));
-    env.insert("value".to_owned(), Value::Number(1.0));
+    env.insert_realm("value".to_owned(), Value::Number(1.0));
 
     assert_eq!(
         crate::global::native_global_eval(
@@ -146,7 +146,7 @@ fn repeated_declaration_free_direct_eval_uses_fresh_cached_blueprints() {
     );
     assert_eq!(env.direct_eval_cache_len(), 1);
 
-    env.insert("value".to_owned(), Value::Number(41.0));
+    env.insert_realm("value".to_owned(), Value::Number(41.0));
     assert_eq!(
         crate::global::native_global_eval(
             &[Value::String("value + 1".to_owned().into())],
@@ -1767,14 +1767,12 @@ fn native_callees_see_the_realm_not_the_caller_frame() {
         ),
         Ok(Value::Number(7.0))
     );
-    // A direct `eval` inside a callback passed to a builtin cannot see the
-    // enclosing function's locals. That is a pre-existing divergence from the
-    // reference implementation, unchanged by the environment used to invoke
-    // the builtin; it is pinned here so a later environment-model fix has a
-    // regression to flip rather than a silent behavior change.
-    assert!(
-        eval("function f() { var local = 2; return [3].map(function (x) { return eval('x * local'); })[0]; } f();")
-            .is_err()
+    // The callback retains its lexical declarations through its scope lease.
+    assert_eq!(
+        eval(
+            "function f() { var local = 2; return [3].map(function (x) { return eval('x * local'); })[0]; } f();"
+        ),
+        Ok(Value::Number(6.0))
     );
     // A native that calls back into a class method and a getter.
     assert_eq!(

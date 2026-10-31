@@ -137,9 +137,15 @@ impl Compiler {
     /// clone on the hot path.
     fn loop_body_needs_iteration_scope(&self, body: &Stmt, body_start: usize) -> bool {
         stmt_declares_capturable_lexical(body)
-            && self.code[body_start..]
-                .iter()
-                .any(|op| matches!(op, Op::NewFunction { .. } | Op::NewClass { .. }))
+            && self.code[body_start..].iter().any(|op| {
+                matches!(
+                    op,
+                    Op::NewFunction { .. }
+                        | Op::NewClass { .. }
+                        | Op::CallDirectEval { .. }
+                        | Op::CallDirectEvalSpread { .. }
+                )
+            })
     }
 
     pub(super) fn compile_do_while(
@@ -208,9 +214,15 @@ impl Compiler {
         if let Some(init) = init {
             let init_start = self.code.len();
             self.compile_for_init(init)?;
-            init_created_closure = self.code[init_start..]
-                .iter()
-                .any(|op| matches!(op, Op::NewFunction { .. } | Op::NewClass { .. }));
+            init_created_closure = self.code[init_start..].iter().any(|op| {
+                matches!(
+                    op,
+                    Op::NewFunction { .. }
+                        | Op::NewClass { .. }
+                        | Op::CallDirectEval { .. }
+                        | Op::CallDirectEvalSpread { .. }
+                )
+            });
             self.emit(Op::Pop);
         }
         self.compile_for_loop_after_init(init, test, update, body, init_created_closure)
@@ -239,9 +251,15 @@ impl Compiler {
             if let Some(init) = init {
                 let init_start = self.code.len();
                 self.compile_for_init(init)?;
-                let init_created_closure = self.code[init_start..]
-                    .iter()
-                    .any(|op| matches!(op, Op::NewFunction { .. } | Op::NewClass { .. }));
+                let init_created_closure = self.code[init_start..].iter().any(|op| {
+                    matches!(
+                        op,
+                        Op::NewFunction { .. }
+                            | Op::NewClass { .. }
+                            | Op::CallDirectEval { .. }
+                            | Op::CallDirectEvalSpread { .. }
+                    )
+                });
                 self.emit(Op::Pop);
                 self.compile_for_loop_after_init_with_result(
                     Some(init),
@@ -573,7 +591,7 @@ impl Compiler {
                 let is_strict = self.strict || is_strict_function_body(body);
                 let mut local_names =
                     collect_function_local_names(name.as_ref(), params, body, !lexical_arguments);
-                if *lexical_arguments && !self.global_scope {
+                if *lexical_arguments && !self.global_scope && self.arguments_owner {
                     self.own_call_frame_slot("arguments");
                 }
                 let (mut bytecode, mut lexical_captures) = self.compile_nested_function_body(
@@ -583,6 +601,7 @@ impl Compiler {
                     *is_generator,
                     *is_async,
                     &local_names,
+                    !*lexical_arguments,
                 )?;
                 if *lexical_this && bytecode.needs_call_receiver() && !self.global_scope {
                     self.own_call_frame_slot("this");
@@ -594,6 +613,7 @@ impl Compiler {
                         *is_generator,
                         *is_async,
                         &local_names,
+                        !*lexical_arguments,
                     )?;
                 }
                 // A named function expression's inner name binding is
@@ -755,7 +775,7 @@ impl Compiler {
                 let is_strict = self.strict || is_strict_function_body(body);
                 let mut local_names =
                     collect_function_local_names(None, params, body, !lexical_arguments);
-                if *lexical_arguments && !self.global_scope {
+                if *lexical_arguments && !self.global_scope && self.arguments_owner {
                     self.own_call_frame_slot("arguments");
                 }
                 let (mut bytecode, mut lexical_captures) = self.compile_nested_function_body(
@@ -765,6 +785,7 @@ impl Compiler {
                     *is_generator,
                     *is_async,
                     &local_names,
+                    !*lexical_arguments,
                 )?;
                 if *lexical_this && bytecode.needs_call_receiver() && !self.global_scope {
                     self.own_call_frame_slot("this");
@@ -776,6 +797,7 @@ impl Compiler {
                         *is_generator,
                         *is_async,
                         &local_names,
+                        !*lexical_arguments,
                     )?;
                 }
                 self.emit(Op::NewFunction {
@@ -825,7 +847,7 @@ impl Compiler {
         let source_text = self.function_source_text(*span);
         let is_strict = self.strict || is_strict_function_body(body);
         let mut local_names = collect_function_local_names(None, params, body, !lexical_arguments);
-        if *lexical_arguments && !self.global_scope {
+        if *lexical_arguments && !self.global_scope && self.arguments_owner {
             self.own_call_frame_slot("arguments");
         }
         let (mut bytecode, mut lexical_captures) = self.compile_nested_function_body(
@@ -835,6 +857,7 @@ impl Compiler {
             *is_generator,
             *is_async,
             &local_names,
+            !*lexical_arguments,
         )?;
         if *lexical_this && bytecode.needs_call_receiver() && !self.global_scope {
             self.own_call_frame_slot("this");
@@ -846,6 +869,7 @@ impl Compiler {
                 *is_generator,
                 *is_async,
                 &local_names,
+                !*lexical_arguments,
             )?;
         }
         self.emit(Op::NewFunction {

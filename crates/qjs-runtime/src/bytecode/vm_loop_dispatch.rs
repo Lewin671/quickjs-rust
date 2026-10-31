@@ -67,7 +67,7 @@ impl Vm<'_> {
         target: usize,
         backedge: usize,
     ) -> bool {
-        if target >= backedge {
+        if target >= backedge || self.env.scope_cursor().is_some() {
             self.ip = target;
             return false;
         }

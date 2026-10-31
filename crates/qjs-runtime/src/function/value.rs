@@ -311,6 +311,7 @@ pub struct FunctionAuxiliaryState {
 }
 
 struct FunctionColdState {
+    lexical_scope: Option<crate::binding::ScopeCursor>,
     receiver_layout: Option<Rc<crate::value::layout::Layout>>,
     constructor_prototype_slot: Option<(crate::value::layout::LayoutVersion, usize)>,
     home_object: Option<Value>,
@@ -434,6 +435,7 @@ impl FunctionAuxiliaryState {
 impl FunctionColdState {
     fn new(home_object: Option<Value>, super_constructor: Option<Value>) -> Self {
         Self {
+            lexical_scope: None,
             home_object,
             receiver_layout: None,
             constructor_prototype_slot: None,
@@ -486,6 +488,7 @@ pub(crate) struct CompiledUserFunction {
     pub(crate) is_field_initializer: bool,
     pub(crate) home_object: Option<Value>,
     pub(crate) super_constructor: Option<Value>,
+    pub(crate) lexical_scope: Option<crate::binding::ScopeCursor>,
     pub(crate) deopt_bindings: Option<DynamicBindings>,
     pub(crate) with_stack: Vec<Value>,
     pub(crate) upvalues: Vec<BindingCell>,
@@ -696,6 +699,11 @@ impl Function {
         Ok(function)
     }
 
+    pub(crate) fn lexical_scope(&self) -> Option<crate::binding::ScopeCursor> {
+        self.auxiliary
+            .with_cold(|cold| cold.and_then(|cold| cold.lexical_scope.clone()))
+    }
+
     pub(crate) fn new_user_compiled(compiled: CompiledUserFunction) -> Self {
         let CompiledUserFunction {
             name,
@@ -722,6 +730,7 @@ impl Function {
             is_field_initializer,
             home_object,
             super_constructor,
+            lexical_scope,
             deopt_bindings,
             with_stack,
             upvalues,
@@ -781,6 +790,11 @@ impl Function {
             bound: None,
             named: RefCell::new(crate::value::layout::NamedStorage::Sentinel),
         }));
+        if let Some(scope) = lexical_scope {
+            function
+                .auxiliary
+                .with_cold_mut(|cold| cold.lexical_scope = Some(scope));
+        }
         function.initialize_named();
         function.define_length_property();
         function.define_name_property();
@@ -1268,7 +1282,9 @@ impl Function {
     pub(crate) fn has_cold_lexical_state(&self) -> bool {
         self.auxiliary.with_cold(|cold| {
             cold.is_some_and(|cold| {
-                cold.private_state.environment.is_some() || cold.home_object.is_some()
+                cold.private_state.environment.is_some()
+                    || cold.home_object.is_some()
+                    || cold.lexical_scope.is_some()
             })
         })
     }

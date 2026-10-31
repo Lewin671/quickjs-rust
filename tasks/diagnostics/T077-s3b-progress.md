@@ -106,12 +106,36 @@ Command: pinned QJS_CLI_BIN, QJS_AGENTS=1, `find-qjsng-gaps.sh --exact --all
 IC-off, stress, counters and timing remain final B6 obligations; this is not S3b
 exit or performance acceptance.
 
-## B3 work in progress
+## B3a live binding authority
 
-The working tree contains uncommitted scope leases, fresh own var holders,
-PC-selected scope descriptors, explicit eval entry roots/global binding targets,
-and canonical eval declaration routes. The selected-name cached eval view is
-removed; compiled plans still cache, with each invocation resolving its live
-chain. The independent non-key T074 discriminators and parameter/body split
-match NG in a focused diagnostic. Regression repairs are ongoing; no full-gate,
-stress or performance claim applies to this uncommitted B3 code.
+The owner implements descriptor/cell leases, fresh own var holders, live parent
+links, explicit eval entry roots and global binding targets. Parameter/body
+locations split for non-simple lists, including destructured leaves and TDZ;
+fresh loop/catch cells preserve metadata. Saved with references survive RHS
+suspension. Scope instances/holders/references are retained by snapshots.
+Functions retain optional escaping scope in existing cold state.
+
+Deleted: selected_direct_eval_call_env/cached_direct_eval_call_env and their
+selected-name scan, writes_bindings apply-back proof, Host evalScript value
+write-back, and the unused completion sloppy-name projection. Compiled eval
+plans still cache; each invocation resolves its own live chain.
+
+Source audit found that legacy frame initialization replaced selected eval cells
+with new cells; preserving those routes fixes two-location writes and eval loop
+nontermination. Global eval and host script need an explicit global target even
+though their IR is function-shaped; otherwise declarations alias private frames
+or publish into the caller realm. Temporary typed entry/global-selection fields
+on CallEnv bridge to B4's CreationContext/ActivationContext, without another live
+value table. Host script function descriptor attributes remain distinct from
+sloppy global eval. Selected foreign globals use live object semantics and never
+cache/publish their values in the caller's realm. Native setters retain getter
+authority, including lexical/property homonyms.
+
+Verification on this code: 2,512 runtime tests and 271 NG fixtures pass; 15
+permanent non-key/parameter T074 discriminators match NG; new lowest-layer
+holder/lease/selected-cell tests pass. Default/agents/perf-counters compile and
+Clippy pass. Final staged gate pending. No S3b exit/performance acceptance.
+Remaining B3 policy/reference audit and compatibility deletion join B4/B5:
+class-key suspension/private/lexical owner, named self, complete Init/Assign and
+saved crossing-name references, borrowed Context/native ABI and all raw view
+retirement. Final stress/exact cached+off/counters/triage remain B6 obligations.

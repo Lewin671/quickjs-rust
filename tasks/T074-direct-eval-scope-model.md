@@ -1,11 +1,11 @@
 # T074: Direct eval scope model
 
-- Status: active; design needed.
-- Implementation: none; T071 eval-only capture and declaration-shadowing experiments removed by lead decision.
+- Status: active; approved design, implementation in progress on the T077 S3b owner branch.
+- Implementation: S3b owner has canonical cell metadata, live leases/own holders and parameter/body routes; this is not integrated main. T071 runtime experiments remain removed.
 - Verified at: narrowed T071 `dd312dac` constraint tests and comparisons, 2026-10-23; other main gaps are lead-reported at `6e899d24`/`2fc8efb8` (2026-10-24). Evidence is in [T071](archive/T071-lexical-context-review.md).
-- Evidence: [T071 prior review](archive/T071-review-verification.md); reproductions below, lead narrow decision of 2026-10-24.
+- Evidence: [S3b progress](diagnostics/T077-s3b-progress.md), [approved design](proposals/T077-s3-eval-scope.md), [T071 prior review](archive/T071-review-verification.md); reproductions below, lead narrow decision of 2026-10-24.
 - Unresolved: eval-only visibility, declaration ownership/liveness, mutability/TDZ, deletion, mapped arguments, with resolution and lexical-context suspension.
-- Next action: design how direct eval names bindings across frames under the protected slot/shared-cell model; obtain architecture review before writing implementation code.
+- Next action: finish the frozen S3b lexical-owner/computed-key continuation and Context cuts, reference/policy audit and full stress/verification matrix.
 
 ## Design boundary
 

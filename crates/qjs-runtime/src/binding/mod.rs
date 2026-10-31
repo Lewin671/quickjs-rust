@@ -5,6 +5,11 @@
 
 mod cell;
 mod plan;
+mod scope;
 
 pub(crate) use cell::BindingCell;
 pub(crate) use plan::*;
+pub(crate) use scope::*;
+
+#[cfg(test)]
+mod scope_tests;

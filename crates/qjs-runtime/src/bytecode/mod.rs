@@ -99,6 +99,7 @@ mod vm_ops;
 mod vm_private;
 mod vm_props;
 mod vm_result;
+mod vm_scopes;
 mod vm_set;
 mod vm_string_append;
 mod vm_this_property_leaf;

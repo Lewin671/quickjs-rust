@@ -23,6 +23,7 @@ use crate::{
 };
 use crate::{PropertyKey, property_value, property_value_key};
 
+mod scoped_eval;
 mod uri;
 use uri::{UriDecodeKind, UriEncodeKind, decode_uri, encode_uri};
 
@@ -838,7 +839,8 @@ pub(super) fn native_global_eval(
     if direct_eval {
         eval_env.fork_deopt_bindings();
     }
-    let direct_function_eval = direct_eval && eval_env.get_local("this").is_some();
+    let direct_function_eval =
+        direct_eval && !env.has_global_binding_root() && eval_env.get_local("this").is_some();
     let direct_parameter_eval = direct_function_eval
         && matches!(
             eval_env.get(crate::DIRECT_EVAL_IN_PARAMETER_SCOPE_BINDING),
@@ -884,6 +886,11 @@ pub(super) fn native_global_eval(
     let simple_direct_eval =
         cacheable_direct_eval && !bytecode.contains_direct_eval() && !bytecode.contains_with();
     let eval_strict = bytecode.is_strict();
+    if eval_strict || direct_function_eval && env.scope_cursor().is_some() {
+        return scoped_eval::evaluate(&bytecode, env, eval_strict);
+    }
+    eval_env.select_global_bindings(!direct_function_eval && !eval_strict);
+
     if direct_function_eval
         && matches!(
             eval_env.get(crate::DIRECT_EVAL_ARGUMENTS_BINDING),
@@ -979,6 +986,9 @@ pub(super) fn native_global_eval(
             .map_or_else(|| env.has_local_binding(name), |names| names.contains(name))
     };
     let result = eval_bytecode_with_env_ephemeral_global_lexicals(&bytecode, eval_env.clone());
+    if eval_env.has_global_binding_root() {
+        return result.value;
+    }
     let writeback_names = hoisted_names
         .iter()
         .cloned()
@@ -1191,6 +1201,7 @@ pub(super) fn native_eval_script(
     let mut bytecode = compile_direct_eval_script(&script, false)?;
     bytecode.mark_script_lexical_routes();
     let mut eval_env = env.empty_frame();
+    eval_env.select_script_bindings();
     validate_eval_global_lexical_bindings(&bytecode, env, true, true)?;
     // $262.evalScript runs GlobalDeclarationInstantiation: a var/function
     // declaration that cannot be created on a non-extensible global, or that
@@ -1209,22 +1220,7 @@ pub(super) fn native_eval_script(
         )?;
     }
     initialize_eval_script_bindings(&bytecode, &mut eval_env);
-    let result = eval_bytecode_with_env(&bytecode, eval_env.clone());
-    for name in bytecode.hoisted_local_names() {
-        if let Some(value) = result.binding(name) {
-            if hoisted_function_names.contains(name) {
-                create_eval_script_global_function_binding(&mut eval_env, name, value.clone());
-            } else {
-                create_eval_script_global_var_binding(&mut eval_env, name, value.clone());
-            }
-        }
-    }
-    for name in &result.sloppy_global_names {
-        if let Some(value) = result.binding(name) {
-            define_eval_global_binding(&mut eval_env, name, value.clone());
-        }
-    }
-    result.value
+    eval_bytecode_with_env(&bytecode, eval_env).value
 }
 
 pub(crate) fn try_eval_regexp_literal_source(
@@ -1541,8 +1537,17 @@ fn initialize_direct_eval_bindings(
             .as_ref()
             .and_then(|object| object.own_property(name))
         {
-            env.insert(name.to_owned(), property.value.clone());
-            env.insert_realm(name.to_owned(), property.value);
+            if property.is_accessor() {
+                if env.can_cache_realm_globals() {
+                    env.remove_realm(name);
+                }
+                env.insert_frame(name.to_owned(), Value::Undefined);
+            } else {
+                env.insert(name.to_owned(), property.value.clone());
+                if env.can_cache_realm_globals() {
+                    env.insert_realm(name.to_owned(), property.value);
+                }
+            }
         } else {
             env.insert(name.to_owned(), Value::Undefined);
             define_eval_global_binding(env, name, Value::Undefined);
@@ -1565,8 +1570,17 @@ fn initialize_eval_script_bindings(bytecode: &crate::bytecode::Bytecode, env: &m
             .as_ref()
             .and_then(|object| object.own_property(name))
         {
-            env.insert(name.to_owned(), property.value.clone());
-            env.insert_realm(name.to_owned(), property.value);
+            if property.is_accessor() {
+                if env.can_cache_realm_globals() {
+                    env.remove_realm(name);
+                }
+                env.insert_frame(name.to_owned(), Value::Undefined);
+            } else {
+                env.insert(name.to_owned(), property.value.clone());
+                if env.can_cache_realm_globals() {
+                    env.insert_realm(name.to_owned(), property.value);
+                }
+            }
         } else {
             env.insert(name.to_owned(), Value::Undefined);
             create_eval_script_global_var_binding(env, name, Value::Undefined);
@@ -1646,25 +1660,6 @@ fn create_eval_global_function_binding(env: &mut CallEnv, name: &str, value: Val
         if dynamic_realm_global {
             return;
         }
-    }
-    env.insert_realm(name.to_owned(), value);
-}
-
-fn create_eval_script_global_function_binding(env: &mut CallEnv, name: &str, value: Value) {
-    let global_this = env.get(GLOBAL_THIS_BINDING).and_then(|value| match value {
-        Value::Object(object) => Some(object),
-        _ => None,
-    });
-    if let Some(global_this) = global_this {
-        let property = match global_this.own_property(name) {
-            Some(existing) if !existing.configurable => {
-                let mut property = existing;
-                property.value = value.clone();
-                property
-            }
-            _ => Property::data(value.clone(), true, true, false),
-        };
-        global_this.define_property(name.to_owned(), property);
     }
     env.insert_realm(name.to_owned(), value);
 }

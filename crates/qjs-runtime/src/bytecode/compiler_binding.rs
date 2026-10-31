@@ -36,7 +36,8 @@ impl Compiler {
             return None;
         };
         let slot = self.resolve_local_slot(name);
-        if !self.identifier_needs_with_resolution(slot) {
+        if !(self.identifier_needs_with_resolution(slot) || self.direct_eval_source && !self.strict)
+        {
             return None;
         }
         let object_slot = self.temp_local("with_var_initializer_object");
@@ -156,7 +157,9 @@ impl Compiler {
         pattern: &BindingPattern,
         kind: VarKind,
     ) -> Option<PreparedBindingTarget> {
-        if kind != VarKind::Var || !self.inside_current_with() {
+        if kind != VarKind::Var
+            || !(self.inside_current_with() || self.direct_eval_source && !self.strict)
+        {
             return None;
         }
         let BindingPattern::Identifier { name, .. } = pattern else {
@@ -442,6 +445,13 @@ impl Compiler {
     }
 
     pub(super) fn emit_store_var_initializer(&mut self, slot: usize, name: &str, kind: VarKind) {
+        if self.direct_eval_source && !self.strict && kind == VarKind::Var {
+            self.emit(Op::StoreGlobalSloppy {
+                slot,
+                name: name.to_owned(),
+            });
+            return;
+        }
         if kind == VarKind::Var && self.inside_current_with() {
             // Inside a `with`, a `var` initializer assignment is an ordinary
             // PutValue on a reference resolved through the current lexical

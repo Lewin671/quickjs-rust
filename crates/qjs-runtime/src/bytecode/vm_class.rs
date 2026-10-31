@@ -136,6 +136,7 @@ impl Vm<'_> {
             is_field_initializer: false,
             home_object: None,
             super_constructor: super_constructor.clone(),
+            lexical_scope: self.prepare_scope_cursor(),
             deopt_bindings: self.frame_deopt_bindings(),
             with_stack: self.with_stack().to_vec(),
             upvalues: constructor_upvalues,
@@ -357,6 +358,7 @@ impl Vm<'_> {
                         is_field_initializer: false,
                         home_object: Some(Value::Function(constructor_function.clone())),
                         super_constructor: None,
+                        lexical_scope: self.prepare_scope_cursor(),
                         deopt_bindings: self.frame_deopt_bindings(),
                         with_stack: self.with_stack().to_vec(),
                         upvalues: self.captured_upvalues_for_function_with_override(
@@ -424,6 +426,7 @@ impl Vm<'_> {
             is_field_initializer: false,
             home_object: Some(home_object.clone()),
             super_constructor: None,
+            lexical_scope: self.prepare_scope_cursor(),
             deopt_bindings: self.frame_deopt_bindings(),
             with_stack: self.with_stack().to_vec(),
             upvalues: self.captured_upvalues_for_function_with_override(
@@ -524,6 +527,7 @@ impl Vm<'_> {
             is_field_initializer: true,
             home_object: Some(home_object),
             super_constructor: None,
+            lexical_scope: self.prepare_scope_cursor(),
             deopt_bindings: self.frame_deopt_bindings(),
             with_stack: self.with_stack().to_vec(),
             upvalues: self.captured_upvalues_for_function_with_override(
@@ -574,6 +578,7 @@ impl Vm<'_> {
             is_field_initializer: false,
             home_object: Some(Value::Function(constructor_function.clone())),
             super_constructor: None,
+            lexical_scope: self.prepare_scope_cursor(),
             deopt_bindings: self.frame_deopt_bindings(),
             with_stack: self.with_stack().to_vec(),
             upvalues: self.captured_upvalues_for_function_with_override(

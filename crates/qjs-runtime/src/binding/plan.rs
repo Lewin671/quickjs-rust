@@ -97,6 +97,7 @@ pub(crate) struct ScopePlanBuilder {
     pub(crate) sites: Vec<ExposureSite>,
     pub(crate) variable: ScopeId,
     pub(crate) implicit_arguments: Option<LocalSlot>,
+    pub(crate) pc_scopes: Vec<ScopeId>,
 }
 
 impl Default for ScopePlanBuilder {
@@ -116,6 +117,7 @@ impl Default for ScopePlanBuilder {
             sites: Vec::new(),
             variable: ScopeId(0),
             implicit_arguments: None,
+            pc_scopes: Vec::new(),
         }
     }
 }
@@ -167,6 +169,12 @@ impl ScopePlanBuilder {
             self.declarations
                 .push((name.to_owned(), LocalSlot(slot), scope));
         }
+    }
+
+    pub(crate) fn record_pc(&mut self, pc: usize) {
+        let scope = *self.active.last().expect("compiler scope");
+        self.pc_scopes.resize(pc + 1, scope);
+        self.pc_scopes[pc] = scope;
     }
 
     pub(crate) fn exposure_site(&mut self, pc: usize) {

@@ -53,6 +53,7 @@ pub(super) const REALM_ARRAY_PROTOTYPE_INTRINSIC: &str = "\0realm:Array.prototyp
 /// sync, which the old two-map design required on every store.
 pub(crate) struct RealmState {
     bindings: DynamicBindings,
+    next_variable: std::cell::Cell<u64>,
     /// Stable realm intrinsics are separate from the mutable global bindings.
     /// Rebinding `Object` or `Array` must not change the default prototype used
     /// by literals, classes, or abstract operations that name an intrinsic.
@@ -94,6 +95,15 @@ pub(crate) struct RealmState {
 }
 
 impl RealmState {
+    pub(crate) fn next_variable_identity(&self) -> u64 {
+        let current = self.next_variable.get();
+        let Some(next) = current.checked_add(1) else {
+            std::process::abort();
+        };
+        self.next_variable.set(next);
+        current
+    }
+
     fn new(mut bindings: HashMap<String, Value>, atoms: AtomDomain) -> Self {
         // Dynamic Function construction still enters through a compact flat
         // snapshot. Consume its internal-only intrinsic handoff markers before
@@ -113,6 +123,7 @@ impl RealmState {
                 });
         let realm = Self {
             bindings: DynamicBindings::from_values(bindings),
+            next_variable: std::cell::Cell::new(1),
             object_prototype: OnceCell::new(),
             array_prototype: OnceCell::new(),
             arguments_layouts: RefCell::default(),
@@ -842,6 +853,10 @@ pub(crate) struct CallEnv {
     /// unchanged.
     new_target: Option<Value>,
     deopt_bindings: Option<DynamicBindings>,
+    scope_cursor: Option<crate::binding::ScopeCursor>,
+    global_binding_root: bool,
+    global_function_configurable: bool,
+    entry_scope: Option<Rc<crate::binding::ScopeLease>>,
     /// Dynamic-scope metadata is inherited by nested execution views but is
     /// mutated only by catch setup. Share the ordinary call path and
     /// detach on those cold mutations instead of cloning a hash table per call.
@@ -898,6 +913,10 @@ impl Clone for CallEnv {
             frame_bindings: self.frame_bindings.clone(),
             new_target: self.new_target.clone(),
             deopt_bindings: self.deopt_bindings.clone(),
+            scope_cursor: self.scope_cursor.clone(),
+            global_binding_root: self.global_binding_root,
+            global_function_configurable: self.global_function_configurable,
+            entry_scope: self.entry_scope.clone(),
             catch_bindings: self.catch_bindings.clone(),
             immutable_function_name: self.immutable_function_name.clone(),
             direct_eval_var_conflicts: self.direct_eval_var_conflicts.clone(),
@@ -937,6 +956,10 @@ impl CallEnv {
             frame_bindings: FrameBindings::default(),
             new_target: None,
             deopt_bindings: None,
+            scope_cursor: None,
+            global_binding_root: false,
+            global_function_configurable: true,
+            entry_scope: None,
             catch_bindings: Default::default(),
             immutable_function_name: None,
             direct_eval_var_conflicts: Default::default(),
@@ -1054,6 +1077,10 @@ impl CallEnv {
             frame_bindings: FrameBindings::default(),
             new_target: None,
             deopt_bindings: None,
+            scope_cursor: None,
+            global_binding_root: false,
+            global_function_configurable: true,
+            entry_scope: None,
             catch_bindings: Default::default(),
             immutable_function_name: None,
             direct_eval_var_conflicts: Default::default(),
@@ -1076,6 +1103,10 @@ impl CallEnv {
             frame_bindings: FrameBindings::default(),
             new_target: None,
             deopt_bindings: None,
+            scope_cursor: None,
+            global_binding_root: false,
+            global_function_configurable: true,
+            entry_scope: None,
             catch_bindings: Default::default(),
             immutable_function_name: None,
             direct_eval_var_conflicts: Default::default(),
@@ -1096,6 +1127,10 @@ impl CallEnv {
             frame_bindings: FrameBindings::from_values(locals),
             new_target: None,
             deopt_bindings: None,
+            scope_cursor: None,
+            global_binding_root: false,
+            global_function_configurable: true,
+            entry_scope: None,
             catch_bindings: Default::default(),
             immutable_function_name: None,
             direct_eval_var_conflicts: Default::default(),
@@ -1139,6 +1174,10 @@ impl CallEnv {
             frame_bindings: FrameBindings::with_capacity(capacity),
             new_target: None,
             deopt_bindings: None,
+            scope_cursor: None,
+            global_binding_root: false,
+            global_function_configurable: true,
+            entry_scope: None,
             catch_bindings: self.catch_bindings.clone(),
             immutable_function_name: None,
             direct_eval_var_conflicts: self.direct_eval_var_conflicts.clone(),
@@ -1163,6 +1202,10 @@ impl CallEnv {
             frame_bindings: FrameBindings::default(),
             new_target: None,
             deopt_bindings: None,
+            scope_cursor: None,
+            global_binding_root: false,
+            global_function_configurable: true,
+            entry_scope: None,
             catch_bindings: None,
             immutable_function_name: None,
             direct_eval_var_conflicts: None,
@@ -1342,6 +1385,62 @@ impl CallEnv {
 
     pub(crate) fn set_deopt_bindings(&mut self, bindings: DynamicBindings) {
         self.deopt_bindings = Some(bindings);
+    }
+
+    pub(crate) fn select_global_bindings(&mut self, global: bool) {
+        self.global_binding_root = global;
+        self.global_function_configurable = true;
+        self.entry_scope = None;
+    }
+    pub(crate) fn select_script_bindings(&mut self) {
+        self.select_global_bindings(true);
+        self.global_function_configurable = false;
+    }
+    pub(crate) fn global_function_configurable(&self) -> bool {
+        self.global_function_configurable
+    }
+    pub(crate) fn selected_global_this(&self) -> Option<Value> {
+        match self
+            .frame_bindings
+            .get(DYNAMIC_FUNCTION_REALM_GLOBAL)
+            .or_else(|| {
+                self.deopt_bindings
+                    .as_ref()
+                    .and_then(|bindings| bindings.get(DYNAMIC_FUNCTION_REALM_GLOBAL))
+            }) {
+            Some(Value::Object(global)) => Some(Value::Object(global)),
+            Some(_) | None => self.scope.global_this(),
+        }
+    }
+
+    pub(crate) fn can_cache_realm_globals(&self) -> bool {
+        match self.selected_global_this() {
+            Some(Value::Object(object)) => self.is_realm_global_object(&object),
+            _ => true,
+        }
+    }
+
+    pub(crate) fn has_global_binding_root(&self) -> bool {
+        self.global_binding_root
+    }
+    pub(crate) fn entry_scope(&self) -> Option<&Rc<crate::binding::ScopeLease>> {
+        self.entry_scope.as_ref()
+    }
+    pub(crate) fn set_eval_scope(&mut self, cursor: crate::binding::ScopeCursor) {
+        self.entry_scope = Some(cursor.head.clone());
+        self.scope_cursor = Some(cursor);
+        self.global_binding_root = false;
+    }
+
+    pub(crate) fn clear_deopt_bindings(&mut self) {
+        self.deopt_bindings = None;
+    }
+
+    pub(crate) fn scope_cursor(&self) -> Option<&crate::binding::ScopeCursor> {
+        self.scope_cursor.as_ref()
+    }
+    pub(crate) fn set_scope_cursor(&mut self, cursor: Option<crate::binding::ScopeCursor>) {
+        self.scope_cursor = cursor;
     }
 
     pub(crate) fn deopt_bindings(&self) -> Option<&DynamicBindings> {
@@ -1734,6 +1833,7 @@ impl CallEnv {
     /// once, rather than one environment query per local.
     pub(crate) fn supplies_no_named_binding(&self) -> bool {
         self.frame_bindings.is_empty()
+            && self.scope_cursor.is_none()
             && self.deopt_bindings.is_none()
             && self.module_imports.is_empty()
             && self.module_live_bindings.is_none()
@@ -1784,6 +1884,10 @@ impl CallEnv {
                 .fork_values(self.derived_this_cell().is_some()),
             new_target: self.new_target.clone(),
             deopt_bindings: None,
+            scope_cursor: None,
+            global_binding_root: self.global_binding_root,
+            global_function_configurable: self.global_function_configurable,
+            entry_scope: None,
             catch_bindings: self.catch_bindings.clone(),
             immutable_function_name: self.immutable_function_name.clone(),
             direct_eval_var_conflicts: self.direct_eval_var_conflicts.clone(),

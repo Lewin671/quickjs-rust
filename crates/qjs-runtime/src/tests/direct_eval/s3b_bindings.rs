@@ -24,3 +24,11 @@ fn global_lexical_cells_are_independent_of_same_named_properties() {
         Ok(Value::String("1:2:2".into()))
     );
 }
+
+#[test]
+fn leases_preserve_live_declarations_tdz_arguments_and_parameter_boundaries() {
+    assert_eq!(
+        eval(include_str!("../../../../../tests/fixtures/compare-qjs/s3b-scope-live-leases.js")),
+        Ok(Value::String("8|5|TypeError:3|ReferenceError:3|2:1|2:1|true:undefined|false:2|2:4|1:2|ReferenceError:3|undefined|object|2:1|2:1".into())),
+    );
+}

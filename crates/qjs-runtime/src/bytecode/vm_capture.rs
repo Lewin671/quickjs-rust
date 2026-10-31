@@ -118,14 +118,9 @@ impl Vm<'_> {
     }
 
     pub(super) fn in_parameter_prologue(&self) -> bool {
-        if self.bytecode.global_scope {
-            return false;
-        }
-        if !self.bytecode.locals.iter().any(|local| local.parameter) {
-            return false;
-        }
-        !self.bytecode.code[..self.ip]
-            .iter()
-            .any(|op| matches!(op, super::ir::Op::FunctionPrologueEnd))
+        self.bytecode
+            .binding_plan
+            .prologue_end
+            .is_some_and(|end| self.ip <= end)
     }
 }

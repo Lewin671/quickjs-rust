@@ -14,6 +14,7 @@ pub(super) enum InitialSlot {
     Empty,
     Undefined,
     Frame,
+    Arguments,
     FrameOrUndefined,
     Incoming,
     IncomingOrUndefined,
@@ -63,7 +64,8 @@ impl ParameterInfo {
 
 #[derive(Clone, Debug, Default)]
 pub(super) struct BindingPlan {
-    pub(super) scopes: Box<[crate::binding::ScopeDescriptor]>,
+    pub(super) scopes: std::rc::Rc<crate::binding::ScopeDescriptors>,
+    pub(super) pc_scopes: Box<[crate::binding::ScopeId]>,
     pub(super) bindings: std::rc::Rc<crate::binding::BindingMetadata>,
     pub(super) local_bindings: Box<[Option<crate::binding::BindingId>]>,
     pub(super) realm_lexical_slots: Box<[bool]>,
@@ -80,6 +82,7 @@ pub(super) struct BindingPlan {
     pub(super) dynamic_scope_tree: bool,
     pub(super) needs_receiver: bool,
     pub(super) reads_new_target: bool,
+    pub(super) prologue_end: Option<usize>,
 }
 
 impl BindingPlan {
@@ -140,7 +143,8 @@ impl BindingPlan {
         dynamic_cell_slots.dedup();
         let dynamic_scope_tree = dynamic_tree(bytecode);
         Self {
-            scopes: Box::default(),
+            scopes: std::rc::Rc::default(),
+            pc_scopes: Box::default(),
             bindings: std::rc::Rc::default(),
             local_bindings: Box::default(),
             realm_lexical_slots: vec![false; bytecode.locals.len()].into_boxed_slice(),
@@ -190,6 +194,10 @@ impl BindingPlan {
                 || bytecode.contains_super_operation()
                 || nested_receiver(bytecode)
                 || dynamic_scope_tree,
+            prologue_end: bytecode
+                .code
+                .iter()
+                .position(|op| matches!(op, Op::FunctionPrologueEnd)),
             reads_new_target: bytecode
                 .code
                 .iter()
@@ -238,8 +246,12 @@ fn binds_arguments(binding: &BindingPattern) -> bool {
 }
 
 fn dynamic_tree(bytecode: &Bytecode) -> bool {
-    bytecode.contains_direct_eval() || bytecode.contains_with()
-        || bytecode.code.iter().any(|op| match op {
+    dynamic_code(&bytecode.code)
+}
+
+pub(super) fn dynamic_code(code: &[Op]) -> bool {
+    code.iter().any(|op| matches!(op, Op::CallDirectEval { .. } | Op::CallDirectEvalSpread { .. } | Op::EnterWith | Op::ExitWith))
+        || code.iter().any(|op| match op {
             Op::NewFunction { bytecode, .. } => bytecode.has_dynamic_scope_tree(),
             Op::NewClass { definition } => {
                 definition.constructor.bytecode.has_dynamic_scope_tree()

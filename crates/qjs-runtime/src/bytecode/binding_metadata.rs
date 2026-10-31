@@ -30,6 +30,23 @@ impl Bytecode {
         bytecode
     }
 
+    pub(crate) fn scope_descriptors(&self) -> std::rc::Rc<crate::binding::ScopeDescriptors> {
+        self.binding_plan.scopes.clone()
+    }
+
+    pub(crate) fn scope_declarations(
+        &self,
+        scope: crate::binding::ScopeId,
+    ) -> impl Iterator<Item = crate::binding::BindingMetaRef> + '_ {
+        self.binding_plan.scopes[scope.0]
+            .declarations
+            .iter()
+            .map(|&id| crate::binding::BindingMetaRef {
+                owner: self.binding_plan.bindings.clone(),
+                id,
+            })
+    }
+
     pub(crate) fn mark_script_lexical_routes(&mut self) {
         if let Some(root) = self.binding_plan.scopes.first() {
             for &id in &root.declarations {
@@ -101,7 +118,10 @@ impl Bytecode {
             } else {
                 BindingKind::Lexical
             };
-            if !local.is_received_upvalue() && !local.sloppy_global_fallback {
+            if !(local.is_received_upvalue()
+                || local.sloppy_global_fallback
+                || self.global_scope && local.hoisted)
+            {
                 let scope = declaration.map_or(builder.variable, |(_, _, scope)| *scope);
                 let descriptor = &mut builder.scopes[scope.0];
                 if self.global_scope && scope.0 == 0 && kind == BindingKind::Lexical {
@@ -110,6 +130,9 @@ impl Bytecode {
                 }
                 declarations[scope.0].push(id);
                 descriptor.lookup.insert(name.clone(), id);
+            }
+            if kind == BindingKind::Arguments {
+                self.binding_plan.initial_slots[slot] = super::binding_plan::InitialSlot::Arguments;
             }
             if name == "arguments" && kind == BindingKind::Lexical {
                 self.binding_plan.initial_slots[slot] = super::binding_plan::InitialSlot::Empty;
@@ -127,7 +150,7 @@ impl Bytecode {
                 deletable: eval_declarations && local.hoisted && !local.parameter,
                 initialization: if local.parameter {
                     InitPolicy::Parameter
-                } else if local.hoisted {
+                } else if local.hoisted || kind == BindingKind::Arguments {
                     InitPolicy::Undefined
                 } else {
                     InitPolicy::Uninitialized
@@ -140,10 +163,22 @@ impl Bytecode {
             crate::binding::MetadataOrigin::Compiled,
         ));
         self.binding_plan.local_bindings = slots.into_boxed_slice();
+        self.binding_plan.cell_slots.retain(|&slot| {
+            self.binding_plan.local_bindings[slot].is_some() || self.locals[slot].name == "this"
+        });
+        self.binding_plan.dynamic_cell_slots.retain(|&slot| {
+            self.binding_plan.local_bindings[slot].is_some() || self.locals[slot].name == "this"
+        });
         for (scope, bindings) in builder.scopes.iter_mut().zip(declarations) {
             scope.declarations = bindings.into_boxed_slice();
         }
-        self.binding_plan.scopes = builder.scopes.into_boxed_slice();
+        self.binding_plan.scopes = std::rc::Rc::new(crate::binding::ScopeDescriptors(
+            builder.scopes.into_boxed_slice(),
+        ));
+        builder
+            .pc_scopes
+            .resize(self.code.len(), *builder.active.last().expect("root scope"));
+        self.binding_plan.pc_scopes = builder.pc_scopes.into_boxed_slice();
         self.binding_plan.exposure = crate::binding::EvalExposurePlan {
             sites: builder.sites.into_boxed_slice(),
         };

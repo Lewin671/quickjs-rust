@@ -187,6 +187,7 @@ impl Vm<'_> {
             is_field_initializer: false,
             home_object: Some(home_object),
             super_constructor: None,
+            lexical_scope: self.prepare_scope_cursor(),
             deopt_bindings: self.frame_deopt_bindings(),
             with_stack: self.with_stack().to_vec(),
             upvalues: self.captured_upvalues_for_function_with_override(
@@ -246,6 +247,7 @@ impl Vm<'_> {
             is_field_initializer: true,
             home_object: Some(home_object),
             super_constructor: None,
+            lexical_scope: self.prepare_scope_cursor(),
             deopt_bindings: self.frame_deopt_bindings(),
             with_stack: self.with_stack().to_vec(),
             upvalues: self.captured_upvalues_for_function_with_override(

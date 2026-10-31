@@ -202,3 +202,17 @@ fn simple_parameters_share_the_variable_environment_with_body_vars() {
         );
     }
 }
+
+#[test]
+fn eval_demand_owns_arguments_in_the_parameter_descriptor() {
+    let root = compile("function f(x){eval('arguments[0]=2');return x}f(1);");
+    let body = functions(&root)[0];
+    let id = body.binding_plan.scopes[0].lookup["arguments"];
+    let meta = &body.binding_plan.bindings[id.0];
+    assert_eq!(meta.kind, BindingKind::Arguments);
+    assert!(!body.locals[meta.slot.0].from_env);
+    assert!(matches!(
+        body.binding_plan.initial_slots[meta.slot.0],
+        InitialSlot::Arguments
+    ));
+}

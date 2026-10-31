@@ -81,6 +81,13 @@ impl BindingCell {
         self.0.meta.owner.1 == super::MetadataOrigin::Compiled
     }
 
+    pub(crate) fn fresh_uninitialized(&self) -> Self {
+        Self::with_metadata(self.0.meta.clone(), None)
+    }
+    pub(crate) fn fresh_with_value(&self, value: Value) -> Self {
+        Self::with_metadata(self.0.meta.clone(), Some(value))
+    }
+
     pub(crate) fn metadata(&self) -> &BindingMeta {
         &self.0.meta
     }
