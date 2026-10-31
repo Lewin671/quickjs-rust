@@ -113,6 +113,7 @@ Each file is under `archive/` with a resume block; outcomes record what happened
   `benchmarking-history.md`, `performance-observations.md`,
   `source-comment-measurements.md`, `harness-convergence-risks.md`,
   `task-index-2026-10-09.md`.
+- T077 S2 follow-up round 2 [iteration history](archive/T077-s2fu-r2-iterations.md); current qualification is linked from T077.
 - Frozen unit plans and their outcomes are indexed in
   [performance-units/README.md](performance-units/README.md).
 
