@@ -7,7 +7,7 @@ update the resume block in the commit that lands it. When a task closes, move it
 ## Active
 | Task | Status | What it is |
 | --- | --- | --- |
-| [T077](T077-core-rebuild.md) core rebuild | active | S3a integrated; S2 round-2 repair in progress ([before-state](diagnostics/T077-s2-r2-before.md), [method](diagnostics/T077-s2-round2-method.md)). Prior S2 evidence: [receipt](archive/T077-s2-round1-verification.md), [source](archive/T077-s2-round1-source.md), [counters](archive/T077-s2-round1-final-counters.md), [iMac/RSS](archive/T077-s2-round1-measurements.md); cached/off exact 42,672 passes each; lead formal acceptance pending. |
+| [T077](T077-core-rebuild.md) core rebuild | active | S3a integrated; S2 round-3 layout-first redirect in progress ([before-state](diagnostics/T077-s2-r2-before.md), [method](diagnostics/T077-s2-round2-method.md)). Prior S2 evidence: [receipt](archive/T077-s2-round1-verification.md), [source](archive/T077-s2-round1-source.md), [counters](archive/T077-s2-round1-final-counters.md), [iMac/RSS](archive/T077-s2-round1-measurements.md); cached/off exact 42,672 passes each; lead formal acceptance pending. |
 | [T073](T073-local-read-bimodal.md) local-read bimodality | active | Diagnosis complete: candidate text-layout CPU tails; T017 adopts case-health containment only. |
 | [T074](T074-direct-eval-scope-model.md) direct eval scope model | design needed | Architecture review before code; tracks eval visibility, declarations, mutability, context and suspension constraints. |
 | [T057](T057-string-code-units.md) string code units | active | Stage 1 and UTF-16 correctness extraction integrated; stage 2 abandoned (0 attempts); linear-search follow-up awaits screening. |
