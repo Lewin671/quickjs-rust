@@ -14,3 +14,11 @@ mod eval_cache;
 mod realm;
 pub(crate) use creation::ModuleImports;
 pub(crate) use realm::{Realm, new_realm, new_realm_sharing_atoms};
+
+/// Parse/declaration facts belonging to the immediate direct-eval call site.
+/// B5 borrows this through NativeSite instead of retaining it on a service view.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct DirectEvalSite {
+    pub(crate) strict: bool,
+    pub(crate) in_parameters: bool,
+}

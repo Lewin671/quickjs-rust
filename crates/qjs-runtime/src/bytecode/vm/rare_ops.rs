@@ -332,7 +332,6 @@ impl Vm<'_> {
                 let value = self.pop()?;
                 let mut env = self.callee_env();
                 let result = to_js_string_with_env(value, &mut env);
-                self.apply_env(env);
                 // Route a throwing toString/Symbol.toPrimitive through the
                 // try-handler stack so `` `${bad}` `` is catchable, instead of
                 // escaping the VM loop.

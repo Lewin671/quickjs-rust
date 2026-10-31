@@ -23,10 +23,7 @@ impl Vm<'_> {
         if !bytecode.has_direct_local_upvalue_routes() && !env.has_module_imports() {
             return (Vec::new(), Some(0));
         }
-        let direct_eval_frame = matches!(
-            env.get_local(crate::DIRECT_EVAL_BINDING),
-            Some(crate::Value::Boolean(true))
-        );
+        let direct_eval_frame = env.direct_eval_site().is_some();
         let mut next_received = 0;
         let has_module_imports = env.has_module_imports();
         let mut realm_binding_slots = 0_u128;

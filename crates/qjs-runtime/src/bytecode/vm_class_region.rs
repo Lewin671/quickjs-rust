@@ -89,7 +89,6 @@ impl Vm<'_> {
         let heritage = if has_heritage {
             let mut heritage_env = self.current_env();
             let heritage = ClassHeritage::resolve(self.pop()?, &mut heritage_env)?;
-            self.apply_env(heritage_env);
             Some(heritage)
         } else {
             None
@@ -241,7 +240,6 @@ impl Vm<'_> {
                 let value = self.pop()?;
                 let mut env = self.current_env();
                 let key = to_property_key_value(value, &mut env)?;
-                self.apply_env(env);
                 Some(key)
             }
             None => None,

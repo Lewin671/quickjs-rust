@@ -214,14 +214,7 @@ impl ScopePlanBuilder {
 }
 
 #[derive(Clone, Debug, Default)]
-pub(crate) struct BindingMetadata(pub(crate) Box<[BindingMeta]>, pub(crate) MetadataOrigin);
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(crate) enum MetadataOrigin {
-    #[default]
-    Compiled,
-    Dynamic,
-}
+pub(crate) struct BindingMetadata(pub(crate) Box<[BindingMeta]>);
 
 impl std::ops::Deref for BindingMetadata {
     type Target = [BindingMeta];

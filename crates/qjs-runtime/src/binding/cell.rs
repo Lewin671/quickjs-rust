@@ -44,7 +44,6 @@ impl BindingMetaRef {
                     slot: LocalSlot(0),
                 }]
                 .into_boxed_slice(),
-                super::MetadataOrigin::Dynamic,
             )),
             id: BindingId(0),
         }
@@ -58,10 +57,7 @@ impl BindingMetaRef {
         meta.strict_write = WritePolicy::IgnoreSloppy;
         meta.initialization = InitPolicy::Uninitialized;
         Self {
-            owner: Rc::new(BindingMetadata(
-                vec![meta].into_boxed_slice(),
-                super::MetadataOrigin::Compiled,
-            )),
+            owner: Rc::new(BindingMetadata(vec![meta].into_boxed_slice())),
             id: BindingId(0),
         }
     }
@@ -91,10 +87,6 @@ impl BindingCell {
             meta,
             state: RefCell::new(state),
         }))
-    }
-
-    pub(crate) fn has_compiler_metadata(&self) -> bool {
-        self.0.meta.owner.1 == super::MetadataOrigin::Compiled
     }
 
     pub(crate) fn fresh_uninitialized(&self) -> Self {

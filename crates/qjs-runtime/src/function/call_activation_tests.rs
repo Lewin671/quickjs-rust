@@ -70,7 +70,10 @@ fn mapped_dynamic_and_suspended_parameters_use_positional_inputs() {
 #[test]
 fn parameter_metadata_distinguishes_binding_names_from_property_keys() {
     for (source, shadows) in [
-        ("(function ({arguments: other}) { return other; })", false),
+        (
+            "(function ({arguments: other}) { return arguments; })",
+            false,
+        ),
         ("(function ({arguments}) { return arguments; })", true),
         ("(function ([arguments]) { return arguments; })", true),
         (
@@ -79,7 +82,7 @@ fn parameter_metadata_distinguishes_binding_names_from_property_keys() {
         ),
     ] {
         inspect(source, |_, code| {
-            assert_eq!(code.parameters_shadow_arguments(), shadows)
+            assert_eq!(!code.needs_arguments_object(), shadows)
         });
     }
 }

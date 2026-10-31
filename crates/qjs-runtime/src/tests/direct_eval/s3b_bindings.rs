@@ -45,3 +45,23 @@ fn missing_with_property_does_not_repeat_has_binding_on_fallback() {
         Ok(Value::String("Object".into()))
     );
 }
+
+#[test]
+fn global_eval_declarations_use_object_records_and_fresh_lexicals() {
+    assert_eq!(
+        eval(include_str!(
+            "../../../../../tests/fixtures/compare-qjs/s3b-scope-global-eval-authority.js"
+        )),
+        Ok(Value::String(
+            "s3bEvalFunction,s3bEvalVar:11:3:6:3:5:7".into()
+        ))
+    );
+}
+
+#[test]
+fn eval_lexicals_can_shadow_a_restricted_global_property() {
+    assert_eq!(
+        eval("(0, eval)('let undefined = 11; undefined');"),
+        Ok(Value::Number(11.0))
+    );
+}

@@ -1,5 +1,6 @@
-//! Direct eval executes against live leases and the selected own var holder.
-//! Declarations choose their owner once; effects go directly to canonical cells.
+//! Eval declarations retain canonical entry cells and a selected variable base.
+//! Global declarations use the live global object; function eval uses its own
+//! variable holder. Completion never returns a value map to apply to its caller.
 
 use crate::binding::{
     AccessPolicy, BindingCell, BindingKind, CellReference, ScopeCursor, ScopeDescriptorRef,
@@ -14,10 +15,34 @@ pub(super) fn evaluate(
     strict: bool,
 ) -> Result<Value, RuntimeError> {
     let caller = env.scope_cursor().cloned();
-    let in_parameters = matches!(
-        env.get(crate::DIRECT_EVAL_IN_PARAMETER_SCOPE_BINDING),
-        Some(Value::Boolean(true))
-    );
+    let global = !strict && (env.has_global_binding_root() || caller.is_none());
+    let in_parameters = env
+        .direct_eval_site()
+        .is_some_and(|site| site.in_parameters);
+    if !strict {
+        for meta in bytecode.scope_declarations(ScopeId(0)) {
+            if matches!(meta.kind, BindingKind::Var | BindingKind::Function) {
+                if let Some(cursor) = &caller {
+                    cursor.validate_eval_declaration(&meta.name, in_parameters)?;
+                }
+                if global
+                    && env.can_cache_realm_globals()
+                    && env.is_global_lexical_binding(&meta.name)
+                {
+                    return Err(RuntimeError {
+                        thrown: None,
+                        message: format!(
+                            "SyntaxError: eval declaration conflicts with `{}`",
+                            meta.name
+                        ),
+                    });
+                }
+            }
+        }
+    }
+    if global {
+        prepare_global_declarations(bytecode, env)?;
+    }
     let holder = strict.then(|| {
         Rc::new(VarHolder::new(VariableEnvIdentity {
             activation: env.realm().next_variable_identity(),
@@ -25,38 +50,25 @@ pub(super) fn evaluate(
         }))
     });
     let mut cells = Vec::new();
-    let mut eval_env = env.clone();
-    eval_env.clear_deopt_bindings();
-    eval_env.set_direct_eval_with_stack(Vec::new());
-    if !strict {
-        for meta in bytecode.scope_declarations(ScopeId(0)) {
-            if matches!(meta.kind, BindingKind::Var | BindingKind::Function) {
-                caller
+    for meta in bytecode.scope_declarations(ScopeId(0)) {
+        let name = meta.name.clone();
+        let cell = match meta.kind {
+            BindingKind::Var | BindingKind::Function if strict => {
+                let cell = BindingCell::with_metadata(meta, Some(Value::Undefined));
+                holder
                     .as_ref()
-                    .expect("sloppy direct eval has caller")
-                    .validate_eval_declaration(&meta.name, in_parameters)?;
+                    .expect("strict eval holder")
+                    .insert_cell(name, cell.clone());
+                cell
             }
-        }
-    }
-    for reference in bytecode.scope_declarations(ScopeId(0)) {
-        let name = reference.name.clone();
-        let kind = reference.kind;
-        let cell = match kind {
-            BindingKind::Var | BindingKind::Function => {
-                if let Some(holder) = &holder {
-                    let cell = BindingCell::with_metadata(reference, Some(Value::Undefined));
-                    holder.insert_cell(name.clone(), cell.clone());
-                    cell
-                } else {
-                    caller
-                        .as_ref()
-                        .expect("sloppy direct eval has caller")
-                        .declare_var(&name)
-                }
-            }
-            _ => BindingCell::with_metadata(reference, None),
+            BindingKind::Var | BindingKind::Function if !global => caller
+                .as_ref()
+                .expect("function variable cursor")
+                .declare_var(&name),
+            // Global object-record routes never read/write this positional
+            // placeholder; the root descriptor retains its declaration ordinal.
+            _ => BindingCell::with_metadata(meta, None),
         };
-        eval_env.insert_frame_cell(name, cell.clone());
         cells.push(CellReference {
             cell,
             access: AccessPolicy::Mutable,
@@ -72,13 +84,79 @@ pub(super) fn evaluate(
         object: None,
         own_vars: holder,
     });
-    eval_env.set_eval_scope(ScopeCursor {
-        head: root.clone(),
-        variable: if strict {
-            root
-        } else {
-            caller.expect("sloppy direct eval has caller").variable
+    let variable = match (&caller, strict) {
+        (Some(caller), false) => caller.variable.clone(),
+        _ => root.clone(),
+    };
+    let mut selected = env.scope_service_view();
+    selected.set_eval_scope(
+        ScopeCursor {
+            head: root,
+            variable,
         },
-    });
-    crate::bytecode::eval_bytecode_with_env_ephemeral_global_lexicals(bytecode, eval_env).value
+        global,
+    );
+    crate::bytecode::eval_bytecode_with_env_ephemeral_global_lexicals(bytecode, selected).value
+}
+
+fn prepare_global_declarations(bytecode: &Bytecode, env: &mut CallEnv) -> Result<(), RuntimeError> {
+    let Some(Value::Object(object)) = env.selected_global_this() else {
+        for meta in bytecode.scope_declarations(ScopeId(0)) {
+            if matches!(meta.kind, BindingKind::Var | BindingKind::Function)
+                && !env.realm_contains(&meta.name)
+            {
+                env.insert_realm(meta.name.clone(), Value::Undefined);
+            }
+        }
+        return Ok(());
+    };
+    // Validate everything before creating bindings. Function declarations are
+    // installed first; newly declared vars follow, preserving property order.
+    for function in [true, false] {
+        for meta in bytecode.scope_declarations(ScopeId(0)) {
+            if !matches!(meta.kind, BindingKind::Var | BindingKind::Function)
+                || (meta.kind == BindingKind::Function) != function
+            {
+                continue;
+            }
+            let allowed = if function {
+                super::can_declare_global_function(&object, &meta.name)
+            } else {
+                super::can_declare_global_var(&object, &meta.name)
+            };
+            if !allowed {
+                return Err(RuntimeError {
+                    thrown: None,
+                    message: format!("TypeError: cannot declare global binding `{}`", meta.name),
+                });
+            }
+        }
+    }
+    for function in [true, false] {
+        for meta in bytecode.scope_declarations(ScopeId(0)) {
+            if !matches!(meta.kind, BindingKind::Var | BindingKind::Function)
+                || (meta.kind == BindingKind::Function) != function
+            {
+                continue;
+            }
+            if function || !object.has_own_property(&meta.name) {
+                let property = match object.own_property(&meta.name) {
+                    Some(existing) if !existing.configurable => existing,
+                    _ => crate::Property::data(Value::Undefined, true, true, true),
+                };
+                object.define_property(meta.name.clone(), property);
+            }
+            if env.can_cache_realm_globals() {
+                match object.own_property(&meta.name) {
+                    Some(property) if !property.is_accessor() => {
+                        env.insert_realm(meta.name.clone(), property.value);
+                    }
+                    _ => {
+                        env.remove_realm(&meta.name);
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
 }

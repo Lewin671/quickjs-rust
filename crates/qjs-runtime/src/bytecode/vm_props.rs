@@ -246,7 +246,6 @@ impl Vm<'_> {
         let object = self.pop()?;
         let mut env = self.current_env();
         let result = delete_property_key(object, &key, &mut env)?;
-        self.apply_env(env);
         // Strict-mode `delete` of a non-configurable property is a TypeError.
         if is_strict && matches!(result, Value::Boolean(false)) {
             return Err(RuntimeError {

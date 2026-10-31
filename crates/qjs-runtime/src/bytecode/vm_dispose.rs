@@ -87,7 +87,6 @@ impl Vm<'_> {
         }
         let mut env = self.current_env();
         let method = resolve_dispose_method(value.clone(), hint, &mut env)?;
-        self.apply_env(env);
         if matches!(method, Value::Null | Value::Undefined) {
             return Err(RuntimeError {
                 thrown: None,
@@ -129,10 +128,8 @@ impl Vm<'_> {
                 Ok(Value::Undefined)
             } else {
                 let mut env = self.current_env();
-                let result =
-                    call_function(resource.method, resource.value, Vec::new(), &mut env, false);
-                self.apply_env(env);
-                result
+
+                call_function(resource.method, resource.value, Vec::new(), &mut env, false)
             };
             match result {
                 Ok(value) => {
@@ -178,7 +175,6 @@ impl Vm<'_> {
             Some(previous) => {
                 let mut env = self.current_env();
                 let suppressed = create_suppressed_error(thrown, previous, &mut env)?;
-                self.apply_env(env);
                 Ok(suppressed)
             }
         }

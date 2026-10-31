@@ -101,9 +101,8 @@ impl Vm<'_> {
             return Ok(value);
         }
         let mut env = self.current_env();
-        let result = operations::eval_unary(op, value, &mut env);
-        self.apply_env(env);
-        result
+
+        operations::eval_unary(op, value, &mut env)
     }
 
     pub(super) fn eval_to_numeric(&mut self) -> Result<Value, RuntimeError> {
@@ -117,7 +116,6 @@ impl Vm<'_> {
             Value::BigInt(_) => primitive,
             value => Value::Number(to_number_with_env(value, &mut env)?),
         };
-        self.apply_env(env);
         Ok(result)
     }
 
@@ -159,7 +157,6 @@ impl Vm<'_> {
                 }
             }
         };
-        self.apply_env(env);
         Ok(result)
     }
 

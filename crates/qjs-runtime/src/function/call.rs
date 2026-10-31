@@ -18,8 +18,7 @@ use std::{collections::HashMap, rc::Rc};
 use qjs_ast::FunctionParams;
 
 use crate::{
-    Bytecode, DIRECT_EVAL_ARGUMENTS_BINDING, Function, NativeFunction, ObjectRef, RuntimeError,
-    Value,
+    Bytecode, Function, NativeFunction, ObjectRef, RuntimeError, Value,
     bytecode::{
         DirectCallSlots, DirectCallUpvalues, eval_call_bytecode, eval_direct_call_bytecode,
         eval_function_bytecode, try_eval_numeric_leaf, try_eval_this_property_leaf,
@@ -846,9 +845,9 @@ pub(crate) fn call_field_initializer(
 }
 
 fn finish_derived_construct(
-    result: crate::bytecode::FunctionBytecodeResult<'_>,
+    result: crate::bytecode::FunctionBytecodeResult,
 ) -> Result<Value, RuntimeError> {
-    let bound_this = result.frame_cell_binding("this");
+    let bound_this = result.bound_this;
     let value = result.value?;
     match value {
         // A Symbol (or BigInt) primitive is represented as an object reference
@@ -1247,16 +1246,6 @@ fn function_env<'a>(
             active_constructor: derived.then(|| callee.clone()),
             kind: function.owner_kind,
         });
-    }
-    let parameter_shadows_arguments = bytecode.parameters_shadow_arguments();
-    let has_own_arguments_object = !function.lexical_arguments
-        && !parameter_shadows_arguments
-        && bytecode.needs_arguments_object();
-    if has_own_arguments_object || parameter_shadows_arguments {
-        frame_env.insert(
-            DIRECT_EVAL_ARGUMENTS_BINDING.to_owned(),
-            Value::Boolean(true),
-        );
     }
     if let Some(bindings) = &function.deopt_bindings
         && !function.scope_bypassed.get()

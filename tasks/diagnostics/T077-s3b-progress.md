@@ -435,3 +435,50 @@ SHA-256 `673e6bc39c537495f70b57fd8c97eccfac72b555105ba52a40c15bd161cb852d`;
 Summary SHA-256 `592bafe4c02d38d9c10e1e72ff376275a406cd62bd64f042ff6d9981f028faff`.
 Case-map SHA-256 `55da6d79ae0db402cc12fdc9a5a75ae1e6168477b258f8439fd72dee12156a7a`.
 This is a complete filtered slice, not a full scan/burndown or S3b acceptance.
+
+
+## B3a3 live eval entry and projection/apply-back retirement
+
+DirectEvalSite replaces the four direct-eval/strict/parameter/arguments marker
+bindings; marker scrubbing, VmCallEnv and VmCallEnvOrigin are deleted. Own
+arguments demand comes only from BindingPlan, so the duplicate parameter-shadow
+admission flag/scanner is gone. Every direct/indirect eval now selects live
+leases plus either an own strict holder, the caller's own variable holder or
+the global record. Eval declaration cells attach by compiled root ordinal,
+never a frame-name/value map. Global function declarations reserve their proper
+property order before vars, validate descriptors before changes, and invalidate
+accessor data routes without calling getters. No global lexical values escape
+an eval's fresh declarative environment.
+
+frame_call_env now retains typed scope/creation state and no values; initial
+deopt overlays are no longer allocated. Removed: global eval writeback/shadow
+repair, binding Snapshot/result lookup APIs, eval-deletable side names, all
+apply_env/apply_call_env paths and native/callback apply-back. Completion carries
+only result/throw and bound derived-this, not env/locals/cells. Existing compact
+caller-environment tiers are still present until B5: the eval-only global-slot
+mask distinguishes them from global eval entry. No tier is disabled.
+
+Implementation checks caught a fast initializer skipping eval entry cells and
+global eval slots using unused TDZ placeholders. Entry roots now decline that
+initializer; object data routes attach canonical realm cells and accessor routes
+retain semantic Get/Set. All **2,573 runtime tests**, staged gate (117 selected Test262 cases),
+agents/perf-counters compilation and **288 NG scripts** pass. The new fixture
+covers declaration effects, lexical shadowing and accessor-loop behavior. Its
+two global-name results are sorted: NG and Node list var before function here;
+our ordinary global object follows the step 17/18 declaration ordering. No
+property-order equivalence is claimed. The complete eval slice remains next.
+
+One prior assertion incorrectly rejected eval lexical shadowing of a global
+function (`evalLexCollisionFn`). ES2025 EvalDeclarationInstantiation step 16
+creates eval lexicals in the fresh environment without HasRestrictedGlobalProperty;
+pinned NG and Node v22.23.3 both return `false:undefined`. The expectation is
+corrected, with a new `let undefined` eval regression; this is a specification
+correction, not a correctness waiver. Primary reference:
+https://tc39.es/ecma262/2025/multipage/global-object.html#sec-evaldeclarationinstantiation
+
+
+Pinned NG rejects `(0, eval)('let undefined = 11; undefined')` with SyntaxError;
+Node v22.23.3 returns 11, as step 16 of the same ES2025 algorithm requires. The
+compatible NG fixture shadows the newly declared function name instead; a
+separate runtime test enforces restricted-property lexical shadowing. No NG
+wrong result is encoded as an engine expectation.

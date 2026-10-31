@@ -137,12 +137,6 @@ impl<'a> Vm<'a> {
         if env.scope_cursor().is_some() {
             env.clear_deopt_bindings();
         }
-        if (bytecode.contains_direct_eval() || bytecode.contains_with())
-            && env.deopt_bindings().is_none()
-            && env.scope_cursor().is_none()
-        {
-            env.set_deopt_bindings(DynamicBindings::new());
-        }
         if bytecode.binding_plan.has_realm_lexicals {
             for (slot, &lexical) in bytecode.binding_plan.realm_lexical_slots.iter().enumerate() {
                 if lexical && let Some(meta) = bytecode.binding_meta(slot) {
@@ -341,81 +335,11 @@ impl<'a> Vm<'a> {
         locals
     }
 
-    /// Builds a `CallEnv` over the shared realm with this frame's live slots.
+    /// Retains typed scope ownership; no slot/name/value projection is made.
     pub(super) fn frame_call_env(&self) -> CallEnv {
-        let deopt_bindings = self.frame_deopt_bindings();
-        let mut env = self.attach_host(self.env.fork_current_frame_values());
-        for index in 0..self.locals.len() {
-            if self.bytecode.local_is_compiler_temporary(index)
-                || self.bytecode.local_is_sloppy_global_fallback(index)
-                || (self.bytecode.is_global_scope()
-                    && self.bytecode.local_is_body_hoist_only(index)
-                    && !self.bytecode.local_is_compiler_temporary(index))
-            {
-                continue;
-            }
-            if let Some(value) = self.local_slot_value(index) {
-                let name = self.bytecode.locals[index].name.clone();
-                if name == "this" {
-                    continue;
-                }
-                // Slots are emitted in lexical declaration order. Inserting every
-                // active slot under its source name therefore makes an inner
-                // shadowing binding replace the outer entry, while an exited
-                // block's cleared slot never wins. Slot identity, not a mangled
-                // name, remains authoritative for ordinary bytecode access.
-                env.insert(name, value);
-            }
-        }
-        for index in 0..self.locals.len() {
-            let Some(upvalue) = self.local_upvalue_cell(index) else {
-                continue;
-            };
-            if self.bytecode.local_is_compiler_temporary(index)
-                || self.bytecode.local_is_sloppy_global_fallback(index)
-                || (self.bytecode.is_global_scope()
-                    && self.bytecode.local_is_body_hoist_only(index)
-                    && !self.bytecode.local_is_compiler_temporary(index))
-            {
-                continue;
-            }
-            if self.locals.get(index).is_some_and(Option::is_some)
-                || self.bytecode.locals[index].is_received_upvalue()
-            {
-                if self.bytecode.locals[index].name == "this" {
-                    continue;
-                }
-                env.insert_frame_cell(self.bytecode.locals[index].name.clone(), upvalue.clone());
-            }
-        }
-        for (index, slot) in self.locals.iter().enumerate() {
-            if slot.is_some() && self.bytecode.locals[index].catch_binding {
-                env.mark_catch_binding(self.bytecode.locals[index].name.clone());
-            }
-        }
-        env.clear_direct_eval_var_conflicts();
-        let in_parameter_prologue = self.in_parameter_prologue();
-        for (index, local) in self.bytecode.locals.iter().enumerate() {
-            if self.bytecode.local_is_compiler_temporary(index) {
-                continue;
-            }
-            if in_parameter_prologue && local.parameter {
-                env.mark_direct_eval_var_conflict(local.name.clone());
-                continue;
-            }
-            if local.hoisted {
-                continue;
-            }
-            let active_lexical = self.locals.get(index).is_some_and(Option::is_some);
-            if active_lexical {
-                env.mark_direct_eval_var_conflict(local.name.clone());
-            }
-        }
+        let mut env = self.attach_host(self.env.scope_service_view());
         env.set_scope_cursor(self.prepare_scope_cursor());
         env.set_private_environment(self.current_private_environment());
-        if let Some(bindings) = deopt_bindings {
-            env.set_deopt_bindings(bindings);
-        }
         env
     }
 

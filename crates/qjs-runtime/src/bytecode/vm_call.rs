@@ -20,7 +20,6 @@ use crate::{
 
 use super::util::stack_underflow;
 use super::vm::Vm;
-use super::vm_call_env::{VmCallEnv, VmCallEnvOrigin};
 
 const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
 
@@ -244,55 +243,30 @@ impl Vm<'_> {
         let frame_independent_native = !effective_direct_eval
             && matches!(&callee, Value::Function(function) if function.native.is_some());
         let mut env = if effective_direct_eval {
-            VmCallEnv {
-                env: self.current_env(),
-                origin: VmCallEnvOrigin::DirectEval,
-            }
+            self.current_env()
         } else if frame_independent_native {
-            VmCallEnv {
-                env: self.realm_env(),
-                origin: VmCallEnvOrigin::RealmOnly,
-            }
+            self.realm_env()
         } else {
             self.call_env(&callee)
         };
-        let marker_free = env.origin.is_marker_free();
+        env.set_direct_eval_site(
+            effective_direct_eval.then_some(crate::context::DirectEvalSite {
+                strict: direct_eval_strict,
+                in_parameters: in_parameter_scope,
+            }),
+        );
         if effective_direct_eval {
-            env.env
-                .insert(crate::DIRECT_EVAL_BINDING.to_owned(), Value::Boolean(true));
-            env.env.insert(
-                crate::DIRECT_EVAL_STRICT_BINDING.to_owned(),
-                Value::Boolean(direct_eval_strict),
-            );
-            if in_parameter_scope {
-                env.env.insert(
-                    crate::DIRECT_EVAL_IN_PARAMETER_SCOPE_BINDING.to_owned(),
-                    Value::Boolean(true),
-                );
-            }
-            env.env
-                .set_direct_eval_with_stack(self.with_stack().to_vec());
-        } else if !marker_free {
-            // A freshly built frame cannot carry a marker: `CallEnv::remove`
-            // reaches only frame and deopt bindings, and both start empty.
-            crate::diagnostics::count!(call_env_marker_scrubs);
-            env.env.remove(crate::DIRECT_EVAL_BINDING);
-            env.env.remove(crate::DIRECT_EVAL_STRICT_BINDING);
-            env.env
-                .remove(crate::DIRECT_EVAL_IN_PARAMETER_SCOPE_BINDING);
+            env.set_direct_eval_with_stack(self.with_stack().to_vec());
         }
         let restore_dynamic_realm_after_call = !matches!(&callee, Value::Function(function) if function.native == Some(NativeFunction::Eval));
         let dynamic_realm_snapshot = restore_dynamic_realm_after_call
             .then(|| self.marked_dynamic_realm_snapshot())
             .flatten();
-        let result =
-            crate::function::call_function_slice(&callee, this_value, arguments, &mut env.env);
-        env.env.remove(crate::DIRECT_EVAL_BINDING);
-        env.env.remove(crate::DIRECT_EVAL_STRICT_BINDING);
-        env.env
-            .remove(crate::DIRECT_EVAL_IN_PARAMETER_SCOPE_BINDING);
-        env.env.set_direct_eval_with_stack(Vec::new());
-        self.apply_call_env(env);
+        let result = crate::function::call_function_slice(&callee, this_value, arguments, &mut env);
+        env.set_direct_eval_site(None);
+        env.set_direct_eval_with_stack(Vec::new());
+        drop(env);
+        self.refresh_realm_backed_locals_from_realm();
         if let Some(snapshot) = dynamic_realm_snapshot {
             self.restore_marked_dynamic_realm(snapshot);
         }

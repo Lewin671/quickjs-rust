@@ -167,10 +167,13 @@ impl Bytecode {
         self.binding_plan.cell_slots.dedup();
         self.binding_plan.dynamic_cell_slots.sort_unstable();
         self.binding_plan.dynamic_cell_slots.dedup();
-        self.binding_plan.bindings = std::rc::Rc::new(crate::binding::BindingMetadata(
-            bindings.into_boxed_slice(),
-            crate::binding::MetadataOrigin::Compiled,
-        ));
+        let mut root_ordinals = vec![None; self.locals.len()];
+        for (ordinal, id) in declarations[0].iter().enumerate() {
+            root_ordinals[bindings[id.0].slot.0] = Some(ordinal);
+        }
+        self.binding_plan.root_ordinals = root_ordinals.into_boxed_slice();
+        self.binding_plan.bindings =
+            std::rc::Rc::new(crate::binding::BindingMetadata(bindings.into_boxed_slice()));
         self.binding_plan.local_bindings = slots.into_boxed_slice();
         self.binding_plan.cell_slots.retain(|&slot| {
             self.binding_plan.local_bindings[slot].is_some() || self.locals[slot].name == "this"

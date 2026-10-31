@@ -1,7 +1,7 @@
 //! Temporary service ABI over typed creation/activation state.
 //! Declaratives live in bytecode slots/shared cells; realm ownership is in
-//! context/realm.rs. FrameBindings/deopt value projections remain compatibility
-//! inputs/publication for the atomic Context cut. Never add new snapshots here.
+//! context/realm.rs. FrameBindings/deopt types remain ABI compatibility for
+//! the atomic Context cut; effect/eval views retain typed leases, not values.
 //! Storage borrows must end before getters, setters, traps or other JS callbacks.
 
 use std::{
@@ -380,10 +380,6 @@ impl DynamicBindings {
             .collect()
     }
 
-    pub(crate) fn names(&self) -> Vec<String> {
-        self.0.map.borrow().keys().cloned().collect()
-    }
-
     /// Calls `visit` with every binding name that carries `prefix`, stripped.
     ///
     /// The caller used to ask the opposite question -- build `prefix + name`
@@ -420,6 +416,7 @@ pub(crate) struct CallEnv {
     frame_bindings: FrameBindings,
     /// Pending construct target until B5 introduces the borrowed NativeSite.
     construct_target: Option<Value>,
+    direct_eval_site: Option<crate::context::DirectEvalSite>,
     deopt_bindings: Option<DynamicBindings>,
     global_binding_root: bool,
     global_function_configurable: bool,
@@ -436,6 +433,7 @@ impl Clone for CallEnv {
             activation: self.activation.retained_view(),
             frame_bindings: self.frame_bindings.clone(),
             construct_target: self.construct_target.clone(),
+            direct_eval_site: self.direct_eval_site,
             deopt_bindings: self.deopt_bindings.clone(),
             global_binding_root: self.global_binding_root,
             global_function_configurable: self.global_function_configurable,
@@ -466,6 +464,30 @@ impl std::fmt::Debug for CallEnv {
 
 #[allow(dead_code)]
 impl CallEnv {
+    /// Transitional typed scope/service view; it retains no binding values.
+    /// B5 replaces ownership of this view with a mutable Context borrow.
+    pub(crate) fn scope_service_view(&self) -> Self {
+        Self {
+            activation: self.activation.retained_view(),
+            frame_bindings: FrameBindings::default(),
+            construct_target: None,
+            direct_eval_site: None,
+            deopt_bindings: None,
+            global_binding_root: self.global_binding_root,
+            global_function_configurable: self.global_function_configurable,
+            catch_bindings: None,
+            direct_eval_var_conflicts: None,
+            direct_eval_with_stack: Vec::new(),
+            #[cfg(feature = "agents")]
+            agent_context: self.agent_context.clone(),
+        }
+    }
+    pub(crate) fn direct_eval_site(&self) -> Option<crate::context::DirectEvalSite> {
+        self.direct_eval_site
+    }
+    pub(crate) fn set_direct_eval_site(&mut self, site: Option<crate::context::DirectEvalSite>) {
+        self.direct_eval_site = site;
+    }
     pub(crate) fn primitive_prototype(&self, name: &str) -> Option<ObjectRef> {
         let kind = crate::context::PrimitiveIntrinsic::from_name(name)?;
         self.activation.creation.intrinsics.primitive[kind.index()]
@@ -490,6 +512,7 @@ impl CallEnv {
             ),
             frame_bindings: FrameBindings::with_capacity(capacity),
             construct_target: None,
+            direct_eval_site: None,
             deopt_bindings: None,
             global_binding_root: false,
             global_function_configurable: true,
@@ -615,6 +638,7 @@ impl CallEnv {
             ),
             frame_bindings: FrameBindings::default(),
             construct_target: None,
+            direct_eval_site: None,
             deopt_bindings: None,
             global_binding_root: false,
             global_function_configurable: true,
@@ -799,6 +823,7 @@ impl CallEnv {
             activation: self.activation.fresh_function(),
             frame_bindings: FrameBindings::with_capacity(capacity),
             construct_target: None,
+            direct_eval_site: None,
             deopt_bindings: None,
             global_binding_root: false,
             global_function_configurable: true,
@@ -1027,7 +1052,7 @@ impl CallEnv {
     pub(crate) fn entry_scope(&self) -> Option<&Rc<crate::binding::ScopeLease>> {
         self.activation.scopes.entry.as_ref()
     }
-    pub(crate) fn set_eval_scope(&mut self, cursor: crate::binding::ScopeCursor) {
+    pub(crate) fn set_eval_scope(&mut self, cursor: crate::binding::ScopeCursor, global: bool) {
         self.activation.mode = crate::context::ExecutionMode::Eval;
         self.activation.scopes.module_root = false;
         if let Some(holder) = &cursor.variable.own_vars {
@@ -1035,7 +1060,8 @@ impl CallEnv {
         }
         self.activation.scopes.entry = Some(cursor.head.clone());
         self.activation.scopes.cursor = Some(cursor);
-        self.global_binding_root = false;
+        self.global_binding_root = global;
+        self.global_function_configurable = true;
     }
 
     pub(crate) fn clear_deopt_bindings(&mut self) {

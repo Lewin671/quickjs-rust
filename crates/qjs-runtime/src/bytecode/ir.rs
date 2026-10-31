@@ -723,7 +723,6 @@ pub struct Bytecode {
     global_names: Vec<String>,
     global_lexical_names: Vec<String>,
     sloppy_global_assignment_names: Vec<String>,
-    eval_deletable_local_names: BTreeSet<String>,
     /// Whether this bytecode is global script code (top-level scripts and
     /// eval bodies). Global `var`/function bindings live in the realm, and
     /// `this` resolves to the realm global; function bodies resolve `this`
@@ -880,7 +879,6 @@ impl Bytecode {
             global_names: collect_global_names(&code),
             global_lexical_names,
             sloppy_global_assignment_names: collect_sloppy_global_assignment_names(&code),
-            eval_deletable_local_names: BTreeSet::new(),
             global_scope,
             dead_completion_slots,
             strict,
@@ -1194,19 +1192,6 @@ impl Bytecode {
         self.locals
             .get(slot)
             .is_some_and(|local| local.compiler_temporary)
-    }
-
-    pub(crate) fn mark_eval_deletable_locals<I>(&mut self, names: I)
-    where
-        I: IntoIterator<Item = String>,
-    {
-        self.eval_deletable_local_names.extend(names);
-    }
-
-    pub(crate) fn local_is_eval_deletable(&self, slot: usize) -> bool {
-        self.locals
-            .get(slot)
-            .is_some_and(|local| self.eval_deletable_local_names.contains(&local.name))
     }
 
     pub(crate) fn local_is_sloppy_global_fallback(&self, slot: usize) -> bool {

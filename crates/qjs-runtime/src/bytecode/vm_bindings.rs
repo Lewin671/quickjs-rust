@@ -1,5 +1,5 @@
 //! Binding access for the interpreter: local
-//! and global loads and stores, and write-back from a callee's environment.
+//! and global loads and stores through their canonical locations.
 //!
 //! A local slot is *authoritative* (a bit in `authoritative_slots`) when no
 //! name-addressed state can supersede it; such a slot is read and written
@@ -10,12 +10,8 @@
 //! `refresh_authoritative_slots` recomputes the masks after a frame's cells
 //! or environment change.
 
-use std::collections::{HashMap, HashSet};
-
 use crate::{
-    GLOBAL_THIS_BINDING, Property, RuntimeError, Value,
-    function::{BindingCell, CallEnv},
-    property_value,
+    GLOBAL_THIS_BINDING, Property, RuntimeError, Value, function::BindingCell, property_value,
     value::OwnDataPropertyWrite,
 };
 
@@ -341,7 +337,6 @@ impl Vm<'_> {
         }
         let mut env = self.current_env();
         let value = property_value(Value::Object(global_this), name, &mut env)?;
-        self.apply_env(env);
         Ok(Some(value))
     }
 
@@ -384,7 +379,6 @@ impl Vm<'_> {
             &mut env,
             false,
         );
-        self.apply_env(env);
         Some(result.map(|_| ()))
     }
 
@@ -1321,219 +1315,6 @@ impl Vm<'_> {
             *local = None;
         }
     }
-    /// Resolves a dynamic environment name to the innermost currently-active
-    /// frame slot. Static bytecode is already slot-indexed; this reverse lookup
-    /// is only for `CallEnv` round-trips used by direct eval and native calls.
-    /// Later slots correspond to inner lexical declarations, so searching in
-    /// reverse preserves shadowing without encoding slot identity in the name.
-    fn active_local_slot_for_env_name(&self, name: &str) -> Option<usize> {
-        self.bytecode
-            .locals
-            .iter()
-            .enumerate()
-            .rev()
-            .find(|(slot, local)| {
-                local.name == name
-                    && (self.locals.get(*slot).is_some_and(Option::is_some)
-                        || self.local_upvalues.get(*slot).is_some_and(Option::is_some))
-            })
-            .map(|(slot, _)| slot)
-            .or_else(|| self.bytecode.local_slot(name))
-    }
-
-    pub(super) fn apply_env(&mut self, env: CallEnv) {
-        // A realm-only environment carries no frame binding to write back, and
-        // the write-back path allocates a name vector and a conflict set before
-        // discovering that. Ordinary frames hand builtins, accessors, coercion
-        // hooks, and iteration exactly such an environment, so this is the
-        // common case now rather than a corner.
-        if !env.has_writable_frame_state() {
-            return;
-        }
-        // The realm layer is shared by `Rc`, so global writes are already live.
-        // Write each non-realm local back to its slot, to the frame's own
-        // internal/caller-scope binding layer, or (for a genuinely new binding)
-        // to the shared realm.
-        let direct_parameter_eval_values = env
-            .deopt_bindings()
-            .map(|bindings| {
-                bindings
-                    .names()
-                    .into_iter()
-                    .filter_map(|name| {
-                        name.strip_prefix(crate::DIRECT_EVAL_PARAMETER_VAR_BINDING_PREFIX)
-                            .and_then(|parameter| {
-                                bindings
-                                    .get(parameter)
-                                    .map(|value| (parameter.to_owned(), value))
-                            })
-                    })
-                    .collect::<HashMap<_, _>>()
-            })
-            .unwrap_or_default();
-        // A direct eval in this function declares its `var`s as deopt
-        // bindings; one named like a sloppy-global fallback local is now
-        // the function's own variable, which the fallback slot must keep
-        // rather than mirror the global of the same name.
-        let locals = env.visible_local_entries();
-        let eval_declared_vars = match env.deopt_bindings().filter(|_| !self.bytecode.global_scope)
-        {
-            Some(bindings) => locals
-                .iter()
-                .filter(|(name, _)| bindings.contains_key(name))
-                .map(|(name, _)| name.clone())
-                .collect::<HashSet<_>>(),
-            None => HashSet::new(),
-        };
-        let eval_declared_fallbacks =
-            match env.deopt_bindings().filter(|_| !self.bytecode.global_scope) {
-                Some(bindings) => locals
-                    .iter()
-                    .filter(|(name, _)| {
-                        bindings.contains_key(name)
-                            && self
-                                .active_local_slot_for_env_name(name)
-                                .is_some_and(|index| {
-                                    self.bytecode.local_is_sloppy_global_fallback(index)
-                                })
-                    })
-                    .map(|(name, _)| name.clone())
-                    .collect::<HashSet<_>>(),
-                None => HashSet::new(),
-            };
-        let direct_parameter_eval_vars = locals
-            .iter()
-            .filter_map(|(name, _)| {
-                name.strip_prefix(crate::DIRECT_EVAL_PARAMETER_VAR_BINDING_PREFIX)
-                    .map(str::to_owned)
-            })
-            .collect::<HashSet<_>>();
-        for (name, mut value) in locals {
-            // Compiler-owned declaratives already received every effect through
-            // their canonical cell. A service view's projected value may
-            // predate a getter/setter callback; publishing it would undo that
-            // callback (notably a mapped arguments write).
-            if self
-                .env
-                .local_binding_cell(&name)
-                .is_some_and(|cell| cell.has_compiler_metadata())
-            {
-                continue;
-            }
-            // Implicit this is never assigned by ordinary name writeback.
-            // Derived initialization already reaches its shared cell; an
-            // outer frame's stale value must not write an inherited cell.
-            if name == "this" {
-                continue;
-            }
-            if name.starts_with(crate::DIRECT_EVAL_PARAMETER_VAR_BINDING_PREFIX) {
-                self.env.insert_deopt(name, value);
-                continue;
-            }
-            if self.in_parameter_prologue() && direct_parameter_eval_vars.contains(&name) {
-                if let Some(parameter_value) = direct_parameter_eval_values.get(&name) {
-                    value = parameter_value.clone();
-                }
-                if let Some(parameter_var_slot) = self.active_local_slot_for_env_name(&name) {
-                    if let Some(local) = self.locals.get_mut(parameter_var_slot) {
-                        *local = Some(value.clone());
-                    }
-                    if let Some(upvalue) = self
-                        .local_upvalues
-                        .get(parameter_var_slot)
-                        .and_then(Option::as_ref)
-                    {
-                        upvalue.set(value.clone());
-                    }
-                }
-                self.env.insert_deopt(name, value);
-                continue;
-            }
-            if let Some(index) = self.active_local_slot_for_env_name(&name) {
-                if self.in_parameter_prologue()
-                    && !self.bytecode.local_is_parameter(index)
-                    && (is_call_frame_binding(&name) || !self.bytecode.local_is_from_env(index))
-                {
-                    self.env.insert(name, value);
-                    continue;
-                }
-                if eval_declared_fallbacks.contains(&name) {
-                    self.locals[index] = Some(value.clone());
-                    // The slot's cell was the global's own realm cell; the
-                    // function's variable needs a cell of its own.
-                    if let Some(cell) = self.local_upvalues.get_mut(index)
-                        && cell.is_some()
-                    {
-                        *cell = Some(BindingCell::new(value.clone()));
-                    }
-                    self.env.insert_deopt(
-                        format!("{}{name}", crate::DIRECT_EVAL_FUNCTION_VAR_BINDING_PREFIX),
-                        Value::Boolean(true),
-                    );
-                    self.env.insert_deopt(name, value);
-                    continue;
-                }
-                let syncs_global_this = self.bytecode.local_is_sloppy_global_fallback(index)
-                    || (self.bytecode.global_scope
-                        && self.bytecode.local_is_body_hoist_only(index)
-                        && !self.bytecode.local_is_compiler_temporary(index));
-                let value = if syncs_global_this {
-                    self.global_this_property(&name).unwrap_or(value)
-                } else {
-                    value
-                };
-                if self.locals[index].is_some()
-                    || self.bytecode.local_is_from_env(index)
-                    || syncs_global_this
-                {
-                    if self.locals[index]
-                        .as_ref()
-                        .is_some_and(|current| !is_uninitialized_lexical_value(current))
-                        && is_uninitialized_lexical_value(&value)
-                    {
-                        continue;
-                    }
-                    self.locals[index] = Some(value.clone());
-                    if let Some(upvalue) = self.local_upvalues.get(index).and_then(Option::as_ref) {
-                        upvalue.set(value.clone());
-                    }
-                    self.write_through_module_live_binding(&name, value.clone());
-                    let realm_backed_slot = (self.bytecode.global_scope
-                        && self.bytecode.local_is_body_hoist_only(index)
-                        && !self.bytecode.local_is_compiler_temporary(index))
-                        || self
-                            .local_upvalues
-                            .get(index)
-                            .and_then(Option::as_ref)
-                            .is_some_and(|cell| self.env.is_realm_binding_cell(&name, cell));
-                    if realm_backed_slot && self.realm.contains(&name) {
-                        self.env.insert_realm(name, value);
-                    } else if syncs_global_this {
-                        self.sync_global_this_own_property(&name, value);
-                    }
-                } else if self.env.has_local_binding(&name) {
-                    self.env.insert(name.clone(), value.clone());
-                    self.write_through_module_live_binding(&name, value);
-                }
-            } else if self.env.has_local_binding(&name)
-                || (self.in_parameter_prologue()
-                    && !is_call_frame_binding(&name)
-                    && !is_compiler_temporary(&name))
-            {
-                self.env.insert(name, value);
-            } else if eval_declared_vars.contains(&name) {
-                // A `var` a direct eval declared in this function, shadowing
-                // a global of the same name.
-                self.env.insert_deopt(name, value);
-            } else if self.realm.contains(&name) {
-                // Already a realm binding (shared cell) — leave it; a mutation
-                // would have hit the cell directly.
-            } else {
-                self.env.insert(name, value);
-            }
-        }
-    }
-
     fn sync_global_this_own_property(&self, name: &str, value: Value) {
         let Some(global_this) = self.cached_global_this() else {
             return;
@@ -1568,6 +1349,9 @@ impl Vm<'_> {
         if let Some(reference) = self.resolve_scope_binding(name, false)? {
             return reference.delete(&mut self.realm_env());
         }
+        if self.prepare_scope_cursor().is_some() {
+            return Ok(true);
+        }
         if self.uses_selected_object_binding(name) {
             let Some(base) = self.env.selected_global_this() else {
                 return Ok(true);
@@ -1589,12 +1373,6 @@ impl Vm<'_> {
             if !is_sloppy_global {
                 if let Some(slot) = self.bytecode.local_slot(name) {
                     if self.locals[slot].is_some() {
-                        if self.bytecode.local_is_eval_deletable(slot) {
-                            self.locals[slot] = None;
-                            self.local_upvalues[slot] = None;
-                            self.env.remove(name);
-                            return true;
-                        }
                         return false;
                     }
                 }
@@ -1664,7 +1442,6 @@ impl Vm<'_> {
     pub(super) fn drain_promise_jobs(&mut self) -> Result<(), RuntimeError> {
         let mut env = self.current_env();
         crate::promise::drain_promise_jobs(&mut env)?;
-        self.apply_env(env);
         Ok(())
     }
 }
@@ -1681,23 +1458,4 @@ pub(super) fn clone_local_value(value: &Value) -> Value {
         Value::Undefined => Value::Undefined,
         value => value.clone(),
     }
-}
-
-pub(super) fn is_compiler_temporary(name: &str) -> bool {
-    name.starts_with("\0\0")
-}
-
-pub(super) fn is_call_frame_binding(name: &str) -> bool {
-    matches!(
-        name,
-        crate::GLOBAL_THIS_BINDING
-            | crate::DIRECT_EVAL_STRICT_BINDING
-            | crate::DIRECT_EVAL_ARGUMENTS_BINDING
-            | "this"
-            | "arguments"
-    )
-}
-
-fn is_uninitialized_lexical_value(value: &Value) -> bool {
-    matches!(value, Value::Function(function) if function.is_uninitialized_lexical_marker())
 }

@@ -42,14 +42,7 @@ pub(crate) use call::{
 };
 pub(crate) use intrinsic_construct::construct_intrinsic_directly;
 pub(crate) fn is_call_frame_binding(name: &str) -> bool {
-    matches!(
-        name,
-        crate::GLOBAL_THIS_BINDING
-            | crate::DIRECT_EVAL_STRICT_BINDING
-            | crate::DIRECT_EVAL_ARGUMENTS_BINDING
-            | "this"
-            | "arguments"
-    )
+    matches!(name, crate::GLOBAL_THIS_BINDING | "this" | "arguments")
 }
 pub(crate) use crate::binding::BindingCell;
 #[cfg(test)]

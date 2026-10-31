@@ -220,9 +220,8 @@ impl Vm<'_> {
         this_value: Value,
     ) -> Result<Value, RuntimeError> {
         let mut env = self.current_env();
-        let result = call_field_initializer(thunk, this_value, &mut env);
-        self.apply_env(env);
-        result
+
+        call_field_initializer(thunk, this_value, &mut env)
     }
 
     /// Resolves `super.<key>` (or `super[key]`): the property is looked up on
@@ -252,7 +251,6 @@ impl Vm<'_> {
         }
         let mut env = self.current_env();
         let value = property_value_key_with_receiver(lookup_base, key, receiver, &mut env)?;
-        self.apply_env(env);
         Ok(value)
     }
 
@@ -296,7 +294,6 @@ impl Vm<'_> {
         let mut env = self.current_env();
         let wrote =
             crate::reflect::ordinary_set(lookup_base, &key, value.clone(), receiver, &mut env)?;
-        self.apply_env(env);
         if !wrote && is_strict {
             return Err(RuntimeError {
                 thrown: None,
@@ -365,7 +362,6 @@ impl Vm<'_> {
         let mut env = self.current_env();
         let result =
             crate::function::initialize_instance_fields(&constructor, this_value, &mut env);
-        self.apply_env(env);
         result.map(|()| Value::Undefined)
     }
 
@@ -384,7 +380,6 @@ impl Vm<'_> {
 
         let mut env = self.current_env();
         let result = construct_function(super_constructor, new_target, arguments, &mut env);
-        self.apply_env(env);
         let value = result?;
         // A repeated `super(...)` still performs the parent construction after
         // argument evaluation, then fails while trying to initialize `this`.

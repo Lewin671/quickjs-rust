@@ -24,7 +24,6 @@ pub(super) enum InitialSlot {
 #[derive(Clone, Debug, Default)]
 pub(super) struct ParameterInfo {
     pub(super) direct_seedable: bool,
-    pub(super) shadows_arguments: bool,
     pub(super) rest_slot: Option<usize>,
     pub(super) mapped_slots: Box<[Option<usize>]>,
 }
@@ -48,11 +47,6 @@ impl ParameterInfo {
                     .positional
                     .iter()
                     .all(|element| matches!(element.binding, BindingPattern::Identifier { .. })),
-            shadows_arguments: params
-                .positional
-                .iter()
-                .any(|element| binds_arguments(&element.binding))
-                || params.rest.as_deref().is_some_and(binds_arguments),
             rest_slot: params.rest.as_deref().map(|rest| {
                 bytecode
                     .local_slot(&crate::function::rest_parameter_binding_name(rest))
@@ -68,6 +62,7 @@ pub(super) struct BindingPlan {
     pub(super) scopes: std::rc::Rc<crate::binding::ScopeDescriptors>,
     pub(super) pc_scopes: Box<[crate::binding::ScopeId]>,
     pub(super) bindings: std::rc::Rc<crate::binding::BindingMetadata>,
+    pub(super) root_ordinals: Box<[Option<usize>]>,
     pub(super) local_bindings: Box<[Option<crate::binding::BindingId>]>,
     pub(super) realm_lexical_slots: Box<[bool]>,
     pub(super) has_realm_lexicals: bool,
@@ -151,6 +146,7 @@ impl BindingPlan {
             scopes: std::rc::Rc::default(),
             pc_scopes: Box::default(),
             bindings: std::rc::Rc::default(),
+            root_ordinals: Box::default(),
             local_bindings: Box::default(),
             realm_lexical_slots: vec![false; bytecode.locals.len()].into_boxed_slice(),
             has_realm_lexicals: false,
@@ -232,27 +228,6 @@ fn nested_receiver(bytecode: &Bytecode) -> bool {
         } => bytecode.needs_call_receiver(),
         _ => false,
     })
-}
-
-fn binds_arguments(binding: &BindingPattern) -> bool {
-    match binding {
-        BindingPattern::Identifier { name, .. } => name == "arguments",
-        BindingPattern::Array { elements, rest, .. } => {
-            elements
-                .iter()
-                .flatten()
-                .any(|element| binds_arguments(&element.binding))
-                || rest.as_deref().is_some_and(binds_arguments)
-        }
-        BindingPattern::Object {
-            properties, rest, ..
-        } => {
-            properties
-                .iter()
-                .any(|property| binds_arguments(&property.binding))
-                || rest.as_deref().is_some_and(binds_arguments)
-        }
-    }
 }
 
 fn dynamic_tree(bytecode: &Bytecode) -> bool {

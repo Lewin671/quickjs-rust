@@ -32,10 +32,6 @@ impl Bytecode {
         self.binding_plan.parameters.direct_seedable
     }
 
-    pub(crate) fn parameters_shadow_arguments(&self) -> bool {
-        self.binding_plan.parameters.shadows_arguments
-    }
-
     pub(crate) fn mapped_argument_slot(&self, index: usize) -> Option<usize> {
         self.binding_plan
             .parameters

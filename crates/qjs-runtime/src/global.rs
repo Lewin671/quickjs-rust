@@ -11,7 +11,7 @@ use crate::{
     Value,
     bytecode::{
         compile_direct_eval_script, direct_eval_bytecode_is_cacheable, eval_bytecode_with_env,
-        eval_bytecode_with_env_ephemeral_global_lexicals, set_object_property,
+        set_object_property,
     },
     function_delete_own_property, function_own_property_descriptor,
     object::define_property_on_value_key,
@@ -820,10 +820,7 @@ pub(super) fn native_global_eval(
     let Value::String(source) = value else {
         return Ok(value);
     };
-    let direct_eval = matches!(
-        env.get(crate::DIRECT_EVAL_BINDING),
-        Some(Value::Boolean(true))
-    );
+    let direct_eval = env.direct_eval_site().is_some();
     if let Some(value) = try_eval_regexp_literal_source(&source, env)? {
         return Ok(value);
     }
@@ -831,35 +828,16 @@ pub(super) fn native_global_eval(
         return Ok(Value::Undefined);
     }
     let direct_parse_context = direct_eval.then(|| direct_eval_parse_context(env));
-    let mut eval_env = if direct_eval {
-        env.clone()
-    } else {
-        indirect_eval_frame(env)
-    };
-    if direct_eval {
-        eval_env.fork_deopt_bindings();
-    }
-    let direct_function_eval =
-        direct_eval && !env.has_global_binding_root() && eval_env.get_local("this").is_some();
-    let direct_parameter_eval = direct_function_eval
-        && matches!(
-            eval_env.get(crate::DIRECT_EVAL_IN_PARAMETER_SCOPE_BINDING),
-            Some(Value::Boolean(true))
-        );
     // Direct eval inside strict code is itself strict even without its own
     // "use strict" prologue; seed the compiler so Annex B block-function
     // hoisting is correctly suppressed. Indirect eval is sloppy unless its own
     // body opts in.
-    let caller_strict = direct_eval
-        && matches!(
-            env.get(crate::DIRECT_EVAL_STRICT_BINDING),
-            Some(Value::Boolean(true))
-        );
-    let (mut bytecode, cacheable_direct_eval) = match direct_parse_context
+    let caller_strict = direct_eval && env.direct_eval_site().is_some_and(|site| site.strict);
+    let bytecode = match direct_parse_context
         .as_ref()
         .and_then(|context| env.cached_direct_eval_bytecode(&source, context))
     {
-        Some(bytecode) => (bytecode, true),
+        Some(bytecode) => bytecode,
         None => {
             let script = match &direct_parse_context {
                 Some(context) => parse_direct_eval_wtf16_script(&source, context.clone()),
@@ -877,200 +855,18 @@ pub(super) fn native_global_eval(
             {
                 env.cache_direct_eval_bytecode(source.clone(), context.clone(), bytecode.clone());
             }
-            (bytecode, cacheable_direct_eval)
+            bytecode
         }
     };
-    // A declaration-free direct eval needs no complete caller-name snapshot.
-    // Its potential writes are handled below with one exact lookup per written
-    // name. Nested eval and `with` retain the conservative dynamic path.
-    let simple_direct_eval =
-        cacheable_direct_eval && !bytecode.contains_direct_eval() && !bytecode.contains_with();
-    let eval_strict = bytecode.is_strict();
-    if eval_strict || direct_function_eval && env.scope_cursor().is_some() {
-        return scoped_eval::evaluate(&bytecode, env, eval_strict);
-    }
-    eval_env.select_global_bindings(!direct_function_eval && !eval_strict);
-
-    if direct_function_eval
-        && matches!(
-            eval_env.get(crate::DIRECT_EVAL_ARGUMENTS_BINDING),
-            Some(Value::Boolean(true))
-        )
-        && matches!(
-            eval_env.get(crate::DIRECT_EVAL_IN_PARAMETER_SCOPE_BINDING),
-            Some(Value::Boolean(true))
-        )
-        && bytecode
-            .hoisted_local_names()
-            .any(|name| name == "arguments")
-    {
-        // EvalDeclarationInstantiation: a direct eval in a formal-parameter
-        // default may not hoist a `var`/`function` named `arguments`. With
-        // parameter expressions the parameter list has its own environment that
-        // already binds `arguments` (the arguments object, or an `arguments`
-        // parameter), so the eval's separate var declaration collides with it
-        // and is a SyntaxError. A *body*-scope direct eval shares the function
-        // var environment with `arguments` and may redeclare it (`var arguments`
-        // in a plain function body is allowed in sloppy code).
-        return Err(RuntimeError {
-            thrown: None,
-            message: "SyntaxError: cannot declare 'arguments' in function eval".to_owned(),
-        });
-    }
-    // A direct eval always gets its own declarative lexical environment, so its
-    // `let`/`const`/`class` declarations never clash with an existing *lexical*
-    // global binding (`let outside; eval('let outside;')` is two distinct
-    // bindings). They must still not clash with a non-configurable global *var*
-    // binding. Indirect eval also gets a fresh declarative lexical environment,
-    // so its lexicals do not collide with or persist into global lexicals.
-    if direct_function_eval {
-        // A function-scope direct eval declares no global lexicals at all.
+    let mut selected = if direct_eval {
+        env.scope_service_view()
     } else {
-        validate_eval_global_lexical_bindings(&bytecode, &eval_env, false, false)?;
-    }
-    let caller_locals = (!simple_direct_eval).then(|| eval_env.visible_local_names());
-    let hoisted_names = bytecode
-        .hoisted_local_names()
-        .map(str::to_owned)
-        .collect::<HashSet<_>>();
-    let hoisted_function_names = bytecode
-        .hoisted_function_names()
-        .map(str::to_owned)
-        .collect::<HashSet<_>>();
-    let eval_lexical_names = bytecode
-        .eval_lexical_local_names()
-        .map(str::to_owned)
-        .collect::<HashSet<_>>();
-    if !direct_function_eval
-        && !eval_strict
-        && let Some(caller_locals) = caller_locals.as_ref()
-    {
-        validate_sloppy_global_eval_declarations(
-            &bytecode,
-            &eval_env,
-            caller_locals,
-            &hoisted_function_names,
-            false,
-        )?;
-    }
-    if direct_function_eval && !eval_strict && !hoisted_names.is_empty() {
-        validate_sloppy_function_eval_declarations(&bytecode, &eval_env)?;
-    }
-    if direct_function_eval && !eval_strict && !hoisted_names.is_empty() {
-        // Cacheable blueprints have no hoisted declarations, so this only
-        // mutates a fresh, uncached compilation. `make_mut` keeps that
-        // invariant defensive if cache eligibility changes later.
-        Rc::make_mut(&mut bytecode).mark_eval_deletable_locals(
-            hoisted_names
-                .iter()
-                .filter(|name| {
-                    !caller_locals
-                        .as_ref()
-                        .is_some_and(|names| names.contains(*name))
-                })
-                .cloned(),
-        );
-    }
-    let mut strict_direct_writeback_env = (direct_eval && eval_strict).then(|| env.clone());
-    initialize_direct_eval_bindings(
-        &bytecode,
-        &mut eval_env,
-        direct_function_eval,
-        direct_parameter_eval,
-        caller_locals.as_ref(),
-        eval_strict,
-    );
-    let caller_has_local = |name: &str| {
-        caller_locals
-            .as_ref()
-            .map_or_else(|| env.has_local_binding(name), |names| names.contains(name))
+        indirect_eval_frame(env)
     };
-    let result = eval_bytecode_with_env_ephemeral_global_lexicals(&bytecode, eval_env.clone());
-    if eval_env.has_global_binding_root() {
-        return result.value;
-    }
-    let writeback_names = hoisted_names
-        .iter()
-        .cloned()
-        .chain(bytecode.written_binding_names())
-        .collect::<HashSet<_>>();
-    for name in writeback_names {
-        let name = name.as_str();
-        if eval_lexical_names.contains(name) {
-            continue;
-        }
-        let binding = if direct_function_eval && hoisted_names.contains(name) {
-            result.frame_binding(name).or_else(|| result.binding(name))
-        } else {
-            result.binding(name)
-        };
-        if let Some(value) = binding {
-            if let Some(writeback_env) = strict_direct_writeback_env.as_mut() {
-                if hoisted_names.contains(name) {
-                    continue;
-                }
-                if caller_has_local(name) {
-                    // Strict direct eval runs declarations in its own eval
-                    // variable environment, but ordinary assignments to
-                    // caller-scope bindings still write through to the caller.
-                    writeback_env.insert(name.to_owned(), value.clone());
-                }
-                continue;
-            }
-            if direct_parameter_eval && hoisted_names.contains(name) && !eval_strict {
-                eval_env.insert_deopt(name.to_owned(), value.clone());
-                eval_env.insert_deopt(
-                    format!(
-                        "{}{}",
-                        crate::DIRECT_EVAL_PARAMETER_VAR_BINDING_PREFIX,
-                        name
-                    ),
-                    Value::Boolean(true),
-                );
-                update_direct_eval_parameter_captured_functions(&mut eval_env, name, value.clone());
-            } else if caller_has_local(name) {
-                // A caller frame binding (an outer `let`/`var` the eval'd code
-                // assigned): write it back through the frame so the caller's
-                // slot sees the update.
-                // At global scope the native eval call can also carry an
-                // existing realm var through its dynamic frame view. Annex B
-                // block functions update that variable binding at evaluation
-                // time; route it to the shared realm cell and global property
-                // instead of leaving the new function in the ephemeral view.
-                if !direct_function_eval && eval_env.realm_contains(name) {
-                    create_eval_global_var_binding(&mut eval_env, name, value.clone());
-                } else {
-                    eval_env.insert(name.to_owned(), value.clone());
-                }
-            } else if direct_function_eval {
-                if hoisted_names.contains(name) {
-                    eval_env.insert_deopt(name.to_owned(), value.clone());
-                } else {
-                    eval_env.insert(name.to_owned(), value.clone());
-                }
-                if hoisted_names.contains(name) {
-                    update_direct_eval_captured_functions(&mut eval_env, name, value.clone());
-                }
-            } else if eval_strict && !direct_eval && hoisted_names.contains(name) {
-                continue;
-            } else if hoisted_function_names.contains(name) {
-                create_eval_global_function_binding(&mut eval_env, name, value.clone());
-            } else if hoisted_names.contains(name) {
-                create_eval_global_var_binding(&mut eval_env, name, value.clone());
-            } else {
-                define_eval_global_binding(&mut eval_env, name, value.clone());
-            }
-        }
-    }
-    // Indirect eval evaluates its lexical declarations (let/const/class) in a
-    // fresh declarative environment whose parent is the global environment;
-    // those bindings are discarded when the eval completes and never become
-    // global lexical bindings. Only var/function declarations (handled above
-    // via define_eval_global_binding) reach the global var environment.
-    if direct_eval {
-        *env = strict_direct_writeback_env.unwrap_or(eval_env);
-    }
-    result.value
+    // The direct site's parse facts are consumed above. Declaration validation
+    // still needs its parameter boundary, without a binding-name marker.
+    selected.set_direct_eval_site(env.direct_eval_site().filter(|_| direct_eval));
+    scoped_eval::evaluate(&bytecode, &mut selected, bytecode.is_strict())
 }
 
 pub(crate) fn eval_source_is_only_comments_and_whitespace(source: &str) -> bool {
@@ -1280,10 +1076,7 @@ fn is_line_terminator(ch: char) -> bool {
 
 pub(crate) fn direct_eval_parse_context(env: &CallEnv) -> EvalParseContext {
     EvalParseContext {
-        strict: matches!(
-            env.get(crate::DIRECT_EVAL_STRICT_BINDING),
-            Some(Value::Boolean(true))
-        ),
+        strict: env.direct_eval_site().is_some_and(|site| site.strict),
         in_function: env
             .owner_kind()
             .is_some_and(crate::context::OwnerKind::in_function),
@@ -1339,53 +1132,6 @@ fn validate_eval_global_lexical_bindings(
                     ),
                 });
             }
-        }
-    }
-    Ok(())
-}
-
-fn update_direct_eval_captured_functions(env: &mut CallEnv, name: &str, value: Value) {
-    env.for_each_visible_local_value(|local_value| {
-        update_function_captured_binding(local_value, name, value.clone());
-    });
-}
-
-fn update_direct_eval_parameter_captured_functions(env: &mut CallEnv, name: &str, value: Value) {
-    let marker_name = format!(
-        "{}{}",
-        crate::DIRECT_EVAL_PARAMETER_VAR_BINDING_PREFIX,
-        name
-    );
-    update_direct_eval_captured_functions(env, name, value.clone());
-    let _ = (marker_name, value);
-}
-
-fn update_function_captured_binding(value: &Value, name: &str, replacement: Value) {
-    let Value::Function(function) = value else {
-        return;
-    };
-    if let Some(bytecode) = &function.bytecode
-        && let Some((_, upvalue)) = bytecode
-            .received_upvalue_names()
-            .zip(&function.upvalues)
-            .find(|(candidate, _)| *candidate == name)
-    {
-        upvalue.set(replacement);
-    }
-}
-
-fn validate_sloppy_function_eval_declarations(
-    bytecode: &crate::bytecode::Bytecode,
-    env: &CallEnv,
-) -> Result<(), RuntimeError> {
-    for name in bytecode.hoisted_local_names() {
-        if env.is_direct_eval_var_conflict(name) {
-            return Err(RuntimeError {
-                thrown: None,
-                message: format!(
-                    "SyntaxError: function eval var declaration `{name}` conflicts with a lexical binding"
-                ),
-            });
         }
     }
     Ok(())
@@ -1479,67 +1225,6 @@ fn can_declare_global_function(global_this: &ObjectRef, name: &str) -> bool {
     existing.configurable || (!existing.is_accessor() && existing.writable && existing.enumerable)
 }
 
-fn initialize_direct_eval_bindings(
-    bytecode: &crate::bytecode::Bytecode,
-    env: &mut CallEnv,
-    direct_function_eval: bool,
-    direct_parameter_eval: bool,
-    caller_locals: Option<&HashSet<String>>,
-    eval_strict: bool,
-) {
-    // An existing derived-this cell can hold the TDZ marker. Presence must
-    // preserve it, including strict eval copies, rather than seed realm this.
-    if !env.has_local_binding("this")
-        && let Some(value) = env.selected_global_this().or_else(|| env.get("this"))
-    {
-        env.set_call_owner(crate::context::CallOwner::root(
-            value,
-            crate::context::OwnerKind::Script,
-        ));
-    }
-    for name in bytecode.hoisted_local_names() {
-        if !eval_strict
-            && caller_locals.is_some_and(|caller_locals| caller_locals.contains(name))
-            && !direct_parameter_eval
-        {
-            continue;
-        }
-        if eval_strict {
-            env.insert_frame(name.to_owned(), Value::Undefined);
-            continue;
-        }
-        if direct_function_eval {
-            if direct_parameter_eval || !env.has_local_binding(name) {
-                env.insert_deopt(name.to_owned(), Value::Undefined);
-            }
-            continue;
-        }
-        let global_this = env.get(GLOBAL_THIS_BINDING).and_then(|value| match value {
-            Value::Object(object) => Some(object),
-            _ => None,
-        });
-        if let Some(property) = global_this
-            .as_ref()
-            .and_then(|object| object.own_property(name))
-        {
-            if property.is_accessor() {
-                if env.can_cache_realm_globals() {
-                    env.remove_realm(name);
-                }
-                env.insert_frame(name.to_owned(), Value::Undefined);
-            } else {
-                env.insert(name.to_owned(), property.value.clone());
-                if env.can_cache_realm_globals() {
-                    env.insert_realm(name.to_owned(), property.value);
-                }
-            }
-        } else {
-            env.insert(name.to_owned(), Value::Undefined);
-            define_eval_global_binding(env, name, Value::Undefined);
-        }
-    }
-}
-
 fn initialize_eval_script_bindings(bytecode: &crate::bytecode::Bytecode, env: &mut CallEnv) {
     if !env.has_local_binding("this")
         && let Some(value) = env.selected_global_this().or_else(|| env.get("this"))
@@ -1576,36 +1261,6 @@ fn initialize_eval_script_bindings(bytecode: &crate::bytecode::Bytecode, env: &m
     }
 }
 
-fn create_eval_global_var_binding(env: &mut CallEnv, name: &str, value: Value) {
-    let global_this = env.get(GLOBAL_THIS_BINDING).and_then(|value| match value {
-        Value::Object(object) => Some(object),
-        _ => None,
-    });
-    if let Some(global_this) = global_this {
-        let dynamic_realm_global = is_marked_dynamic_realm_global(env, &global_this);
-        if global_this.has_own_property(name) {
-            global_this.set(name.to_owned(), value.clone());
-            let value = global_this
-                .own_property(name)
-                .map(|property| property.value)
-                .unwrap_or(value);
-            if dynamic_realm_global {
-                return;
-            }
-            env.insert_realm(name.to_owned(), value);
-            return;
-        }
-        global_this.define_property(
-            name.to_owned(),
-            Property::data(value.clone(), true, true, true),
-        );
-        if dynamic_realm_global {
-            return;
-        }
-    }
-    env.insert_realm(name.to_owned(), value);
-}
-
 fn create_eval_script_global_var_binding(env: &mut CallEnv, name: &str, value: Value) {
     let global_this = env.get(GLOBAL_THIS_BINDING).and_then(|value| match value {
         Value::Object(object) => Some(object),
@@ -1625,51 +1280,6 @@ fn create_eval_script_global_var_binding(env: &mut CallEnv, name: &str, value: V
             name.to_owned(),
             Property::data(value.clone(), true, true, false),
         );
-    }
-    env.insert_realm(name.to_owned(), value);
-}
-
-fn create_eval_global_function_binding(env: &mut CallEnv, name: &str, value: Value) {
-    let global_this = env.get(GLOBAL_THIS_BINDING).and_then(|value| match value {
-        Value::Object(object) => Some(object),
-        _ => None,
-    });
-    if let Some(global_this) = global_this {
-        let dynamic_realm_global = is_marked_dynamic_realm_global(env, &global_this);
-        let property = match global_this.own_property(name) {
-            Some(existing) if !existing.configurable => {
-                let mut property = existing;
-                property.value = value.clone();
-                property
-            }
-            _ => Property::data(value.clone(), true, true, true),
-        };
-        global_this.define_property(name.to_owned(), property);
-        if dynamic_realm_global {
-            return;
-        }
-    }
-    env.insert_realm(name.to_owned(), value);
-}
-
-fn define_eval_global_binding(env: &mut CallEnv, name: &str, value: Value) {
-    let global_this = env.get(GLOBAL_THIS_BINDING).and_then(|value| match value {
-        Value::Object(object) => Some(object),
-        _ => None,
-    });
-    if let Some(global_this) = global_this {
-        let dynamic_realm_global = is_marked_dynamic_realm_global(env, &global_this);
-        if global_this.has_own_property(name) {
-            global_this.set(name.to_owned(), value.clone());
-        } else {
-            global_this.define_property(
-                name.to_owned(),
-                Property::data(value.clone(), true, true, true),
-            );
-        }
-        if dynamic_realm_global {
-            return;
-        }
     }
     env.insert_realm(name.to_owned(), value);
 }

@@ -336,9 +336,8 @@ impl Vm<'_> {
         this_value: Value,
     ) -> Result<Value, RuntimeError> {
         let mut env = self.current_env();
-        let result = call_field_initializer(thunk, this_value, &mut env);
-        self.apply_env(env);
-        result
+
+        call_field_initializer(thunk, this_value, &mut env)
     }
 
     /// Reads `obj.#name`: resolves the binding through the current home object's
@@ -438,9 +437,8 @@ impl Vm<'_> {
     ) -> Result<Value, RuntimeError> {
         let arguments = argument.into_iter().collect();
         let mut env = self.current_env();
-        let result = call_function(accessor, this_value, arguments, &mut env, false);
-        self.apply_env(env);
-        result
+
+        call_function(accessor, this_value, arguments, &mut env, false)
     }
 
     /// Resolves a private name against the private environment of the current

@@ -215,14 +215,14 @@ pub(crate) fn compile_function_body_with_source(
     compiler.compile_function(params, body)
 }
 
-pub(crate) fn eval_function_bytecode<'a>(
-    bytecode: &'a Bytecode,
+pub(crate) fn eval_function_bytecode(
+    bytecode: &Bytecode,
     env: crate::CallEnv,
     upvalues: Vec<crate::function::BindingCell>,
     with_stack: Vec<Value>,
     persist_global_lexicals: bool,
     call_inputs: Option<crate::function::CallInputs<'_>>,
-) -> FunctionBytecodeResult<'a> {
+) -> FunctionBytecodeResult {
     vm::eval_function_bytecode(
         bytecode,
         env,
@@ -505,7 +505,7 @@ pub(crate) fn initialize_module_cells(
 pub(crate) fn eval_bytecode_with_env(
     bytecode: &Bytecode,
     env: crate::CallEnv,
-) -> FunctionBytecodeResult<'_> {
+) -> FunctionBytecodeResult {
     let with_stack = env.direct_eval_with_stack();
     vm::eval_function_bytecode(bytecode, env, Vec::new(), with_stack, true, None, None)
 }
@@ -513,7 +513,7 @@ pub(crate) fn eval_bytecode_with_env(
 pub(crate) fn eval_bytecode_with_env_ephemeral_global_lexicals(
     bytecode: &Bytecode,
     env: crate::CallEnv,
-) -> FunctionBytecodeResult<'_> {
+) -> FunctionBytecodeResult {
     let with_stack = env.direct_eval_with_stack();
     vm::eval_function_bytecode(bytecode, env, Vec::new(), with_stack, false, None, None)
 }

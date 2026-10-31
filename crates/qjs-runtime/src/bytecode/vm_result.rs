@@ -1,16 +1,9 @@
-use crate::{
-    RuntimeError, Value,
-    function::{BindingCell, CallEnv},
-};
+use crate::{RuntimeError, Value};
 
-use super::ir::Bytecode;
-
-pub(crate) struct FunctionBytecodeResult<'a> {
+/// Only genuine completion state leaves a frame; no environment/slots apply back.
+pub(crate) struct FunctionBytecodeResult {
     pub(crate) value: Result<Value, RuntimeError>,
-    pub(super) bytecode: &'a Bytecode,
-    pub(super) env: CallEnv,
-    pub(super) locals: Vec<Option<Value>>,
-    pub(super) local_upvalues: Vec<Option<BindingCell>>,
+    pub(crate) bound_this: Option<Value>,
 }
 
 /// How the bytecode loop exited: an ordinary/abrupt return value, or a
@@ -64,48 +57,4 @@ pub(super) enum ResumeMode {
     AwaitReturnRejected(Value),
     AwaitedReturnValue(Value),
     AwaitReturnValueRejected(Value),
-}
-
-impl FunctionBytecodeResult<'_> {
-    pub(crate) fn frame_binding(&self, name: &str) -> Option<Value> {
-        self.bytecode
-            .local_slot(name)
-            .and_then(|index| {
-                self.locals.get(index).and_then(Option::as_ref)?;
-                self.local_upvalues
-                    .get(index)
-                    .and_then(Option::as_ref)
-                    .map(BindingCell::get)
-                    .or_else(|| self.locals.get(index).and_then(Option::as_ref).cloned())
-            })
-            .or_else(|| self.env.get_local(name))
-    }
-
-    pub(crate) fn frame_cell_binding(&self, name: &str) -> Option<Value> {
-        self.bytecode
-            .local_slot(name)
-            .and_then(|index| {
-                self.local_upvalues
-                    .get(index)
-                    .and_then(Option::as_ref)
-                    .map(BindingCell::get)
-                    .or_else(|| self.locals.get(index).and_then(Option::as_ref).cloned())
-            })
-            .or_else(|| self.env.get_local(name))
-            .filter(|value| !value.is_uninitialized_lexical_marker())
-    }
-
-    pub(crate) fn binding(&self, name: &str) -> Option<Value> {
-        self.bytecode
-            .local_slot(name)
-            .and_then(|index| {
-                self.locals.get(index).and_then(Option::as_ref)?;
-                self.local_upvalues
-                    .get(index)
-                    .and_then(Option::as_ref)
-                    .map(BindingCell::get)
-                    .or_else(|| self.locals.get(index).and_then(Option::as_ref).cloned())
-            })
-            .or_else(|| self.env.get(name))
-    }
 }

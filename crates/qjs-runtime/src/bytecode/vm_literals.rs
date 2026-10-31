@@ -55,7 +55,6 @@ impl Vm<'_> {
                     let value = next_value.next().ok_or_else(stack_underflow)?;
                     let mut env = self.callee_env();
                     let result = iterable_values_with_env(value, "array spread", &mut env);
-                    self.apply_env(env);
                     // Route an iterator error through the try-handler stack so a
                     // throw during `[...iterable]` is catchable, instead of
                     // escaping the VM loop. On a handled throw, stop building the
@@ -204,7 +203,6 @@ impl Vm<'_> {
         let key_value = self.pop()?;
         let mut key_env = self.callee_env();
         let key = to_property_key_value(key_value, &mut key_env)?;
-        self.apply_env(key_env);
         if let Value::Function(ref function) = value {
             let base = function_name_from_property_key(&key).unwrap_or_default();
             let name = match kind {
@@ -242,7 +240,6 @@ impl Vm<'_> {
         }
         let mut key_env = self.callee_env();
         let key = to_property_key_value(key_value, &mut key_env)?;
-        self.apply_env(key_env);
         let descriptor = object_property_descriptor(meta.kind, value)?;
         define_object_literal_property(&object, key, descriptor, &mut self.realm_env())
     }
@@ -256,7 +253,6 @@ impl Vm<'_> {
         let object = self.object_literal_target()?;
         let mut env = self.callee_env();
         let result = object::enumerable_property_entries_with_symbols(source, &mut env);
-        self.apply_env(env);
         // A getter invoked while gathering `{...source}` properties may throw;
         // route it through the try-handler stack so it is catchable.
         let Some(entries) = self.handle_runtime_result(result)? else {

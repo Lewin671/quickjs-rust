@@ -49,15 +49,13 @@ impl Vm<'_> {
     ) -> Vec<Option<BindingCell>> {
         let mut next_received = 0;
         let mut local_upvalues = vec![None; bytecode.locals.len()];
-        let direct_eval_frame = matches!(
-            env.get_local(crate::DIRECT_EVAL_BINDING),
-            Some(Value::Boolean(true))
-        );
+        let direct_eval_frame = env.direct_eval_site().is_some();
         if !bytecode.global_scope
             && !env.has_global_binding_root()
             && !bytecode.binding_plan.has_realm_lexicals
             && !direct_eval_frame
             && !env.has_module_imports()
+            && env.entry_scope().is_none()
             && env.derived_this_cell().is_none()
             && env.deopt_bindings().is_none()
             && !env.has_module_live_bindings()
@@ -91,23 +89,20 @@ impl Vm<'_> {
                     continue;
                 }
                 if env.has_global_binding_root()
-                    && env.can_cache_realm_globals()
+                    && (bytecode.global_scope || bytecode.is_direct_eval_code())
                     && local.hoisted
                     && !local.parameter
-                    && let Some(cell) = env.realm_binding_cell(&local.name)
                 {
-                    local_upvalues[slot] = Some(cell);
+                    if env.can_cache_realm_globals() {
+                        local_upvalues[slot] = env.realm_binding_cell(&local.name);
+                    }
                     continue;
                 }
                 if bytecode.is_direct_eval_code()
-                    && env.scope_cursor().is_some()
-                    && bytecode.binding_plan.scopes[0]
-                        .lookup
-                        .get(&local.name)
-                        .is_some_and(|id| bytecode.binding_plan.bindings[id.0].slot.0 == slot)
-                    && let Some(cell) = env.frame_binding_cell(&local.name)
+                    && let Some(root) = env.entry_scope()
+                    && let Some(ordinal) = bytecode.binding_plan.root_ordinals[slot]
                 {
-                    local_upvalues[slot] = Some(cell);
+                    local_upvalues[slot] = Some(root.cells[ordinal].cell.clone());
                     continue;
                 }
                 if bytecode.binding_plan.realm_lexical_slots[slot] {
@@ -266,10 +261,20 @@ impl Vm<'_> {
                 .enumerate()
                 .take(u128::BITS as usize)
                 .filter_map(|(slot, local)| {
-                    (!local.sloppy_global_fallback
-                        && !local.is_received_upvalue()
-                        && local_upvalues.get(slot).is_none_or(Option::is_none))
-                    .then_some(1_u128 << slot)
+                    if local.sloppy_global_fallback
+                        || local.is_received_upvalue()
+                        || local_upvalues.get(slot).is_some_and(Option::is_some)
+                    {
+                        return None;
+                    }
+                    if env.has_global_binding_root()
+                        && bytecode.is_direct_eval_code()
+                        && local.hoisted
+                        && !local.parameter
+                    {
+                        return None;
+                    }
+                    Some(1_u128 << slot)
                 })
                 .fold(0, |mask, slot| mask | slot);
         }

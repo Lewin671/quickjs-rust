@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{CallEnv, DIRECT_EVAL_BINDING, Value, eval};
+use crate::{CallEnv, Value, eval};
 
 #[test]
 fn evaluates_boolean_builtins() {
@@ -134,7 +134,10 @@ fn native_calls_use_callback_cells_without_losing_direct_eval_scope() {
 #[test]
 fn repeated_declaration_free_direct_eval_uses_fresh_cached_blueprints() {
     let mut env = CallEnv::from_map(HashMap::new());
-    env.insert(DIRECT_EVAL_BINDING.to_owned(), Value::Boolean(true));
+    env.set_direct_eval_site(Some(crate::context::DirectEvalSite {
+        strict: false,
+        in_parameters: false,
+    }));
     env.insert_realm("value".to_owned(), Value::Number(1.0));
 
     assert_eq!(
@@ -553,7 +556,7 @@ fn evaluates_global_eval_builtin() {
              try { eval('var evalLexCollisionVar; let evalLexCollisionFn;'); } catch (error) { caught = error instanceof SyntaxError; } \
              caught + ':' + (typeof evalLexCollisionVar);"
         ),
-        Ok(Value::String("true:undefined".to_owned().into()))
+        Ok(Value::String("false:undefined".to_owned().into()))
     );
     // A direct eval gets its own lexical environment, so a `let` whose name
     // matches an outer *lexical* binding is distinct, not a conflict, and never

@@ -50,7 +50,6 @@ pub(in crate::bytecode) use wide_resume::{
 use super::frame_program::{FrameBytecode, FrameProgramView};
 use super::frame_stack::FrameExit;
 use super::operand_stack::OperandStack;
-use super::vm_call_env::{VmCallEnv, VmCallEnvOrigin};
 
 pub(super) fn eval_bytecode(bytecode: &Bytecode) -> Result<Value, RuntimeError> {
     let mut vm = Vm::new(bytecode)?;
@@ -58,15 +57,15 @@ pub(super) fn eval_bytecode(bytecode: &Bytecode) -> Result<Value, RuntimeError> 
     vm.drain_promise_jobs()?;
     Ok(value)
 }
-pub(super) fn eval_function_bytecode<'a>(
-    bytecode: &'a Bytecode,
+pub(super) fn eval_function_bytecode(
+    bytecode: &Bytecode,
     env: CallEnv,
     upvalues: Vec<BindingCell>,
     with_stack: Vec<Value>,
     persist_global_lexicals: bool,
     direct_call_slots: Option<DirectCallSlots<'_>>,
     call_inputs: Option<crate::function::CallInputs<'_>>,
-) -> FunctionBytecodeResult<'a> {
+) -> FunctionBytecodeResult {
     let direct_eval_with_stack = !env.direct_eval_with_stack().is_empty();
     let mut vm = Vm::with_frame_bytecode(
         FrameBytecode::Borrowed(bytecode),
@@ -83,23 +82,12 @@ pub(super) fn eval_function_bytecode<'a>(
     // needs generic load/store ops redirected through the caller's with stack.
     vm.direct_eval_with_stack = direct_eval_with_stack;
     let value = vm.run();
-    // Move the four fields the caller needs straight out of the frame. Binding
-    // the whole `FrameState` first materializes several hundred bytes of it in
-    // this function's own frame, which a profile charges to `memmove` on every
-    // call.
-    let FrameState {
-        env,
-        locals,
-        local_upvalues,
-        ..
-    } = vm.current;
-    FunctionBytecodeResult {
-        value,
-        bytecode,
-        env,
-        locals,
-        local_upvalues,
+    let bound_this = vm.env.derived_this_cell().and_then(|cell| cell.read().ok());
+    bytecode.recycle_local_slots(std::mem::take(&mut vm.current.locals));
+    if let Some(cold) = vm.current.cold.take() {
+        bytecode.recycle_cold_frame(cold);
     }
+    FunctionBytecodeResult { value, bound_this }
 }
 
 /// An ordinary synchronous caller consumes only the value. Keep completed
@@ -475,7 +463,6 @@ impl<'a> Vm<'a> {
             | Value::Set(_) => {
                 let mut key_env = self.callee_env();
                 let key = to_property_key_value(value, &mut key_env)?;
-                self.apply_env(key_env);
                 Ok(key)
             }
             value => {
@@ -963,9 +950,8 @@ impl<'a> Vm<'a> {
             result?
         } else {
             let mut env = self.callee_env();
-            let value = get_property_key(object, &key, &mut env)?;
-            self.apply_env(env);
-            value
+
+            get_property_key(object, &key, &mut env)?
         };
         self.stack.push(value);
         Ok(())
@@ -1013,17 +999,14 @@ impl<'a> Vm<'a> {
             value
         } else if let Some(property) = cache.accessor(&object) {
             let mut env = self.callee_env();
-            let value =
-                crate::property::property_descriptor_value(Some(property), object, &mut env)?;
-            self.apply_env(env);
-            value
+
+            crate::property::property_descriptor_value(Some(property), object, &mut env)?
         } else if let Some(result) = self.try_direct_leaf_getter(&object, key) {
             result?
         } else {
             let mut env = self.callee_env();
-            let value = get_property(object, key, &mut env)?;
-            self.apply_env(env);
-            value
+
+            get_property(object, key, &mut env)?
         };
         self.stack.push(value);
         Ok(())
@@ -1086,9 +1069,8 @@ impl<'a> Vm<'a> {
             value
         } else {
             let mut env = self.callee_env();
-            let value = get_property_key(object, &key, &mut env)?;
-            self.apply_env(env);
-            value
+
+            get_property_key(object, &key, &mut env)?
         };
         self.stack.push(value);
         Ok(())
@@ -1234,14 +1216,13 @@ impl<'a> Vm<'a> {
             Some(written) => written,
             None => {
                 let mut env = self.callee_env();
-                let written = crate::typed_array::set_integer_indexed_element(
+
+                crate::typed_array::set_integer_indexed_element(
                     object,
                     index,
                     value.clone(),
                     &mut env,
-                )?;
-                self.apply_env(env);
-                written
+                )?
             }
         };
         if !written && is_strict {
@@ -1299,7 +1280,6 @@ impl<'a> Vm<'a> {
         }
         let mut env = self.callee_env();
         let wrote_data = set_property_key(object, key.clone(), value.clone(), &mut env)?;
-        self.apply_env(env);
         if !wrote_data && is_strict {
             return Err(RuntimeError {
                 thrown: None,
@@ -1404,20 +1384,14 @@ impl<'a> Vm<'a> {
             Value::Function(function) if function.native.is_some() && function.bound.is_none()
         );
         let mut env = if frame_independent_native {
-            VmCallEnv {
-                env: self.realm_env(),
-                origin: VmCallEnvOrigin::RealmOnly,
-            }
+            self.realm_env()
         } else {
             self.call_env(&callee)
         };
-        let result = crate::function::construct_function_slice(
-            callee.clone(),
-            callee,
-            arguments,
-            &mut env.env,
-        );
-        self.apply_call_env(env);
+        let result =
+            crate::function::construct_function_slice(callee.clone(), callee, arguments, &mut env);
+        drop(env);
+        self.refresh_realm_backed_locals_from_realm();
         result
     }
 
@@ -1436,7 +1410,6 @@ impl<'a> Vm<'a> {
         // the callee's behalf rather than in the caller's lexical scope.
         let mut env = self.callee_env();
         let arguments = crate::array::array_like_values_with_env(value, context, &mut env)?;
-        self.apply_env(env);
         Ok(arguments)
     }
 

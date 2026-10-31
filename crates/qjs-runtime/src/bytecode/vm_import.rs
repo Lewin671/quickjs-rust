@@ -89,7 +89,6 @@ impl Vm<'_> {
         let specifier = self.pop()?;
         let mut env = self.current_env();
         let promise = crate::promise::dynamic_import(specifier, options, &mut env);
-        self.apply_env(env);
         self.stack.push(promise);
         Ok(())
     }

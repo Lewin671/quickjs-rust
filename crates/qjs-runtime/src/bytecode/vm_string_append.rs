@@ -278,7 +278,6 @@ impl Vm<'_> {
                 Value::String(suffix.to_owned().into()),
                 &mut env,
             )?;
-            self.apply_env(env);
             self.store_local(slot, result.clone())?;
             return Ok(result);
         };
@@ -377,7 +376,6 @@ impl Vm<'_> {
             Value::String(suffix.to_owned().into()),
             &mut env,
         )?;
-        self.apply_env(env);
         if is_strict {
             self.store_global_strict(name, result.clone())?;
         } else {

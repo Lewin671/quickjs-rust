@@ -166,7 +166,6 @@ impl Vm<'_> {
             // getter. A false result throws in strict mode and otherwise yields
             // undefined for the loose with-binding.
             if !has_property(object.clone(), &env, name)? {
-                self.apply_env(env);
                 if is_strict {
                     return Err(RuntimeError {
                         thrown: None,
@@ -176,7 +175,6 @@ impl Vm<'_> {
                 return Ok(Value::Undefined);
             }
             let value = get_property(object, name, &mut env)?;
-            self.apply_env(env);
             return Ok(value);
         }
         match slot {
@@ -205,7 +203,6 @@ impl Vm<'_> {
             // getter). A false result throws only in strict mode; the Set in
             // step 3 runs otherwise, recreating the property in sloppy mode.
             if !has_property(object.clone(), &env, name)? && is_strict {
-                self.apply_env(env);
                 return Err(RuntimeError {
                     thrown: None,
                     message: format!("ReferenceError: undefined identifier `{name}`"),
@@ -217,7 +214,6 @@ impl Vm<'_> {
                 value,
                 &mut env,
             )?;
-            self.apply_env(env);
             return Ok(());
         }
         match slot {
@@ -283,7 +279,6 @@ impl Vm<'_> {
                 // GetBindingValue re-checks HasProperty (step 2) before the Get;
                 // a false result throws in strict mode, else yields undefined.
                 if !has_property(object.clone(), &env, name)? {
-                    self.apply_env(env);
                     if is_strict {
                         return Err(RuntimeError {
                             thrown: None,
@@ -293,7 +288,6 @@ impl Vm<'_> {
                     return Ok(Value::Undefined);
                 }
                 let value = get_property(object, name, &mut env)?;
-                self.apply_env(env);
                 Ok(value)
             }
         }
@@ -331,7 +325,6 @@ impl Vm<'_> {
                 // on a Proxy); a false result throws only in strict mode, while
                 // the Set in step 3 still recreates the property in sloppy mode.
                 if !has_property(object.clone(), &env, name)? && is_strict {
-                    self.apply_env(env);
                     return Err(RuntimeError {
                         thrown: None,
                         message: format!("ReferenceError: undefined identifier `{name}`"),
@@ -343,7 +336,6 @@ impl Vm<'_> {
                     value,
                     &mut env,
                 )?;
-                self.apply_env(env);
                 Ok(())
             }
         }
@@ -365,7 +357,6 @@ impl Vm<'_> {
         if let Some(object) = self.with_binding_object(name)? {
             let mut env = self.current_env();
             let value = get_property(object, name, &mut env)?;
-            self.apply_env(env);
             return Ok(Value::String(typeof_value(value)));
         }
         let value = match slot {
@@ -410,7 +401,6 @@ impl Vm<'_> {
                 &PropertyKey::String(name.to_owned()),
                 &mut env,
             )?;
-            self.apply_env(env);
             self.stack.push(result);
         } else {
             // Fall back to ordinary identifier deletion.
