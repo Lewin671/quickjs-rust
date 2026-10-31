@@ -7,7 +7,7 @@ update the resume block in the commit that lands it. When a task closes, move it
 ## Active
 | Task | Status | What it is |
 | --- | --- | --- |
-| [T077](T077-core-rebuild.md) core rebuild | active | Authorized rebuild; S3a and S1+S2 integrated (cumulative development 0.893, held-out 0.929 vs baseline); S2 follow-up and S3b in progress. |
+| [T077](T077-core-rebuild.md) core rebuild | active | Authorized rebuild; S3a and S1+S2 integrated (cumulative development 0.893, held-out 0.929 vs baseline); S2 follow-up qualified at frozen 40814de6, awaiting lead acceptance; S3b in progress. |
 | [T073](T073-local-read-bimodal.md) local-read bimodality | active | Diagnosis complete: candidate text-layout CPU tails; T017 adopts case-health containment only. |
 | [T074](T074-direct-eval-scope-model.md) direct eval scope model | design needed | Architecture review before code; tracks eval visibility, declarations, mutability, context and suspension constraints. |
 | [T057](T057-string-code-units.md) string code units | active | Stage 1 and UTF-16 correctness extraction integrated; stage 2 abandoned (0 attempts); linear-search follow-up awaits screening. |
@@ -22,7 +22,7 @@ update the resume block in the commit that lands it. When a task closes, move it
 | [T017](T017-performance-benchmark-system.md) benchmark system | active | The measurement platform; an x86_64 measurement host is characterized, the fixed-hardware milestones are open. |
 | [T013](T013-temporal-campaign.md) Temporal | blocked | Not started. Temporal is outside ES2025 and the reference engine's Test262 configuration skips it. |
 
-The last qualified full scan passes every configured case; later invalid CLI-agent pins are documented in [T077 verification](diagnostics/T077-s2-r2-agent-pin-verification.md) (see
+Current complete scans pass every configured case; historical invalid CLI-agent pins are documented in [T077 verification](diagnostics/T077-s2-r2-agent-pin-verification.md) (see
 [conformance records](../docs/conformance/README.md)); [T043 history](archive/T043-derived-constructor-eval-context.md) records
 two remaining baseline programs outside that standing. Take broader conformance work from `./scripts/find-qjsng-gaps.sh`.
 

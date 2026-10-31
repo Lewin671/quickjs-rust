@@ -1,0 +1,14 @@
+{
+  "job": "20261031T181931Z-t077-s2fu-r3-rss15",
+  "candidate": "40814de69f430bd6cd4ee9bd4d9c53575d00368e",
+  "base": "1e6e2a2b8ccdb590d735e5b6e969105cb1344c72",
+  "timing": false,
+  "pairs_per_case": 15,
+  "cases": 10,
+  "command": "PYTHONPATH=\"$PWD\" python3 tasks/diagnostics/t077-s2fu-r2/resources.py --candidate 40814de6 --output \"$BENCH_OUT/rss15\" --development",
+  "status": "done",
+  "exit_code": 0,
+  "verdict": "pass",
+  "geomean": 0.9850464884186694,
+  "maximum_case_ratio": 1.0171108917407041
+}
