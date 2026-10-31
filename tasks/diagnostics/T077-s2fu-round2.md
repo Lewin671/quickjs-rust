@@ -87,3 +87,9 @@ access-nsieve, binary trees, date-tofte and JSON parse before any further hot
 adapter changes. The instruction-only suite was missing the largest residual
 (nsieve 1.016722 in the retained full screen); add explicit case selection to
 the existing diagnostic counter collector. Counters remain non-timing evidence.
+
+Use a complete public86 screen of the shared witness as well as the focused
+probes: the explicit target is aggregate per-lane neutrality, and the ten
+probes do not cover the whole external lane. Apply only its generated default
+order from `20261031T160025Z-t077-s2fu-r2-shared-witness`. The retained-source
+operation-counter job is serialized ahead of that full screen.
