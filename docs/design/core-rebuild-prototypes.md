@@ -6,7 +6,9 @@ Prototype holders retain their own shared immutable layouts. Per-receiver cold
 metadata owns accessor slots, an optional validity state and a deferred empty
 guard root. Empty ordinary objects retain only an inline prototype edge and a
 shared neutral seed until a guard is issued or a named property is added. A
-neutral seed never validates a prototype-sensitive guard. Existing roots are
+neutral seed has a separate identity from every semantic root, including the
+null-prototype root; it is never issued as a guard. Published guards compare
+the direct layout identity first, without consulting cold metadata on a hit. Existing roots are
 reused at construction; newly demanded roots share the empty descriptor buffer.
 IC admission publishes an ordinary receiver's deferred root into its direct
 layout field once, preserving an already-issued guard identity.

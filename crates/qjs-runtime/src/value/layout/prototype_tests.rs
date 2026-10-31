@@ -23,7 +23,7 @@ fn unused_prototype_edges_allocate_no_roots_states_or_descriptor_copies() {
     });
     // The empty receiver retains its edge inline and shares the neutral seed.
     child.with_named(|s| {
-        assert!(Rc::ptr_eq(&s.layout, &owner.0.root));
+        assert!(s.layout.deferred_seed);
         assert!(s.cold.is_unallocated());
     });
     drop(grandchild);
@@ -139,4 +139,22 @@ fn publishing_a_deferred_guard_preserves_its_identity_and_retires_it_on_reparent
     assert!(store.cold.guard().is_none());
     store.set_prototype(Some(Prototype::Object(object(&domain, None))));
     assert!(!store.matches_version(&guard));
+}
+
+#[test]
+fn deferred_seeds_cannot_match_a_null_prototype_guard_or_another_prototype() {
+    let domain = AtomDomain::new();
+    let owner = PropertyOwner::new(domain.clone());
+    let null_guard = owner.empty_store().version();
+    let a = object(&domain, None);
+    let b = object(&domain, None);
+    let first = NamedStore::empty_with_prototype(&domain, Some(Prototype::Object(a)), 0);
+    let second = NamedStore::empty_with_prototype(&domain, Some(Prototype::Object(b)), 0);
+    assert!(Rc::ptr_eq(&first.layout, &second.layout));
+    assert!(!first.matches_version(&null_guard));
+    assert!(!first.matches_shared_identity(&null_guard));
+    let first_guard = first.version();
+    assert!(!second.matches_version(&first_guard));
+    let second_guard = second.version();
+    assert!(!first.matches_version(&second_guard));
 }

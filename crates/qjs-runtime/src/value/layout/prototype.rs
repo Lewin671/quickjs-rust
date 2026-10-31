@@ -190,7 +190,8 @@ impl Layout {
         layout.root.as_ref().unwrap_or(layout)
     }
     pub(crate) fn matches_prototype(&self, prototype: Option<&Prototype>, flavor: u16) -> bool {
-        self.flavor == flavor
+        !self.deferred_seed
+            && self.flavor == flavor
             && self.prototype.as_ref().map(WeakPrototype::identity)
                 == prototype.map(Prototype::identity)
     }
@@ -206,6 +207,25 @@ impl PropertyOwner {
             .borrow()
             .get(&(kind, address, flavor))
             .and_then(Weak::upgrade)
+    }
+    /// These seeds are never issued as guards, including for null prototypes.
+    fn empty_layout(&self, prototype: Option<&Prototype>, flavor: u16) -> Rc<Layout> {
+        if let Some(root) = self.cached_root(prototype, flavor) {
+            return root;
+        }
+        if prototype.is_none() {
+            return self.root_for(None, flavor);
+        }
+        if let Some(seed) = self.0.seeds.borrow().get(&flavor) {
+            return seed.clone();
+        }
+        let mut seed = self.0.root.copied(false);
+        seed.data = self.0.root.data.clone();
+        seed.flavor = flavor;
+        seed.deferred_seed = true;
+        let seed = Rc::new(seed);
+        self.0.seeds.borrow_mut().insert(flavor, seed.clone());
+        seed
     }
     pub(super) fn root_for(&self, prototype: Option<&Prototype>, flavor: u16) -> Rc<Layout> {
         if prototype.is_none() && flavor == 0 {
@@ -227,6 +247,7 @@ impl PropertyOwner {
             parent: None,
             incoming: None,
             dictionary: false,
+            deferred_seed: false,
             edits: 0,
             next_order: 0,
             transitions: RefCell::default(),
@@ -253,9 +274,7 @@ impl NamedStore {
         flavor: u16,
     ) -> Self {
         let owner = PropertyOwner::new(domain.clone());
-        let layout = owner
-            .cached_root(prototype.as_ref(), flavor)
-            .unwrap_or_else(|| owner.root_for(None, flavor));
+        let layout = owner.empty_layout(prototype.as_ref(), flavor);
         Self {
             layout,
             values: ValueSlots::Empty,
@@ -264,7 +283,7 @@ impl NamedStore {
         }
     }
     fn deferred(&self) -> bool {
-        self.layout.len == 0 && self.layout.prototype.is_none() && self.prototype.is_some()
+        self.layout.deferred_seed
     }
     /// An empty seed carries no cacheable prototype identity until admission.
     pub(super) fn guard_layout(&self) -> &Rc<Layout> {
@@ -338,18 +357,18 @@ impl NamedStore {
             return;
         }
         let owner = PropertyOwner::new(self.domain().clone());
-        let root = owner.root_for(
-            if self.is_empty() {
-                None
-            } else {
-                prototype.as_ref()
-            },
-            flavor,
-        );
+        let root = if self.is_empty() {
+            owner.empty_layout(prototype.as_ref(), flavor)
+        } else {
+            owner.root_for(prototype.as_ref(), flavor)
+        };
         let mode = self.cold.mode().cloned();
         self.invalidate_dependencies();
         self.cold.clear_guard();
-        if self.layout.dictionary {
+        if self.is_empty() {
+            self.layout = root.clone();
+            self.set_epoch(0);
+        } else if self.layout.dictionary {
             let mut next = self.layout.copied(true);
             next.root = Some(root.clone());
             next.prototype = root.prototype.clone();

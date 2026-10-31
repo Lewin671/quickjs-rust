@@ -109,6 +109,7 @@ pub(crate) struct Layout {
     parent: Option<Rc<Layout>>,
     incoming: Option<Transition>,
     dictionary: bool,
+    deferred_seed: bool,
     edits: u8,
     next_order: u32,
     transitions: RefCell<transitions::Transitions>,
@@ -122,6 +123,7 @@ pub(crate) struct Layout {
 pub(crate) struct OwnerState {
     root: Rc<Layout>,
     roots: RefCell<crate::value::name_hash::NameMap<(u8, usize, u16), Weak<Layout>>>,
+    seeds: RefCell<crate::value::name_hash::NameMap<u16, Rc<Layout>>>,
     retained: RefCell<transitions::Retention>,
 }
 
@@ -160,6 +162,7 @@ impl PropertyOwner {
                 parent: None,
                 incoming: None,
                 dictionary: false,
+                deferred_seed: false,
                 edits: 0,
                 next_order: 0,
                 transitions: RefCell::new(transitions::Transitions::default()),
@@ -170,6 +173,7 @@ impl PropertyOwner {
                 append_misses: std::cell::Cell::new(0),
             }),
             roots: RefCell::default(),
+            seeds: RefCell::default(),
             retained: RefCell::new(transitions::Retention::default()),
         });
         *attachment.shape_owner().borrow_mut() = Rc::downgrade(&owner);

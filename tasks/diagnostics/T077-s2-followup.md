@@ -80,3 +80,13 @@ It applies to all ordinary/Map/Set receivers. Array/function empty authorities
 already have their final root and retain their allocation-free probe path.
 A focused test preserves an issued guard through publication and retires it on
 reparenting. This correction requires a new full qualification and measurement.
+
+
+`9cd9c467` passes the full gate and 268 NG fixtures in all three modes; native
+RSS remains within target. Its publication alone leaves inherited-write at
+0.475 s versus integration 0.449 s (1.058). Final correction separates the
+never-issued neutral seed identity from all semantic roots, including the
+null-prototype root. Published hits can compare direct layout identity first;
+cold deferred guards are consulted only after a miss. A test proves that two
+different prototypes sharing a seed cannot match each other's guards or a
+null-prototype guard. No benchmark-specific admission rule is added.
