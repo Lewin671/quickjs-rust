@@ -231,13 +231,6 @@ pub(super) fn compile_module_function_hoists(script: &Script) -> Result<Bytecode
     Ok(Bytecode::from_compiler(compiler, None, blocked))
 }
 
-pub(super) fn compile_function_body(
-    params: &FunctionParams,
-    body: &[Stmt],
-) -> Result<Bytecode, RuntimeError> {
-    compile_function_body_with_strict(params, body, false)
-}
-
 pub(super) fn compile_function_body_with_strict(
     params: &FunctionParams,
     body: &[Stmt],
@@ -248,19 +241,6 @@ pub(super) fn compile_function_body_with_strict(
         ..Compiler::default()
     }
     .compile_function(params, body)
-}
-
-/// Compiles a function body, carrying generator/async-ness on the resulting
-/// function value (`yield` is parser-gated and lowers to `Op::Yield`).
-pub(super) fn compile_function_body_with_strict_generator(
-    params: &FunctionParams,
-    body: &[Stmt],
-    parent_strict: bool,
-    is_generator: bool,
-    is_async: bool,
-) -> Result<Bytecode, RuntimeError> {
-    Compiler::function_compiler(parent_strict, is_generator && is_async)
-        .compile_function(params, body)
 }
 
 impl Compiler {

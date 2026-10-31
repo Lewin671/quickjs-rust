@@ -611,6 +611,21 @@ pub(super) fn get_prop_computed(
 /// `globalThis` (invoking its getter), then the ReferenceError.
 #[inline(never)]
 pub(in crate::bytecode) fn load_global(name: &str, env: &CallEnv) -> Result<Value, RuntimeError> {
+    if !env.can_cache_realm_globals() {
+        let Some(global) = env.selected_global_this() else {
+            return Err(undefined_identifier(name));
+        };
+        if name == "globalThis"
+            && matches!(&global, Value::Object(object) if !object.has_own_property(name))
+        {
+            return Ok(global);
+        }
+        if !crate::property::has_property(global.clone(), env, name)? {
+            return Err(undefined_identifier(name));
+        }
+        let mut access = env.clone();
+        return crate::property_value(global, name, &mut access);
+    }
     if let Some(value) = env.get(name) {
         if value.is_uninitialized_lexical_marker() {
             return Err(undefined_identifier(name));

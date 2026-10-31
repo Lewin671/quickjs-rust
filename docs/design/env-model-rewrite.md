@@ -55,7 +55,7 @@ parameter leaf bindings are parameters too; raw pattern inputs are not bindings.
    invalidates a data route and restores semantic Get, without inventing lexical
    TDZ. Tests: `global.rs`, `closure_state.rs`, `direct_eval/s3b_bindings.rs`.
 9. **Intrinsics are not mutable global bindings.** Set-once realm intrinsic fields
-   own Object/Array/Function/String/Number prototypes and well-known symbols.
+   own Object/Array/Function and primitive prototypes, plus well-known symbols.
    Rebinding a public constructor does not redefine those identities.
 10. **Modules retain live cells.** Import routes attach exporting cells and reject
     writes through import access policy. Module top-level slots attach canonical
@@ -138,9 +138,9 @@ Creation/module metadata contains cell routes, never settled lexical values.
 `function/env.rs::CallEnv` temporarily wraps those contexts as the old service
 ABI. Compiler-owned cells are excluded from value apply-back so a stale native
 view cannot undo a callback. FrameBindings/deopt views, raw publishers, eval and
-intrinsic-handoff compatibility metadata remain B5 obligations. Function-owned
-creation selection, RuntimeServices and the borrowed Context ABI are not switched
-yet. Native construct dispatch's typed pending target moves into NativeSite in B5.
+intrinsic-handoff compatibility metadata remain B5 obligations. Functions retain
+shared creation records; dynamic Function reuses its callee Realm and live global
+selection. RuntimeServices/borrowed Context and NativeSite remain upcoming cuts.
 Class keys execute inline. A cold continuation owns the partial class/private
 context across yield/await; handlers restore regions and mode to their entry.
 Heritage validation precedes keys; each method installs before the next key.

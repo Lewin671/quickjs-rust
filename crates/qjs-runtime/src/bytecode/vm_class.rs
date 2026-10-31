@@ -2,8 +2,6 @@
 //! heritage, methods, fields, static blocks) and the `super` property,
 //! method and call operations.
 
-use std::rc::Rc;
-
 use crate::{
     Function, ObjectRef, Property, PropertyKey, RuntimeError, Value, array_as_prototype_slot,
     function::CompiledUserFunction, object, property_value,
@@ -80,9 +78,7 @@ impl Vm<'_> {
             ),
             immutable_env_value: None,
             params: std::rc::Rc::new(method.params.clone()),
-            realm: Rc::clone(&self.realm),
-            module_host: self.module_host.clone(),
-            module_imports: self.env.module_imports(),
+            creation: self.current_creation_context(),
             bytecode: method.bytecode.clone(),
             source_text: method.source_text.clone(),
             local_names: method.local_names.clone().into(),
@@ -181,9 +177,7 @@ impl Vm<'_> {
             immutable_env_binding: class_inner_name_binding(name, bytecode, local_names),
             immutable_env_value: None,
             params: std::rc::Rc::new(qjs_ast::FunctionParams::positional(Vec::new())),
-            realm: Rc::clone(&self.realm),
-            module_host: self.module_host.clone(),
-            module_imports: self.env.module_imports(),
+            creation: self.current_creation_context(),
             bytecode: bytecode.clone(),
             source_text: None,
             local_names: local_names.clone().into(),
@@ -232,9 +226,7 @@ impl Vm<'_> {
             immutable_env_binding: class_inner_name_binding(name, bytecode, local_names),
             immutable_env_value: None,
             params: std::rc::Rc::new(qjs_ast::FunctionParams::positional(Vec::new())),
-            realm: Rc::clone(&self.realm),
-            module_host: self.module_host.clone(),
-            module_imports: self.env.module_imports(),
+            creation: self.current_creation_context(),
             bytecode: bytecode.clone(),
             source_text: None,
             local_names: local_names.clone().into(),

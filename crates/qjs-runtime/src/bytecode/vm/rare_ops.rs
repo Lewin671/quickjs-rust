@@ -57,6 +57,11 @@ impl Vm<'_> {
                             self.read_scope_binding(&reference)?,
                         )));
                     }
+                    if self.uses_selected_object_binding(name) {
+                        return Ok(Value::String(typeof_value(
+                            self.read_global_binding(name)?.unwrap_or(Value::Undefined),
+                        )));
+                    }
                     if self.env.has_global_binding_root() {
                         return Ok(Value::String(typeof_value(
                             self.read_global_binding(name)?.unwrap_or(Value::Undefined),
@@ -213,9 +218,7 @@ impl Vm<'_> {
                     immutable_env_binding,
                     immutable_env_value,
                     params: Rc::clone(params),
-                    realm: Rc::clone(&self.realm),
-                    module_host: self.module_host.clone(),
-                    module_imports: self.env.module_imports(),
+                    creation: self.current_creation_context(),
                     bytecode: Rc::clone(bytecode),
                     source_text: source_text.clone(),
                     local_names: Rc::clone(local_names),
@@ -239,7 +242,6 @@ impl Vm<'_> {
                 if let Some(bindings) = bypass_scope {
                     bindings.bypass(&function);
                 }
-                self.capture_private_environment(&function);
                 if *is_generator && *is_async {
                     crate::async_generator::wire_async_generator_function_intrinsics(
                         &function,

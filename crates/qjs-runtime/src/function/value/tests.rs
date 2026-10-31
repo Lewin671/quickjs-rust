@@ -36,7 +36,7 @@ fn ordinary_function_header_keeps_cold_identity_state_out_of_line() {
         "lazy native context must remain pointer-sized"
     );
     assert_eq!(
-        mem::size_of::<super::ModuleImports>(),
+        mem::size_of::<crate::function::ModuleImports>(),
         mem::size_of::<Rc<()>>(),
         "shared module imports must remain pointer-sized"
     );

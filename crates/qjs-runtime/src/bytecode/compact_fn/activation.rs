@@ -171,7 +171,7 @@ fn shares_caller_environment(function: &Function, bytecode: &Bytecode, env: &Cal
     // handle -- which is the ordinary case, since a script's functions all
     // carry the host of the environment that created them -- that install is
     // idempotent and the two environments still agree.
-    let host_agrees = match (&function.module_host, env.module_host_ref()) {
+    let host_agrees = match (function.module_host_ref(), env.module_host_ref()) {
         (None, _) => true,
         (Some(callee), Some(caller)) => std::rc::Rc::ptr_eq(callee, caller),
         (Some(_), None) => false,
@@ -180,7 +180,7 @@ fn shares_caller_environment(function: &Function, bytecode: &Bytecode, env: &Cal
         && !bytecode.uses_lexical_this()
         && !function.has_dynamic_function_realm
         && !function.has_dynamic_function_realm_override.get()
-        && function.module_imports.is_empty()
+        && !function.has_module_imports()
         && !function.has_cold_lexical_state()
 }
 
@@ -318,7 +318,7 @@ fn inline_callee(callee: &Value, env: &CallEnv) -> Option<InlineCallee> {
     }
     // The parts of `shares_caller_environment` that can change after the
     // function is created, or depend on the caller.
-    let host_agrees = match (&function.module_host, env.module_host_ref()) {
+    let host_agrees = match (function.module_host_ref(), env.module_host_ref()) {
         (None, _) => true,
         (Some(callee), Some(caller)) => std::rc::Rc::ptr_eq(callee, caller),
         (Some(_), None) => false,
@@ -385,7 +385,7 @@ fn compute_fixed_inline_facts(callee: &Value, function: &Function) -> u32 {
     if !crate::function::is_direct_leaf_function(callee)
         || bytecode.uses_lexical_this()
         || function.has_dynamic_function_realm
-        || !function.module_imports.is_empty()
+        || function.has_module_imports()
     {
         return FACTS_KNOWN;
     }

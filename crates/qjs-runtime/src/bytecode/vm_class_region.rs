@@ -28,6 +28,7 @@ pub(super) struct ClassKeyContinuation {
 struct ClassState {
     constructor: Function,
     prototype: ObjectRef,
+    creation: Rc<crate::context::CreationContext>,
 }
 
 enum PendingStaticItem {
@@ -70,6 +71,7 @@ impl Vm<'_> {
             region.state = Some(ClassState {
                 constructor: state.constructor.clone(),
                 prototype: state.prototype.clone(),
+                creation: state.creation.clone(),
             });
         }
         self.cold_mut().class_regions.push(region);
@@ -105,6 +107,16 @@ impl Vm<'_> {
             Some(ClassHeritage::Null) => function_prototype_value(&self.env),
             _ => None,
         };
+        let private = self.prepare_class_private_environment(&definition.private_elements);
+        let mut creation = self.current_creation_context();
+        let same_private = match (&creation.private, &private) {
+            (None, None) => true,
+            (Some(a), Some(b)) => a.same(b),
+            _ => false,
+        };
+        if !same_private {
+            Rc::make_mut(&mut creation).private = private.clone();
+        }
         let class_name_upvalue = region.name_cell.clone();
         let constructor_upvalues = self.captured_upvalues_for_function_with_override(
             &constructor.bytecode,
@@ -122,9 +134,7 @@ impl Vm<'_> {
             ),
             immutable_env_value: None,
             params: std::rc::Rc::new(constructor.params.clone()),
-            realm: Rc::clone(&self.realm),
-            module_host: self.module_host.clone(),
-            module_imports: self.env.module_imports(),
+            creation: creation.clone(),
             bytecode: constructor.bytecode.clone(),
             source_text: None,
             local_names: constructor.local_names.clone().into(),
@@ -180,11 +190,9 @@ impl Vm<'_> {
         // resolves through it.
         constructor_function.set_home_object(Value::Object(prototype.clone()));
 
-        self.create_private_environment(
-            &definition.private_elements,
-            &prototype,
-            &constructor_function,
-        );
+        if let Some(private) = private {
+            prototype.set_private_environment(private);
+        }
         let mut queued = Vec::new();
         for private in &definition.private_elements {
             self.queue_instance_private_method_brand(private, &constructor_function, &mut queued);
@@ -192,16 +200,32 @@ impl Vm<'_> {
         Ok(ClassState {
             constructor: constructor_function,
             prototype,
+            creation,
         })
+    }
+
+    pub(super) fn current_creation_context(&self) -> Rc<crate::context::CreationContext> {
+        self.cold()
+            .and_then(|cold| {
+                cold.class_regions
+                    .iter()
+                    .rev()
+                    .find_map(|region| region.state.as_ref().map(|state| state.creation.clone()))
+            })
+            .unwrap_or_else(|| self.env.creation_context())
     }
 
     pub(super) fn class_key_private_environment(
         &self,
     ) -> Option<crate::private::PrivateEnvironment> {
-        self.cold()
-            .and_then(|cold| cold.class_regions.last())
-            .and_then(|region| region.state.as_ref())
-            .and_then(|state| state.prototype.private_environment())
+        self.cold().and_then(|cold| {
+            cold.class_regions.iter().rev().find_map(|region| {
+                region
+                    .state
+                    .as_ref()
+                    .and_then(|state| state.creation.private.clone())
+            })
+        })
     }
 
     pub(super) fn define_class_element(&mut self, index: usize) -> Result<(), RuntimeError> {

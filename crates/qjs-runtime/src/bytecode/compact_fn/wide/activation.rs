@@ -248,7 +248,7 @@ fn environment_is_slot_only(env: &CallEnv) -> bool {
 /// Only a lexical-`this` arrow inherits `this` from its enclosing environment
 /// and cannot be seeded from a receiver.
 fn shares_caller_environment(function: &Function, env: &CallEnv) -> bool {
-    let host_agrees = match (&function.module_host, env.module_host_ref()) {
+    let host_agrees = match (function.module_host_ref(), env.module_host_ref()) {
         (None, _) => true,
         (Some(callee), Some(caller)) => std::rc::Rc::ptr_eq(callee, caller),
         (Some(_), None) => false,
@@ -306,7 +306,7 @@ fn compute_fixed_inline_facts(callee: &Value, function: &Function, bytecode: &By
     if !shape_admitted
         || inherits_lexical_this
         || function.has_dynamic_function_realm
-        || !function.module_imports.is_empty()
+        || function.has_module_imports()
     {
         return FACTS_KNOWN;
     }

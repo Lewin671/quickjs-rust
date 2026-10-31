@@ -14,6 +14,10 @@ pub(crate) const BIGINT_DATA_PROPERTY: &str = "\0BigIntData";
 pub(crate) fn install_bigint(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
     let bigint_prototype =
         ObjectRef::with_prototype(HashMap::new(), Some(object_prototype), env.realm().atoms());
+    env.realm().initialize_other_primitive_prototype(
+        crate::context::PrimitiveIntrinsic::BigInt,
+        bigint_prototype.clone(),
+    );
     let bigint_function =
         Function::new_native(Some("BigInt"), 1, NativeFunction::BigInt, true, env.realm());
     bigint_prototype.set_to_string_tag("BigInt");

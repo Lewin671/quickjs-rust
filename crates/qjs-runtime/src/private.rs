@@ -6,8 +6,9 @@
 //! class definition. A [`PrivateEnvironment`] maps the source-level name text
 //! (without the `#`) to the identity and, for methods/accessors, the bound
 //! function values shared by every instance of the class. Member access is
-//! resolved lexically: a method, field initializer, or constructor reaches its
-//! class's [`PrivateEnvironment`] through its `[[HomeObject]]`.
+//! resolved lexically through a function's creation context. Class prototypes
+//! also attach the environment for instance-element initialization; home objects
+//! separately supply super-property semantics.
 
 use std::{cell::RefCell, rc::Rc};
 

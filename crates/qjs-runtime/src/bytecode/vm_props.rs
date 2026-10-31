@@ -586,6 +586,9 @@ impl Vm<'_> {
         if let Some(reference) = self.resolve_scope_binding(name, true)? {
             return self.assign_scope_binding(&reference, value, true);
         }
+        if !self.env.can_cache_realm_globals() && !self.env.has_module_import(name) {
+            return self.store_global_binding(name, value, true);
+        }
         if self.env.has_global_binding_root() {
             return self.store_global_binding(name, value, true);
         }
@@ -733,6 +736,9 @@ impl Vm<'_> {
     ) -> Result<(), RuntimeError> {
         if let Some(reference) = self.resolve_scope_binding(name, false)? {
             return self.assign_scope_binding(&reference, value, false);
+        }
+        if self.uses_selected_object_binding(name) {
+            return self.store_global_binding(name, value, false);
         }
         if self.env.has_global_binding_root() {
             return self.store_global_binding(name, value, false);

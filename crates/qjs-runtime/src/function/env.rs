@@ -1,374 +1,25 @@
-//! The call-frame environment view threaded through the runtime.
-//!
-//! Ordinary JavaScript bindings do not live here: bytecode frames keep
-//! slot-indexed values and captured slots share indexed [`BindingCell`] cells.
-//! [`CallEnv`] carries only the cross-call runtime context that is still
-//! naturally name-addressed:
-//!
-//! - `realm` is shared into every frame. It owns intrinsics and one cell per
-//!   global binding (`RealmState.bindings`), so global writes are immediately
-//!   visible without copying or write-back.
-//! - `frame_bindings` is a small cell vector for call metadata and native or
-//!   dynamic compatibility consumers. Ordinary user-function setup inserts
-//!   directly into it and never builds a per-call locals `HashMap`.
-//! - `deopt_bindings` is the explicit name-to-cell map allocated only for
-//!   direct `eval`, `with`, or a dynamic scope inherited from them.
-//!
-//! Reads take only short borrows and clone values out. A borrow is never held
-//! across a call back into user code
-//! (getters, setters, Proxy traps, `valueOf`/`toString`, iterators): callers
-//! copy the needed value out, drop the borrow, then call.
-
-mod construction;
+//! Temporary service ABI over typed creation/activation state.
+//! Declaratives live in bytecode slots/shared cells; realm ownership is in
+//! context/realm.rs. FrameBindings/deopt value projections remain compatibility
+//! inputs/publication for the atomic Context cut. Never add new snapshots here.
+//! Storage borrows must end before getters, setters, traps or other JS callbacks.
 
 use std::{
-    cell::{OnceCell, RefCell},
+    cell::RefCell,
     collections::{HashMap, HashSet},
-    fmt,
     ops::Deref,
     rc::Rc,
 };
 
 use qjs_parser::EvalParseContext;
 
-use super::eval_cache::DirectEvalCache;
-
+use crate::context::{ModuleImports, Realm, new_realm};
 use crate::{
     Bytecode, Function, JsString, ObjectRef, Value, function::BindingCell,
-    private::PrivateEnvironment, property::atom::AtomDomain,
+    private::PrivateEnvironment,
 };
 
 const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
-pub(super) const REALM_OBJECT_PROTOTYPE_INTRINSIC: &str = "\0realm:Object.prototype";
-pub(super) const REALM_ARRAY_PROTOTYPE_INTRINSIC: &str = "\0realm:Array.prototype";
-
-/// Shared realm state: intrinsics, true globals, and captured-global cells.
-///
-/// `bindings` is the single source of truth for every realm-level name: it is
-/// a name-to-[`BindingCell`] map from the start, not a plain `Value` map with a
-/// separate lazily-populated cell registry layered on top. A name that never
-/// gets captured or hoisted-global-cached still costs exactly one hash lookup
-/// to read or write (through its cell); a name that does get a cell no longer
-/// needs a *second* hash lookup into a separate registry to keep that cell in
-/// sync, which the old two-map design required on every store.
-pub(crate) struct RealmState {
-    bindings: DynamicBindings,
-    /// Stable realm intrinsics are separate from the mutable global bindings.
-    /// Rebinding `Object` or `Array` must not change the default prototype used
-    /// by literals, classes, or abstract operations that name an intrinsic.
-    object_prototype: OnceCell<ObjectRef>,
-    array_prototype: OnceCell<ObjectRef>,
-    /// Intrinsic arguments schemas contain only descriptor metadata and this
-    /// realm's well-known symbols; their actual values/accessors stay per object.
-    arguments_layouts: RefCell<Vec<Rc<crate::value::layout::Layout>>>,
-    array_named_seed: OnceCell<Rc<crate::value::layout::NamedStorage>>,
-    function_prototype: OnceCell<crate::Prototype>,
-    function_constructor: OnceCell<Function>,
-    /// Stable `%String.prototype%` identity used by primitive String reads.
-    /// The mutable global `String` binding is not the intrinsic authority.
-    string_prototype: OnceCell<ObjectRef>,
-    string_wrapper_layout: OnceCell<crate::value::layout::StringWrapperLayout>,
-    /// Stable `%Number.prototype%` identity used by primitive Number reads.
-    number_prototype: OnceCell<ObjectRef>,
-    /// The realm's well-known symbols, in `symbol::WELL_KNOWN_SYMBOL_NAMES`
-    /// order.
-    well_known_symbols: OnceCell<Vec<ObjectRef>>,
-    /// Property keys every boxed String installs, shared instead of allocated.
-    string_object_keys: crate::string::StringObjectKeys,
-    /// Canonical empty copy-on-write name set for ordinary frames. Sharing it
-    /// avoids allocating catch/eval metadata that most calls never mutate.
-    global_this: Option<Value>,
-    dynamic_function_realm_global: RefCell<Option<ObjectRef>>,
-    /// Parsed/compiled blueprints for small, declaration-free direct eval
-    /// sources. Entries share only immutable bytecode; each invocation still
-    /// receives an independent VM frame and runtime values.
-    direct_eval_cache: RefCell<DirectEvalCache>,
-    /// Compiled regular-expression programs and validated patterns, shared
-    /// by every RegExp object with the same source and flags. Bounded; holds
-    /// no objects or realm references.
-    regexp_programs: RefCell<crate::regexp::ProgramCache>,
-    /// The property-name atom domain. A realm derived from another (a
-    /// dynamic-function scope) shares its parent's domain because the two
-    /// exchange objects; an independent root owns a fresh one.
-    property_owner: crate::value::layout::PropertyOwner,
-}
-
-impl RealmState {
-    pub(crate) fn next_variable_identity(&self) -> u64 {
-        self.atoms().next_variable_identity()
-    }
-
-    fn new(mut bindings: HashMap<String, Value>, atoms: AtomDomain) -> Self {
-        // Dynamic Function construction still enters through a compact flat
-        // snapshot. Consume its internal-only intrinsic handoff markers before
-        // the remaining values become ordinary realm bindings, so the marker
-        // names can never become JavaScript-visible globals.
-        let object_prototype =
-            take_intrinsic_prototype(&mut bindings, REALM_OBJECT_PROTOTYPE_INTRINSIC);
-        let array_prototype =
-            take_intrinsic_prototype(&mut bindings, REALM_ARRAY_PROTOTYPE_INTRINSIC);
-        let global_this = bindings.get(crate::GLOBAL_THIS_BINDING).cloned();
-        let dynamic_function_realm_global =
-            bindings
-                .get(DYNAMIC_FUNCTION_REALM_GLOBAL)
-                .and_then(|value| match value {
-                    Value::Object(global) => Some(global.clone()),
-                    _ => None,
-                });
-        let realm = Self {
-            bindings: DynamicBindings::from_values(bindings),
-            object_prototype: OnceCell::new(),
-            array_prototype: OnceCell::new(),
-            arguments_layouts: RefCell::default(),
-            array_named_seed: OnceCell::new(),
-            function_prototype: OnceCell::new(),
-            function_constructor: OnceCell::new(),
-            string_prototype: OnceCell::new(),
-            string_wrapper_layout: OnceCell::new(),
-            number_prototype: OnceCell::new(),
-            well_known_symbols: OnceCell::new(),
-            string_object_keys: crate::string::StringObjectKeys::default(),
-            global_this,
-            dynamic_function_realm_global: RefCell::new(dynamic_function_realm_global),
-            direct_eval_cache: RefCell::new(DirectEvalCache::default()),
-            regexp_programs: RefCell::default(),
-            property_owner: crate::value::layout::PropertyOwner::new(atoms.clone()),
-        };
-        if let Some(prototype) = object_prototype {
-            let _ = realm.object_prototype.set(prototype);
-        }
-        if let Some(prototype) = array_prototype {
-            let _ = realm.array_prototype.set(prototype);
-        }
-        realm
-    }
-
-    pub(crate) fn string_object_keys(&self) -> &crate::string::StringObjectKeys {
-        &self.string_object_keys
-    }
-
-    pub(crate) fn regexp_programs(&self) -> &RefCell<crate::regexp::ProgramCache> {
-        &self.regexp_programs
-    }
-
-    /// The property-name atom domain this realm's code links against.
-    #[inline]
-    pub(crate) fn atoms(&self) -> &AtomDomain {
-        self.property_owner.domain()
-    }
-
-    pub(crate) fn initialize_object_prototype(&self, prototype: ObjectRef) {
-        assert!(
-            self.object_prototype.set(prototype).is_ok(),
-            "realm Object.prototype intrinsic initialized twice"
-        );
-    }
-
-    pub(crate) fn initialize_array_prototype(&self, prototype: ObjectRef) {
-        assert!(
-            self.array_prototype.set(prototype).is_ok(),
-            "realm Array.prototype intrinsic initialized twice"
-        );
-    }
-
-    pub(crate) fn initialize_function_prototype(&self, prototype: crate::Prototype) {
-        assert!(
-            self.function_prototype.set(prototype).is_ok(),
-            "Function.prototype initialized twice"
-        );
-    }
-    pub(crate) fn function_prototype(&self) -> Option<crate::Prototype> {
-        self.function_prototype.get().cloned()
-    }
-    pub(crate) fn initialize_function_constructor(&self, constructor: Function) {
-        assert!(
-            self.function_constructor.set(constructor).is_ok(),
-            "Function constructor initialized twice"
-        );
-    }
-    pub(crate) fn function_constructor(&self) -> Option<Function> {
-        self.function_constructor.get().cloned()
-    }
-    pub(crate) fn initialize_number_prototype(&self, prototype: ObjectRef) {
-        assert!(
-            self.number_prototype.set(prototype).is_ok(),
-            "realm Number.prototype intrinsic initialized twice"
-        );
-    }
-
-    pub(crate) fn initialize_well_known_symbols(&self, symbols: Vec<ObjectRef>) {
-        assert!(
-            self.well_known_symbols.set(symbols).is_ok(),
-            "realm well-known symbols initialized twice"
-        );
-    }
-
-    pub(crate) fn well_known_symbol(&self, index: usize) -> Option<ObjectRef> {
-        self.well_known_symbols.get()?.get(index).cloned()
-    }
-
-    pub(crate) fn number_prototype(&self) -> Option<ObjectRef> {
-        self.number_prototype.get().cloned()
-    }
-
-    pub(crate) fn initialize_string_prototype(&self, prototype: ObjectRef) {
-        assert!(
-            self.string_prototype.set(prototype).is_ok(),
-            "realm String.prototype intrinsic initialized twice"
-        );
-    }
-
-    pub(crate) fn object_prototype(&self) -> Option<ObjectRef> {
-        self.object_prototype.get().cloned()
-    }
-
-    pub(crate) fn array_prototype(&self) -> Option<ObjectRef> {
-        self.array_prototype.get().cloned()
-    }
-
-    pub(crate) fn string_prototype(&self) -> Option<ObjectRef> {
-        self.string_prototype.get().cloned()
-    }
-
-    pub(crate) fn get_value(&self, name: &str) -> Option<Value> {
-        self.bindings.get(name)
-    }
-
-    pub(crate) fn contains(&self, name: &str) -> bool {
-        self.bindings.contains_key(name)
-    }
-
-    pub(crate) fn cell(&self, name: &str) -> Option<BindingCell> {
-        self.bindings.cell(name)
-    }
-
-    pub(crate) fn insert_value(&self, name: String, value: Value) -> Option<Value> {
-        self.bindings.insert(name, value)
-    }
-
-    pub(crate) fn remove_value(&self, name: &str) -> Option<Value> {
-        self.bindings.remove(name)
-    }
-
-    pub(crate) fn entry_or_insert_value(&self, name: String, value: Value) {
-        if !self.bindings.contains_key(&name) {
-            self.bindings.insert(name, value);
-        }
-    }
-
-    pub(crate) fn global_this(&self) -> Option<Value> {
-        self.global_this.clone()
-    }
-
-    /// Whether `object` is this realm's global object, without cloning it.
-    fn is_global_object(&self, object: &ObjectRef) -> bool {
-        matches!(&self.global_this, Some(Value::Object(global)) if global.ptr_eq(object))
-    }
-
-    /// Returns the internal global object used by dynamically constructed
-    /// functions without hashing its private binding name for every closure.
-    pub(crate) fn dynamic_function_realm_global(&self) -> Option<ObjectRef> {
-        self.dynamic_function_realm_global.borrow().clone()
-    }
-
-    pub(crate) fn has_dynamic_function_realm_global(&self) -> bool {
-        self.dynamic_function_realm_global.borrow().is_some()
-    }
-
-    pub(crate) fn cached_direct_eval_bytecode(
-        &self,
-        source: &JsString,
-        context: &EvalParseContext,
-    ) -> Option<Rc<Bytecode>> {
-        self.direct_eval_cache.borrow().lookup(source, context)
-    }
-
-    pub(crate) fn cache_direct_eval_bytecode(
-        &self,
-        source: JsString,
-        context: EvalParseContext,
-        bytecode: Rc<Bytecode>,
-    ) {
-        self.direct_eval_cache
-            .borrow_mut()
-            .insert(source, context, bytecode);
-    }
-
-    #[cfg(test)]
-    pub(crate) fn direct_eval_cache_len(&self) -> usize {
-        self.direct_eval_cache.borrow().len()
-    }
-
-    fn sync_dynamic_function_realm_binding(&self, name: &str, value: Option<&Value>) {
-        if name != DYNAMIC_FUNCTION_REALM_GLOBAL {
-            return;
-        }
-        *self.dynamic_function_realm_global.borrow_mut() = value.and_then(|value| match value {
-            Value::Object(global) => Some(global.clone()),
-            _ => None,
-        });
-    }
-
-    /// Rebuilds cached internal metadata after a bulk initialization path has
-    /// edited the binding map directly.
-    pub(crate) fn refresh_dynamic_function_realm_global(&self) {
-        let global =
-            self.bindings
-                .get(DYNAMIC_FUNCTION_REALM_GLOBAL)
-                .and_then(|value| match value {
-                    Value::Object(global) => Some(global.clone()),
-                    _ => None,
-                });
-        *self.dynamic_function_realm_global.borrow_mut() = global;
-    }
-
-    pub(crate) fn is_binding_cell(&self, name: &str, cell: &BindingCell) -> bool {
-        self.bindings.cell(name).is_some_and(|candidate| {
-            candidate.metadata().kind != crate::binding::BindingKind::Lexical
-                && candidate.ptr_eq(cell)
-        })
-    }
-}
-
-fn take_intrinsic_prototype(
-    bindings: &mut HashMap<String, Value>,
-    name: &str,
-) -> Option<ObjectRef> {
-    match bindings.remove(name) {
-        Some(Value::Object(prototype)) => Some(prototype),
-        Some(_) | None => None,
-    }
-}
-
-impl fmt::Debug for RealmState {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter
-            .debug_struct("RealmState")
-            .field("bindings", &self.bindings.snapshot())
-            .finish_non_exhaustive()
-    }
-}
-
-pub(crate) type Realm = Rc<RealmState>;
-
-/// A realm for an independent root, with its own atom domain.
-pub(crate) fn new_realm(bindings: HashMap<String, Value>) -> Realm {
-    Rc::new(RealmState::new(bindings, AtomDomain::new()))
-}
-
-/// A realm that exchanges objects with code using `atoms`, and so shares it.
-pub(crate) fn new_realm_sharing_atoms(
-    bindings: HashMap<String, Value>,
-    atoms: AtomDomain,
-) -> Realm {
-    Rc::new(RealmState::new(bindings, atoms))
-}
-/// Structurally immutable module-import routing shared by function objects and
-/// call frames. Module setup uses copy-on-write so environment clones preserve
-/// their previous routing table while ordinary scripts and nested functions
-/// retain only one pointer-sized empty map.
-pub(crate) type ModuleImports =
-    Rc<crate::value::name_hash::NameMap<String, (DynamicBindings, String)>>;
 
 #[derive(Clone)]
 enum FrameBindingValue {
@@ -884,6 +535,41 @@ impl std::fmt::Debug for CallEnv {
 
 #[allow(dead_code)]
 impl CallEnv {
+    pub(crate) fn primitive_prototype(&self, name: &str) -> Option<ObjectRef> {
+        let kind = crate::context::PrimitiveIntrinsic::from_name(name)?;
+        self.activation.creation.intrinsics.primitive[kind.index()]
+            .clone()
+            .or_else(|| self.realm().primitive_prototype(kind))
+    }
+    pub(crate) fn creation_context(&self) -> Rc<crate::context::CreationContext> {
+        self.activation.creation.clone()
+    }
+    pub(crate) fn creation_context_ref(&self) -> &Rc<crate::context::CreationContext> {
+        &self.activation.creation
+    }
+    pub(crate) fn function_entry(
+        &self,
+        creation: Rc<crate::context::CreationContext>,
+        capacity: usize,
+    ) -> Self {
+        Self {
+            activation: crate::context::ActivationContext::new(
+                creation,
+                crate::context::ExecutionMode::Function,
+            ),
+            frame_bindings: FrameBindings::with_capacity(capacity),
+            construct_target: None,
+            deopt_bindings: None,
+            global_binding_root: false,
+            global_function_configurable: true,
+            catch_bindings: None,
+            immutable_function_name: None,
+            direct_eval_var_conflicts: None,
+            direct_eval_with_stack: Vec::new(),
+            #[cfg(feature = "agents")]
+            agent_context: self.agent_context.clone(),
+        }
+    }
     pub(crate) fn set_call_owner(&mut self, owner: crate::context::CallOwner) {
         self.activation.mode = owner.kind.into();
         if owner.kind == crate::context::OwnerKind::Module
@@ -956,8 +642,12 @@ impl CallEnv {
     }
 
     pub(crate) fn set_global_selection(&mut self, value: Value) {
-        Rc::make_mut(&mut self.activation.creation).global =
-            crate::context::GlobalSelection::from_control(value);
+        let selected = Rc::make_mut(&mut self.activation.creation);
+        selected.intrinsics = match &value {
+            Value::Object(global) => crate::context::IntrinsicOverrides::for_marked_global(global),
+            _ => Default::default(),
+        };
+        selected.global = crate::context::GlobalSelection::from_control(value);
     }
     pub(crate) fn explicit_global_selection_value(&self) -> Option<Value> {
         self.activation.creation.global.explicit_value()
@@ -1229,7 +919,7 @@ impl CallEnv {
         self.activation
             .creation
             .realm
-            .bindings
+            .binding_cells()
             .insert_cell(name, cell.clone());
         cell
     }
@@ -1519,7 +1209,7 @@ impl CallEnv {
         {
             return None;
         }
-        Some(&self.activation.creation.realm.bindings)
+        Some(self.activation.creation.realm.binding_cells())
     }
 
     /// Looks up `name` in the shared realm layer only.
@@ -1591,17 +1281,10 @@ impl CallEnv {
     }
 
     pub(crate) fn object_prototype_intrinsic_override(&self) -> Option<ObjectRef> {
-        match self.get_local(REALM_OBJECT_PROTOTYPE_INTRINSIC) {
-            Some(Value::Object(prototype)) => Some(prototype),
-            _ => None,
-        }
+        self.activation.creation.intrinsics.object.clone()
     }
-
     pub(crate) fn array_prototype_intrinsic_override(&self) -> Option<ObjectRef> {
-        match self.get_local(REALM_ARRAY_PROTOTYPE_INTRINSIC) {
-            Some(Value::Object(prototype)) => Some(prototype),
-            _ => None,
-        }
+        self.activation.creation.intrinsics.array.clone()
     }
 
     /// Returns the realm's internal global-this slot without hashing its

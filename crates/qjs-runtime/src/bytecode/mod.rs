@@ -201,27 +201,19 @@ pub fn compile_script_classified(script: &Script) -> Result<Bytecode, CompileErr
     compiler::compile_script(script)
 }
 
-pub(crate) fn compile_function_body(
+pub(crate) fn compile_function_body_with_source(
     params: &FunctionParams,
     body: &[qjs_ast::Stmt],
-) -> Result<Bytecode, RuntimeError> {
-    compiler::compile_function_body(params, body)
-}
-
-pub(crate) fn compile_function_body_with_kind(
-    params: &FunctionParams,
-    body: &[qjs_ast::Stmt],
-    parent_strict: bool,
+    strict: bool,
     is_generator: bool,
     is_async: bool,
+    source: &std::rc::Rc<str>,
+    source_is_wtf16: bool,
 ) -> Result<Bytecode, RuntimeError> {
-    compiler::compile_function_body_with_strict_generator(
-        params,
-        body,
-        parent_strict,
-        is_generator,
-        is_async,
-    )
+    let mut compiler = compiler::Compiler::function_compiler(strict, is_generator && is_async);
+    compiler.source = source.clone();
+    compiler.source_is_wtf16 = source_is_wtf16;
+    compiler.compile_function(params, body)
 }
 
 pub(crate) fn eval_function_bytecode<'a>(

@@ -293,6 +293,54 @@ explicit marked-global control values in frame maps. The complete with slice
 and its 7-case curated slice pass. Full runtime verification passes after
 the final mode/root-role adjustment: **2,558 runtime tests**, **283 NG scripts**,
 separate recovered module comparison, feature compilation and Clippy pass.
-The 181-case full with slice and 7-case curated slice pass. Final staged gate
-pending. Function-owned creation selection remains B4d; this is not borrowed-ABI
+The 181-case full with slice and 7-case curated slice pass. Staged gate passes at `1e409f0e`, including all 5,171 curated Test262 cases.
+Function-owned creation selection remains B4d; this is not borrowed-ABI
 completion or final full-conformance/performance acceptance.
+
+## B4d function-owned creation (in progress)
+
+FunctionData now retains one shared CreationContext instead of separate realm,
+module-host/import and private-environment ownership. Ordinary entries select
+that exact creation owner, with a fresh variable token, and inherit no caller
+name/value view. Source/host belongs to the function, not a caller fallback.
+Native roots share a single weakly attached default creation record per Realm;
+the attachment retains nothing and copy-on-write disassociates weak defaults.
+The internal TDZ Function sentinel temporarily has no creation context; it is not
+an executable user callable and its marker-facing compatibility is a B6 deletion.
+
+Class private environments now exist before constructor functions retain creation
+metadata. No post-publication Function private setter is needed. Nested heritage
+selects the nearest initialized enclosing class environment while the new class's
+own private environment is not active yet; keys then select the inner environment.
+The constructor/prototype backreference no longer requires mutable creation state.
+
+Deleted: dynamic_function_scope_snapshot, the AST/new_user/with-bytecode factory
+family, per-call marked-global property copying, callee_this_realm_env, and forced
+caller-host fallback on ordinary/constructor entries. Dynamic Function kinds use
+one compiler and retain the callee Realm plus a live selected global object;
+source text/WTF-16 spans reach nested bodies. Globals, getter/setter writes and
+deletes use the selected object without publishing into the origin's cells.
+
+The explicit synthetic-realm protocol retains typed prototype identities using
+known constructor descriptors and the existing Object/Array identity slot, never
+namespace values or getters. Boolean/BigInt/Symbol prototype intrinsics are now
+set once alongside the existing Number/String intrinsics; primitive boxing no
+longer follows rebound public constructor variables. This generalization is
+required by removing marked namespace copies. No value/layout or object.rs
+prototype-cycle/IC-admission ownership path is edited.
+
+Verification so far: 2,562 runtime tests and 285 NG fixtures pass, including live
+selected global getter/deletion behavior, prototype rebinding, nested heritage
+private identities and dynamic nested source text. The weak-owner test, agents/perf-counters compilation, Clippy and separate module
+comparison pass; final staged gate remains. The full runtime count is 2,563 with
+that final identity test included. This is not the borrowed Context switch;
+RuntimeServices, NativeEntry, generic saved references and final compatibility
+retirement/stress/counters/complete exact cached+off/triage remain.
+
+The staged gate caught env.rs exceeding its 2,000-line budget. RealmState,
+realm construction schemas and the immutable eval-plan cache now live under
+context/realm.rs, context/realm/construction.rs and context/eval_cache.rs.
+Module import routing types live with CreationContext. The obsolete Object/Array
+intrinsic snapshot-handoff reader/constants are deleted; typed creation records
+supply those identities. The legacy env file now owns only the remaining ABI
+compatibility to retire, rather than also owning Realm semantics.

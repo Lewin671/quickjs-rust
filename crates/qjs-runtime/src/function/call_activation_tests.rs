@@ -8,7 +8,7 @@ fn inspect(source: &str, check: impl FnOnce(&FunctionCallEnv<'_>, &Bytecode)) {
         panic!("expected function");
     };
     let code = function.bytecode.as_ref().unwrap();
-    let env = CallEnv::new(function.realm.as_ref().unwrap().clone());
+    let env = CallEnv::new(function.realm().unwrap().clone());
     let arguments = [Value::Number(7.0)];
     let prepared = function_env(
         function,

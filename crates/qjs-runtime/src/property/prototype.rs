@@ -155,10 +155,7 @@ fn marked_global_constructor_prototype(global: &ObjectRef, name: &str) -> Option
 }
 
 pub(crate) fn string_prototype(env: &CallEnv) -> Option<ObjectRef> {
-    let Some(Value::Function(string_function)) = env.get("String") else {
-        return None;
-    };
-    function_prototype(&string_function)
+    env.primitive_prototype("String")
 }
 
 /// The intrinsic `%Function%` constructor as a prototype slot. The
@@ -278,10 +275,7 @@ pub(crate) fn function_prototype_chain_descriptor(
 }
 
 pub(crate) fn constructor_named_prototype(env: &CallEnv, name: &str) -> Option<ObjectRef> {
-    let Some(Value::Function(function)) = env.get(name) else {
-        return None;
-    };
-    function_prototype(&function)
+    env.primitive_prototype(name)
 }
 
 pub(crate) fn inherited_primitive_prototype_descriptor(

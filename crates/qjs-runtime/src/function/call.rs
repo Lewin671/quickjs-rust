@@ -26,9 +26,7 @@ use crate::{
     },
     function_prototype,
     native::call_native_function,
-    object_prototype,
-    private::PrivateEnvironment,
-    symbol,
+    object_prototype, symbol,
 };
 
 use super::call_frame::{CallCompletionPolicy, PreparedBytecodeCall, missing_bytecode_body};
@@ -401,19 +399,18 @@ pub(crate) fn call_direct_leaf_function(
     }
     crate::diagnostics::count!(direct_leaf_frames);
     let FunctionCallEnv {
-        env: mut call_env,
+        env: call_env,
         direct_call_slots,
         ..
     } = direct_leaf_function_env(function, bytecode, this_value, argument_values, env, None);
-    if call_env.module_host_ref().is_none()
-        && let Some(host) = module_host
-    {
-        call_env.set_module_host(host);
-    }
     #[cfg(feature = "agents")]
-    if let Some(context) = agent_context {
-        call_env.set_agent_context(context);
-    }
+    let call_env = {
+        let mut call_env = call_env;
+        if let Some(context) = agent_context {
+            call_env.set_agent_context(context);
+        }
+        call_env
+    };
     let direct_call_slots = direct_call_slots.expect("guarded direct leaf calls always seed slots");
     eval_direct_call_bytecode(bytecode, call_env, direct_call_slots)
 }
@@ -434,7 +431,7 @@ pub(crate) fn try_construct_direct_leaf_function(
     callee: &Value,
     argument_values: &[Value],
     env: &CallEnv,
-    module_host: Option<crate::module::ModuleHostRef>,
+    _module_host: Option<crate::module::ModuleHostRef>,
     #[cfg(feature = "agents")] agent_context: Option<crate::agent::AgentContextRef>,
 ) -> Option<Result<Value, RuntimeError>> {
     let Value::Function(function) = callee else {
@@ -467,7 +464,7 @@ pub(crate) fn try_construct_direct_leaf_function(
             &elements,
             &receiver,
             env,
-            module_host.as_ref(),
+            function.module_host_ref(),
             #[cfg(feature = "agents")]
             agent_context.as_ref(),
         )
@@ -475,7 +472,7 @@ pub(crate) fn try_construct_direct_leaf_function(
         return Some(Err(error));
     }
     let FunctionCallEnv {
-        env: mut call_env,
+        env: call_env,
         direct_call_slots,
         ..
     } = direct_leaf_function_env(
@@ -486,15 +483,14 @@ pub(crate) fn try_construct_direct_leaf_function(
         env,
         Some(callee.clone()),
     );
-    if call_env.module_host_ref().is_none()
-        && let Some(host) = module_host
-    {
-        call_env.set_module_host(host);
-    }
     #[cfg(feature = "agents")]
-    if let Some(context) = agent_context {
-        call_env.set_agent_context(context);
-    }
+    let call_env = {
+        let mut call_env = call_env;
+        if let Some(context) = agent_context {
+            call_env.set_agent_context(context);
+        }
+        call_env
+    };
     let direct_call_slots = direct_call_slots.expect("guarded direct leaf calls always seed slots");
     let result = eval_direct_call_bytecode(bytecode, call_env, direct_call_slots);
     Some(match result {
@@ -1187,18 +1183,10 @@ fn direct_leaf_function_env<'a>(
     // Ordinary leaf calls and direct base class constructions both reach
     // this frame; the class-constructor TypeError is the caller's concern.
     debug_assert!(can_seed_slot_backed_call(function, bytecode));
-    let mut frame_env = env.new_direct_leaf_function_frame(function.module_imports.clone());
-    let direct_this_value = if bytecode.uses_lexical_this() {
-        let this_env_storage = callee_this_realm_env(function, env);
-        let this_env = this_env_storage.as_ref().unwrap_or(env);
-        Some(function_call_this(
-            Some(this_value),
-            this_env,
-            function.is_strict,
-        ))
-    } else {
-        None
-    };
+    let mut frame_env = env.function_entry(selected_function_creation(function), 0);
+    let direct_this_value = bytecode
+        .uses_lexical_this()
+        .then(|| function_call_this(Some(this_value), &frame_env, function.is_strict));
     if let Some(owner) = function.lexical_call() {
         frame_env.inherit_call_owner(owner);
     } else {
@@ -1208,15 +1196,6 @@ fn direct_leaf_function_env<'a>(
         );
         owner.new_target = new_target;
         frame_env.set_call_owner(owner);
-    }
-    insert_marked_call_realm(function, &mut frame_env);
-    if let Some(host) = function.module_host.clone() {
-        frame_env.set_module_host(host);
-    }
-    // A fresh leaf frame starts with no private environment; only a function
-    // that carries one (or a home object that does) has anything to install.
-    if function.has_cold_lexical_state() {
-        frame_env.set_private_environment(function_private_environment(function));
     }
     FunctionCallEnv {
         env: frame_env,
@@ -1245,36 +1224,20 @@ fn function_env<'a>(
         && function.lexical_scope().is_none();
     let use_positional_arguments =
         !use_direct_call_slots && can_seed_positional_call(function, bytecode, env);
-    // Ordinary calls materialize `this`, each positional parameter, and a
-    // small number of internal context bindings. Reserve that hot-path shape
-    // up front instead of growing the frame binding vector several times.
-    let mut frame_env = if use_direct_call_slots {
-        env.new_direct_leaf_function_frame(function.module_imports.clone())
+    let capacity = if use_direct_call_slots || use_positional_arguments {
+        0
     } else {
-        env.new_function_frame_with_capacity(if use_positional_arguments {
-            0
-        } else {
-            function.params.positional.len().saturating_add(4)
-        })
+        function.params.positional.len().saturating_add(2)
     };
+    let mut frame_env = env.function_entry(selected_function_creation(function), capacity);
     frame_env.set_scope_cursor(function.lexical_scope());
-    // Install the synthetic realm snapshot before creating any real function
-    // bindings. Parameters, `this`, `arguments`, and internal bindings then
-    // shadow global names normally, while their intrinsic lookup already sees
-    // the function's creation realm.
-    insert_marked_call_realm(function, &mut frame_env);
     let mut direct_this_value = None;
     if let Some(owner) = function.lexical_call() {
         frame_env.inherit_call_owner(owner);
     } else {
         let needs_receiver = !use_positional_arguments || bytecode.needs_call_receiver();
         let receiver = if needs_receiver {
-            let selected = callee_this_realm_env(function, env);
-            function_call_this(
-                Some(this_value),
-                selected.as_ref().unwrap_or(env),
-                function.is_strict,
-            )
+            function_call_this(Some(this_value), &frame_env, function.is_strict)
         } else {
             Value::Undefined
         };
@@ -1368,13 +1331,6 @@ fn function_env<'a>(
     {
         frame_env.set_immutable_function_name(name.to_owned());
     }
-    if let Some(host) = function.module_host.clone() {
-        frame_env.set_module_host(host);
-    }
-    if !use_direct_call_slots {
-        frame_env.set_module_imports(function.module_imports.clone());
-    }
-    frame_env.set_private_environment(function_private_environment(function));
     if let Some(bindings) = &function.deopt_bindings
         && !function.scope_bypassed.get()
     {
@@ -1421,10 +1377,9 @@ fn can_seed_positional_call(function: &Function, bytecode: &Bytecode, env: &Call
         && !function.has_dynamic_function_realm
         && !function.has_dynamic_function_realm_override.get()
         && function
-            .realm
-            .as_ref()
+            .realm()
             .is_none_or(|realm| Rc::ptr_eq(realm, env.realm()))
-        && function.module_imports.is_empty()
+        && !function.has_module_imports()
         && [
             function
                 .name
@@ -1497,79 +1452,23 @@ fn received_upvalue_value(function: &Function, bytecode: &Bytecode, name: &str) 
         .find_map(|(candidate, upvalue)| (candidate == name).then(|| upvalue.get()))
 }
 
-fn insert_marked_call_realm(function: &Function, frame_env: &mut CallEnv) {
-    let has_override = function.has_dynamic_function_realm_override.get();
-    if !function.has_dynamic_function_realm && !has_override {
-        return;
-    }
-    let own_global = has_override.then(|| {
-        function
+/// A function owns its immutable creation metadata. An explicit host override
+/// selects a live object, never a copied namespace. The default entry only
+/// retains the existing creation handle.
+fn selected_function_creation(function: &Function) -> Rc<crate::context::CreationContext> {
+    let mut creation = function.creation_context().clone();
+    if function.has_dynamic_function_realm_override.get() {
+        let value = function
             .own_property(DYNAMIC_FUNCTION_REALM_GLOBAL)
-            .and_then(|property| match property.value {
-                Value::Object(global) => Some(global),
-                _ => None,
-            })
-    });
-    let realm_global = function.has_dynamic_function_realm.then(|| {
-        function
-            .realm
-            .as_ref()
-            .and_then(|realm| realm.dynamic_function_realm_global())
-    });
-    let Some(global) = own_global.flatten().or_else(|| realm_global.flatten()) else {
-        return;
-    };
-    if function.has_dynamic_function_realm
-        && let Some(realm) = &function.realm
+            .map_or(Value::Undefined, |property| property.value);
+        Rc::make_mut(&mut creation).global = crate::context::GlobalSelection::from_control(value);
+    } else if function.has_dynamic_function_realm
+        && matches!(creation.global, crate::context::GlobalSelection::Default)
+        && let Some(global) = creation.realm.dynamic_function_realm_global()
     {
-        if let Some(prototype) = realm.object_prototype() {
-            frame_env.insert(
-                super::env::REALM_OBJECT_PROTOTYPE_INTRINSIC.to_owned(),
-                Value::Object(prototype),
-            );
-        }
-        if let Some(prototype) = realm.array_prototype() {
-            frame_env.insert(
-                super::env::REALM_ARRAY_PROTOTYPE_INTRINSIC.to_owned(),
-                Value::Object(prototype),
-            );
-        }
+        Rc::make_mut(&mut creation).global = crate::context::GlobalSelection::Override(global);
     }
-    frame_env.set_global_selection(Value::Object(global.clone()));
-    for name in global.own_property_names() {
-        if let Some(property) = global.own_property(&name) {
-            frame_env.insert(name, property.value);
-        }
-    }
-}
-
-fn callee_this_realm_env(function: &Function, caller_env: &CallEnv) -> Option<CallEnv> {
-    if function.is_strict {
-        return None;
-    }
-    let realm = function.realm.as_ref()?;
-    if Rc::ptr_eq(realm, caller_env.realm()) {
-        return None;
-    }
-    let captured_global = realm.global_this()?;
-    if caller_env
-        .global_this()
-        .is_some_and(|caller_global| caller_global.same_value(&captured_global))
-    {
-        return None;
-    }
-    Some(CallEnv::new(Rc::clone(realm)))
-}
-
-fn function_private_environment(function: &Function) -> Option<PrivateEnvironment> {
-    if let Some(environment) = function.private_environment() {
-        return Some(environment);
-    }
-    match function.home_object() {
-        Some(Value::Object(object)) => object.private_environment(),
-        Some(Value::Function(function)) => function.private_environment(),
-        _ => None,
-    }
+    creation
 }
 
 #[cfg(test)]

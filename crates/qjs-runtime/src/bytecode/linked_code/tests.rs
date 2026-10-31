@@ -244,16 +244,16 @@ fn one_body_runs_under_two_independent_roots() {
 }
 
 #[test]
-fn a_dynamic_function_shares_its_creators_domain() {
+fn a_dynamic_function_reuses_its_creators_realm_and_domain() {
     let bytecode = compile("new Function('o', 'return o.shared;');");
     let mut vm = Vm::new(&bytecode).expect("root frame");
     let Value::Function(created) = vm.run().expect("runs") else {
         panic!("expected a function");
     };
-    let creation_realm = created.realm.as_ref().expect("a user function has a realm");
+    let creation_realm = created.realm().expect("a user function has a realm");
     assert!(
-        !Rc::ptr_eq(creation_realm, &vm.realm),
-        "dynamic functions get a scope realm"
+        Rc::ptr_eq(creation_realm, &vm.realm),
+        "dynamic functions retain the callee creation realm"
     );
     assert!(creation_realm.atoms().ptr_eq(vm.realm.atoms()));
 }

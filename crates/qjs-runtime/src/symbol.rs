@@ -30,6 +30,10 @@ const WELL_KNOWN_SYMBOL_NAMES: &[&str] = &[
 pub(crate) fn install_symbol(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
     let symbol_prototype =
         ObjectRef::with_prototype(HashMap::new(), Some(object_prototype), env.realm().atoms());
+    env.realm().initialize_other_primitive_prototype(
+        crate::context::PrimitiveIntrinsic::Symbol,
+        symbol_prototype.clone(),
+    );
     symbol_prototype.set_to_string_tag("Symbol");
 
     let symbol_function =
@@ -527,10 +531,7 @@ fn symbol_object(
 }
 
 fn symbol_prototype(env: &CallEnv) -> Option<ObjectRef> {
-    let Some(Value::Function(symbol_function)) = env.get("Symbol") else {
-        return None;
-    };
-    function_prototype(&symbol_function)
+    env.primitive_prototype("Symbol")
 }
 
 fn symbol_registry(env: &mut CallEnv) -> ObjectRef {

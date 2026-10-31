@@ -2,7 +2,6 @@ mod arguments;
 mod call;
 mod call_frame;
 mod env;
-mod eval_cache;
 mod install;
 mod intrinsic_construct;
 mod local_names;
@@ -52,11 +51,14 @@ pub(crate) fn is_call_frame_binding(name: &str) -> bool {
     )
 }
 pub(crate) use crate::binding::BindingCell;
+#[cfg(test)]
+pub(crate) use crate::context::ModuleImports;
+pub(crate) use crate::context::Realm;
 #[allow(unused_imports)]
 #[cfg(test)]
-pub(crate) use env::new_realm;
-pub(crate) use env::new_realm_sharing_atoms;
-pub(crate) use env::{CallEnv, DynamicBindings, ModuleImports, Realm};
+pub(crate) use crate::context::new_realm;
+pub(crate) use crate::context::new_realm_sharing_atoms;
+pub(crate) use env::{CallEnv, DynamicBindings};
 pub(crate) use install::install_function;
 pub(crate) use local_names::{
     collect_function_local_names, parameter_argument_binding_name, parameter_binding_name,

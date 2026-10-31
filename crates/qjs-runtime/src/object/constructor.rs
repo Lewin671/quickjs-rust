@@ -142,10 +142,7 @@ fn boxed_string(value: &str, env: &CallEnv) -> Value {
 }
 
 fn constructor_prototype(name: &str, env: &CallEnv) -> Option<ObjectRef> {
-    let Some(Value::Function(function)) = env.get(name) else {
-        return None;
-    };
-    function_prototype(&function)
+    env.primitive_prototype(name)
 }
 
 pub(crate) fn native_object_create(

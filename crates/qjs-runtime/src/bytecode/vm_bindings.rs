@@ -201,11 +201,37 @@ impl Vm<'_> {
         }
     }
 
+    /// Own lexical/import/arguments routes precede the selected global object.
+    pub(super) fn uses_selected_object_binding(&self, name: &str) -> bool {
+        !(self.env.can_cache_realm_globals()
+            || self.env.has_module_import(name)
+            || name == "arguments" && self.env.has_local_binding(name))
+    }
+
     pub(super) fn load_global(&mut self, name: &str) -> Result<Value, RuntimeError> {
         if name != "this"
             && let Some(reference) = self.resolve_scope_binding(name, self.execution_is_strict())?
         {
             return self.read_scope_binding(&reference);
+        }
+        if name != "this" && !self.env.can_cache_realm_globals() {
+            if let Some(value) = self.env.module_import_value(name).or_else(|| {
+                (name == "arguments")
+                    .then(|| self.env.get_local(name))
+                    .flatten()
+            }) {
+                if value.is_uninitialized_lexical_marker() {
+                    return Err(RuntimeError {
+                        thrown: None,
+                        message: format!("ReferenceError: undefined identifier `{name}`"),
+                    });
+                }
+                return Ok(value);
+            }
+            return self.read_global_binding(name)?.ok_or_else(|| RuntimeError {
+                thrown: None,
+                message: format!("ReferenceError: undefined identifier `{name}`"),
+            });
         }
         if name != "this" && self.env.has_global_binding_root() {
             return self.read_global_binding(name)?.ok_or_else(|| RuntimeError {
@@ -391,6 +417,9 @@ impl Vm<'_> {
         name: String,
         value: Value,
     ) -> Result<(), RuntimeError> {
+        if !self.env.can_cache_realm_globals() {
+            return self.store_global_binding(&name, value, false);
+        }
         if self.env.is_immutable_lexical_binding(&name) {
             return Err(RuntimeError {
                 thrown: None,
@@ -1111,6 +1140,9 @@ impl Vm<'_> {
         if let Some(reference) = self.resolve_scope_binding(name, false)? {
             return self.assign_scope_binding(&reference, value, false);
         }
+        if self.uses_selected_object_binding(name) {
+            return self.store_global_binding(name, value, false);
+        }
         self.check_dynamic_assignment(name, false)?;
         if self.env.has_module_import(name) {
             return Err(RuntimeError {
@@ -1563,6 +1595,16 @@ impl Vm<'_> {
     pub(super) fn delete_ident(&mut self, name: &str) -> Result<bool, RuntimeError> {
         if let Some(reference) = self.resolve_scope_binding(name, false)? {
             return reference.delete(&mut self.realm_env());
+        }
+        if self.uses_selected_object_binding(name) {
+            let Some(base) = self.env.selected_global_this() else {
+                return Ok(true);
+            };
+            return crate::bytecode::delete_object_property(
+                base,
+                &crate::PropertyKey::String(name.to_owned()),
+                &mut self.realm_env(),
+            );
         }
         let deleted = (|| {
             let is_sloppy_global = self

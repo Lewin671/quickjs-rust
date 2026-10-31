@@ -6,12 +6,11 @@ use qjs_parser::parse_dynamic_function_wtf16_script;
 use crate::CallEnv;
 use crate::function::CompiledUserFunction;
 use crate::{
-    Function, GLOBAL_THIS_BINDING, NativeFunction, Property, Prototype, RuntimeError, Value,
+    Function, NativeFunction, Property, Prototype, RuntimeError, Value,
     array::array_like_values_with_env, object::boxed_primitive, property_value, symbol,
     to_js_string_with_env, to_length_with_env,
 };
 
-const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
 const FUNCTION_REALM_PROTOTYPE: &str = "__quickjsRustRealmFunctionPrototype";
 pub(crate) const GENERATOR_FUNCTION_REALM_PROTOTYPE: &str =
     "__quickjsRustRealmGeneratorFunctionPrototype";
@@ -50,33 +49,14 @@ pub(crate) fn native_function(
     is_construct: bool,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let (params, body) = function_source_parts(argument_values, env)?;
-    let source = format!("function anonymous({params}\n) {{\n{body}\n}}");
-    let script = parse_dynamic_function_wtf16_script(&source).map_err(|error| RuntimeError {
-        thrown: None,
-        message: format!(
-            "SyntaxError: invalid Function constructor source: {}",
-            error.message
-        ),
-    })?;
-
-    let Some(Stmt::FunctionDecl {
-        name, params, body, ..
-    }) = script.body.into_iter().next()
-    else {
-        return Err(RuntimeError {
-            thrown: None,
-            message: "Function constructor did not produce a function declaration".to_owned(),
-        });
-    };
-
-    let created = Function::new_user(
-        Some(name),
-        params,
-        body,
-        dynamic_function_scope_snapshot(env),
-        env.realm().atoms().clone(),
-        Rc::from(source),
+    let created = build_dynamic_function(
+        constructor,
+        "Function",
+        "function",
+        false,
+        false,
+        argument_values,
+        env,
     )?;
     // `new Function(...)` derives the [[Prototype]] from new.target, but a plain
     // `Function(...)` call must ignore the ambient new.target (e.g. when invoked
@@ -84,7 +64,7 @@ pub(crate) fn native_function(
     let prototype_slot = if is_construct {
         dynamic_function_construct_prototype_slot(constructor, env)?
     } else {
-        crate::function_intrinsic_prototype_slot(env)
+        constructor.creation_realm().function_prototype()
     };
     created
         .set_internal_prototype_slot(prototype_slot)
@@ -101,6 +81,7 @@ pub(crate) fn native_generator_function(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let created = build_dynamic_function(
+        constructor,
         "GeneratorFunction",
         "function*",
         true,
@@ -124,6 +105,7 @@ pub(crate) fn native_async_function_constructor(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let created = build_dynamic_function(
+        constructor,
         "AsyncFunction",
         "async function",
         false,
@@ -147,6 +129,7 @@ pub(crate) fn native_async_generator_function_constructor(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let created = build_dynamic_function(
+        constructor,
         "AsyncGeneratorFunction",
         "async function*",
         true,
@@ -166,6 +149,7 @@ pub(crate) fn native_async_generator_function_constructor(
 }
 
 fn build_dynamic_function(
+    constructor: &Function,
     constructor_name: &str,
     function_prefix: &str,
     is_generator: bool,
@@ -183,6 +167,8 @@ fn build_dynamic_function(
         ),
     })?;
 
+    let body_source = script.source.clone();
+    let source_is_wtf16 = script.source_is_wtf16;
     let Some(Stmt::FunctionDecl {
         name,
         params,
@@ -208,14 +194,16 @@ fn build_dynamic_function(
 
     let is_strict = crate::function::is_strict_function_body(&body);
     let local_names = crate::function::collect_function_local_names(None, &params, &body, true);
-    let bytecode = crate::bytecode::compile_function_body_with_kind(
+    let bytecode = crate::bytecode::compile_function_body_with_source(
         &params,
         &body,
         is_strict,
         is_generator,
         is_async,
+        &body_source,
+        source_is_wtf16,
     )?;
-    let env_snapshot = dynamic_function_scope_snapshot(env);
+    let creation = dynamic_function_creation(constructor, env);
     let created = Function::new_user_compiled(CompiledUserFunction {
         name: Some(name),
         has_name_binding: false,
@@ -223,13 +211,11 @@ fn build_dynamic_function(
         immutable_env_binding: None,
         immutable_env_value: None,
         params: Rc::new(params),
-        realm: super::env::new_realm_sharing_atoms(env_snapshot, env.realm().atoms().clone()),
-        module_host: None,
-        module_imports: Default::default(),
+        creation,
         bytecode: Rc::new(bytecode),
         source_text: Some(Rc::from(source)),
         local_names: local_names.into(),
-        constructable: false,
+        constructable: !is_generator && !is_async,
         is_strict,
         lexical_this: false,
         lexical_arguments: false,
@@ -323,103 +309,35 @@ fn dynamic_prototype_slot_from_value(value: Value, env: &CallEnv) -> Option<Prot
     }
 }
 
-fn dynamic_function_scope_snapshot(env: &CallEnv) -> std::collections::HashMap<String, Value> {
-    let mut snapshot = HashMap::new();
-    for name in [
-        "Object",
-        "Function",
-        "Array",
-        "Boolean",
-        "Number",
-        "String",
-        "Symbol",
-        "BigInt",
-        "RegExp",
-        "TypeError",
-        GLOBAL_THIS_BINDING,
-    ] {
-        if let Some(value) = env.get_realm(name) {
-            snapshot.insert(name.to_owned(), value);
+fn dynamic_function_creation(
+    constructor: &Function,
+    env: &CallEnv,
+) -> Rc<crate::context::CreationContext> {
+    let mut creation = crate::context::CreationContext::root(constructor.creation_realm().clone());
+    let global = env.dynamic_function_realm_global();
+    if global.is_some()
+        || env.module_host_ref().is_some()
+        || env.explicit_global_selection_value().is_some()
+    {
+        let selected = Rc::make_mut(&mut creation);
+        selected.referrer = env.creation_context_ref().referrer.clone();
+        selected.module = None;
+        selected.private = None;
+        selected.global = global.clone().map_or_else(
+            || {
+                if env.explicit_global_selection_value().is_some() {
+                    crate::context::GlobalSelection::Disabled
+                } else {
+                    crate::context::GlobalSelection::Default
+                }
+            },
+            crate::context::GlobalSelection::Override,
+        );
+        if let Some(global) = &global {
+            selected.intrinsics = crate::context::IntrinsicOverrides::for_marked_global(global);
         }
     }
-    let dynamic_realm_global = env
-        .dynamic_function_realm_value()
-        .and_then(|value| match value {
-            Value::Object(global) => Some(global),
-            _ => None,
-        })
-        .or_else(|| {
-            env.get(GLOBAL_THIS_BINDING).and_then(|value| match value {
-                Value::Object(global_this) => global_this
-                    .own_property(DYNAMIC_FUNCTION_REALM_GLOBAL)
-                    .and_then(|property| match property.value {
-                        Value::Object(global) => Some(global),
-                        _ => None,
-                    }),
-                _ => None,
-            })
-        });
-    if let Some(global) = &dynamic_realm_global {
-        snapshot.insert(
-            DYNAMIC_FUNCTION_REALM_GLOBAL.to_owned(),
-            Value::Object(global.clone()),
-        );
-        snapshot.insert(
-            GLOBAL_THIS_BINDING.to_owned(),
-            Value::Object(global.clone()),
-        );
-        for name in global.own_property_names() {
-            if let Some(property) = global.own_property(&name) {
-                snapshot.insert(name, property.value);
-            }
-        }
-    }
-    // A synthetic Test262 realm captures these identities when its
-    // self-referential globalThis is initialized. Never reconstruct them from
-    // the mutable Object/Array globals after that point: those bindings may be
-    // replaced without changing the Realm's intrinsic objects. The snapshot
-    // lookup remains only as compatibility fallback for older marked globals
-    // that predate the internal identity slot.
-    let dynamic_realm_intrinsics = dynamic_realm_global
-        .as_ref()
-        .and_then(|global| global.realm_intrinsic_prototype_identity());
-    let object_prototype = if let Some((object_prototype, _)) = &dynamic_realm_intrinsics {
-        Some(object_prototype.clone())
-    } else if dynamic_realm_global.is_some() {
-        snapshot_constructor_prototype(&snapshot, "Object")
-    } else {
-        env.realm().object_prototype()
-    };
-    let array_prototype = if let Some((_, array_prototype)) = &dynamic_realm_intrinsics {
-        Some(array_prototype.clone())
-    } else if dynamic_realm_global.is_some() {
-        snapshot_constructor_prototype(&snapshot, "Array")
-    } else {
-        env.realm().array_prototype()
-    };
-    if let Some(prototype) = object_prototype {
-        snapshot.insert(
-            super::env::REALM_OBJECT_PROTOTYPE_INTRINSIC.to_owned(),
-            Value::Object(prototype),
-        );
-    }
-    if let Some(prototype) = array_prototype {
-        snapshot.insert(
-            super::env::REALM_ARRAY_PROTOTYPE_INTRINSIC.to_owned(),
-            Value::Object(prototype),
-        );
-    }
-    snapshot
-}
-
-fn snapshot_constructor_prototype(
-    snapshot: &HashMap<String, Value>,
-    name: &str,
-) -> Option<crate::ObjectRef> {
-    let Some(Value::Function(constructor)) = snapshot.get(name) else {
-        return None;
-    };
-    crate::function_prototype(constructor)
+    creation
 }
 
 fn function_source_parts(

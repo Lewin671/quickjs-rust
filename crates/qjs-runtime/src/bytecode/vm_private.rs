@@ -1,16 +1,13 @@
 //! VM support for private class names: installing private elements when a class
 //! is built, and the `GetPrivate`/`SetPrivate`/`PrivateIn` operations.
 
-use std::{collections::HashMap, rc::Rc};
+use std::collections::HashMap;
 
 use crate::CallEnv;
 
 use crate::{
     Function, ObjectRef, RuntimeError, Value, call_field_initializer, call_function,
-    function::{
-        CROSS_REALM_TYPE_ERROR_PROTOTYPE, CompiledUserFunction, InstancePrivateElement,
-        PrivateFieldInit,
-    },
+    function::{CompiledUserFunction, InstancePrivateElement, PrivateFieldInit},
     private::{PrivateBinding, PrivateEnvironment, PrivateKind, PrivateStorage},
 };
 
@@ -130,34 +127,30 @@ impl Vm<'_> {
         Ok(())
     }
 
-    /// Creates and attaches a class private environment before computed keys are
-    /// evaluated, then predeclares every private name in the class body.
-    pub(super) fn create_private_environment(
-        &mut self,
-        private_elements: &[ClassPrivateElementDef],
-        prototype: &ObjectRef,
-        constructor_function: &Function,
-    ) {
+    /// Allocates a class's lexical private environment before function objects
+    /// retain its immutable creation metadata. Heritage has already resolved.
+    pub(super) fn prepare_class_private_environment(
+        &self,
+        elements: &[ClassPrivateElementDef],
+    ) -> Option<PrivateEnvironment> {
         let enclosing = self.current_private_environment();
-        if private_elements.is_empty() && enclosing.is_none() {
-            return;
+        if elements.is_empty() && enclosing.is_none() {
+            return None;
         }
         let environment = PrivateEnvironment::with_outer(
             enclosing,
-            realm_type_error_prototype(constructor_function, &self.current_env()),
+            dynamic_realm_type_error_prototype(&self.env),
         );
-        prototype.set_private_environment(environment.clone());
-        constructor_function.set_private_environment(environment.clone());
-        for element in private_elements {
-            match element {
+        for element in elements {
+            let name = match element {
                 ClassPrivateElementDef::Field { name, .. }
                 | ClassPrivateElementDef::Method { name, .. }
                 | ClassPrivateElementDef::Getter { name, .. }
-                | ClassPrivateElementDef::Setter { name, .. } => {
-                    environment.declare_placeholder(name);
-                }
-            }
+                | ClassPrivateElementDef::Setter { name, .. } => name,
+            };
+            environment.declare_placeholder(name);
         }
+        Some(environment)
     }
 
     /// Builds the shared function object for a private method or accessor. Its
@@ -184,9 +177,7 @@ impl Vm<'_> {
             immutable_env_binding: name.map(str::to_owned),
             immutable_env_value: None,
             params: std::rc::Rc::new(def.params.clone()),
-            realm: Rc::clone(&self.realm),
-            module_host: self.module_host.clone(),
-            module_imports: self.env.module_imports(),
+            creation: self.current_creation_context(),
             bytecode: def.bytecode.clone(),
             source_text: def.source_text.clone(),
             local_names: def.local_names.clone().into(),
@@ -244,9 +235,7 @@ impl Vm<'_> {
             immutable_env_binding: name.map(str::to_owned),
             immutable_env_value: None,
             params: std::rc::Rc::new(qjs_ast::FunctionParams::positional(Vec::new())),
-            realm: Rc::clone(&self.realm),
-            module_host: self.module_host.clone(),
-            module_imports: self.env.module_imports(),
+            creation: self.current_creation_context(),
             bytecode: definition.bytecode.clone(),
             source_text: None,
             local_names: definition.local_names.clone().into(),
@@ -490,12 +479,6 @@ impl Vm<'_> {
             _ => None,
         }
     }
-
-    pub(super) fn capture_private_environment(&self, function: &Function) {
-        if let Some(environment) = self.current_private_environment() {
-            function.set_private_environment(environment);
-        }
-    }
 }
 
 /// Applies one constructor instance private element to a freshly created
@@ -569,21 +552,6 @@ fn instance_private_storage(value: &Value) -> Option<PrivateStorage> {
 
 fn private_storage_of(value: &Value) -> Option<PrivateStorage> {
     instance_private_storage(value)
-}
-
-fn realm_type_error_prototype(function: &Function, env: &CallEnv) -> Option<ObjectRef> {
-    marked_type_error_prototype(function).or_else(|| dynamic_realm_type_error_prototype(env))
-}
-
-fn marked_type_error_prototype(function: &Function) -> Option<ObjectRef> {
-    let crate::Property {
-        value: Value::Object(prototype),
-        ..
-    } = function.own_property(CROSS_REALM_TYPE_ERROR_PROTOTYPE)?
-    else {
-        return None;
-    };
-    Some(prototype)
 }
 
 fn dynamic_realm_type_error_prototype(env: &CallEnv) -> Option<ObjectRef> {

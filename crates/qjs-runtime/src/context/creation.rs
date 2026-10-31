@@ -1,13 +1,17 @@
 //! Immutable creation metadata shared by roots, functions and retained jobs.
 //! Module routes point to canonical cells. No execution binding values or
 //! activation-local names are captured here.
+use super::Realm;
 use crate::{
-    ObjectRef, Value,
-    function::{DynamicBindings, ModuleImports, Realm},
-    module::ModuleHostRef,
-    private::PrivateEnvironment,
+    ObjectRef, Value, function::DynamicBindings, module::ModuleHostRef, private::PrivateEnvironment,
 };
 use std::rc::Rc;
+/// Structurally immutable module-import routing shared by function objects and
+/// call frames. Module setup uses copy-on-write so environment clones preserve
+/// their previous routing table while ordinary scripts and nested functions
+/// retain only one pointer-sized empty map.
+pub(crate) type ModuleImports =
+    Rc<crate::value::name_hash::NameMap<String, (DynamicBindings, String)>>;
 
 #[derive(Clone)]
 pub(crate) struct ModuleContext {
@@ -59,6 +63,53 @@ impl GlobalSelection {
     }
 }
 
+#[derive(Clone, Default)]
+pub(crate) struct IntrinsicOverrides {
+    pub(crate) object: Option<ObjectRef>,
+    pub(crate) array: Option<ObjectRef>,
+    pub(crate) function: Option<crate::Prototype>,
+    pub(crate) primitive: [Option<ObjectRef>; 5],
+}
+
+impl IntrinsicOverrides {
+    /// Retain semantic identities for the explicit synthetic-realm protocol.
+    /// This reads only known constructor descriptors, never a namespace copy
+    /// and never a user getter. Canonical Object/Array identity slots win.
+    pub(crate) fn for_marked_global(global: &ObjectRef) -> Self {
+        let mut result = Self::default();
+        for kind in [
+            super::PrimitiveIntrinsic::Boolean,
+            super::PrimitiveIntrinsic::Number,
+            super::PrimitiveIntrinsic::String,
+            super::PrimitiveIntrinsic::BigInt,
+            super::PrimitiveIntrinsic::Symbol,
+        ] {
+            result.primitive[kind.index()] = global
+                .own_property(kind.name())
+                .and_then(|property| super::constructor_object_prototype(property.value));
+        }
+        result.function =
+            global
+                .own_property("Function")
+                .and_then(|property| match property.value {
+                    Value::Function(function) => super::constructor_function_prototype(&function),
+                    _ => None,
+                });
+        if let Some((object, array)) = global.realm_intrinsic_prototype_identity() {
+            result.object = Some(object);
+            result.array = Some(array);
+        } else {
+            result.object = global
+                .own_property("Object")
+                .and_then(|property| super::constructor_object_prototype(property.value));
+            result.array = global
+                .own_property("Array")
+                .and_then(|property| super::constructor_object_prototype(property.value));
+        }
+        result
+    }
+}
+
 #[derive(Clone)]
 pub(crate) struct CreationContext {
     pub(crate) realm: Realm,
@@ -66,20 +117,27 @@ pub(crate) struct CreationContext {
     pub(crate) referrer: ScriptOrModule,
     pub(crate) private: Option<PrivateEnvironment>,
     pub(crate) global: GlobalSelection,
+    pub(crate) intrinsics: IntrinsicOverrides,
     // The existing Function/arguments APIs retain an imports handle even for
     // scripts. Keep one empty metadata handle per root, shared by its views.
     pub(crate) empty_imports: ModuleImports,
 }
 impl CreationContext {
     pub(crate) fn root(realm: Realm) -> Rc<Self> {
-        Rc::new(Self {
+        if let Some(creation) = realm.cached_root_creation() {
+            return creation;
+        }
+        let creation = Rc::new(Self {
             realm,
             module: None,
             referrer: ScriptOrModule::Script(None),
             private: None,
             global: GlobalSelection::Default,
+            intrinsics: IntrinsicOverrides::default(),
             empty_imports: ModuleImports::default(),
-        })
+        });
+        creation.realm.cache_root_creation(Rc::downgrade(&creation));
+        creation
     }
     pub(crate) fn imports(&self) -> &ModuleImports {
         self.module
@@ -93,5 +151,29 @@ impl CreationContext {
                 live: None,
             })
         }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+    #[test]
+    fn root_metadata_is_shared_weakly_and_mutation_cannot_change_the_default() {
+        let realm = crate::function::new_realm(HashMap::new());
+        let first = CreationContext::root(realm.clone());
+        let second = CreationContext::root(realm.clone());
+        assert!(Rc::ptr_eq(&first, &second));
+        drop(second);
+        let old = Rc::downgrade(&first);
+        let mut selected = first;
+        Rc::make_mut(&mut selected).global = GlobalSelection::Disabled;
+        assert!(old.upgrade().is_none());
+        let default = CreationContext::root(realm);
+        assert!(matches!(default.global, GlobalSelection::Default));
+        assert!(!Rc::ptr_eq(&selected, &default));
+        let weak = Rc::downgrade(&default);
+        drop(default);
+        assert!(weak.upgrade().is_none());
     }
 }

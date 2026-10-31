@@ -201,8 +201,7 @@ fn arguments_iterator_property(function: &Function, env: &CallEnv) -> Property {
     let values = cross_realm_array_proto_values(function)
         .or_else(|| {
             function
-                .realm
-                .as_ref()
+                .realm()
                 .and_then(|realm| realm.get_value(super::ARRAY_PROTO_VALUES_INTRINSIC))
         })
         .or_else(|| env.get_realm(super::ARRAY_PROTO_VALUES_INTRINSIC))
