@@ -253,6 +253,7 @@ impl PropertyOwner {
             transitions: RefCell::default(),
             root: None,
             prototype: prototype.map(WeakPrototype::new),
+            compact_prototype: RefCell::default(),
             flavor,
             capacity_hint: std::cell::Cell::new(0),
             append_misses: std::cell::Cell::new(0),
@@ -281,6 +282,21 @@ impl NamedStore {
             cold: ColdStorage::default(),
             prototype,
         }
+    }
+    /// Compact empty authorities keep their smaller boxed-edge representation.
+    /// The root memo is weak: sharing an edge box must never pin a JS value.
+    pub(super) fn compact_prototype(
+        layout: &Rc<Layout>,
+        prototype: Option<Prototype>,
+    ) -> Option<Rc<Prototype>> {
+        let prototype = prototype?;
+        let root = Layout::root_shape(layout);
+        if let Some(edge) = root.compact_prototype.borrow().upgrade() {
+            return Some(edge);
+        }
+        let edge = Rc::new(prototype);
+        *root.compact_prototype.borrow_mut() = Rc::downgrade(&edge);
+        Some(edge)
     }
     fn deferred(&self) -> bool {
         self.layout.deferred_seed

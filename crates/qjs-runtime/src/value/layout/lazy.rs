@@ -15,9 +15,10 @@ impl NamedStorage {
     pub(crate) fn new(domain: &AtomDomain, prototype: Option<Prototype>, flavor: u16) -> Self {
         let mut store = NamedStore::empty_with_prototype(domain, prototype, flavor);
         store.materialize_layout();
+        let prototype = NamedStore::compact_prototype(&store.layout, store.prototype);
         Self::Empty {
             layout: store.layout,
-            prototype: store.prototype.map(Rc::new),
+            prototype,
         }
     }
     /// Fork a realm's immutable empty seed on the first receiver mutation.
@@ -111,7 +112,7 @@ impl NamedStorage {
             Self::Empty { layout, prototype } => {
                 let owner = PropertyOwner::new(layout.domain.clone());
                 let next = owner.root_for(p.as_ref(), flavor);
-                *prototype = p.map(Rc::new);
+                *prototype = NamedStore::compact_prototype(&next, p);
                 *layout = next;
             }
             Self::Full(s) => s.rebase(p, flavor),

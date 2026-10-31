@@ -12,7 +12,9 @@ the direct layout identity first, without consulting cold metadata on a hit. Exi
 reused at construction; newly demanded roots share the empty descriptor buffer.
 IC admission publishes an ordinary receiver's deferred root into its direct
 layout field once, preserving an already-issued guard identity.
-Array/function empty seeds retain their compact shared edge representation.
+Array/function empty seeds retain their compact shared edge representation,
+reusing a weak root memo rather than allocating a box per instance. The memo
+never owns a prototype, and full NamedStores retain their edge inline.
 
 A dependency request installs only the required ancestor path, iteratively.
 The weak user graph links validity states, never IC sites. Reparenting leaves

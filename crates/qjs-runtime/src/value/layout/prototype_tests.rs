@@ -158,3 +158,53 @@ fn deferred_seeds_cannot_match_a_null_prototype_guard_or_another_prototype() {
     let second_guard = second.version();
     assert!(!first.matches_version(&second_guard));
 }
+
+#[test]
+fn compact_authorities_share_weak_edge_boxes_without_pinning_prototypes() {
+    let domain = AtomDomain::new();
+    let _owner = PropertyOwner::new(domain.clone());
+    let parent = object(&domain, None);
+    let weak = parent.downgrade();
+    let mut first = NamedStorage::new(&domain, Some(Prototype::Object(parent.clone())), 0x100);
+    let second = NamedStorage::new(&domain, Some(Prototype::Object(parent.clone())), 0x100);
+    let (
+        NamedStorage::Empty {
+            prototype: Some(a), ..
+        },
+        NamedStorage::Empty {
+            prototype: Some(b), ..
+        },
+    ) = (&first, &second)
+    else {
+        panic!("compact authorities");
+    };
+    assert!(
+        Rc::ptr_eq(a, b),
+        "compact instances must reuse their edge allocation"
+    );
+    first.store_mut();
+    let third = NamedStorage::new(&domain, Some(Prototype::Object(parent.clone())), 0x100);
+    let (
+        NamedStorage::Empty {
+            prototype: Some(b), ..
+        },
+        NamedStorage::Empty {
+            prototype: Some(c), ..
+        },
+    ) = (&second, &third)
+    else {
+        panic!("compact authorities");
+    };
+    assert!(Rc::ptr_eq(b, c));
+    let guard = second.version().unwrap();
+    drop(parent);
+    drop(first);
+    drop(second);
+    drop(third);
+    assert!(guard.is_alive(), "retained root metadata stays available");
+    assert!(
+        weak.upgrade().is_none(),
+        "the root memo must not pin the prototype"
+    );
+    assert_eq!(std::mem::size_of::<RefCell<NamedStorage>>(), 32);
+}

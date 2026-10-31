@@ -1,11 +1,12 @@
 # S2 follow-up: prototype memory and complexity
 
-- Status: active; implementation in progress.
-- Implementation: all five requested mechanisms present; prototype roots and validity graphs are demand-driven; shared holders no longer copy descriptors.
-- Verified at: `f35bf831` first-increment fast gate passes (2,497 tests, 65 selected Test262); memory increment fast gate passes (2,502 tests, no matching curated slice). Full gates pending.
+- Status: active; final compact-sharing repair passes the fast gate; full qualification pending.
+- Implementation: all five mechanisms present; final compact-edge sharing repair passes 2,505 runtime tests, with final qualification pending. Collector at `d30838c6`.
+- Verified at: `3dc2a684`: full check (5,170 curated cases), 268 NG fixtures cached/off/verify, seven x86_64 graph tests; 2,504 default runtime tests.
 - Evidence: this record and [retained review programs/collector](t077-s2-followup/measure.py).
-- Unresolved: final acceptance gates and measured memory/performance standing.
-- Next action: qualify the committed memory migration with full correctness and performance gates.
+- Unresolved: final compact-sharing qualification, complete exact cached/off results and burndown; quiet native timings; iMac gates blocked by no-push; x86 order audit.
+- Next action: freeze the compact-sharing repair, complete full checks and exact scans per mode, record burndown, then measure on a quiet host; no push or merge.
+
 
 ## Frozen scope and migration
 
@@ -47,7 +48,7 @@ the common invalidation barrier, including when an existing receiver becomes
 a prototype after the plan was admitted. Physical assertions remain 64-byte
 NamedStore, 72-byte RefCell and 96-byte ordinary payload.
 
-## Frozen candidate qualification (in progress)
+## Initial candidate qualification (`635ca6f8`)
 
 Production source `6a9c615d`, integration base `1e6e2a2b`, review reference
 `d38f30a7`. Isolated release `agents` CLI SHA-256
@@ -125,3 +126,14 @@ both active exact runner parents; invoking the collector during those scans
 exits 1 with `host busy before collection` and creates no measurement report.
 Known shell test runners are recognized by their script argv rather than by
 arbitrary command text, so a reader/tool shell is not treated as test load.
+
+
+Final representation audit found a migration regression before acceptance:
+compact array/function NamedStorage still needs a boxed edge, but the root's
+weak edge-box memo had been removed with ordinary-object boxes. Restoring that
+memo only for compact authorities preserves sharing and the 32-byte RefCell
+header; ordinary NamedStore keeps its inline edge and 64-byte size. A focused
+test proves edge-box reuse across instances/conversion and proves retained
+root metadata does not pin the prototype. The eight `3dc2a684` shards are
+superseded partial scans (no burndown), and final exact qualification restarts
+at the corrected source. No function/env/call/context path changes.
