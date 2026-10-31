@@ -53,7 +53,6 @@ pub(super) const REALM_ARRAY_PROTOTYPE_INTRINSIC: &str = "\0realm:Array.prototyp
 /// sync, which the old two-map design required on every store.
 pub(crate) struct RealmState {
     bindings: DynamicBindings,
-    next_variable: std::cell::Cell<u64>,
     /// Stable realm intrinsics are separate from the mutable global bindings.
     /// Rebinding `Object` or `Array` must not change the default prototype used
     /// by literals, classes, or abstract operations that name an intrinsic.
@@ -96,12 +95,7 @@ pub(crate) struct RealmState {
 
 impl RealmState {
     pub(crate) fn next_variable_identity(&self) -> u64 {
-        let current = self.next_variable.get();
-        let Some(next) = current.checked_add(1) else {
-            std::process::abort();
-        };
-        self.next_variable.set(next);
-        current
+        self.atoms().next_variable_identity()
     }
 
     fn new(mut bindings: HashMap<String, Value>, atoms: AtomDomain) -> Self {
@@ -123,7 +117,6 @@ impl RealmState {
                 });
         let realm = Self {
             bindings: DynamicBindings::from_values(bindings),
-            next_variable: std::cell::Cell::new(1),
             object_prototype: OnceCell::new(),
             array_prototype: OnceCell::new(),
             arguments_layouts: RefCell::default(),
@@ -839,59 +832,17 @@ impl IntoIterator for BindingSnapshot {
 /// compatibility frame vector.
 #[allow(dead_code)]
 pub(crate) struct CallEnv {
-    scope: Realm,
+    activation: crate::context::ActivationContext,
     frame_bindings: FrameBindings,
-    /// Temporary construct-dispatch target, separate from lexical new.target.
-    /// B5 moves this borrowed target source into the native call facade.
+    /// Pending construct target until B5 introduces the borrowed NativeSite.
     construct_target: Option<Value>,
-    call: RefCell<crate::context::LexicalCallContext>,
     deopt_bindings: Option<DynamicBindings>,
-    scope_cursor: Option<crate::binding::ScopeCursor>,
     global_binding_root: bool,
     global_function_configurable: bool,
-    entry_scope: Option<Rc<crate::binding::ScopeLease>>,
-    /// Dynamic-scope metadata is inherited by nested execution views but is
-    /// mutated only by catch setup. Share the ordinary call path and
-    /// detach on those cold mutations instead of cloning a hash table per call.
     catch_bindings: Option<Rc<HashSet<String>>>,
-    /// The immutable name binding of a named function expression, for this
-    /// frame only. Assigning to it is a silent no-op in sloppy mode and a
-    /// TypeError in strict mode (unless a parameter/`var`/lexical shadows it,
-    /// in which case the assignment resolves to that local slot instead and
-    /// never consults this field). New ordinary function frames reset this;
-    /// lexical-this functions inherit it explicitly from their enclosing frame.
     immutable_function_name: Option<String>,
-    /// Share the inherited declaration-conflict set across ordinary frames and
-    /// detach only when direct-eval setup rebuilds the active conflict names.
     direct_eval_var_conflicts: Option<Rc<HashSet<String>>>,
-    /// The lexical private-name environment active for this frame. This is
-    /// separate from the typed home object: ordinary nested functions do not inherit
-    /// `super`, but they do retain access to private names declared by enclosing
-    /// classes.
-    private_environment: Option<PrivateEnvironment>,
-    /// Dynamic with-object chain active at a direct eval call site. This is
-    /// intentionally not part of ordinary function environments; the VM sets it
-    /// only while invoking the intrinsic eval function as a direct eval.
     direct_eval_with_stack: Vec<Value>,
-    /// The realm's dynamic-import host (module graph + resolver + active
-    /// referrer), shared by `Rc::clone` into every frame and the job queue so a
-    /// dynamic `import()` reached at any depth can load and cache modules. `None`
-    /// when the code was not entered with a module host (the host then reports a
-    /// dynamic-import-unsupported rejection).
-    module_host: Option<crate::module::ModuleHostRef>,
-    /// Live module imports keyed by this module's local import binding name.
-    /// Each entry points at the exporting module's shared lexical export cell
-    /// and the local binding name that backs that export.
-    module_imports: ModuleImports,
-    /// Exported bindings of the currently executing module body. This is set
-    /// only on the module frame (and its suspended TLA continuation), so an
-    /// ordinary nested function with a same-named local cannot accidentally
-    /// reuse a module export cell.
-    module_live_bindings: Option<DynamicBindings>,
-    /// The Test262 `$262.agent` execution context for this thread's agent,
-    /// threaded like `module_host` so native `Atomics`/`$262.agent` hooks reach
-    /// it. `None` outside the agents harness. Gated so the default build's
-    /// struct layout and per-call clone cost are unchanged.
     #[cfg(feature = "agents")]
     agent_context: Option<crate::agent::AgentContextRef>,
 }
@@ -899,26 +850,16 @@ pub(crate) struct CallEnv {
 impl Clone for CallEnv {
     fn clone(&self) -> Self {
         Self {
-            scope: Rc::clone(&self.scope),
-            // A cloned execution view is an isolated dynamic environment. The
-            // cells themselves are shared only when a direct-eval/with deopt
-            // path explicitly requests that identity.
+            activation: self.activation.retained_view(),
             frame_bindings: self.frame_bindings.clone(),
             construct_target: self.construct_target.clone(),
-            call: RefCell::new(self.call.borrow_mut().shared_view()),
             deopt_bindings: self.deopt_bindings.clone(),
-            scope_cursor: self.scope_cursor.clone(),
             global_binding_root: self.global_binding_root,
             global_function_configurable: self.global_function_configurable,
-            entry_scope: self.entry_scope.clone(),
             catch_bindings: self.catch_bindings.clone(),
             immutable_function_name: self.immutable_function_name.clone(),
             direct_eval_var_conflicts: self.direct_eval_var_conflicts.clone(),
-            private_environment: self.private_environment.clone(),
             direct_eval_with_stack: self.direct_eval_with_stack.clone(),
-            module_host: self.module_host.clone(),
-            module_imports: self.module_imports.clone(),
-            module_live_bindings: self.module_live_bindings.clone(),
             #[cfg(feature = "agents")]
             agent_context: self.agent_context.clone(),
         }
@@ -928,15 +869,15 @@ impl Clone for CallEnv {
 impl std::fmt::Debug for CallEnv {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CallEnv")
-            .field("realm", &self.scope)
+            .field("realm", &self.activation.creation.realm)
             .field("frame_bindings", &self.snapshot_locals())
             .field("deopt_bindings", &self.deopt_bindings.is_some())
             .field("catch_bindings", &self.catch_bindings)
             .field("direct_eval_var_conflicts", &self.direct_eval_var_conflicts)
             .field("direct_eval_with_stack", &self.direct_eval_with_stack.len())
-            .field("module_host", &self.module_host.is_some())
-            .field("module_imports", &self.module_imports.keys())
-            .field("module_live_bindings", &self.module_live_bindings.is_some())
+            .field("module_host", &self.module_host_ref().is_some())
+            .field("module_imports", &self.activation.creation.imports().keys())
+            .field("module_live_bindings", &self.has_module_live_bindings())
             .finish()
     }
 }
@@ -944,16 +885,27 @@ impl std::fmt::Debug for CallEnv {
 #[allow(dead_code)]
 impl CallEnv {
     pub(crate) fn set_call_owner(&mut self, owner: crate::context::CallOwner) {
-        *self.call.borrow_mut() = crate::context::LexicalCallContext::Inline(owner);
+        self.activation.mode = owner.kind.into();
+        if owner.kind == crate::context::OwnerKind::Module
+            && !matches!(
+                self.activation.creation.referrer,
+                crate::context::ScriptOrModule::Module(_)
+            )
+        {
+            Rc::make_mut(&mut self.activation.creation)
+                .referrer
+                .select_module();
+        }
+        *self.activation.call.borrow_mut() = crate::context::LexicalCallContext::Inline(owner);
     }
     pub(crate) fn inherit_call_owner(&mut self, owner: Rc<crate::context::CallOwner>) {
-        *self.call.borrow_mut() = crate::context::LexicalCallContext::Shared(owner);
+        *self.activation.call.borrow_mut() = crate::context::LexicalCallContext::Shared(owner);
     }
     pub(crate) fn capture_call_owner(&self) -> Option<Rc<crate::context::CallOwner>> {
-        self.call.borrow_mut().capture()
+        self.activation.call.borrow_mut().capture()
     }
     fn this_compatibility_value(&self) -> Option<Value> {
-        self.call.borrow().owner().map(|owner| {
+        self.activation.call.borrow().owner().map(|owner| {
             owner
                 .this
                 .read()
@@ -961,59 +913,95 @@ impl CallEnv {
         })
     }
     pub(crate) fn this_value(&self) -> Result<Value, crate::RuntimeError> {
-        self.call
+        self.activation
+            .call
             .borrow()
             .owner()
             .map_or(Ok(Value::Undefined), |owner| owner.this.read())
     }
     pub(crate) fn lexical_new_target(&self) -> Option<Value> {
-        self.call
+        self.activation
+            .call
             .borrow()
             .owner()
             .and_then(|owner| owner.new_target.clone())
     }
     pub(crate) fn home_object(&self) -> Option<Value> {
-        self.call
+        self.activation
+            .call
             .borrow()
             .owner()
             .and_then(|owner| owner.home.clone())
     }
     pub(crate) fn super_constructor(&self) -> Option<Value> {
-        self.call
+        self.activation
+            .call
             .borrow()
             .owner()
             .and_then(|owner| owner.super_constructor.clone())
     }
     pub(crate) fn active_constructor(&self) -> Option<Value> {
-        self.call
+        self.activation
+            .call
             .borrow()
             .owner()
             .and_then(|owner| owner.active_constructor.clone())
     }
     pub(crate) fn owner_kind(&self) -> Option<crate::context::OwnerKind> {
-        self.call.borrow().owner().map(|owner| owner.kind)
+        self.activation
+            .call
+            .borrow()
+            .owner()
+            .map(|owner| owner.kind)
     }
 
+    pub(crate) fn set_global_selection(&mut self, value: Value) {
+        Rc::make_mut(&mut self.activation.creation).global =
+            crate::context::GlobalSelection::from_control(value);
+    }
+    pub(crate) fn explicit_global_selection_value(&self) -> Option<Value> {
+        self.activation.creation.global.explicit_value()
+    }
+    pub(crate) fn dynamic_function_realm_value(&self) -> Option<Value> {
+        self.explicit_global_selection_value().or_else(|| {
+            self.realm()
+                .dynamic_function_realm_global()
+                .map(Value::Object)
+        })
+    }
+    pub(crate) fn select_variable_boundary(&mut self, scope: crate::binding::ScopeId) {
+        self.activation.variable.boundary = scope;
+    }
+    pub(crate) fn variable_identity(&self) -> crate::binding::VariableEnvIdentity {
+        self.activation.variable
+    }
+    pub(crate) fn execution_state(&self) -> (crate::context::ExecutionMode, bool) {
+        (self.activation.mode, self.activation.strict)
+    }
+    pub(crate) fn set_execution_state(
+        &mut self,
+        mode: crate::context::ExecutionMode,
+        strict: bool,
+    ) {
+        self.activation.mode = mode;
+        self.activation.strict = strict;
+    }
     /// Builds an environment over `realm` with empty locals.
     pub(crate) fn new(realm: Realm) -> Self {
         Self {
-            scope: realm,
+            activation: crate::context::ActivationContext::new(
+                crate::context::CreationContext::root(realm),
+                crate::context::ExecutionMode::Script,
+            ),
             frame_bindings: FrameBindings::default(),
             construct_target: None,
-            call: RefCell::default(),
             deopt_bindings: None,
-            scope_cursor: None,
             global_binding_root: false,
             global_function_configurable: true,
-            entry_scope: None,
-            catch_bindings: Default::default(),
+            catch_bindings: None,
             immutable_function_name: None,
-            direct_eval_var_conflicts: Default::default(),
-            private_environment: None,
+            direct_eval_var_conflicts: None,
             direct_eval_with_stack: Vec::new(),
-            module_host: None,
-            module_imports: Default::default(),
-            module_live_bindings: None,
             #[cfg(feature = "agents")]
             agent_context: None,
         }
@@ -1021,7 +1009,7 @@ impl CallEnv {
 
     /// The realm's dynamic-import host, if one was installed.
     pub(crate) fn module_host(&self) -> Option<crate::module::ModuleHostRef> {
-        self.module_host.clone()
+        self.module_host_ref().cloned()
     }
 
     /// Borrows the dynamic-import host, for callers that only compare it.
@@ -1030,12 +1018,20 @@ impl CallEnv {
     /// per question asked. The call-admission predicates ask on every call and
     /// only ever compare identity.
     pub(crate) fn module_host_ref(&self) -> Option<&crate::module::ModuleHostRef> {
-        self.module_host.as_ref()
+        self.activation.creation.referrer.host()
     }
 
     /// Installs (or replaces) the dynamic-import host on this environment.
     pub(crate) fn set_module_host(&mut self, host: crate::module::ModuleHostRef) {
-        self.module_host = Some(host);
+        if self
+            .module_host_ref()
+            .is_some_and(|old| Rc::ptr_eq(old, &host))
+        {
+            return;
+        }
+        Rc::make_mut(&mut self.activation.creation)
+            .referrer
+            .set_host(host);
     }
 
     /// The Test262 `$262.agent` context for this thread's agent, if installed.
@@ -1055,19 +1051,19 @@ impl CallEnv {
     pub(crate) fn set_module_import(
         &mut self,
         local_name: String,
-        exported_bindings: DynamicBindings,
-        exported_local_name: String,
+        bindings: DynamicBindings,
+        exported: String,
     ) {
-        Rc::make_mut(&mut self.module_imports)
-            .insert(local_name, (exported_bindings, exported_local_name));
+        let module = Rc::make_mut(&mut self.activation.creation).module_mut();
+        Rc::make_mut(&mut module.imports).insert(local_name, (bindings, exported));
     }
 
     /// Reads the current value of a live module import binding.
     pub(crate) fn module_import_value(&self, local_name: &str) -> Option<Value> {
-        let (bindings, exported_local_name) = self.module_imports.get(local_name)?;
+        let (bindings, exported) = self.activation.creation.imports().get(local_name)?;
         Some(
             bindings
-                .get(exported_local_name)
+                .get(exported)
                 .unwrap_or_else(|| Value::Function(Function::uninitialized_lexical_marker())),
         )
     }
@@ -1076,41 +1072,61 @@ impl CallEnv {
     /// Capturing an import must retain this identity instead of boxing the
     /// value currently observed by the importing module frame.
     pub(crate) fn module_import_cell(&self, local_name: &str) -> Option<BindingCell> {
-        let (bindings, exported_local_name) = self.module_imports.get(local_name)?;
-        bindings.cell(exported_local_name)
+        let (bindings, exported) = self.activation.creation.imports().get(local_name)?;
+        bindings.cell(exported)
     }
 
     pub(crate) fn has_module_import(&self, local_name: &str) -> bool {
-        // Almost every frame (any non-module script/function) has no module
-        // imports at all; skip the name-table hash entirely in that case
-        // instead of hashing `local_name` against an empty map on every call.
-        !self.module_imports.is_empty() && self.module_imports.contains_key(local_name)
+        self.activation.creation.imports().contains_key(local_name)
     }
 
     pub(crate) fn module_imports(&self) -> ModuleImports {
-        self.module_imports.clone()
+        self.activation.creation.imports().clone()
     }
 
     pub(crate) fn has_module_imports(&self) -> bool {
-        !self.module_imports.is_empty()
+        !self.activation.creation.imports().is_empty()
     }
 
     pub(crate) fn set_module_imports(&mut self, imports: ModuleImports) {
-        self.module_imports = imports;
+        let old = self.activation.creation.imports();
+        if Rc::ptr_eq(old, &imports) || old.is_empty() && imports.is_empty() {
+            return;
+        }
+        Rc::make_mut(&mut self.activation.creation)
+            .module_mut()
+            .imports = imports;
     }
 
     pub(crate) fn set_module_live_bindings(&mut self, bindings: DynamicBindings) {
-        self.module_live_bindings = Some(bindings);
+        self.activation.mode = crate::context::ExecutionMode::Module;
+        self.activation.scopes.module_root = true;
+        Rc::make_mut(&mut self.activation.creation)
+            .module_mut()
+            .live = Some(bindings);
     }
 
     pub(crate) fn has_module_live_bindings(&self) -> bool {
-        self.module_live_bindings.is_some()
+        self.activation.scopes.module_root
+            && self
+                .activation
+                .creation
+                .module
+                .as_ref()
+                .is_some_and(|module| module.live.is_some())
     }
 
     pub(crate) fn module_live_binding_cell(&self, name: &str) -> Option<BindingCell> {
-        self.module_live_bindings
-            .as_ref()
-            .and_then(|bindings| bindings.cell(name))
+        if !self.has_module_live_bindings() {
+            return None;
+        }
+        self.activation
+            .creation
+            .module
+            .as_ref()?
+            .live
+            .as_ref()?
+            .cell(name)
     }
 
     /// Builds a standalone environment over a fresh, empty realm. Used by the
@@ -1118,89 +1134,31 @@ impl CallEnv {
     /// `parse_json_text`) that run without a live VM; intrinsic lookups simply
     /// return `None`, matching the prior empty-`HashMap` behavior.
     pub(crate) fn detached() -> Self {
-        Self {
-            scope: new_realm(HashMap::new()),
-            frame_bindings: FrameBindings::default(),
-            construct_target: None,
-            call: RefCell::default(),
-            deopt_bindings: None,
-            scope_cursor: None,
-            global_binding_root: false,
-            global_function_configurable: true,
-            entry_scope: None,
-            catch_bindings: Default::default(),
-            immutable_function_name: None,
-            direct_eval_var_conflicts: Default::default(),
-            private_environment: None,
-            direct_eval_with_stack: Vec::new(),
-            module_host: None,
-            module_imports: Default::default(),
-            module_live_bindings: None,
-            #[cfg(feature = "agents")]
-            agent_context: None,
-        }
+        Self::new(new_realm(HashMap::new()))
     }
 
     /// Wraps an owned flat map as a detached realm with no frame bindings.
     /// Used by native/dynamic compatibility entry points that receive an owned
     /// map rather than a live VM realm.
     pub(crate) fn from_map(map: HashMap<String, Value>) -> Self {
-        Self {
-            scope: new_realm(map),
-            frame_bindings: FrameBindings::default(),
-            construct_target: None,
-            call: RefCell::default(),
-            deopt_bindings: None,
-            scope_cursor: None,
-            global_binding_root: false,
-            global_function_configurable: true,
-            entry_scope: None,
-            catch_bindings: Default::default(),
-            immutable_function_name: None,
-            direct_eval_var_conflicts: Default::default(),
-            private_environment: None,
-            direct_eval_with_stack: Vec::new(),
-            module_host: None,
-            module_imports: Default::default(),
-            module_live_bindings: None,
-            #[cfg(feature = "agents")]
-            agent_context: None,
-        }
+        Self::new(new_realm(map))
     }
 
     /// Builds an environment over `realm` with the given frame locals.
     pub(crate) fn with_locals(realm: Realm, locals: HashMap<String, Value>) -> Self {
-        Self {
-            scope: realm,
-            frame_bindings: FrameBindings::from_values(locals),
-            construct_target: None,
-            call: RefCell::default(),
-            deopt_bindings: None,
-            scope_cursor: None,
-            global_binding_root: false,
-            global_function_configurable: true,
-            entry_scope: None,
-            catch_bindings: Default::default(),
-            immutable_function_name: None,
-            direct_eval_var_conflicts: Default::default(),
-            private_environment: None,
-            direct_eval_with_stack: Vec::new(),
-            module_host: None,
-            module_imports: Default::default(),
-            module_live_bindings: None,
-            #[cfg(feature = "agents")]
-            agent_context: None,
-        }
+        let mut env = Self::new(realm);
+        env.frame_bindings = FrameBindings::from_values(locals);
+        env
     }
 
     /// The shared realm cell, for sharing into a new frame or snapshot.
     pub(crate) fn realm(&self) -> &Realm {
-        &self.scope
+        &self.activation.creation.realm
     }
 
     /// A clone of the realm `Rc` (shared cell, not a deep copy).
     pub(crate) fn realm_rc(&self) -> Realm {
-        Rc::clone(&self.scope)
+        Rc::clone(&self.activation.creation.realm)
     }
 
     /// Builds an empty frame that shares this environment's realm metadata.
@@ -1219,23 +1177,16 @@ impl CallEnv {
     /// will materialize, avoiding repeated small-vector growth on hot calls.
     pub(crate) fn new_function_frame_with_capacity(&self, capacity: usize) -> Self {
         Self {
-            scope: Rc::clone(&self.scope),
+            activation: self.activation.fresh_function(),
             frame_bindings: FrameBindings::with_capacity(capacity),
             construct_target: None,
-            call: RefCell::default(),
             deopt_bindings: None,
-            scope_cursor: None,
             global_binding_root: false,
             global_function_configurable: true,
-            entry_scope: None,
             catch_bindings: self.catch_bindings.clone(),
             immutable_function_name: None,
             direct_eval_var_conflicts: self.direct_eval_var_conflicts.clone(),
-            private_environment: self.private_environment.clone(),
             direct_eval_with_stack: self.direct_eval_with_stack.clone(),
-            module_host: self.module_host.clone(),
-            module_imports: self.module_imports.clone(),
-            module_live_bindings: None,
             #[cfg(feature = "agents")]
             agent_context: self.agent_context.clone(),
         }
@@ -1247,27 +1198,13 @@ impl CallEnv {
     /// state is installed by the caller, so copying the caller's transient maps
     /// here would only allocate them before immediately replacing them.
     pub(crate) fn new_direct_leaf_function_frame(&self, module_imports: ModuleImports) -> Self {
-        Self {
-            scope: Rc::clone(&self.scope),
-            frame_bindings: FrameBindings::default(),
-            construct_target: None,
-            call: RefCell::default(),
-            deopt_bindings: None,
-            scope_cursor: None,
-            global_binding_root: false,
-            global_function_configurable: true,
-            entry_scope: None,
-            catch_bindings: None,
-            immutable_function_name: None,
-            direct_eval_var_conflicts: None,
-            private_environment: None,
-            direct_eval_with_stack: Vec::new(),
-            module_host: self.module_host.clone(),
-            module_imports,
-            module_live_bindings: None,
-            #[cfg(feature = "agents")]
-            agent_context: self.agent_context.clone(),
-        }
+        let mut env = self.new_function_frame();
+        env.catch_bindings = None;
+        env.direct_eval_var_conflicts = None;
+        env.direct_eval_with_stack.clear();
+        env.set_module_imports(module_imports);
+        env.set_private_environment(None);
+        env
     }
 
     /// Builds an indirect-eval global frame. It has no caller locals, but it
@@ -1281,7 +1218,7 @@ impl CallEnv {
         &self,
         meta: crate::binding::BindingMetaRef,
     ) -> BindingCell {
-        if let Some(cell) = self.scope.cell(&meta.name) {
+        if let Some(cell) = self.activation.creation.realm.cell(&meta.name) {
             if cell.metadata().kind == crate::binding::BindingKind::Lexical {
                 return cell;
             }
@@ -1289,20 +1226,31 @@ impl CallEnv {
         }
         let name = meta.name.clone();
         let cell = BindingCell::with_metadata(meta, None);
-        self.scope.bindings.insert_cell(name, cell.clone());
+        self.activation
+            .creation
+            .realm
+            .bindings
+            .insert_cell(name, cell.clone());
         cell
     }
 
     pub(crate) fn is_global_lexical_binding(&self, name: &str) -> bool {
-        self.scope
+        self.activation
+            .creation
+            .realm
             .cell(name)
             .is_some_and(|cell| cell.metadata().kind == crate::binding::BindingKind::Lexical)
     }
 
     pub(crate) fn is_immutable_lexical_binding(&self, name: &str) -> bool {
-        self.scope.cell(name).is_some_and(|cell| {
-            cell.metadata().kind == crate::binding::BindingKind::Lexical && !cell.metadata().mutable
-        })
+        self.activation
+            .creation
+            .realm
+            .cell(name)
+            .is_some_and(|cell| {
+                cell.metadata().kind == crate::binding::BindingKind::Lexical
+                    && !cell.metadata().mutable
+            })
     }
 
     pub(crate) fn mark_catch_binding(&mut self, name: String) {
@@ -1418,12 +1366,19 @@ impl CallEnv {
 
     /// Returns the lexical private-name environment for this frame, if any.
     pub(crate) fn private_environment(&self) -> Option<PrivateEnvironment> {
-        self.private_environment.clone()
+        self.activation.creation.private.clone()
     }
 
     /// Installs the lexical private-name environment for this frame.
     pub(crate) fn set_private_environment(&mut self, environment: Option<PrivateEnvironment>) {
-        self.private_environment = environment;
+        let same = match (&self.activation.creation.private, &environment) {
+            (None, None) => true,
+            (Some(a), Some(b)) => a.same(b),
+            _ => false,
+        };
+        if !same {
+            Rc::make_mut(&mut self.activation.creation).private = environment;
+        }
     }
 
     pub(crate) fn set_direct_eval_with_stack(&mut self, with_stack: Vec<Value>) {
@@ -1441,7 +1396,7 @@ impl CallEnv {
     pub(crate) fn select_global_bindings(&mut self, global: bool) {
         self.global_binding_root = global;
         self.global_function_configurable = true;
-        self.entry_scope = None;
+        self.activation.scopes.entry = None;
     }
     pub(crate) fn select_script_bindings(&mut self) {
         self.select_global_bindings(true);
@@ -1451,22 +1406,20 @@ impl CallEnv {
         self.global_function_configurable
     }
     pub(crate) fn selected_global_this(&self) -> Option<Value> {
-        match self
-            .frame_bindings
-            .get(DYNAMIC_FUNCTION_REALM_GLOBAL)
-            .or_else(|| {
-                self.deopt_bindings
-                    .as_ref()
-                    .and_then(|bindings| bindings.get(DYNAMIC_FUNCTION_REALM_GLOBAL))
-            }) {
-            Some(Value::Object(global)) => Some(Value::Object(global)),
-            Some(_) | None => self.scope.global_this(),
+        match &self.activation.creation.global {
+            crate::context::GlobalSelection::Override(global) => {
+                Some(Value::Object(global.clone()))
+            }
+            crate::context::GlobalSelection::Default
+            | crate::context::GlobalSelection::Disabled => self.realm().global_this(),
         }
     }
 
     pub(crate) fn can_cache_realm_globals(&self) -> bool {
-        match self.selected_global_this() {
-            Some(Value::Object(object)) => self.is_realm_global_object(&object),
+        match &self.activation.creation.global {
+            crate::context::GlobalSelection::Override(global) => {
+                self.realm().is_global_object(global)
+            }
             _ => true,
         }
     }
@@ -1475,11 +1428,16 @@ impl CallEnv {
         self.global_binding_root
     }
     pub(crate) fn entry_scope(&self) -> Option<&Rc<crate::binding::ScopeLease>> {
-        self.entry_scope.as_ref()
+        self.activation.scopes.entry.as_ref()
     }
     pub(crate) fn set_eval_scope(&mut self, cursor: crate::binding::ScopeCursor) {
-        self.entry_scope = Some(cursor.head.clone());
-        self.scope_cursor = Some(cursor);
+        self.activation.mode = crate::context::ExecutionMode::Eval;
+        self.activation.scopes.module_root = false;
+        if let Some(holder) = &cursor.variable.own_vars {
+            self.activation.variable = holder.identity;
+        }
+        self.activation.scopes.entry = Some(cursor.head.clone());
+        self.activation.scopes.cursor = Some(cursor);
         self.global_binding_root = false;
     }
 
@@ -1488,10 +1446,10 @@ impl CallEnv {
     }
 
     pub(crate) fn scope_cursor(&self) -> Option<&crate::binding::ScopeCursor> {
-        self.scope_cursor.as_ref()
+        self.activation.scopes.cursor.as_ref()
     }
     pub(crate) fn set_scope_cursor(&mut self, cursor: Option<crate::binding::ScopeCursor>) {
-        self.scope_cursor = cursor;
+        self.activation.scopes.cursor = cursor;
     }
 
     pub(crate) fn deopt_bindings(&self) -> Option<&DynamicBindings> {
@@ -1545,7 +1503,7 @@ impl CallEnv {
         {
             return Some(value);
         }
-        if let Some(value) = self.scope.get_value(name) {
+        if let Some(value) = self.activation.creation.realm.get_value(name) {
             return Some(value);
         }
         None
@@ -1555,15 +1513,18 @@ impl CallEnv {
     /// no frame or deoptimized layer sits above it -- then [`Self::get`] of any
     /// name the table binds, other than `new.target`, is that binding's cell.
     pub(crate) fn realm_read_layer(&self) -> Option<&DynamicBindings> {
-        if !self.frame_bindings.is_empty() || self.deopt_bindings.is_some() {
+        if !self.frame_bindings.is_empty()
+            || self.deopt_bindings.is_some()
+            || !self.can_cache_realm_globals()
+        {
             return None;
         }
-        Some(&self.scope.bindings)
+        Some(&self.activation.creation.realm.bindings)
     }
 
     /// Looks up `name` in the shared realm layer only.
     pub(crate) fn get_realm(&self, name: &str) -> Option<Value> {
-        self.scope.get_value(name)
+        self.activation.creation.realm.get_value(name)
     }
 
     /// Returns the active global object override used by indirect eval and
@@ -1571,39 +1532,34 @@ impl CallEnv {
     /// non-object value that disables an outer override, wins before the
     /// realm's cached marker.
     pub(crate) fn dynamic_function_realm_global(&self) -> Option<ObjectRef> {
-        let frame_value = self
-            .frame_bindings
-            .get(DYNAMIC_FUNCTION_REALM_GLOBAL)
-            .or_else(|| {
-                self.deopt_bindings
-                    .as_ref()
-                    .and_then(|bindings| bindings.get(DYNAMIC_FUNCTION_REALM_GLOBAL))
-            });
-        if let Some(value) = frame_value {
-            return match value {
-                Value::Object(global) => Some(global),
-                _ => None,
-            };
+        match &self.activation.creation.global {
+            crate::context::GlobalSelection::Override(global) => Some(global.clone()),
+            crate::context::GlobalSelection::Disabled => None,
+            crate::context::GlobalSelection::Default => {
+                self.realm().dynamic_function_realm_global()
+            }
         }
-        self.scope.dynamic_function_realm_global()
     }
 
     /// Whether [`Self::dynamic_function_realm_global`] would answer `Some`,
     /// without cloning the object. Frame setup asks this on every call.
     pub(crate) fn has_dynamic_function_realm_global(&self) -> bool {
-        if self.frame_bindings.is_empty() && self.deopt_bindings.is_none() {
-            return self.scope.has_dynamic_function_realm_global();
+        match &self.activation.creation.global {
+            crate::context::GlobalSelection::Override(_) => true,
+            crate::context::GlobalSelection::Disabled => false,
+            crate::context::GlobalSelection::Default => {
+                self.realm().has_dynamic_function_realm_global()
+            }
         }
-        self.dynamic_function_realm_global().is_some()
     }
 
     /// Preserve marked-realm compatibility views, including a frame marker
     /// whose non-object value deliberately disables an outer override.
     pub(crate) fn has_realm_override_context(&self) -> bool {
-        self.scope.has_dynamic_function_realm_global()
-            || self
-                .frame_bindings
-                .contains_key(DYNAMIC_FUNCTION_REALM_GLOBAL)
+        !matches!(
+            self.activation.creation.global,
+            crate::context::GlobalSelection::Default
+        ) || self.realm().has_dynamic_function_realm_global()
     }
 
     pub(crate) fn cached_direct_eval_bytecode(
@@ -1611,7 +1567,10 @@ impl CallEnv {
         source: &JsString,
         context: &EvalParseContext,
     ) -> Option<Rc<Bytecode>> {
-        self.scope.cached_direct_eval_bytecode(source, context)
+        self.activation
+            .creation
+            .realm
+            .cached_direct_eval_bytecode(source, context)
     }
 
     pub(crate) fn cache_direct_eval_bytecode(
@@ -1620,13 +1579,15 @@ impl CallEnv {
         context: EvalParseContext,
         bytecode: Rc<Bytecode>,
     ) {
-        self.scope
+        self.activation
+            .creation
+            .realm
             .cache_direct_eval_bytecode(source, context, bytecode);
     }
 
     #[cfg(test)]
     pub(crate) fn direct_eval_cache_len(&self) -> usize {
-        self.scope.direct_eval_cache_len()
+        self.activation.creation.realm.direct_eval_cache_len()
     }
 
     pub(crate) fn object_prototype_intrinsic_override(&self) -> Option<ObjectRef> {
@@ -1647,7 +1608,7 @@ impl CallEnv {
     /// private string key. The slot is fixed when a realm is created; writes
     /// to the public `globalThis` property do not replace this identity.
     pub(crate) fn global_this(&self) -> Option<Value> {
-        self.scope.global_this()
+        self.selected_global_this()
     }
 
     /// Returns the one shared cell for a realm binding. Every realm binding is
@@ -1655,7 +1616,7 @@ impl CallEnv {
     /// `DynamicBindings` map), so this is just a lookup — no more lazy
     /// cell creation on first capture.
     pub(crate) fn realm_binding_cell(&self, name: &str) -> Option<BindingCell> {
-        self.scope.cell(name)
+        self.activation.creation.realm.cell(name)
     }
 
     pub(crate) fn remove_realm(&self, name: &str) -> Option<Value> {
@@ -1664,17 +1625,20 @@ impl CallEnv {
         // cell (e.g. a closure that captured the binding) observes the
         // uninitialized marker, while the returned value here is the value
         // that was live immediately before removal.
-        let removed = self.scope.get_value(name);
-        if let Some(cell) = self.scope.cell(name) {
+        let removed = self.activation.creation.realm.get_value(name);
+        if let Some(cell) = self.activation.creation.realm.cell(name) {
             cell.set(Value::Function(Function::uninitialized_lexical_marker()));
         }
-        self.scope.remove_value(name);
-        self.scope.sync_dynamic_function_realm_binding(name, None);
+        self.activation.creation.realm.remove_value(name);
+        self.activation
+            .creation
+            .realm
+            .sync_dynamic_function_realm_binding(name, None);
         removed
     }
 
     pub(crate) fn is_realm_binding_cell(&self, name: &str, cell: &BindingCell) -> bool {
-        self.scope.is_binding_cell(name, cell)
+        self.activation.creation.realm.is_binding_cell(name, cell)
     }
 
     /// True if `name` is bound in either layer.
@@ -1684,7 +1648,7 @@ impl CallEnv {
                 .deopt_bindings
                 .as_ref()
                 .is_some_and(|bindings| bindings.contains_key(name))
-            || self.scope.contains(name)
+            || self.activation.creation.realm.contains(name)
     }
 
     /// Construct dispatch target only. The lexical new.target stays in the
@@ -1734,20 +1698,24 @@ impl CallEnv {
     /// Inserts directly into the shared realm cell (builtin install and global
     /// definition). Visible to every frame sharing the realm.
     pub(crate) fn insert_realm(&self, name: String, value: Value) -> Option<Value> {
-        self.scope
+        self.activation
+            .creation
+            .realm
             .sync_dynamic_function_realm_binding(&name, Some(&value));
-        self.scope.insert_value(name, value)
+        self.activation.creation.realm.insert_value(name, value)
     }
 
     /// Replaces an existing realm binding. Hot global stores use this after
     /// proving that the corresponding global-object property is still an
     /// ordinary writable data property.
     pub(crate) fn replace_existing_realm(&self, name: &str, value: Value) -> bool {
-        let Some(cell) = self.scope.cell(name) else {
+        let Some(cell) = self.activation.creation.realm.cell(name) else {
             return false;
         };
         cell.set(value.clone());
-        self.scope
+        self.activation
+            .creation
+            .realm
             .sync_dynamic_function_realm_binding(name, Some(&value));
         true
     }
@@ -1764,21 +1732,23 @@ impl CallEnv {
         cell: &BindingCell,
     ) -> bool {
         cell.set(value.clone());
-        self.scope
+        self.activation
+            .creation
+            .realm
             .sync_dynamic_function_realm_binding(name, Some(&value));
         true
     }
 
     /// Whether `object` is this realm's global object, without cloning it.
     pub(crate) fn is_realm_global_object(&self, object: &ObjectRef) -> bool {
-        self.scope.is_global_object(object)
+        self.activation.creation.realm.is_global_object(object)
     }
 
     /// Mirrors a data-property definition on this realm's global object into
     /// the realm value table and any already-captured global cell.
     pub(crate) fn sync_realm_global_object_property(&self, object: &ObjectRef, name: &str) {
-        if !self.scope.is_global_object(object)
-            || !self.scope.contains(name)
+        if !self.activation.creation.realm.is_global_object(object)
+            || !self.activation.creation.realm.contains(name)
             || self.is_global_lexical_binding(name)
         {
             return;
@@ -1799,8 +1769,8 @@ impl CallEnv {
     /// resolving exactly as it does after `delete x`. A script-level lexical
     /// binding of the same name is a different binding and stays.
     pub(crate) fn forget_deleted_global_object_property(&self, object: &ObjectRef, name: &str) {
-        if !self.scope.is_global_object(object)
-            || !self.scope.contains(name)
+        if !self.activation.creation.realm.is_global_object(object)
+            || !self.activation.creation.realm.contains(name)
             || self.is_global_lexical_binding(name)
         {
             return;
@@ -1812,15 +1782,21 @@ impl CallEnv {
     /// Used by global-binding initialization (script and indirect-eval scopes).
     pub(crate) fn realm_entry_or_insert(&self, name: String, value: Value) {
         let refresh_dynamic_realm = name == DYNAMIC_FUNCTION_REALM_GLOBAL;
-        self.scope.entry_or_insert_value(name, value);
+        self.activation
+            .creation
+            .realm
+            .entry_or_insert_value(name, value);
         if refresh_dynamic_realm {
-            self.scope.refresh_dynamic_function_realm_global();
+            self.activation
+                .creation
+                .realm
+                .refresh_dynamic_function_realm_global();
         }
     }
 
     /// True if the shared realm cell binds `name`.
     pub(crate) fn realm_contains(&self, name: &str) -> bool {
-        self.scope.contains(name)
+        self.activation.creation.realm.contains(name)
     }
 
     /// Removes a frame-local binding.
@@ -1847,14 +1823,14 @@ impl CallEnv {
 
     pub(crate) fn has_frame_binding(&self, name: &str) -> bool {
         if name == "this" {
-            return self.call.borrow().owner().is_some();
+            return self.activation.call.borrow().owner().is_some();
         }
         self.frame_bindings.contains_key(name)
     }
 
     pub(crate) fn has_local_binding(&self, name: &str) -> bool {
         if name == "this" {
-            return self.call.borrow().owner().is_some();
+            return self.activation.call.borrow().owner().is_some();
         }
         self.frame_bindings.contains_key(name)
             || self
@@ -1868,8 +1844,8 @@ impl CallEnv {
     pub(crate) fn slot_is_authoritative(&self, name: &str) -> bool {
         !self.frame_bindings.contains_key(name)
             && self.deopt_bindings.is_none()
-            && self.module_imports.is_empty()
-            && self.module_live_bindings.is_none()
+            && self.activation.creation.imports().is_empty()
+            && !self.has_module_live_bindings()
             && self.immutable_function_name.is_none()
     }
 
@@ -1879,10 +1855,14 @@ impl CallEnv {
     /// once, rather than one environment query per local.
     pub(crate) fn supplies_no_named_binding(&self) -> bool {
         self.frame_bindings.is_empty()
-            && self.scope_cursor.is_none()
+            && matches!(
+                self.activation.creation.global,
+                crate::context::GlobalSelection::Default
+            )
+            && self.activation.scopes.cursor.is_none()
             && self.deopt_bindings.is_none()
-            && self.module_imports.is_empty()
-            && self.module_live_bindings.is_none()
+            && self.activation.creation.imports().is_empty()
+            && !self.has_module_live_bindings()
             && self.immutable_function_name.is_none()
     }
 
@@ -1929,33 +1909,19 @@ impl CallEnv {
     /// name-keyed intermediate map. Explicit direct-eval/with cells are added
     /// by the VM after it overlays live slot values.
     pub(crate) fn fork_current_frame_values(&self) -> Self {
-        Self {
-            scope: Rc::clone(&self.scope),
-            frame_bindings: self.frame_bindings.fork_values(),
-            construct_target: self.construct_target.clone(),
-            call: RefCell::new(self.call.borrow_mut().shared_view()),
-            deopt_bindings: None,
-            scope_cursor: None,
-            global_binding_root: self.global_binding_root,
-            global_function_configurable: self.global_function_configurable,
-            entry_scope: None,
-            catch_bindings: self.catch_bindings.clone(),
-            immutable_function_name: self.immutable_function_name.clone(),
-            direct_eval_var_conflicts: self.direct_eval_var_conflicts.clone(),
-            private_environment: self.private_environment.clone(),
-            direct_eval_with_stack: self.direct_eval_with_stack.clone(),
-            module_host: self.module_host.clone(),
-            module_imports: self.module_imports.clone(),
-            module_live_bindings: self.module_live_bindings.clone(),
-            #[cfg(feature = "agents")]
-            agent_context: self.agent_context.clone(),
-        }
+        let mut env = self.clone();
+        env.frame_bindings = self.frame_bindings.fork_values();
+        env.deopt_bindings = None;
+        env.activation.scopes.cursor = None;
+        env.activation.scopes.entry = None;
+        env
     }
 
     /// The implicit binding of one derived activation, never a realm cell.
     /// Its marker denotes TDZ; forks and lexical arrows must retain identity.
     pub(crate) fn derived_this_cell(&self) -> Option<BindingCell> {
-        self.call
+        self.activation
+            .call
             .borrow()
             .owner()
             .and_then(|owner| owner.this.derived_cell())

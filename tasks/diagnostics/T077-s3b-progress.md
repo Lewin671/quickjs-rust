@@ -242,4 +242,57 @@ wrapping, generic binding reference selection and the final compatibility deleti
 remain. Verification on this working tree: 2,554 runtime tests, 282 NG script
 fixtures, Clippy/workspace/all-targets and agents/perf-counters compile pass.
 The recovered module still exits 0 and matches both output lines against NG with
-TZ=UTC. Staged gate pending. No S3b exit or performance standing is claimed.
+TZ=UTC. Staged gate passes at `3fe0b5b2`, including 117 selected Test262 cases. No S3b exit or performance standing is claimed.
+
+### Complete B4b checkpoint and with fallback repair
+
+The immutable `3fe0b5b2412a79ee3deeaa90026c15da21f3807b` agents production CLI
+was built under `target/s3b-b4b-production`, SHA-256
+`ea867d1a6785ea7ada5f94c6af0177a28fd12210995e9d35327a37c981534765`.
+Agent-ready smoke passed. Pinned QJS_CLI_BIN/QJS_AGENTS=1, binding/IC debug modes
+unset, `find-qjsng-gaps.sh --exact --all --no-recommend --out-dir
+ target/s3b-b4b-exact` completed: Rust **42,671 pass / 1 fail / 0 timeout /
+0 not-run**, NG 42,602 pass / 70 fail; total 53,572, unchanged skips 10,900.
+Summary SHA-256 `22e91a2ecd2d269bad0cafd67df1b5c4ed90a17b02a81194630da6c7023dc195`;
+case-map SHA-256 `f27e633c23389659e2ddb18df687692c4b4349bd6f09582430c717353cf6b8d8`.
+The complete regression scan is appended to burndown; it establishes no acceptance.
+
+Sole gap: `test/language/statements/with/has-binding-idref-with-proxy-env.js`.
+Frozen binary traces `Object:Object` for the empty Proxy environment; NG traces
+`Object`. The legacy with miss path then called the typed resolver, selecting
+HasBinding a second time. With loads/typeof/stores now use one typed selection
+when a cursor exists. Added an exact Proxy trace runtime/NG fixture and the
+upstream case to the curated allowlist. The after-fix complete with slice passes
+**181/181**, NG 175 pass / 6 known nonpasses, zero gaps. This filtered scan does
+not create a burndown record or replace final full cached/IC-off scans.
+
+## B4c creation/activation ownership (in progress)
+
+Realm, module/import/export routing, referrer, private environment and explicit
+global selection have moved to shared CreationContext. ActivationContext owns
+its call owner, scope entry/cursor, logical variable identity, execution mode
+and strictness. Metadata-only view clones retain those owners; no lexical values
+are added to either context. One empty import-metadata handle per root preserves
+the existing Function API without allocating an empty map per query. Private,
+module-host and import setters avoid copy-on-write when identity is unchanged.
+
+Variable tokens are minted before VM scope exposure, in the existing shared
+AtomDomain boundary so related realms cannot alias tokens. Scope instances use
+the activation token instead of inventing one on first exposure. Parameter/body
+boundary changes retain the token; strict eval selects its own holder identity.
+Class regions save/restore typed mode/strictness, including suspension and abrupt
+unwind. The temporary CallEnv Clone API still requires RefCell promotion through
+&self; B5 removes that wrapper when Context borrows the activation mutably.
+Function-owned creation selection and borrowed NativeEntry remain upcoming cuts.
+
+The module-root flag belongs to ScopeRoots, independent of temporary execution
+mode: a class-key region cannot disable canonical module-cell routes. Fresh
+ordinary/eval variable entries clear that root role while retained views keep it.
+With fallback now selects one typed reference; source names no longer carry
+explicit marked-global control values in frame maps. The complete with slice
+and its 7-case curated slice pass. Full runtime verification passes after
+the final mode/root-role adjustment: **2,558 runtime tests**, **283 NG scripts**,
+separate recovered module comparison, feature compilation and Clippy pass.
+The 181-case full with slice and 7-case curated slice pass. Final staged gate
+pending. Function-owned creation selection remains B4d; this is not borrowed-ABI
+completion or final full-conformance/performance acceptance.

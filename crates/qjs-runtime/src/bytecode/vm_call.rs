@@ -304,7 +304,7 @@ impl Vm<'_> {
         // so an unmarked frame answers without the full name-resolution chain
         // that `get` walks. Almost every call is unmarked.
         self.env.dynamic_function_realm_global()?;
-        let Some(Value::Object(global)) = self.env.get(DYNAMIC_FUNCTION_REALM_GLOBAL) else {
+        let Some(Value::Object(global)) = self.env.dynamic_function_realm_value() else {
             return None;
         };
         let Some(Value::Object(global_this)) = self.env.get(crate::GLOBAL_THIS_BINDING) else {

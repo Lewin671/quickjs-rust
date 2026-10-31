@@ -123,8 +123,15 @@ fn direct_leaf_frames_share_empty_metadata_until_mutation() {
 
     assert!(first.catch_bindings.is_none() && second.catch_bindings.is_none());
     assert!(first.direct_eval_var_conflicts.is_none());
-    assert!(Rc::ptr_eq(&first.module_imports, &imports));
-    assert!(Rc::ptr_eq(&second.module_imports, &imports));
+    assert!(first.module_imports().is_empty());
+    assert!(Rc::ptr_eq(
+        &first.module_imports(),
+        &second.module_imports()
+    ));
+    assert!(Rc::ptr_eq(
+        &first.module_imports(),
+        &caller.module_imports()
+    ));
 
     first.mark_catch_binding("caught".to_owned());
     assert!(first.is_catch_binding("caught"));
@@ -211,7 +218,7 @@ fn visible_local_scans_skip_shadowed_bindings() {
 fn module_import_routes_share_until_environment_mutation() {
     let mut env = CallEnv::new(new_realm(HashMap::new()));
     let cloned = env.clone();
-    assert!(Rc::ptr_eq(&env.module_imports, &cloned.module_imports));
+    assert!(Rc::ptr_eq(&env.module_imports(), &cloned.module_imports()));
 
     env.set_module_import(
         "local".to_owned(),
@@ -220,7 +227,7 @@ fn module_import_routes_share_until_environment_mutation() {
     );
     assert!(env.has_module_import("local"));
     assert!(!cloned.has_module_import("local"));
-    assert!(!Rc::ptr_eq(&env.module_imports, &cloned.module_imports));
+    assert!(!Rc::ptr_eq(&env.module_imports(), &cloned.module_imports()));
 }
 
 #[test]
@@ -257,4 +264,26 @@ fn dynamic_function_realm_cache_tracks_bulk_and_incremental_mutations() {
 
     env.remove_realm(DYNAMIC_FUNCTION_REALM_GLOBAL);
     assert!(realm.dynamic_function_realm_global().is_none());
+}
+
+#[test]
+fn module_root_cell_routes_survive_temporary_class_key_mode() {
+    let mut env = CallEnv::detached();
+    let cells = DynamicBindings::new();
+    let cell = BindingCell::new(Value::Number(3.0));
+    cells.insert_cell("value".into(), cell.clone());
+    env.set_module_live_bindings(cells);
+    env.set_execution_state(crate::context::ExecutionMode::ClassKey, true);
+    assert!(env.module_live_binding_cell("value").unwrap().ptr_eq(&cell));
+    assert!(
+        env.fork_current_frame_values()
+            .module_live_binding_cell("value")
+            .unwrap()
+            .ptr_eq(&cell)
+    );
+    assert!(
+        env.new_function_frame()
+            .module_live_binding_cell("value")
+            .is_none()
+    );
 }

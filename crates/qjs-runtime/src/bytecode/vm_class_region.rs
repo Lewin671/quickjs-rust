@@ -22,6 +22,7 @@ pub(super) struct ClassKeyContinuation {
     name_cell: Option<BindingCell>,
     state: Option<ClassState>,
     pending: Vec<PendingStaticItem>,
+    saved_execution: (crate::context::ExecutionMode, bool),
 }
 
 struct ClassState {
@@ -37,18 +38,19 @@ enum PendingStaticItem {
 
 impl Vm<'_> {
     pub(super) fn execution_is_strict(&self) -> bool {
-        self.bytecode.is_strict()
-            || self
-                .cold()
-                .is_some_and(|cold| !cold.class_regions.is_empty())
+        self.env.execution_state().1
     }
 
     pub(super) fn enter_class(&mut self, definition: Rc<ClassDefinition>) {
+        let saved_execution = self.env.execution_state();
+        self.env
+            .set_execution_state(crate::context::ExecutionMode::ClassKey, true);
         let name_cell = definition
             .name_slot
             .map(|slot| self.ensure_upvalue_for_parent_slot(slot));
         self.cold_mut().class_regions.push(ClassKeyContinuation {
             definition,
+            saved_execution,
             name_cell,
             state: None,
             pending: Vec::new(),
@@ -287,8 +289,21 @@ impl Vm<'_> {
         let prototype = state.prototype.clone();
         let pending = std::mem::take(&mut region.pending);
         let result = self.finish_class_initialization(&definition, constructor, prototype, pending);
-        self.cold_mut().class_regions.pop();
+        let region = self.cold_mut().class_regions.pop().expect("class region");
+        self.env
+            .set_execution_state(region.saved_execution.0, region.saved_execution.1);
         result
+    }
+
+    pub(super) fn restore_class_depth(&mut self, depth: usize) {
+        while self
+            .cold()
+            .is_some_and(|cold| cold.class_regions.len() > depth)
+        {
+            let region = self.cold_mut().class_regions.pop().expect("class region");
+            self.env
+                .set_execution_state(region.saved_execution.0, region.saved_execution.1);
+        }
     }
 
     pub(super) fn class_inner_upvalue(

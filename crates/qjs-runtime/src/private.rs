@@ -88,6 +88,10 @@ pub(crate) struct PrivateEnvironment {
 }
 
 impl PrivateEnvironment {
+    pub(crate) fn same(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.bindings, &other.bindings)
+    }
+
     /// Creates a private environment nested inside `outer`, so unresolved names
     /// fall through to the enclosing class.
     pub(crate) fn with_outer(

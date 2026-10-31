@@ -30,9 +30,9 @@ source text -> qjs-lexer (tokens with spans) -> qjs-parser (qjs-ast)
 - `qjs-runtime`: compiles the AST to bytecode and executes it. It never
   evaluates AST nodes, and re-parses (for `eval`, `Function`) only through
   the parser's public API. `value` holds values, objects and property
-  descriptors; `function` holds function objects, the call path and
-  `CallEnv`; `bytecode` holds the compiler, the IR and every executor; the
-  remaining modules are builtins grouped by standard object.
+  descriptors; `function` holds functions, calls and the temporary `CallEnv` ABI.
+  `context` owns creation/activation metadata and lexical call owners;
+  `bytecode` holds the compiler, IR and executors. Other modules are builtins.
 - `qjs-cli`: thin command-line wrapper; no engine semantics.
 
 `third_party/quickjs-ng` (behavioural oracle and reference) and

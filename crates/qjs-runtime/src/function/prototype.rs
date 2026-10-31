@@ -343,7 +343,7 @@ fn dynamic_function_scope_snapshot(env: &CallEnv) -> std::collections::HashMap<S
         }
     }
     let dynamic_realm_global = env
-        .get(DYNAMIC_FUNCTION_REALM_GLOBAL)
+        .dynamic_function_realm_value()
         .and_then(|value| match value {
             Value::Object(global) => Some(global),
             _ => None,

@@ -7,7 +7,7 @@
 //! layouts separately retain the owning domain.
 
 use std::borrow::Cow;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 #[cfg(test)]
 use std::collections::HashMap;
 use std::fmt;
@@ -194,6 +194,7 @@ pub(crate) struct IcPolicy {
 }
 
 struct DomainState {
+    next_variable: Cell<u64>,
     ic_policy: IcPolicy,
     table: RefCell<AtomTable>,
     free_ids: RefCell<Vec<KeyId>>,
@@ -207,6 +208,17 @@ struct DomainState {
 pub(crate) struct AtomDomain(Rc<DomainState>);
 
 impl AtomDomain {
+    /// Logical activation identities share the communicating-realm boundary.
+    /// Never recycle or wrap an identity while a scope can retain it.
+    pub(crate) fn next_variable_identity(&self) -> u64 {
+        let current = self.0.next_variable.get();
+        let Some(next) = current.checked_add(1) else {
+            std::process::abort();
+        };
+        self.0.next_variable.set(next);
+        current
+    }
+
     pub(crate) fn new() -> Self {
         Self::with_limit(u32::MAX)
     }
@@ -218,6 +230,7 @@ impl AtomDomain {
 
     fn with_limit(limit: u32) -> Self {
         Self(Rc::new(DomainState {
+            next_variable: Cell::new(1),
             ic_policy: IcPolicy {
                 enabled: std::env::var_os("QJS_DISABLE_IC").is_none(),
                 verify: cfg!(debug_assertions) && std::env::var_os("QJS_VERIFY_IC").is_some(),

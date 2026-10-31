@@ -95,6 +95,7 @@ impl<'a> Vm<'a> {
         crate::diagnostics::count!(nested_vm_constructions);
         let bytecode: &Bytecode = &handle;
         if env.owner_kind().is_none() {
+            let saved = env.execution_state();
             let kind = if bytecode.binding_plan.scopes[0].kind == crate::binding::ScopeKind::Module
             {
                 crate::context::OwnerKind::Module
@@ -109,6 +110,13 @@ impl<'a> Vm<'a> {
                     .unwrap_or(Value::Undefined)
             };
             env.set_call_owner(crate::context::CallOwner::root(receiver, kind));
+            if saved.0 == crate::context::ExecutionMode::Eval {
+                env.set_execution_state(saved.0, saved.1);
+            }
+        }
+        let (mode, _) = env.execution_state();
+        if mode != crate::context::ExecutionMode::ClassKey {
+            env.set_execution_state(mode, bytecode.is_strict());
         }
         if bytecode.global_scope {
             env.select_script_bindings();

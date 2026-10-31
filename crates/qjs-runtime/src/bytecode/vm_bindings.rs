@@ -53,6 +53,10 @@ impl Vm<'_> {
     }
 
     pub(super) fn enter_body_deopt_scope(&mut self) {
+        if let Some(scope) = self.bytecode.binding_plan.pc_scopes.get(self.ip) {
+            let target = self.bytecode.binding_plan.scopes[scope.0].variable_target;
+            self.env.select_variable_boundary(target);
+        }
         let Some(parameter_bindings) = self.env.deopt_bindings().cloned() else {
             return;
         };

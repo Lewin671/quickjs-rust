@@ -18,8 +18,6 @@ use super::ir::{ClassMethodDef, ClassMethodKind, ClassPrivateElementDef};
 use super::vm::Vm;
 use super::vm_class::class_method_function_name_with_base;
 
-const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
-
 impl Vm<'_> {
     /// Installs the private elements of a class. Methods and accessors become
     /// shared function values registered in the private environment; instances
@@ -589,7 +587,7 @@ fn marked_type_error_prototype(function: &Function) -> Option<ObjectRef> {
 }
 
 fn dynamic_realm_type_error_prototype(env: &CallEnv) -> Option<ObjectRef> {
-    let Value::Object(global) = env.get(DYNAMIC_FUNCTION_REALM_GLOBAL)? else {
+    let Value::Object(global) = env.dynamic_function_realm_value()? else {
         return None;
     };
     let Value::Function(type_error) = global.get("TypeError")? else {

@@ -18,8 +18,8 @@ use std::{collections::HashMap, rc::Rc};
 use qjs_ast::FunctionParams;
 
 use crate::{
-    ArrayRef, Bytecode, DIRECT_EVAL_ARGUMENTS_BINDING, Function, GLOBAL_THIS_BINDING,
-    NativeFunction, ObjectRef, RuntimeError, Value,
+    ArrayRef, Bytecode, DIRECT_EVAL_ARGUMENTS_BINDING, Function, NativeFunction, ObjectRef,
+    RuntimeError, Value,
     bytecode::{
         DirectCallSlots, DirectCallUpvalues, eval_call_bytecode, eval_direct_call_bytecode,
         eval_function_bytecode, try_eval_numeric_leaf, try_eval_this_property_leaf,
@@ -1535,14 +1535,7 @@ fn insert_marked_call_realm(function: &Function, frame_env: &mut CallEnv) {
             );
         }
     }
-    frame_env.insert(
-        DYNAMIC_FUNCTION_REALM_GLOBAL.to_owned(),
-        Value::Object(global.clone()),
-    );
-    frame_env.insert(
-        GLOBAL_THIS_BINDING.to_owned(),
-        Value::Object(global.clone()),
-    );
+    frame_env.set_global_selection(Value::Object(global.clone()));
     for name in global.own_property_names() {
         if let Some(property) = global.own_property(&name) {
             frame_env.insert(name, property.value);

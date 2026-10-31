@@ -32,3 +32,16 @@ fn leases_preserve_live_declarations_tdz_arguments_and_parameter_boundaries() {
         Ok(Value::String("8|5|TypeError:3|ReferenceError:3|2:1|2:1|true:undefined|false:2|2:4|1:2|ReferenceError:3|undefined|object|2:1|2:1".into())),
     );
 }
+
+#[test]
+fn missing_with_property_does_not_repeat_has_binding_on_fallback() {
+    assert_eq!(
+        eval(
+            r#"let log = []; const p = new Proxy({}, {
+        has(target, key) { log.push(String(key)); return false; },
+        get() { throw new Error('unexpected Get'); }
+    }); with (p) { Object; } log.join(':');"#
+        ),
+        Ok(Value::String("Object".into()))
+    );
+}

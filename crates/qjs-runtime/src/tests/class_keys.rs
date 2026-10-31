@@ -136,3 +136,17 @@ fn public_property_named_this_cannot_replace_the_script_receiver() {
         Ok(Value::String("true:true".into()))
     );
 }
+
+#[test]
+fn abrupt_class_key_restores_enclosing_sloppy_assignment_policy() {
+    assert_eq!(
+        eval(
+            r#"(function self() {
+        let strict = false; try { class C { [(self = 1)]() {} } }
+        catch(e) { strict = e instanceof TypeError; }
+        self = 8; return strict + ':' + typeof self;
+    })();"#
+        ),
+        Ok(Value::String("true:function".into()))
+    );
+}

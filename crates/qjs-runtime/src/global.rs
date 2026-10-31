@@ -1139,15 +1139,7 @@ fn indirect_eval_frame(env: &CallEnv) -> CallEnv {
     let Some(global) = marked_dynamic_realm_global(env) else {
         return eval_env;
     };
-    eval_env.insert(
-        DYNAMIC_FUNCTION_REALM_GLOBAL.to_owned(),
-        Value::Object(global.clone()),
-    );
-    eval_env.insert(
-        GLOBAL_THIS_BINDING.to_owned(),
-        Value::Object(global.clone()),
-    );
-    eval_env.insert("globalThis".to_owned(), Value::Object(global.clone()));
+    eval_env.set_global_selection(Value::Object(global.clone()));
     eval_env.set_call_owner(crate::context::CallOwner::root(
         Value::Object(global.clone()),
         crate::context::OwnerKind::Script,
@@ -1164,7 +1156,7 @@ fn indirect_eval_frame(env: &CallEnv) -> CallEnv {
 }
 
 fn marked_dynamic_realm_global(env: &CallEnv) -> Option<ObjectRef> {
-    env.get(DYNAMIC_FUNCTION_REALM_GLOBAL)
+    env.dynamic_function_realm_value()
         .and_then(object_value)
         .or_else(|| {
             env.get(GLOBAL_THIS_BINDING)
@@ -1691,7 +1683,7 @@ fn define_eval_global_binding(env: &mut CallEnv, name: &str, value: Value) {
 }
 
 fn is_marked_dynamic_realm_global(env: &CallEnv, global_this: &ObjectRef) -> bool {
-    env.get_local(DYNAMIC_FUNCTION_REALM_GLOBAL)
+    env.explicit_global_selection_value()
         .is_some_and(|value| matches!(value, Value::Object(global) if global.ptr_eq(global_this)))
         || global_this
             .own_property(DYNAMIC_FUNCTION_REALM_GLOBAL)

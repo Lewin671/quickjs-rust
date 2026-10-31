@@ -150,6 +150,15 @@ impl Vm<'_> {
         slot: Option<usize>,
         is_strict: bool,
     ) -> Result<Value, RuntimeError> {
+        if self.prepare_scope_cursor().is_some() {
+            return match self.resolve_scope_binding(name, is_strict)? {
+                Some(reference) => self.read_scope_binding(&reference),
+                None => Err(RuntimeError {
+                    thrown: None,
+                    message: format!("ReferenceError: undefined identifier `{name}`"),
+                }),
+            };
+        }
         if let Some(object) = self.with_binding_object(name)? {
             let mut env = self.current_env();
             // GetBindingValue re-checks HasProperty (step 2) before the Get
@@ -183,6 +192,12 @@ impl Vm<'_> {
         is_strict: bool,
         value: Value,
     ) -> Result<(), RuntimeError> {
+        if self.prepare_scope_cursor().is_some() {
+            return match self.resolve_scope_binding(name, is_strict)? {
+                Some(reference) => self.assign_scope_binding(&reference, value, is_strict),
+                None => self.store_global_binding(name, value, is_strict),
+            };
+        }
         if let Some(object) = self.with_binding_object(name)? {
             let mut env = self.current_env();
             // SetMutableBinding step 1 re-checks HasProperty (observable on a
@@ -339,6 +354,14 @@ impl Vm<'_> {
         name: &str,
         slot: Option<usize>,
     ) -> Result<Value, RuntimeError> {
+        if self.prepare_scope_cursor().is_some() {
+            return match self.resolve_scope_binding(name, false)? {
+                Some(reference) => self
+                    .read_scope_binding(&reference)
+                    .map(|value| Value::String(typeof_value(value))),
+                None => Ok(Value::String("undefined".into())),
+            };
+        }
         if let Some(object) = self.with_binding_object(name)? {
             let mut env = self.current_env();
             let value = get_property(object, name, &mut env)?;

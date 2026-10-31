@@ -217,7 +217,7 @@ impl Vm<'_> {
         let mut storage = self.scope_instances.borrow_mut();
         let instances = storage.get_or_insert_with(|| {
             Box::new(ScopeInstances {
-                activation: self.realm.next_variable_identity(),
+                activation: self.env.variable_identity().activation,
                 ..ScopeInstances::default()
             })
         });

@@ -3,8 +3,7 @@
 The runtime uses slot-indexed locals and shared cells. This is a protected
 boundary: ordinary calls must not copy a name-to-value environment. Source paths
 below are under `crates/qjs-runtime/src/`; tests are under `tests/` there.
-The remaining service-view migration belongs to
-[T077 S3b](../../tasks/proposals/T077-s3b-brief.md).
+The service-view migration belongs to [T077 S3b](../../tasks/proposals/T077-s3b-brief.md).
 
 ## Compiled authority
 
@@ -96,7 +95,6 @@ body and preserve their non-configurable attributes.
 
 Compiled eval caches retain plans and parse context only. Every invocation uses
 its current chain; the old selected-name cached execution view is deleted.
-Permanent NG fixture: `s3b-scope-live-leases.js`.
 
 ## Immutable names and imports
 
@@ -117,7 +115,7 @@ constructor and field/static restrictions from declarative bindings. An ordinary
 activation owns this metadata inline. At lexical retention it moves into one Rc
 and the declaring activation redirects to that same owner. BindingPlan propagates
 owner demand through lexical arrows, including nested new.target/eval; parameter-only
-arrows retain no owner. Arguments remains a lexical binding.
+arrows retain no owner.
 
 Derived this is one uninitialized BindingCell in the typed owner; no declaring
 slot or name-keyed mirror exists. Super constructs Base before duplicate checking,
@@ -129,23 +127,26 @@ restrictions, arrows inherit them, and ordinary nested calls establish new owner
 Tests: `context/call_owner.rs`, `function/call_activation_tests.rs`,
 `direct_eval/derived_this.rs`, and `class_keys.rs`.
 
-`function/env.rs::CallEnv` still carries service/call metadata during the S3b
-migration. Its typed scope cursor/entry root selects canonical cells; compiler-owned
-cells are excluded from value apply-back so a stale native view cannot undo a
-callback. Remaining FrameBindings/deopt views, raw compatibility publishers and
-legacy eval/global-selection metadata are temporary and must disappear with Context.
-Receiver/home/super/constructor/field marker strings and synthetic this capture
-slots are deleted. The temporary typed construct-dispatch target is separate from
-lexical new.target; B5 moves its borrowed source into NativeSite.
-CreationContext/ActivationContext wrapping and the borrowed service ABI remain.
-Class keys execute inline between class-region operations. A cold continuation
-owns the partial class/private overlay across yield/await; handlers truncate
-regions to their entry depth. Heritage validation precedes keys, each method
-is installed before the next key, and static public/private fields and blocks
-run together in source order. The inner-name cell remains TDZ through keys and
-is initialized once before static initialization; inferred display names create
-no inner lexical binding. Module entry explicitly supplies initialized undefined
-this for arrow capture. Field/static helpers never own implicit arguments.
+`context/creation.rs` owns shared realm, referrer, module routes, private
+context and explicit global selection. `context/activation.rs` owns logical
+variable identity, call owner, scope roots, mode and strictness. Related realms
+mint non-wrapping tokens in their existing AtomDomain boundary; scope exposure
+uses the activation token. Parameter/body entry changes only its scope boundary.
+Module-root routing remains a scope fact while temporary class-key mode changes.
+Creation/module metadata contains cell routes, never settled lexical values.
+
+`function/env.rs::CallEnv` temporarily wraps those contexts as the old service
+ABI. Compiler-owned cells are excluded from value apply-back so a stale native
+view cannot undo a callback. FrameBindings/deopt views, raw publishers, eval and
+intrinsic-handoff compatibility metadata remain B5 obligations. Function-owned
+creation selection, RuntimeServices and the borrowed Context ABI are not switched
+yet. Native construct dispatch's typed pending target moves into NativeSite in B5.
+Class keys execute inline. A cold continuation owns the partial class/private
+context across yield/await; handlers restore regions and mode to their entry.
+Heritage validation precedes keys; each method installs before the next key.
+Static public/private fields and blocks run together in source order. The
+inner-name cell stays TDZ through keys and initializes before static fields;
+inferred display names create no inner binding.
 The frozen brief owns the remaining migration and deletion contract.
 
 Compact/wide/leaf tiers retain their static cell paths. A retained dynamic chain
@@ -156,5 +157,4 @@ that could bypass live crossing names. T077 later retires these tiers separately
 
 - Rc cycles between functions, cells, objects and private state are not collected;
   the tracing collector/arena stage owns that replacement.
-- Dynamic lookup is an uncached chain walk. Do not add a name/value cache or an
-  inherited map fork to avoid walking it.
+- Dynamic lookup is an uncached chain walk; no name/value cache or inherited map fork.

@@ -171,18 +171,17 @@ mod tests {
             )),
             Value::Boolean(false),
         ] {
-            vm.env.insert(
-                "__quickjsRustDynamicFunctionRealm".to_owned(),
-                marker.clone(),
-            );
+            vm.env.set_global_selection(marker.clone());
             assert_eq!(
                 vm.callee_env_origin(),
                 VmCallEnvOrigin::InheritedDynamicFrame
             );
             assert_eq!(
-                vm.callee_env()
-                    .get_local("__quickjsRustDynamicFunctionRealm"),
-                Some(marker)
+                vm.callee_env().explicit_global_selection_value(),
+                Some(match marker {
+                    Value::Object(_) => marker,
+                    _ => Value::Undefined,
+                })
             );
         }
     }
