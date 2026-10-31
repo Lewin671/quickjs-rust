@@ -20,6 +20,7 @@ semantics change. [Hashes and exact path-only diffs](T077-s2-freeze-routing.json
 Build an isolated release CLI with `cargo build -p qjs-cli --release --features
 agents --target-dir target/t077-s2-freeze/agent-cli-build`, pin it, hash it and
 prove --agent with `__quickjsRustAgentStart(""); "agent-ready";`.
+[Pin, toolchain, agent smoke and passing one-case preflight](T077-s2-freeze-pin.json).
 Run both routed front-ends with --exact --all, QJS_AGENTS=1,
 QJS_CLI_PROFILE=release, TEST262_CASE_TIMEOUT_SECONDS=20,
 TEST262_BASELINE_JOBS=4, the same pinned QJS_CLI_BIN and shared TEST262_DIR.
