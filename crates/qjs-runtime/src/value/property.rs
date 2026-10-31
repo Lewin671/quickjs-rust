@@ -27,7 +27,25 @@ pub(crate) struct Property {
     pub(crate) configurable: bool,
 }
 
+/// A constant IC observes the existing accessor pair without owning its closures.
+#[derive(Clone, Debug)]
+pub(crate) struct WeakAccessorState(std::rc::Weak<AccessorState>);
+impl WeakAccessorState {
+    pub(crate) fn upgrade(&self, enumerable: bool, configurable: bool) -> Option<Property> {
+        Some(Property::from_shared_accessors(
+            self.0.upgrade()?,
+            enumerable,
+            configurable,
+        ))
+    }
+}
+
 impl Property {
+    pub(crate) fn weak_accessors(&self) -> Option<WeakAccessorState> {
+        self.accessors
+            .as_ref()
+            .map(|pair| WeakAccessorState(Rc::downgrade(pair)))
+    }
     pub(in crate::value) fn shared_accessors(&self) -> Option<Rc<AccessorState>> {
         self.accessors.clone()
     }
@@ -167,6 +185,20 @@ mod tests {
 
     use super::Property;
     use crate::Value;
+
+    #[test]
+    fn weak_accessor_upgrade_reuses_the_pair_without_pinning_it() {
+        let property = Property::accessor(Some(Value::Undefined), None, true, true);
+        let weak = property.weak_accessors().unwrap();
+        let hit = weak.upgrade(true, true).unwrap();
+        assert!(Rc::ptr_eq(
+            property.accessors.as_ref().unwrap(),
+            hit.accessors.as_ref().unwrap()
+        ));
+        drop(hit);
+        drop(property);
+        assert!(weak.upgrade(true, true).is_none());
+    }
 
     #[test]
     #[cfg(target_pointer_width = "64")]

@@ -806,7 +806,9 @@ fn run_frames(
                         ) else {
                             break Err(execute::uninitialized_local());
                         };
-                        if let Some(value) = property::get_prop_named_hot(receiver, &site.cache) {
+                        if let Some(value) =
+                            property::get_prop_named_hot(receiver, &site.key, &site.cache)
+                        {
                             execute::store(&mut window[dst as usize], value);
                             continue;
                         }
@@ -821,9 +823,11 @@ fn run_frames(
                         };
                         // The receiver is borrowed: a fused site peeks its
                         // local, and the plain form's result replaces it.
-                        if let Some(value) =
-                            property::get_prop_named_hot(&window[obj as usize], &site.cache)
-                        {
+                        if let Some(value) = property::get_prop_named_hot(
+                            &window[obj as usize],
+                            &site.key,
+                            &site.cache,
+                        ) {
                             execute::store(&mut window[dst as usize], value);
                             continue;
                         }

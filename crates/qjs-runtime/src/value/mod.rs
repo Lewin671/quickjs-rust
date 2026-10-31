@@ -39,7 +39,7 @@ pub(crate) use object::{
     ModuleNamespaceBindings, ObjectWeakRef, OwnDataPropertyRead, OwnDataPropertyWrite,
 };
 pub(crate) use object::{ObjectLiteralShape, OrderedDataPropertyBuilder};
-pub(crate) use property::Property;
+pub(crate) use property::{Property, WeakAccessorState};
 pub use set::SetRef;
 
 use crate::{Function, proxy::ProxyRef, string};

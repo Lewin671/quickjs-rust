@@ -21,8 +21,14 @@ use crate::{PropertyKey, RuntimeError, Value};
 /// ordinary object the site's hot cache entry answers (`probe_hot`). Paying
 /// `get_prop_named`'s whole frame for that was a third of a read's cost.
 #[inline(always)]
-pub(super) fn get_prop_named_hot(object: &Value, cache: &NamedPropertyCache) -> Option<Value> {
-    cache.get_value(object, None)
+pub(super) fn get_prop_named_hot(
+    object: &Value,
+    key: &str,
+    cache: &NamedPropertyCache,
+) -> Option<Value> {
+    object
+        .unconditional_named_hook(key)
+        .or_else(|| cache.get_value(object, None))
 }
 
 /// Reads the statically named property `key` of `object`, consulting `cache`

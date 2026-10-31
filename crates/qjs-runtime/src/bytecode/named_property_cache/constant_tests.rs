@@ -188,3 +188,57 @@ fn marked_foreign_realm_method_updates_invalidate_warmed_sites() {
         Ok(Value::Boolean(true))
     );
 }
+
+#[test]
+fn typed_array_length_proof_observes_shadowing_and_replaced_getters_once() {
+    assert_eq!(
+        crate::eval(
+            r#"
+      var a=new Uint8Array(7), p=Object.getPrototypeOf(Uint8Array.prototype);
+      var original=Object.getOwnPropertyDescriptor(p,'length'), calls=0;
+      function read(x){return x.length}; function warm(){for(var i=0;i<100;i++)read(a)};
+      warm(); var result=read(a)===7;
+      Object.defineProperty(a,'length',{value:11,configurable:true});
+      warm(); result=result && read(a)===11;
+      delete a.length; warm(); result=result && read(a)===7;
+      Object.defineProperty(p,'length',{get:function(){calls++;return 13},configurable:true});
+      result=result && read(a)===13 && calls===1;
+      Object.defineProperty(p,'length',original);
+      result && read(a)===7;
+    "#
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn weak_accessor_constants_release_the_pair_and_its_getter() {
+    let domain = AtomDomain::new();
+    let holder = object(&domain, "x", 1.0);
+    let getter = Function::new_native_in_domain(None, 0, NativeFunction::MathAbs, false, &domain);
+    let weak = getter.downgrade();
+    holder.define_property(
+        "x".into(),
+        Property::accessor(Some(Value::Function(getter)), None, true, true),
+    );
+    let receiver = ObjectRef::with_prototype(HashMap::new(), Some(holder.clone()), &domain);
+    let site = NamedPropertyCache::default();
+    assert!(matches!(
+        site.read_outcome(&Value::Object(receiver.clone()), "x"),
+        Some(ReadOutcome::Accessor(_))
+    ));
+    let constant = site
+        .first
+        .get()
+        .unwrap()
+        .chain
+        .as_ref()
+        .unwrap()
+        .constant
+        .clone()
+        .unwrap();
+    drop(receiver);
+    drop(holder);
+    assert!(weak.upgrade().is_none());
+    assert!(constant.fetch().is_none());
+}

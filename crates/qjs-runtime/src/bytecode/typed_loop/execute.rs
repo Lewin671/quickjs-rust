@@ -373,8 +373,11 @@ fn execute<F: LoopFrame>(
                 name,
                 cache,
             } => {
-                if let Some(value) =
-                    shape_caches[cache as usize].get_value(&boxed[object as usize], None)
+                if let Some(value) = boxed[object as usize]
+                    .unconditional_named_hook(&program.names[name as usize])
+                    .or_else(|| {
+                        shape_caches[cache as usize].get_value(&boxed[object as usize], None)
+                    })
                 {
                     boxed[dst as usize] = value;
                     continue;

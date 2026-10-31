@@ -59,6 +59,22 @@ pub(crate) enum Probe {
     Exotic,
 }
 impl Value {
+    /// These own exotic properties cannot be replaced by a JS descriptor.
+    /// Conditional/accessor hooks retain their guarded semantic path.
+    #[inline(always)]
+    pub(crate) fn unconditional_named_hook(&self, name: &str) -> Option<Value> {
+        if name != "length" {
+            return None;
+        }
+        match self {
+            Self::Array(array) => Some(Self::Number(array.len() as f64)),
+            Self::String(text) => Some(Self::Number(
+                crate::string::js_string_code_unit_len(text) as f64
+            )),
+            _ => None,
+        }
+    }
+
     #[inline(always)]
     pub(crate) fn with_named_target<R>(&self, f: impl FnOnce(NamedTarget<'_>) -> R) -> Option<R> {
         Some(match self {

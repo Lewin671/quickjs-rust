@@ -122,10 +122,11 @@ for(var overwrite=0;overwrite<12;overwrite++) {
   else Object.assign(constantProto,{m:replacement});
   constantProto.text+='x'; log('constant:'+constantRead());
 }
+var accessorProto={}, accessorRec=Object.create(accessorProto);
 for(var access=0;access<6;access++) {
-  Object.defineProperty(constantProto,'a',{get:(function(v){return function(){return v}})(rnd(1000)),configurable:true});
-  for(var hot=0;hot<40;hot++) ra(constantRec);
-  log('accessor:'+ra(constantRec));
+  Object.defineProperty(accessorProto,'a',{get:(function(v){return function(){return v}})(rnd(1000)),configurable:true});
+  for(var hot=0;hot<40;hot++) ra(accessorRec);
+  log('accessor:'+ra(accessorRec));
 }
 var h = 0; var all = out.join('\n');
 for (var i = 0; i < all.length; i++) h = (h * 31 + all.charCodeAt(i)) | 0;

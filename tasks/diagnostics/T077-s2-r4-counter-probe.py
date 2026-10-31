@@ -47,6 +47,11 @@ for name,outcome in [('get_prop_named_hot','option'),('get_prop_element','result
  function('bytecode/compact_fn/property.rs',name,'r4_compact_'+name,outcome)
 for name in ['integer_indexed_value','indexed_element_value','set_indexed_element','set_integer_indexed_element','try_set_integer_indexed_primitive_element','read_element','write_element']:
  function('typed_array/element.rs',name,'r4_typed_array_'+name)
+def hook_counts(s):
+ m=re.search(r'pub\(super\) fn get_prop_named\(',s);assert m
+ start=s.index('{',m.end())
+ return s[:start+1]+'\nif key.as_ref()=="length" && matches!(object, Value::Array(_)) {'+field('r4_array_length_miss_handler')+'}\n'+s[start+1:]
+edit('bytecode/compact_fn/property.rs',hook_counts)
 base='struct NamedPropertyCacheState' in (src/'bytecode/named_property_cache.rs').read_text()
 function('bytecode/named_property_cache.rs','probe_hot' if base else 'get_value','r4_hot_ic','option')
 if base:

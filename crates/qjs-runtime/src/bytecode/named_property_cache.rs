@@ -436,15 +436,6 @@ impl CacheData {
                 );
                 return value;
             }
-            if entry.flags & (7 | FIRST_HOLDER) == DATA | FIRST_HOLDER
-                && entry.chain.as_ref().is_some_and(|c| c.validity.is_valid())
-                && let Some(value) = target.first_prototype_data(&entry.version, entry.slot)
-            {
-                #[cfg(debug_assertions)]
-                self.verify_hot(entry, target);
-                count_event(target, Event::Hit);
-                return Some(value);
-            }
         }
         self.data_value_other(target)
     }
@@ -591,6 +582,15 @@ impl CacheData {
     }
     #[inline(always)]
     pub(super) fn get_value(&self, value: &Value, _env: Option<&CallEnv>) -> Option<Value> {
+        if let Value::Object(object) = value {
+            return self.data_value(NamedTarget::Object(object));
+        }
+        self.get_non_object(value)
+    }
+    // Retain the same guards/hits for every family without multiplying their
+    // receiver-specific borrows through the ordinary-object dispatch loop.
+    #[inline(never)]
+    fn get_non_object(&self, value: &Value) -> Option<Value> {
         value.with_named_target(|t| self.data_value(t))?
     }
     #[inline(always)]

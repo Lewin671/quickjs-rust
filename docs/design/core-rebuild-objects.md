@@ -1,7 +1,6 @@
 # Core rebuild: keys, shapes, slots and ICs
 
-Target contract for [core rebuild](core-rebuild.md); S1 ordinary storage, S2 all
-named stores and caches. Paths below are under `crates/qjs-runtime/src/`.
+Target contract for [core rebuild](core-rebuild.md); S1 ordinary storage, S2 named stores/caches. Paths below are under `crates/qjs-runtime/src/`.
 
 ## Keys and lifetime
 
@@ -59,8 +58,6 @@ only on demand. Symbol descriptors join this authority, not a second cold table.
 ObjectRef construction requires an ordered vector; legacy HashMap constructor
 entry points accept only empty input, keeping S2 empty creation sites compatible.
 
-## Shapes and edits
-
 The [shape contract](core-rebuild-shapes.md) owns transitions, metadata retention, dictionary edits and integrity transitions.
 
 ## Shared semantic API
@@ -114,10 +111,12 @@ Layouts include prototype identity and semantic hook flavor. Shared guards compa
 weak allocation identity only; dictionary guards additionally compare versions.
 A receiver owns its explicit prototype edge; layouts retain weak identities so
 retained shapes cannot pin JavaScript values or realms. Roots and transition
-trees are canonical per prototype/flavor. Prototype mutation re-roots the layout.
+trees are canonical per prototype/flavor. Prototype mutation re-roots the layout. Unconditional array/string length hooks
+precede IC lookup. The interpreter may evaluate a cell-proven native typed-array
+length getter directly; custom accessors retain the ordinary call path.
 
-Objects used as prototypes enter private dictionary mode with one validity state.
-Its weak user graph links prototype-mode children, never IC sites. Structural
+Prototype-mode objects use private dictionaries and one validity state. Their
+weak user graph links prototype-mode children, never IC sites. Structural
 mutation replaces its validity generation and cascades iteratively. The single
 NamedStore write barrier also invalidates on prototype value/accessor writes.
 After four value overwrites a holder becomes permanently value-unstable: the
@@ -125,8 +124,9 @@ transition invalidates once, future entries load live slots and value writes sto
 invalidating. Structural edits always invalidate; additions do not spend the
 overwrite budget. There is no subscriber cap. Inherited entries hold the first
 prototype's generation, weak holder/slot and optional stable-holder constant;
-the receiver layout already implies its first prototype. Numbers/booleans/null/undefined are copied; strings, BigInts, objects, functions
-and accessor halves use weak handles, and a failed upgrade misses. Missing and accessor outcomes use the same proof. Accessors execute once after all borrows end. Array prototype identity is the live array payload, with no contextual wrapper.
+the receiver layout already implies its first prototype. Numbers/booleans/null/undefined are copied; RC values and existing accessor pairs
+use weak handles (no hit-time pair allocation), and a failed upgrade misses.
+Missing and accessor outcomes use the same proof. Accessors execute once after all borrows end. Array prototype identity is the live array payload, with no contextual wrapper.
 Proxy/unmodeled exotic chains remain uncached. Expired layouts/generations are
 stale entries and can be replaced without consuming another polymorphic way.
 Enumeration and creation proofs use the same shared generations and layout roots.

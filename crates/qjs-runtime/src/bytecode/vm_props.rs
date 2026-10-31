@@ -475,9 +475,38 @@ impl Vm<'_> {
         name: &crate::property::atom::Atom,
         cache: &NamedPropertyCache,
     ) -> Option<Value> {
+        if let Some(value) = object.unconditional_named_hook(name.as_str()) {
+            return Some(value);
+        }
+        if let Value::Object(receiver) = object
+            && receiver.is_typed_array_exotic()
+            && name.as_str() == "length"
+        {
+            return self.cached_typed_array_length(object, receiver, cache);
+        }
         cache
             .get_value(object, Some(&self.env))
             .or_else(|| self.cached_get_named_miss(object, name, cache))
+    }
+    /// The IC proves the current accessor before this side-effect-free builtin
+    /// shortcut; custom accessors still execute through the ordinary call path.
+    #[inline(never)]
+    fn cached_typed_array_length(
+        &self,
+        value: &Value,
+        object: &ObjectRef,
+        cache: &NamedPropertyCache,
+    ) -> Option<Value> {
+        use super::named_property_cache::ReadOutcome;
+        match cache.read_outcome(value, "length")? {
+            ReadOutcome::Value(value) => Some(value),
+            ReadOutcome::Accessor(property) if matches!(property.getter(), Some(Value::Function(getter)) if getter.native_kind() == Some(NativeFunction::TypedArrayPrototypeLength)) => {
+                Some(Value::Number(
+                    crate::typed_array::typed_array_length(object) as f64,
+                ))
+            }
+            ReadOutcome::Accessor(_) => None,
+        }
     }
     #[cold]
     #[inline(never)]

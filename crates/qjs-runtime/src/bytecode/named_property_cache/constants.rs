@@ -1,7 +1,7 @@
 //! Prototype-only constants. Chain cells protect values; RC payloads are weak
 //! so a cache cannot keep its holder, method, accessor closure or realm alive.
 use super::*;
-use crate::value::{WeakJsString, layout::NamedStore};
+use crate::value::{WeakAccessorState, WeakJsString, layout::NamedStore};
 use std::rc::Weak;
 
 #[derive(Clone, Debug)]
@@ -50,8 +50,7 @@ impl ConstantValue {
 pub(super) enum Constant {
     Data(ConstantValue),
     Accessor {
-        get: Option<ConstantValue>,
-        set: Option<ConstantValue>,
+        pair: WeakAccessorState,
         enumerable: bool,
         configurable: bool,
     },
@@ -67,8 +66,7 @@ impl Constant {
                     Self::Data(ConstantValue::new(&value))
                 }
                 ReadOutcome::Accessor(property) => Self::Accessor {
-                    get: property.getter().map(ConstantValue::new),
-                    set: property.setter().map(ConstantValue::new),
+                    pair: property.weak_accessors()?,
                     enumerable: property.enumerable,
                     configurable: property.configurable,
                 },
@@ -87,24 +85,10 @@ impl Constant {
         Some(match self {
             Self::Data(value) => ReadOutcome::Value(value.load()?),
             Self::Accessor {
-                get,
-                set,
+                pair,
                 enumerable,
                 configurable,
-            } => {
-                let load = |v: &Option<ConstantValue>| -> Option<Option<Value>> {
-                    Some(match v {
-                        Some(v) => Some(v.load()?),
-                        None => None,
-                    })
-                };
-                ReadOutcome::Accessor(Property::accessor(
-                    load(get)?,
-                    load(set)?,
-                    *enumerable,
-                    *configurable,
-                ))
-            }
+            } => ReadOutcome::Accessor(pair.upgrade(*enumerable, *configurable)?),
         })
     }
 }
