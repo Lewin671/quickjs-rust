@@ -1,0 +1,27 @@
+{
+  "runtime_revision": "a8e7709f",
+  "binary": "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261031T010922Z-t077-s2-r2-lazy-array-instructions/out/candidate/qjs",
+  "binary_sha256": "3da2e5a034a039e091c28410e0c226b6b3b3d3293bc117be122291632cffa0c4",
+  "files": {
+    "crates/qjs-cli/hot-functions-x86_64.order": "2b9ca64d3b1c724ed282ea3bfe0d0ab098ded3c8a7ef78197a7c1a23cacd74b0",
+    "crates/qjs-cli/hot-functions.order": "978820e5ef704ae26f5f791b0a63229a326124f8eae795cda84c85f2c68bf3df",
+    "crates/qjs-cli/build.rs": "ef3d5d3daa2cc2d46b613e11e3c5b5d1b8afee05a6f9859beb2f706ae454aced"
+  },
+  "case_set": "generator defaults: external, sentinel, broad; no development or held-out",
+  "pin": "generator defaults; no offset search",
+  "job": "20261031T012158Z-t077-s2-r3-regenerate-x86-order",
+  "tool_command": [
+    "python3",
+    "-m",
+    "tools.benchmark.order_file",
+    "--binary",
+    "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261031T010922Z-t077-s2-r2-lazy-array-instructions/out/candidate/qjs",
+    "--output",
+    "crates/qjs-cli/hot-functions-x86_64.order"
+  ],
+  "generated_ranking_symbols": 498,
+  "committed_order_symbols": 525,
+  "order_sha256": "dbfb6ecfd353baed0649eecbbe72aca74252653a8ecf981ca8c5e6f122288d0c",
+  "arm64_sha256": "978820e5ef704ae26f5f791b0a63229a326124f8eae795cda84c85f2c68bf3df",
+  "result": "exit 0; generator default pins, no offset search"
+}
