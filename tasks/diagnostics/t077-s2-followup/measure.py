@@ -31,13 +31,14 @@ def competing_processes():
             pid, parent, state, command, arguments = fields
             processes[int(pid)] = (int(parent), state, Path(command).name, arguments)
     busy = []
-    names = {'cargo', 'rustc', 'clang', 'clang++', 'cc', 'gcc', 'ld', 'lld',
+    names = {'cargo', 'cargo-clippy', 'clippy-driver', 'rustc', 'rustdoc', 'clang', 'clang++', 'cc', 'gcc', 'ld', 'lld',
              'cmake', 'make', 'qjs'}
-    runners = {'test262-baseline.sh', 'test262-subset.sh', 'compare-qjs.sh', 'check.sh'}
+    runners = {'test262-baseline.sh', 'test262-subset.sh', 'compare-qjs.sh', 'check.sh', 'check-touched.sh'}
     for pid, (_, state, name, arguments) in processes.items():
         argv = arguments.split()
         runner = name in {'bash', 'sh'} and len(argv) > 1 and Path(argv[1]).name in runners
-        if (name not in names and not runner) or state.startswith('Z'):
+        engine_test = name.startswith(('qjs_', 'qjs-'))
+        if (name not in names and not runner and not engine_test) or state.startswith('Z'):
             continue
         ancestor = pid
         seen = set()

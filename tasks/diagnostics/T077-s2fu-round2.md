@@ -358,3 +358,22 @@ Direct compact factory `76fbd142`, job
 0.999272, meriyah 0.999697, diff 0.999261, date-tofte 1.002786, dynamic read
 0.974129 and string churn 0.998686. Apply its default-set order (482 symbols)
 and require all four full lanes, rather than extrapolating the focused cases.
+
+
+Direct-factory ordered `1744d8a9`, job
+`20261031T140901Z-t077-s2fu-r2-compact-public86`, records wall/instructions:
+development 0.995563/0.998079; external 0.994878/1.001128;
+broad 0.996384/0.998250; sentinel 0.989893/0.996013. External instructions
+remain open. The native 76fbd142 replay is rejected: other S3b test shells
+were detected. Its RSS numbers are diagnostic only. Extend the native collector
+to recognize cargo-clippy, clippy-driver, runtime-test binaries and the whole
+check-touched shell; do not cancel the other owner's work. Earlier frozen
+collector hashes describe their named revisions, not this amended script.
+
+Next preserve the caller-owned prototype in DataSequence's predicted phase
+and move it into the completed store or mismatch prefix. Reacquiring the same
+prototype from weak metadata adds dispatch/refcount work, and predictions must
+not own JS values after construction. Keep the cached layout weak with respect
+to prototypes; only the live builder/receiver owns the value. Add a lifetime
+regression covering an otherwise-unowned prototype and both predicted/mismatch
+completion before measuring this constructor path.
