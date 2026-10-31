@@ -1,0 +1,45 @@
+{
+  "frozen_revision": "40814de69f430bd6cd4ee9bd4d9c53575d00368e",
+  "off_documentation_checkpoint": "960e89231dfe33f9834964487c0d18632e03b6ec",
+  "runtime_and_harness_diff": [],
+  "engine_sha256": "a4790dfc816aebbf5e15709dc69b26719f6010b3464e9d861c1286b9f5ab99fb",
+  "binary": "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s2-followup/target/t077-r3/release-build/release/qjs",
+  "profile": "release",
+  "agents": true,
+  "agent_start_report_smoke": true,
+  "test262_revision": "4249661388e5d3f92a85186213da140a6481490f",
+  "ng_revision": "f7830186043e4488f2998759d60a514faf07cbc9",
+  "workers_per_mode": 4,
+  "case_timeout_seconds": 20,
+  "status": "finished",
+  "results": [
+    {
+      "mode": "cached",
+      "exit_code": 0,
+      "argv": [
+        "./scripts/find-qjsng-gaps.sh",
+        "--exact",
+        "--all",
+        "--no-recommend",
+        "--include-timeouts",
+        "--out-dir",
+        "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s2-followup/target/t077-r3/exact/cached"
+      ],
+      "ic_disabled": false
+    },
+    {
+      "mode": "off",
+      "exit_code": 0,
+      "argv": [
+        "./scripts/find-qjsng-gaps.sh",
+        "--exact",
+        "--all",
+        "--no-recommend",
+        "--include-timeouts",
+        "--out-dir",
+        "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s2-followup/target/t077-r3/exact/off"
+      ],
+      "ic_disabled": true
+    }
+  ]
+}

@@ -76,6 +76,7 @@ const WRITABLE: u32 = 1 << 4;
 const WRITE_FORBIDDEN: u32 = 1 << 5;
 const VERIFY: u32 = 1 << 6;
 const FIRST_HOLDER: u32 = 1 << 7;
+const SHARED: u32 = 1 << 8;
 #[cfg(target_pointer_width = "64")]
 const _: () = assert!(std::mem::size_of::<Entry>() == 32);
 #[cfg(all(target_pointer_width = "64", not(debug_assertions)))]
@@ -192,8 +193,11 @@ impl Entry {
         }
     }
     fn matches(&self, target: NamedTarget<'_>) -> bool {
-        target.matches_version(&self.version)
-            && self.chain.as_ref().is_none_or(|c| c.validity.is_valid())
+        (if self.flags & SHARED != 0 {
+            target.matches_shared_version(&self.version)
+        } else {
+            target.matches_version(&self.version)
+        }) && self.chain.as_ref().is_none_or(|c| c.validity.is_valid())
     }
     #[cfg(debug_assertions)]
     fn resolution(&self) -> Resolution {
@@ -401,8 +405,8 @@ impl CacheData {
     #[inline(always)]
     fn data_value(&self, target: NamedTarget<'_>) -> Option<Value> {
         if let Some(entry) = self.hot_mono() {
-            if entry.flags & (7 | OWN) == DATA | OWN {
-                let value = target.load_matched_data(&entry.version, entry.slot);
+            if entry.flags & (7 | OWN | SHARED) == DATA | OWN | SHARED {
+                let value = target.load_matched_shared_data(&entry.version, entry.slot);
                 #[cfg(debug_assertions)]
                 if value.is_some() {
                     self.verify_hot(entry, target);
@@ -416,6 +420,9 @@ impl CacheData {
                     },
                 );
                 return value;
+            }
+            if entry.flags & (7 | OWN) == DATA | OWN {
+                return self.versioned_own_value(entry, target);
             }
             if entry.flags & 7 == DATA
                 && entry.matches(target)
@@ -438,6 +445,24 @@ impl CacheData {
             }
         }
         self.data_value_other(target)
+    }
+    #[cold]
+    #[inline(never)]
+    fn versioned_own_value(&self, entry: &Entry, target: NamedTarget<'_>) -> Option<Value> {
+        let value = target.load_matched_data(&entry.version, entry.slot);
+        #[cfg(debug_assertions)]
+        if value.is_some() {
+            self.verify_hot(entry, target);
+        }
+        count_event(
+            target,
+            if value.is_some() {
+                Event::Hit
+            } else {
+                Event::Miss
+            },
+        );
+        value
     }
     #[cold]
     #[inline(never)]
@@ -533,7 +558,7 @@ impl CacheData {
                         .iter()
                         .find(|entry| {
                             entry.flags & (7 | OWN) == DATA | OWN
-                                && store.matches_version(&entry.version)
+                                && store.matches_own_version(&entry.version)
                         })
                         .and_then(|entry| {
                             #[cfg(debug_assertions)]
@@ -605,7 +630,7 @@ impl CacheData {
             && entry.flags & (7 | OWN) == DATA | OWN
         {
             let value = object.with_named(|store| {
-                if !store.matches_version(&entry.version) {
+                if !store.matches_own_version(&entry.version) {
                     return None;
                 }
                 store.load_guarded_number(entry.slot as usize)
@@ -634,7 +659,7 @@ impl CacheData {
             let entry = match &state.entries {
                 Entries::MonoFirst | Entries::Mono(_)
                     if state.entries.mono(&self.first).is_some_and(|e| {
-                        e.flags & (7 | OWN) == DATA | OWN && store.matches_version(&e.version)
+                        e.flags & (7 | OWN) == DATA | OWN && store.matches_own_version(&e.version)
                     }) =>
                 {
                     state.entries.mono(&self.first).expect("mono guard")
@@ -650,7 +675,7 @@ impl CacheData {
                     &ways[mask.trailing_zeros() as usize]
                 }
                 Entries::Poly(ways) => ways.iter().find(|e| {
-                    e.flags & (7 | OWN) == DATA | OWN && store.matches_version(&e.version)
+                    e.flags & (7 | OWN) == DATA | OWN && store.matches_own_version(&e.version)
                 })?,
                 _ => return None,
             };

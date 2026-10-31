@@ -7,7 +7,7 @@
 //! data writes preserve identity and epoch; prototype-mode writes invalidate
 //! guarded constants until the holder becomes value-unstable. No borrow may cross JS.
 
-use std::cell::RefCell;
+use std::cell::{OnceCell, RefCell};
 use std::collections::{HashMap, VecDeque};
 use std::rc::{Rc, Weak};
 
@@ -17,16 +17,22 @@ use crate::{Property, Value};
 mod append_recipe;
 pub(crate) use append_recipe::{AppendRecipe, FieldPlans};
 mod append_batch;
+mod cold;
 mod edit;
+use cold::ColdStorage;
 mod host;
 mod index;
 mod storage;
 mod string_wrapper;
 pub(crate) use string_wrapper::StringWrapperLayout;
+mod tiny;
 mod transitions;
 use index::{IdIndex, IdProbe};
+mod links;
+use links::LayoutLinks;
 mod lazy;
 mod prototype;
+mod roots;
 mod sequence;
 #[cfg(test)]
 mod sequence_tests;
@@ -45,6 +51,7 @@ mod tests;
 
 #[cfg(target_pointer_width = "64")]
 const _: () = {
+    assert!(std::mem::size_of::<Layout>() == 80);
     assert!(std::mem::size_of::<KeyId>() == 4);
     assert!(std::mem::size_of::<KeyLease>() == 8);
     assert!(std::mem::size_of::<ShapeEntry>() == 16);
@@ -103,18 +110,14 @@ pub(crate) struct Layout {
     domain: AtomDomain,
     owner: Weak<OwnerState>,
     data: Rc<RefCell<storage::LayoutData>>,
+    links: OnceCell<Box<LayoutLinks>>,
     len: usize,
-    parent: Option<Rc<Layout>>,
-    incoming: Option<Transition>,
     dictionary: bool,
+    epoch: std::cell::Cell<u64>,
+    deferred_seed: bool,
+    transient: bool,
     edits: u8,
-    next_order: u32,
-    transitions: RefCell<transitions::Transitions>,
-    root: Option<Rc<Layout>>,
     prototype: Option<WeakPrototype>,
-    prototype_value: RefCell<Weak<crate::Prototype>>,
-    parent_state: Weak<PrototypeState>,
-    mode: Option<Rc<PrototypeState>>,
     flavor: u16,
     capacity_hint: std::cell::Cell<u8>,
     append_misses: std::cell::Cell<u8>,
@@ -123,6 +126,10 @@ pub(crate) struct Layout {
 pub(crate) struct OwnerState {
     root: Rc<Layout>,
     roots: RefCell<crate::value::name_hash::NameMap<(u8, usize, u16), Weak<Layout>>>,
+    roots_until_sweep: std::cell::Cell<usize>,
+    seeds: RefCell<crate::value::name_hash::NameMap<u16, Rc<Layout>>>,
+    tiny_data:
+        RefCell<crate::value::name_hash::NameMap<[u64; 2], Weak<RefCell<storage::LayoutData>>>>,
     retained: RefCell<transitions::Retention>,
 }
 
@@ -158,22 +165,21 @@ impl PropertyOwner {
                 owner: owner.clone(),
                 data: Rc::new(RefCell::new(storage::LayoutData::new(budget.clone()))),
                 len: 0,
-                parent: None,
-                incoming: None,
+                links: OnceCell::new(),
                 dictionary: false,
+                epoch: std::cell::Cell::new(0),
+                deferred_seed: false,
+                transient: false,
                 edits: 0,
-                next_order: 0,
-                transitions: RefCell::new(transitions::Transitions::default()),
-                root: None,
                 prototype: None,
-                prototype_value: RefCell::new(Weak::new()),
-                parent_state: Weak::new(),
-                mode: None,
                 flavor: 0,
                 capacity_hint: std::cell::Cell::new(0),
                 append_misses: std::cell::Cell::new(0),
             }),
             roots: RefCell::default(),
+            roots_until_sweep: std::cell::Cell::new(64),
+            seeds: RefCell::default(),
+            tiny_data: RefCell::default(),
             retained: RefCell::new(transitions::Retention::default()),
         });
         *attachment.shape_owner().borrow_mut() = Rc::downgrade(&owner);
@@ -187,8 +193,7 @@ impl PropertyOwner {
         NamedStore {
             layout: self.0.root.clone(),
             values: ValueSlots::Empty,
-            accessors: None,
-            epoch: 0,
+            cold: ColdStorage::default(),
             prototype: None,
         }
     }
@@ -203,9 +208,8 @@ type AccessorSlots = HashMap<u32, Rc<super::property::AccessorState>>;
 pub(crate) struct NamedStore {
     layout: Rc<Layout>,
     values: ValueSlots,
-    accessors: Option<Box<AccessorSlots>>,
-    epoch: u64,
-    prototype: Option<Rc<crate::Prototype>>,
+    cold: ColdStorage,
+    prototype: Option<crate::Prototype>,
 }
 
 /// A lookup borrows the store exclusively. Its miss proof therefore cannot
@@ -276,7 +280,7 @@ impl NamedStore {
             assert_eq!(entry.key, self.layout.keys()[position].id());
             assert_eq!(self.layout.verify_position(entry.key), Some(position));
             assert_eq!(
-                self.accessors
+                self.cold
                     .as_deref()
                     .is_some_and(|slots| slots.contains_key(&entry.slot)),
                 entry.attrs.has(Attributes::ACCESSOR)
@@ -314,15 +318,20 @@ impl NamedStore {
             .collect()
     }
     pub(crate) fn layout(&self) -> &Rc<Layout> {
-        &self.layout
+        self.guard_layout()
     }
     #[cfg(test)]
     pub(crate) fn test_set_epoch(&mut self, epoch: u64) {
-        self.epoch = epoch;
+        self.set_epoch(epoch);
     }
-    #[cfg(test)]
-    pub(crate) fn epoch(&self) -> u64 {
-        self.epoch
+    pub(super) fn epoch(&self) -> u64 {
+        self.layout.epoch.get()
+    }
+    pub(super) fn set_epoch(&self, epoch: u64) {
+        debug_assert!(self.layout.dictionary || epoch == 0);
+        if self.layout.dictionary {
+            self.layout.epoch.set(epoch);
+        }
     }
     #[cfg(test)]
     pub(crate) fn is_dictionary(&self) -> bool {
@@ -351,13 +360,13 @@ impl NamedStore {
                 assert_eq!(entry.key, key.id());
                 assert!(key.belongs_to(&layout.domain));
                 assert_eq!(entry.slot as usize, position);
-                assert!(entry.order < layout.next_order);
+                assert!(entry.order < layout.next_order());
                 assert!(orders.insert(entry.order));
                 assert_eq!(entry.reserved, 0);
                 assert_eq!(layout.verify_position(entry.key), Some(position));
                 let accessor = entry.attrs.has(Attributes::ACCESSOR);
                 assert_eq!(
-                    self.accessors
+                    self.cold
                         .as_deref()
                         .is_some_and(|slots| slots.contains_key(&entry.slot)),
                     accessor
@@ -368,12 +377,9 @@ impl NamedStore {
                 }
                 assert_eq!(Attributes::of(&self.descriptor(position)), entry.attrs);
             }
-            assert_eq!(
-                self.accessors.as_deref().map_or(0, HashMap::len),
-                accessor_count
-            );
+            assert_eq!(self.cold.as_deref().map_or(0, HashMap::len), accessor_count);
             if layout.dictionary {
-                assert!(layout.transitions.borrow().is_empty());
+                assert!(layout.transitions_empty());
             }
         }
     }

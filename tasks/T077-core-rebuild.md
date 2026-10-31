@@ -1,11 +1,11 @@
 # T077: In-place core rebuild
 
-- Status: active; S3a and S1+S2 accepted and integrated (lead 2026-10-31); S2 follow-up and S3b in progress.
+- Status: active; S3a and S1+S2 accepted and integrated (lead 2026-10-31); S2 follow-up qualified at frozen 40814de6, awaiting lead acceptance; S3b remains separate.
 - Implementation: main has S3a direct native entries/slices and S1+S2's one named-property authority (recycled KeyIds, prototype-sensitive shapes, validity cells, cell-protected weak prototype constants, shape ICs, construction recipes). Owner branches: `agent/t077-s2-followup/codex`, `agent/t077-s3b-context/codex`.
-- Verified at: S1+S2 `fc3deef7` (runtime `dc710e4b`): full check, 268 NG fixtures, 42,672/42,672 exact cached and IC-off; formal/held-out/RSS in [S1+S2 acceptance](diagnostics/T077-s1s2-acceptance.md); S3a in [S3a acceptance](diagnostics/T077-s3a-acceptance.md).
-- Evidence: [target](../docs/design/core-rebuild.md), [baseline](diagnostics/T077-baseline.md), [S2 freeze](diagnostics/T077-s2-freeze-qualification.md), [S2 round 4](diagnostics/T077-s2-r4-handoff.md), [S3 plan](proposals/T077-s3-plan.md), [S3b brief](proposals/T077-s3b-brief.md).
-- Unresolved: accepted local regressions (external +0.25% vs S3a, typed-loop/wide static size) are S3e/S4 obligations; prototype-mode memory/complexity fixes are the S2 follow-up; the global accessor stale-read bug is in S3b; deep Rust-stack exhaustion is S3d-owned.
-- Next action: S2 follow-up and S3b owners implement on their branches; lead measures and integrates each. Cumulative vs baseline: development 0.893, external 0.996, selection 0.978, held-out 0.929.
+- Verified at: S1+S2 `fc3deef7` (runtime `dc710e4b`): full check, 268 NG fixtures, 42,672/42,672 exact cached and IC-off; formal/held-out/RSS in [S1+S2 acceptance](diagnostics/T077-s1s2-acceptance.md); S3a in [S3a acceptance](diagnostics/T077-s3a-acceptance.md). Follow-up 40814de6 passes full/NG/exact cached+IC-off/resources/RSS15; [final qualification](diagnostics/T077-s2fu-round2.md) binds the revisions and receipts.
+- Evidence: [S2 follow-up round 2](diagnostics/T077-s2fu-round2.md), [S2 follow-up](diagnostics/T077-s2-followup.md), [target](../docs/design/core-rebuild.md), [baseline](diagnostics/T077-baseline.md), [S2 freeze](diagnostics/T077-s2-freeze-qualification.md), [S2 round 4](diagnostics/T077-s2-r4-handoff.md), [S3 plan](proposals/T077-s3-plan.md), [S3b brief](proposals/T077-s3b-brief.md).
+- Unresolved: accepted local regressions (external +0.25% vs S3a, typed-loop/wide static size) are S3e/S4 obligations; lead round 3 accepts the follow-up residual instruction cost for S3e/S4 recovery; the global accessor stale-read bug is in S3b; deep Rust-stack exhaustion is S3d-owned.
+- Next action: S2 follow-up owner stops at frozen 40814de6; lead owns final acceptance and integration. S3b continues on its branch; no further follow-up A/order iteration. Cumulative vs baseline: development 0.893, external 0.996, selection 0.978, held-out 0.929.
 
 ## Authority and scope
 
@@ -107,7 +107,7 @@ The [round-1 correction](proposals/T077-s2-prototype-layout.md) replaces shared-
 
 ## S3 — Universal bytecode, frames, calls and native ABI
 
-- Contract: [execution](../docs/design/core-rebuild-execution.md); [approved five-stage plan](proposals/T077-s3-plan.md); [frozen S3b implementation brief](proposals/T077-s3b-brief.md) with typed Context, complete ports, binding structures, B1–B6 commits and verification matrix. S3a is integrated; S3b remains design only.
+- Contract: [execution](../docs/design/core-rebuild-execution.md); [approved five-stage plan](proposals/T077-s3-plan.md); [frozen S3b implementation brief](proposals/T077-s3b-brief.md) with typed Context, complete ports, binding structures, B1–B6 commits and verification matrix. S3a is integrated; S3b owner standing is in the resume block.
 - Landings: S3a direct native entries/slices; S3b typed Context and T074
   binding authority; S3c owning activations/suspension; S3d explicit JS stack and
   callee argument writes; S3e universal register Code and executor deletion.

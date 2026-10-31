@@ -3,7 +3,10 @@
 Transition label is `(KeyId, attributes, descriptor kind)`; a hit allocates no
 shape, interns no key and copies no field list. Tail misses share an append-only descriptor/key buffer and incremental ID
 index with prefix shapes; each shape limits lookup/enumeration to its prefix.
-Tail growth is amortized O(1); a branch copies its prefix once. Private edits
+Tail growth is amortized O(1); a branch copies its prefix once. Buffers through
+four keys use linear probes without a hash allocation; weak sequence interning
+shares zero/one/two-key buffers across prototype-bound layouts. Unobserved transient bindings omit
+parent links; observed bindings publish the canonical transition path. Private edits
 detach before mutation. The empty root never retains a nonempty buffer. Shared shapes apply equally to literals,
 constructor stores, class fields, JSON and host creation. No whole-vector hash
 or comparison on a hit. Duplicate keys preserve first insertion order and last
@@ -21,6 +24,8 @@ strong cache roots, while live objects retain their complete transition paths.
 Live shapes and their weak lookup edges may exceed the keep-alive bound.
 Observer-free arguments construction validates each predicted key/descriptor
 then fills live slots/accessors; mismatch rebuilds the completed prefix.
+Predicted construction moves its provided prototype from builder to receiver;
+cached layout predictions keep only weak prototype identities.
 Realm-owned construction retains at most 32 shared layouts with
 only that realm's intrinsic prototype/domain and already-owned well-known symbol
 keys. Values, parameter cells, poison accessors and iterator values stay per

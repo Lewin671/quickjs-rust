@@ -140,6 +140,17 @@ impl<'a> NamedTarget<'a> {
             _ => self.with_store(|s| s.matches_version(v)).unwrap_or(false),
         }
     }
+    /// Shared cache tokens need only identity on published receivers. A Full
+    /// authority cleared/rebased to a seed still needs the general cold guard.
+    #[inline(always)]
+    pub(crate) fn matches_shared_version(self, v: &LayoutVersion) -> bool {
+        debug_assert!(v.is_shared());
+        if let Some(object) = self.object() {
+            return object
+                .with_named(|store| store.matches_shared_identity(v) || store.matches_version(v));
+        }
+        self.matches_version(v)
+    }
     pub(crate) fn chain_dependency(self) -> Option<StructuralDependency> {
         match self {
             Self::Array(a) => a.chain_dependency(),
@@ -242,7 +253,17 @@ impl<'a> NamedTarget<'a> {
     #[inline(always)]
     pub(crate) fn load_matched_data(self, v: &LayoutVersion, slot: u32) -> Option<Value> {
         self.with_store(|s| {
-            s.matches_version(v)
+            s.matches_own_version(v)
+                .then(|| s.load_guarded_data(slot as usize))
+                .flatten()
+        })?
+    }
+    /// The cache admitted an immutable shared own-data layout.
+    #[inline(always)]
+    pub(crate) fn load_matched_shared_data(self, v: &LayoutVersion, slot: u32) -> Option<Value> {
+        debug_assert!(v.is_shared());
+        self.with_store(|s| {
+            s.matches_shared_identity(v)
                 .then(|| s.load_guarded_data(slot as usize))
                 .flatten()
         })?
@@ -265,7 +286,7 @@ impl<'a> NamedTarget<'a> {
         value: &Value,
     ) -> Option<OwnDataPropertyWrite> {
         let write = |s: &mut NamedStore| {
-            if s.matches_version(v) && s.overwrite_guarded_data(slot as usize, value.clone()) {
+            if s.matches_own_version(v) && s.overwrite_guarded_data(slot as usize, value.clone()) {
                 Some(OwnDataPropertyWrite::Written)
             } else {
                 None

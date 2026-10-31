@@ -16,13 +16,15 @@ impl AppendBatchRecipe {
     ) -> Option<usize> {
         if values.len() != self.width
             || store.len() != self.start
-            || !store.matches_shared_identity(&self.before)
+            || !store.matches_version(&self.before)
         {
             return None;
         }
+        store.invalidate_dependencies();
+        store.cold.clear_guard();
         store.values.extend(values);
         store.layout = self.after.clone();
-        store.epoch = 0;
+        store.set_epoch(0);
         for slot in self.start..store.len() {
             store.verify_slot(slot);
         }
@@ -40,14 +42,13 @@ impl NamedStore {
             || start.checked_add(width)? != self.len()
             || !before.is_shared()
             || self.layout.dictionary
-            || self.layout.mode.is_some()
         {
             return None;
         }
         let mut prefix = &self.layout;
         while prefix.len > start {
             if !matches!(
-                prefix.incoming,
+                prefix.incoming(),
                 Some(Transition::Append {
                     attrs: Attributes(7),
                     ..
@@ -55,7 +56,7 @@ impl NamedStore {
             ) {
                 return None;
             }
-            prefix = prefix.parent.as_ref()?;
+            prefix = prefix.parent()?;
         }
         if prefix.len != start || !before.matches_identity(prefix) {
             return None;

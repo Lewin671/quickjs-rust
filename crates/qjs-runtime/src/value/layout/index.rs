@@ -4,6 +4,7 @@
 //! prefix forks rebuild and consume a new proof as cold structural work.
 //! Each insertion reserves space for the next one; index rebuilds are counted
 //! separately from operation probes. Shared-tail admission lives in storage.
+//! The hash shift is derived from bucket capacity only at allocation/rebuild.
 
 use crate::property::atom::KeyId;
 
@@ -21,6 +22,7 @@ const EMPTY: Bucket = Bucket {
 #[derive(Clone)]
 pub(super) struct IdIndex {
     buckets: Vec<Bucket>,
+    hash_shift: u32,
     len: usize,
     tombstones: usize,
 }
@@ -33,10 +35,21 @@ pub(super) struct IdProbe {
     pub(super) position: Option<usize>,
 }
 
+impl IdProbe {
+    pub(super) fn linear(key: KeyId, position: Option<usize>) -> Self {
+        Self {
+            key,
+            bucket: position.unwrap_or(0),
+            capacity: 0,
+            position,
+        }
+    }
+}
 impl IdIndex {
     pub(super) fn new() -> Self {
         Self {
             buckets: vec![EMPTY; 8],
+            hash_shift: Self::shift_for(8),
             len: 0,
             tombstones: 0,
         }
@@ -44,8 +57,23 @@ impl IdIndex {
     pub(super) fn bytes(&self) -> usize {
         self.buckets.capacity() * size_of::<Bucket>()
     }
+    pub(super) fn unallocated() -> Self {
+        Self {
+            buckets: Vec::new(),
+            hash_shift: 0,
+            len: 0,
+            tombstones: 0,
+        }
+    }
+    pub(super) fn allocated(&self) -> bool {
+        !self.buckets.is_empty()
+    }
+    fn shift_for(capacity: usize) -> u32 {
+        32 - capacity.trailing_zeros().min(32)
+    }
+    #[cfg(test)]
     fn bucket(key: KeyId, capacity: usize) -> usize {
-        (key.get().wrapping_mul(0x9e37_79b1) >> (32 - capacity.trailing_zeros().min(32))) as usize
+        (key.get().wrapping_mul(0x9e37_79b1) >> Self::shift_for(capacity)) as usize
     }
     pub(super) fn probe(&self, key: KeyId) -> IdProbe {
         crate::diagnostics::count!(property_id_probes);
@@ -53,7 +81,7 @@ impl IdIndex {
     }
     pub(super) fn probe_uncounted(&self, key: KeyId) -> IdProbe {
         let mask = self.buckets.len() - 1;
-        let mut bucket = Self::bucket(key, self.buckets.len());
+        let mut bucket = (key.get().wrapping_mul(0x9e37_79b1) >> self.hash_shift) as usize;
         let mut vacancy = None;
         loop {
             let entry = self.buckets[bucket];
@@ -86,10 +114,6 @@ impl IdIndex {
     pub(super) fn get(&self, key: KeyId) -> Option<usize> {
         self.probe(key).position
     }
-    /// Debug reconstruction is outside the operation's diagnostic work count.
-    pub(super) fn verify_position(&self, key: KeyId) -> Option<usize> {
-        self.probe_uncounted(key).position
-    }
     pub(super) fn insert_at(&mut self, proof: IdProbe, position: usize) {
         assert_eq!(proof.capacity, self.buckets.len(), "stale index proof");
         assert!(proof.position.is_none(), "insertion requires a miss proof");
@@ -112,6 +136,10 @@ impl IdIndex {
         }
     }
     pub(super) fn remove_at(&mut self, proof: IdProbe) {
+        if !self.allocated() {
+            debug_assert_eq!(proof.capacity, 0);
+            return;
+        }
         assert_eq!(proof.capacity, self.buckets.len(), "stale index proof");
         let position = proof.position.expect("removal requires a hit proof");
         let entry = &mut self.buckets[proof.bucket];
@@ -125,6 +153,9 @@ impl IdIndex {
         self.tombstones += 1;
     }
     pub(super) fn set_position(&mut self, key: KeyId, position: usize) {
+        if !self.allocated() {
+            return;
+        }
         let proof = self.probe(key);
         assert!(
             proof.position.is_some(),
@@ -140,6 +171,7 @@ impl IdIndex {
     fn rebuild(&mut self, capacity: usize) {
         crate::diagnostics::count!(property_id_index_rebuilds);
         let previous = std::mem::replace(&mut self.buckets, vec![EMPTY; capacity]);
+        self.hash_shift = Self::shift_for(capacity);
         self.tombstones = 0;
         for entry in previous {
             if let Some(key) = entry.key {

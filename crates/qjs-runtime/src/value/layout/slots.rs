@@ -6,7 +6,7 @@ impl NamedStore {
         let entry = self.layout.entry(position);
         let attrs = entry.attrs;
         if attrs.has(Attributes::ACCESSOR) {
-            let pair = &self.accessors.as_deref().expect("accessor table")[&entry.slot];
+            let pair = &self.cold.as_deref().expect("accessor table")[&entry.slot];
             Property::from_shared_accessors(
                 pair.clone(),
                 attrs.has(Attributes::ENUMERABLE),
@@ -25,15 +25,15 @@ impl NamedStore {
         self.before_value_write(existing);
         if let Some(pair) = property.shared_accessors() {
             self.values[position] = Value::Undefined;
-            self.accessors
+            self.cold
                 .get_or_insert_with(|| Box::new(HashMap::new()))
                 .insert(position as u32, pair);
         } else {
             self.values[position] = property.value;
-            if let Some(slots) = self.accessors.as_mut() {
+            if let Some(slots) = self.cold.as_mut() {
                 slots.remove(&(position as u32));
                 if slots.is_empty() {
-                    self.accessors = None;
+                    self.cold.clear();
                 }
             }
         }
@@ -146,15 +146,13 @@ impl NamedStore {
     }
     pub(crate) fn defer_children(&mut self, pending: &mut Vec<Value>) {
         if let Some(prototype) = self.prototype.take() {
-            if let Some(prototype) = Rc::into_inner(prototype) {
-                let mut value = prototype.into_value();
-                crate::value::teardown::defer_if_last(&mut value, pending);
-            }
+            let mut value = prototype.into_value();
+            crate::value::teardown::defer_if_last(&mut value, pending);
         }
         for value in &mut self.values {
             crate::value::teardown::defer_if_last(value, pending);
         }
-        if let Some(slots) = &mut self.accessors {
+        if let Some(slots) = self.cold.as_mut() {
             for pair in slots.values_mut() {
                 if let Some(pair) = Rc::get_mut(pair) {
                     pair.defer_children(pending);

@@ -1,6 +1,7 @@
 //! Cold resolution and bounded cache admission. No miss/update code is inlined
 //! into typed, compact, wide or interpreter dispatch. All hooks stay outside borrows.
 use super::*;
+use crate::value::layout::NamedStore;
 impl CacheData {
     #[cold]
     #[inline(never)]
@@ -66,10 +67,47 @@ impl CacheData {
         if !policy.enabled {
             return;
         }
+        // Publish ordinary bound metadata once so own hits stay direct.
+        // Present array/function named slots prove Full storage and publish too.
+        // Compact Empty authorities already carry their root, but Full storage
+        // can be cleared and rebased to a seed. Missing/inherited/virtual cases
+        // retain the general cold guard until publication; do not allocate a
+        // Full authority solely to record a pure empty/virtual read.
+        match target {
+            NamedTarget::Object(o) => o.with_named_mut(NamedStore::materialize_layout),
+            NamedTarget::Map(m) => m
+                .object_ref()
+                .with_named_mut(NamedStore::materialize_layout),
+            NamedTarget::Set(s) => s
+                .object_ref()
+                .with_named_mut(NamedStore::materialize_layout),
+            NamedTarget::Array(a)
+                if !resolution.inherited
+                    && matches!(
+                        resolution.probe,
+                        Probe::Data { .. } | Probe::Accessor { .. }
+                    ) =>
+            {
+                a.with_named_mut(NamedStore::materialize_layout);
+            }
+            NamedTarget::Function(f)
+                if !resolution.inherited
+                    && matches!(
+                        resolution.probe,
+                        Probe::Data { .. } | Probe::Accessor { .. }
+                    ) =>
+            {
+                f.with_named_mut(NamedStore::materialize_layout);
+            }
+            _ => {}
+        }
         let Some(version) = target.version() else {
             return;
         };
         let mut flags = if resolution.inherited { 0 } else { OWN };
+        if version.is_shared() {
+            flags |= SHARED;
+        }
         if resolution.first_holder {
             flags |= FIRST_HOLDER;
         }
