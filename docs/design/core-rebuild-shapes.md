@@ -62,8 +62,8 @@ mode. A saturating byte survives expired child edges without retaining keys. Sta
 JsString leases and consume one own-slot lookup before chain proof/creation.
 A structural mutation prepares storage first, publishes layout+slots together, then bumps
 validity; slot reuse never occurs under an unchanged dictionary version.
-Value writes touch no shape/version. Existing property_revision consumers must
-be migrated individually: cached values cannot borrow slot-cache validity.
+Value writes touch no shape/version. Own slots load live; prototype constants
+use the separate write-invalidated [IC contract](core-rebuild-objects.md#inline-caches).
 
 Shared structural tokens use weak allocation identity only; dictionary tokens
 also compare a nonzero version. Rollover publishes a fresh dictionary allocation.
