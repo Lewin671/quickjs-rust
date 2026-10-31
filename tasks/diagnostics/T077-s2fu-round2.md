@@ -1,7 +1,7 @@
 # T077 S2 follow-up, lead feedback round 2
 
 - Status: active; A–D implemented, final qualification in progress.
-- Implementation: runtime `362d1bf0`, generated x86 order at `68046c8a`: direct own guards, private-layout epochs, 80-byte bound nodes/shared tiny data, canonical reusable templates, allocation-free cycle walks and corrected Full-storage comment.
+- Implementation: A–D present, with shared-epoch cleanup at `6bf1055b`; current repair stops retaining otherwise unused empty roots. Generated x86 order at `68046c8a`.
 - Verified at: native full check on `362d1bf0` passes 2,519 runtime tests/5,170 curated cases; all 268 NG fixtures cached/off/verify; eight x86 cycle tests. Preliminary owned-child RSS meets <=1.25. Final exact/performance/resource results pending.
 - Evidence: this record and the named job/artifact receipts below; [round 1](T077-s2-followup.md) is historical.
 - Unresolved: final per-lane instruction/wall limits, exact cached/off with burndown, complete native/x86 resource gates.
@@ -187,3 +187,19 @@ receiver-era `set_epoch(0)` work on immutable shared layouts after append/rebase
 and in literal construction. Such layouts already carry epoch zero by
 construction; private copies still initialize to one. Own guards explicitly
 short-circuit the private epoch load when the expected shared epoch is zero.
+
+The ordered resource job completes: owned-chain/fan/mx2 peaks are
+215.04/90.98/109.29 MB versus pre-S2 187.19/83.41/93.62 MB (ratios
+1.149/1.091/1.167). The reconstructed mx2 provenance caveat still applies.
+All original memory cases except mem3 pass; mem3 churn is 6.30 versus 4.49 MB,
+ratio 1.404, so B is not yet qualified. Empty roots were retained independently
+in the owner's byte-bounded cache, keeping dead prototype Rc allocations alive
+via weak identities. Keep empty roots weakly cached instead: live receivers and
+retained property transitions already own roots that can be reused. The focused
+compact-authority test now proves both the edge and unused binding disappear.
+Class 2k/4k/8k wall seconds are 0.03/0.11/0.43 versus integration main
+0.50/3.43/27.21; ch is 0.09 versus 11.46. These remain intermediate measurements.
+Job `20261031T115955Z-t077-s2fu-r2-epochs-public86` measures the shared-epoch
+cleanup; the empty-root correction needs its own final qualification.
+The partial cached/off exact scans on superseded `68046c8a` were stopped after
+its instruction gate failed; no burndown rows were recorded for partial scans.

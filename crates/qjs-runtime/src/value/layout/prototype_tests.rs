@@ -201,7 +201,7 @@ fn compact_authorities_share_weak_edge_boxes_without_pinning_prototypes() {
     drop(first);
     drop(second);
     drop(third);
-    assert!(guard.is_alive(), "retained root metadata stays available");
+    assert!(!guard.is_alive(), "unused empty bindings are not retained");
     assert!(
         weak.upgrade().is_none(),
         "the root memo must not pin the prototype"

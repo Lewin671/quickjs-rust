@@ -298,7 +298,9 @@ impl PropertyOwner {
         }
         roots.insert(key, Rc::downgrade(&root));
         drop(roots);
-        root.retain();
+        // Empty bindings have no descriptor path worth retaining independently.
+        // Live receivers and retained property transitions keep their root alive;
+        // an owner-only root would retain dead prototype allocations through Weak.
         root
     }
 }
