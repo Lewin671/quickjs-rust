@@ -70,7 +70,7 @@ fn last_delete_restores_parent_but_other_delete_detaches() {
     store.define(&b, data()).unwrap();
     assert!(Rc::ptr_eq(&child, store.layout()));
     store.remove(&a).unwrap();
-    assert!(store.layout.parent.is_none());
+    assert!(store.layout.parent().is_none());
     assert_eq!(store.keys(), [b]);
 }
 
@@ -191,7 +191,7 @@ fn dead_children_remove_their_small_and_hashed_edges() {
                 .unwrap();
         }
         owner.0.retained.borrow_mut().nodes.clear();
-        assert!(owner.0.root.transitions.borrow().is_empty());
+        assert!(owner.0.root.transitions_empty());
     }
 }
 

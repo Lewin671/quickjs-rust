@@ -78,6 +78,24 @@ impl CacheData {
             NamedTarget::Set(s) => s
                 .object_ref()
                 .with_named_mut(NamedStore::materialize_layout),
+            NamedTarget::Array(a)
+                if !resolution.inherited
+                    && matches!(
+                        resolution.probe,
+                        Probe::Data { .. } | Probe::Accessor { .. }
+                    ) =>
+            {
+                a.with_named_mut(NamedStore::materialize_layout);
+            }
+            NamedTarget::Function(f)
+                if !resolution.inherited
+                    && matches!(
+                        resolution.probe,
+                        Probe::Data { .. } | Probe::Accessor { .. }
+                    ) =>
+            {
+                f.with_named_mut(NamedStore::materialize_layout);
+            }
             _ => {}
         }
         let Some(version) = target.version() else {

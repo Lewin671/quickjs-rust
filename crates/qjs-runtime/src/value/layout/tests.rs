@@ -127,7 +127,7 @@ fn dictionary_churn_has_no_tombstones_and_invalidates_slots() {
         assert_eq!(store.values.len(), 2);
     }
     assert!(store.layout.dictionary);
-    assert!(store.layout.transitions.borrow().is_empty());
+    assert!(store.layout.transitions_empty());
     assert_eq!(store.keys(), [a, b]);
 }
 
@@ -177,9 +177,7 @@ fn live_shapes_exceed_cache_bound_and_keep_all_edges() {
             owner
                 .0
                 .root
-                .transitions
-                .borrow()
-                .get(Transition::Append {
+                .transition(Transition::Append {
                     key: key.id(),
                     attrs: Attributes::of(&data(0.0))
                 })
@@ -360,7 +358,10 @@ fn dictionary_order_exhaustion_compacts_live_order_without_changing_slots() {
         store.define(key, data(n as f64)).unwrap();
     }
     store.remove(&keys[60]).unwrap().unwrap();
-    Rc::get_mut(&mut store.layout).unwrap().next_order = u32::MAX;
+    Rc::get_mut(&mut store.layout)
+        .unwrap()
+        .private_data()
+        .next_order = u32::MAX;
     let fresh = owner.domain().intern("fresh");
     store.define(&fresh, data(1000.0)).unwrap();
     let expected: Vec<_> = keys

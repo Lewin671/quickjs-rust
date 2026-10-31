@@ -187,7 +187,19 @@ impl Drop for PrototypeState {
 
 impl Layout {
     pub(super) fn root_shape(layout: &Rc<Self>) -> &Rc<Self> {
-        layout.root.as_ref().unwrap_or(layout)
+        if let Some(root) = layout.known_root() {
+            return root;
+        }
+        if layout.len == 0 && !layout.transient {
+            return layout;
+        }
+        let prototype = layout.prototype.as_ref().and_then(WeakPrototype::upgrade);
+        if layout.prototype.is_some() && prototype.is_none() {
+            return layout;
+        }
+        layout.links().root.get_or_init(|| {
+            PropertyOwner::new(layout.domain.clone()).root_for(prototype.as_ref(), layout.flavor)
+        })
     }
     pub(crate) fn matches_prototype(&self, prototype: Option<&Prototype>, flavor: u16) -> bool {
         !self.deferred_seed
@@ -227,6 +239,31 @@ impl PropertyOwner {
         self.0.seeds.borrow_mut().insert(flavor, seed.clone());
         seed
     }
+    pub(super) fn write_root(&self, prototype: Option<&Prototype>, flavor: u16) -> Rc<Layout> {
+        if let Some(root) = self.cached_root(prototype, flavor) {
+            return root;
+        }
+        let budget = self.0.root.budget.clone();
+        budget.add(size_of::<Layout>());
+        Rc::new(Layout {
+            budget,
+            domain: self.domain().clone(),
+            owner: Rc::downgrade(&self.0),
+            data: self.0.root.data.clone(),
+            len: 0,
+            links: OnceCell::new(),
+            dictionary: false,
+            epoch: std::cell::Cell::new(0),
+            deferred_seed: false,
+            transient: true,
+            edits: 0,
+            prototype: prototype.map(WeakPrototype::new),
+            flavor,
+            capacity_hint: std::cell::Cell::new(0),
+            append_misses: std::cell::Cell::new(0),
+        })
+    }
+
     pub(super) fn root_for(&self, prototype: Option<&Prototype>, flavor: u16) -> Rc<Layout> {
         if prototype.is_none() && flavor == 0 {
             return self.0.root.clone();
@@ -244,17 +281,13 @@ impl PropertyOwner {
             owner: Rc::downgrade(&self.0),
             data: self.0.root.data.clone(),
             len: 0,
-            parent: None,
-            incoming: None,
+            links: OnceCell::new(),
             dictionary: false,
             epoch: std::cell::Cell::new(0),
             deferred_seed: false,
+            transient: false,
             edits: 0,
-            next_order: 0,
-            transitions: RefCell::default(),
-            root: None,
             prototype: prototype.map(WeakPrototype::new),
-            compact_prototype: RefCell::default(),
             flavor,
             capacity_hint: std::cell::Cell::new(0),
             append_misses: std::cell::Cell::new(0),
@@ -292,11 +325,11 @@ impl NamedStore {
     ) -> Option<Rc<Prototype>> {
         let prototype = prototype?;
         let root = Layout::root_shape(layout);
-        if let Some(edge) = root.compact_prototype.borrow().upgrade() {
+        if let Some(edge) = root.links().compact_prototype.borrow().upgrade() {
             return Some(edge);
         }
         let edge = Rc::new(prototype);
-        *root.compact_prototype.borrow_mut() = Rc::downgrade(&edge);
+        *root.links().compact_prototype.borrow_mut() = Rc::downgrade(&edge);
         Some(edge)
     }
     fn deferred(&self) -> bool {
@@ -304,27 +337,41 @@ impl NamedStore {
     }
     /// An empty seed carries no cacheable prototype identity until admission.
     pub(super) fn guard_layout(&self) -> &Rc<Layout> {
-        if !self.deferred() {
+        if !self.needs_publication() {
             return &self.layout;
         }
         self.cold.get().guard.get_or_init(|| {
-            PropertyOwner::new(self.domain().clone())
-                .root_for(self.prototype.as_ref(), self.layout.flavor)
+            let owner = PropertyOwner::new(self.domain().clone());
+            let mut next = owner.root_for(self.prototype.as_ref(), self.layout.flavor);
+            for (key, entry) in self.layout.keys().iter().zip(self.layout.entries().iter()) {
+                let proof = next.probe(key.id());
+                next = next.append(key, entry.attrs, proof);
+            }
+            next
         })
     }
     pub(super) fn matched_layout(&self) -> Option<&Rc<Layout>> {
-        if self.deferred() {
+        if self.needs_publication() {
             self.cold.guard()
         } else {
             Some(&self.layout)
         }
     }
-    /// Publish an already-issued guard without changing its identity.
+    pub(super) fn needs_publication(&self) -> bool {
+        self.layout.deferred_seed || (self.layout.transient && !self.layout.dictionary)
+    }
+    /// Publish observed metadata without changing properties or their slots.
     pub(crate) fn materialize_layout(&mut self) {
+        if self.needs_publication() {
+            self.layout = self.guard_layout().clone();
+            self.cold.clear_guard();
+        }
+    }
+    pub(super) fn materialize_write_layout(&mut self) {
         if self.deferred() {
             self.layout = self.cold.guard().cloned().unwrap_or_else(|| {
                 PropertyOwner::new(self.domain().clone())
-                    .root_for(self.prototype.as_ref(), self.layout.flavor)
+                    .write_root(self.prototype.as_ref(), self.layout.flavor)
             });
             self.cold.clear_guard();
         }
@@ -387,7 +434,7 @@ impl NamedStore {
             self.set_epoch(0);
         } else if self.layout.dictionary {
             let mut next = self.layout.copied(true);
-            next.root = Some(root.clone());
+            next.set_root(root.clone());
             next.prototype = root.prototype.clone();
             next.flavor = flavor;
             self.layout = Rc::new(next);

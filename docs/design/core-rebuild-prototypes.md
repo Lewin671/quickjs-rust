@@ -10,6 +10,11 @@ neutral seed has a separate identity from every semantic root, including the
 null-prototype root; it is never issued as a guard. Published guards compare
 the direct layout identity first, without consulting cold metadata on a hit. Existing roots are
 reused at construction; newly demanded roots share the empty descriptor buffer.
+Unobserved named writes use transient bound nodes without empty roots or retained
+transient prefixes. Before guard/template observation, publication rebuilds the
+canonical prototype/flavor transition path without copying values. Structural
+edits clear any pending publication guard. Tiny key/attribute buffers are weakly
+interned by sequence across prototypes; only bound layouts guard inheritance.
 IC admission publishes an ordinary receiver's deferred root into its direct
 layout field once, preserving an already-issued guard identity.
 Array/function empty seeds retain their compact shared edge representation,

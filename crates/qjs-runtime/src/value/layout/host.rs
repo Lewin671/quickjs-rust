@@ -140,7 +140,7 @@ impl NamedStore {
     pub(crate) fn transform_descriptors(&mut self, frozen: bool) {
         let source = self.layout.clone();
         let label = Transition::Integrity { frozen };
-        if let Some(next) = source.transitions.borrow().get(label) {
+        if let Some(next) = source.transition(label) {
             crate::diagnostics::count!(property_transition_hits);
             self.invalidate_dependencies();
             self.layout = next;
@@ -166,8 +166,7 @@ impl NamedStore {
             entry.attrs = change(entry.attrs);
         }
         if !source.dictionary {
-            next.parent = Some(source.clone());
-            next.incoming = Some(label);
+            next.set_parent(source.clone(), label);
         }
         crate::diagnostics::count!(property_transition_misses);
         crate::diagnostics::count!(property_shape_nodes_created);

@@ -98,7 +98,7 @@ impl DataSequence {
             }
             let mut prefix: &Rc<Layout> = layout;
             while prefix.len > values.len() {
-                prefix = prefix.parent.as_ref().expect("append-only prediction");
+                prefix = prefix.parent().expect("append-only prediction");
             }
             self.phase = Phase::Generic(NamedStore::from_slot_parts(
                 prefix.clone(),
@@ -134,7 +134,7 @@ impl DataSequence {
                 accessors,
             } => {
                 while layout.len > values.len() {
-                    layout = layout.parent.as_ref().expect("prefix").clone();
+                    layout = layout.parent().expect("prefix").clone();
                 }
                 NamedStore::from_slot_parts(layout, values, accessors)
             }

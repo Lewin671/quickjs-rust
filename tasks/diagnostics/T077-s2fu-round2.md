@@ -1,11 +1,11 @@
 # T077 S2 follow-up, lead feedback round 2
 
 - Status: active; checked clean branch at `3c6bec4e`; executing A, then B, C, D.
-- Implementation: A present: direct own guards, private-layout epochs and inline inherited constants; B–D pending.
+- Implementation: A/B present: direct guards/private-layout epochs, 80-byte bound nodes, shared tiny metadata and transient write paths; C/D pending.
 - Verified at: A increment on `3c6bec4e` passes 2,507 runtime tests and the fast gate, including 65 selected Test262 cases; iMac lane measurements pending.
 - Evidence: this record; lead jobs `20261031T083411Z-t077-s2fu-public86` and `20261031T083411Z-t077-s2fu-rss15`.
 - Unresolved: all round-2 acceptance gates.
-- Next action: remove A's hot-path overhead and measure public86 before B.
+- Next action: measure the B candidate and finish C/D; the final per-lane A target remains unchanged.
 
 ## Authority and ordered scope
 
@@ -56,3 +56,61 @@ Move publication to the missing-key define branch; pure missing probes need no
 root either. Empty seeds and semantic roots share the untouched empty ID index,
 so the exclusive miss proof remains valid. The new test proves a missing probe
 allocates/publishes nothing and a subsequent define still publishes correctly.
+
+A2 public86 job `20261031T102438Z-t077-s2fu-r2-a2-public86`, `70b6efbf`:
+development 1.001942/1.003463; external 0.994150/0.999976;
+broad 0.984990/0.999618; sentinel 0.979273/0.996129 (wall/instructions).
+Counter job `20261031T102742Z-t077-s2fu-r2-a2-counters` uses the original public
+argv and instrumented builds only, with identical stdout. In diff, base/head
+shape creations are 125,800/647,782; transition hits 758,549/236,595; retained
+nodes 37/1; block allocations 15,683,620/17,704,850. The remaining development
+cost includes metadata churn/cache-budget pressure, not just hit guards.
+A's development limit remains open; proceed to B's structural metadata repair,
+then require every final lane to meet the unchanged A target.
+
+## B target architecture and migration
+
+Keep the 64-byte NamedStore and 96-byte ordinary payload. Reduce each bound
+Layout to an 80-byte hot header: domain/budget/owner, property-data handle,
+length/version/prototype/flavor flags, and one optional cold pointer. Move
+parent/incoming/root links, transition tables and compact-edge memos to cold
+metadata. Share prototype-independent zero/one/two-property metadata by leased
+KeyId/descriptor sequence within the owner; no text/source recognition. Tiny
+metadata probes linearly; allocate a hash index only past the tiny threshold.
+
+Do not mint a per-prototype empty root just to write the first property.
+Unobserved writes use a transient prototype-bound node; append nodes do not
+retain their previous transient nodes. Own-key data is shared independently
+of the prototype, while a bound layout still includes its exact prototype and
+flavor. Observation/IC admission publishes the canonical root/transition path
+before exposing guards or reusable constructor metadata. Private dictionary
+versions and all write barriers remain unchanged. Cold guards protect a
+version exposed before publication. Store sites that are disabled or already
+megamorphic must not create unused before-write versions.
+
+Stages: compact the header/cold fields; add tiny data sharing/linear indexes;
+add transient binding and canonical publication; test sharing, mutation,
+prototype separation and cache admission; measure the three owned-child
+patterns plus mem1..mem7 before committing B's final candidate.
+
+## B implementation and preliminary check
+
+The header is statically asserted at 80 bytes (named/ordinary headers unchanged).
+Cold links are allocated only for observed/canonical graph paths. Tiny leased
+buffers are weakly interned across prototypes; linear probes avoid the ID-index
+allocation through two entries. Transient appends retain no previous binding.
+IC-disabled/megamorphic stores no longer capture unused before-write versions.
+Root/template publication rebuilds only metadata, preserving values and slot
+order; every structural edit clears a pending publication guard. Own-slot
+admission also publishes already-Full array/function storage without forcing
+empty authorities to allocate. These paths have focused tests.
+
+Preliminary native single-run RSS (pre-S2 / B, decimal MB): owned-chain
+184.37/216.25; owned-fan 83.44/91.13; reconstructed mx2 95.17/110.84.
+The mx2 source was not supplied; a half-million one-field chain reproduces the
+round-1 reported footprint (639 MB here versus lead ~636 MB), so that is the
+explicit provisional gate. An additional half-million two-field control is
+also retained (95.21/110.87 MB). Exact source clarification remains requested.
+All meet <=1.25 in this preliminary check; final native/x86 pairs remain due.
+
+B fast gate passes 2,514 runtime tests and 65 selected Test262 cases; clippy passes. The 80-byte header assertion compiles on the native target.

@@ -33,6 +33,16 @@ pub(super) struct IdProbe {
     pub(super) position: Option<usize>,
 }
 
+impl IdProbe {
+    pub(super) fn linear(key: KeyId, position: Option<usize>) -> Self {
+        Self {
+            key,
+            bucket: position.unwrap_or(0),
+            capacity: 0,
+            position,
+        }
+    }
+}
 impl IdIndex {
     pub(super) fn new() -> Self {
         Self {
@@ -43,6 +53,16 @@ impl IdIndex {
     }
     pub(super) fn bytes(&self) -> usize {
         self.buckets.capacity() * size_of::<Bucket>()
+    }
+    pub(super) fn unallocated() -> Self {
+        Self {
+            buckets: Vec::new(),
+            len: 0,
+            tombstones: 0,
+        }
+    }
+    pub(super) fn allocated(&self) -> bool {
+        !self.buckets.is_empty()
     }
     fn bucket(key: KeyId, capacity: usize) -> usize {
         (key.get().wrapping_mul(0x9e37_79b1) >> (32 - capacity.trailing_zeros().min(32))) as usize
@@ -86,10 +106,6 @@ impl IdIndex {
     pub(super) fn get(&self, key: KeyId) -> Option<usize> {
         self.probe(key).position
     }
-    /// Debug reconstruction is outside the operation's diagnostic work count.
-    pub(super) fn verify_position(&self, key: KeyId) -> Option<usize> {
-        self.probe_uncounted(key).position
-    }
     pub(super) fn insert_at(&mut self, proof: IdProbe, position: usize) {
         assert_eq!(proof.capacity, self.buckets.len(), "stale index proof");
         assert!(proof.position.is_none(), "insertion requires a miss proof");
@@ -112,6 +128,10 @@ impl IdIndex {
         }
     }
     pub(super) fn remove_at(&mut self, proof: IdProbe) {
+        if !self.allocated() {
+            debug_assert_eq!(proof.capacity, 0);
+            return;
+        }
         assert_eq!(proof.capacity, self.buckets.len(), "stale index proof");
         let position = proof.position.expect("removal requires a hit proof");
         let entry = &mut self.buckets[proof.bucket];
@@ -125,6 +145,9 @@ impl IdIndex {
         self.tombstones += 1;
     }
     pub(super) fn set_position(&mut self, key: KeyId, position: usize) {
+        if !self.allocated() {
+            return;
+        }
         let proof = self.probe(key);
         assert!(
             proof.position.is_some(),

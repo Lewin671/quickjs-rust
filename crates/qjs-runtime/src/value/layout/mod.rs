@@ -25,8 +25,11 @@ mod index;
 mod storage;
 mod string_wrapper;
 pub(crate) use string_wrapper::StringWrapperLayout;
+mod tiny;
 mod transitions;
 use index::{IdIndex, IdProbe};
+mod links;
+use links::LayoutLinks;
 mod lazy;
 mod prototype;
 mod sequence;
@@ -47,6 +50,7 @@ mod tests;
 
 #[cfg(target_pointer_width = "64")]
 const _: () = {
+    assert!(std::mem::size_of::<Layout>() == 80);
     assert!(std::mem::size_of::<KeyId>() == 4);
     assert!(std::mem::size_of::<KeyLease>() == 8);
     assert!(std::mem::size_of::<ShapeEntry>() == 16);
@@ -105,18 +109,14 @@ pub(crate) struct Layout {
     domain: AtomDomain,
     owner: Weak<OwnerState>,
     data: Rc<RefCell<storage::LayoutData>>,
+    links: OnceCell<Box<LayoutLinks>>,
     len: usize,
-    parent: Option<Rc<Layout>>,
-    incoming: Option<Transition>,
     dictionary: bool,
     epoch: std::cell::Cell<u64>,
     deferred_seed: bool,
+    transient: bool,
     edits: u8,
-    next_order: u32,
-    transitions: RefCell<transitions::Transitions>,
-    root: Option<Rc<Layout>>,
     prototype: Option<WeakPrototype>,
-    compact_prototype: RefCell<Weak<crate::Prototype>>,
     flavor: u16,
     capacity_hint: std::cell::Cell<u8>,
     append_misses: std::cell::Cell<u8>,
@@ -126,6 +126,8 @@ pub(crate) struct OwnerState {
     root: Rc<Layout>,
     roots: RefCell<crate::value::name_hash::NameMap<(u8, usize, u16), Weak<Layout>>>,
     seeds: RefCell<crate::value::name_hash::NameMap<u16, Rc<Layout>>>,
+    tiny_data:
+        RefCell<crate::value::name_hash::NameMap<[u64; 2], Weak<RefCell<storage::LayoutData>>>>,
     retained: RefCell<transitions::Retention>,
 }
 
@@ -161,23 +163,20 @@ impl PropertyOwner {
                 owner: owner.clone(),
                 data: Rc::new(RefCell::new(storage::LayoutData::new(budget.clone()))),
                 len: 0,
-                parent: None,
-                incoming: None,
+                links: OnceCell::new(),
                 dictionary: false,
                 epoch: std::cell::Cell::new(0),
                 deferred_seed: false,
+                transient: false,
                 edits: 0,
-                next_order: 0,
-                transitions: RefCell::new(transitions::Transitions::default()),
-                root: None,
                 prototype: None,
-                compact_prototype: RefCell::default(),
                 flavor: 0,
                 capacity_hint: std::cell::Cell::new(0),
                 append_misses: std::cell::Cell::new(0),
             }),
             roots: RefCell::default(),
             seeds: RefCell::default(),
+            tiny_data: RefCell::default(),
             retained: RefCell::new(transitions::Retention::default()),
         });
         *attachment.shape_owner().borrow_mut() = Rc::downgrade(&owner);
@@ -358,7 +357,7 @@ impl NamedStore {
                 assert_eq!(entry.key, key.id());
                 assert!(key.belongs_to(&layout.domain));
                 assert_eq!(entry.slot as usize, position);
-                assert!(entry.order < layout.next_order);
+                assert!(entry.order < layout.next_order());
                 assert!(orders.insert(entry.order));
                 assert_eq!(entry.reserved, 0);
                 assert_eq!(layout.verify_position(entry.key), Some(position));
@@ -377,7 +376,7 @@ impl NamedStore {
             }
             assert_eq!(self.cold.as_deref().map_or(0, HashMap::len), accessor_count);
             if layout.dictionary {
-                assert!(layout.transitions.borrow().is_empty());
+                assert!(layout.transitions_empty());
             }
         }
     }

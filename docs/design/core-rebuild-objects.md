@@ -45,7 +45,7 @@ slice/key lease share a 24-byte payload, with no extra allocation. No receiver/d
 | Ordinary hot payload | `named:RefCell<NamedStore>` 72, tagged cold pointer 16, index count 4, packed flags/edit count/padding 4 = 96 bytes, excluding RC header |
 | Array hot/cold payload | 56-byte header: dense Vec RefCell 32, packed length/flags 8, scoped seed owner 8, cold pointer 8. Optional hole payload 40: holes RefCell 32 and lazy named pointer 8; a separate NamedStore RefCell 72 is created only on named/prototype mutation. Realm shares the default empty seed; probes allocate nothing. |
 | `Slot` | One owning `Value`: initially 16 bytes, S5 target 8; TDZ/hole state separate from ordinary data |
-| `Layout` | Immutable shape or unique dictionary; ID/domain, owned entries/key leases and one key-ID lookup index; transition cache is cold |
+| `Layout` | 80-byte prototype-bound header; shared leased property buffer; parent/root/transition links cold. Tiny buffers are interned independently of prototypes; linear lookup through width two, then one ID index. |
 | `Dictionary` | Private identity + `u64` structural version; key-ID index, attributes/order and slot allocation are its sole authority |
 
 Compile-time assertions verify these sizes on aarch64/x86_64 macOS; a layout

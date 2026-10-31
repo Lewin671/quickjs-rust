@@ -199,7 +199,7 @@ pub(super) fn set_prop_named(
             .find(key)
             .unwrap_or_else(|| env.realm().atoms().intern(key));
         let proven = creation.is_some_and(|creation| creation.permits(object_ref));
-        let before = cache.map(|_| object_ref.with_named(|s| s.version()));
+        let before = cache.and_then(|cache| cache.before_write_version(object_ref));
         let write = object_ref.write_or_create_data_key(&lease, &value, proven);
         match write.result {
             OwnDataPropertyWrite::Written => {

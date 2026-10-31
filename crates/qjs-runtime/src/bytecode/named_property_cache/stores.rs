@@ -8,6 +8,17 @@ pub(super) struct AddEntry {
     validity: Option<StructuralDependency>,
 }
 impl CacheData {
+    /// Snapshot only when this site can use the old-layout append proof.
+    pub(in crate::bytecode) fn before_write_version(
+        &self,
+        object: &ObjectRef,
+    ) -> Option<LayoutVersion> {
+        if matches!(self.state.borrow().entries, Entries::Mega) {
+            return None;
+        }
+        object.with_named(|store| store.domain().ic_policy().enabled.then(|| store.version()))
+    }
+
     #[cold]
     #[inline(never)]
     pub(in crate::bytecode) fn record_data_slot(

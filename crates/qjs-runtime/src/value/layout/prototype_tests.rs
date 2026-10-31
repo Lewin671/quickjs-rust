@@ -259,3 +259,102 @@ fn a_missing_exclusive_probe_does_not_publish_a_deferred_root() {
     assert!(!store.deferred());
     assert_eq!(store.get(&key).unwrap().unwrap().value, Value::Null);
 }
+
+#[test]
+fn unobserved_owned_chains_keep_one_small_binding_and_shared_fields() {
+    let domain = AtomDomain::new();
+    let owner = PropertyOwner::new(domain.clone());
+    let mut head = object(&domain, None);
+    for i in 0..1000 {
+        let next = object(&domain, Some(head.clone()));
+        next.set("v".into(), Value::Number(i as f64));
+        next.with_named(|s| {
+            assert!(s.layout.transient);
+            assert!(s.layout.links.get().is_none());
+            assert!(s.cold.is_unallocated());
+            assert!(!s.layout.data.borrow().index.allocated());
+            if i > 0 {
+                head.with_named(|p| assert!(Rc::ptr_eq(&s.layout.data, &p.layout.data)));
+            }
+        });
+        head = next;
+    }
+    assert!(owner.0.roots.borrow().is_empty());
+    assert_eq!(owner.0.tiny_data.borrow().len(), 1);
+    assert_eq!(std::mem::size_of::<Layout>(), 80);
+}
+
+#[test]
+fn equal_tiny_fields_share_data_but_never_merge_prototype_guards() {
+    let domain = AtomDomain::new();
+    let _owner = PropertyOwner::new(domain.clone());
+    let a = object(&domain, Some(object(&domain, None)));
+    let b = object(&domain, Some(object(&domain, None)));
+    for (o, n) in [(&a, 1.0), (&b, 9.0)] {
+        o.set("a".into(), Value::Number(n));
+        o.set("b".into(), Value::Number(n + 1.0));
+    }
+    a.with_named(|s| {
+        b.with_named(|t| {
+            assert!(Rc::ptr_eq(&s.layout.data, &t.layout.data));
+            assert!(!Rc::ptr_eq(&s.layout, &t.layout));
+            assert!(!s.layout.data.borrow().index.allocated());
+            assert!(!s.matches_version(&t.version()));
+        })
+    });
+    assert_eq!(a.get("a"), Some(Value::Number(1.0)));
+    assert_eq!(b.get("a"), Some(Value::Number(9.0)));
+}
+
+#[test]
+fn observing_equal_transient_bindings_publishes_the_canonical_path() {
+    let domain = AtomDomain::new();
+    let _owner = PropertyOwner::new(domain.clone());
+    let parent = object(&domain, None);
+    let a = object(&domain, Some(parent.clone()));
+    let b = object(&domain, Some(parent));
+    a.set("x".into(), Value::Number(2.0));
+    b.set("x".into(), Value::Number(3.0));
+    for o in [&a, &b] {
+        o.with_named_mut(NamedStore::materialize_layout);
+    }
+    a.with_named(|s| {
+        b.with_named(|t| {
+            assert!(Rc::ptr_eq(&s.layout, &t.layout));
+            assert!(!s.layout.transient);
+        })
+    });
+    assert_eq!(a.get("x"), Some(Value::Number(2.0)));
+    assert_eq!(b.get("x"), Some(Value::Number(3.0)));
+}
+
+#[test]
+fn transient_publication_is_refreshed_after_addition_and_reconfiguration() {
+    let domain = AtomDomain::new();
+    let _owner = PropertyOwner::new(domain.clone());
+    let mut store = NamedStore::empty_with_prototype(
+        &domain,
+        Some(Prototype::Object(object(&domain, None))),
+        0,
+    );
+    let a = domain.intern("a");
+    let b = domain.intern("b");
+    store
+        .define(&a, Property::enumerable(Value::Number(1.0)))
+        .unwrap();
+    let old = store.version();
+    store
+        .define(&b, Property::enumerable(Value::Number(2.0)))
+        .unwrap();
+    assert!(!store.matches_version(&old));
+    let before_attributes = store.version();
+    store
+        .define(&a, Property::data(Value::Number(4.0), false, false, true))
+        .unwrap();
+    assert!(!store.matches_version(&before_attributes));
+    store.materialize_layout();
+    assert_eq!(store.len(), 2);
+    let descriptor = store.get(&a).unwrap().unwrap();
+    assert_eq!(descriptor.value, Value::Number(4.0));
+    assert!(!descriptor.writable && !descriptor.enumerable);
+}

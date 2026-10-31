@@ -3,7 +3,10 @@
 Transition label is `(KeyId, attributes, descriptor kind)`; a hit allocates no
 shape, interns no key and copies no field list. Tail misses share an append-only descriptor/key buffer and incremental ID
 index with prefix shapes; each shape limits lookup/enumeration to its prefix.
-Tail growth is amortized O(1); a branch copies its prefix once. Private edits
+Tail growth is amortized O(1); a branch copies its prefix once. Zero/one/two-key
+buffers use linear probes without a hash allocation and weak sequence interning
+shares them across prototype-bound layouts. Unobserved transient bindings omit
+parent links; observed bindings publish the canonical transition path. Private edits
 detach before mutation. The empty root never retains a nonempty buffer. Shared shapes apply equally to literals,
 constructor stores, class fields, JSON and host creation. No whole-vector hash
 or comparison on a hit. Duplicate keys preserve first insertion order and last

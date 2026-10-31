@@ -30,6 +30,7 @@ impl AppendRecipe {
             return false;
         }
         store.invalidate_dependencies();
+        store.cold.clear_guard();
         store.values.push(value);
         store.layout = self.after.clone();
         store.set_epoch(0);
@@ -42,9 +43,9 @@ impl NamedStore {
         if !before.is_shared()
             || self.layout.dictionary
             || slot + 1 != self.len()
-            || !before.matches_identity(self.layout.parent.as_ref()?)
+            || !before.matches_identity(self.layout.parent()?)
             || !matches!(
-                self.layout.incoming,
+                self.layout.incoming(),
                 Some(Transition::Append {
                     attrs: Attributes(7),
                     ..

@@ -21,6 +21,7 @@ impl AppendBatchRecipe {
             return None;
         }
         store.invalidate_dependencies();
+        store.cold.clear_guard();
         store.values.extend(values);
         store.layout = self.after.clone();
         store.set_epoch(0);
@@ -47,7 +48,7 @@ impl NamedStore {
         let mut prefix = &self.layout;
         while prefix.len > start {
             if !matches!(
-                prefix.incoming,
+                prefix.incoming(),
                 Some(Transition::Append {
                     attrs: Attributes(7),
                     ..
@@ -55,7 +56,7 @@ impl NamedStore {
             ) {
                 return None;
             }
-            prefix = prefix.parent.as_ref()?;
+            prefix = prefix.parent()?;
         }
         if prefix.len != start || !before.matches_identity(prefix) {
             return None;

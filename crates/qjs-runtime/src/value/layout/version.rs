@@ -63,7 +63,7 @@ impl NamedStore {
     #[inline(always)]
     pub(crate) fn matches_version(&self, expected: &LayoutVersion) -> bool {
         self.matches_own_version(expected)
-            || (self.layout.deferred_seed
+            || (self.needs_publication()
                 && self
                     .cold
                     .guard()
