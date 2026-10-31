@@ -98,3 +98,11 @@ fn with_call_receiver_and_reference_lifetimes_match_ng() {
         "144:3:1:true",
     );
 }
+
+#[test]
+fn global_effects_remain_live_without_frame_value_projections() {
+    result(
+        include_str!("../../../../../tests/fixtures/compare-qjs/s3b-scope-global-effects-live.js"),
+        "9:7:1:ReferenceError",
+    );
+}

@@ -151,7 +151,6 @@ impl Vm<'_> {
     fn detach_matching_realm_string(&mut self, name: &str, expected: &crate::JsString) -> bool {
         if self.env.has_module_import(name)
             || self.env.is_immutable_lexical_binding(name)
-            || self.env.has_local_binding(name)
             || self
                 .bytecode
                 .local_slot(name)
@@ -287,12 +286,6 @@ impl Vm<'_> {
             upvalue.set(result.clone());
         }
         self.write_through_module_live_binding(&local_meta.name, result.clone());
-        if local_meta.from_env || self.bytecode.local_is_body_hoist_only(slot) {
-            let name = local_meta.name.clone();
-            if self.env.has_local_binding(&name) {
-                self.env.insert(name, result.clone());
-            }
-        }
         let syncs_global_var = (local_meta.from_env && !local_meta.hoisted)
             || (self.bytecode.global_scope
                 && self.bytecode.local_is_body_hoist_only(slot)
@@ -326,9 +319,6 @@ impl Vm<'_> {
         suffix: &str,
         is_strict: bool,
     ) -> Result<Value, RuntimeError> {
-        if self.env.has_local_binding(name) {
-            return self.append_string_literal_global_via_store(name, suffix, is_strict);
-        }
         {
             // The cell is the sole storage for this binding, so mutating it
             // in place needs no separate cell refresh afterward — unlike the

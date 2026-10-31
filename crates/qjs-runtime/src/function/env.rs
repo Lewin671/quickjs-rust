@@ -1,11 +1,10 @@
 //! Temporary service ABI over typed creation/activation state.
 //! Declaratives live in bytecode slots/shared cells; realm ownership is in
-//! context/realm.rs. FrameBindings remains ABI compatibility for
-//! the atomic Context cut; effect/eval views retain typed leases, not values.
+//! context/realm.rs. Effect/eval views retain typed leases, not values;
+//! no compatibility frame value container remains before the Context cut.
 //! Storage borrows must end before getters, setters, traps or other JS callbacks.
 
 use std::{
-    cell::RefCell,
     collections::{HashMap, HashSet},
     rc::Rc,
 };
@@ -20,172 +19,15 @@ use crate::{
 
 const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
 
-#[derive(Clone)]
-enum FrameBindingValue {
-    Direct(Value),
-    Cell(BindingCell),
-}
-
-impl FrameBindingValue {
-    fn get(&self) -> Value {
-        match self {
-            Self::Direct(value) => value.clone(),
-            Self::Cell(value) => value.get(),
-        }
-    }
-
-    fn set(&mut self, value: Value) -> Value {
-        match self {
-            Self::Direct(existing) => std::mem::replace(existing, value),
-            Self::Cell(existing) => {
-                let previous = existing.get();
-                existing.set(value);
-                previous
-            }
-        }
-    }
-}
-
-#[derive(Default)]
-struct FrameBindings(RefCell<Vec<(String, FrameBindingValue)>>);
-
-impl Clone for FrameBindings {
-    fn clone(&self) -> Self {
-        Self(RefCell::new(self.0.borrow().clone()))
-    }
-}
-
-impl FrameBindings {
-    fn with_capacity(capacity: usize) -> Self {
-        Self(RefCell::new(Vec::with_capacity(capacity)))
-    }
-
-    fn from_values(values: HashMap<String, Value>) -> Self {
-        Self(RefCell::new(
-            values
-                .into_iter()
-                .map(|(name, value)| (name, FrameBindingValue::Direct(value)))
-                .collect(),
-        ))
-    }
-
-    fn get(&self, name: &str) -> Option<Value> {
-        self.0
-            .borrow()
-            .iter()
-            .rev()
-            .find(|(candidate, _)| candidate == name)
-            .map(|(_, value)| value.get())
-    }
-
-    fn cell(&self, name: &str) -> Option<BindingCell> {
-        let mut bindings = self.0.borrow_mut();
-        let index = bindings
-            .iter()
-            .rposition(|(candidate, _)| candidate == name)?;
-        match &mut bindings[index].1 {
-            FrameBindingValue::Direct(value) => {
-                let cell = BindingCell::new(value.clone());
-                // Replace only after cloning the direct value so promotion
-                // preserves the exact binding value and future identity.
-                let promoted = cell.clone();
-                bindings[index].1 = FrameBindingValue::Cell(cell);
-                Some(promoted)
-            }
-            FrameBindingValue::Cell(value) => Some(value.clone()),
-        }
-    }
-
-    fn is_empty(&self) -> bool {
-        self.0.borrow().is_empty()
-    }
-
-    fn contains_key(&self, name: &str) -> bool {
-        self.0
-            .borrow()
-            .iter()
-            .any(|(candidate, _)| candidate == name)
-    }
-
-    fn insert(&self, name: String, value: Value) -> Option<Value> {
-        let mut bindings = self.0.borrow_mut();
-        if let Some((_, existing)) = bindings
-            .iter_mut()
-            .rev()
-            .find(|(candidate, _)| candidate == &name)
-        {
-            return Some(existing.set(value));
-        }
-        bindings.push((name, FrameBindingValue::Direct(value)));
-        None
-    }
-
-    fn insert_cell(&self, name: String, value: BindingCell) {
-        let mut bindings = self.0.borrow_mut();
-        if let Some((_, existing)) = bindings
-            .iter_mut()
-            .rev()
-            .find(|(candidate, _)| candidate == &name)
-        {
-            *existing = FrameBindingValue::Cell(value);
-            return;
-        }
-        bindings.push((name, FrameBindingValue::Cell(value)));
-    }
-
-    fn push(&self, name: String, value: Value) {
-        self.0
-            .borrow_mut()
-            .push((name, FrameBindingValue::Direct(value)));
-    }
-
-    fn set(&self, name: &str, value: Value) -> bool {
-        let mut bindings = self.0.borrow_mut();
-        let Some((_, existing)) = bindings
-            .iter_mut()
-            .rev()
-            .find(|(candidate, _)| candidate == name)
-        else {
-            return false;
-        };
-        existing.set(value);
-        true
-    }
-
-    fn remove(&self, name: &str) -> Option<Value> {
-        let mut bindings = self.0.borrow_mut();
-        let index = bindings
-            .iter()
-            .rposition(|(candidate, _)| candidate == name)?;
-        Some(bindings.remove(index).1.get())
-    }
-
-    fn replace_value(&self, expected: &Value, replacement: &Value) {
-        for (_, value) in self.0.borrow_mut().iter_mut() {
-            if value.get() == *expected {
-                value.set(replacement.clone());
-            }
-        }
-    }
-
-    fn snapshot(&self) -> HashMap<String, Value> {
-        self.0
-            .borrow()
-            .iter()
-            .map(|(name, value)| (name.clone(), value.get()))
-            .collect()
-    }
-}
-
 /// Cross-call runtime context: shared realm metadata plus a small frame view.
 ///
 /// Bytecode lexical bindings remain in VM slots/upvalue cells. Cloning this
-/// value shares typed scope/realm ownership and the remaining arguments cell.
-/// The borrowed Context cut removes the compatibility frame vector.
+/// value shares typed scope/realm ownership; arguments stays in indexed cells.
+/// The borrowed Context cut removes ownership of this temporary service entry.
 #[allow(dead_code)]
 pub(crate) struct CallEnv {
     activation: crate::context::ActivationContext,
-    frame_bindings: FrameBindings,
+
     /// Pending construct target until B5 introduces the borrowed NativeSite.
     construct_target: Option<Value>,
     direct_eval_site: Option<crate::context::DirectEvalSite>,
@@ -200,9 +42,10 @@ pub(crate) struct CallEnv {
 
 impl Clone for CallEnv {
     fn clone(&self) -> Self {
+        crate::diagnostics::count!(call_env_clones);
         Self {
             activation: self.activation.retained_view(),
-            frame_bindings: self.frame_bindings.clone(),
+
             construct_target: self.construct_target.clone(),
             direct_eval_site: self.direct_eval_site,
             global_binding_root: self.global_binding_root,
@@ -220,7 +63,6 @@ impl std::fmt::Debug for CallEnv {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CallEnv")
             .field("realm", &self.activation.creation.realm)
-            .field("frame_bindings", &self.frame_bindings.snapshot())
             .field("catch_bindings", &self.catch_bindings)
             .field("direct_eval_var_conflicts", &self.direct_eval_var_conflicts)
             .field("direct_eval_with_stack", &self.direct_eval_with_stack.len())
@@ -236,9 +78,10 @@ impl CallEnv {
     /// Transitional typed scope/service view; it retains no binding values.
     /// B5 replaces ownership of this view with a mutable Context borrow.
     pub(crate) fn scope_service_view(&self) -> Self {
+        crate::diagnostics::count!(call_env_constructions);
         Self {
             activation: self.activation.retained_view(),
-            frame_bindings: FrameBindings::default(),
+
             construct_target: None,
             direct_eval_site: None,
             global_binding_root: self.global_binding_root,
@@ -271,14 +114,15 @@ impl CallEnv {
     pub(crate) fn function_entry(
         &self,
         creation: Rc<crate::context::CreationContext>,
-        capacity: usize,
+        _capacity: usize,
     ) -> Self {
+        crate::diagnostics::count!(call_env_constructions);
         Self {
             activation: crate::context::ActivationContext::new(
                 creation,
                 crate::context::ExecutionMode::Function,
             ),
-            frame_bindings: FrameBindings::with_capacity(capacity),
+
             construct_target: None,
             direct_eval_site: None,
             global_binding_root: false,
@@ -398,12 +242,13 @@ impl CallEnv {
     }
     /// Builds an environment over `realm` with empty locals.
     pub(crate) fn new(realm: Realm) -> Self {
+        crate::diagnostics::count!(call_env_constructions);
         Self {
             activation: crate::context::ActivationContext::new(
                 crate::context::CreationContext::root(realm),
                 crate::context::ExecutionMode::Script,
             ),
-            frame_bindings: FrameBindings::default(),
+
             construct_target: None,
             direct_eval_site: None,
             global_binding_root: false,
@@ -553,13 +398,6 @@ impl CallEnv {
         Self::new(new_realm(map))
     }
 
-    /// Builds an environment over `realm` with the given frame locals.
-    pub(crate) fn with_locals(realm: Realm, locals: HashMap<String, Value>) -> Self {
-        let mut env = Self::new(realm);
-        env.frame_bindings = FrameBindings::from_values(locals);
-        env
-    }
-
     /// The shared realm cell, for sharing into a new frame or snapshot.
     pub(crate) fn realm(&self) -> &Realm {
         &self.activation.creation.realm
@@ -575,19 +413,17 @@ impl CallEnv {
         self.new_function_frame()
     }
 
-    /// Builds a new ordinary function frame over the same shared realm. Frame
-    /// bindings are inserted directly into the small cell vector by the call
-    /// setup path, avoiding an intermediate name-keyed `HashMap` allocation.
+    /// Builds an ordinary activation over shared creation/realm ownership.
     pub(crate) fn new_function_frame(&self) -> Self {
         self.new_function_frame_with_capacity(0)
     }
 
-    /// Builds a function frame with room for the bindings its call prologue
-    /// will materialize, avoiding repeated small-vector growth on hot calls.
-    pub(crate) fn new_function_frame_with_capacity(&self, capacity: usize) -> Self {
+    /// Temporary owned ABI entry; no binding value container is allocated.
+    pub(crate) fn new_function_frame_with_capacity(&self, _capacity: usize) -> Self {
+        crate::diagnostics::count!(call_env_constructions);
         Self {
             activation: self.activation.fresh_function(),
-            frame_bindings: FrameBindings::with_capacity(capacity),
+
             construct_target: None,
             direct_eval_site: None,
             global_binding_root: false,
@@ -698,7 +534,7 @@ impl CallEnv {
     }
 
     pub(crate) fn has_writable_frame_state(&self) -> bool {
-        !self.frame_bindings.is_empty()
+        false
     }
 
     /// Returns the lexical private-name environment for this frame, if any.
@@ -782,15 +618,6 @@ impl CallEnv {
         self.activation.scopes.cursor = cursor;
     }
 
-    pub(crate) fn remove_frame_binding(&mut self, name: &str) {
-        self.frame_bindings.remove(name);
-    }
-
-    /// This frame's own locals layer, mutably.
-    pub(crate) fn replace_local_value(&self, expected: &Value, replacement: &Value) {
-        self.frame_bindings.replace_value(expected, replacement);
-    }
-
     /// Looks up `name`: frame locals first, then a short realm borrow. Returns
     /// an owned value because a value behind the realm `RefCell` cannot be
     /// handed out by reference.
@@ -798,9 +625,6 @@ impl CallEnv {
         if name == "this"
             && let Some(value) = self.this_compatibility_value()
         {
-            return Some(value);
-        }
-        if let Some(value) = self.frame_bindings.get(name) {
             return Some(value);
         }
         if let Some(value) = self.activation.creation.realm.get_value(name) {
@@ -813,7 +637,7 @@ impl CallEnv {
     /// no frame or deoptimized layer sits above it -- then [`Self::get`] of any
     /// name the table binds, other than `new.target`, is that binding's cell.
     pub(crate) fn realm_read_layer(&self) -> Option<&DynamicBindings> {
-        if !self.frame_bindings.is_empty() || !self.can_cache_realm_globals() {
+        if !self.can_cache_realm_globals() {
             return None;
         }
         Some(self.activation.creation.realm.binding_cells())
@@ -933,7 +757,7 @@ impl CallEnv {
 
     /// True if `name` is bound in either layer.
     pub(crate) fn contains_key(&self, name: &str) -> bool {
-        self.frame_bindings.contains_key(name) || self.activation.creation.realm.contains(name)
+        self.activation.creation.realm.contains(name)
     }
 
     /// Construct dispatch target only. The lexical new.target stays in the
@@ -946,23 +770,6 @@ impl CallEnv {
             Some(value) => self.construct_target.replace(value),
             None => self.construct_target.take(),
         }
-    }
-
-    pub(crate) fn insert(&mut self, name: String, value: Value) -> Option<Value> {
-        self.frame_bindings.insert(name, value)
-    }
-
-    /// Transient root-entry compatibility input; eval declarations use cells.
-    pub(crate) fn insert_frame(&mut self, name: String, value: Value) -> Option<Value> {
-        self.frame_bindings.push(name, value);
-        None
-    }
-
-    /// Installs an existing VM slot cell in this frame view. Native operations
-    /// and callbacks then observe the same binding identity as bytecode, so no
-    /// value snapshot can overwrite a callback's update on return.
-    pub(crate) fn insert_frame_cell(&self, name: String, value: BindingCell) {
-        self.frame_bindings.insert_cell(name, value);
     }
 
     /// Inserts directly into the shared realm cell (builtin install and global
@@ -1069,39 +876,32 @@ impl CallEnv {
         self.activation.creation.realm.contains(name)
     }
 
-    /// Removes a frame-local binding.
-    pub(crate) fn remove(&mut self, name: &str) -> Option<Value> {
-        self.frame_bindings.remove(name)
-    }
-
-    /// Mutates an existing frame-local binding in place, if present.
+    /// Compatibility query for typed receiver metadata only.
     pub(crate) fn get_local(&self, name: &str) -> Option<Value> {
         if name == "this" {
             return self.this_compatibility_value();
         }
-        self.frame_bindings.get(name)
+        None
     }
 
     pub(crate) fn has_frame_binding(&self, name: &str) -> bool {
         if name == "this" {
             return self.activation.call.borrow().owner().is_some();
         }
-        self.frame_bindings.contains_key(name)
+        false
     }
 
     pub(crate) fn has_local_binding(&self, name: &str) -> bool {
         if name == "this" {
             return self.activation.call.borrow().owner().is_some();
         }
-        self.frame_bindings.contains_key(name)
+        false
     }
 
     /// Whether ordinary bytecode locals can use their indexed slots without
     /// consulting any name-addressed compatibility environment.
-    pub(crate) fn slot_is_authoritative(&self, name: &str) -> bool {
-        !self.frame_bindings.contains_key(name)
-            && self.activation.creation.imports().is_empty()
-            && !self.has_module_live_bindings()
+    pub(crate) fn slot_is_authoritative(&self, _name: &str) -> bool {
+        self.activation.creation.imports().is_empty() && !self.has_module_live_bindings()
     }
 
     /// Whether this environment can supply a value for *any* name, which is
@@ -1109,12 +909,10 @@ impl CallEnv {
     /// asked about. A frame with no bindings answers the whole slot mask at
     /// once, rather than one environment query per local.
     pub(crate) fn supplies_no_named_binding(&self) -> bool {
-        self.frame_bindings.is_empty()
-            && matches!(
-                self.activation.creation.global,
-                crate::context::GlobalSelection::Default
-            )
-            && self.activation.scopes.cursor.is_none()
+        matches!(
+            self.activation.creation.global,
+            crate::context::GlobalSelection::Default
+        ) && self.activation.scopes.cursor.is_none()
             && self.activation.creation.imports().is_empty()
             && !self.has_module_live_bindings()
     }
@@ -1123,7 +921,7 @@ impl CallEnv {
         if name == "this" {
             return self.derived_this_cell();
         }
-        self.frame_bindings.cell(name)
+        None
     }
 
     /// Returns the live cell for a binding supplied by the current caller or
@@ -1133,11 +931,7 @@ impl CallEnv {
         if name == "this" {
             return self.derived_this_cell();
         }
-        self.frame_bindings.cell(name)
-    }
-
-    pub(crate) fn set_local(&self, name: &str, value: Value) -> bool {
-        self.frame_bindings.set(name, value)
+        None
     }
 
     /// The implicit binding of one derived activation, never a realm cell.

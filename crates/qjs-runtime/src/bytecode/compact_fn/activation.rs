@@ -165,6 +165,7 @@ fn environment_is_slot_only(env: &CallEnv) -> bool {
 /// module imports, which the caller's environment is already known to have --
 /// leaves the two environments indistinguishable.
 fn shares_caller_environment(function: &Function, bytecode: &Bytecode, env: &CallEnv) -> bool {
+    crate::diagnostics::count!(call_env_equality_proofs);
     // `direct_leaf_function_env` installs the callee's own module host over
     // the one the frame inherited from its parent. When they are the same
     // handle -- which is the ordinary case, since a script's functions all
@@ -322,6 +323,7 @@ fn inline_callee(callee: &Value, env: &CallEnv) -> Option<InlineCallee> {
     {
         return None;
     }
+    crate::diagnostics::count!(call_env_equality_proofs);
     // The parts of `shares_caller_environment` that can change after the
     // function is created, or depend on the caller.
     let host_agrees = match (function.module_host_ref(), env.module_host_ref()) {

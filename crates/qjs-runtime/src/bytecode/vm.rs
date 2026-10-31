@@ -1410,7 +1410,6 @@ impl<'a> Vm<'a> {
         let result =
             crate::function::construct_function_slice(callee.clone(), callee, arguments, &mut env);
         drop(env);
-        self.refresh_realm_backed_locals_from_realm();
         result
     }
 
@@ -1430,35 +1429,6 @@ impl<'a> Vm<'a> {
         let mut env = self.callee_env();
         let arguments = crate::array::array_like_values_with_env(value, context, &mut env)?;
         Ok(arguments)
-    }
-
-    pub(super) fn refresh_realm_backed_locals_from_realm(&mut self) {
-        for position in 0..self.bytecode.binding_plan.sloppy_global_slots.len() {
-            let index = self.bytecode.binding_plan.sloppy_global_slots[position];
-            let Some(name) = self.current.bytecode.local_name_at(index) else {
-                continue;
-            };
-            if !self
-                .sloppy_global_names()
-                .iter()
-                .any(|candidate| candidate == name)
-            {
-                continue;
-            }
-            let value = if let Some(value) = self.realm.get_value(name) {
-                value
-            } else if let Some(property) = self.global_this_own_property(name)
-                && !property.is_accessor()
-            {
-                property.value
-            } else {
-                continue;
-            };
-            self.current.locals[index] = Some(value.clone());
-            if let Some(binding) = self.current.env.module_live_binding_cell(name) {
-                binding.set(value);
-            }
-        }
     }
 
     pub(super) fn pop(&mut self) -> Result<Value, RuntimeError> {

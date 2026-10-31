@@ -1247,15 +1247,12 @@ fn initialize_eval_script_bindings(bytecode: &crate::bytecode::Bytecode, env: &m
                 if env.can_cache_realm_globals() {
                     env.remove_realm(name);
                 }
-                env.insert_frame(name.to_owned(), Value::Undefined);
             } else {
-                env.insert(name.to_owned(), property.value.clone());
                 if env.can_cache_realm_globals() {
                     env.insert_realm(name.to_owned(), property.value);
                 }
             }
         } else {
-            env.insert(name.to_owned(), Value::Undefined);
             create_eval_script_global_var_binding(env, name, Value::Undefined);
         }
     }

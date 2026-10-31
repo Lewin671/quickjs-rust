@@ -147,9 +147,7 @@ impl Vm<'_> {
 
     /// Own lexical/import/arguments routes precede the selected global object.
     pub(super) fn uses_selected_object_binding(&self, name: &str) -> bool {
-        !(self.env.can_cache_realm_globals()
-            || self.env.has_module_import(name)
-            || name == "arguments" && self.env.has_local_binding(name))
+        !(self.env.can_cache_realm_globals() || self.env.has_module_import(name))
     }
 
     pub(super) fn load_global(&mut self, name: &str) -> Result<Value, RuntimeError> {
@@ -159,11 +157,7 @@ impl Vm<'_> {
             return self.read_scope_binding(&reference);
         }
         if name != "this" && !self.env.can_cache_realm_globals() {
-            if let Some(value) = self.env.module_import_value(name).or_else(|| {
-                (name == "arguments")
-                    .then(|| self.env.get_local(name))
-                    .flatten()
-            }) {
+            if let Some(value) = self.env.module_import_value(name) {
                 if value.is_uninitialized_lexical_marker() {
                     return Err(RuntimeError {
                         thrown: None,
@@ -368,17 +362,8 @@ impl Vm<'_> {
         {
             return Ok(());
         }
-        if self.env.has_local_binding(&name) {
-            self.env.insert(name.clone(), value.clone());
-            self.write_through_module_live_binding(&name, value);
-            self.sync_marked_dynamic_global(&name);
-            return Ok(());
-        }
         if self.realm.contains(&name) {
             self.env.insert_realm(name.clone(), value.clone());
-            if self.env.has_local_binding(&name) {
-                self.env.insert(name.clone(), value.clone());
-            }
             self.write_through_module_live_binding(&name, value.clone());
             let global_this = self.cached_global_this();
             if let Some(global_this) = global_this
@@ -394,9 +379,6 @@ impl Vm<'_> {
             global_this.set(name.clone(), value.clone());
         }
         self.env.insert_realm(name.clone(), value.clone());
-        if self.env.has_local_binding(&name) {
-            self.env.insert(name.clone(), value.clone());
-        }
         self.write_through_module_live_binding(&name, value);
         self.sync_marked_dynamic_global(&name);
         Ok(())
@@ -469,6 +451,10 @@ impl Vm<'_> {
 
     #[inline(never)]
     fn load_local_slow(&mut self, slot: usize) -> Result<Value, RuntimeError> {
+        if self.bytecode.locals[slot].sloppy_global_fallback {
+            let name = self.bytecode.locals[slot].name.clone();
+            return self.load_global(&name);
+        }
         if self.bytecode.is_direct_eval_code()
             && self.env.scope_cursor().is_some()
             && self.bytecode.locals[slot].hoisted
@@ -585,7 +571,6 @@ impl Vm<'_> {
             || self.bytecode.contains_with()
             || self.env.has_module_imports()
             || self.env.has_dynamic_function_realm_global()
-            || self.env.has_local_binding(name)
             || self.env.has_module_import(name)
             || self.env.is_global_lexical_binding(name)
             || self.env.is_immutable_lexical_binding(name)
@@ -873,15 +858,6 @@ impl Vm<'_> {
             // same-named outer binding can be a different cell.
             self.write_through_module_live_binding_slot(slot, &value);
         }
-        let mut env_mirror_synced = false;
-        if !uses_shared_cell
-            && (from_env || self.bytecode.local_is_body_hoist_only(slot))
-            && self.env.has_local_binding(&self.bytecode.locals[slot].name)
-        {
-            let name = self.bytecode.locals[slot].name.clone();
-            self.env.insert(name, value.clone());
-            env_mirror_synced = true;
-        }
         // `shared_realm_cell` only matters through the first `syncs_global_var`
         // disjunct, which is unreachable when `hoisted` (its `!hoisted` term is
         // false) — skip the hash lookup entirely for the common hoisted-var
@@ -919,9 +895,6 @@ impl Vm<'_> {
                     if self.realm.contains(&name) {
                         self.env.insert_realm(name.clone(), value.clone());
                     }
-                    if !env_mirror_synced && self.env.has_local_binding(&name) {
-                        self.env.insert(name, value);
-                    }
                 }
                 OwnDataPropertyWrite::ReadOnly => {}
                 OwnDataPropertyWrite::NeedsSlowPath => {
@@ -930,9 +903,6 @@ impl Vm<'_> {
                         global_this.set(name.clone(), value.clone());
                         if self.realm.contains(&name) {
                             self.env.insert_realm(name.clone(), value.clone());
-                        }
-                        if !env_mirror_synced && self.env.has_local_binding(&name) {
-                            self.env.insert(name, value);
                         }
                     }
                 }
@@ -1119,16 +1089,8 @@ impl Vm<'_> {
                     return Ok(());
                 }
                 if is_sloppy_global_fallback || self.has_realm_or_global_this_binding(name) {
-                    let syncs_global_snapshot = is_sloppy_global_fallback
-                        && self.captured_or_local_matches_global_this(name);
-                    if syncs_global_snapshot {
-                        self.record_sloppy_global_name(name);
-                    }
                     self.store_realm_or_global_this_sloppy(name.to_owned(), value.clone())?;
                     self.store_local(slot, value)?;
-                    if syncs_global_snapshot && let Some(value) = self.locals[slot].clone() {
-                        self.sync_global_this_own_property(name, value);
-                    }
                 } else {
                     self.store_local(slot, value)?;
                 }
@@ -1139,15 +1101,8 @@ impl Vm<'_> {
                     if self.local_slot_targets_non_writable_global(slot, name) {
                         return Ok(());
                     }
-                    let syncs_global_snapshot = self.captured_or_local_matches_global_this(name);
-                    if syncs_global_snapshot {
-                        self.record_sloppy_global_name(name);
-                    }
                     self.store_realm_or_global_this_sloppy(name.to_owned(), value.clone())?;
                     self.store_local(slot, value)?;
-                    if syncs_global_snapshot && let Some(value) = self.locals[slot].clone() {
-                        self.sync_global_this_own_property(name, value);
-                    }
                     return Ok(());
                 }
                 self.store_global_sloppy(name, value)?;
@@ -1198,7 +1153,6 @@ impl Vm<'_> {
                 .get(slot)
                 .is_some_and(|local| local.catch_binding)
             {
-                self.current.env.remove(name);
                 self.current.env.unmark_catch_binding(name);
             }
         }
@@ -1223,9 +1177,6 @@ impl Vm<'_> {
                 .map(|property| property.value)
                 .unwrap_or(value);
             self.env.insert_realm(name.clone(), value.clone());
-            if self.env.has_local_binding(&name) {
-                self.env.insert(name.clone(), value.clone());
-            }
             self.clear_global_var_local(&name);
             self.write_through_module_live_binding(&name, value);
             return Ok(());
@@ -1235,9 +1186,6 @@ impl Vm<'_> {
             Property::data(value.clone(), true, true, false),
         );
         self.env.insert_realm(name.clone(), value.clone());
-        if self.env.has_local_binding(&name) {
-            self.env.insert(name.clone(), value.clone());
-        }
         self.clear_global_var_local(&name);
         self.write_through_module_live_binding(&name, value);
         Ok(())
@@ -1255,30 +1203,6 @@ impl Vm<'_> {
         {
             *local = None;
         }
-    }
-    fn sync_global_this_own_property(&self, name: &str, value: Value) {
-        let Some(global_this) = self.cached_global_this() else {
-            return;
-        };
-        let Some(property) = global_this.own_property(name) else {
-            return;
-        };
-        if property.is_accessor() {
-            // The setter has already run. A value projected by the caller's
-            // compatibility view is neither the getter result nor a data
-            // binding: keep identifier reads on the semantic global Get path.
-            self.env.remove_realm(name);
-        } else {
-            global_this.set(name.to_owned(), value.clone());
-            self.env.insert_realm(name.to_owned(), value);
-        }
-    }
-
-    fn captured_or_local_matches_global_this(&self, name: &str) -> bool {
-        let Some(global_value) = self.global_this_property(name) else {
-            return false;
-        };
-        self.env.get_local(name) == Some(global_value)
     }
 
     /// `delete identifier` in non-strict mode (sloppy): attempts to delete the

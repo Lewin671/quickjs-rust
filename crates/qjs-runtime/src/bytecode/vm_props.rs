@@ -626,7 +626,7 @@ impl Vm<'_> {
                 message: "bytecode local index out of bounds".to_owned(),
             })?;
             *local = Some(value.clone());
-            self.env.insert(name.to_owned(), value.clone());
+
             if self.bytecode.global_scope
                 && self.bytecode.local_is_body_hoist_only(slot)
                 && !self.bytecode.local_is_compiler_temporary(slot)
@@ -644,9 +644,7 @@ impl Vm<'_> {
             self.sync_marked_dynamic_global(name);
             return Ok(());
         }
-        if !self.env.has_local_binding(name)
-            && let Some(result) = self.store_global_this_accessor(name, &value, true)
-        {
+        if let Some(result) = self.store_global_this_accessor(name, &value, true) {
             return result;
         }
         // Reject writes to non-writable global properties (e.g. NaN, Infinity,
@@ -659,20 +657,6 @@ impl Vm<'_> {
                     message: format!("TypeError: Cannot assign to read only property '{name}'"),
                 });
             }
-        }
-        if self.env.has_local_binding(name) {
-            self.env.insert(name.to_owned(), value.clone());
-            self.write_through_module_live_binding(name, value.clone());
-            if self.realm.contains(name) {
-                self.env.insert_realm(name.to_owned(), value.clone());
-            }
-            if let Some(global_this) = self.cached_global_this()
-                && global_this.has_own_property(name)
-            {
-                global_this.set(name.to_owned(), value);
-            }
-            self.sync_marked_dynamic_global(name);
-            return Ok(());
         }
         if !self.realm.contains(name) && self.global_this_property(name).is_none() {
             return Err(RuntimeError {
@@ -764,7 +748,7 @@ impl Vm<'_> {
                     message: "bytecode local index out of bounds".to_owned(),
                 })?;
                 *local = Some(value.clone());
-                self.env.insert(name.to_owned(), value.clone());
+
                 if self.bytecode.global_scope
                     && self.bytecode.local_is_body_hoist_only(slot)
                     && !self.bytecode.local_is_compiler_temporary(slot)
@@ -783,9 +767,7 @@ impl Vm<'_> {
                 return Ok(());
             }
         }
-        if !self.env.has_local_binding(name)
-            && let Some(result) = self.store_global_this_accessor(name, &value, false)
-        {
+        if let Some(result) = self.store_global_this_accessor(name, &value, false) {
             return result;
         }
         // Silently reject writes to non-writable global properties (e.g. NaN,
@@ -794,20 +776,6 @@ impl Vm<'_> {
             if !property.writable {
                 return Ok(());
             }
-        }
-        if self.env.has_local_binding(name) {
-            self.env.insert(name.to_owned(), value.clone());
-            self.write_through_module_live_binding(name, value.clone());
-            if self.realm.contains(name) {
-                self.env.insert_realm(name.to_owned(), value.clone());
-            }
-            if let Some(global_this) = self.cached_global_this()
-                && global_this.has_own_property(name)
-            {
-                global_this.set(name.to_owned(), value);
-            }
-            self.sync_marked_dynamic_global(name);
-            return Ok(());
         }
         if self.realm.contains(name) {
             self.env.insert_realm(name.to_owned(), value.clone());
@@ -836,16 +804,8 @@ impl Vm<'_> {
     /// Keep that object's existing globals live at the write site; generator
     /// suspension no longer performs a later name-based writeback pass.
     pub(super) fn sync_marked_dynamic_global(&self, name: &str) {
-        // `dynamic_function_realm_global()` is a field read (a
-        // `frame_bindings` linear scan then a plain `RefCell` clone kept in
-        // sync with the same-named realm entry) instead of a name-table hash
-        // — this function runs after every global var store, and the marked
-        // dynamic-function realm feature is unset in the overwhelming common
-        // case, so the fast `None` here must stay cheap. `GLOBAL_THIS_BINDING`
-        // is intentionally still read through `env.get`, not the realm's
-        // fixed `global_this`: a dynamically-constructed function body's own
-        // frame overrides this binding to the marked realm object, and that
-        // frame-local override is exactly what this comparison must observe.
+        // Typed selection names the actual global object. Never enumerate its
+        // values into an activation before/after callbacks.
         let Some(global) = self.env.dynamic_function_realm_global() else {
             return;
         };

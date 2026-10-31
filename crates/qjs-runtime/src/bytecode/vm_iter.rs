@@ -119,7 +119,6 @@ impl Vm<'_> {
             false,
         );
         drop(call_env);
-        self.refresh_realm_backed_locals_from_realm();
         let result = result?;
         if !is_iterator_result_object(&result) {
             return Err(RuntimeError {

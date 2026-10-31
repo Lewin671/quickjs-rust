@@ -7,8 +7,6 @@
 //! The direct-leaf path hands the callee no caller bindings, so only a
 //! callee passing `is_direct_leaf_function` may take it.
 
-use std::collections::HashMap;
-
 #[cfg(test)]
 use std::cell::Cell;
 
@@ -20,8 +18,6 @@ use crate::{
 
 use super::util::stack_underflow;
 use super::vm::Vm;
-
-const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
 
 #[cfg(test)]
 thread_local! {
@@ -258,67 +254,11 @@ impl Vm<'_> {
         if effective_direct_eval {
             env.set_direct_eval_with_stack(self.with_stack().to_vec());
         }
-        let restore_dynamic_realm_after_call = !matches!(&callee, Value::Function(function) if function.native == Some(NativeFunction::Eval));
-        let dynamic_realm_snapshot = restore_dynamic_realm_after_call
-            .then(|| self.marked_dynamic_realm_snapshot())
-            .flatten();
         let result = crate::function::call_function_slice(&callee, this_value, arguments, &mut env);
         env.set_direct_eval_site(None);
         env.set_direct_eval_with_stack(Vec::new());
         drop(env);
-        self.refresh_realm_backed_locals_from_realm();
-        if let Some(snapshot) = dynamic_realm_snapshot {
-            self.restore_marked_dynamic_realm(snapshot);
-        }
         result
-    }
-
-    fn marked_dynamic_realm_snapshot(&self) -> Option<HashMap<String, Value>> {
-        // The realm caches this marker, and the frame layer is checked first,
-        // so an unmarked frame answers without the full name-resolution chain
-        // that `get` walks. Almost every call is unmarked.
-        self.env.dynamic_function_realm_global()?;
-        let Some(Value::Object(global)) = self.env.dynamic_function_realm_value() else {
-            return None;
-        };
-        let Some(Value::Object(global_this)) = self.env.get(crate::GLOBAL_THIS_BINDING) else {
-            return None;
-        };
-        if !global.ptr_eq(&global_this) {
-            return None;
-        }
-        let mut snapshot = HashMap::new();
-        snapshot.insert(
-            DYNAMIC_FUNCTION_REALM_GLOBAL.to_owned(),
-            Value::Object(global.clone()),
-        );
-        snapshot.insert(
-            crate::GLOBAL_THIS_BINDING.to_owned(),
-            Value::Object(global.clone()),
-        );
-        snapshot.insert("globalThis".to_owned(), Value::Object(global.clone()));
-        for name in global.own_property_names() {
-            if name.starts_with('\0') {
-                continue;
-            }
-            if let Some(property) = global.own_property(&name) {
-                snapshot.insert(name, property.value);
-            }
-        }
-        Some(snapshot)
-    }
-
-    fn restore_marked_dynamic_realm(&mut self, snapshot: HashMap<String, Value>) {
-        if let Some(Value::Object(global)) = snapshot.get(DYNAMIC_FUNCTION_REALM_GLOBAL) {
-            for name in global.own_property_names() {
-                if !snapshot.contains_key(&name) {
-                    self.env.remove(&name);
-                }
-            }
-        }
-        for (name, value) in snapshot {
-            self.env.insert(name, value);
-        }
     }
 
     pub(super) fn call_spread(&mut self) -> Result<(), RuntimeError> {

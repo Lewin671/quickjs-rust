@@ -137,8 +137,8 @@ Creation/module metadata contains cell routes, never settled lexical values.
 
 `function/env.rs::CallEnv` temporarily wraps those contexts as the old service
 ABI. Eval/native scope views retain leases without slot/name/value projections;
-completion returns no frame state to apply back. FrameBindings, raw
-publishers and owned service views remain B5 obligations. Functions retain
+completion returns no frame state to apply back. FrameBindings and execution
+projections are retired; raw publishers/owned views remain B5 work. Functions retain
 shared creation records; dynamic Function reuses its callee Realm and live global
 selection. RuntimeServices/borrowed Context and NativeSite remain upcoming cuts.
 Class keys execute inline. A cold continuation owns the partial class/private

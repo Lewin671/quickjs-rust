@@ -641,3 +641,26 @@ results remain independent unit tests, not fixtures encoding their wrong answer.
 Verified over `3999f127`: all **2,592 default runtime tests**, agents/perf-counters
 compile, the staged gate including **65 Test262 cases**, and all **291 NG scripts**
 with COMPARE_QJS_JOBS=1 pass. Final S3b gates remain open.
+
+
+## B3a5 compatibility value-container deletion
+
+At `ae923849` the general reference unit is committed. This subsequent audit
+removes FrameBindings/FrameBindingValue completely, not merely their eval use.
+The remaining indirect global-eval hoist inputs are no longer copied into a
+name/value vector. Hoists attach the existing canonical global data cells or
+use semantic object routes for accessors. Retired: marked_dynamic_realm_snapshot,
+restore_marked_dynamic_realm, refresh_realm_backed_locals_from_realm, frame
+publish/remove/replace APIs, global-value equality synchronization, and the
+obsolete vector-promotion test. Sloppy fallback loads select the live global
+route, so callback writes/accessor replacement/deletion need no post-call pass.
+The permanent global-effects fixture verifies all three effects with NG.
+
+Actual CallEnv struct construction (excluding Clone), Clone::clone and indexed
+tier compatibility proof attempts now have separate feature-gated counters.
+They count real events before B5 deletion, not allocations or delegated factory
+calls, and remain visible as zero-event audit fields after the migration.
+No production timing claim follows from these diagnostic counts. All 2,641
+agents/perf-counters runtime tests and all 292 serial NG scripts pass. The staged
+gate over `ae923849` passes 2,592 default tests and 117 Test262 cases. Borrowed Context, checked-publisher
+retirement, lazy promotion and the final matrix remain outstanding.

@@ -1,7 +1,4 @@
-use super::{
-    BindingCell, CallEnv, DYNAMIC_FUNCTION_REALM_GLOBAL, DynamicBindings, FrameBindingValue,
-    FrameBindings, new_realm,
-};
+use super::{BindingCell, CallEnv, DYNAMIC_FUNCTION_REALM_GLOBAL, DynamicBindings, new_realm};
 use crate::{ObjectRef, Value};
 use std::{collections::HashMap, rc::Rc};
 
@@ -17,7 +14,6 @@ fn typed_views_retain_derived_this_without_copying_bindings() {
         crate::context::CallOwner::root(Value::Undefined, crate::context::OwnerKind::Function);
     owner.this = crate::context::ThisBinding::Derived(this.clone());
     env.set_call_owner(owner);
-    env.insert_frame_cell("local".to_owned(), local.clone());
     let clone = env.clone();
     let fork = env.scope_service_view();
     assert!(this.ptr_eq(&clone.derived_this_cell().unwrap()));
@@ -28,7 +24,7 @@ fn typed_views_retain_derived_this_without_copying_bindings() {
     assert_eq!(env.get_local("this"), fork.get_local("this"));
     local.set(Value::Number(2.0));
     assert_eq!(fork.get_local("local"), None);
-    assert_eq!(env.get_local("local"), Some(Value::Number(2.0)));
+    assert_eq!(env.get_local("local"), None);
 }
 
 #[test]
@@ -72,25 +68,6 @@ fn derived_this_insert_does_not_write_an_inherited_activations_cell() {
     assert!(child.this_value().is_err());
     assert!(this.ptr_eq(&env.derived_this_cell().unwrap()));
     assert!(other.ptr_eq(&child.derived_this_cell().unwrap()));
-}
-
-#[test]
-fn frame_binding_promotes_to_a_cell_only_when_identity_is_requested() {
-    let bindings = FrameBindings::default();
-    bindings.insert("value".to_owned(), Value::Number(1.0));
-    assert!(matches!(
-        &bindings.0.borrow()[0].1,
-        FrameBindingValue::Direct(Value::Number(1.0))
-    ));
-
-    let cell = bindings.cell("value").expect("binding should promote");
-    assert!(matches!(
-        &bindings.0.borrow()[0].1,
-        FrameBindingValue::Cell(_)
-    ));
-    cell.set(Value::Number(2.0));
-    assert!(matches!(bindings.get("value"), Some(Value::Number(2.0))));
-    assert!(cell.ptr_eq(&bindings.cell("value").expect("cell is stable")));
 }
 
 #[test]
@@ -149,7 +126,6 @@ fn typed_call_metadata_does_not_disable_an_authoritative_slot() {
     ));
 
     assert!(env.slot_is_authoritative("value"));
-    assert!(env.frame_bindings.is_empty());
     assert_eq!(env.this_value(), Ok(Value::Undefined));
 }
 

@@ -81,6 +81,13 @@ declare_counters! {
     /// Always zero: no counting site exists, because no call routes through
     /// the frame-stack driver (`bytecode/frame_stack.rs`).
     same_vm_frame_entries,
+    /// Actual construction of the temporary owned CallEnv, excluding Clone.
+    /// Retained at zero after the borrowed Context migration.
+    call_env_constructions,
+    /// Actual Clone::clone entries, counted separately from construction.
+    call_env_clones,
+    /// Caller/callee compatibility proof attempts in indexed tier entry.
+    call_env_equality_proofs,
     /// Retired direct-eval marker scrub event, retained during the Context
     /// migration audit. Typed eval sites have no counting site for this event.
     call_env_marker_scrubs,
