@@ -24,6 +24,7 @@ impl AppendBatchRecipe {
         store.cold.clear_guard();
         store.values.extend(values);
         store.layout = self.after.clone();
+        store.set_epoch(0);
         for slot in self.start..store.len() {
             store.verify_slot(slot);
         }

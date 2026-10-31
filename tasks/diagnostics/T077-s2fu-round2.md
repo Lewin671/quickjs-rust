@@ -420,3 +420,12 @@ cached append. The older broad epoch experiment was confounded by root-cache
 retention changes; this retains live-root reuse and changes only the two append
 plan publications. Existing append/invalidation tests cover the shared-version
 and prototype-holder contracts; final hardware measurements still decide A.
+
+
+Shared-append experiment `da1d0367`, job
+`20261031T150432Z-t077-s2fu-r2-shared-append`, adds work broadly (lod
+1.015174, meriyah 1.006593, string-fasta 1.017934). Restore the two calls.
+Retain runtime inputs exactly equivalent to `4c6fc5c6`; apply its default-set
+order from `20261031T145539Z-t077-s2fu-r2-bound-comparison` and run full public86.
+The retained source includes both prototype ownership repairs and the bound
+cache guard, which have not yet had a complete aggregate screen together.
