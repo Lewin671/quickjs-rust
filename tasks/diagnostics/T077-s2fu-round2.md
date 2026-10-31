@@ -1,11 +1,12 @@
 # T077 S2 follow-up, lead feedback round 2
 
-- Status: active; checked clean branch at `3c6bec4e`; executing A, then B, C, D.
-- Implementation: A/B/C present, including both allocation-free cycle checks; D comment corrected; final qualification pending.
-- Verified at: A increment on `3c6bec4e` passes 2,507 runtime tests and the fast gate, including 65 selected Test262 cases; iMac lane measurements pending.
-- Evidence: this record; lead jobs `20261031T083411Z-t077-s2fu-public86` and `20261031T083411Z-t077-s2fu-rss15`.
-- Unresolved: all round-2 acceptance gates.
-- Next action: measure the B candidate and finish C/D; the final per-lane A target remains unchanged.
+- Status: active; A–D implemented, final qualification in progress.
+- Implementation: runtime `362d1bf0`, generated x86 order at `68046c8a`: direct own guards, private-layout epochs, 80-byte bound nodes/shared tiny data, canonical reusable templates, allocation-free cycle walks and corrected Full-storage comment.
+- Verified at: native full check on `362d1bf0` passes 2,519 runtime tests/5,170 curated cases; all 268 NG fixtures cached/off/verify; eight x86 cycle tests. Preliminary owned-child RSS meets <=1.25. Final exact/performance/resource results pending.
+- Evidence: this record and the named job/artifact receipts below; [round 1](T077-s2-followup.md) is historical.
+- Unresolved: final per-lane instruction/wall limits, exact cached/off with burndown, complete native/x86 resource gates.
+- Next action: collect final jobs and exact summaries; no origin push or merge.
+
 
 ## Authority and ordered scope
 
@@ -159,3 +160,18 @@ default external/sentinel/broad set, producing 491 symbols at the unchanged
 default pin offset. No held-out/development selection or offset search is used.
 The generated order and image receipt are applied; final relink/audit and
 public86 remain required.
+
+
+## Final ordered candidate
+
+Applied order at `68046c8a`, derived from job
+`20261031T113502Z-t077-s2fu-r2-final-order` and runtime `362d1bf0`.
+The final public86 job `20261031T114212Z-t077-s2fu-r2-final-public86` first
+builds the exact canonical image and runs strict layout audit; that audit passes
+and collection starts. Resource jobs `20261031T114323Z-t077-s2fu-r2-final-resources`
+and `20261031T114323Z-t077-s2fu-r2-final-rss15` are serialized behind it.
+Native pinned release/agents SHA-256:
+`af703b95498c650b430f93a966c03ea03dbc2712abc6fea4950e8ba81c23c502`;
+actual --agent smoke passes. Final exact scans execute this image with ICs
+cached/off, four --all/engine-both partitions per mode, one worker per shard,
+20-second timeout, no selection/exclusion changes.
