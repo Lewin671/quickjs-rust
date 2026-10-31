@@ -1,11 +1,12 @@
-# S2 round4 handoff: stop at the lead gate
+# S2 frozen-source handoff: correctness qualified
 
 The lead's post-round4 decision treats external 1.001593 as within five-pair
 triage noise and is running formal 30-block, held-out and RSS acceptance for
-fc3deef7 against dcee3c56. This owner is running the complete cached/off
-[freeze correctness qualification](T077-s2-freeze-qualification.md) with the
-specified shared Test262 corpus. Runtime code is frozen; no iMac jobs are
-submitted by this owner. Typed static size remains a reported gap.
+fc3deef7 against dcee3c56. This owner completed the cached/off
+[freeze correctness qualification](T077-s2-freeze-qualification.md) for fc3deef7
+with the specified shared Test262 corpus: 42,672 configured passes per mode,
+zero failures/timeouts/not-run cases and zero actionable gaps. Runtime code is
+frozen; this owner submitted no iMac jobs. Typed static size remains a reported gap.
 
 Runtime source **dc710e4b**, x86 order candidate **4098ee67**. Later commits are
 records only. Canonical x86 SHA
@@ -87,12 +88,16 @@ Fuzz adds stable prototype constants, write routes, accessor replacements and
 instability transitions. Release/debug CLIs use the CLI agents feature and
 both pass the actual --agent smoke. No new dependencies, unsafe or exclusions.
 
-At the initial round4 handoff, complete configured cached/off exact Test262
-qualification had not run because the owner followed the earlier stop rule.
-The post-round4 lead decision now requests it; results are recorded in the
-[freeze qualification](T077-s2-freeze-qualification.md). The round3 scans were intentionally interrupted; no partial scan has a
-burndown row. Last qualified complete cached/off scans remain 061e7f28, 42,672
-passes each/zero gaps; those historical results do not qualify this source.
+The post-round4 lead decision requested complete configured exact qualification
+for fc3deef7. Both cached and IC-off scans now pass all 42,672 configured cases,
+with zero failures, timeouts, not-run cases and actionable gaps; both commands
+exit 0. Full inventory 53,572, unchanged configuration skips 10,900. NG has
+42,602 passes/70 failures; Rust passes all 70 reference-only failures. Complete
+burndown rows name fc3deef7 (cached) and doc-only equivalent 4a6cbab8 (off).
+[Receipt, identity proof, summaries and case hashes](T077-s2-freeze-qualification.md).
+The two full case-result files have identical SHA
+`2263183d8df546cb37338205c107cc4614a7ddee069a711be6181c0e27c2f61a`.
+Earlier interrupted scans remain historical partial runs with no burndown row.
 
 ## RSS and retained source
 
@@ -119,5 +124,5 @@ dc710e4b (final outlining), 4098ee67 (order) remain on this owner branch.
 
 No push to origin, merge into main, formal or held-out run. The tracked corpus
 pointer is unchanged; pre-existing untracked harness files were left alone.
-The lead now measures formal acceptance while this owner completes frozen-source
-exact qualification and burndown. No acceptance claim is made.
+Frozen-source exact qualification and both burndown records are complete. The
+lead owns formal, held-out and RSS acceptance; no acceptance claim is made here.
