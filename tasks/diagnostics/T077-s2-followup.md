@@ -90,3 +90,14 @@ null-prototype root. Published hits can compare direct layout identity first;
 cold deferred guards are consulted only after a miss. A test proves that two
 different prototypes sharing a seed cannot match each other's guards or a
 null-prototype guard. No benchmark-specific admission rule is added.
+
+
+The first `3dc2a684` timing run is **disturbed**, not qualified performance
+evidence: an independent S3b release build started at 2026-10-30 23:26:48 PDT
+during collection. Its raw report remains local at
+`target/t077-followup/review-arm64-seeds.json`; no timings are pooled into a
+replacement. The retained collector now requires an initially quiet host and
+monitors external compilers/qjs processes every 0.5 seconds, excluding its own
+process tree. Any observed overlap marks the whole report disturbed. Complete
+cached and IC-off exact scans run first; final timings will be collected after
+their load ends. Runtime source stays frozen at `3dc2a684`.
