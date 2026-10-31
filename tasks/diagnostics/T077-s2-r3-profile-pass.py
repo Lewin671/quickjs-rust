@@ -11,6 +11,7 @@ p = argparse.ArgumentParser(description=__doc__)
 p.add_argument('--triage', type=Path, required=True)
 p.add_argument('--output', type=Path, required=True)
 p.add_argument('--repeats', type=int, default=8)
+p.add_argument('--case', action='append', default=[], help='quality supplement restricted to the frozen top five')
 a = p.parse_args()
 a.output.mkdir(parents=True, exist_ok=False)
 os.environ['TZ'] = 'UTC'
@@ -19,6 +20,9 @@ for key in ['QJS_DISABLE_IC', 'QJS_VERIFY_IC', 'QJS_TL_TRACE']:
 report = json.loads((a.triage / 'triage.json').read_text())
 cases = sorted((r for r in report['cases'] if r['id'].startswith(('external/', 'broad/'))), key=lambda r: r['wall_ns']['ratio'], reverse=True)[:5]
 assert len(cases) == 5
+if a.case:
+ assert set(a.case).issubset({c['id'] for c in cases})
+ cases = [c for c in cases if c['id'] in a.case]
 binaries = {role: Path(report['builds'][role]['path']) for role in ['base', 'candidate']}
 for role, binary in binaries.items():
  assert hashlib.sha256(binary.read_bytes()).hexdigest() == report['builds'][role]['sha256']
@@ -88,5 +92,5 @@ for case in cases:
   functions = [{'raw': raw, 'canonical': canonical(raw), 'self_samples': count, 'approx_self_ms': count, **{k: v for k, v in static[role].get(raw, {}).items() if k != 'canonical'}} for raw, count in self_counts.most_common()]
   record['roles'][role] = {'counters': counters, 'sample_files': samples, 'self_table_samples': sum(self_counts.values()), 'functions': functions}
  results.append(record)
- (a.output / 'profiles.json').write_text(json.dumps({'source': report['builds']['candidate']['revision'], 'images': report['builds'], 'cycle_counter_qualified': tool.cycles, 'method': 'eight repeated exact original argv per image/case; sample 1s at 1ms mayDie; self tables omit functions with fewer than five samples per report; static decoded instructions are not per-function dynamic retired instructions; separate unprofiled whole-case counters', 'records': results}, indent=2))
+ (a.output / 'profiles.json').write_text(json.dumps({'source': report['builds']['candidate']['revision'], 'images': report['builds'], 'cycle_counter_qualified': tool.cycles, 'repeats': a.repeats, 'method': 'repeated exact original argv per image/case; sample 1s at 1ms mayDie; self tables omit functions with fewer than five samples per report; static decoded instructions are not per-function dynamic retired instructions; separate unprofiled whole-case counters', 'records': results}, indent=2))
  print('PROFILED', case_id, {r: record['roles'][r]['self_table_samples'] for r in binaries}, flush=True)
