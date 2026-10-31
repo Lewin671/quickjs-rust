@@ -23,7 +23,7 @@ if args.output.exists():
 
 def competing_processes():
     snapshot = subprocess.run(['ps', '-axo', 'pid=,ppid=,stat=,comm=,args='],
-        capture_output=True, text=True, check=True, timeout=5)
+        capture_output=True, text=True, errors='replace', check=True, timeout=5)
     processes = {}
     for line in snapshot.stdout.splitlines():
         fields = line.split(None, 4)
