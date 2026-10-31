@@ -13,10 +13,11 @@ pub(crate) enum NamedStorage {
 }
 impl NamedStorage {
     pub(crate) fn new(domain: &AtomDomain, prototype: Option<Prototype>, flavor: u16) -> Self {
-        let store = NamedStore::empty_with_prototype(domain, prototype, flavor);
+        let mut store = NamedStore::empty_with_prototype(domain, prototype, flavor);
+        store.materialize_layout();
         Self::Empty {
             layout: store.layout,
-            prototype: store.prototype,
+            prototype: store.prototype.map(Rc::new),
         }
     }
     /// Fork a realm's immutable empty seed on the first receiver mutation.
@@ -24,10 +25,9 @@ impl NamedStorage {
         match self {
             Self::Empty { layout, prototype } => NamedStore {
                 layout: layout.clone(),
-                prototype: prototype.clone(),
+                prototype: prototype.as_deref().cloned(),
                 values: ValueSlots::Empty,
-                accessors: None,
-                epoch: 0,
+                cold: ColdStorage::default(),
             },
             _ => panic!("array seed must be an empty authority"),
         }
@@ -42,10 +42,9 @@ impl NamedStorage {
         if let Self::Empty { layout, prototype } = self {
             let store = NamedStore {
                 layout: layout.clone(),
-                prototype: prototype.clone(),
+                prototype: prototype.as_deref().cloned(),
                 values: ValueSlots::Empty,
-                accessors: None,
-                epoch: 0,
+                cold: ColdStorage::default(),
             };
             *self = Self::Full(Box::new(store));
         }
@@ -102,7 +101,7 @@ impl NamedStorage {
     }
     pub(crate) fn chain_dependency(&self) -> Option<StructuralDependency> {
         match self {
-            Self::Empty { layout, .. } => layout.parent_state.upgrade()?.token(),
+            Self::Empty { prototype, .. } => prototype.as_deref()?.enter_prototype_mode()?.token(),
             Self::Full(s) => s.chain_dependency(),
             Self::Sentinel => None,
         }
@@ -112,7 +111,7 @@ impl NamedStorage {
             Self::Empty { layout, prototype } => {
                 let owner = PropertyOwner::new(layout.domain.clone());
                 let next = owner.root_for(p.as_ref(), flavor);
-                *prototype = NamedStore::retain_prototype(&next, p);
+                *prototype = p.map(Rc::new);
                 *layout = next;
             }
             Self::Full(s) => s.rebase(p, flavor),

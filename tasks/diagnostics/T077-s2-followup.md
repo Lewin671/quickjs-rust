@@ -1,11 +1,11 @@
 # S2 follow-up: prototype memory and complexity
 
 - Status: active; implementation in progress.
-- Implementation: cycle walk and constant admission repairs present; memory migration planned below.
-- Verified at: first increment on `1e6e2a2b`: fast gate passes (2,497 runtime tests, 65 selected Test262 cases); deep-chain and virtual-admission tests pass.
-- Evidence: this record; review programs originally supplied in `/tmp/qjs-s2r/t` will be retained with measurements.
-- Unresolved: memory migration and all requested acceptance gates.
-- Next action: implement demand-driven prototype metadata and run focused tests.
+- Implementation: all five requested mechanisms present; prototype roots and validity graphs are demand-driven; shared holders no longer copy descriptors.
+- Verified at: `f35bf831` first-increment fast gate passes (2,497 tests, 65 selected Test262); memory increment fast gate passes (2,502 tests, no matching curated slice). Full gates pending.
+- Evidence: this record and [retained review programs/collector](t077-s2-followup/measure.py).
+- Unresolved: final acceptance gates and measured memory/performance standing.
+- Next action: qualify the committed memory migration with full correctness and performance gates.
 
 ## Frozen scope and migration
 
@@ -21,8 +21,9 @@ No dependency, unsafe, source-template recognizer, push or merge.
    a dependency is requested, and create prototype-sensitive empty roots only
    when a guard or named mutation needs them. Empty construction must retain
    only an inline live prototype edge, with no per-object shape/state/edge box.
-   The inline edge adds eight bytes to NamedStore; array/function empty seeds
-   keep their existing compact shared representation. Guards must always use
+   The dictionary epoch moves into cold metadata, making room for the inline
+   edge without growing NamedStore; array/function empty seeds keep their
+   existing compact shared representation. Guards must always use
    the materialized prototype-sensitive layout, never the deferred empty seed.
 3. Reparent through stale weak links with amortized compaction; invalidate only
    armed subtrees. Issuing a token arms every ancestor, so a previously invalid
@@ -34,3 +35,14 @@ qualification: full check, all NG fixtures default/off/verify, complete exact
 cached/off scans with burndown, review time/RSS on arm64 and x86, and iMac
 public86 against the integration base. The iMac wrapper itself pushes runner
 refs; clarification of the explicit no-push constraint is pending.
+
+## Implementation checks
+
+`f35bf831` is the committed cycle/constant increment. The memory migration
+passes 2,502 runtime tests; the five new deterministic graph/laziness tests also
+pass separately, including the 16,000-node nonrecursive demand/invalidation walk
+and an explicit visit-count assertion for repeated invalidation. Clippy with
+all runtime targets and `-D warnings` passes. Shared append plans now execute
+the common invalidation barrier, including when an existing receiver becomes
+a prototype after the plan was admitted. Physical assertions remain 64-byte
+NamedStore, 72-byte RefCell and 96-byte ordinary payload.

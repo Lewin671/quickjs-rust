@@ -41,9 +41,9 @@ impl LayoutVersion {
 impl NamedStore {
     pub(crate) fn version(&self) -> LayoutVersion {
         LayoutVersion {
-            layout: Rc::downgrade(&self.layout),
+            layout: Rc::downgrade(self.guard_layout()),
             epoch: if self.layout.dictionary {
-                self.epoch.max(1)
+                self.epoch().max(1)
             } else {
                 0
             },
@@ -52,11 +52,15 @@ impl NamedStore {
     /// The caller established an immutable shared-layout guard at admission.
     #[inline(always)]
     pub(crate) fn matches_shared_identity(&self, expected: &LayoutVersion) -> bool {
-        expected.matches_identity(&self.layout)
+        self.matched_layout()
+            .is_some_and(|layout| expected.matches_identity(layout))
     }
     #[inline(always)]
     pub(crate) fn matches_version(&self, expected: &LayoutVersion) -> bool {
-        expected.matches_layout(&self.layout, self.epoch)
+        self.matched_layout().is_some_and(|layout| {
+            expected.matches_identity(layout)
+                && (expected.is_shared() || expected.epoch == self.epoch())
+        })
     }
 }
 impl Clone for Layout {

@@ -20,9 +20,10 @@ impl AppendBatchRecipe {
         {
             return None;
         }
+        store.invalidate_dependencies();
         store.values.extend(values);
         store.layout = self.after.clone();
-        store.epoch = 0;
+        store.set_epoch(0);
         for slot in self.start..store.len() {
             store.verify_slot(slot);
         }
@@ -40,7 +41,6 @@ impl NamedStore {
             || start.checked_add(width)? != self.len()
             || !before.is_shared()
             || self.layout.dictionary
-            || self.layout.mode.is_some()
         {
             return None;
         }

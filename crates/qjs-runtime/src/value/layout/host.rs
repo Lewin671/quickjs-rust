@@ -6,7 +6,7 @@ use crate::value::{OwnDataPropertyRead, OwnDataPropertyWrite};
 impl NamedStore {
     /// Shared construction metadata; a retaining caller must own its symbol lifetime.
     pub(crate) fn shared_layout(&self) -> Option<&Rc<Layout>> {
-        (!self.layout.dictionary && self.layout.mode.is_none()).then_some(&self.layout)
+        (!self.layout.dictionary).then(|| self.guard_layout())
     }
 
     /// Construction caches retain only an empty layout; the new store owns its edge.
@@ -21,12 +21,12 @@ impl NamedStore {
             Self {
                 layout: layout.clone(),
                 values: ValueSlots::Empty,
-                accessors: None,
-                epoch: 0,
-                prototype: Self::retain_prototype(layout, prototype),
+                cold: ColdStorage::default(),
+                prototype,
             }
         } else {
-            let store = Self::empty_with_prototype(domain, prototype, 0);
+            let mut store = Self::empty_with_prototype(domain, prototype, 0);
+            store.materialize_layout();
             *cache = Some(store.layout.clone());
             store
         };
@@ -60,26 +60,14 @@ impl NamedStore {
             layout
         };
         let epoch = if layout.dictionary { 1 } else { 0 };
-        let cached = layout
-            .root
-            .as_ref()
-            .unwrap_or(&layout)
-            .prototype_value
-            .borrow()
-            .upgrade();
-        let prototype = cached.or_else(|| {
-            Self::retain_prototype(
-                &layout,
-                layout.prototype.as_ref().and_then(WeakPrototype::upgrade),
-            )
-        });
+        let prototype = layout.prototype.as_ref().and_then(WeakPrototype::upgrade);
         let store = Self {
             layout,
             values,
-            accessors,
-            epoch,
+            cold: accessors.into(),
             prototype,
         };
+        store.set_epoch(epoch);
         store.verify();
         store
     }

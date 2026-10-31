@@ -50,23 +50,33 @@ impl WeakPrototype {
 pub(crate) struct PrototypeState {
     cell: RefCell<StructuralDependency>,
     parent: RefCell<Weak<PrototypeState>>,
-    users: RefCell<Vec<Weak<PrototypeState>>>,
+    users: RefCell<Vec<(Weak<PrototypeState>, u64)>>,
     direct_trackable: Cell<bool>,
     trackable: Cell<bool>,
     sweep_at: Cell<usize>,
     value_writes: Cell<u8>,
+    initialized: Cell<bool>,
+    registration: Cell<u64>,
+    #[cfg(test)]
+    visits: Cell<usize>,
 }
 impl PrototypeState {
     fn new(parent: Weak<Self>, direct_trackable: bool) -> Rc<Self> {
         let trackable = direct_trackable && parent.upgrade().is_none_or(|p| p.trackable.get());
+        let cell = StructuralDependency::new();
+        cell.invalidate();
         let state = Rc::new(Self {
-            cell: RefCell::new(StructuralDependency::new()),
+            cell: RefCell::new(cell),
             parent: RefCell::new(parent),
             users: RefCell::new(Vec::new()),
             direct_trackable: Cell::new(direct_trackable),
             trackable: Cell::new(trackable),
             sweep_at: Cell::new(64),
             value_writes: Cell::new(0),
+            initialized: Cell::new(false),
+            registration: Cell::new(0),
+            #[cfg(test)]
+            visits: Cell::new(0),
         });
         Self::register(&state);
         state
@@ -77,23 +87,26 @@ impl PrototypeState {
         };
         let mut users = parent.users.borrow_mut();
         if users.len() >= parent.sweep_at.get() {
-            users.retain(|u| {
-                u.upgrade()
-                    .is_some_and(|u| u.parent.borrow().as_ptr() == Rc::as_ptr(&parent))
+            users.retain(|(weak, registration)| {
+                weak.upgrade().is_some_and(|u| {
+                    u.parent.borrow().as_ptr() == Rc::as_ptr(&parent)
+                        && u.registration.get() == *registration
+                })
             });
             parent
                 .sweep_at
                 .set(users.len().saturating_mul(2).saturating_add(64));
         }
-        users.push(Rc::downgrade(this));
+        let registration = this
+            .registration
+            .get()
+            .checked_add(1)
+            .expect("prototype registration space exhausted");
+        this.registration.set(registration);
+        users.push((Rc::downgrade(this), registration));
     }
     fn reparent(this: &Rc<Self>, parent: Weak<Self>, direct_trackable: bool) {
         if !this.parent.borrow().ptr_eq(&parent) {
-            if let Some(old) = this.parent.borrow().upgrade() {
-                old.users
-                    .borrow_mut()
-                    .retain(|w| w.as_ptr() != Rc::as_ptr(this) && w.strong_count() > 0);
-            }
             *this.parent.borrow_mut() = parent;
             Self::register(this);
         }
@@ -103,21 +116,29 @@ impl PrototypeState {
     pub(crate) fn invalidate(this: &Rc<Self>) {
         let mut pending = vec![this.clone()];
         while let Some(state) = pending.pop() {
-            state.cell.borrow().invalidate();
+            #[cfg(test)]
+            state.visits.set(state.visits.get() + 1);
             let tracked = state.direct_trackable.get()
                 && state
                     .parent
                     .borrow()
                     .upgrade()
                     .is_none_or(|p| p.trackable.get());
+            // A fresh descendant token arms its ancestors. An invalid cell
+            // with unchanged trackability therefore proves the subtree inert.
+            if !state.cell.borrow().is_valid() && tracked == state.trackable.get() {
+                continue;
+            }
+            state.cell.borrow().invalidate();
             state.trackable.set(tracked);
-            *state.cell.borrow_mut() = StructuralDependency::new();
             let mut users = state.users.borrow_mut();
-            users.retain(|weak| {
+            users.retain(|(weak, registration)| {
                 let Some(user) = weak.upgrade() else {
                     return false;
                 };
-                if user.parent.borrow().as_ptr() != Rc::as_ptr(&state) {
+                if user.parent.borrow().as_ptr() != Rc::as_ptr(&state)
+                    || user.registration.get() != *registration
+                {
                     return false;
                 }
                 pending.push(user);
@@ -138,7 +159,24 @@ impl PrototypeState {
         }
     }
     pub(super) fn token(&self) -> Option<StructuralDependency> {
-        self.trackable.get().then(|| self.cell.borrow().clone())
+        if !self.trackable.get() {
+            return None;
+        }
+        Self::arm(self);
+        let mut parent = self.parent.borrow().upgrade();
+        while let Some(state) = parent {
+            if state.cell.borrow().is_valid() {
+                break;
+            }
+            Self::arm(&state);
+            parent = state.parent.borrow().upgrade();
+        }
+        Some(self.cell.borrow().clone())
+    }
+    fn arm(&self) {
+        if !self.cell.borrow().is_valid() {
+            *self.cell.borrow_mut() = StructuralDependency::new();
+        }
     }
 }
 impl Drop for PrototypeState {
@@ -158,6 +196,17 @@ impl Layout {
     }
 }
 impl PropertyOwner {
+    fn cached_root(&self, prototype: Option<&Prototype>, flavor: u16) -> Option<Rc<Layout>> {
+        if prototype.is_none() && flavor == 0 {
+            return Some(self.0.root.clone());
+        }
+        let (kind, address) = prototype.map(Prototype::identity).unwrap_or((0, 0));
+        self.0
+            .roots
+            .borrow()
+            .get(&(kind, address, flavor))
+            .and_then(Weak::upgrade)
+    }
     pub(super) fn root_for(&self, prototype: Option<&Prototype>, flavor: u16) -> Rc<Layout> {
         if prototype.is_none() && flavor == 0 {
             return self.0.root.clone();
@@ -167,14 +216,13 @@ impl PropertyOwner {
         if let Some(layout) = self.0.roots.borrow().get(&key).and_then(Weak::upgrade) {
             return layout;
         }
-        let parent_state = prototype.and_then(Prototype::enter_prototype_mode);
         let budget = self.0.root.budget.clone();
         budget.add(size_of::<Layout>());
         let root = Rc::new(Layout {
             budget: budget.clone(),
             domain: self.domain().clone(),
             owner: Rc::downgrade(&self.0),
-            data: Rc::new(RefCell::new(storage::LayoutData::new(budget))),
+            data: self.0.root.data.clone(),
             len: 0,
             parent: None,
             incoming: None,
@@ -184,9 +232,6 @@ impl PropertyOwner {
             transitions: RefCell::default(),
             root: None,
             prototype: prototype.map(WeakPrototype::new),
-            prototype_value: RefCell::new(Weak::new()),
-            parent_state: parent_state.as_ref().map(Rc::downgrade).unwrap_or_default(),
-            mode: None,
             flavor,
             capacity_hint: std::cell::Cell::new(0),
             append_misses: std::cell::Cell::new(0),
@@ -208,68 +253,75 @@ impl NamedStore {
         flavor: u16,
     ) -> Self {
         let owner = PropertyOwner::new(domain.clone());
-        let layout = owner.root_for(prototype.as_ref(), flavor);
-        let strong = Self::retain_prototype(&layout, prototype);
+        let layout = owner
+            .cached_root(prototype.as_ref(), flavor)
+            .unwrap_or_else(|| owner.root_for(None, flavor));
         Self {
             layout,
             values: ValueSlots::Empty,
-            accessors: None,
-            epoch: 0,
-            prototype: strong,
+            cold: ColdStorage::default(),
+            prototype,
         }
     }
-    pub(super) fn retain_prototype(
-        layout: &Rc<Layout>,
-        prototype: Option<Prototype>,
-    ) -> Option<Rc<Prototype>> {
-        let prototype = prototype?;
-        let root = Layout::root_shape(layout);
-        if let Some(value) = root.prototype_value.borrow().upgrade() {
-            return Some(value);
+    fn deferred(&self) -> bool {
+        self.layout.len == 0 && self.layout.prototype.is_none() && self.prototype.is_some()
+    }
+    /// An empty seed carries no cacheable prototype identity until admission.
+    pub(super) fn guard_layout(&self) -> &Rc<Layout> {
+        if !self.deferred() {
+            return &self.layout;
         }
-        let value = Rc::new(prototype);
-        *root.prototype_value.borrow_mut() = Rc::downgrade(&value);
-        Some(value)
+        self.cold.get().guard.get_or_init(|| {
+            PropertyOwner::new(self.domain().clone())
+                .root_for(self.prototype.as_ref(), self.layout.flavor)
+        })
+    }
+    pub(super) fn matched_layout(&self) -> Option<&Rc<Layout>> {
+        if self.deferred() {
+            self.cold.guard()
+        } else {
+            Some(&self.layout)
+        }
+    }
+    pub(super) fn materialize_layout(&mut self) {
+        if self.deferred() {
+            self.layout = self.cold.guard().cloned().unwrap_or_else(|| {
+                PropertyOwner::new(self.domain().clone())
+                    .root_for(self.prototype.as_ref(), self.layout.flavor)
+            });
+            self.cold.clear_guard();
+        }
     }
     pub(crate) fn first_prototype_data(&self, version: &LayoutVersion, slot: u32) -> Option<Value> {
         if !self.matches_version(version) {
             return None;
         }
-        self.prototype.as_deref()?.load_guarded_data(slot)
+        self.prototype.as_ref()?.load_guarded_data(slot)
     }
     /// Pure identity check without acquiring a prototype owner.
     #[inline(always)]
     pub(crate) fn prototype_is_object(&self, expected: &crate::ObjectRef) -> bool {
-        matches!(self.prototype.as_deref(), Some(Prototype::Object(actual)) if actual.ptr_eq(expected))
+        matches!(self.prototype.as_ref(), Some(Prototype::Object(actual)) if actual.ptr_eq(expected))
     }
     pub(crate) fn prototype(&self) -> Option<Prototype> {
-        self.prototype.as_deref().cloned()
+        self.prototype.clone()
     }
     pub(crate) fn root_version(&self) -> LayoutVersion {
-        LayoutVersion::shared(Layout::root_shape(&self.layout))
+        LayoutVersion::shared(Layout::root_shape(self.guard_layout()))
     }
     pub(crate) fn root_matches(&self, token: &LayoutVersion) -> bool {
-        token.matches_layout(Layout::root_shape(&self.layout), 0)
+        self.matched_layout()
+            .is_some_and(|layout| token.matches_layout(Layout::root_shape(layout), 0))
     }
     pub(crate) fn chain_dependency(&self) -> Option<StructuralDependency> {
-        Layout::root_shape(&self.layout)
-            .parent_state
-            .upgrade()?
-            .token()
+        self.prototype.as_ref()?.enter_prototype_mode()?.token()
     }
     pub(crate) fn prototype_mode(&mut self) -> Rc<PrototypeState> {
-        if let Some(mode) = &self.layout.mode {
-            return mode.clone();
-        }
-        let root = Layout::root_shape(&self.layout).clone();
-        let tracked = root.prototype.is_none() || root.parent_state.strong_count() > 0;
-        let state = PrototypeState::new(root.parent_state.clone(), tracked);
-        let mut layout = self.layout.copied(true);
-        layout.root = Some(root);
-        layout.mode = Some(state.clone());
-        self.layout = Rc::new(layout);
-        self.epoch = 1;
-        state
+        self.cold
+            .get()
+            .mode
+            .get_or_init(|| PrototypeState::new(Weak::new(), true))
+            .clone()
     }
     pub(crate) fn set_prototype(&mut self, prototype: Option<Prototype>) {
         self.rebase(prototype, self.layout.flavor);
@@ -278,18 +330,28 @@ impl NamedStore {
         self.rebase(self.prototype(), flavor);
     }
     pub(super) fn rebase(&mut self, prototype: Option<Prototype>, flavor: u16) {
-        if self.layout.matches_prototype(prototype.as_ref(), flavor) {
+        if self.layout.flavor == flavor
+            && self.prototype.as_ref().map(Prototype::identity)
+                == prototype.as_ref().map(Prototype::identity)
+        {
             return;
         }
         let owner = PropertyOwner::new(self.domain().clone());
-        let root = owner.root_for(prototype.as_ref(), flavor);
-        let mode = self.layout.mode.clone();
+        let root = owner.root_for(
+            if self.is_empty() {
+                None
+            } else {
+                prototype.as_ref()
+            },
+            flavor,
+        );
+        let mode = self.cold.mode().cloned();
+        self.invalidate_dependencies();
+        self.cold.clear_guard();
         if self.layout.dictionary {
-            self.invalidate_dependencies();
             let mut next = self.layout.copied(true);
             next.root = Some(root.clone());
             next.prototype = root.prototype.clone();
-            next.parent_state = root.parent_state.clone();
             next.flavor = flavor;
             self.layout = Rc::new(next);
             self.bump_epoch();
@@ -304,14 +366,19 @@ impl NamedStore {
             drop(fields);
             drop(keys);
             self.layout = next;
-            self.epoch = 0;
+            self.set_epoch(0);
         }
-        self.prototype = Self::retain_prototype(&root, prototype);
+        self.prototype = prototype.clone();
         if let Some(mode) = mode {
             PrototypeState::reparent(
                 &mode,
-                root.parent_state.clone(),
-                root.prototype.is_none() || root.parent_state.strong_count() > 0,
+                prototype
+                    .as_ref()
+                    .and_then(Prototype::enter_prototype_mode)
+                    .as_ref()
+                    .map(Rc::downgrade)
+                    .unwrap_or_default(),
+                prototype.is_none() || !matches!(prototype, Some(Prototype::Proxy(_))),
             );
         }
     }
@@ -319,29 +386,63 @@ impl NamedStore {
     #[inline(always)]
     pub(super) fn before_value_write(&self, value_only: bool) {
         // Additions have already invalidated through edit_layout/append.
-        if value_only && let Some(mode) = &self.layout.mode {
+        if value_only && let Some(mode) = self.cold.mode() {
             PrototypeState::value_write(mode);
         }
     }
     pub(crate) fn prototype_values_stable(&self) -> bool {
-        self.layout.mode.as_ref().is_some_and(|m| m.values_stable())
+        self.cold.mode().is_some_and(|m| m.values_stable())
     }
     pub(crate) fn invalidate_dependencies(&self) {
-        if let Some(mode) = &self.layout.mode {
+        if let Some(mode) = self.cold.mode() {
             PrototypeState::invalidate(mode);
         }
     }
 }
 
 impl Prototype {
+    /// Install only the demanded path, iteratively, without holding a store
+    /// borrow while following another receiver. Proxy ancestry is untrackable.
     pub(crate) fn enter_prototype_mode(&self) -> Option<Rc<PrototypeState>> {
-        match self {
-            Self::Object(o) => Some(o.with_named_mut(NamedStore::prototype_mode)),
-            Self::Array(a) => Some(a.array_ref().with_named_mut(NamedStore::prototype_mode)),
-            Self::Function(f) => Some(f.with_named_mut(NamedStore::prototype_mode)),
-            Self::Map(m) => Some(m.object_ref().with_named_mut(NamedStore::prototype_mode)),
-            Self::Set(s) => Some(s.object_ref().with_named_mut(NamedStore::prototype_mode)),
-            Self::Proxy(_) => None,
+        let mut next = Some(self.clone());
+        let mut path = Vec::new();
+        let mut parent = None;
+        let mut trackable = true;
+        while let Some(prototype) = next {
+            let local = |s: &mut NamedStore| (s.prototype_mode(), s.prototype());
+            let (state, above) = match prototype {
+                Self::Object(o) => o.with_named_mut(local),
+                Self::Array(a) => a.array_ref().with_named_mut(local),
+                Self::Function(f) => f.with_named_mut(local),
+                Self::Map(m) => m.object_ref().with_named_mut(local),
+                Self::Set(s) => s.object_ref().with_named_mut(local),
+                Self::Proxy(_) => {
+                    trackable = false;
+                    break;
+                }
+            };
+            if state.initialized.get() {
+                parent = Some(state);
+                break;
+            }
+            path.push(state);
+            next = above;
         }
+        for state in path.into_iter().rev() {
+            *state.parent.borrow_mut() = parent.as_ref().map(Rc::downgrade).unwrap_or_default();
+            state.direct_trackable.set(trackable);
+            state
+                .trackable
+                .set(trackable && parent.as_ref().is_none_or(|p| p.trackable.get()));
+            state.initialized.set(true);
+            PrototypeState::register(&state);
+            parent = Some(state);
+            trackable = true;
+        }
+        parent
     }
 }
+
+#[cfg(test)]
+#[path = "prototype_tests.rs"]
+mod tests;

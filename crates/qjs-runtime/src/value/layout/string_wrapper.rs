@@ -10,16 +10,15 @@ impl StringWrapperLayout {
         let store = NamedStore::string_wrapper(domain, Some(prototype), 0.0);
         Self {
             layout: store.layout,
-            prototype: store.prototype,
+            prototype: store.prototype.map(Rc::new),
         }
     }
     pub(crate) fn instantiate(&self, length: f64) -> NamedStore {
         let store = NamedStore {
             layout: self.layout.clone(),
-            prototype: self.prototype.clone(),
+            prototype: self.prototype.as_deref().cloned(),
             values: ValueSlots::One(Value::Number(length)),
-            accessors: None,
-            epoch: 0,
+            cold: ColdStorage::default(),
         };
         store.verify();
         store

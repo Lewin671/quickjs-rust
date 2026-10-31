@@ -18,9 +18,6 @@ impl Layout {
             transitions: RefCell::new(transitions::Transitions::default()),
             root: self.root.clone(),
             prototype: self.prototype.clone(),
-            prototype_value: RefCell::new(Weak::new()),
-            parent_state: self.parent_state.clone(),
-            mode: self.mode.clone(),
             flavor: self.flavor,
             capacity_hint: std::cell::Cell::new(0),
             append_misses: std::cell::Cell::new(0),
@@ -92,9 +89,6 @@ impl Layout {
             transitions: RefCell::new(transitions::Transitions::default()),
             root: Some(self.root.as_ref().unwrap_or(self).clone()),
             prototype: self.prototype.clone(),
-            prototype_value: RefCell::new(Weak::new()),
-            parent_state: self.parent_state.clone(),
-            mode: None,
             flavor: self.flavor,
             capacity_hint: std::cell::Cell::new(0),
             append_misses: std::cell::Cell::new(0),
@@ -236,23 +230,23 @@ impl Lookup<'_> {
         if !self.store.layout.dictionary
             && matches!(self.store.layout.incoming, Some(Transition::Append { .. }))
             && position + 1 == self.store.len()
-            && self.store.epoch != u64::MAX
+            && self.store.epoch() != u64::MAX
             && let Some(parent) = self.store.layout.parent.clone()
         {
             self.store.invalidate_dependencies();
             self.store.layout = parent;
             self.store.bump_epoch();
             self.store.values.pop();
-            if let Some(slots) = &mut self.store.accessors {
+            if let Some(slots) = self.store.cold.as_mut() {
                 slots.remove(&(position as u32));
             }
             if self
                 .store
-                .accessors
+                .cold
                 .as_ref()
                 .is_some_and(|slots| slots.is_empty())
             {
-                self.store.accessors = None;
+                self.store.cold.clear();
             }
             self.store.verify();
             return Some(old);
@@ -278,7 +272,7 @@ impl Lookup<'_> {
             }
             layout.private_data().reaccount(before_bytes);
             self.store.values.swap_remove(position);
-            if let Some(slots) = self.store.accessors.as_mut() {
+            if let Some(slots) = self.store.cold.as_mut() {
                 slots.remove(&(position as u32));
                 if position < last
                     && let Some(pair) = slots.remove(&(last as u32))
@@ -298,7 +292,7 @@ impl Lookup<'_> {
             layout.next_order = layout.len as u32 - 1;
             layout.private_data().reaccount(before_bytes);
             self.store.values.remove(position);
-            if let Some(slots) = self.store.accessors.as_mut() {
+            if let Some(slots) = self.store.cold.as_mut() {
                 let previous = std::mem::take(slots.as_mut());
                 for (slot, pair) in previous {
                     if (slot as usize) < position {
@@ -312,11 +306,11 @@ impl Lookup<'_> {
         self.store.layout_mut_len_after_remove();
         if self
             .store
-            .accessors
+            .cold
             .as_ref()
             .is_some_and(|slots| slots.is_empty())
         {
-            self.store.accessors = None;
+            self.store.cold.clear();
         }
         Rc::get_mut(&mut self.store.layout)
             .expect("private edited layout")
@@ -334,16 +328,17 @@ impl NamedStore {
     }
     pub(super) fn bump_epoch(&mut self) {
         if !self.layout.dictionary {
-            self.epoch = 0;
+            self.set_epoch(0);
             return;
         }
-        self.epoch = match self.epoch.checked_add(1) {
+        let epoch = match self.epoch().checked_add(1) {
             Some(next) if next != 0 => next,
             _ => {
                 self.layout = Rc::new(self.layout.copied(true));
                 1
             }
         };
+        self.set_epoch(epoch);
     }
     fn edit_layout(&mut self, force_dictionary: bool) -> &mut Layout {
         self.invalidate_dependencies();
@@ -356,8 +351,8 @@ impl NamedStore {
         if !self.layout.dictionary {
             self.layout = Rc::new(self.layout.copied(dictionary));
         }
-        if dictionary && self.epoch == 0 {
-            self.epoch = 1;
+        if dictionary && self.epoch() == 0 {
+            self.set_epoch(1);
         }
         let layout = Rc::make_mut(&mut self.layout);
         layout.edits = edits;
