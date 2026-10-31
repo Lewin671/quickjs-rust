@@ -66,6 +66,8 @@ declare_counters! {
     /// body, before any tier decides how to run it. A workload that claims N
     /// calls must report about N here, or the workload is not measuring calls.
     ordinary_call_attempts,
+    /// Host/callback forwarding to the direct-leaf entry; not a second JS call.
+    ordinary_call_forwardings,
     /// Calls answered by a closed-form leaf evaluator without building any
     /// frame. This is the tier that makes a foldable benchmark look free.
     closed_form_leaf_evaluations,
@@ -117,6 +119,14 @@ declare_counters! {
     call_env_clones,
     /// Retired caller/callee environment equality proof; no counting site remains.
     call_env_equality_proofs,
+    /// Retired execution projection/fork/apply-back boundaries; no sites remain.
+    legacy_binding_snapshot_calls,
+    legacy_frame_fork_calls,
+    legacy_applyback_calls,
+    /// S3a-retired native argument ownership/family dispatch; no sites remain.
+    argument_vec_native_pop,
+    native_family_probes,
+    native_family_declines,
     /// Retired direct-eval marker scrub event, retained during the Context
     /// migration audit. Typed eval sites have no counting site for this event.
     call_env_marker_scrubs,
@@ -233,9 +243,7 @@ declare_counters! {
     /// building neither a frame nor an environment. This is a tier
     /// attribution: such a call is counted here and nowhere else.
     compact_direct_calls,
-    /// Direct-leaf calls from the ordinary interpreter or a loop plan that a
-    /// compact tier ran in the caller's own environment, with no frame built.
-    /// Also a tier attribution: counted here and nowhere else.
+    /// Retired caller-environment tier substitution; no counting site remains.
     compact_caller_env_calls,
 }
 

@@ -142,7 +142,12 @@ fn call_with_arguments(
         );
     }
     if let Some(bytecode) = &function.bytecode {
-        crate::diagnostics::count!(ordinary_call_attempts);
+        // Direct forwarding is attributed at the leaf entry. Keep this proof
+        // entirely out of production builds, including its admission probe.
+        #[cfg(feature = "perf-counters")]
+        if is_construct || !is_direct_leaf_function(callee) {
+            crate::diagnostics::count!(ordinary_call_attempts);
+        }
         if function.is_generator && function.is_async {
             let enter_function_activation = enter_function_activation(
                 function,
@@ -215,13 +220,11 @@ fn call_with_arguments(
         if function.is_class_constructor && !function.is_derived_constructor && is_construct {
             initialize_instance_fields(function, &this_value, env)?;
         }
-        // A native's callback -- `forEach`, `map`, `replace` -- calling an
-        // ordinary function takes the path the interpreter's own calls take:
-        // the compact tiers run it in the caller's environment, and only a
-        // body they decline builds its slot-seeded frame. The general path
-        // below built a compatibility frame for every such call, which was
-        // most of a small callback's cost.
+        // Native callbacks use the same callee-owned direct entry as VM
+        // calls. Bodies needing dynamic scope, suspension or a general
+        // prologue retain the prepared-frame route below.
         if !is_construct && is_direct_leaf_function(callee) {
+            crate::diagnostics::count!(ordinary_call_forwardings);
             return call_direct_leaf_function(callee.clone(), this_value, argument_values, env);
         }
         crate::diagnostics::count!(generic_call_frames);

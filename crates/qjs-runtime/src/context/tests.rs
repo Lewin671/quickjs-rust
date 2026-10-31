@@ -371,3 +371,37 @@ fn specialized_native_errors_keep_the_foreign_realm_inside_a_caller_body() {
         matches!(error.prototype_slot(), Some(crate::Prototype::Object(prototype)) if prototype.ptr_eq(&expected))
     );
 }
+
+#[cfg(feature = "perf-counters")]
+#[test]
+fn callback_forwarding_counts_each_javascript_entry_once() {
+    crate::reset_counters();
+    assert_eq!(
+        crate::eval("(function() { return [1, 2, 3].map(value => value + 1).join(':'); })();"),
+        Ok(Value::String("2:3:4".into()))
+    );
+    let counters = crate::counters().unwrap();
+    assert_eq!(counters.ordinary_call_attempts, 4);
+    assert_eq!(counters.ordinary_call_forwardings, 0);
+    let function = crate::eval("value => value + 1;").unwrap();
+    let mut root = HostRoot::script();
+    crate::reset_counters();
+    assert_eq!(
+        crate::call_function(
+            function,
+            Value::Undefined,
+            vec![Value::Number(2.0)],
+            &mut root.context(),
+            false
+        ),
+        Ok(Value::Number(3.0))
+    );
+    let counters = crate::counters().unwrap();
+    assert_eq!(counters.ordinary_call_attempts, 1);
+    assert_eq!(counters.ordinary_call_forwardings, 1);
+    assert_eq!(counters.call_env_constructions, 0);
+    assert_eq!(counters.call_env_clones, 0);
+    assert_eq!(counters.legacy_applyback_calls, 0);
+    assert_eq!(counters.native_family_probes, 0);
+    assert_eq!(counters.argument_vec_native_pop, 0);
+}

@@ -908,3 +908,22 @@ The first two fail before the fix; the specialized-call test protects the native
 shortcut as well. All **2,654 feature tests**, **297 serial NG scripts** and the
 fresh staged gate (**2,601 default tests + 65 Test262 cases**) pass. Final S3b
 acceptance remains open.
+
+
+## B6b logical-entry denominator and explicit retired events
+
+Over `eca56b86`, diagnostic ordinary_call_attempts counts one entry when the
+owned-argument host dispatcher forwards to a direct leaf. Previously both the
+host dispatcher and leaf entry incremented it. The admission check used solely
+for this attribution is feature-gated and absent in production code. A separate
+ordinary_call_forwardings event retains the observable routing count. A focused
+counter test proves four entries for an outer function plus three map callbacks,
+and one entry/one forwarding for an owned host call.
+
+Explicit zero-site counters retain the named snapshot/fork/apply-back boundaries
+and S3a native argument-pop/family-probe/decline events. They identify removed
+work; typed cell/lease/owner and recycler events remain separate. The retired
+caller-environment substitution counter description is corrected. Clean accepted
+S2 and final candidate ten-program maps are collected separately, twice each;
+no timing is inferred from counter builds. Fresh **2,655 feature tests** and the
+staged gate (**2,601 default tests + 52 Test262 cases**) pass.
