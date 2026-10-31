@@ -251,3 +251,19 @@ sweeps geometrically by live root count, only on new canonical root creation;
 no new work enters own hits or unobserved transient appends. Test stable-root
 reuse after the last receiver dies and bounded dead-binding churn before
 measuring; retain 80-byte nodes and unchanged tiny shared-data/slot invariants.
+
+
+Live-root job `20261031T123913Z-t077-s2fu-r2-live-roots`, runtime `4e788129`,
+recovers the earlier profile: dynamic-read 1.045843 and captured-write 1.000059;
+diff 0.999991, lodash 1.000887, meriyah 1.001367. x86 mem3 is 4.03 MB versus
+4.49 MB pre-S2 (quiet three pairs), native 5.57 versus 6.16 MB. The new
+liveness test and 2,520-test fast gate pass. Live-prototype reuse must remain.
+The residual generic keyed lookup pays the tiny/indexed mode branch plus
+recomputing the power-of-two hash shift on every indexed probe. Next stage
+stores that capacity-derived shift in IdIndex, refreshing only on construction
+or rebuild. Prefix clones preserve it with their bucket allocation; probe
+capacity proofs and collision/deletion semantics stay unchanged. The bound
+Layout/NamedStore sizes stay 80/64 bytes; LayoutData grows by eight bytes, and
+its existing size-based accounting includes that change. Run collision, growth,
+delete/reinsert and prefix tests via the fast gate, then focused instructions
+and original memory before any final qualification.

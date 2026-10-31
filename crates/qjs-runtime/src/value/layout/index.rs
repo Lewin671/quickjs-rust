@@ -4,6 +4,7 @@
 //! prefix forks rebuild and consume a new proof as cold structural work.
 //! Each insertion reserves space for the next one; index rebuilds are counted
 //! separately from operation probes. Shared-tail admission lives in storage.
+//! The hash shift is derived from bucket capacity only at allocation/rebuild.
 
 use crate::property::atom::KeyId;
 
@@ -21,6 +22,7 @@ const EMPTY: Bucket = Bucket {
 #[derive(Clone)]
 pub(super) struct IdIndex {
     buckets: Vec<Bucket>,
+    hash_shift: u32,
     len: usize,
     tombstones: usize,
 }
@@ -47,6 +49,7 @@ impl IdIndex {
     pub(super) fn new() -> Self {
         Self {
             buckets: vec![EMPTY; 8],
+            hash_shift: Self::shift_for(8),
             len: 0,
             tombstones: 0,
         }
@@ -57,6 +60,7 @@ impl IdIndex {
     pub(super) fn unallocated() -> Self {
         Self {
             buckets: Vec::new(),
+            hash_shift: 0,
             len: 0,
             tombstones: 0,
         }
@@ -64,8 +68,12 @@ impl IdIndex {
     pub(super) fn allocated(&self) -> bool {
         !self.buckets.is_empty()
     }
+    fn shift_for(capacity: usize) -> u32 {
+        32 - capacity.trailing_zeros().min(32)
+    }
+    #[cfg(test)]
     fn bucket(key: KeyId, capacity: usize) -> usize {
-        (key.get().wrapping_mul(0x9e37_79b1) >> (32 - capacity.trailing_zeros().min(32))) as usize
+        (key.get().wrapping_mul(0x9e37_79b1) >> Self::shift_for(capacity)) as usize
     }
     pub(super) fn probe(&self, key: KeyId) -> IdProbe {
         crate::diagnostics::count!(property_id_probes);
@@ -73,7 +81,7 @@ impl IdIndex {
     }
     pub(super) fn probe_uncounted(&self, key: KeyId) -> IdProbe {
         let mask = self.buckets.len() - 1;
-        let mut bucket = Self::bucket(key, self.buckets.len());
+        let mut bucket = (key.get().wrapping_mul(0x9e37_79b1) >> self.hash_shift) as usize;
         let mut vacancy = None;
         loop {
             let entry = self.buckets[bucket];
@@ -163,6 +171,7 @@ impl IdIndex {
     fn rebuild(&mut self, capacity: usize) {
         crate::diagnostics::count!(property_id_index_rebuilds);
         let previous = std::mem::replace(&mut self.buckets, vec![EMPTY; capacity]);
+        self.hash_shift = Self::shift_for(capacity);
         self.tombstones = 0;
         for entry in previous {
             if let Some(key) = entry.key {

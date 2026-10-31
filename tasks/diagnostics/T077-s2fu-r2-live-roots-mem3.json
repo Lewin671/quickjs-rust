@@ -1,0 +1,67 @@
+{
+  "binaries": {
+    "pre": {
+      "path": "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261031T123913Z-t077-s2fu-r2-live-roots/out/pre/qjs",
+      "sha256": "ca0254a1a4b9e0ce839ea0752b0668324042ffee33fd11481162709b89f862c9"
+    },
+    "candidate": {
+      "path": "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261031T123913Z-t077-s2fu-r2-live-roots/out/instructions/4e788129/qjs",
+      "sha256": "a73be17a95dd4bfc3e4fbf221ce1c19d9998e8c1e8367ecc80c454c1f1071b19"
+    }
+  },
+  "pairs": 3,
+  "cases": {
+    "mem3": {
+      "sha256": "47018c33a8a2ee44265730fa1f3c39d493d9505fc14664d1a7fe5ab14e006c8f",
+      "samples": {
+        "pre": [
+          {
+            "wall_s": 2.640272529097274,
+            "rss_bytes": 4485120,
+            "stdout": "churn 1000000\nUndefined"
+          },
+          {
+            "wall_s": 1.7601887709461153,
+            "rss_bytes": 4485120,
+            "stdout": "churn 1000000\nUndefined"
+          },
+          {
+            "wall_s": 1.7255113800056279,
+            "rss_bytes": 4485120,
+            "stdout": "churn 1000000\nUndefined"
+          }
+        ],
+        "candidate": [
+          {
+            "wall_s": 2.2398146281484514,
+            "rss_bytes": 4026368,
+            "stdout": "churn 1000000\nUndefined"
+          },
+          {
+            "wall_s": 2.2249800621066242,
+            "rss_bytes": 4026368,
+            "stdout": "churn 1000000\nUndefined"
+          },
+          {
+            "wall_s": 2.242347812047228,
+            "rss_bytes": 4026368,
+            "stdout": "churn 1000000\nUndefined"
+          }
+        ]
+      },
+      "median": {
+        "pre": {
+          "wall_s": 1.7601887709461153,
+          "rss_bytes": 4485120
+        },
+        "candidate": {
+          "wall_s": 2.2398146281484514,
+          "rss_bytes": 4026368
+        }
+      }
+    }
+  },
+  "load_monitor_interval_s": 0.5,
+  "load_events": [],
+  "valid_quiet_host": true
+}
