@@ -105,6 +105,9 @@ impl CacheData {
             return;
         };
         let mut flags = if resolution.inherited { 0 } else { OWN };
+        if version.is_shared() {
+            flags |= SHARED;
+        }
         if resolution.first_holder {
             flags |= FIRST_HOLDER;
         }

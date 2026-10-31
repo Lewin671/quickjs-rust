@@ -1,11 +1,11 @@
 # T077 S2 follow-up, lead feedback round 2
 
 - Status: active; implementation present, final performance qualification in progress.
-- Implementation: runtime `4c6fc5c6`, exactly retained at `f05baa01` except x86 order/docs; no pending runtime edits.
+- Implementation: retained 4c6fc5c6 runtime plus a shared-entry witness fast path under current qualification. Entry/receiver/layout sizes are unchanged.
 - Verified at: full native check on `4c6fc5c6` passes 2,524 runtime tests and 5,170 curated Test262 cases; all 268 NG fixtures pass cached/off/debug-verify. Final exact/resource standing is pending.
 - Evidence: [iteration history](../archive/T077-s2fu-r2-iterations.md), [architecture](../../docs/design/core-rebuild-objects.md), named receipts below.
 - Unresolved: final all-lane performance limits, complete cached/off exact scans with burndown, final native/x86 resource replays; mx2 source reconstruction caveat.
-- Next action: collect retained-source public86, then complete final qualification. Commit here only; no origin push or merge.
+- Next action: focused shared-witness replay, then default-order relink/public86 and complete final qualification. Commit here only; no origin push or merge.
 
 ## Authority and targets
 
@@ -54,3 +54,28 @@ lead ~636 MB. [Program](t077-s2fu-r2/mx2.js); an additional
 [two-field control](t077-s2fu-r2/owned-two-chain.js) is also measured. The exact
 lead-source match is not claimed. The million-node owned chain and 250,000-parent
 two-field fan are separately retained in the same diagnostic directory.
+
+
+## Retained-screen decision and next guard stage
+
+Job `20261031T151127Z-t077-s2fu-r2-retained-public86`, f05baa01: 430 valid,
+zero invalid/heavy pairs. Wall/instructions: development 0.998221/0.997611;
+external 1.002905/1.001250; broad 0.987326/0.998252;
+sentinel 0.978639/0.996009. External remains open. The corrected native
+collector accepts the first undisturbed retained-source replay; results are
+under the native-retained receipt pending final source selection.
+
+Next classify shared monomorphic own-data entries in an unused existing flags
+bit at admission. Their metadata is immutable, so a direct identity guard
+suffices, as in SharedOwnPoly; keep private/versioned entries on the original
+guard and keep shared-own masks branch-free. Entry/CacheData/receiver sizes
+must not grow. A dictionary-conversion test must retire the shared witness,
+then prove private-epoch invalidation after delete/re-add. No cached JS values,
+prototype snapshots or binding-model changes are introduced.
+
+The witness fast gate passes 2,525 runtime tests, 65 selected Test262 cases and
+clippy. Shared generic object guards retain the cold-seed fallback; only
+monomorphic shared own-data hits omit epochs entirely. Versioned own hits keep
+the original guard in a separate adapter; no private-dictionary or global
+binding guard is weakened. The task-index budget issue from the archive
+checkpoint is repaired in this commit and the fast gate is rerun successfully.

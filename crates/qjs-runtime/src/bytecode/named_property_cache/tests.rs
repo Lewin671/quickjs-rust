@@ -648,3 +648,26 @@ fn own_slot_admission_publishes_rebased_full_array_and_function_authorities() {
         assert_eq!(cache.get_value(&value, None), Some(Value::Number(9.0)));
     }
 }
+
+#[test]
+fn shared_own_witness_retires_on_dictionary_conversion_and_private_reconfiguration() {
+    let domain = AtomDomain::new();
+    let _owner = crate::value::layout::PropertyOwner::new(domain.clone());
+    let object = object(&domain, "x", 1.0);
+    let shared = NamedPropertyCache::default();
+    assert_eq!(shared.read_object(&object, "x"), Some(Value::Number(1.0)));
+    assert_ne!(shared.0.first.get().unwrap().flags & SHARED, 0);
+    object.set("x".into(), Value::Number(2.0));
+    assert_eq!(shared.get(&object), Some(Value::Number(2.0)));
+    for i in 0..130 {
+        object.set(format!("p{i}"), Value::Null);
+    }
+    assert!(shared.get(&object).is_none());
+    let private = NamedPropertyCache::default();
+    assert_eq!(private.read_object(&object, "x"), Some(Value::Number(2.0)));
+    assert_eq!(private.0.first.get().unwrap().flags & SHARED, 0);
+    object.delete_own_property("x");
+    object.set("x".into(), Value::Number(3.0));
+    assert!(private.get(&object).is_none());
+    assert_eq!(private.read_object(&object, "x"), Some(Value::Number(3.0)));
+}
