@@ -431,3 +431,16 @@ fn string_payload_keeps_optional_general_extension_identity() {
     assert_eq!(object.string_data().unwrap(), "two");
     assert!(std::ptr::eq(general, object.0.cold_if_present().unwrap()));
 }
+
+#[test]
+fn prototype_cycle_checks_walk_deep_chains_without_recursion() {
+    use crate::Prototype;
+    let domain = crate::property::atom::AtomDomain::new();
+    let root = ObjectRef::new(HashMap::new(), &domain);
+    let mut head = root.clone();
+    for _ in 0..16_000 {
+        head = ObjectRef::with_prototype(HashMap::new(), Some(head), &domain);
+    }
+    assert!(Prototype::Object(head.clone()).would_cycle(&root));
+    assert!(!Prototype::Object(head).would_cycle(&ObjectRef::new(HashMap::new(), &domain)));
+}

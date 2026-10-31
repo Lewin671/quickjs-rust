@@ -250,195 +250,41 @@ impl Prototype {
         }
     }
 
-    /// Whether this prototype is (or descends to) the object `target`, used to
-    /// reject prototype cycles.
+    /// Ordinary cycle checks stop at proxies, without invoking their traps.
+    /// Carrier objects use their ordinary payload identity, matching [[Prototype]].
     fn would_cycle(&self, target: &ObjectRef) -> bool {
-        self.would_cycle_inner(target, &mut Vec::new(), &mut Vec::new(), &mut Vec::new())
-    }
-
-    fn would_cycle_inner(
-        &self,
-        target: &ObjectRef,
-        seen_objects: &mut Vec<ObjectRef>,
-        seen_arrays: &mut Vec<ArrayRef>,
-        seen_functions: &mut Vec<Function>,
-    ) -> bool {
-        match self {
-            Self::Object(object) => {
-                if object.ptr_eq(target) {
-                    return true;
-                }
-                if seen_objects.iter().any(|seen| seen.ptr_eq(object)) {
-                    return false;
-                }
-                seen_objects.push(object.clone());
-                object.prototype_slot().is_some_and(|prototype| {
-                    prototype.would_cycle_inner(target, seen_objects, seen_arrays, seen_functions)
-                })
-            }
-            Self::Array(array_prototype) => {
-                let array = array_prototype.array();
-                if seen_arrays.iter().any(|seen| seen.ptr_eq(&array)) {
-                    return false;
-                }
-                seen_arrays.push(array);
-                array_prototype
-                    .effective_prototype_slot()
-                    .is_some_and(|prototype| {
-                        prototype.would_cycle_inner(
-                            target,
-                            seen_objects,
-                            seen_arrays,
-                            seen_functions,
-                        )
-                    })
-            }
-            Self::Function(function) => {
-                if seen_functions.iter().any(|seen| seen.ptr_eq(function)) {
-                    return false;
-                }
-                seen_functions.push(function.clone());
-                function
-                    .effective_internal_prototype()
-                    .is_some_and(|prototype| {
-                        prototype.would_cycle_inner(
-                            target,
-                            seen_objects,
-                            seen_arrays,
-                            seen_functions,
-                        )
-                    })
-            }
-            Self::Proxy(_) => false,
-
-            Self::Map(_carrier) => {
-                let object = &_carrier.object();
-
-                if object.ptr_eq(target) {
-                    return true;
-                }
-                if seen_objects.iter().any(|seen| seen.ptr_eq(object)) {
-                    return false;
-                }
-                seen_objects.push(object.clone());
-                object.prototype_slot().is_some_and(|prototype| {
-                    prototype.would_cycle_inner(target, seen_objects, seen_arrays, seen_functions)
-                })
-            }
-
-            Self::Set(_carrier) => {
-                let object = &_carrier.object();
-
-                if object.ptr_eq(target) {
-                    return true;
-                }
-                if seen_objects.iter().any(|seen| seen.ptr_eq(object)) {
-                    return false;
-                }
-                seen_objects.push(object.clone());
-                object.prototype_slot().is_some_and(|prototype| {
-                    prototype.would_cycle_inner(target, seen_objects, seen_arrays, seen_functions)
-                })
-            }
-        }
+        self.chain_contains((1, target.address()))
     }
 
     pub(crate) fn would_cycle_array(&self, target: &ArrayRef) -> bool {
-        self.would_cycle_array_inner(target, &mut Vec::new(), &mut Vec::new(), &mut Vec::new())
+        self.chain_contains((2, target.address()))
     }
 
-    fn would_cycle_array_inner(
-        &self,
-        target: &ArrayRef,
-        seen_objects: &mut Vec<ObjectRef>,
-        seen_arrays: &mut Vec<ArrayRef>,
-        seen_functions: &mut Vec<Function>,
-    ) -> bool {
-        match self {
-            Self::Array(array) => {
-                let current = array.array();
-                if current.ptr_eq(target) {
-                    return true;
-                }
-                if seen_arrays.iter().any(|seen| seen.ptr_eq(&current)) {
-                    return false;
-                }
-                seen_arrays.push(current);
-                array.effective_prototype_slot().is_some_and(|prototype| {
-                    prototype.would_cycle_array_inner(
-                        target,
-                        seen_objects,
-                        seen_arrays,
-                        seen_functions,
-                    )
-                })
+    fn chain_contains(&self, target: (u8, usize)) -> bool {
+        let mut seen = std::collections::HashSet::new();
+        let mut next = Some(self.clone());
+        while let Some(prototype) = next {
+            let identity = match &prototype {
+                Self::Map(m) => (1, m.object_ref().address()),
+                Self::Set(s) => (1, s.object_ref().address()),
+                _ => prototype.identity(),
+            };
+            if identity == target {
+                return true;
             }
-            Self::Object(object) => {
-                if seen_objects.iter().any(|seen| seen.ptr_eq(object)) {
-                    return false;
-                }
-                seen_objects.push(object.clone());
-                object.prototype_slot().is_some_and(|prototype| {
-                    prototype.would_cycle_array_inner(
-                        target,
-                        seen_objects,
-                        seen_arrays,
-                        seen_functions,
-                    )
-                })
+            if !seen.insert(identity) {
+                return false;
             }
-            Self::Function(function) => {
-                if seen_functions.iter().any(|seen| seen.ptr_eq(function)) {
-                    return false;
-                }
-                seen_functions.push(function.clone());
-                function
-                    .effective_internal_prototype()
-                    .is_some_and(|prototype| {
-                        prototype.would_cycle_array_inner(
-                            target,
-                            seen_objects,
-                            seen_arrays,
-                            seen_functions,
-                        )
-                    })
-            }
-            Self::Proxy(_) => false,
-
-            Self::Map(_carrier) => {
-                let object = &_carrier.object();
-
-                if seen_objects.iter().any(|seen| seen.ptr_eq(object)) {
-                    return false;
-                }
-                seen_objects.push(object.clone());
-                object.prototype_slot().is_some_and(|prototype| {
-                    prototype.would_cycle_array_inner(
-                        target,
-                        seen_objects,
-                        seen_arrays,
-                        seen_functions,
-                    )
-                })
-            }
-
-            Self::Set(_carrier) => {
-                let object = &_carrier.object();
-
-                if seen_objects.iter().any(|seen| seen.ptr_eq(object)) {
-                    return false;
-                }
-                seen_objects.push(object.clone());
-                object.prototype_slot().is_some_and(|prototype| {
-                    prototype.would_cycle_array_inner(
-                        target,
-                        seen_objects,
-                        seen_arrays,
-                        seen_functions,
-                    )
-                })
-            }
+            next = match prototype {
+                Self::Object(o) => o.prototype_slot(),
+                Self::Array(a) => a.effective_prototype_slot(),
+                Self::Function(f) => f.effective_internal_prototype(),
+                Self::Map(m) => m.object_ref().prototype_slot(),
+                Self::Set(s) => s.object_ref().prototype_slot(),
+                Self::Proxy(_) => None,
+            };
         }
+        false
     }
 
     /// The prototype as a JavaScript value, for `getPrototypeOf` and friends.

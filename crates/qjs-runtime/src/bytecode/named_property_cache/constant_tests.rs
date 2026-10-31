@@ -242,3 +242,19 @@ fn weak_accessor_constants_release_the_pair_and_its_getter() {
     assert!(weak.upgrade().is_none());
     assert!(constant.fetch().is_none());
 }
+
+#[test]
+fn virtual_properties_are_rejected_before_constant_fetch() {
+    let domain = AtomDomain::new();
+    let function = Function::new_native_in_domain(
+        Some("constructor"),
+        0,
+        NativeFunction::Object,
+        true,
+        &domain,
+    );
+    let holder = WeakTarget::Function(function.downgrade());
+    let before = function.virtual_named_probe("prototype");
+    assert!(Constant::admit(&holder, Probe::Virtual(Virtual::FunctionPrototype)).is_none());
+    assert_eq!(function.virtual_named_probe("prototype"), before);
+}

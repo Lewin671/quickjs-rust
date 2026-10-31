@@ -32,7 +32,7 @@ impl ConstantValue {
             ),
         }
     }
-    #[inline(never)]
+    #[inline(always)]
     fn load(&self) -> Option<Value> {
         Some(match self {
             Self::Number(n) => Value::Number(*n),
@@ -57,20 +57,20 @@ pub(super) enum Constant {
 }
 impl Constant {
     pub(super) fn admit(holder: &WeakTarget, probe: Probe) -> Option<Self> {
+        if !matches!(probe, Probe::Data { .. } | Probe::Accessor { .. }) {
+            return None;
+        }
         holder.upgrade()?.with_named_target(|target| {
             if !target.with_store(NamedStore::prototype_values_stable)? {
                 return None;
             }
             Some(match fetch_probe(target, probe)? {
-                ReadOutcome::Value(value) if matches!(probe, Probe::Data { .. }) => {
-                    Self::Data(ConstantValue::new(&value))
-                }
+                ReadOutcome::Value(value) => Self::Data(ConstantValue::new(&value)),
                 ReadOutcome::Accessor(property) => Self::Accessor {
                     pair: property.weak_accessors()?,
                     enumerable: property.enumerable,
                     configurable: property.configurable,
                 },
-                _ => return None,
             })
         })?
     }
