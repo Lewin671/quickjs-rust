@@ -236,8 +236,18 @@ pub(super) fn set_prop_named(
     if !wrote_data && is_strict {
         return Err(read_only_set_error());
     }
-    if updates_global_binding && wrote_data {
-        env.insert_realm(key.to_string(), value.clone());
+    if updates_global_binding
+        && wrote_data
+        && let Value::Object(global) = object
+    {
+        match global.own_property(key) {
+            Some(property) if !property.is_accessor() => {
+                env.insert_realm(key.to_string(), property.value);
+            }
+            _ => {
+                env.remove_realm(key);
+            }
+        }
     }
     Ok(value)
 }

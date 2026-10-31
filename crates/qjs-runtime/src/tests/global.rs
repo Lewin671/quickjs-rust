@@ -1982,3 +1982,13 @@ fn a_function_eval_var_shadows_the_global_for_later_assignments() {
         Ok(Value::String("3,5:undefined".to_owned().into()))
     );
 }
+
+#[test]
+fn global_accessor_writes_preserve_getter_authority() {
+    assert_eq!(
+        eval(include_str!(
+            "../../../../tests/fixtures/compare-qjs/s3b-scope-global-accessor-writes.js"
+        )),
+        Ok(Value::String("2:3:4:3:4".into())),
+    );
+}

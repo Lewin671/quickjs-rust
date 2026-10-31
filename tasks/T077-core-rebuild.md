@@ -2,8 +2,8 @@
 
 - Status: active; S3a and S1+S2 accepted and integrated (lead 2026-10-31); S2 follow-up and S3b in progress.
 - Implementation: main has S3a direct native entries/slices and S1+S2's one named-property authority (recycled KeyIds, prototype-sensitive shapes, validity cells, cell-protected weak prototype constants, shape ICs, construction recipes). Owner branches: `agent/t077-s2-followup/codex`, `agent/t077-s3b-context/codex`.
-- Verified at: S1+S2 `fc3deef7` (runtime `dc710e4b`): full check, 268 NG fixtures, 42,672/42,672 exact cached and IC-off; formal/held-out/RSS in [S1+S2 acceptance](diagnostics/T077-s1s2-acceptance.md); S3a in [S3a acceptance](diagnostics/T077-s3a-acceptance.md).
-- Evidence: [target](../docs/design/core-rebuild.md), [baseline](diagnostics/T077-baseline.md), [S2 freeze](diagnostics/T077-s2-freeze-qualification.md), [S2 round 4](diagnostics/T077-s2-r4-handoff.md), [S3 plan](proposals/T077-s3-plan.md), [S3b brief](proposals/T077-s3b-brief.md).
+- Verified at: S3b base `1e6e2a2b`; accessor repair: fast gate, 269 NG fixtures, 178/178 variable slice, feature compile pass (working tree). S1+S2 `fc3deef7` (runtime `dc710e4b`): full check, 268 NG fixtures, 42,672/42,672 exact cached and IC-off; formal/held-out/RSS in [S1+S2 acceptance](diagnostics/T077-s1s2-acceptance.md); S3a in [S3a acceptance](diagnostics/T077-s3a-acceptance.md).
+- Evidence: [S3b progress](diagnostics/T077-s3b-progress.md), [target](../docs/design/core-rebuild.md), [baseline](diagnostics/T077-baseline.md), [S2 freeze](diagnostics/T077-s2-freeze-qualification.md), [S2 round 4](diagnostics/T077-s2-r4-handoff.md), [S3 plan](proposals/T077-s3-plan.md), [S3b brief](proposals/T077-s3b-brief.md).
 - Unresolved: accepted local regressions (external +0.25% vs S3a, typed-loop/wide static size) are S3e/S4 obligations; prototype-mode memory/complexity fixes are the S2 follow-up; the global accessor stale-read bug is in S3b; deep Rust-stack exhaustion is S3d-owned.
 - Next action: S2 follow-up and S3b owners implement on their branches; lead measures and integrates each. Cumulative vs baseline: development 0.893, external 0.996, selection 0.978, held-out 0.929.
 

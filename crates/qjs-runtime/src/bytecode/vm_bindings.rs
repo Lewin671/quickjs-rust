@@ -1435,7 +1435,15 @@ impl Vm<'_> {
         let Some(global_this) = self.cached_global_this() else {
             return;
         };
-        if global_this.has_own_property(name) {
+        let Some(property) = global_this.own_property(name) else {
+            return;
+        };
+        if property.is_accessor() {
+            // The setter has already run. A value projected by the caller's
+            // compatibility view is neither the getter result nor a data
+            // binding: keep identifier reads on the semantic global Get path.
+            self.env.remove_realm(name);
+        } else {
             global_this.set(name.to_owned(), value.clone());
             self.env.insert_realm(name.to_owned(), value);
         }

@@ -1308,7 +1308,17 @@ impl<'a> Vm<'a> {
             && wrote_data
             && let crate::PropertyKey::String(key) = key
         {
-            self.env.insert_realm(key, value.clone());
+            // [[Set]] success also includes calling a setter. Only the
+            // resulting own data descriptor can supply a realm cell value;
+            // a setter may redefine/delete the property or change its value.
+            match self.global_this_own_property(&key) {
+                Some(property) if !property.is_accessor() => {
+                    self.env.insert_realm(key, property.value);
+                }
+                _ => {
+                    self.env.remove_realm(&key);
+                }
+            }
         }
         self.stack.push(value);
         Ok(())
