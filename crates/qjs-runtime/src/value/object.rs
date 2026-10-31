@@ -637,8 +637,11 @@ impl ObjectRef {
             values.truncate(shape.unique_len());
         }
         let prototype = prototype.map(Prototype::Object);
-        let store =
-            NamedStore::from_data_layout(shape.linked_layout(domain, prototype.as_ref()), values);
+        let store = NamedStore::from_data_layout(
+            shape.linked_layout(domain, prototype.as_ref()),
+            values,
+            prototype,
+        );
         Self::from_ready_named(store, shape.index_property_count)
     }
 
@@ -652,8 +655,11 @@ impl ObjectRef {
             return Self::with_literal_properties(shape, Vec::from(values), prototype, domain);
         }
         let prototype = prototype.map(Prototype::Object);
-        let store =
-            NamedStore::from_data_pair(shape.linked_layout(domain, prototype.as_ref()), values);
+        let store = NamedStore::from_data_pair(
+            shape.linked_layout(domain, prototype.as_ref()),
+            values,
+            prototype,
+        );
         Self::from_ready_named(store, shape.index_property_count)
     }
 

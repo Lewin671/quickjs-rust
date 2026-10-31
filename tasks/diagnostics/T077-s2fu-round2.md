@@ -377,3 +377,14 @@ not own JS values after construction. Keep the cached layout weak with respect
 to prototypes; only the live builder/receiver owns the value. Add a lifetime
 regression covering an otherwise-unowned prototype and both predicted/mismatch
 completion before measuring this constructor path.
+
+
+Owned-builder source `674891f8`, job
+`20261031T142943Z-t077-s2fu-r2-owned-prototype`, reduces JSON parse
+1.010808 -> 1.006605 and diff 0.999271 -> 0.997952 while keeping dynamic read
+0.974203. The literal factories have the same redundant reacquisition: both
+with_literal_properties and with_literal_pair already own the exact prototype
+passed to linked_layout. Move that edge into NamedStore as well and remove the
+weak-reacquiring slot wrapper. Private dictionary copies still initialize their
+own metadata/version; cache layouts continue owning only weak prototype links.
+The external limit remains unchanged; measure both bulk-construction checkpoints.

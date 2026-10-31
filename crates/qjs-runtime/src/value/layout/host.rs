@@ -39,27 +39,24 @@ impl NamedStore {
     pub(crate) fn reserve(&mut self, capacity: usize) {
         self.values.reserve(capacity);
     }
-    pub(crate) fn from_data_layout(layout: Rc<Layout>, values: Vec<Value>) -> Self {
-        Self::from_slots(layout, ValueSlots::from_vec(values))
+    pub(crate) fn from_data_layout(
+        layout: Rc<Layout>,
+        values: Vec<Value>,
+        prototype: Option<crate::Prototype>,
+    ) -> Self {
+        Self::from_slot_parts(layout, ValueSlots::from_vec(values), None, prototype)
     }
     /// Unique two-key input is already in slot order and needs no Vec allocation.
-    pub(crate) fn from_data_pair(layout: Rc<Layout>, values: [Value; 2]) -> Self {
-        Self::from_slots(layout, ValueSlots::pair(values))
-    }
-    pub(super) fn from_slots(layout: Rc<Layout>, values: ValueSlots) -> Self {
-        Self::from_slot_parts(layout, values, None)
-    }
-    pub(super) fn from_slot_parts(
+    pub(crate) fn from_data_pair(
         layout: Rc<Layout>,
-        values: ValueSlots,
-        accessors: Option<Box<AccessorSlots>>,
+        values: [Value; 2],
+        prototype: Option<crate::Prototype>,
     ) -> Self {
-        let prototype = layout.prototype.as_ref().and_then(WeakPrototype::upgrade);
-        Self::from_slot_parts_with_prototype(layout, values, accessors, prototype)
+        Self::from_slot_parts(layout, ValueSlots::pair(values), None, prototype)
     }
     /// A live builder can move its already-owned prototype into the receiver.
     /// The caller has already matched this edge to the layout.
-    pub(super) fn from_slot_parts_with_prototype(
+    pub(super) fn from_slot_parts(
         layout: Rc<Layout>,
         values: ValueSlots,
         accessors: Option<Box<AccessorSlots>>,

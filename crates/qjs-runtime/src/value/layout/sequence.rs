@@ -104,7 +104,7 @@ impl DataSequence {
             while prefix.len > values.len() {
                 prefix = prefix.parent().expect("append-only prediction");
             }
-            self.phase = Phase::Generic(NamedStore::from_slot_parts_with_prototype(
+            self.phase = Phase::Generic(NamedStore::from_slot_parts(
                 prefix.clone(),
                 std::mem::replace(values, ValueSlots::Empty),
                 accessors.take(),
@@ -142,7 +142,7 @@ impl DataSequence {
                 while layout.len > values.len() {
                     layout = layout.parent().expect("prefix").clone();
                 }
-                NamedStore::from_slot_parts_with_prototype(layout, values, accessors, prototype)
+                NamedStore::from_slot_parts(layout, values, accessors, prototype)
             }
             Phase::Generic(store) => store,
         };
