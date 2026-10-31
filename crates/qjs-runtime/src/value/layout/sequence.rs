@@ -1,6 +1,7 @@
 //! Unobserved ordered construction. Predictions validate each key/descriptor;
 //! a mismatch resumes common insertion from exactly the completed prefix.
 //! Predictions come only from unique append-only construction, before exposure.
+//! The builder owns its actual prototype; cached predictions own no JS edge.
 use super::*;
 
 pub(crate) struct DataSequence {
@@ -13,6 +14,7 @@ enum Phase {
         layout: Rc<Layout>,
         values: ValueSlots,
         accessors: Option<Box<AccessorSlots>>,
+        prototype: Option<crate::Prototype>,
     },
     Generic(NamedStore),
 }
@@ -40,6 +42,7 @@ impl DataSequence {
                 layout,
                 values,
                 accessors: None,
+                prototype,
             }
         } else {
             Phase::Generic(NamedStore::empty_with_prototype(domain, prototype, 0))
@@ -64,6 +67,7 @@ impl DataSequence {
             layout,
             values,
             accessors,
+            prototype,
         } = &mut self.phase
         {
             let matches = {
@@ -100,10 +104,11 @@ impl DataSequence {
             while prefix.len > values.len() {
                 prefix = prefix.parent().expect("append-only prediction");
             }
-            self.phase = Phase::Generic(NamedStore::from_slot_parts(
+            self.phase = Phase::Generic(NamedStore::from_slot_parts_with_prototype(
                 prefix.clone(),
                 std::mem::replace(values, ValueSlots::Empty),
                 accessors.take(),
+                prototype.take(),
             ));
         }
         let Phase::Generic(store) = &mut self.phase else {
@@ -132,11 +137,12 @@ impl DataSequence {
                 mut layout,
                 values,
                 accessors,
+                prototype,
             } => {
                 while layout.len > values.len() {
                     layout = layout.parent().expect("prefix").clone();
                 }
-                NamedStore::from_slot_parts(layout, values, accessors)
+                NamedStore::from_slot_parts_with_prototype(layout, values, accessors, prototype)
             }
             Phase::Generic(store) => store,
         };

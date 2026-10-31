@@ -24,6 +24,8 @@ strong cache roots, while live objects retain their complete transition paths.
 Live shapes and their weak lookup edges may exceed the keep-alive bound.
 Observer-free arguments construction validates each predicted key/descriptor
 then fills live slots/accessors; mismatch rebuilds the completed prefix.
+Predicted construction moves its provided prototype from builder to receiver;
+cached layout predictions keep only weak prototype identities.
 Realm-owned construction retains at most 32 shared layouts with
 only that realm's intrinsic prototype/domain and already-owned well-known symbol
 keys. Values, parameter cells, poison accessors and iterator values stay per

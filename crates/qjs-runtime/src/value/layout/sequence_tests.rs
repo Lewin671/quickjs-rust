@@ -115,3 +115,37 @@ fn string_wrapper_templates_publish_before_instances_are_minted() {
     assert_eq!(a.get_text("length").unwrap().value, Value::Number(1.0));
     assert_eq!(b.get_text("length").unwrap().value, Value::Number(2.0));
 }
+
+#[test]
+fn predicted_builders_own_the_prototype_until_exact_or_mismatching_completion() {
+    for mismatch in [false, true] {
+        let domain = AtomDomain::new();
+        let _owner = PropertyOwner::new(domain.clone());
+        let parent = crate::ObjectRef::new(HashMap::new(), &domain);
+        let weak = parent.downgrade();
+        let mut first = DataSequence::new(
+            None,
+            &domain,
+            Some(crate::Prototype::Object(parent.clone())),
+        );
+        first.insert("x", Value::Null);
+        let (store, prediction, _) = first.finish();
+        drop(store);
+        let mut next = DataSequence::new(
+            prediction.clone(),
+            &domain,
+            Some(crate::Prototype::Object(parent)),
+        );
+        assert!(weak.upgrade().is_some(), "the builder owns its actual edge");
+        next.insert(if mismatch { "other" } else { "x" }, Value::Number(2.0));
+        let (store, _) = next.finish_store();
+        let parent = weak.upgrade().expect("completed receiver keeps the edge");
+        assert!(store.prototype_is_object(&parent));
+        drop(parent);
+        drop(store);
+        assert!(
+            weak.upgrade().is_none(),
+            "prediction metadata must not pin the prototype"
+        );
+    }
+}

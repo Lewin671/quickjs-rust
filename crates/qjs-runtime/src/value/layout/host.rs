@@ -54,6 +54,17 @@ impl NamedStore {
         values: ValueSlots,
         accessors: Option<Box<AccessorSlots>>,
     ) -> Self {
+        let prototype = layout.prototype.as_ref().and_then(WeakPrototype::upgrade);
+        Self::from_slot_parts_with_prototype(layout, values, accessors, prototype)
+    }
+    /// A live builder can move its already-owned prototype into the receiver.
+    /// The caller has already matched this edge to the layout.
+    pub(super) fn from_slot_parts_with_prototype(
+        layout: Rc<Layout>,
+        values: ValueSlots,
+        accessors: Option<Box<AccessorSlots>>,
+        prototype: Option<crate::Prototype>,
+    ) -> Self {
         let layout = if layout.dictionary {
             let copy = layout.copied(true);
             copy.epoch.set(1);
@@ -62,7 +73,6 @@ impl NamedStore {
             debug_assert_eq!(layout.epoch.get(), 0);
             layout
         };
-        let prototype = layout.prototype.as_ref().and_then(WeakPrototype::upgrade);
         let store = Self {
             layout,
             values,
