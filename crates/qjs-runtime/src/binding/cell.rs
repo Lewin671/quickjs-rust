@@ -80,6 +80,7 @@ impl BindingCell {
     }
 
     pub(crate) fn with_metadata(meta: BindingMetaRef, value: Option<Value>) -> Self {
+        crate::diagnostics::count!(binding_cell_allocations);
         let state = value.map_or(BindingState::Uninitialized, BindingState::Initialized);
         Self(Rc::new(CellStorage {
             meta,
@@ -91,6 +92,7 @@ impl BindingCell {
         Self::with_metadata(self.0.meta.clone(), None)
     }
     pub(crate) fn fresh_for_iteration(&self) -> Self {
+        crate::diagnostics::count!(binding_cell_allocations);
         Self(Rc::new(CellStorage {
             meta: self.0.meta.clone(),
             state: RefCell::new(self.0.state.borrow().clone()),

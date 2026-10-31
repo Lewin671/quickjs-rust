@@ -19,3 +19,6 @@ pub(crate) use table::DynamicBindings;
 
 mod global_reference;
 pub(crate) use global_reference::GlobalReference;
+
+mod debug;
+pub(crate) use debug::BindingDebug;

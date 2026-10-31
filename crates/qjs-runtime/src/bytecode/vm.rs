@@ -87,7 +87,7 @@ pub(super) fn eval_function_bytecode(
     vm.direct_eval_with_stack = direct_eval_with_stack;
     let value = vm.run();
     let bound_this = vm.env.derived_this_cell().and_then(|cell| cell.read().ok());
-    bytecode.recycle_local_slots(std::mem::take(&mut vm.current.locals));
+    vm.recycle_binding_slots();
     if let Some(cold) = vm.current.cold.take() {
         bytecode.recycle_cold_frame(cold);
     }
@@ -118,7 +118,7 @@ pub(super) fn eval_call_bytecode(
     vm.persist_global_lexicals = true;
     vm.direct_eval_with_stack = direct_eval_with_stack;
     let value = vm.run();
-    bytecode.recycle_local_slots(std::mem::take(&mut vm.current.locals));
+    vm.recycle_binding_slots();
     if let Some(cold) = vm.current.cold.take() {
         bytecode.recycle_cold_frame(cold);
     }
@@ -162,7 +162,7 @@ pub(super) fn eval_direct_call_bytecode(
     // The direct-slot contract excludes closures over this frame's locals, so
     // nothing outlives the call and the allocation can go back to the body's
     // pool instead of being freed and rebuilt on the next invocation.
-    bytecode.recycle_local_slots(std::mem::take(&mut vm.current.locals));
+    vm.recycle_binding_slots();
     if let Some(cold) = vm.current.cold.take() {
         bytecode.recycle_cold_frame(cold);
     }
@@ -297,7 +297,11 @@ impl ColdFramePool {
     const MAX_POOLED: usize = 8;
 
     pub(super) fn take(&self) -> Box<ColdFrame> {
-        self.0.borrow_mut().pop().unwrap_or_default()
+        crate::diagnostics::count!(cold_frame_pool_requests);
+        self.0.borrow_mut().pop().unwrap_or_else(|| {
+            crate::diagnostics::count!(cold_frame_allocations);
+            Box::default()
+        })
     }
 
     pub(super) fn recycle(&self, mut cold: Box<ColdFrame>) {
@@ -503,6 +507,7 @@ impl<'a, 's> Vm<'a, 's> {
         // Promotion ends this dispatch interval with RefreshBindings. The next
         // interval derives its stream from the new authority mask; no JS
         // instruction or observable reference selection is replayed.
+        self.verify_binding_authority();
         let owner = self.current.bytecode.clone();
         let authority_at_entry = self.current.authoritative_slots;
         let program = FrameProgramView::new(
@@ -903,6 +908,7 @@ impl<'a, 's> Vm<'a, 's> {
                 Some(exit) => return Ok(exit),
                 None => pc = self.current.ip,
             }
+            self.verify_binding_authority();
             if self.current.authoritative_slots != authority_at_entry {
                 return Ok(FrameExit::RefreshBindings);
             }

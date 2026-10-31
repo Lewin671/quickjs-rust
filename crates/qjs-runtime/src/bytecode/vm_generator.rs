@@ -250,6 +250,7 @@ fn run_from_yield(
         .get(vm.ip.saturating_sub(1))
         .copied();
     vm.refresh_authoritative_slots();
+    vm.verify_binding_authority();
     {
         let cold = vm.cold_mut();
         cold.class_regions = snapshot.class_regions;

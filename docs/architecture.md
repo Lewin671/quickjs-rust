@@ -145,9 +145,9 @@ The [object contract](design/core-rebuild-objects.md) owns these invariants.
 
 ## State
 
-**Bindings.** A local lives in a frame slot; a captured binding lives in one
-shared cell; every realm binding has one cell in the realm. No per-call
-name-keyed snapshot exists. See
+**Bindings.** Capture/eval exposure moves a private slot into one shared cell;
+canonical realm/module cells retain identity. Init/Assign/Read check typed state;
+object-cache invalidation is distinct from lexical TDZ. No name/value snapshot. See
 [design/env-model-rewrite.md](design/env-model-rewrite.md).
 
 **Suspended frames.** A generator or async body owns its whole frame while

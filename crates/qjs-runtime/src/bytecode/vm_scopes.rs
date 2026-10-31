@@ -34,6 +34,53 @@ impl Vm<'_, '_> {
         }
         let owner = self.bytecode.clone();
         let scopes = &owner.binding_plan.scopes;
+        if self.runtime.binding_debug.poisoning() {
+            let mut exited = Some(previous);
+            while let Some(id) = exited {
+                let mut target = Some(next);
+                let mut still_active = false;
+                while let Some(active) = target {
+                    if active == id {
+                        still_active = true;
+                        break;
+                    }
+                    target = scopes[active.0].parent;
+                }
+                if still_active {
+                    break;
+                }
+                if matches!(
+                    scopes[id.0].kind,
+                    ScopeKind::Block | ScopeKind::Catch | ScopeKind::Loop | ScopeKind::ClassName
+                ) {
+                    for binding in &scopes[id.0].declarations {
+                        let slot = owner.binding_plan.bindings[binding.0].slot.0;
+                        if owner.locals[slot].from_env || owner.locals[slot].compiler_temporary {
+                            continue;
+                        }
+                        // A released private slot has no observer. Escaped
+                        // cells and leases retain their own storage untouched.
+                        self.locals[slot] = Some(crate::Value::Number(f64::NAN));
+                        self.locals[slot] = None;
+                        if let Some(route) = self.local_upvalues.get_mut(slot) {
+                            *route = None;
+                        }
+                        if slot < u128::BITS as usize {
+                            self.authoritative_slots |= 1_u128 << slot;
+                        }
+                    }
+                    if let Some(instances) = self.scope_instances.borrow_mut().as_mut() {
+                        if let Some(lease) = instances.leases.get_mut(id.0) {
+                            *lease = None;
+                        }
+                        if let Some(holder) = instances.holders.get_mut(id.0) {
+                            *holder = None;
+                        }
+                    }
+                }
+                exited = scopes[id.0].parent;
+            }
+        }
         let mut current = Some(next);
         while let Some(id) = current {
             let mut old = Some(previous);
@@ -71,6 +118,8 @@ impl Vm<'_, '_> {
             }
         }
         self.binding_scope = Some(next);
+        self.force_binding_exposure(next);
+        self.verify_binding_authority();
     }
 
     pub(super) fn read_global_binding(
@@ -461,6 +510,7 @@ impl Vm<'_, '_> {
                 .cloned()
                 .expect("active with region")
         });
+        crate::diagnostics::count!(scope_lease_allocations);
         let lease = Rc::new(ScopeLease {
             descriptor: ScopeDescriptorRef {
                 owner: self.bytecode.binding_plan.scopes.clone(),

@@ -1,6 +1,7 @@
 use super::*;
+use crate::Value;
 use crate::bytecode::compiler;
-use crate::{Value, eval};
+use crate::bytecode::vm_binding_debug::eval_with_slots_for_test as eval;
 
 const FAST_REGION: &str = r#"
 function fast(real, imag, size, half) {

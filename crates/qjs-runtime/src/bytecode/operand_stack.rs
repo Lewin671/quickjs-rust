@@ -49,10 +49,11 @@ impl OperandStackRecycler {
     }
 
     pub(super) fn take(&self) -> Vec<Value> {
-        self.0
-            .borrow_mut()
-            .pop()
-            .unwrap_or_else(|| Vec::with_capacity(Self::INITIAL_CAPACITY))
+        crate::diagnostics::count!(operand_stack_pool_requests);
+        self.0.borrow_mut().pop().unwrap_or_else(|| {
+            crate::diagnostics::count!(operand_stack_pool_allocations);
+            Vec::with_capacity(Self::INITIAL_CAPACITY)
+        })
     }
 
     pub(super) fn recycle(&self, mut stack: Vec<Value>) {
@@ -122,7 +123,11 @@ impl Drop for OperandStack {
 /// locals never outlive the call on that path -- the direct-slot contract
 /// excludes closures over them -- so the allocation can be handed back.
 #[derive(Clone)]
-pub(super) struct LocalSlotRecycler(Rc<RefCell<Vec<Vec<Option<Value>>>>>);
+pub(super) struct LocalSlotRecycler(Rc<RefCell<Vec<RecycledLocals>>>);
+struct RecycledLocals {
+    slots: Vec<Option<Value>>,
+    poisoned: bool,
+}
 
 impl std::fmt::Debug for LocalSlotRecycler {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -146,27 +151,50 @@ impl LocalSlotRecycler {
     /// Returns a vector of exactly `len` `None` slots, reusing a pooled
     /// allocation when one is available.
     pub(super) fn take(&self, len: usize) -> Vec<Option<Value>> {
-        let Some(mut slots) = self.0.borrow_mut().pop() else {
+        crate::diagnostics::count!(local_slot_pool_requests);
+        let Some(RecycledLocals {
+            mut slots,
+            poisoned,
+        }) = self.0.borrow_mut().pop()
+        else {
+            if len != 0 {
+                crate::diagnostics::count!(local_slot_allocations);
+            }
             return vec![None; len];
         };
+        if poisoned {
+            for slot in &mut slots {
+                assert!(
+                    matches!(slot, Some(Value::Number(value)) if value.is_nan()),
+                    "released local poison changed"
+                );
+                *slot = None;
+            }
+        }
         // A pooled vector is recycled at its body's slot count with every
         // entry already cleared, so the common case needs no resize.
         if slots.len() != len {
+            if slots.capacity() < len {
+                crate::diagnostics::count!(local_slot_allocations);
+            }
             slots.resize(len, None);
         }
         slots
     }
 
-    pub(super) fn recycle(&self, mut slots: Vec<Option<Value>>) {
+    pub(super) fn recycle_with_poison(&self, mut slots: Vec<Option<Value>>, poison: bool) {
         if slots.capacity() > Self::MAX_RECYCLED_CAPACITY {
             return;
         }
         for slot in slots.iter_mut() {
-            *slot = None;
+            *slot = poison.then_some(Value::Number(f64::NAN));
         }
         let mut pooled = self.0.borrow_mut();
         if pooled.len() < Self::MAX_POOLED {
-            pooled.push(slots);
+            pooled.push(RecycledLocals {
+                slots,
+                poisoned: poison,
+            });
         }
     }
 }

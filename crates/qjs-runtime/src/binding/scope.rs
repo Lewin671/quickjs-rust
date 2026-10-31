@@ -173,6 +173,7 @@ impl ScopeCursor {
         plan: &super::FunctionNamePlan,
     ) -> Self {
         let id = ScopeId(0);
+        crate::diagnostics::count!(scope_lease_allocations);
         let lease = Rc::new(ScopeLease {
             descriptor: ScopeDescriptorRef {
                 owner: plan.scopes.clone(),

@@ -279,8 +279,9 @@ pub(super) fn try_run_numeric_mutation_loop(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Value;
     use crate::bytecode::compiler;
-    use crate::{Value, eval};
+    use crate::bytecode::vm_binding_debug::eval_with_slots_for_test as eval;
     use qjs_ast::UpdateOp;
 
     fn nested_function(source: &str) -> Bytecode {

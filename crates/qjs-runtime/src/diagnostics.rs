@@ -93,6 +93,24 @@ declare_counters! {
     native_capture_payload_allocations,
     /// Actual slot-to-cell authority transfers at first exposure.
     binding_promotions,
+    /// Actual Rc<CellStorage> allocations, including canonical object caches.
+    binding_cell_allocations,
+    /// Actual Rc<ScopeLease> allocations; cached reuse does not increment.
+    scope_lease_allocations,
+    /// Function creations retaining a lexical scope, not lease allocations.
+    function_scope_retentions,
+    /// Actual inline lexical call owners promoted into Rc storage.
+    lexical_owner_allocations,
+    /// Existing local-vector pool requests, including hits and zero-length requests.
+    local_slot_pool_requests,
+    /// New nonempty local-vector storage, separate from pool requests.
+    local_slot_allocations,
+    /// Operand-stack bank requests and initial capacity allocations; excludes growth.
+    operand_stack_pool_requests,
+    operand_stack_pool_allocations,
+    /// Cold-frame recycler requests and actual new Box<ColdFrame> allocations.
+    cold_frame_pool_requests,
+    cold_frame_allocations,
     /// Retired CallEnv construction event; no counting site remains.
     call_env_constructions,
     /// Retired CallEnv Clone event; no counting site remains.

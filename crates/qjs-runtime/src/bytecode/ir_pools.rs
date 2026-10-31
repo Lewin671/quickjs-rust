@@ -29,8 +29,8 @@ impl Bytecode {
         self.local_slot_pool.take(len)
     }
 
-    pub(super) fn recycle_local_slots(&self, slots: Vec<Option<Value>>) {
-        self.local_slot_pool.recycle(slots);
+    pub(super) fn recycle_local_slots_with_poison(&self, slots: Vec<Option<Value>>, poison: bool) {
+        self.local_slot_pool.recycle_with_poison(slots, poison);
     }
 
     /// Takes a cleared cold-frame box from this body's pool, or allocates one.

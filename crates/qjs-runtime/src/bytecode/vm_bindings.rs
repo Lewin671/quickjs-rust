@@ -998,7 +998,7 @@ impl Vm<'_, '_> {
             .bytecode
             .locals
             .get(slot)
-            .is_some_and(|local| !local.from_env)
+            .is_some_and(|local| !local.is_received_upvalue())
             && self.local_upvalue_cell(slot).is_some_and(|cell| {
                 let name = &self.bytecode.locals[slot].name;
                 cell.is_initialized()

@@ -98,7 +98,22 @@ pub(in crate::bytecode) fn resume_direct_call_bytecode(
             continue;
         }
         let value = std::mem::replace(register, Value::Undefined);
-        if let Some(target) = vm.current.locals.get_mut(slot) {
+        if let Some(cell) = vm.local_upvalue_cell(slot) {
+            if value.is_uninitialized_lexical_marker() {
+                let replacement = cell.fresh_uninitialized();
+                vm.local_upvalues[slot] = Some(replacement);
+            } else {
+                let result = if cell.is_initialized() {
+                    cell.assign(value, vm.execution_is_strict())
+                } else {
+                    cell.initialize(value)
+                };
+                if let Err(error) = result {
+                    return Resumed::Finished(Err(error));
+                }
+            }
+            vm.locals[slot] = None;
+        } else if let Some(target) = vm.current.locals.get_mut(slot) {
             *target = (!value.is_uninitialized_lexical_marker()).then_some(value);
         }
     }
@@ -142,7 +157,7 @@ pub(in crate::bytecode) fn resume_direct_call_bytecode(
     if let Resumed::HandedBack { .. } | Resumed::LoopFinished { .. } = resumed {
         hand_back(&mut vm, registers);
     }
-    bytecode.recycle_local_slots(std::mem::take(&mut vm.current.locals));
+    vm.recycle_binding_slots();
     if let Some(cold) = vm.current.cold.take() {
         bytecode.recycle_cold_frame(cold);
     }
@@ -172,9 +187,16 @@ fn hand_back(vm: &mut Vm<'_, '_>, registers: WideRegisters<'_>) {
         if !is_own(registers.own_locals, slot) {
             continue;
         }
-        if let Some(local) = vm.current.locals.get_mut(slot) {
-            *register = local.take().unwrap_or_else(|| registers.tdz_marker.clone());
-        }
+        *register = if let Some(cell) = vm.local_upvalue_cell(slot) {
+            cell.value_if_initialized()
+                .unwrap_or_else(|| registers.tdz_marker.clone())
+        } else {
+            vm.current
+                .locals
+                .get_mut(slot)
+                .and_then(Option::take)
+                .unwrap_or_else(|| registers.tdz_marker.clone())
+        };
     }
     let depth = vm.current.stack.len();
     for register in registers.stack[..depth].iter_mut().rev() {

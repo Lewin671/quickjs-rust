@@ -139,15 +139,15 @@ NativeSite borrows call info, target and eval sources; callee realm is lazy.
 Vm/tiers own callee state; no caller-equality proof or empty-env factory remains.
 RuntimeGroup shares AtomDomain/weak realm registry; host/agent services stay canonical.
 Dynamic Function reuses its callee Realm/live globals without execution projections.
-Own cells are promoted at capture/eval/reference exposure; entry keeps only
-received/module/global/mapped-arguments cells. Debug stress controls remain.
+Debug RuntimeServices captures QJS_VERIFY_BINDINGS, QJS_FORCE_EVAL_EXPOSURE,
+QJS_POISON_RELEASED_SCOPES once; production ignores them. Forcing applies to
+materialized declarations; nonexposing admitted tiers retain their own storage.
 Class keys execute inline. A cold continuation owns the partial class/private
 context across yield/await; handlers restore regions and mode to their entry.
 Heritage validation precedes keys; each method installs before the next key.
 Static public/private fields and blocks run together in source order. The
 inner-name cell stays TDZ through keys and initializes before static fields;
 inferred display names create no inner binding.
-The frozen brief owns the remaining migration and deletion contract.
 
 Compact/wide/leaf tiers retain their static cell paths. A retained dynamic chain
 is not a caller-environment equality proof; current admission rejects shortcuts

@@ -74,6 +74,7 @@ pub(super) fn evaluate(
             access: AccessPolicy::Mutable,
         });
     }
+    crate::diagnostics::count!(scope_lease_allocations);
     let root = Rc::new(ScopeLease {
         descriptor: ScopeDescriptorRef {
             owner: bytecode.scope_descriptors(),

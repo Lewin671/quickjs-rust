@@ -1,7 +1,8 @@
 use super::*;
+use crate::Value;
 use crate::bytecode::compiler;
+use crate::bytecode::vm_binding_debug::eval_with_slots_for_test as eval;
 use crate::value::ArrayRef;
-use crate::{Value, eval};
 
 fn nested_function(source: &str) -> Bytecode {
     let script = qjs_parser::parse_script(source).expect("source should parse");

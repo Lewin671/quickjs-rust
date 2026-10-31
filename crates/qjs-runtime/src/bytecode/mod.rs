@@ -75,6 +75,7 @@ mod upvalue_resolver;
 mod util;
 mod virtual_object;
 mod vm;
+mod vm_binding_debug;
 mod vm_bindings;
 mod vm_call;
 mod vm_capture;

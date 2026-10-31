@@ -511,6 +511,7 @@ impl Function {
                 .expect("fresh self binding");
         }
         if let Some(scope) = lexical_scope {
+            crate::diagnostics::count!(function_scope_retentions);
             function
                 .auxiliary
                 .with_cold_mut(|cold| cold.lexical_scope = Some(scope));

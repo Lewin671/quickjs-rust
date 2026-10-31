@@ -267,13 +267,14 @@ impl<'a, 's> Vm<'a, 's> {
         let stack = OperandStack::new(bytecode);
         let cold =
             (!with_stack.is_empty() || array_literal_prototype_override.is_some()).then(|| {
+                crate::diagnostics::count!(cold_frame_allocations);
                 Box::new(ColdFrame {
                     with_stack,
                     array_literal_prototype_override,
                     ..ColdFrame::default()
                 })
             });
-        Self {
+        let mut vm = Self {
             runtime,
             current: FrameState {
                 reference_hooks: !handle.binding_plan.references.can_skip(&env),
@@ -306,7 +307,17 @@ impl<'a, 's> Vm<'a, 's> {
             },
             callers: Vec::new(),
             pending_frame_entry: None,
-        }
+        };
+        let scope = vm
+            .bytecode
+            .binding_plan
+            .pc_scopes
+            .first()
+            .copied()
+            .unwrap_or(crate::binding::ScopeId(0));
+        vm.force_binding_exposure(scope);
+        vm.verify_binding_authority();
+        vm
     }
 
     pub(super) fn seed_direct_call_slots(

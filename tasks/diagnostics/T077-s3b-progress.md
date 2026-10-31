@@ -845,3 +845,47 @@ checks, value/layout and IC constant admission are untouched.
 Fresh feature runtime suite passes **2,650 tests**; all **297 serial NG scripts**
 and the staged gate (**2,597 default tests + 117 Test262 cases**) pass. Final S3b
 acceptance, stress controls and full/exact/counter/public86 gates remain open.
+
+
+## B6a binding stress controls and retained event accounting
+
+Implementation over `a5f15790` captures QJS_VERIFY_BINDINGS,
+QJS_FORCE_EVAL_EXPOSURE and QJS_POISON_RELEASED_SCOPES once per RuntimeServices.
+Production ignores forcing; constant-false release queries remove per-op verifier
+work. Verification checks slot/cell exclusivity, metadata policies and received
+cell order without reading values or replaying JS hooks. Snapshot restoration and
+promotion run the same checks. Force moves every active materialized declarative,
+including TDZ, into its cell. Scope/slot recyclers poison only private released
+storage; reuse checks/clears poison. Escaped cells/leases are never poisoned.
+The new identity test alternates lazy/forced entry and churns recycled vectors.
+
+Design correction: forcing preserves existing compact/wide/closed numeric entry
+whose admission proves own bindings cannot escape or be dynamically resolved;
+it forces actual VM slot storage. Disabling those tiers just to force synthetic
+cells overflowed the existing deep-recursion test and would violate the stage's
+no-tier-disable boundary. Admission/counter tests explicitly choose slot mode;
+semantic runtime tests and permanent fixtures inherit forcing. Wide-to-VM entry
+now installs values into forced cells, then handback reads those same cells.
+No production admission restriction or new depth guard is introduced.
+
+Forcing exposed a parameter clear bug: own parameters marked from_env retained
+a promoted initialized cell after their input snapshot was cleared. Clear now
+distinguishes positional received upvalues from own parameters, preserving
+parameter TDZ before defaults. Existing self/later default tests protect it.
+
+New independent counters count actual CellStorage/ScopeLease/lexical-owner
+allocations, function scope-retention events, and existing local/operand/cold
+pool requests separately from new banks/boxes. Operand initial-bank counts do
+not claim Vec growth or allocator-wide totals. Retired CallEnv counters retain
+zero sites; none are relabeled as typed work.
+
+All **2,598 default tests** pass separately in verify, force and poison modes.
+All **2,651 agents/perf-counters tests**, strict feature workspace Clippy and
+all **2,598 tests with IC verification enabled** pass. Combined binding modes
+plus IC-off pass **2,561 semantic/identity tests**; 37 IC-enabled mechanism tests
+are exercised in the complete IC-verification-on suite instead. The unfiltered
+IC-off experiment failed 26 such mechanism assertions, with no semantic failures;
+no test/fixture or Test262 exclusion is added. All **297 serial NG scripts** pass
+in each verify+IC-verify, force, poison and combined+IC-off configuration.
+The fresh staged gate passes **2,598 default tests + 117 Test262 cases**.
+Final full/exact/counter/depth/public86 and lead formal acceptance remain open.

@@ -74,6 +74,7 @@ impl HostServices {
 pub(crate) struct RuntimeServices {
     pub(crate) group: RuntimeGroup,
     pub(crate) host: HostServices,
+    pub(crate) binding_debug: crate::binding::BindingDebug,
     #[cfg(feature = "agents")]
     pub(crate) agent: Option<crate::agent::AgentContextRef>,
 }
@@ -83,6 +84,7 @@ impl RuntimeServices {
         Self {
             group: realm.group().clone(),
             host: HostServices,
+            binding_debug: crate::binding::BindingDebug::capture(),
             #[cfg(feature = "agents")]
             agent: None,
         }
@@ -93,6 +95,7 @@ impl RuntimeServices {
         Self {
             group: self.group.clone(),
             host: HostServices,
+            binding_debug: self.binding_debug,
             #[cfg(feature = "agents")]
             agent: self.agent.clone(),
         }

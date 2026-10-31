@@ -3,7 +3,7 @@
 //! A call takes one of three routes: a guarded native fast path
 //! (`try_fast_global_native_call`), the direct-leaf path
 //! (`function::call_direct_leaf_function`), or the general
-//! `function::call_function` with a `crate::context::ActivationContext` built by `vm_call_env.rs`.
+//! `function::call_function` with a borrowed Context from `vm_context.rs`.
 //! The direct-leaf path hands the callee no caller bindings, so only a
 //! callee passing `is_direct_leaf_function` may take it.
 
@@ -146,7 +146,7 @@ impl Vm<'_, '_> {
         this_value: Value,
         arguments: Vec<Value>,
     ) -> Result<(), RuntimeError> {
-        self.call_callee_with_marker(callee, this_value, arguments, false, false)
+        self.call_callee_with_eval_site(callee, this_value, arguments, false, false)
     }
 
     fn call_callee_with_direct_eval(
@@ -156,10 +156,10 @@ impl Vm<'_, '_> {
         arguments: Vec<Value>,
         is_strict: bool,
     ) -> Result<(), RuntimeError> {
-        self.call_callee_with_marker(callee, this_value, arguments, true, is_strict)
+        self.call_callee_with_eval_site(callee, this_value, arguments, true, is_strict)
     }
 
-    fn call_callee_with_marker(
+    fn call_callee_with_eval_site(
         &mut self,
         callee: Value,
         this_value: Value,

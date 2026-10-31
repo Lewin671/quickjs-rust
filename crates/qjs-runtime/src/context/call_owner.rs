@@ -89,6 +89,7 @@ impl LexicalCallContext {
                 let Self::Inline(owner) = std::mem::take(self) else {
                     unreachable!()
                 };
+                crate::diagnostics::count!(lexical_owner_allocations);
                 let owner = Rc::new(owner);
                 *self = Self::Shared(owner.clone());
                 Some(owner)

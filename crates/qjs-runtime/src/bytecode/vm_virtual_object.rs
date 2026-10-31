@@ -577,7 +577,8 @@ impl<'a, 's> Vm<'a, 's> {
 #[cfg(test)]
 mod tests {
     use super::{constant_binary_init_hits, reset_constant_binary_init_hits};
-    use crate::{Value, eval};
+    use crate::Value;
+    use crate::bytecode::vm_binding_debug::eval_with_slots_for_test as eval;
 
     #[test]
     fn folds_forwarded_literal_constants_into_binary_assignments() {

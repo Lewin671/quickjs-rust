@@ -109,6 +109,7 @@ impl Vm<'_, '_> {
                 .get(self.ip.saturating_sub(1))
                 .copied();
         }
+        self.verify_binding_authority();
         crate::diagnostics::count!(binding_promotions);
         upvalue
     }
@@ -139,6 +140,7 @@ mod tests {
             let slot = bytecode.local_slot("value").unwrap();
             let activation = crate::function::enter_indexed_activation(&function);
             let mut runtime = crate::context::RuntimeServices::for_realm(activation.realm());
+            runtime.binding_debug.force = false;
             let mut vm = Vm::new_with_globals(bytecode, &mut runtime, activation);
             assert!(vm.local_upvalue_cell(slot).is_none());
             let Value::Function(closure) = vm.run().unwrap() else {
