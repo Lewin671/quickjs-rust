@@ -236,7 +236,7 @@ pub(crate) fn function_prototype_chain_descriptor(
     match function.internal_prototype_slot() {
         Some(Some(crate::Prototype::Object(prototype))) => prototype.property(key),
         Some(Some(crate::Prototype::Array(array))) => array.property(key),
-        Some(Some(crate::Prototype::Function(parent))) => parent.chain_property_with_env(key, env),
+        Some(Some(crate::Prototype::Function(parent))) => parent.chain_property(key),
         Some(Some(crate::Prototype::Proxy(proxy))) => proxy
             .target_result()
             .ok()
@@ -245,7 +245,7 @@ pub(crate) fn function_prototype_chain_descriptor(
         None => function_intrinsic_prototype_slot(env).and_then(|prototype| match prototype {
             crate::Prototype::Object(prototype) => prototype.property(key),
             crate::Prototype::Array(array) => array.property(key),
-            crate::Prototype::Function(prototype) => prototype.chain_property_with_env(key, env),
+            crate::Prototype::Function(prototype) => prototype.chain_property(key),
             crate::Prototype::Proxy(proxy) => proxy
                 .target_result()
                 .ok()

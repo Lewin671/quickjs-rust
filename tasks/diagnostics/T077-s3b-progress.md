@@ -664,3 +664,17 @@ No production timing claim follows from these diagnostic counts. All 2,641
 agents/perf-counters runtime tests and all 292 serial NG scripts pass. The staged
 gate over `ae923849` passes 2,592 default tests and 117 Test262 cases. Borrowed Context, checked-publisher
 retirement, lazy promotion and the final matrix remain outstanding.
+
+
+## B4e1 pure function descriptor services
+
+Over `bc6d6c16`, function descriptor walks no longer construct a creation_env
+or a fresh owned function-entry service object. The selected [[Prototype]] is
+already installed; walking it is pure. Lazy default prototype creation selects
+CreationContext's typed intrinsic override or the stable realm Object.prototype
+directly. The obsolete with-env prototype wrapper is removed from these paths.
+All 2,592 default runtime tests pass, and an agents/perf-counters regression
+proves inherited, missing and lazy prototype descriptor reads construct/clone
+zero CallEnv instances. All 292 serial NG scripts and the staged gate (2,592
+default tests plus 52 Test262 cases) pass. This is a
+service-boundary deletion, not a new property cache or production timing claim.

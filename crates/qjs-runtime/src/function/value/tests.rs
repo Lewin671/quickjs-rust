@@ -331,3 +331,18 @@ fn unrelated_probes_leave_function_defaults_and_lazy_prototype_implicit() {
     assert!(function.auxiliary.lazy_default_prototype.get());
     assert_eq!(function.named_version(), version);
 }
+
+#[cfg(feature = "perf-counters")]
+#[test]
+fn pure_function_descriptor_walks_construct_no_execution_context() {
+    let Value::Function(function) = crate::eval("(function retained() {})").unwrap() else {
+        panic!("ordinary function");
+    };
+    crate::reset_counters();
+    assert!(function.chain_property("call").is_some());
+    assert!(function.chain_property("prototype").is_some());
+    assert!(function.chain_property("notPresent").is_none());
+    let counts = crate::counters().unwrap();
+    assert_eq!(counts.call_env_constructions, 0);
+    assert_eq!(counts.call_env_clones, 0);
+}

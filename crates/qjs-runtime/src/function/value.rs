@@ -13,9 +13,7 @@ use qjs_ast::FunctionParams;
 use crate::CallEnv;
 use crate::function::{BindingCell, Realm};
 use crate::module::ModuleHostRef;
-use crate::{
-    Bytecode, NativeFunction, ObjectRef, Property, PropertyKey, Prototype, Value, object_prototype,
-};
+use crate::{Bytecode, NativeFunction, ObjectRef, Property, PropertyKey, Prototype, Value};
 
 const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
 
@@ -873,9 +871,9 @@ impl Function {
         )
     }
 
-    pub(crate) fn symbol_property(&self, symbol: &ObjectRef, env: &CallEnv) -> Option<Property> {
-        self.own_symbol_property(symbol).or_else(|| {
-            match self.effective_internal_prototype_with_env(env) {
+    pub(crate) fn symbol_property(&self, symbol: &ObjectRef, _env: &CallEnv) -> Option<Property> {
+        self.own_symbol_property(symbol)
+            .or_else(|| match self.effective_internal_prototype() {
                 Some(Prototype::Object(prototype)) => prototype.symbol_property(symbol),
                 Some(Prototype::Array(array)) => array.symbol_property(symbol),
                 Some(Prototype::Function(parent)) => parent.chain_symbol_property(symbol),
@@ -893,51 +891,24 @@ impl Function {
                     let prototype = _carrier.object();
                     prototype.symbol_property(symbol)
                 }
-            }
-        })
+            })
     }
 
-    /// The function's resolved [[Prototype]] slot, resolving the implicit
-    /// default to %Function.prototype% via the function's captured environment.
-    /// Returns `None` only when the prototype is explicitly `null` or the
-    /// intrinsic cannot be resolved (for example a native function with no
-    /// captured globals).
+    /// The selected [[Prototype]] identity; construction installed the intrinsic
+    /// default once. Pure descriptor walking requires no execution context.
     pub(crate) fn effective_internal_prototype(&self) -> Option<Prototype> {
         self.named.borrow().prototype()
-    }
-    fn effective_internal_prototype_with_env(&self, _env: &CallEnv) -> Option<Prototype> {
-        self.effective_internal_prototype()
     }
 
     /// Walks this function's own properties, then its [[Prototype]] chain, for a
     /// string-keyed property. Used when a function sits inside another value's
     /// prototype chain.
     pub(crate) fn chain_property(&self, key: &str) -> Option<Property> {
-        let env = self.creation_env();
-        self.chain_property_with_env(key, &env)
-    }
-
-    fn creation_env(&self) -> crate::CallEnv {
-        self.realm().map_or_else(
-            || {
-                crate::CallEnv::new(crate::context::new_realm_sharing_atoms(
-                    self.native_context.clone_map(),
-                    self.property_domain().clone(),
-                ))
-            },
-            |realm| {
-                let base = crate::CallEnv::new(Rc::clone(realm));
-                base.function_entry(self.creation_context().clone(), 0)
-            },
-        )
-    }
-
-    pub(crate) fn chain_property_with_env(&self, key: &str, env: &CallEnv) -> Option<Property> {
         self.own_property(key)
-            .or_else(|| match self.effective_internal_prototype_with_env(env) {
+            .or_else(|| match self.effective_internal_prototype() {
                 Some(Prototype::Object(prototype)) => prototype.property(key),
                 Some(Prototype::Array(array)) => array.property(key),
-                Some(Prototype::Function(parent)) => parent.chain_property_with_env(key, env),
+                Some(Prototype::Function(parent)) => parent.chain_property(key),
                 Some(Prototype::Proxy(proxy)) => proxy
                     .target_result()
                     .ok()

@@ -139,7 +139,13 @@ impl Function {
         self.refresh_named_flavor();
         let prototype = ObjectRef::with_prototype(
             HashMap::new(),
-            object_prototype(&self.creation_env()),
+            self.creation.as_ref().and_then(|creation| {
+                creation
+                    .intrinsics
+                    .object
+                    .clone()
+                    .or_else(|| creation.realm.object_prototype())
+            }),
             self.property_domain(),
         );
         prototype.define_non_enumerable("constructor".to_owned(), Value::Function(self.clone()));
