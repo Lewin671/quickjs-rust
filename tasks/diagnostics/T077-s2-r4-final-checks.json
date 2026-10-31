@@ -1,0 +1,88 @@
+{
+  "runtime_revision": "dc710e4b",
+  "ordered_candidate_revision": "4098ee67",
+  "checks": {
+    "full-check": {
+      "exit": 0,
+      "log_sha256": "96bb82f4e8b7e4464e9c33fa708c984e31b7f69a32f99bc8676a89227a2b29a5",
+      "stages": [
+        "check: ok format (2s)",
+        "check: ok clippy (0s)",
+        "check: ok clippy (agents) (7s)",
+        "check: ok agents feature tests (9s)",
+        "check: ok clippy (perf-counters) (7s)",
+        "check: ok perf-counters feature tests (7s)",
+        "check: ok workspace tests (22s)",
+        "check: ok benchmark tool tests (137s)",
+        "check: ok performance unit plans (8s)",
+        "check: ok agent context (1s)",
+        "check: ok script tests (0s)",
+        "check: ok git hook worktree isolation (3s)",
+        "check: ok benchmark shell syntax (0s)",
+        "check: ok file-size guard (0s)",
+        "check: ok Test262 subset (90s)"
+      ]
+    },
+    "ng-on": {
+      "exit": 0,
+      "log_sha256": "9d72b3376d91e7701c9f6ae133cc10193ef5e51bef3fd6f25d62812bd442620f",
+      "fixtures": 268
+    },
+    "ng-off": {
+      "exit": 0,
+      "log_sha256": "9d72b3376d91e7701c9f6ae133cc10193ef5e51bef3fd6f25d62812bd442620f",
+      "fixtures": 268
+    },
+    "ng-verify": {
+      "exit": 0,
+      "log_sha256": "9d72b3376d91e7701c9f6ae133cc10193ef5e51bef3fd6f25d62812bd442620f",
+      "fixtures": 268
+    },
+    "fuzz-original": {
+      "exit": 0,
+      "log_sha256": "e877bfdfc00bdc09d0fe50fb6a5ed62b2493be4b47460c004f73fbd71ee02891",
+      "seeds": 300,
+      "same": 300,
+      "modes": [
+        "on",
+        "off",
+        "verify"
+      ],
+      "records_sha256": "b59e3bce2fcccd5f80052892654e3c63b9764d24fb0f0afaae35eb69f13f8099",
+      "template_sha256": "1e87e9916216b5fb797b57b436a5b86905a00a0c2b95d7375955ad52c5b485fd"
+    },
+    "fuzz-warmed": {
+      "exit": 0,
+      "log_sha256": "40cb5cf7d7c20f3fb223e6eaefef5e5af4d6773a1a10f0073d2226c6bea973b3",
+      "seeds": 50,
+      "same": 50,
+      "modes": [
+        "on",
+        "off",
+        "verify"
+      ],
+      "records_sha256": "208ceb9e0325d9adcdf47f2b84b415595528544fc751edcc1c65bbe0fff3fc9d",
+      "template_sha256": "1e87e9916216b5fb797b57b436a5b86905a00a0c2b95d7375955ad52c5b485fd"
+    }
+  },
+  "pins": {
+    "release": {
+      "sha256": "54408c018ebf85d59492c798c78bf5fe9e345c42d734334e041754bf660dda08",
+      "build_features": "agents (CLI feature forwards runtime agents)",
+      "agent_smoke": "agent-ready",
+      "profile": "release"
+    },
+    "debug": {
+      "sha256": "cf5debd7443713bd910340218de3a992d22854376c04f1d71f986b78c57fc4b6",
+      "build_features": "agents (CLI feature forwards runtime agents)",
+      "agent_smoke": "agent-ready",
+      "profile": "debug"
+    }
+  },
+  "verified_runtime_tests": {
+    "arm64": 2542,
+    "x86_64": 2542,
+    "mode": "QJS_VERIFY_IC=1 cargo test -p qjs-runtime --lib --features agents,perf-counters"
+  },
+  "identity_proof": "git diff --quiet dc710e4b 4098ee67 -- crates/qjs-runtime scripts Cargo.toml Cargo.lock .cargo rust-toolchain.toml: exit 0; order changes only x86 CLI layout, arm64 order/build.rs unchanged"
+}

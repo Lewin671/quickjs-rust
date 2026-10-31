@@ -119,7 +119,7 @@ Prototype-mode objects use private dictionaries and one validity state. Their
 weak user graph links prototype-mode children, never IC sites. Structural
 mutation replaces its validity generation and cascades iteratively. The single
 NamedStore write barrier also invalidates on prototype value/accessor writes.
-After four value overwrites a holder becomes permanently value-unstable: the
+After four value-write invalidations a holder becomes permanently value-unstable: the
 transition invalidates once, future entries load live slots and value writes stop
 invalidating. Structural edits always invalidate; additions do not spend the
 overwrite budget. There is no subscriber cap. Inherited entries hold the first
