@@ -2,7 +2,7 @@
 
 - Status: active; B–D implemented, A performance repair still open; final qualification paused pending instruction acceptance.
 - Implementation: A–D present with 80-byte bound nodes/shared tiny data, published reusable templates, allocation-free cycle checks, live-root reuse/dead-root sweeps, cached hash width and four-field linear buffers. A acceptance remains open.
-- Verified at: staged fast gate passes 2,520 runtime tests; `b731ea83` passes all 268 NG fixtures in cached/off/verify. `4e788129` native/x86 mem3 passes. Older full gates are revision-bound; final exact/performance/resource gates remain due.
+- Verified at: staged fast gate passes 2,521 runtime tests; `b731ea83` passes all 268 NG fixtures in cached/off/verify. `4e788129` native/x86 mem3 passes. Older full gates are revision-bound; final exact/performance/resource gates remain due.
 - Evidence: this record and the named job/artifact receipts below; [round 1](T077-s2-followup.md) is historical.
 - Unresolved: final per-lane instruction/wall limits, exact cached/off with burndown, complete native/x86 resource gates.
 - Next action: focused instruction replays on restored guard code; freeze a passing source before final full/exact/resource replays. No origin push or merge.
