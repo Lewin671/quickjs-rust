@@ -26,7 +26,7 @@ parameter leaf bindings are parameters too; raw pattern inputs are not bindings.
 2. **Captured bindings share identity.** `binding/cell.rs::BindingCell` owns
    immutable declaration metadata and Uninitialized/Initialized state. The
    declaring frame, sibling closures and descendants retain the same Rc cell.
-   Init differs from Assign; failed const/TDZ writes leave state unchanged.
+   Init differs from Assign; Delete checks presence without reading TDZ values.
    Tests: `binding::cell::policy_tests`, `closure_state.rs` captured/shadowed cells.
 3. **Capture order is exact.** Producers and consumers use the same received
    classification; adding one accidental input must not shift subsequent cells.
@@ -69,7 +69,7 @@ parameter leaf bindings are parameters too; raw pattern inputs are not bindings.
 `binding/scope.rs::ScopeLease` retains an immutable descriptor, positional cells,
 parent leases, optional with object and optional own VarHolder. No lease points
 at a VM, frame ID, recycled window or borrowed local. A function retains its
-optional lexical scope in cold state; slot-only closures need no lease.
+optional lexical scope only for compiled name demand or mutable mappings.
 
 Only runtime-added declarations use a mutable name-to-cell holder. An ordinary
 activation exposes a fresh own holder at its selected variable boundary. Parent

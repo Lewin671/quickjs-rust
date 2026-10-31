@@ -615,20 +615,13 @@ impl Compiler {
                     !*lexical_arguments,
                 )?;
 
-                // A named function expression's inner name binding is
-                // immutable, and it only exists for a body that can reach the
-                // name. Carrying an unused one excludes the function from the
-                // slot-seeded direct call path, which made a named function
-                // expression measurably slower than the identical anonymous
-                // one. A body that creates a closure, runs a direct `eval`, or
-                // has a `with` can reach the name by a route the compiler does
-                // not record, and such a body is declined by that path anyway.
+                // A self binding is retained for a direct/static descendant
+                // reference or potential dynamic resolution. Merely creating
+                // an unrelated closure does not expose that name.
                 let needs_name_binding = name.as_deref().is_some_and(|name| {
-                    bytecode.creates_closures()
-                        || bytecode.contains_direct_eval()
-                        || bytecode.contains_with()
+                    bytecode.has_dynamic_scope_tree()
                         || bytecode.uses_local_binding(name)
-                        || bytecode.global_names().iter().any(|global| global == name)
+                        || bytecode.references_free_name_tree(name)
                 });
                 if needs_name_binding {
                     bytecode.binding_plan.self_name = name

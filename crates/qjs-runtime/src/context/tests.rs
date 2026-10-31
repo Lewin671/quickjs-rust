@@ -405,3 +405,133 @@ fn callback_forwarding_counts_each_javascript_entry_once() {
     assert_eq!(counters.native_family_probes, 0);
     assert_eq!(counters.argument_vec_native_pop, 0);
 }
+
+#[cfg(feature = "perf-counters")]
+#[test]
+fn wide_numeric_roots_count_their_own_entry_separately_from_retained_children() {
+    crate::reset_counters();
+    assert_eq!(
+        crate::eval(
+            "function calc(value) { return value * value + 1; } function wrapper(object) { return calc(object.x); } wrapper({x: 3});"
+        ),
+        Ok(Value::Number(10.0))
+    );
+    let counts = crate::counters().unwrap();
+    assert!(counts.numeric_plan_roots > 0);
+    assert_eq!(counts.ordinary_call_attempts, 2);
+    assert_eq!(counts.typed_variable_identities, 3);
+}
+
+#[test]
+fn unrelated_closures_do_not_inherit_an_unused_or_fixed_self_scope() {
+    let Value::Function(factory) =
+        crate::eval("(function factory() { return function(value) { return value + 1; }; });")
+            .unwrap()
+    else {
+        panic!("factory");
+    };
+    assert!(!factory.has_name_binding);
+    let mut root = HostRoot::script();
+    let Value::Function(child) = crate::call_function(
+        Value::Function(factory),
+        Value::Undefined,
+        Vec::new(),
+        &mut root.context(),
+        false,
+    )
+    .unwrap() else {
+        panic!("child");
+    };
+    assert!(child.lexical_scope().is_none());
+    let Value::Object(result) = crate::eval(
+        "(function factory() { return { self: factory, child: function(value) { return value + 1; } }; })();"
+    ).unwrap() else { panic!("result"); };
+    let Value::Function(child) = result.own_property("child").unwrap().value else {
+        panic!("child");
+    };
+    assert!(child.lexical_scope().is_none());
+    assert_eq!(
+        crate::call_function(
+            Value::Function(child),
+            Value::Undefined,
+            vec![Value::Number(4.0)],
+            &mut root.context(),
+            false
+        ),
+        Ok(Value::Number(5.0))
+    );
+}
+
+#[test]
+fn a_descendant_free_self_reference_retains_the_original_name_cell() {
+    let Value::Function(factory) =
+        crate::eval("(function factory() { return function() { return factory; }; });").unwrap()
+    else {
+        panic!("factory");
+    };
+    assert!(factory.has_name_binding);
+    let mut root = HostRoot::script();
+    let child = crate::call_function(
+        Value::Function(factory.clone()),
+        Value::Undefined,
+        Vec::new(),
+        &mut root.context(),
+        false,
+    )
+    .unwrap();
+    assert_eq!(
+        crate::call_function(
+            child,
+            Value::Undefined,
+            Vec::new(),
+            &mut root.context(),
+            false
+        ),
+        Ok(Value::Function(factory))
+    );
+}
+
+#[test]
+fn an_inactive_shadow_does_not_hide_a_descendant_free_self_reference() {
+    assert_eq!(
+        crate::eval(
+            "(function factory() { return function() { const result = factory; { let factory = 1; } return typeof result; }; })()();"
+        ),
+        Ok(Value::String("function".into()))
+    );
+}
+
+#[test]
+fn declarative_deletion_keeps_self_captures_and_tdz_as_present_bindings() {
+    for source in [
+        "(function named() { return delete named; })();",
+        "(function() { let value = 1; return () => delete value; })()();",
+        "(function() { return delete value; let value = 1; })();",
+        "(function named() { return () => delete named; })()();",
+    ] {
+        assert_eq!(crate::eval(source), Ok(Value::Boolean(false)), "{source}");
+    }
+    assert_eq!(
+        crate::eval("(function() { return delete neverThere; })();"),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn class_consumers_retain_only_the_fixed_names_their_code_can_select() {
+    let Value::Function(constructor) = crate::eval("(function factory() { const self = factory; return class { method(value) { return value + 1; } }; })();").unwrap() else { panic!("constructor"); };
+    assert!(constructor.lexical_scope().is_none());
+    let Value::Object(prototype) = constructor.own_property("prototype").unwrap().value else {
+        panic!("prototype");
+    };
+    let Value::Function(method) = prototype.own_property("method").unwrap().value else {
+        panic!("method");
+    };
+    assert!(method.lexical_scope().is_none());
+    assert_eq!(
+        crate::eval(
+            "(function factory() { const C = class { method() { return factory; } }; return new C().method() === factory; })();"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}

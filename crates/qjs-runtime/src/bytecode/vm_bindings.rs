@@ -1073,6 +1073,29 @@ impl Vm<'_, '_> {
         if self.prepare_scope_cursor().is_some() {
             return Ok(true);
         }
+        // Deletion asks whether a declarative binding exists, without GetValue.
+        // TDZ and cell authority must not turn that location into absence.
+        let owner = self.bytecode.clone();
+        let mut scope = owner
+            .binding_plan
+            .pc_scopes
+            .get(self.ip.saturating_sub(1))
+            .copied();
+        while let Some(id) = scope {
+            let descriptor = &owner.binding_plan.scopes[id.0];
+            if descriptor.lookup.contains_key(name) {
+                return Ok(false);
+            }
+            scope = descriptor.parent;
+        }
+        if let Some(slot) = owner.local_slot(name)
+            && owner.locals[slot].is_received_upvalue()
+            && self.local_upvalue_cell(slot).is_some_and(|cell| {
+                cell.metadata().kind != crate::binding::BindingKind::ObjectStorage
+            })
+        {
+            return Ok(false);
+        }
         if self.uses_selected_object_binding(name) {
             let Some(base) = self.env.selected_global_this() else {
                 return Ok(true);

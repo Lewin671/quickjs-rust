@@ -56,7 +56,7 @@ impl Vm<'_, '_> {
             owner_kind: crate::context::OwnerKind::Function,
             home_object: Some(home_object.clone()),
             super_constructor: None,
-            lexical_scope: self.prepare_scope_cursor(),
+            lexical_scope: self.closure_scope_cursor(&method.bytecode),
             upvalues: self.captured_upvalues_for_function_with_override(
                 &method.bytecode,
                 &method.lexical_captures,
@@ -150,7 +150,7 @@ impl Vm<'_, '_> {
             owner_kind: crate::context::OwnerKind::Field,
             home_object: Some(home_object),
             super_constructor: None,
-            lexical_scope: self.prepare_scope_cursor(),
+            lexical_scope: self.closure_scope_cursor(bytecode),
             upvalues: self.captured_upvalues_for_function_with_override(
                 bytecode,
                 lexical_captures,
@@ -194,7 +194,7 @@ impl Vm<'_, '_> {
             owner_kind: crate::context::OwnerKind::StaticBlock,
             home_object: Some(Value::Function(constructor_function.clone())),
             super_constructor: None,
-            lexical_scope: self.prepare_scope_cursor(),
+            lexical_scope: self.closure_scope_cursor(bytecode),
             upvalues: self.captured_upvalues_for_function_with_override(
                 bytecode,
                 lexical_captures,

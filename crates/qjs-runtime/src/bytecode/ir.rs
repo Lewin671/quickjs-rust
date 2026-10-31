@@ -1526,7 +1526,8 @@ fn collect_global_names_from_ops<'a>(code: &'a [Op], names: &mut BTreeSet<&'a st
             | Op::StoreGlobalStrict(name)
             | Op::StoreGlobalSloppy { name, .. }
             | Op::AppendStringLiteralGlobal { name, .. }
-            | Op::TypeofGlobal(name) => {
+            | Op::TypeofGlobal(name)
+            | Op::DeleteIdent(name) => {
                 names.insert(name.as_str());
             }
             Op::StoreLocalOrGlobalSloppy { name, .. } => {

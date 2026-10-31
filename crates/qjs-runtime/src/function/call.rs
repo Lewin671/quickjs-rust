@@ -314,7 +314,8 @@ fn run_prepared_bytecode_call(
     } = prepared;
     if slot_seeded {
         let slots = slots.expect("a slot-seeded call carries its slots");
-        let result = eval_direct_call_bytecode(&bytecode, env, runtime, slots);
+        let result =
+            eval_direct_call_bytecode(&bytecode, &mut Some(env), runtime, &mut Some(slots));
         return result;
     }
     if !completion.finishes_derived_construct() {
@@ -383,7 +384,12 @@ pub(crate) fn call_direct_leaf_function(
         None,
     );
     let direct_call_slots = direct_call_slots.expect("guarded direct leaf calls always seed slots");
-    eval_direct_call_bytecode(bytecode, call_env, env.runtime, direct_call_slots)
+    eval_direct_call_bytecode(
+        bytecode,
+        &mut Some(call_env),
+        env.runtime,
+        &mut Some(direct_call_slots),
+    )
 }
 
 /// Constructs an ordinary bytecode function through the same slot-seeded
@@ -446,7 +452,12 @@ pub(crate) fn try_construct_direct_leaf_function(
         Some(callee.clone()),
     );
     let direct_call_slots = direct_call_slots.expect("guarded direct leaf calls always seed slots");
-    let result = eval_direct_call_bytecode(bytecode, call_env, env.runtime, direct_call_slots);
+    let result = eval_direct_call_bytecode(
+        bytecode,
+        &mut Some(call_env),
+        env.runtime,
+        &mut Some(direct_call_slots),
+    );
     Some(match result {
         Ok(
             value @ (Value::Array(_)
@@ -594,7 +605,12 @@ pub(crate) fn call_direct_function_literal(
         upvalues: DirectCallUpvalues::Slice(&[]),
         realm_upvalue_slots: 0,
     };
-    eval_direct_call_bytecode(bytecode, call_env, env.runtime, direct_call_slots)
+    eval_direct_call_bytecode(
+        bytecode,
+        &mut Some(call_env),
+        env.runtime,
+        &mut Some(direct_call_slots),
+    )
 }
 
 pub(crate) fn is_direct_leaf_function(callee: &Value) -> bool {

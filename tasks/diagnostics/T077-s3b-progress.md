@@ -940,3 +940,44 @@ temporaries outside retained driver frames, borrow the actual prepared callee,
 and avoid fixed-name lease propagation without compiled free-name demand.
 No resource limit, caller-context substitution or benchmark recognizer is added.
 Fresh gates and a new source freeze are required.
+
+
+## Entry and static-scope repairs over the rejected first freeze
+
+The admitted entry borrows its actual callee through ownership slots. Only a
+rejected tier moves that record into the outlined VM fallback. Inline-entry
+preparation/move temporaries live in separate helpers, not across recursive
+native callbacks. Scope transition work is outlined behind its unchanged-scope
+guard. Existing executors, admission ordering, frame bounds and native stack
+policy remain; there is no caller-context equality route or activation pool.
+
+Fixed declarative mappings retain a lease only for compiled unresolved-name
+demand. Extensible holders/with objects always retain live crossing lookup;
+a function with potential own direct eval exposes its holder before later
+additions. Pure parent scopes no longer allocate unused extensible holders.
+Named functions retain self bindings for actual static/dynamic demand, including
+all descendants, rather than merely because they create an unrelated closure.
+Class constructors, methods, fields, static blocks and private members use the
+same demand rule. The existing sorted/transitive global-name index is reused.
+
+Deletion was absent from that index and raw-slot presence checks missed canonical
+cells/TDZ. In the rejected binary, named-self/captured/TDZ deletion all returned
+true versus NG false. Delete now participates in compiled demand, and the VM
+checks active descriptors/received declarative identity without GetValue.
+Unresolvable and object-record deletion retain their semantic paths.
+
+Successful wide numeric roots also count their actual ordinary entry; retained
+children remain separate. New identity tests cover unrelated fixed/self scopes,
+descendant self references with inactive shadows, class consumers and deletion;
+two permanent NG scripts protect the semantic boundaries. Preliminary checks
+pass **2,661 feature tests**, **2,606 default tests**, **299 NG scripts**, strict
+feature Clippy and the staged gate (**117 curated Test262 cases**). Forced and
+poisoned binding modes each pass all 2,606 default tests. All sixteen accepted
+S2 debug/release depth maxima are preserved; repaired maxima are at least the
+base in every case. The attempted curated delete-only filter selects no cases;
+its upstream slice will be exercised through the exact harness.
+
+[Lead feedback round one](T077-s3b-lead-feedback-1.md) requires committing this
+repair, merging main `3cc12c6f`, and then regenerating all final evidence against
+that new baseline. The pre-merge depth/counter standing is not merged-source
+standing. Origin pushes and merges into main remain forbidden.

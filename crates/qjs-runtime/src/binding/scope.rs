@@ -164,6 +164,26 @@ pub(crate) struct ScopeCursor {
     pub(crate) variable: Rc<ScopeLease>,
 }
 impl ScopeCursor {
+    /// Fixed declarative mappings can be omitted when the child's compiled
+    /// routes cannot select any of them. Extensible holders and with objects
+    /// always require live crossing lookup, including future declarations.
+    pub(crate) fn needs_crossing_lookup(&self, mut name_is_free: impl FnMut(&str) -> bool) -> bool {
+        let mut current = Some(self.head.as_ref());
+        while let Some(scope) = current {
+            if scope.object.is_some()
+                || scope.own_vars.is_some()
+                || scope
+                    .cells
+                    .iter()
+                    .any(|binding| name_is_free(&binding.cell.metadata().name))
+            {
+                return true;
+            }
+            current = scope.parent.as_deref();
+        }
+        false
+    }
+
     /// An expression's self name belongs outside its parameter environment.
     /// Calls and escaping descendants share its cell; ordinary body bindings
     /// can shadow it without changing it.

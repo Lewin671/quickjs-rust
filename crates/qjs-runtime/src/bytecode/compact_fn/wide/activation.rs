@@ -20,6 +20,7 @@ use crate::bytecode::vm::{ResumeFrom, Resumed};
 use crate::function::{BindingCell, Function};
 use crate::{RuntimeError, Value};
 
+mod entry;
 mod exits;
 
 use exits::{EXIT_ARGC, ExitOutcome, RootExit, exit_to_interpreter};
@@ -632,7 +633,7 @@ fn thrown(slot: &mut Value) -> RuntimeError {
 #[allow(clippy::too_many_arguments)]
 fn run(
     bytecode: &Bytecode,
-    mut activation: crate::context::ActivationContext,
+    activation: &mut crate::context::ActivationContext,
     runtime: &mut crate::context::RuntimeServices,
     entry: WideEntry<'_>,
     parameter_slots: &[usize],
@@ -644,7 +645,7 @@ fn run(
     let mut storage = FRAME_STORAGE.with(|cell| cell.take());
     let mut env = crate::context::Context {
         runtime,
-        activation: &mut activation,
+        activation,
         native: None,
     };
     let result = run_frames(
@@ -1285,8 +1286,8 @@ fn run_frames(
         // Both call forms pop the callee register (and a resolved call its
         // receiver register) and push the result at `dst`, so taking the
         // values out costs no reference count.
-        let callee = std::mem::replace(&mut registers[callee_index], Value::Undefined);
-        let receiver = if resolved {
+        let mut callee = std::mem::replace(&mut registers[callee_index], Value::Undefined);
+        let mut receiver = if resolved {
             Some(std::mem::replace(
                 &mut registers[callee_index - 1],
                 Value::Undefined,
@@ -1297,94 +1298,29 @@ fn run_frames(
         let argument_index = callee_index + 1;
         let argument_count = argc as usize;
 
-        if let Some(inline) = inline_callee(&callee) {
-            // A numeric body runs its whole call tree on `f64` registers,
-            // leaving the arguments where they are: they are numbers.
-            if inline.numeric
-                && let Some(value) = try_numeric_call(
-                    &callee,
-                    &registers[argument_index..argument_index + argument_count],
-                    &inline.activation,
-                )
-            {
-                if let Some(receiver) = receiver {
-                    release(receiver);
-                }
-                execute::store(&mut registers[current_base + dst as usize], value);
-                pc = resume_pc;
-                continue;
-            }
-            if frames.len() >= MAX_FRAMES {
+        match entry::try_enter_call(
+            &mut callee,
+            &mut receiver,
+            root_bytecode,
+            env,
+            registers,
+            frames,
+            &mut current_callee,
+            &mut current_this,
+            &mut current_base,
+            &mut current_len,
+            &mut pc,
+            argument_index,
+            argument_count,
+            dst,
+            resume_pc,
+        ) {
+            Ok(true) => continue,
+            Ok(false) => {}
+            Err(error) => {
                 unwind(registers, frames, current_base + current_len);
-                return Err(call_stack_exhausted());
+                return Err(crate::error::capture_error_origin(error, env));
             }
-            crate::diagnostics::count!(ordinary_call_attempts);
-            crate::diagnostics::count!(compact_direct_calls);
-            let callee_base = current_base + current_len;
-            let callee_len = inline.register_count;
-            reserve_registers(registers, callee_base + callee_len);
-            {
-                let parameter_slots = callee_parameter_slots(&callee);
-                let (caller_side, callee_side) = registers.split_at_mut(callee_base);
-                for index in 0..argument_count {
-                    let value = std::mem::replace(
-                        &mut caller_side[argument_index + index],
-                        Value::Undefined,
-                    );
-                    match parameter_slots.get(index) {
-                        // The window was cleared when it was last returned
-                        // from, so the register holds a primitive to forget.
-                        Some(&slot) if slot < callee_len => {
-                            release(std::mem::replace(&mut callee_side[slot], value));
-                        }
-                        _ => release(value),
-                    }
-                }
-            }
-            // A callee that reads `this` receives the same coercion the
-            // general path applies: the resolved receiver, or `undefined`
-            // for a plain call.
-            let callee_this = if inline.requires_this {
-                // An object receiver is `this` unchanged, strict or not;
-                // only a primitive (a symbol is an object here) or a missing
-                // receiver takes the coercion.
-                Some(match receiver {
-                    Some(this @ (Value::Array(_) | Value::Function(_))) => this,
-                    Some(Value::Object(object)) if !crate::symbol::is_symbol_primitive(&object) => {
-                        Value::Object(object)
-                    }
-                    receiver => {
-                        crate::function::function_call_this(receiver, env, inline.is_strict)
-                    }
-                })
-            } else {
-                if let Some(receiver) = receiver {
-                    release(receiver);
-                }
-                None
-            };
-            if inline.has_lexical_slots
-                && let Some(program) = super::program_for(running_bytecode(&callee, root_bytecode))
-            {
-                seed_lexical_markers(
-                    program,
-                    &mut registers[callee_base..callee_base + callee_len],
-                );
-            }
-            frames.push(WideFrame {
-                activation: std::mem::replace(env.activation, inline.activation),
-                callee: std::mem::replace(&mut current_callee, callee),
-                this_value: std::mem::replace(&mut current_this, callee_this),
-                base: current_base,
-                len: current_len,
-                resume_pc,
-                dst,
-                constructs: false,
-            });
-            current_base = callee_base;
-            current_len = callee_len;
-            pc = 0;
-            continue;
         }
 
         let outcome = {
@@ -1612,27 +1548,26 @@ fn call_stack_exhausted() -> RuntimeError {
 }
 
 /// Runs `bytecode` on the wide tier without building a `Vm`, or returns
-/// `None` having consumed nothing. Every guard runs before `env` or `slots`
-/// is taken and before any observable work.
+/// `None` having consumed nothing. Guards precede receiver consumption and
+/// observable work; the actual prepared callee is borrowed in place.
+#[inline(always)]
 pub(in crate::bytecode) fn try_run_standalone(
     bytecode: &Bytecode,
-    env: &mut Option<crate::context::ActivationContext>,
+    env: &mut crate::context::ActivationContext,
     runtime: &mut crate::context::RuntimeServices,
-    slots: &mut Option<DirectCallSlots<'_>>,
+    slots: &mut DirectCallSlots<'_>,
 ) -> Option<Result<Value, RuntimeError>> {
-    if !env.as_ref()?.indexed_bindings_only()
-        || !bytecode.binding_plan.references.can_skip(env.as_ref()?)
-    {
+    if !env.indexed_bindings_only() || !bytecode.binding_plan.references.can_skip(env) {
         return None;
     }
-    let entry = admit(bytecode, slots.as_ref()?.upvalues)?;
+    let entry = admit(bytecode, slots.upvalues)?;
     // A body that reads `this` needs the caller to seed a receiver, exactly
     // like the general path's `Vm.direct_this`.
-    if entry.program.requires_this && slots.as_ref()?.this_value.is_none() {
+    if entry.program.requires_this && slots.this_value.is_none() {
         return None;
     }
-    let call_env = env.take()?;
-    let call_slots = slots.take()?;
+    let call_env = env;
+    let call_slots = slots;
     let root = RootExit {
         upvalues: call_slots.upvalues,
         realm_upvalue_slots: call_slots.realm_upvalue_slots,
@@ -1644,7 +1579,7 @@ pub(in crate::bytecode) fn try_run_standalone(
         entry,
         call_slots.parameter_slots,
         call_slots.arguments,
-        call_slots.this_value,
+        call_slots.this_value.take(),
         root,
     ))
 }

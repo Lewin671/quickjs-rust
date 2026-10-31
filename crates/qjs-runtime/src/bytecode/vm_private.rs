@@ -184,7 +184,7 @@ impl Vm<'_, '_> {
             owner_kind: crate::context::OwnerKind::Function,
             home_object: Some(home_object),
             super_constructor: None,
-            lexical_scope: self.prepare_scope_cursor(),
+            lexical_scope: self.closure_scope_cursor(&def.bytecode),
             upvalues: self.captured_upvalues_for_function_with_override(
                 &def.bytecode,
                 &def.lexical_captures,
@@ -240,7 +240,7 @@ impl Vm<'_, '_> {
             owner_kind: crate::context::OwnerKind::Field,
             home_object: Some(home_object),
             super_constructor: None,
-            lexical_scope: self.prepare_scope_cursor(),
+            lexical_scope: self.closure_scope_cursor(&definition.bytecode),
             upvalues: self.captured_upvalues_for_function_with_override(
                 &definition.bytecode,
                 &definition.lexical_captures,

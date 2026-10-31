@@ -141,7 +141,7 @@ impl Vm<'_, '_> {
             owner_kind: crate::context::OwnerKind::Function,
             home_object: None,
             super_constructor: super_constructor.clone(),
-            lexical_scope: self.prepare_scope_cursor(),
+            lexical_scope: self.closure_scope_cursor(&constructor.bytecode),
             upvalues: constructor_upvalues,
         });
         // Static-side inheritance: a subclass constructor inherits the parent

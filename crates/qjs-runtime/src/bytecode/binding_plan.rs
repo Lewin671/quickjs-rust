@@ -269,6 +269,16 @@ fn private_dynamic(element: &ClassPrivateElementDef) -> bool {
     }
 }
 
+/// The existing global-name index includes descendant unresolved operations;
+/// positional captures already retain their canonical selected cells.
+impl Bytecode {
+    pub(super) fn references_free_name_tree(&self, name: &str) -> bool {
+        self.global_names()
+            .binary_search_by(|candidate| candidate.as_str().cmp(name))
+            .is_ok()
+    }
+}
+
 impl BindingPlan {
     pub(super) fn validate(&self, slots: usize, code_len: usize) {
         use crate::binding::{BindingKind, InitPolicy, WritePolicy};

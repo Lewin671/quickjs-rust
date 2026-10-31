@@ -284,15 +284,15 @@ pub(crate) struct DirectCallSlots<'a> {
     pub(crate) realm_upvalue_slots: u128,
 }
 
-/// Runs a slot-seeded ordinary call whose caller needs only its completion
-/// value. Direct-call eligibility excludes the compatibility bindings that a
-/// general call must copy back to its caller, so materializing a completed
-/// `FunctionBytecodeResult` would only move and then drop the finished frame.
+/// Runs the prepared callee through retained tiers or the general frame.
+/// Tier dispatch borrows that callee directly; a declined route alone owns
+/// interpreter storage. Completion returns no environment projection.
+#[inline(always)]
 pub(crate) fn eval_direct_call_bytecode(
     bytecode: &Bytecode,
-    env: crate::context::ActivationContext,
+    env: &mut Option<crate::context::ActivationContext>,
     runtime: &mut crate::context::RuntimeServices,
-    direct_call_slots: DirectCallSlots<'_>,
+    direct_call_slots: &mut Option<DirectCallSlots<'_>>,
 ) -> Result<Value, RuntimeError> {
     vm::eval_direct_call_bytecode(bytecode, env, runtime, direct_call_slots)
 }

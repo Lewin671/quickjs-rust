@@ -22,6 +22,7 @@ impl Vm<'_, '_> {
     /// Re-entry creates new private lexical locations even when the previous
     /// instance escaped while still in TDZ. Declaration Init does not replace
     /// a cell already captured in this same scope instance.
+    #[inline(never)]
     pub(super) fn update_binding_scope(&mut self, pc: usize) {
         let Some(next) = self.bytecode.binding_plan.pc_scopes.get(pc).copied() else {
             return;
@@ -392,7 +393,9 @@ impl Vm<'_, '_> {
         child: &super::ir::Bytecode,
     ) -> Option<ScopeCursor> {
         if child.has_dynamic_scope_tree()
-            || self.env.scope_cursor().is_some()
+            || self.env.scope_cursor().is_some_and(|cursor| {
+                cursor.needs_crossing_lookup(|name| child.references_free_name_tree(name))
+            })
             || !self.with_stack().is_empty()
             || !self.bytecode.global_scope && self.bytecode.contains_direct_eval()
         {
@@ -480,20 +483,22 @@ impl Vm<'_, '_> {
                 CellReference { cell, access }
             })
             .collect();
-        let own_vars = (descriptor.variable_target == id && !self.env.has_global_binding_root())
-            .then(|| {
-                if instances.holders.len() <= id.0 {
-                    instances.holders.resize_with(id.0 + 1, || None);
-                }
-                instances.holders[id.0]
-                    .get_or_insert_with(|| {
-                        Rc::new(VarHolder::new(VariableEnvIdentity {
-                            activation: instances.activation,
-                            boundary: id,
-                        }))
-                    })
-                    .clone()
-            });
+        let own_vars = (descriptor.variable_target == id
+            && !self.env.has_global_binding_root()
+            && self.bytecode.contains_direct_eval())
+        .then(|| {
+            if instances.holders.len() <= id.0 {
+                instances.holders.resize_with(id.0 + 1, || None);
+            }
+            instances.holders[id.0]
+                .get_or_insert_with(|| {
+                    Rc::new(VarHolder::new(VariableEnvIdentity {
+                        activation: instances.activation,
+                        boundary: id,
+                    }))
+                })
+                .clone()
+        });
         let object = (descriptor.kind == ScopeKind::With).then(|| {
             let mut current = Some(id);
             let mut depth = 0;

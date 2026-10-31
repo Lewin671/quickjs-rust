@@ -126,30 +126,36 @@ pub(super) fn eval_call_bytecode(
 }
 
 /// Runs a guarded direct call and drops its completed frame in place.
+#[inline(always)]
 pub(super) fn eval_direct_call_bytecode(
     bytecode: &Bytecode,
-    env: crate::context::ActivationContext,
+    env: &mut Option<crate::context::ActivationContext>,
     runtime: &mut crate::context::RuntimeServices,
-    direct_call_slots: DirectCallSlots<'_>,
+    slots: &mut Option<DirectCallSlots<'_>>,
 ) -> Result<Value, RuntimeError> {
-    // A body the compact tier admits runs without a `Vm` at all: it has no
-    // handler, cannot suspend, runs no loop plans, and keeps its operands in
-    // registers, so nothing in `FrameState` would be read. Admission
-    // is decided before `env` or the slots are consumed, so a declined body
-    // builds exactly the frame it always did.
-    let mut pending_env = Some(env);
-    let mut pending_slots = Some(direct_call_slots);
     if let Some(result) = super::compact_fn::try_run_standalone(
         bytecode,
-        &mut pending_env,
+        env.as_mut().expect("prepared callee activation"),
         runtime,
-        &mut pending_slots,
+        slots.as_mut().expect("prepared positional inputs"),
     ) {
         return result;
     }
-    let env = pending_env.expect("a declined standalone activation consumes nothing");
-    let direct_call_slots =
-        pending_slots.expect("a declined standalone activation consumes nothing");
+    eval_direct_call_fallback(bytecode, env, runtime, slots)
+}
+
+/// Only a declined tier moves the actual callee and inputs into VM storage.
+/// The admitted path borrows the owning entry without moving large records
+/// through recursive dispatcher stack frames.
+#[inline(never)]
+fn eval_direct_call_fallback(
+    bytecode: &Bytecode,
+    entry: &mut Option<crate::context::ActivationContext>,
+    runtime: &mut crate::context::RuntimeServices,
+    slots: &mut Option<DirectCallSlots<'_>>,
+) -> Result<Value, RuntimeError> {
+    let env = entry.take().expect("prepared callee activation");
+    let direct_call_slots = slots.take().expect("prepared positional inputs");
     let mut vm = Vm::new_with_globals_upvalues_with_stack_and_direct_call_slots(
         bytecode,
         runtime,
@@ -527,7 +533,14 @@ impl<'a, 's> Vm<'a, 's> {
         let mut event_cursor = references.events.partition_point(|event| event.pc < pc);
         let mut expected_pc = pc;
         loop {
-            if self.current.binding_scope.is_some() {
+            if let Some(active) = self.current.binding_scope
+                && program
+                    .bytecode
+                    .binding_plan
+                    .pc_scopes
+                    .get(pc)
+                    .is_some_and(|scope| *scope != active)
+            {
                 self.update_binding_scope(pc);
                 if self.current.authoritative_slots != authority_at_entry {
                     self.current.ip = pc;

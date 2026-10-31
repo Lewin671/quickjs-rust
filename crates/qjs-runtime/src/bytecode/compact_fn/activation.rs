@@ -24,6 +24,8 @@
 //! registers: `Op::Call` pops its operand registers, so nothing else can
 //! observe them, and no reference count moves.
 
+mod entry;
+
 use qjs_ast::BinaryOp;
 
 use super::CompactOp;
@@ -366,7 +368,7 @@ fn compute_fixed_inline_facts(callee: &Value, function: &Function) -> u32 {
 /// Runs an admitted body in `env`, together with every admitted body it calls.
 fn run(
     bytecode: &Bytecode,
-    mut activation: crate::context::ActivationContext,
+    activation: &mut crate::context::ActivationContext,
     runtime: &mut crate::context::RuntimeServices,
     entry: CompactEntry<'_>,
     parameter_slots: &[usize],
@@ -379,7 +381,7 @@ fn run(
     let mut storage = FRAME_STORAGE.with(|cell| cell.take());
     let mut env = crate::context::Context {
         runtime,
-        activation: &mut activation,
+        activation,
         native: None,
     };
     let result = run_frames(
@@ -600,62 +602,32 @@ fn run_frames(
                 let callee_index = current_base + base as usize;
                 // `Op::Call` pops the callee register and pushes its result
                 // there, so taking the callee out costs no reference count.
-                let callee = std::mem::replace(&mut registers[callee_index], Value::Undefined);
+                let mut callee = std::mem::replace(&mut registers[callee_index], Value::Undefined);
                 let argument_index = callee_index + 1;
                 let argument_count = argc as usize;
 
-                if let Some(inline) = inline_callee(&callee) {
-                    if frames.len() >= MAX_FRAMES {
+                match entry::try_enter_call(
+                    &mut callee,
+                    env,
+                    registers,
+                    frames,
+                    &mut current_callee,
+                    &mut current_owner,
+                    &mut current_slots,
+                    &mut current_base,
+                    &mut current_len,
+                    &mut pc,
+                    argument_index,
+                    argument_count,
+                    dst,
+                    resume_pc,
+                ) {
+                    Ok(true) => continue,
+                    Ok(false) => {}
+                    Err(error) => {
                         unwind(registers, frames, current_base + current_len);
-                        return Err(call_stack_exhausted());
+                        return Err(crate::error::capture_error_origin(error, env));
                     }
-                    // The attempt counter's whole job is to prove a workload
-                    // really performs the calls it claims, so it is raised for
-                    // every dispatched call whatever tier answers it. The tier
-                    // attribution is `compact_direct_calls`, not
-                    // `direct_leaf_frames`: no frame is built.
-                    crate::diagnostics::count!(ordinary_call_attempts);
-                    crate::diagnostics::count!(compact_direct_calls);
-                    let callee_base = current_base + current_len;
-                    let callee_len = inline.register_count;
-                    reserve_registers(registers, callee_base + callee_len);
-                    {
-                        // Every argument register sits below `callee_base`,
-                        // because the operand stack that holds them is part of
-                        // the caller's own window. Each argument is dead after
-                        // the call, so it is moved rather than cloned; one the
-                        // callee does not name is released here, because its
-                        // register would otherwise stay live until this frame
-                        // returns.
-                        let parameter_slots = callee_parameter_slots(&callee);
-                        let (caller_side, callee_side) = registers.split_at_mut(callee_base);
-                        for index in 0..argument_count {
-                            let value = std::mem::replace(
-                                &mut caller_side[argument_index + index],
-                                Value::Undefined,
-                            );
-                            match parameter_slots.get(index) {
-                                Some(&slot) if slot < callee_len => callee_side[slot] = value,
-                                _ => release(value),
-                            }
-                        }
-                    }
-                    frames.push(CompactFrame {
-                        activation: std::mem::replace(env.activation, inline.activation),
-                        callee: std::mem::replace(&mut current_callee, callee),
-                        upvalue_owner: current_owner,
-                        upvalue_slots: current_slots,
-                        base: current_base,
-                        len: current_len,
-                        resume_pc,
-                        dst,
-                    });
-                    current_owner = inline.upvalue_owner;
-                    current_slots = inline.upvalue_slots;
-                    current_base = callee_base;
-                    current_len = callee_len;
-                    pc = 0;
-                    continue;
                 }
 
                 let outcome = {
@@ -712,33 +684,33 @@ fn call_stack_exhausted() -> RuntimeError {
 /// Runs `bytecode` without building a `Vm`, or returns `None` having consumed
 /// nothing, so the caller can construct the ordinary frame unchanged.
 ///
-/// `env` and `slots` are taken only once admission is certain. Every guard runs
-/// before any of them is consumed and before any observable work.
+/// The actual prepared callee is borrowed in place. Every guard precedes
+/// receiver consumption or any observable work.
+#[inline(always)]
 pub(in crate::bytecode) fn try_run_standalone(
     bytecode: &Bytecode,
-    env: &mut Option<crate::context::ActivationContext>,
+    env: &mut crate::context::ActivationContext,
     runtime: &mut crate::context::RuntimeServices,
-    slots: &mut Option<DirectCallSlots<'_>>,
+    slots: &mut DirectCallSlots<'_>,
 ) -> Option<Result<Value, RuntimeError>> {
     // This tier resolves every name by slot index. An environment that can
     // still answer a name, that carries deoptimized dynamic bindings, or that
     // overrides the realm global belongs on the general path.
-    if !env.as_ref()?.indexed_bindings_only()
-        || !bytecode.binding_plan.references.can_skip(env.as_ref()?)
-    {
+    if !env.indexed_bindings_only() || !bytecode.binding_plan.references.can_skip(env) {
         return None;
     }
     // A body outside this tier's numeric set may still be one the wide tier
     // runs; that tier re-checks admission on its own program.
-    let Some(entry) = admit(bytecode, slots.as_ref()?.upvalues) else {
+    let Some(entry) = admit(bytecode, slots.upvalues) else {
         return super::wide::try_run_standalone(bytecode, env, runtime, slots);
     };
-    if let Some(value) = run_numeric_plan(bytecode, slots.as_ref()?, env.as_ref()?) {
+    if let Some(value) = run_numeric_plan(bytecode, slots, env) {
         return Some(Ok(value));
     }
-    // Admitted. From here on the caller's `env` and `slots` are ours.
-    let call_env = env.take()?;
-    let call_slots = slots.take()?;
+    // Borrow the actual prepared callee in place; do not move a second
+    // root-sized activation through the recursive native call stack.
+    let call_env = env;
+    let call_slots = slots;
     Some(run(
         bytecode,
         call_env,
