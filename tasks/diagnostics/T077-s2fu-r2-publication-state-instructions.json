@@ -1,0 +1,337 @@
+{
+  "diagnostic_only": true,
+  "timing_claim": false,
+  "builds": {
+    "1e6e2a2b": {
+      "revision": "1e6e2a2b",
+      "path": "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261031T134556Z-t077-s2fu-r2-publication-state/out/instructions/1e6e2a2b/qjs",
+      "sha256": "b756fe7409b65b6c273d71dfbbc06238fbb73b32341797c4df0c19a4725841a5",
+      "cache_hit": true,
+      "cache_key": "e1db3792c7e3b2a2d3a6472804e985f58608cc3561442ba64eaa22cb6ed50758",
+      "cache_spec_sha256": "a91299bfc1b37282d2091114fabba311ef9541e52e3568fb3804ec5a4ff397cb"
+    },
+    "f9d6d86c": {
+      "revision": "f9d6d86c",
+      "path": "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261031T134556Z-t077-s2fu-r2-publication-state/out/instructions/f9d6d86c/qjs",
+      "sha256": "bdb0aa45c50031ff5b2201224b9040a0863ac97432d2f660b687af391299ae5f",
+      "cache_hit": true,
+      "cache_key": "27e4c93e88aecef57cfd2bd490d5387620cc979d4ea0d4aa42554149ad2e3161",
+      "cache_spec_sha256": "10e4eeb54b018f9d8f76e562942f6845f0dc7c6582273f4153b7a70c707c68c9"
+    },
+    "7a3a1108": {
+      "revision": "7a3a1108",
+      "path": "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261031T134556Z-t077-s2fu-r2-publication-state/out/instructions/7a3a1108/qjs",
+      "sha256": "41ef93b1fb12deeb7191ee721fab017d86793d51b8fa31325e89099c0d53b030",
+      "cache_hit": false,
+      "cache_key": "b9799a80342c90524440d1d0ed2d2544c9bf62e1c2c1e862ab20cc8aa7f6800c",
+      "cache_spec_sha256": "c29910d6e5fd1d49cc6a6c09cff8ef76ab2ae6536e632bc2f08f7374eb15ead2"
+    }
+  },
+  "triage_argv_source": "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261031T133013Z-t077-s2fu-r2-slot-public86/out/triage",
+  "records": [
+    {
+      "case": "development/lodash/transform",
+      "argv_without_binary": [
+        [
+          "--raw",
+          "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261031T133013Z-t077-s2fu-r2-slot-public86/out/triage/work/development--lodash--transform.js"
+        ]
+      ],
+      "samples": {
+        "1e6e2a2b": [
+          12573389952,
+          12578476342
+        ],
+        "f9d6d86c": [
+          12581604691,
+          12581278054
+        ],
+        "7a3a1108": [
+          12780223000,
+          12784667574
+        ]
+      },
+      "ratios": {
+        "1e6e2a2b": 1.0,
+        "f9d6d86c": 1.0004379973585749,
+        "7a3a1108": 1.0164212180190593
+      }
+    },
+    {
+      "case": "development/meriyah/parse",
+      "argv_without_binary": [
+        [
+          "--raw",
+          "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261031T133013Z-t077-s2fu-r2-slot-public86/out/triage/work/development--meriyah--parse.js"
+        ]
+      ],
+      "samples": {
+        "1e6e2a2b": [
+          14476433427,
+          14480618388
+        ],
+        "f9d6d86c": [
+          14482583220,
+          14482933162
+        ],
+        "7a3a1108": [
+          14588462822,
+          14588703765
+        ]
+      },
+      "ratios": {
+        "1e6e2a2b": 1.0,
+        "f9d6d86c": 1.000292314530294,
+        "7a3a1108": 1.0076014220441454
+      }
+    },
+    {
+      "case": "development/diff/compare",
+      "argv_without_binary": [
+        [
+          "--raw",
+          "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261031T133013Z-t077-s2fu-r2-slot-public86/out/triage/work/development--diff--compare.js"
+        ]
+      ],
+      "samples": {
+        "1e6e2a2b": [
+          39824978534,
+          39825161840
+        ],
+        "f9d6d86c": [
+          39856854933,
+          39855736025
+        ],
+        "7a3a1108": [
+          39999893738,
+          39999928687
+        ]
+      },
+      "ratios": {
+        "1e6e2a2b": 1.0,
+        "f9d6d86c": 1.000784061191942,
+        "7a3a1108": 1.004390225169197
+      }
+    },
+    {
+      "case": "external/sunspider-1.0/date-format-tofte",
+      "argv_without_binary": [
+        [
+          "--raw",
+          "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261031T133013Z-t077-s2fu-r2-slot-public86/out/triage/work/sunspider-1.0--date-format-tofte.js"
+        ]
+      ],
+      "samples": {
+        "1e6e2a2b": [
+          742564064,
+          742479954
+        ],
+        "f9d6d86c": [
+          747448278,
+          747377184
+        ],
+        "7a3a1108": [
+          751942901,
+          751980067
+        ]
+      },
+      "ratios": {
+        "1e6e2a2b": 1.0,
+        "f9d6d86c": 1.0065866357370157,
+        "7a3a1108": 1.0127127208157947
+      }
+    },
+    {
+      "case": "external/sunspider-1.0/string-fasta",
+      "argv_without_binary": [
+        [
+          "--raw",
+          "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261031T133013Z-t077-s2fu-r2-slot-public86/out/triage/work/sunspider-1.0--string-fasta.js"
+        ]
+      ],
+      "samples": {
+        "1e6e2a2b": [
+          807548742,
+          807416118
+        ],
+        "f9d6d86c": [
+          811494988,
+          811484640
+        ],
+        "7a3a1108": [
+          821972062,
+          822008761
+        ]
+      },
+      "ratios": {
+        "1e6e2a2b": 1.0,
+        "f9d6d86c": 1.0049628126273906,
+        "7a3a1108": 1.0179669314910047
+      }
+    },
+    {
+      "case": "external/sunspider-1.0/access-binary-trees",
+      "argv_without_binary": [
+        [
+          "--raw",
+          "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261031T133013Z-t077-s2fu-r2-slot-public86/out/triage/work/sunspider-1.0--access-binary-trees.js"
+        ]
+      ],
+      "samples": {
+        "1e6e2a2b": [
+          258651451,
+          258563014
+        ],
+        "f9d6d86c": [
+          260628721,
+          260636947
+        ],
+        "7a3a1108": [
+          262630713,
+          262636686
+        ]
+      },
+      "ratios": {
+        "1e6e2a2b": 1.0,
+        "f9d6d86c": 1.007832733371059,
+        "7a3a1108": 1.0155698158983237
+      }
+    },
+    {
+      "case": "external/kraken-1.1/json-parse-financial",
+      "argv_without_binary": [
+        [
+          "--raw",
+          "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261031T133013Z-t077-s2fu-r2-slot-public86/out/triage/work/kraken-1.1--json-parse-financial.js"
+        ]
+      ],
+      "samples": {
+        "1e6e2a2b": [
+          379597336,
+          379429929
+        ],
+        "f9d6d86c": [
+          383454786,
+          383477485
+        ],
+        "7a3a1108": [
+          381553797,
+          381577135
+        ]
+      },
+      "ratios": {
+        "1e6e2a2b": 1.0,
+        "f9d6d86c": 1.0104146535500276,
+        "7a3a1108": 1.0054064816762545
+      }
+    },
+    {
+      "case": "broad/property_dynamic_read",
+      "argv_without_binary": [
+        [
+          "--raw",
+          "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+          "property_dynamic_read",
+          "2306867"
+        ],
+        [
+          "--raw",
+          "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+          "property_dynamic_read",
+          "4613734"
+        ]
+      ],
+      "samples": {
+        "1e6e2a2b": [
+          2871901621,
+          2872416960
+        ],
+        "f9d6d86c": [
+          2797996249,
+          2798059212
+        ],
+        "7a3a1108": [
+          2858155442,
+          2858238541
+        ]
+      },
+      "ratios": {
+        "1e6e2a2b": 1.0,
+        "f9d6d86c": 0.9741896070161572,
+        "7a3a1108": 0.9951387448996364
+      }
+    },
+    {
+      "case": "broad/captured_write",
+      "argv_without_binary": [
+        [
+          "--raw",
+          "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+          "captured_write",
+          "2306867"
+        ],
+        [
+          "--raw",
+          "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/broad-micro.js",
+          "captured_write",
+          "4613734"
+        ]
+      ],
+      "samples": {
+        "1e6e2a2b": [
+          3335891558,
+          3335901220
+        ],
+        "f9d6d86c": [
+          3335648805,
+          3335671965
+        ],
+        "7a3a1108": [
+          3430578280,
+          3430516481
+        ]
+      },
+      "ratios": {
+        "1e6e2a2b": 1.0,
+        "f9d6d86c": 0.9999292531983972,
+        "7a3a1108": 1.0283734806069242
+      }
+    },
+    {
+      "case": "sentinel/string_key_map_churn",
+      "argv_without_binary": [
+        [
+          "--raw",
+          "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/generic-sentinels.js",
+          "string_key_map_churn",
+          "1922389"
+        ],
+        [
+          "--raw",
+          "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/benchmarks/workloads/generic-sentinels.js",
+          "string_key_map_churn",
+          "3844778"
+        ]
+      ],
+      "samples": {
+        "1e6e2a2b": [
+          2784397788,
+          2784176956
+        ],
+        "f9d6d86c": [
+          2780446810,
+          2780111272
+        ],
+        "7a3a1108": [
+          2780515831,
+          2780344026
+        ]
+      },
+      "ratios": {
+        "1e6e2a2b": 1.0,
+        "f9d6d86c": 0.998560374535937,
+        "7a3a1108": 0.998614567038305
+      }
+    }
+  ]
+}

@@ -17,7 +17,8 @@ impl Layout {
             } else {
                 0
             }),
-            publication: self.publication.copied(dictionary),
+            deferred_seed: false,
+            transient: self.transient,
             edits: self.edits,
             prototype: self.prototype.clone(),
             flavor: self.flavor,
@@ -63,7 +64,7 @@ impl Layout {
         self.append_misses
             .set(self.append_misses.get().saturating_add(1));
         let data = self.append_data(key, attrs, proof);
-        if !self.publication.is_transient() {
+        if !self.transient {
             let root = Self::root_shape(self);
             root.capacity_hint
                 .set(root.capacity_hint.get().max((self.len + 1).min(16) as u8));
@@ -78,20 +79,21 @@ impl Layout {
             links: OnceCell::new(),
             dictionary: false,
             epoch: std::cell::Cell::new(0),
-            publication: self.publication.copied(false),
+            deferred_seed: false,
+            transient: self.transient,
             edits: self.edits,
             prototype: self.prototype.clone(),
             flavor: self.flavor,
             capacity_hint: std::cell::Cell::new(0),
             append_misses: std::cell::Cell::new(0),
         };
-        if !self.publication.is_transient() {
+        if !self.transient {
             next.set_parent(self.clone(), label);
             next.set_root(Self::root_shape(self).clone());
         }
         let next = Rc::new(next);
         crate::diagnostics::count!(property_shape_nodes_created);
-        if !self.publication.is_transient() {
+        if !self.transient {
             self.cache(label, &next);
         }
         next

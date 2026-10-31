@@ -13,13 +13,9 @@ pub(crate) enum NamedStorage {
 }
 impl NamedStorage {
     pub(crate) fn new(domain: &AtomDomain, prototype: Option<Prototype>, flavor: u16) -> Self {
-        let mut store = NamedStore::empty_with_prototype(domain, prototype, flavor);
-        store.materialize_layout();
-        let prototype = NamedStore::compact_prototype(&store.layout, store.prototype);
-        Self::Empty {
-            layout: store.layout,
-            prototype,
-        }
+        let layout = PropertyOwner::new(domain.clone()).root_for(prototype.as_ref(), flavor);
+        let prototype = NamedStore::compact_prototype(&layout, prototype);
+        Self::Empty { layout, prototype }
     }
     /// Fork a realm's immutable empty seed on the first receiver mutation.
     pub(crate) fn fork_empty_store(&self) -> NamedStore {

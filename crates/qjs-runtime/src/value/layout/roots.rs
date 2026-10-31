@@ -62,7 +62,7 @@ impl PropertyOwner {
         let mut seed = self.0.root.copied(false);
         seed.data = self.0.root.data.clone();
         seed.flavor = flavor;
-        seed.publication = Publication::Deferred;
+        seed.deferred_seed = true;
         let seed = Rc::new(seed);
         self.0.seeds.borrow_mut().insert(flavor, seed.clone());
         seed
@@ -82,7 +82,8 @@ impl PropertyOwner {
             links: OnceCell::new(),
             dictionary: false,
             epoch: std::cell::Cell::new(0),
-            publication: Publication::Transient,
+            deferred_seed: false,
+            transient: true,
             edits: 0,
             prototype: prototype.map(WeakPrototype::new),
             flavor,
@@ -112,7 +113,8 @@ impl PropertyOwner {
             links: OnceCell::new(),
             dictionary: false,
             epoch: std::cell::Cell::new(0),
-            publication: Publication::Ready,
+            deferred_seed: false,
+            transient: false,
             edits: 0,
             prototype: prototype.map(WeakPrototype::new),
             flavor,

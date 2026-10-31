@@ -89,7 +89,7 @@ fn reusable_predictions_are_canonical_even_for_a_new_prototype_family() {
     builder.insert("x", Value::Number(1.0));
     let (first, prediction, _) = builder.finish();
     let prediction = prediction.unwrap();
-    assert!(!prediction.publication.is_transient());
+    assert!(!prediction.transient);
     assert!(Rc::ptr_eq(&first.layout, &prediction));
     let mut next = DataSequence::new(
         Some(prediction.clone()),
@@ -110,7 +110,7 @@ fn string_wrapper_templates_publish_before_instances_are_minted() {
     let template = StringWrapperLayout::new(&domain, parent);
     let a = template.instantiate(1.0);
     let b = template.instantiate(2.0);
-    assert!(!a.layout.publication.is_transient() && !b.layout.publication.is_transient());
+    assert!(!a.layout.transient && !b.layout.transient);
     assert!(Rc::ptr_eq(&a.layout, &b.layout));
     assert_eq!(a.get_text("length").unwrap().value, Value::Number(1.0));
     assert_eq!(b.get_text("length").unwrap().value, Value::Number(2.0));

@@ -15,13 +15,13 @@ transient prefixes. Before guard/template observation, publication rebuilds the
 canonical prototype/flavor transition path without copying values. Structural
 edits clear any pending publication guard. Tiny key/attribute buffers are weakly
 interned by sequence across prototypes; only bound layouts guard inheritance.
-A publication tag separates pending bindings from directly guardable metadata;
-private bound layouts can guard themselves while keeping root metadata on demand.
 IC admission publishes an ordinary receiver's deferred root into its direct
 layout field once, preserving an already-issued guard identity.
 Array/function empty seeds retain their compact shared edge representation,
 reusing a weak root memo rather than allocating a box per instance. The memo
 never owns a prototype, and full NamedStores retain their edge inline.
+Compact authorities request a canonical root directly, without creating an
+ordinary neutral seed or a temporary value store.
 
 A dependency request installs only the required ancestor path, iteratively.
 The weak user graph links validity states, never IC sites. Reparenting leaves

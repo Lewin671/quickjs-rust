@@ -2,10 +2,10 @@
 
 - Status: active; A–D implementation present, final performance qualification in progress.
 - Implementation: runtime `f9d6d86c`; 80-byte bound nodes/shared tiny data, canonical templates, live-root reuse/dead-root sweeps, cached hash width, visible-prefix own-data reads and allocation-free cycle checks. Default x86 order regenerated from this source.
-- Verified at: fast gate passes 2,521 runtime tests; `f9d6d86c` passes 268 NG fixtures cached/off/verify. Native full check is running. `4e788129` native/x86 mem3 passes; final public86, exact and resource qualification remain due.
+- Verified at: fast gate passes 2,523 runtime tests; `f9d6d86c` passes 268 NG fixtures cached/off/verify. Native full check is running. `4e788129` native/x86 mem3 passes; final public86, exact and resource qualification remain due.
 - Evidence: this record and the named job/artifact receipts below; [round 1](T077-s2-followup.md) is historical.
 - Unresolved: final per-lane instruction/wall limits, exact cached/off with burndown, complete native/x86 resource gates.
-- Next action: strict relink audit/public86, then complete final exact and native/x86 resource replays. No origin push or merge.
+- Next action: focused direct compact-factory replay, then strict relink/public86 and complete final exact/resource qualification. No origin push or merge.
 
 
 ## Authority and ordered scope
@@ -340,3 +340,14 @@ construction/guard publication with one state-range test, without growing the
 80-byte Layout or changing any slot/value/prototype semantics. Migrate all
 constructors and flag reads together, then run guard/prefix tests and focused
 instructions before new final qualification.
+
+
+Publication-tag `7a3a1108`, job
+`20261031T134556Z-t077-s2fu-r2-publication-state`, passes full native/NG gates
+but loses instructions: lodash 1.016421, meriyah 1.007601, captured write
+1.028373 (JSON parse improves to 1.005406). Revert the tag and retain the
+private-version regression test. Next remove the compact-authority factory's
+ordinary-seed/publication round trip: Empty authorities require canonical roots
+by invariant, so request root_for directly and retain the existing compact edge
+memo. No temporary NamedStore, cold guard or unused neutral seed is needed.
+Test that construction remains Empty, can guard directly and creates no seed.
