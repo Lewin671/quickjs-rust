@@ -145,7 +145,7 @@ impl NamedStore {
         if !entry.attrs.has(Attributes::WRITABLE) {
             return OwnDataPropertyWrite::ReadOnly;
         }
-        self.values[slot] = value.clone();
+        self.overwrite_guarded_data(slot, value.clone());
         self.verify_slot(slot);
         OwnDataPropertyWrite::Written
     }

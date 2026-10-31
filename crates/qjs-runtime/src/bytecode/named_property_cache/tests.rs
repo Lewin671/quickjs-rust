@@ -4,7 +4,7 @@ use crate::property::atom::AtomDomain;
 use crate::{Function, NativeFunction, Property};
 use std::collections::HashMap;
 
-fn object(domain: &AtomDomain, name: &str, value: f64) -> ObjectRef {
+pub(super) fn object(domain: &AtomDomain, name: &str, value: f64) -> ObjectRef {
     let object = ObjectRef::new(HashMap::new(), domain);
     object.set(name.into(), Value::Number(value));
     object
@@ -57,7 +57,7 @@ fn site_promotes_to_four_ways_then_stays_megamorphic() {
     assert!(cache.get(&objects[0]).is_none());
 }
 #[test]
-fn inherited_guards_first_edge_and_all_chain_nodes_but_preserves_value_writes() {
+fn inherited_guards_first_edge_and_all_chain_nodes_and_value_writes() {
     let domain = AtomDomain::new();
     let _owner = crate::value::layout::PropertyOwner::new(domain.clone());
     let holder = object(&domain, "x", 1.0);
@@ -76,7 +76,8 @@ fn inherited_guards_first_edge_and_all_chain_nodes_but_preserves_value_writes() 
         "equal layouts do not prove equal first edges"
     );
     holder.set("x".into(), Value::Number(9.0));
-    assert_eq!(cache.get(&receiver), Some(Value::Number(9.0)));
+    assert!(cache.get(&receiver).is_none());
+    assert_eq!(cache.read_object(&receiver, "x"), Some(Value::Number(9.0)));
     middle.set("x".into(), Value::Number(2.0));
     assert!(cache.get(&receiver).is_none());
     assert_eq!(cache.read_object(&receiver, "x"), Some(Value::Number(2.0)));
@@ -237,7 +238,11 @@ fn ordinary_root_churn_preserves_uncapped_shared_prototype_generation() {
         assert_eq!(site.get(&receiver), Some(Value::Number(7.0)));
     }
     holder.set("m".into(), Value::Number(8.0));
-    assert_eq!(sites[0].get(&receiver), Some(Value::Number(8.0)));
+    assert!(sites[0].get(&receiver).is_none());
+    assert_eq!(
+        sites[0].read_object(&receiver, "m"),
+        Some(Value::Number(8.0))
+    );
     holder.set("new".into(), Value::Null);
     assert!(sites.iter().all(|s| s.get(&receiver).is_none()));
 }

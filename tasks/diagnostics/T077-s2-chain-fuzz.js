@@ -109,6 +109,24 @@ for (var step = 0; step < 3000; step++) {
     log('E' + (e && e.constructor && e.constructor.name));
   }
 }
+// Warm constants before each write route, including the instability threshold.
+var constantProto = {m: function(){return 0}, text:'s'};
+var constantRec = Object.create(constantProto);
+function constantRead(){return constantRec.m() + ':' + constantRec.text;}
+for(var overwrite=0;overwrite<12;overwrite++) {
+  for(var hot=0;hot<40;hot++) constantRead();
+  var replacement = (function(v){return function(){return v}})(rnd(10000));
+  if(overwrite%4===0) constantProto.m=replacement;
+  else if(overwrite%4===1) Reflect.set(constantProto,'m',replacement);
+  else if(overwrite%4===2) Object.defineProperty(constantProto,'m',{value:replacement});
+  else Object.assign(constantProto,{m:replacement});
+  constantProto.text+='x'; log('constant:'+constantRead());
+}
+for(var access=0;access<6;access++) {
+  Object.defineProperty(constantProto,'a',{get:(function(v){return function(){return v}})(rnd(1000)),configurable:true});
+  for(var hot=0;hot<40;hot++) ra(constantRec);
+  log('accessor:'+ra(constantRec));
+}
 var h = 0; var all = out.join('\n');
 for (var i = 0; i < all.length; i++) h = (h * 31 + all.charCodeAt(i)) | 0;
 print(h, out.length);

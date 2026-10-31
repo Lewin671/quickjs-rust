@@ -103,7 +103,19 @@ impl Clone for StringData {
 #[derive(Clone, Debug)]
 pub struct JsString(Rc<StringData>);
 
+/// Non-owning IC constant; upgrading never reconstructs a dead string.
+#[derive(Clone, Debug)]
+pub(crate) struct WeakJsString(std::rc::Weak<StringData>);
+impl WeakJsString {
+    pub(crate) fn upgrade(&self) -> Option<JsString> {
+        self.0.upgrade().map(JsString)
+    }
+}
+
 impl JsString {
+    pub(crate) fn downgrade(&self) -> WeakJsString {
+        WeakJsString(Rc::downgrade(&self.0))
+    }
     /// Wraps an owned buffer that already uses the runtime's canonical WTF-16
     /// sentinel representation.
     pub fn new(text: String) -> Self {

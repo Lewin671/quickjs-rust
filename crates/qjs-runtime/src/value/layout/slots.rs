@@ -21,7 +21,8 @@ impl NamedStore {
             )
         }
     }
-    pub(super) fn install(&mut self, position: usize, property: Property) {
+    pub(super) fn install(&mut self, position: usize, property: Property, existing: bool) {
+        self.before_value_write(existing);
         if let Some(pair) = property.shared_accessors() {
             self.values[position] = Value::Undefined;
             self.accessors
@@ -59,6 +60,10 @@ impl NamedStore {
         }
     }
     pub(crate) fn overwrite_guarded_data(&mut self, slot: usize, value: Value) -> bool {
+        if self.values.get(slot).is_none() {
+            return false;
+        }
+        self.before_value_write(true);
         let Some(target) = self.values.get_mut(slot) else {
             return false;
         };
@@ -77,6 +82,10 @@ impl NamedStore {
     }
     #[inline(always)]
     pub(crate) fn overwrite_guarded_number(&mut self, slot: usize, number: f64) -> bool {
+        if self.values.get(slot).is_none() {
+            return false;
+        }
+        self.before_value_write(true);
         let Some(target) = self.values.get_mut(slot) else {
             return false;
         };
@@ -117,14 +126,17 @@ impl NamedStore {
         if !attrs.has(Attributes::WRITABLE) {
             return Some(false);
         }
-        self.values[slot] = value;
+        self.overwrite_guarded_data(slot, value);
         self.verify_slot(slot);
         Some(true)
     }
     pub(crate) fn data_value_mut(&mut self, slot: usize) -> Option<&mut Value> {
         let attrs = self.layout.entry_at(slot)?.attrs;
-        (!attrs.has(Attributes::ACCESSOR) && attrs.has(Attributes::WRITABLE))
-            .then(|| &mut self.values[slot])
+        if attrs.has(Attributes::ACCESSOR) || !attrs.has(Attributes::WRITABLE) {
+            return None;
+        }
+        self.before_value_write(true);
+        Some(&mut self.values[slot])
     }
     pub(crate) fn get_text(&self, key: &str) -> Option<Property> {
         self.get(&self.domain().find(key)?).expect("same domain")

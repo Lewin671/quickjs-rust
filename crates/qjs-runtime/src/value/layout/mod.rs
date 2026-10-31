@@ -4,7 +4,8 @@
 //! Owners retain bounded shape caches outside the atom domain. Layouts retain
 //! the domain and only a weak cache owner, avoiding an owner/layout RC cycle.
 //! Every structural edit publishes layout and slots under one mutable borrow;
-//! data writes preserve identity and epoch. No borrow may cross a JS callback.
+//! data writes preserve identity and epoch; prototype-mode writes invalidate
+//! guarded constants until the holder becomes value-unstable. No borrow may cross JS.
 
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};

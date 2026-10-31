@@ -54,6 +54,7 @@ pub(crate) struct PrototypeState {
     direct_trackable: Cell<bool>,
     trackable: Cell<bool>,
     sweep_at: Cell<usize>,
+    value_writes: Cell<u8>,
 }
 impl PrototypeState {
     fn new(parent: Weak<Self>, direct_trackable: bool) -> Rc<Self> {
@@ -65,6 +66,7 @@ impl PrototypeState {
             direct_trackable: Cell::new(direct_trackable),
             trackable: Cell::new(trackable),
             sweep_at: Cell::new(64),
+            value_writes: Cell::new(0),
         });
         Self::register(&state);
         state
@@ -121,6 +123,18 @@ impl PrototypeState {
                 pending.push(user);
                 true
             });
+        }
+    }
+    // After four invalidations the holder uses live slots permanently.
+    fn values_stable(&self) -> bool {
+        self.value_writes.get() < 4
+    }
+    #[cold]
+    #[inline(never)]
+    fn value_write(this: &Rc<Self>) {
+        if this.values_stable() {
+            this.value_writes.set(this.value_writes.get() + 1);
+            Self::invalidate(this);
         }
     }
     pub(super) fn token(&self) -> Option<StructuralDependency> {
@@ -300,6 +314,17 @@ impl NamedStore {
                 root.prototype.is_none() || root.parent_state.strong_count() > 0,
             );
         }
+    }
+    /// Single barrier before observable named value/accessor mutation.
+    #[inline(always)]
+    pub(super) fn before_value_write(&self, value_only: bool) {
+        // Additions have already invalidated through edit_layout/append.
+        if value_only && let Some(mode) = &self.layout.mode {
+            PrototypeState::value_write(mode);
+        }
+    }
+    pub(crate) fn prototype_values_stable(&self) -> bool {
+        self.layout.mode.as_ref().is_some_and(|m| m.values_stable())
     }
     pub(crate) fn invalidate_dependencies(&self) {
         if let Some(mode) = &self.layout.mode {

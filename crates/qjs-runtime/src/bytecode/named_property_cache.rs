@@ -1,6 +1,7 @@
 //! Per-site mono/four-way/mega caches over complete pure lookup outcomes.
 //! Layout identity implies [[Prototype]]; inherited hits use one prototype
-//! generation plus a live holder slot. No IC subscriptions or cached Values.
+//! generation plus a weak prototype constant or live unstable-holder slot.
+//! Own slots always load live; ICs never own a receiver or heap constant.
 //! The first mono entry is immutable. Disable its marker before replacement;
 //! its inactive weak metadata survives only until this bounded site is dropped.
 //! Shared bytecode sites use Rc handles; loop-owned sites keep this same data
@@ -17,7 +18,11 @@ use std::{
     ops::Deref,
     rc::Rc,
 };
+mod constants;
 mod stores;
+use constants::Constant;
+#[cfg(test)]
+mod constant_tests;
 #[cfg(test)]
 mod tests;
 use stores::AddEntry;
@@ -59,6 +64,7 @@ struct Entry {
 struct Chain {
     holder: Option<WeakTarget>,
     validity: StructuralDependency,
+    constant: Option<Constant>,
 }
 const DATA: u32 = 0;
 const ACCESSOR: u32 = 1;
@@ -202,6 +208,9 @@ impl Entry {
             return Some(ReadOutcome::Value(Value::Undefined));
         }
         if let Some(chain) = &self.chain {
+            if let Some(constant) = &chain.constant {
+                return constant.fetch();
+            }
             chain
                 .holder
                 .as_ref()?
@@ -366,6 +375,21 @@ impl CacheData {
                 && g.identity() == expected.identity()),
             "IC complete outcome differs from pure generic lookup: {name}"
         );
+        if let Some(constant) = entry.chain.as_ref().and_then(|c| c.constant.as_ref()) {
+            let actual = constant.fetch();
+            let expected = generic.and_then(|g| g.fetch(target));
+            match (actual, expected) {
+                (Some(ReadOutcome::Value(a)), Some(ReadOutcome::Value(b))) => {
+                    assert!(a.same_value(&b))
+                }
+                (Some(ReadOutcome::Accessor(a)), Some(ReadOutcome::Accessor(b))) => {
+                    assert_eq!(a.getter(), b.getter());
+                    assert_eq!(a.setter(), b.setter());
+                }
+                (None, _) => (), // Dead weak payload must miss, never resurrect.
+                _ => panic!("prototype constant differs from live lookup: {name}"),
+            }
+        }
     }
     // Keep the data-only hit ABI small. The descriptor outcome belongs to the
     // cold accessor path and must not inflate every typed/compact read frame.
@@ -374,6 +398,25 @@ impl CacheData {
         if let Some(entry) = self.hot_mono() {
             if entry.flags & (7 | OWN) == DATA | OWN {
                 let value = target.load_matched_data(&entry.version, entry.slot);
+                #[cfg(debug_assertions)]
+                if value.is_some() {
+                    self.verify_hot(entry, target);
+                }
+                count_event(
+                    target,
+                    if value.is_some() {
+                        Event::Hit
+                    } else {
+                        Event::Miss
+                    },
+                );
+                return value;
+            }
+            if entry.flags & 7 == DATA
+                && entry.matches(target)
+                && let Some(constant) = entry.chain.as_ref().and_then(|c| c.constant.as_ref())
+            {
+                let value = constant.data();
                 #[cfg(debug_assertions)]
                 if value.is_some() {
                     self.verify_hot(entry, target);
@@ -407,6 +450,26 @@ impl CacheData {
             && entry.flags & (7 | OWN) == DATA | OWN
         {
             let value = target.load_matched_data(&entry.version, entry.slot);
+            #[cfg(debug_assertions)]
+            if value.is_some() {
+                self.verify_entry(&state, entry, target);
+            }
+            count_event(
+                target,
+                if value.is_some() {
+                    Event::Hit
+                } else {
+                    Event::Miss
+                },
+            );
+            return value;
+        }
+        if let Some(entry) = state.entries.mono(&self.first)
+            && entry.flags & 7 == DATA
+            && entry.matches(target)
+            && let Some(constant) = entry.chain.as_ref().and_then(|c| c.constant.as_ref())
+        {
+            let value = constant.data();
             #[cfg(debug_assertions)]
             if value.is_some() {
                 self.verify_entry(&state, entry, target);
@@ -496,6 +559,9 @@ impl CacheData {
         };
         #[cfg(debug_assertions)]
         self.verify_entry(state, entry, target);
+        if let Some(constant) = entry.chain.as_ref().and_then(|c| c.constant.as_ref()) {
+            return constant.data();
+        }
         let probe = entry.probe();
         if matches!(probe, Probe::Accessor { .. }) {
             return None;
@@ -739,6 +805,10 @@ impl CacheData {
             };
             Some(Box::new(Chain {
                 holder: resolution.holder.clone(),
+                constant: resolution
+                    .holder
+                    .as_ref()
+                    .and_then(|h| Constant::admit(h, resolution.probe)),
                 validity,
             }))
         } else {

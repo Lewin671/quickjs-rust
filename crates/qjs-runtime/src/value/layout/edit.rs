@@ -154,7 +154,7 @@ impl Lookup<'_> {
         } else if !attrs.has(Attributes::WRITABLE) {
             OwnDataPropertyWrite::ReadOnly
         } else {
-            self.store.values[position] = value.clone();
+            self.store.overwrite_guarded_data(position, value.clone());
             self.store.verify_slot(position);
             OwnDataPropertyWrite::Written
         };
@@ -179,11 +179,11 @@ impl Lookup<'_> {
                         self.store.layout = self.store.layout.reconfigure(position, attrs);
                         self.store.bump_epoch();
                     }
-                    self.store.install(position, property);
+                    self.store.install(position, property, true);
                     self.store.verify();
                     return;
                 }
-                self.store.install(position, property);
+                self.store.install(position, property, true);
                 self.store.verify_slot(position);
                 return;
             }
@@ -224,7 +224,7 @@ impl Lookup<'_> {
                 }
                 let position = self.store.values.len();
                 self.store.values.push(Value::Undefined);
-                self.store.install(position, property);
+                self.store.install(position, property, false);
             }
         }
         self.store.verify();

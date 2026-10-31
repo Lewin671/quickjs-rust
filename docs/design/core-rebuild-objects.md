@@ -90,11 +90,11 @@ array/function/Map/Set identity (`value/object.rs::Prototype`), never copied des
 One cache per named site, mono first, bounded four-way poly then megamorphic
 generic lookup. Own-data guard: domain + kind + shape ID (dictionary ID/version)
 + descriptor bits + slot. It does not guard the property's value or receiver
-address. Entries hold weak layout tokens, not a strong receiver or cached Value.
+address. Entries hold weak layout tokens, never a strong receiver. Own-data hits always load live; inherited data/accessors may cache cell-protected constants with weak RC payloads.
 The first mono entry is immutable after publication; its hot guard reads no
 mutable IC metadata. Replacement disables it before using cold mono/four-way
 state. One inactive weak token may remain until site destruction, with no fifth
-active way, value or receiver pin. Clear/reuse never reactivates that token.
+active way or owning value/receiver pin. Clear/reuse never reactivates that token.
 Shared bytecode handles are 8 bytes; loop-owned sites embed the same 96-byte data in their program vector. The implemented entry is 32 bytes: weak layout/version 16, slot 4, kind and padding 4, optional cold chain pointer
 8; four-way storage is allocated only when a second guard is admitted. A fifth
 independent live guard makes the site permanently megamorphic. Shared-own poly
@@ -105,7 +105,7 @@ Typed numeric stores guard the same own writable slot and update numeric
 payloads directly, with normal replacement/drop when the old type differs.
 Array prototype identity checks borrow the edge without cloning an owner.
 Constructor prototype links use the same weak layout/version and live own-slot
-read. Lazy/accessor misses retain full Get; no prototype value is cached.
+read. Lazy/accessor misses retain full Get; virtual properties never become constants.
 A cold store-add plan uses the prefix/prototype guards described in the
 [shape contract](core-rebuild-shapes.md). Typed-loop stores explicitly exclude
 additions, preserving their invariant-read hoisting proof.
@@ -118,23 +118,25 @@ trees are canonical per prototype/flavor. Prototype mutation re-roots the layout
 
 Objects used as prototypes enter private dictionary mode with one validity state.
 Its weak user graph links prototype-mode children, never IC sites. Structural
-mutation replaces its validity generation and cascades iteratively; value writes
-and ordinary object transitions invalidate nothing. There is no subscriber cap.
-Inherited entries hold the first prototype's generation and weak holder/slot;
-the receiver layout already implies its first prototype. Missing and accessor
-outcomes use the same proof. Accessors execute once after all borrows end.
-Array prototype identity is the live array payload, with no contextual wrapper.
+mutation replaces its validity generation and cascades iteratively. The single
+NamedStore write barrier also invalidates on prototype value/accessor writes.
+After four value overwrites a holder becomes permanently value-unstable: the
+transition invalidates once, future entries load live slots and value writes stop
+invalidating. Structural edits always invalidate; additions do not spend the
+overwrite budget. There is no subscriber cap. Inherited entries hold the first
+prototype's generation, weak holder/slot and optional stable-holder constant;
+the receiver layout already implies its first prototype. Numbers/booleans/null/undefined are copied; strings, BigInts, objects, functions
+and accessor halves use weak handles, and a failed upgrade misses. Missing and accessor outcomes use the same proof. Accessors execute once after all borrows end. Array prototype identity is the live array payload, with no contextual wrapper.
 Proxy/unmodeled exotic chains remain uncached. Expired layouts/generations are
 stale entries and can be replaced without consuming another polymorphic way.
 Enumeration and creation proofs use the same shared generations and layout roots.
 
-S2 deletes `NamedPropertyCacheEntry`'s exact-value/receiver variants and repeated
-Small/Dynamic/literal probe paths. In debug mode compare every IC result with
+S2 deletes the old unguarded exact-value/receiver variants and repeated probe
+paths. In debug mode compare every IC result with
 uncached semantic lookup without replaying accessors; disable ICs entirely for
 a full correctness run. Count hits/misses by receiver family, hashing, transitions,
 key interning, allocations and bounded retained nodes; do not claim a 90% hit
 rate independent of the operations/programs measured.
-
 
 ## S2 semantic ports and verification
 
