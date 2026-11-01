@@ -1,0 +1,44 @@
+{
+ "job": "20261101T123235Z-t077-s3b-final2",
+ "base": "3cc12c6f8d93ffd6eae91d1bd44efe74134ae195",
+ "candidate": "689efca253c9255101f2c0fed5d1b40906007cf4",
+ "runtime_source": "f7057a51",
+ "verdict": "likely loss",
+ "counts": {
+  "attempts": 430,
+  "heavy_samples": 0,
+  "invalid": 0,
+  "valid": 430
+ },
+ "budget_met": true,
+ "candidate_binary_sha256": "7d9a37a98aad0424768824d6ed0b4c091b2c85619482d04e175f9badee8dc6df",
+ "base_binary_sha256": "3ad34749a288e585b2d20aae59b3255279c662484ae04cc3c01015cdb701dc80",
+ "lanes_wall_instructions": {
+  "broad": {
+   "cases": 25,
+   "wall": 1.0158,
+   "instructions": 1.0312
+  },
+  "development": {
+   "cases": 10,
+   "wall": 1.0289,
+   "instructions": 1.0115
+  },
+  "external": {
+   "cases": 45,
+   "wall": 1.0296,
+   "instructions": 1.0265
+  },
+  "sentinel": {
+   "cases": 6,
+   "wall": 0.9799,
+   "instructions": 1.0321
+  }
+ },
+ "all_cases": {
+  "cases": 86,
+  "wall": 1.022,
+  "instructions": 1.0265
+ },
+ "note": "Lane and all-case values are unweighted geomeans of triage.md case ratios; diagnostic triage only."
+}

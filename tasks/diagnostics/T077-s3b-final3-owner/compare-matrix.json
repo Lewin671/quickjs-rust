@@ -1,0 +1,1546 @@
+[
+ {
+  "kind": "scripts",
+  "mode": "default",
+  "fixtures_ok": 319,
+  "errors": [],
+  "flags": {},
+  "cli": "debug",
+  "log": "cmp-default.log"
+ },
+ {
+  "kind": "module",
+  "mode": "default",
+  "fixture": "tests/fixtures/compare-modules/deferred-key-arguments.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "undefined:undefined:undefined:undefined\nfunction:function\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "undefined:undefined:undefined:undefined\nfunction:function\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "default",
+  "fixture": "tests/fixtures/compare-modules/global-script-lexical-redeclaration.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "SyntaxError:10:1:false\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "SyntaxError:10:1:false\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "default",
+  "fixture": "tests/fixtures/compare-modules/global-store-declarative-first.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "5:34 49:50 50:7 7:7 9 13 7 50:1275 p:54\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "5:34 49:50 50:7 7:7 9 13 7 50:1275 p:54\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "default",
+  "fixture": "tests/fixtures/compare-modules/global-store-object-record.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "none none TypeError none set:12,set:11,set:4 none ReferenceError has,set:2,has,has 53\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "none none TypeError none set:12,set:11,set:4 none ReferenceError has,set:2,has,has 53\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "default",
+  "fixture": "tests/fixtures/compare-modules/import-parameter-shadow-dep.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "default",
+  "fixture": "tests/fixtures/compare-modules/import-parameter-shadow.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "x1|2|3:4|p5|c6|0|c\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "x1|2|3:4|p5|c6|0|c\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "default",
+  "fixture": "tests/fixtures/compare-modules/invalidated-global-capture-jobs.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "ReferenceError\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "ReferenceError\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "default",
+  "fixture": "tests/fixtures/compare-modules/numeric-discarded-call-jobs.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "1:2\ntrue\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "1:2\ntrue\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "default",
+  "fixture": "tests/fixtures/compare-modules/s3b-context-imports-dep.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "default",
+  "fixture": "tests/fixtures/compare-modules/s3b-context-imports.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "7:undefined:undefined:undefined\n9:9\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "7:undefined:undefined:undefined\n9:9\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "scripts",
+  "mode": "off",
+  "fixtures_ok": 319,
+  "errors": [],
+  "flags": {
+   "QJS_DISABLE_IC": "1"
+  },
+  "cli": "debug",
+  "log": "cmp-off.log"
+ },
+ {
+  "kind": "module",
+  "mode": "off",
+  "fixture": "tests/fixtures/compare-modules/deferred-key-arguments.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "undefined:undefined:undefined:undefined\nfunction:function\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "undefined:undefined:undefined:undefined\nfunction:function\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "off",
+  "fixture": "tests/fixtures/compare-modules/global-script-lexical-redeclaration.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "SyntaxError:10:1:false\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "SyntaxError:10:1:false\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "off",
+  "fixture": "tests/fixtures/compare-modules/global-store-declarative-first.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "5:34 49:50 50:7 7:7 9 13 7 50:1275 p:54\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "5:34 49:50 50:7 7:7 9 13 7 50:1275 p:54\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "off",
+  "fixture": "tests/fixtures/compare-modules/global-store-object-record.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "none none TypeError none set:12,set:11,set:4 none ReferenceError has,set:2,has,has 53\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "none none TypeError none set:12,set:11,set:4 none ReferenceError has,set:2,has,has 53\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "off",
+  "fixture": "tests/fixtures/compare-modules/import-parameter-shadow-dep.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "off",
+  "fixture": "tests/fixtures/compare-modules/import-parameter-shadow.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "x1|2|3:4|p5|c6|0|c\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "x1|2|3:4|p5|c6|0|c\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "off",
+  "fixture": "tests/fixtures/compare-modules/invalidated-global-capture-jobs.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "ReferenceError\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "ReferenceError\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "off",
+  "fixture": "tests/fixtures/compare-modules/numeric-discarded-call-jobs.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "1:2\ntrue\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "1:2\ntrue\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "off",
+  "fixture": "tests/fixtures/compare-modules/s3b-context-imports-dep.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "off",
+  "fixture": "tests/fixtures/compare-modules/s3b-context-imports.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "7:undefined:undefined:undefined\n9:9\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "7:undefined:undefined:undefined\n9:9\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "scripts",
+  "mode": "verify",
+  "fixtures_ok": 319,
+  "errors": [],
+  "flags": {
+   "QJS_VERIFY_IC": "1"
+  },
+  "cli": "debug",
+  "log": "cmp-verify.log"
+ },
+ {
+  "kind": "module",
+  "mode": "verify",
+  "fixture": "tests/fixtures/compare-modules/deferred-key-arguments.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "undefined:undefined:undefined:undefined\nfunction:function\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "undefined:undefined:undefined:undefined\nfunction:function\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "verify",
+  "fixture": "tests/fixtures/compare-modules/global-script-lexical-redeclaration.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "SyntaxError:10:1:false\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "SyntaxError:10:1:false\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "verify",
+  "fixture": "tests/fixtures/compare-modules/global-store-declarative-first.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "5:34 49:50 50:7 7:7 9 13 7 50:1275 p:54\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "5:34 49:50 50:7 7:7 9 13 7 50:1275 p:54\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "verify",
+  "fixture": "tests/fixtures/compare-modules/global-store-object-record.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "none none TypeError none set:12,set:11,set:4 none ReferenceError has,set:2,has,has 53\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "none none TypeError none set:12,set:11,set:4 none ReferenceError has,set:2,has,has 53\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "verify",
+  "fixture": "tests/fixtures/compare-modules/import-parameter-shadow-dep.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "verify",
+  "fixture": "tests/fixtures/compare-modules/import-parameter-shadow.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "x1|2|3:4|p5|c6|0|c\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "x1|2|3:4|p5|c6|0|c\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "verify",
+  "fixture": "tests/fixtures/compare-modules/invalidated-global-capture-jobs.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "ReferenceError\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "ReferenceError\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "verify",
+  "fixture": "tests/fixtures/compare-modules/numeric-discarded-call-jobs.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "1:2\ntrue\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "1:2\ntrue\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "verify",
+  "fixture": "tests/fixtures/compare-modules/s3b-context-imports-dep.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "verify",
+  "fixture": "tests/fixtures/compare-modules/s3b-context-imports.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "7:undefined:undefined:undefined\n9:9\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "7:undefined:undefined:undefined\n9:9\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "scripts",
+  "mode": "binding-verify",
+  "fixtures_ok": 319,
+  "errors": [],
+  "flags": {
+   "QJS_VERIFY_BINDINGS": "1"
+  },
+  "cli": "debug",
+  "log": "cmp-binding-verify.log"
+ },
+ {
+  "kind": "module",
+  "mode": "binding-verify",
+  "fixture": "tests/fixtures/compare-modules/deferred-key-arguments.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "undefined:undefined:undefined:undefined\nfunction:function\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "undefined:undefined:undefined:undefined\nfunction:function\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "binding-verify",
+  "fixture": "tests/fixtures/compare-modules/global-script-lexical-redeclaration.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "SyntaxError:10:1:false\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "SyntaxError:10:1:false\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "binding-verify",
+  "fixture": "tests/fixtures/compare-modules/global-store-declarative-first.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "5:34 49:50 50:7 7:7 9 13 7 50:1275 p:54\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "5:34 49:50 50:7 7:7 9 13 7 50:1275 p:54\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "binding-verify",
+  "fixture": "tests/fixtures/compare-modules/global-store-object-record.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "none none TypeError none set:12,set:11,set:4 none ReferenceError has,set:2,has,has 53\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "none none TypeError none set:12,set:11,set:4 none ReferenceError has,set:2,has,has 53\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "binding-verify",
+  "fixture": "tests/fixtures/compare-modules/import-parameter-shadow-dep.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "binding-verify",
+  "fixture": "tests/fixtures/compare-modules/import-parameter-shadow.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "x1|2|3:4|p5|c6|0|c\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "x1|2|3:4|p5|c6|0|c\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "binding-verify",
+  "fixture": "tests/fixtures/compare-modules/invalidated-global-capture-jobs.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "ReferenceError\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "ReferenceError\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "binding-verify",
+  "fixture": "tests/fixtures/compare-modules/numeric-discarded-call-jobs.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "1:2\ntrue\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "1:2\ntrue\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "binding-verify",
+  "fixture": "tests/fixtures/compare-modules/s3b-context-imports-dep.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "binding-verify",
+  "fixture": "tests/fixtures/compare-modules/s3b-context-imports.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "7:undefined:undefined:undefined\n9:9\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "7:undefined:undefined:undefined\n9:9\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "scripts",
+  "mode": "force",
+  "fixtures_ok": 319,
+  "errors": [],
+  "flags": {
+   "QJS_FORCE_EVAL_EXPOSURE": "1"
+  },
+  "cli": "debug",
+  "log": "cmp-force.log"
+ },
+ {
+  "kind": "module",
+  "mode": "force",
+  "fixture": "tests/fixtures/compare-modules/deferred-key-arguments.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "undefined:undefined:undefined:undefined\nfunction:function\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "undefined:undefined:undefined:undefined\nfunction:function\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "force",
+  "fixture": "tests/fixtures/compare-modules/global-script-lexical-redeclaration.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "SyntaxError:10:1:false\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "SyntaxError:10:1:false\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "force",
+  "fixture": "tests/fixtures/compare-modules/global-store-declarative-first.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "5:34 49:50 50:7 7:7 9 13 7 50:1275 p:54\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "5:34 49:50 50:7 7:7 9 13 7 50:1275 p:54\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "force",
+  "fixture": "tests/fixtures/compare-modules/global-store-object-record.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "none none TypeError none set:12,set:11,set:4 none ReferenceError has,set:2,has,has 53\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "none none TypeError none set:12,set:11,set:4 none ReferenceError has,set:2,has,has 53\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "force",
+  "fixture": "tests/fixtures/compare-modules/import-parameter-shadow-dep.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "force",
+  "fixture": "tests/fixtures/compare-modules/import-parameter-shadow.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "x1|2|3:4|p5|c6|0|c\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "x1|2|3:4|p5|c6|0|c\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "force",
+  "fixture": "tests/fixtures/compare-modules/invalidated-global-capture-jobs.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "ReferenceError\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "ReferenceError\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "force",
+  "fixture": "tests/fixtures/compare-modules/numeric-discarded-call-jobs.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "1:2\ntrue\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "1:2\ntrue\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "force",
+  "fixture": "tests/fixtures/compare-modules/s3b-context-imports-dep.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "force",
+  "fixture": "tests/fixtures/compare-modules/s3b-context-imports.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "7:undefined:undefined:undefined\n9:9\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "7:undefined:undefined:undefined\n9:9\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "scripts",
+  "mode": "poison",
+  "fixtures_ok": 319,
+  "errors": [],
+  "flags": {
+   "QJS_POISON_RELEASED_SCOPES": "1"
+  },
+  "cli": "debug",
+  "log": "cmp-poison.log"
+ },
+ {
+  "kind": "module",
+  "mode": "poison",
+  "fixture": "tests/fixtures/compare-modules/deferred-key-arguments.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "undefined:undefined:undefined:undefined\nfunction:function\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "undefined:undefined:undefined:undefined\nfunction:function\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "poison",
+  "fixture": "tests/fixtures/compare-modules/global-script-lexical-redeclaration.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "SyntaxError:10:1:false\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "SyntaxError:10:1:false\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "poison",
+  "fixture": "tests/fixtures/compare-modules/global-store-declarative-first.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "5:34 49:50 50:7 7:7 9 13 7 50:1275 p:54\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "5:34 49:50 50:7 7:7 9 13 7 50:1275 p:54\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "poison",
+  "fixture": "tests/fixtures/compare-modules/global-store-object-record.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "none none TypeError none set:12,set:11,set:4 none ReferenceError has,set:2,has,has 53\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "none none TypeError none set:12,set:11,set:4 none ReferenceError has,set:2,has,has 53\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "poison",
+  "fixture": "tests/fixtures/compare-modules/import-parameter-shadow-dep.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "poison",
+  "fixture": "tests/fixtures/compare-modules/import-parameter-shadow.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "x1|2|3:4|p5|c6|0|c\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "x1|2|3:4|p5|c6|0|c\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "poison",
+  "fixture": "tests/fixtures/compare-modules/invalidated-global-capture-jobs.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "ReferenceError\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "ReferenceError\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "poison",
+  "fixture": "tests/fixtures/compare-modules/numeric-discarded-call-jobs.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "1:2\ntrue\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "1:2\ntrue\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "poison",
+  "fixture": "tests/fixtures/compare-modules/s3b-context-imports-dep.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "poison",
+  "fixture": "tests/fixtures/compare-modules/s3b-context-imports.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "7:undefined:undefined:undefined\n9:9\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "7:undefined:undefined:undefined\n9:9\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "scripts",
+  "mode": "activation-poison",
+  "fixtures_ok": 319,
+  "errors": [],
+  "flags": {
+   "QJS_POISON_RELEASED_ACTIVATIONS": "1"
+  },
+  "cli": "debug",
+  "log": "cmp-activation-poison.log"
+ },
+ {
+  "kind": "module",
+  "mode": "activation-poison",
+  "fixture": "tests/fixtures/compare-modules/deferred-key-arguments.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "undefined:undefined:undefined:undefined\nfunction:function\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "undefined:undefined:undefined:undefined\nfunction:function\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "activation-poison",
+  "fixture": "tests/fixtures/compare-modules/global-script-lexical-redeclaration.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "SyntaxError:10:1:false\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "SyntaxError:10:1:false\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "activation-poison",
+  "fixture": "tests/fixtures/compare-modules/global-store-declarative-first.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "5:34 49:50 50:7 7:7 9 13 7 50:1275 p:54\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "5:34 49:50 50:7 7:7 9 13 7 50:1275 p:54\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "activation-poison",
+  "fixture": "tests/fixtures/compare-modules/global-store-object-record.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "none none TypeError none set:12,set:11,set:4 none ReferenceError has,set:2,has,has 53\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "none none TypeError none set:12,set:11,set:4 none ReferenceError has,set:2,has,has 53\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "activation-poison",
+  "fixture": "tests/fixtures/compare-modules/import-parameter-shadow-dep.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "activation-poison",
+  "fixture": "tests/fixtures/compare-modules/import-parameter-shadow.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "x1|2|3:4|p5|c6|0|c\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "x1|2|3:4|p5|c6|0|c\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "activation-poison",
+  "fixture": "tests/fixtures/compare-modules/invalidated-global-capture-jobs.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "ReferenceError\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "ReferenceError\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "activation-poison",
+  "fixture": "tests/fixtures/compare-modules/numeric-discarded-call-jobs.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "1:2\ntrue\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "1:2\ntrue\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "activation-poison",
+  "fixture": "tests/fixtures/compare-modules/s3b-context-imports-dep.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "activation-poison",
+  "fixture": "tests/fixtures/compare-modules/s3b-context-imports.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "7:undefined:undefined:undefined\n9:9\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "7:undefined:undefined:undefined\n9:9\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "scripts",
+  "mode": "combined-off",
+  "fixtures_ok": 319,
+  "errors": [],
+  "flags": {
+   "QJS_DISABLE_IC": "1",
+   "QJS_VERIFY_BINDINGS": "1",
+   "QJS_FORCE_EVAL_EXPOSURE": "1",
+   "QJS_POISON_RELEASED_SCOPES": "1"
+  },
+  "cli": "debug",
+  "log": "cmp-combined-off.log"
+ },
+ {
+  "kind": "module",
+  "mode": "combined-off",
+  "fixture": "tests/fixtures/compare-modules/deferred-key-arguments.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "undefined:undefined:undefined:undefined\nfunction:function\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "undefined:undefined:undefined:undefined\nfunction:function\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "combined-off",
+  "fixture": "tests/fixtures/compare-modules/global-script-lexical-redeclaration.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "SyntaxError:10:1:false\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "SyntaxError:10:1:false\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "combined-off",
+  "fixture": "tests/fixtures/compare-modules/global-store-declarative-first.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "5:34 49:50 50:7 7:7 9 13 7 50:1275 p:54\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "5:34 49:50 50:7 7:7 9 13 7 50:1275 p:54\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "combined-off",
+  "fixture": "tests/fixtures/compare-modules/global-store-object-record.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "none none TypeError none set:12,set:11,set:4 none ReferenceError has,set:2,has,has 53\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "none none TypeError none set:12,set:11,set:4 none ReferenceError has,set:2,has,has 53\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "combined-off",
+  "fixture": "tests/fixtures/compare-modules/import-parameter-shadow-dep.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "combined-off",
+  "fixture": "tests/fixtures/compare-modules/import-parameter-shadow.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "x1|2|3:4|p5|c6|0|c\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "x1|2|3:4|p5|c6|0|c\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "combined-off",
+  "fixture": "tests/fixtures/compare-modules/invalidated-global-capture-jobs.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "ReferenceError\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "ReferenceError\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "combined-off",
+  "fixture": "tests/fixtures/compare-modules/numeric-discarded-call-jobs.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "1:2\ntrue\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "1:2\ntrue\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "combined-off",
+  "fixture": "tests/fixtures/compare-modules/s3b-context-imports-dep.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "combined-off",
+  "fixture": "tests/fixtures/compare-modules/s3b-context-imports.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "7:undefined:undefined:undefined\n9:9\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "7:undefined:undefined:undefined\n9:9\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "scripts",
+  "mode": "combined-all",
+  "fixtures_ok": 319,
+  "errors": [],
+  "flags": {
+   "QJS_VERIFY_BINDINGS": "1",
+   "QJS_FORCE_EVAL_EXPOSURE": "1",
+   "QJS_POISON_RELEASED_SCOPES": "1",
+   "QJS_POISON_RELEASED_ACTIVATIONS": "1",
+   "QJS_VERIFY_IC": "1"
+  },
+  "cli": "debug",
+  "log": "cmp-combined-all.log"
+ },
+ {
+  "kind": "module",
+  "mode": "combined-all",
+  "fixture": "tests/fixtures/compare-modules/deferred-key-arguments.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "undefined:undefined:undefined:undefined\nfunction:function\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "undefined:undefined:undefined:undefined\nfunction:function\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "combined-all",
+  "fixture": "tests/fixtures/compare-modules/global-script-lexical-redeclaration.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "SyntaxError:10:1:false\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "SyntaxError:10:1:false\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "combined-all",
+  "fixture": "tests/fixtures/compare-modules/global-store-declarative-first.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "5:34 49:50 50:7 7:7 9 13 7 50:1275 p:54\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "5:34 49:50 50:7 7:7 9 13 7 50:1275 p:54\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "combined-all",
+  "fixture": "tests/fixtures/compare-modules/global-store-object-record.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "none none TypeError none set:12,set:11,set:4 none ReferenceError has,set:2,has,has 53\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "none none TypeError none set:12,set:11,set:4 none ReferenceError has,set:2,has,has 53\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "combined-all",
+  "fixture": "tests/fixtures/compare-modules/import-parameter-shadow-dep.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "combined-all",
+  "fixture": "tests/fixtures/compare-modules/import-parameter-shadow.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "x1|2|3:4|p5|c6|0|c\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "x1|2|3:4|p5|c6|0|c\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "combined-all",
+  "fixture": "tests/fixtures/compare-modules/invalidated-global-capture-jobs.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "ReferenceError\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "ReferenceError\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "combined-all",
+  "fixture": "tests/fixtures/compare-modules/numeric-discarded-call-jobs.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "1:2\ntrue\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "1:2\ntrue\n",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "combined-all",
+  "fixture": "tests/fixtures/compare-modules/s3b-context-imports-dep.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "",
+   "stderr": ""
+  }
+ },
+ {
+  "kind": "module",
+  "mode": "combined-all",
+  "fixture": "tests/fixtures/compare-modules/s3b-context-imports.mjs",
+  "match": true,
+  "candidate": {
+   "exit": 0,
+   "stdout": "7:undefined:undefined:undefined\n9:9\n",
+   "stderr": ""
+  },
+  "ng": {
+   "exit": 0,
+   "stdout": "7:undefined:undefined:undefined\n9:9\n",
+   "stderr": ""
+  }
+ }
+]

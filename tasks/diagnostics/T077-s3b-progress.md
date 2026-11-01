@@ -9,10 +9,11 @@ internals. Prototype/layout follow-up paths remain outside this owner boundary.
 
 Final comparison endpoint is accepted main **3cc12c6f** (S2 follow-up); the
 cumulative rebuild endpoint remains `6663738f` per T077. Lead owns exact formal
-binary/corpus/recipe pinning and formal/held-out/RSS acceptance. Owner's final
-public86 is a healthy loss in every lane; the [final owner receipt](T077-s3b-final-owner/README.md)
-owns the final qualification, and [public86](T077-s3b-final-public86/README.md)
-owns all lane/case numbers. No formal performance acceptance is claimed.
+binary/corpus/recipe pinning and formal/held-out/RSS acceptance. Round 4 ends at
+frozen sha 8abd4c69 (runtime 0148b2eb), ready for lead acceptance as an enabling
+stage: the [round-4 owner receipt](T077-s3b-final3-owner/README.md) owns the final
+qualification and [public86](T077-s3b-final3-public86/README.md) its lane/case
+numbers. No formal performance acceptance is claimed.
 
 ## Pre-code inventory recount
 
@@ -1315,3 +1316,96 @@ at dc507107: compare-qjs 318/318, differential seeds 0–299 × three profiles,
 900 programs tag-identical to the final qualification with no mode disagreement.
 Depth maxima forEach 936, map 927, reduce 1,026, call 3,449, apply 2,335,
 reflect_apply 2,492, yield_star 820, plain 4,096 (all ≥ base). No timing ran locally.
+
+## Round-4 milestone 3: global-store repair and final requalification
+
+The 689efca2 order (job `20261101T122522Z-t077-s3b-final2-order`) froze runtime
+f7057a51. Its requalification stopped on the lead's order when an independent
+re-review of 689efca2 confirmed four regressions in mechanism 1; only complete
+records are kept ([689efca2 public86](T077-s3b-final2-public86/README.md)). Commits:
+**0148b2eb** (repair), **a84252bd** (differential profile), **8abd4c69** (x86 order,
+[job `20261101T140029Z-t077-s3b-final3-order`](T077-s3b-final3-order/README.md), 468
+symbols). Frozen runtime **0148b2eb**, frozen sha **8abd4c69**.
+
+**Repair (correctness defect).** An elided bound start (aea492db) and every
+compound/update site stored through the old StoreGlobal paths, which looked only
+at the global object's own properties and the frame's mirror slots: inherited
+setters and read-only properties were bypassed by an own data property, strict
+code threw ReferenceError for a name only the chain bound (also after an RHS
+delete, and through a Proxy in the chain), and a strict store kept writing a
+property after another script, or its own RHS, declared a global lexical
+(F1–F3). Since f609c0ae a strict function created by eval or Function also lost
+its write to a script `let` (F4/F4b): the realm-table insert cannot assign a
+lexical. `binding::set_bound_global` is now the one store for a reference bound
+to the global environment: the lexical at store time, else HasProperty over the
+whole chain and [[Set]], then the realm mirror. Only a realm var cell proven by
+table generation to name an own writable data property, and own-data writes,
+skip the walk; mirror slots are refreshed from the canonical binding; the
+register tier creates a global only when the ordinary chain lacks the name.
+The pre-existing P1 (later lexical ignored after a strict property write) and P2
+(strict `new Function` write to a script `let`) and a lexical string append that
+also wrote a shadowed property are fixed by the same store. Tests:
+`tests/global_store_semantics.rs` (once and hot), NG fixtures
+`global-store-inherited-setter.js`, `global-store-declarative-first.mjs`,
+`global-store-object-record.mjs`; the differential gains the review's genA as
+profile `global-store` (byte-identical programs per seed).
+
+**Cost of the repair**, local arm64 instructions, 689efca2 runtime → 0148b2eb, one
+run per public workload, median of three per reproducer
+([before/after](T077-s3b-final3-owner/fix-cost/)): 55 external+development
+workloads geomean **1.0005** (development 0.9997, external 1.0006; access-nsieve
+1.012, date-format-xparb 1.008, math-cordic 1.006 the largest, string-unpack-code
+0.995 the smallest). Reproducers: call-global-var-write 1.012, call-implicit-
+global-write 1.012, eval-parent-closure 1.011, global-lexical-write 1.006,
+vm-ops 1.005, others within ±0.3%; strict-global-var-write 0.782 and
+compound-global-write 0.838 (realm-cell/own-data paths replace the old strict and
+compound fallbacks). On x86, public86 per-case instructions move 1.0030 against
+the 689efca2 job (development 1.0074, external 1.0033, broad 1.0015, sentinel 1.0000),
+repair plus new order.
+
+**Checks at 8abd4c69** ([owner receipt](T077-s3b-final3-owner/README.md)):
+full gate exit 0 (2,728 runtime tests, 5,174 curated Test262);
+agents 2,739, perf-counters 2,777; stress 2,728 in each of seven modes
+(verify-bindings, forced exposure, scope poison, activation poison, IC verify,
+combined, combined-all) and combined IC-off 2,686 with the unchanged 42 controls;
+compare-qjs 319 scripts × 9 modes and 10 module files × 9 modes match NG; public
+correctness 351/351; complete exact Test262 cached and IC-off 42,672/42,672 each,
+zero gaps, case maps byte-identical to the prior complete map, burndown rows at
+0148b2eb (cached) and 8abd4c69 (IC-off); counter maps reproduce twice, base maps
+unchanged, retired CallEnv/snapshot/apply-back events zero. Differential 8,000
+programs: binding/binding-simple/receiver 6,000 tag-identical to 7b3ed258 (742
+triaged programs identical, no new REGR, no mode disagreement); global-store MATCH
+527, FIXED 1,445, CHANGED 39, REGR 35 (7b3ed258 runtime on the same seeds: REGR 68,
+CHANGED 419, PRE 38); 134 of 181 non-NG observations equal that runtime's, the 47
+others (14 programs, 3 REGR) and every inspected shared one are the
+unresolvable-at-start rule (strict ReferenceError, sloppy global-object property
+beside an RHS-declared lexical; NG and V8 re-resolve) and repaired values. Depth:
+release maxima all above base (call 3,234→3,449); **debug call/apply/Reflect.apply
+fall below base (461→437, 372→366, 373→367)** since f609c0ae, whose
+`wide::activation::run` debug frame grew 13,776→15,376 bytes; not changed (no
+semantic effect, release higher, source frozen), lead decision.
+
+| Public86 job (vs 3cc12c6f) | broad | development | external | sentinel | all 86 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `20261101T123235Z-t077-s3b-final2` (689efca2) | 1.016 / 1.031 | 1.029 / 1.012 | 1.030 / 1.027 | 0.980 / 1.032 | 1.022 / 1.027 |
+| `20261101T140707Z-t077-s3b-final3` (8abd4c69) | 1.017 / 1.033 | 1.034 / 1.019 | 1.026 / 1.030 | 0.991 / 1.032 | 1.021 / 1.030 |
+
+Wall / instruction geomeans; both 430/430 valid, budget met, likely loss.
+
+**Standing: ready for lead acceptance as an enabling stage** (lead acceptance
+bound: overall regression about 3% or less). S3c owns activation ownership and
+these recorded obligations, not started here:
+
+1. Per-call activation binding, about 130–150 instructions per call (slot
+   rebinding ~40, owner binding ~15, out-of-line frame push ~30, release checks
+   ~25, Context rebinding at both depth changes ~20, receiver reads through the
+   owner); upw0/upw1/upw4 1.149/1.149/1.174, broad calls 1.08–1.12.
+2. Checked captured-cell writes, about 125 instructions per write
+   (`BindingCell::assign` TDZ/metadata/strictness); captured_write 1.16–1.19.
+3. Global-code reference hooks (call-implicit-global-write 1.32) and eval-local
+   cell reads (vm-ops-local 1.28, date-format-tofte 1.08).
+
+Residual classes, recorded without an owner action here: 4. wall-only layout
+gaps (lodash 1.19 wall / 1.09 instructions, string-unpack-code 1.17 / 1.04);
+5. diffuse 1–4% typed-loop/property/string codegen (partial-sums, base64, nbody,
+crypto, 3d) without call-count differences.
