@@ -58,3 +58,24 @@ fn dynamic_function_display_name_does_not_bind_anonymous() {
         Ok(Value::String("undefined".into()))
     );
 }
+
+#[test]
+fn self_scope_keeps_positional_free_bindings_ahead_of_global_homonyms() {
+    for prefix in ["", "'use strict';"] {
+        for declaration in ["var", "let"] {
+            let source = format!(
+                "var x='global',count=0;function outer(x){{{declaration} count=0; \
+                var inc=function inc(){{{prefix}inc;return ++count;}}; \
+                var read=function nf(){{{prefix}nf;return x;}}; \
+                var gen=function* gn(){{gn;yield x;yield ++count;}}; \
+                inc();inc();var it=gen();return [read(),[0].map(function cb(){{cb;return x;}})[0], \
+                it.next().value,it.next().value,count].join(':');}}outer('param')+':'+x+':'+count;"
+            );
+            assert_eq!(
+                eval(&source),
+                Ok(Value::String("param:param:param:3:3:global:0".into())),
+                "{source}"
+            );
+        }
+    }
+}

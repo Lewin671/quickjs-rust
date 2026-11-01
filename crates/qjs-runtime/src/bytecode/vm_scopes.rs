@@ -239,26 +239,54 @@ impl Vm<'_, '_> {
         let Some(cursor) = self.prepare_scope_cursor() else {
             return Ok(None);
         };
-        let mut env = self.context();
-        match cursor.resolve(name, strict, &mut env)? {
-            crate::binding::ResolvedReference::Unresolvable => {
-                if !env.has_global_binding_root()
-                    && let Some(cell) = env.module_import_cell(name)
-                {
-                    return Ok(Some(crate::binding::ResolvedReference::Cell {
-                        binding: CellReference {
-                            cell,
-                            access: AccessPolicy::Import,
-                        },
-                    }));
-                }
-                let reference = crate::binding::GlobalReference::select(name, strict, &mut env)?;
-                Ok(reference
-                    .is_bound()
-                    .then_some(crate::binding::ResolvedReference::Global(reference)))
-            }
-            reference => Ok(Some(reference)),
+        let reference = cursor.resolve(name, strict, &mut self.context())?;
+        if !matches!(reference, crate::binding::ResolvedReference::Unresolvable) {
+            return Ok(Some(reference));
         }
+        // A retained dynamic/self-name scope may not contain the statically
+        // captured enclosing scope. Its positional cell still precedes globals.
+        if let Some(binding) = self.received_binding_reference(name) {
+            return Ok(Some(crate::binding::ResolvedReference::Cell { binding }));
+        }
+        if !self.env.has_global_binding_root()
+            && let Some(cell) = self.env.module_import_cell(name)
+        {
+            return Ok(Some(crate::binding::ResolvedReference::Cell {
+                binding: CellReference {
+                    cell,
+                    access: AccessPolicy::Import,
+                },
+            }));
+        }
+        let reference = crate::binding::GlobalReference::select(name, strict, &mut self.context())?;
+        Ok(reference
+            .is_bound()
+            .then_some(crate::binding::ResolvedReference::Global(reference)))
+    }
+
+    /// Static captures are a fallback after live lexical crossing, before the
+    /// realm. Their declaration need not have required an escaping scope lease.
+    fn received_binding_reference(&self, name: &str) -> Option<CellReference> {
+        let slot = *self
+            .bytecode
+            .received_upvalue_slots()
+            .iter()
+            .find(|&&slot| {
+                self.bytecode
+                    .binding_meta(slot)
+                    .is_some_and(|meta| meta.name == name)
+            })?;
+        let cell = self.local_upvalue_cell(slot)?.clone();
+        let access = if self
+            .env
+            .module_import_cell(name)
+            .is_some_and(|import| import.ptr_eq(&cell))
+        {
+            AccessPolicy::Import
+        } else {
+            AccessPolicy::Mutable
+        };
+        Some(CellReference { cell, access })
     }
 
     pub(super) fn select_binding_reference(
@@ -268,13 +296,16 @@ impl Vm<'_, '_> {
         scope: ScopeId,
     ) -> Result<crate::binding::ResolvedReference, crate::RuntimeError> {
         let cursor = self.prepare_scope_cursor_at(scope);
-        let mut services = self.context();
         if let Some(cursor) = cursor {
-            let reference = cursor.resolve(name, strict, &mut services)?;
+            let reference = cursor.resolve(name, strict, &mut self.context())?;
             if !matches!(reference, crate::binding::ResolvedReference::Unresolvable) {
                 return Ok(reference);
             }
         }
+        if let Some(binding) = self.received_binding_reference(name) {
+            return Ok(crate::binding::ResolvedReference::Cell { binding });
+        }
+        let mut services = self.context();
         if !services.has_global_binding_root()
             && let Some(cell) = services.module_import_cell(name)
         {
