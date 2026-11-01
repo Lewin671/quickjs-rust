@@ -1126,3 +1126,11 @@ triaged against an independent Node script oracle and binding/try semantics;
 only HasProperty trace differences and an inherited CLI error-label/index entry
 remain unmatched. All Get/Set sequences agree with Node. No unexplained new
 semantic difference remains; final qualification follows on this runtime.
+
+
+The first final NG fixture pass found a fixture-transport error, before a
+semantic comparison: the new property-equality receiver fixture included line
+comments, while compare-qjs flattens source newlines. Removing the stale
+before/after inline comments preserves executable JavaScript and allows its
+closing braces to reach the parser. Runtime and generated engine binaries are
+unchanged. The failed default pass is retained; all fixture modes rerun below.
