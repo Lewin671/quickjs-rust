@@ -704,3 +704,38 @@ fn retained_arguments_preserve_aliases_identity_and_parameter_body_boundaries() 
         Ok(Value::String("true|2|9|3|true:2:body|11|false|8".into()))
     );
 }
+
+#[test]
+fn expression_free_patterns_share_parameters_with_body_vars_and_eval() {
+    for (params, args) in [
+        ("c,...rest", "'kept'"),
+        ("{c}", "{c:'kept'}"),
+        ("[c]", "['kept']"),
+        ("...c", "'kept'"),
+    ] {
+        let source = format!("function f({params}){{eval('var c;');return c;}}String(f({args}));");
+        assert_eq!(eval(&source), Ok(Value::String("kept".into())), "{source}");
+    }
+    assert_eq!(
+        eval("function f(c,...rest){eval('var c=8;');return c;}f('kept');"),
+        Ok(Value::Number(8.0))
+    );
+}
+
+#[test]
+fn computed_keys_and_nested_defaults_keep_a_separate_body_var_environment() {
+    for (params, args) in [
+        ("c=1", "'kept'"),
+        ("{c=1}", "{c:'kept'}"),
+        ("[c=1]", "['kept']"),
+        ("{['c']:c}", "{c:'kept'}"),
+        ("...[c=1]", "'kept'"),
+    ] {
+        let source = format!("function f({params}){{eval('var c;');return typeof c;}}f({args});");
+        assert_eq!(
+            eval(&source),
+            Ok(Value::String("undefined".into())),
+            "{source}"
+        );
+    }
+}

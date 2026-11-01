@@ -216,3 +216,25 @@ fn eval_demand_owns_arguments_in_the_parameter_descriptor() {
         InitialSlot::Arguments
     ));
 }
+
+#[test]
+fn variable_boundary_splits_only_for_parameter_expressions() {
+    for params in ["c,...rest", "{c}", "[c]", "...c"] {
+        let root = compile(&format!("function f({params}){{eval('var c;');return c;}}"));
+        let f = functions(&root)[0];
+        assert_eq!(
+            f.binding_plan.scopes[1].variable_target,
+            crate::binding::ScopeId(0),
+            "{params}"
+        );
+    }
+    for params in ["c=1", "{c=1}", "[c=1]", "{['c']:c}", "...[c=1]"] {
+        let root = compile(&format!("function f({params}){{eval('var c;');return c;}}"));
+        let f = functions(&root)[0];
+        assert_eq!(
+            f.binding_plan.scopes[1].variable_target,
+            crate::binding::ScopeId(1),
+            "{params}"
+        );
+    }
+}

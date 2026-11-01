@@ -351,14 +351,15 @@ impl Compiler {
         // Mark the end of parameter instantiation: generators run the prologue
         // synchronously at the call and suspend here; others skip past it.
         self.emit(Op::FunctionPrologueEnd);
-        self.scope_plan.enter_function_body(non_simple_params);
-        self.body_var_split = non_simple_params;
+        let parameter_expressions = super::compiler_params::contains_expressions(params);
+        self.scope_plan.enter_function_body(parameter_expressions);
+        self.body_var_split = parameter_expressions;
         let param_blocked = function_param_names(params);
         self.with_annex_b_blocked_function_names(&param_blocked, |compiler| {
             compiler.collect_hoisted_locals(body, false);
             Ok(())
         })?;
-        if non_simple_params
+        if parameter_expressions
             && self.arguments_owner
             && !params.names().iter().any(|name| name == "arguments")
             && let Some(body) = self.local_slots.get("arguments").copied()
