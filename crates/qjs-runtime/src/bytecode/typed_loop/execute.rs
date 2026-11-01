@@ -771,7 +771,14 @@ fn seed_registers<F: LoopFrame>(
         boxed[*register as usize] = value;
     }
     for (slot, name) in &program.sloppy_global_writes {
-        sloppy_global_writes.push(vm.prepare_typed_loop_sloppy_global_write(*slot as usize, name)?);
+        let write = vm.prepare_typed_loop_sloppy_global_write(*slot as usize, name)?;
+        // The sink's register starts from the binding's value; a fallback
+        // slot whose copy canonical routing cleared seeded it `undefined`.
+        if let Some(&(register, _)) = program.local_slots.iter().find(|(_, s)| s == slot) {
+            registers[register as usize] =
+                Typed::from_value(super::super::vm::Vm::sloppy_global_entry_value(&write))?;
+        }
+        sloppy_global_writes.push(write);
     }
     // A later generic native call may refresh a fallback slot from the realm
     // after user code runs. Register every sink once on entry so that slow-path

@@ -22,6 +22,9 @@ use super::{ir::Bytecode, vm::Vm};
 pub(super) struct TypedLoopSloppyGlobalWrite {
     slot: usize,
     name: String,
+    /// The binding's value at entry, which the sink's register starts from:
+    /// a fallback slot whose copy canonical routing cleared holds none.
+    value: Value,
     cell: BindingCell,
     global_this: crate::ObjectRef,
     /// The global object's own-property slot for `name`, with the layout
@@ -556,10 +559,16 @@ impl Vm<'_, '_> {
         Some(TypedLoopSloppyGlobalWrite {
             slot,
             name: name.to_owned(),
+            value,
             cell,
             global_this,
             property_slot,
         })
+    }
+
+    /// See `TypedLoopSloppyGlobalWrite::value`.
+    pub(super) fn sloppy_global_entry_value(target: &TypedLoopSloppyGlobalWrite) -> &Value {
+        &target.value
     }
 
     /// Publishes one already-guarded typed-loop sloppy-global value. No user
