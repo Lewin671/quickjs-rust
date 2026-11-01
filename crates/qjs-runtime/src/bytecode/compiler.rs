@@ -1122,6 +1122,7 @@ impl Compiler {
                 ..
             } => self.compile_try(block, handler.as_ref(), finalizer.as_deref()),
             Stmt::FunctionDecl { .. } => {
+                self.emit_annex_b_function_copy(stmt);
                 self.emit_load_undefined();
                 Ok(())
             }

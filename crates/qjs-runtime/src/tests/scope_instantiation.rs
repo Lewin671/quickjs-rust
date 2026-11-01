@@ -155,3 +155,43 @@ fn separate_scripts_reject_lexical_redeclaration_over_an_independent_property() 
         );
     }
 }
+
+#[test]
+fn annex_b_outer_var_copy_waits_for_the_declaration_statement() {
+    for block in [
+        "throw 0;function f(){return 1;}",
+        "{throw 0;function f(){return 1;}}",
+        "with({}){throw 0;function f(){return 1;}}",
+    ] {
+        let source = format!("var f;try{{{block}}}catch(e){{}}typeof f;");
+        assert_eq!(
+            eval(&source),
+            Ok(Value::String("undefined".into())),
+            "{source}"
+        );
+    }
+    assert_eq!(
+        eval(
+            "var before,after;{before=typeof f;function f(){}after=typeof f;}before+':'+after+':'+typeof f;"
+        ),
+        Ok(Value::String("function:function:function".into()))
+    );
+    assert_eq!(
+        eval("var f='outer',before;{before=f();function f(){return 'inner';}}before+':'+typeof f;"),
+        Ok(Value::String("inner:function".into()))
+    );
+    assert_eq!(
+        eval("var f='outer';try{throw 0;}catch(e){}finally{if(false){function f(){}}}f;"),
+        Ok(Value::String("outer".into()))
+    );
+}
+
+#[test]
+fn block_instantiation_does_not_publish_annex_b_vars_before_their_statement() {
+    assert_eq!(
+        eval(
+            "var f,before;function read(){return typeof f;} {before=read();function f(){}}before+':'+read();"
+        ),
+        Ok(Value::String("undefined:function".into()))
+    );
+}

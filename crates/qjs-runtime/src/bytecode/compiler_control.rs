@@ -525,6 +525,7 @@ impl Compiler {
         for stmt in body {
             if let Stmt::FunctionDecl { .. } = stmt {
                 self.compile_function_decl(stmt)?;
+                self.emit_annex_b_function_copy(stmt);
             } else {
                 self.compile_stmt(stmt)?;
             }

@@ -63,10 +63,14 @@ impl Compiler {
                 return Ok(());
             }
             return self.with_scope_kind(crate::binding::ScopeKind::Block, |compiler| {
-                compiler
-                    .with_annex_b_blocked_function_names(std::slice::from_ref(name), |compiler| {
-                        compiler.compile_function_decl(stmt)
-                    })
+                compiler.with_annex_b_blocked_function_names(
+                    std::slice::from_ref(name),
+                    |compiler| {
+                        compiler.compile_function_decl(stmt)?;
+                        compiler.emit_annex_b_function_copy(stmt);
+                        Ok(())
+                    },
+                )
             });
         }
         // Where nothing observes the `if` statement's value, a clause is a

@@ -650,6 +650,33 @@ impl Compiler {
         Ok(())
     }
 
+    pub(super) fn emit_annex_b_function_copy(&mut self, stmt: &Stmt) {
+        let Stmt::FunctionDecl {
+            name,
+            is_generator: false,
+            is_async: false,
+            ..
+        } = stmt
+        else {
+            return;
+        };
+        let scope = *self.scope_plan.active.last().expect("declaration scope");
+        if self.strict
+            || self.scope_plan.scopes[scope.0].kind != crate::binding::ScopeKind::Block
+            || !self.annex_b_function_name_blocked(name)
+            || self.annex_b_function_name_blocked_by_outer_scope(name)
+            || self.annex_b_arguments_function_name_blocked(name)
+        {
+            return;
+        }
+        let lexical = self
+            .resolve_local_slot(name)
+            .expect("instantiated block function");
+        let variable = self.local_slot(name, true);
+        self.emit(Op::LoadLocal(lexical));
+        self.emit_store_var_binding(variable, name, VarKind::Var);
+    }
+
     fn compile_block_scoped_function_decl(
         &mut self,
         name: &String,
@@ -688,17 +715,10 @@ impl Compiler {
             // toString falls back to the [native code] form.
             source_text: None,
         });
-        self.emit(Op::Dup);
+        // BlockDeclarationInstantiation initializes only the lexical binding.
+        // Annex B's outer-var copy belongs to evaluation of the declaration
+        // statement, which may never be reached after an abrupt completion.
         self.emit(Op::StoreLocal(lexical_slot));
-        // Annex B B.3.3 hoists a block-scoped function declaration into the
-        // enclosing var scope only in sloppy mode; strict code keeps it purely
-        // block-scoped (lexical).
-        if self.strict || self.annex_b_function_name_blocked_by_outer_scope(name) {
-            self.emit(Op::Pop);
-        } else {
-            let var_slot = self.local_slot(name, true);
-            self.emit_store_var_binding(var_slot, name, VarKind::Var);
-        }
         self.emit_load_undefined();
         Ok(())
     }
