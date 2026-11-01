@@ -16,14 +16,17 @@
 //! the tagged interpreter. A body may call another helper -- itself, in a
 //! recursion -- when its arguments are proven numbers and the callee is
 //! itself numeric and returns a number (`settle`), so a whole numeric call
-//! tree runs on `f64` registers (`recursive_call_tree`: 716 instructions a
-//! call through the tagged interpreter).
+//! tree runs on `f64` registers. Result liveness never proves evaluation pure:
+//! `numeric/effects.rs` owns the exhaustive effect model shared by helper and
+//! compact plans. Calls retain callee validation even when their results die.
 
 use qjs_ast::{BinaryOp, UnaryOp};
 
 use super::{HelperOp, MAX_HELPER_REGISTERS};
 use crate::bytecode::typed_loop::Typed;
 use crate::function::NativeFunction;
+
+mod effects;
 
 /// What a register may hold, as a set.
 const NUMBER: u8 = 1;
@@ -1018,13 +1021,16 @@ fn is_live(live: u32, register: u16) -> bool {
     live & (1_u32 << (usize::from(register) & (FILE - 1))) != 0
 }
 
-/// Removes every write no later operation reads; all of them are pure.
+/// Removes unread results only when evaluation is proven pure. A call's
+/// destination can be dead while its callee's effects/throws or validation
+/// remain necessary; dropping it would turn an ineligible body into a leaf.
 fn remove_dead_writes(ops: &mut [NumOp]) {
     loop {
         let live = live_after(ops);
         let mut removed = false;
         for (op, live) in ops.iter_mut().zip(live) {
-            if let (_, Some(written)) = operands(op)
+            if op.effect() == effects::Effect::Pure
+                && let (_, Some(written)) = operands(op)
                 && !is_live(live, written)
             {
                 *op = NumOp::Nop;
@@ -1038,6 +1044,8 @@ fn remove_dead_writes(ops: &mut [NumOp]) {
 }
 
 /// `t = f(...); x = t` with `t` dead afterwards becomes `x = f(...)`.
+/// The producer stays at the same point and still evaluates exactly once;
+/// only its pure result copy is removed, including for an effectful producer.
 fn forward_results(ops: &mut [NumOp]) {
     let targets = jump_targets(ops);
     let live = live_after(ops);
@@ -1124,6 +1132,10 @@ fn compact(ops: Vec<NumOp>) -> Vec<NumOp> {
         })
         .collect()
 }
+
+#[cfg(test)]
+#[path = "numeric/effect_tests.rs"]
+mod effect_tests;
 
 #[cfg(test)]
 mod tests {

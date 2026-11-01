@@ -1,0 +1,168 @@
+   Compiling qjs-runtime v0.1.0 (/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/crates/qjs-runtime)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.93s
+     Running unittests src/lib.rs (target/debug/deps/qjs_runtime-75a63d361e38909b)
+
+running 24 tests
+
+thread 'bytecode::typed_loop::helper_graph::numeric::effect_tests::effects::call' (423396687) panicked at crates/qjs-runtime/src/bytecode/typed_loop/helper_graph/numeric/effect_tests.rs:42:9:
+assertion `left == right` failed: var n=0;function side(){n++;} function h(a,b){side();return a-b;} h.call(null,2,1);n;
+  left: Number(0.0)
+ right: Number(1.0)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'bytecode::typed_loop::helper_graph::numeric::effect_tests::effects::apply' (423396684) panicked at crates/qjs-runtime/src/bytecode/typed_loop/helper_graph/numeric/effect_tests.rs:42:9:
+assertion `left == right` failed: var n=0;function side(){n++;} function h(a,b){side();return a-b;} h.apply(null,[2,1]);n;
+  left: Number(0.0)
+ right: Number(1.0)
+
+thread 'bytecode::typed_loop::helper_graph::numeric::effect_tests::effects::reflect_apply' (423396689) panicked at crates/qjs-runtime/src/bytecode/typed_loop/helper_graph/numeric/effect_tests.rs:42:9:
+assertion `left == right` failed: var n=0;function side(){n++;} function h(a,b){side();return a-b;} Reflect.apply(h,null,[2,1]);n;
+  left: Number(0.0)
+ right: Number(1.0)
+
+thread 'bytecode::typed_loop::helper_graph::numeric::effect_tests::effects::direct' (423396688) panicked at crates/qjs-runtime/src/bytecode/typed_loop/helper_graph/numeric/effect_tests.rs:42:9:
+assertion `left == right` failed: var n=0;function side(){n++;} function h(a,b){side();return a-b;} h(2,1);n;
+  left: Number(0.0)
+ right: Number(1.0)
+
+thread 'bytecode::typed_loop::helper_graph::numeric::effect_tests::effects::to_sorted' (423396691) panicked at crates/qjs-runtime/src/bytecode/typed_loop/helper_graph/numeric/effect_tests.rs:37:9:
+var n=0;function side(){n++;} function h(a,b){side();return a-b;} [2,1].toSorted(h);n;: Number(0.0)
+
+thread 'bytecode::typed_loop::helper_graph::numeric::effect_tests::effects::typed_sort' (423396692) panicked at crates/qjs-runtime/src/bytecode/typed_loop/helper_graph/numeric/effect_tests.rs:37:9:
+var n=0;function side(){n++;} function h(a,b){side();return a-b;} new Uint8Array([2,1]).sort(h);n;: Number(0.0)
+
+thread 'bytecode::typed_loop::helper_graph::numeric::effect_tests::effects::array_from' (423396685) panicked at crates/qjs-runtime/src/bytecode/typed_loop/helper_graph/numeric/effect_tests.rs:42:9:
+assertion `left == right` failed: var n=0;function side(){n++;} function h(a,b){side();return a-b;} Array.from([2,1],h);n;
+  left: Number(0.0)
+ right: Number(2.0)
+
+thread 'bytecode::typed_loop::helper_graph::numeric::effect_tests::effects::sort' (423396690) panicked at crates/qjs-runtime/src/bytecode/typed_loop/helper_graph/numeric/effect_tests.rs:37:9:
+var n=0;function side(){n++;} function h(a,b){side();return a-b;} [2,1].sort(h);n;: Number(0.0)
+test bytecode::typed_loop::helper_graph::numeric::effect_tests::effects::array_from ... FAILED
+test bytecode::typed_loop::helper_graph::numeric::effect_tests::effects::apply ... FAILED
+test bytecode::typed_loop::helper_graph::numeric::effect_tests::effects::to_sorted ... FAILED
+test bytecode::typed_loop::helper_graph::numeric::effect_tests::effects::direct ... FAILED
+test bytecode::typed_loop::helper_graph::numeric::effect_tests::effects::typed_sort ... FAILED
+test bytecode::typed_loop::helper_graph::numeric::effect_tests::effects::call ... FAILED
+
+thread 'bytecode::typed_loop::helper_graph::numeric::effect_tests::optimizer_keeps_a_call_with_an_unread_result_and_its_arguments' (423396696) panicked at crates/qjs-runtime/src/bytecode/typed_loop/helper_graph/numeric/effect_tests.rs:18:5:
+assertion `left == right` failed
+  left: 0
+ right: 1
+test bytecode::typed_loop::helper_graph::numeric::effect_tests::effects::sort ... FAILED
+test bytecode::typed_loop::helper_graph::numeric::effect_tests::effects::reflect_apply ... FAILED
+test bytecode::typed_loop::helper_graph::numeric::effect_tests::optimizer_keeps_a_call_with_an_unread_result_and_its_arguments ... FAILED
+
+thread 'bytecode::typed_loop::helper_graph::numeric::effect_tests::effects::bound' (423396686) panicked at crates/qjs-runtime/src/bytecode/typed_loop/helper_graph/numeric/effect_tests.rs:42:9:
+assertion `left == right` failed: var n=0;function side(){n++;} function h(a,b){side();return a-b;} h.bind(null)(2,1);n;
+  left: Number(0.0)
+ right: Number(1.0)
+test bytecode::typed_loop::helper_graph::numeric::effect_tests::effects::bound ... FAILED
+
+thread 'bytecode::typed_loop::helper_graph::numeric::effect_tests::effects::typed_to_sorted' (423396694) panicked at crates/qjs-runtime/src/bytecode/typed_loop/helper_graph/numeric/effect_tests.rs:37:9:
+var n=0;function side(){n++;} function h(a,b){side();return a-b;} new Uint8Array([2,1]).toSorted(h);n;: Number(0.0)
+test bytecode::typed_loop::helper_graph::numeric::effect_tests::effects::typed_to_sorted ... FAILED
+
+thread 'bytecode::typed_loop::helper_graph::numeric::effect_tests::throws::apply' (423396698) panicked at crates/qjs-runtime/src/bytecode/typed_loop/helper_graph/numeric/effect_tests.rs:52:5:
+assertion `left == right` failed: var marker={};function side(){throw marker;} function h(a,b){side();return a-b;} var caught=false;try{h.apply(null,[2,1]);}catch(e){caught=e===marker;}caught;
+  left: Ok(Boolean(false))
+ right: Ok(Boolean(true))
+test bytecode::typed_loop::helper_graph::numeric::effect_tests::throws::apply ... FAILED
+
+thread 'bytecode::typed_loop::helper_graph::numeric::effect_tests::local_closure_calls_keep_effects_and_throw_identity' (423396695) panicked at crates/qjs-runtime/src/bytecode/typed_loop/helper_graph/numeric/effect_tests.rs:112:5:
+assertion `left == right` failed
+  left: Ok(Number(0.0))
+ right: Ok(Number(1.0))
+test bytecode::typed_loop::helper_graph::numeric::effect_tests::local_closure_calls_keep_effects_and_throw_identity ... FAILED
+
+thread 'bytecode::typed_loop::helper_graph::numeric::effect_tests::throws::array_from' (423396699) panicked at crates/qjs-runtime/src/bytecode/typed_loop/helper_graph/numeric/effect_tests.rs:52:5:
+assertion `left == right` failed: var marker={};function side(){throw marker;} function h(a,b){side();return a-b;} var caught=false;try{Array.from([2,1],h);}catch(e){caught=e===marker;}caught;
+  left: Ok(Boolean(false))
+ right: Ok(Boolean(true))
+test bytecode::typed_loop::helper_graph::numeric::effect_tests::throws::array_from ... FAILED
+
+thread 'bytecode::typed_loop::helper_graph::numeric::effect_tests::throws::call' (423396701) panicked at crates/qjs-runtime/src/bytecode/typed_loop/helper_graph/numeric/effect_tests.rs:52:5:
+assertion `left == right` failed: var marker={};function side(){throw marker;} function h(a,b){side();return a-b;} var caught=false;try{h.call(null,2,1);}catch(e){caught=e===marker;}caught;
+  left: Ok(Boolean(false))
+ right: Ok(Boolean(true))
+test bytecode::typed_loop::helper_graph::numeric::effect_tests::throws::call ... FAILED
+
+thread 'bytecode::typed_loop::helper_graph::numeric::effect_tests::throws::reflect_apply' (423396703) panicked at crates/qjs-runtime/src/bytecode/typed_loop/helper_graph/numeric/effect_tests.rs:52:5:
+assertion `left == right` failed: var marker={};function side(){throw marker;} function h(a,b){side();return a-b;} var caught=false;try{Reflect.apply(h,null,[2,1]);}catch(e){caught=e===marker;}caught;
+  left: Ok(Boolean(false))
+ right: Ok(Boolean(true))
+
+thread 'bytecode::typed_loop::helper_graph::numeric::effect_tests::promise_reactions_keep_discarded_calls_and_rejections' (423396697) panicked at crates/qjs-runtime/src/bytecode/typed_loop/helper_graph/numeric/effect_tests.rs:132:5:
+assertion `left == right` failed
+  left: Some(("fulfilled", String("0:2")))
+ right: Some(("fulfilled", String("1:2")))
+test bytecode::typed_loop::helper_graph::numeric::effect_tests::throws::reflect_apply ... 
+thread 'bytecode::typed_loop::helper_graph::numeric::effect_tests::throws::bound' (423396700) panicked at crates/qjs-runtime/src/bytecode/typed_loop/helper_graph/numeric/effect_tests.rs:52:5:
+assertion `left == right` failed: var marker={};function side(){throw marker;} function h(a,b){side();return a-b;} var caught=false;try{h.bind(null)(2,1);}catch(e){caught=e===marker;}caught;
+  left: Ok(Boolean(false))
+ right: Ok(Boolean(true))
+FAILED
+test bytecode::typed_loop::helper_graph::numeric::effect_tests::promise_reactions_keep_discarded_calls_and_rejections ... FAILED
+test bytecode::typed_loop::helper_graph::numeric::effect_tests::throws::bound ... FAILED
+
+thread 'bytecode::typed_loop::helper_graph::numeric::effect_tests::throws::direct' (423396702) panicked at crates/qjs-runtime/src/bytecode/typed_loop/helper_graph/numeric/effect_tests.rs:52:5:
+assertion `left == right` failed: var marker={};function side(){throw marker;} function h(a,b){side();return a-b;} var caught=false;try{h(2,1);}catch(e){caught=e===marker;}caught;
+  left: Ok(Boolean(false))
+ right: Ok(Boolean(true))
+test bytecode::typed_loop::helper_graph::numeric::effect_tests::throws::direct ... FAILED
+
+thread 'bytecode::typed_loop::helper_graph::numeric::effect_tests::throws::to_sorted' (423396705) panicked at crates/qjs-runtime/src/bytecode/typed_loop/helper_graph/numeric/effect_tests.rs:52:5:
+assertion `left == right` failed: var marker={};function side(){throw marker;} function h(a,b){side();return a-b;} var caught=false;try{[2,1].toSorted(h);}catch(e){caught=e===marker;}caught;
+  left: Ok(Boolean(false))
+ right: Ok(Boolean(true))
+
+thread 'bytecode::typed_loop::helper_graph::numeric::effect_tests::throws::typed_sort' (423396706) panicked at crates/qjs-runtime/src/bytecode/typed_loop/helper_graph/numeric/effect_tests.rs:52:5:
+assertion `left == right` failed: var marker={};function side(){throw marker;} function h(a,b){side();return a-b;} var caught=false;try{new Uint8Array([2,1]).sort(h);}catch(e){caught=e===marker;}caught;
+  left: Ok(Boolean(false))
+ right: Ok(Boolean(true))
+test bytecode::typed_loop::helper_graph::numeric::effect_tests::throws::to_sorted ... FAILED
+test bytecode::typed_loop::helper_graph::numeric::effect_tests::throws::typed_sort ... FAILED
+
+thread 'bytecode::typed_loop::helper_graph::numeric::effect_tests::throws::sort' (423396704) panicked at crates/qjs-runtime/src/bytecode/typed_loop/helper_graph/numeric/effect_tests.rs:52:5:
+assertion `left == right` failed: var marker={};function side(){throw marker;} function h(a,b){side();return a-b;} var caught=false;try{[2,1].sort(h);}catch(e){caught=e===marker;}caught;
+  left: Ok(Boolean(false))
+ right: Ok(Boolean(true))
+test bytecode::typed_loop::helper_graph::numeric::effect_tests::throws::sort ... FAILED
+
+thread 'bytecode::typed_loop::helper_graph::numeric::effect_tests::throws::typed_to_sorted' (423396707) panicked at crates/qjs-runtime/src/bytecode/typed_loop/helper_graph/numeric/effect_tests.rs:52:5:
+assertion `left == right` failed: var marker={};function side(){throw marker;} function h(a,b){side();return a-b;} var caught=false;try{new Uint8Array([2,1]).toSorted(h);}catch(e){caught=e===marker;}caught;
+  left: Ok(Boolean(false))
+ right: Ok(Boolean(true))
+test bytecode::typed_loop::helper_graph::numeric::effect_tests::throws::typed_to_sorted ... FAILED
+test bytecode::typed_loop::helper_graph::numeric::effect_tests::discarded_property_reads_and_coercions_remain_observable ... ok
+
+failures:
+
+failures:
+    bytecode::typed_loop::helper_graph::numeric::effect_tests::effects::apply
+    bytecode::typed_loop::helper_graph::numeric::effect_tests::effects::array_from
+    bytecode::typed_loop::helper_graph::numeric::effect_tests::effects::bound
+    bytecode::typed_loop::helper_graph::numeric::effect_tests::effects::call
+    bytecode::typed_loop::helper_graph::numeric::effect_tests::effects::direct
+    bytecode::typed_loop::helper_graph::numeric::effect_tests::effects::reflect_apply
+    bytecode::typed_loop::helper_graph::numeric::effect_tests::effects::sort
+    bytecode::typed_loop::helper_graph::numeric::effect_tests::effects::to_sorted
+    bytecode::typed_loop::helper_graph::numeric::effect_tests::effects::typed_sort
+    bytecode::typed_loop::helper_graph::numeric::effect_tests::effects::typed_to_sorted
+    bytecode::typed_loop::helper_graph::numeric::effect_tests::local_closure_calls_keep_effects_and_throw_identity
+    bytecode::typed_loop::helper_graph::numeric::effect_tests::optimizer_keeps_a_call_with_an_unread_result_and_its_arguments
+    bytecode::typed_loop::helper_graph::numeric::effect_tests::promise_reactions_keep_discarded_calls_and_rejections
+    bytecode::typed_loop::helper_graph::numeric::effect_tests::throws::apply
+    bytecode::typed_loop::helper_graph::numeric::effect_tests::throws::array_from
+    bytecode::typed_loop::helper_graph::numeric::effect_tests::throws::bound
+    bytecode::typed_loop::helper_graph::numeric::effect_tests::throws::call
+    bytecode::typed_loop::helper_graph::numeric::effect_tests::throws::direct
+    bytecode::typed_loop::helper_graph::numeric::effect_tests::throws::reflect_apply
+    bytecode::typed_loop::helper_graph::numeric::effect_tests::throws::sort
+    bytecode::typed_loop::helper_graph::numeric::effect_tests::throws::to_sorted
+    bytecode::typed_loop::helper_graph::numeric::effect_tests::throws::typed_sort
+    bytecode::typed_loop::helper_graph::numeric::effect_tests::throws::typed_to_sorted
+
+test result: FAILED. 1 passed; 23 failed; 0 ignored; 0 measured; 2644 filtered out; finished in 0.13s
+
+error: test failed, to rerun pass `-p qjs-runtime --lib`
