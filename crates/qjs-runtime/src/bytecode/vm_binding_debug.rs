@@ -71,7 +71,11 @@ impl Vm<'_, '_> {
             }
             if local.is_received_upvalue()
                 || cell.metadata().kind == BindingKind::ObjectStorage
-                || self.env.is_realm_binding_cell(&local.name, cell)
+                // Realm object-cache eligibility deliberately excludes lexical
+                // cells. Verification instead checks canonical cell identity:
+                // a free route's placeholder metadata cannot redefine const.
+                || self.env.realm_binding_cell(&local.name)
+                    .is_some_and(|canonical| canonical.ptr_eq(cell))
                 || self.env.has_module_import(&local.name)
                 || self.env.entry_scope().is_some()
                 || local.name == "this"
@@ -119,6 +123,35 @@ pub(crate) fn eval_with_slots_for_test(source: &str) -> Result<crate::Value, cra
 mod tests {
     use super::*;
     use crate::Value;
+
+    fn eval_with_policy(source: &str, force: bool) -> Result<Value, crate::RuntimeError> {
+        let script = qjs_parser::parse_script(source).unwrap();
+        let bytecode = super::super::compiler::compile_script(&script).unwrap();
+        let (mut runtime, activation) = crate::context::HostRoot::script().into_parts();
+        runtime.binding_debug = crate::binding::BindingDebug {
+            verify: true,
+            force,
+            poison: true,
+        };
+        let mut vm = Vm::new(&bytecode, &mut runtime, activation)?;
+        let value = vm.run()?;
+        vm.drain_promise_jobs()?;
+        Ok(value)
+    }
+
+    #[test]
+    fn verifier_uses_canonical_global_lexical_metadata_for_free_routes() {
+        for source in [
+            "const y=1;var f=eval('(function(){return y--;})');var err;try{f();}catch(e){err=e.name;}err+':'+y;",
+            "const z=1;function f(){{let z=2;}return z--;}var err;try{f();}catch(e){err=e.name;}err+':'+z;",
+        ] {
+            assert_eq!(
+                eval_with_policy(source, false),
+                Ok(Value::String("TypeError:1".into())),
+                "{source}"
+            );
+        }
+    }
 
     #[test]
     fn forced_cells_and_recycled_poison_preserve_escaping_identity() {

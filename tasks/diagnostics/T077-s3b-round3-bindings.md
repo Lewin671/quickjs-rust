@@ -28,3 +28,19 @@ After: focused parameter suite passes; plan tests assert boundary 0 for four
 expression-free forms and boundary 1 for five expression forms. NG fixture
 covers the exact lead rest/object reproducer. Expression-parameter assertions
 follow the spec/lead result and deliberately do not copy NG's known difference.
+
+## F5: canonical metadata versus cache eligibility
+
+Parent `beda2a29`. `is_realm_binding_cell` intentionally excludes declarative
+lexicals because its production callers prove object-cache eligibility. The
+verifier used that predicate to identify external canonical metadata, comparing
+an eval-created free route's mutable placeholder to the actual const's Throw
+policy. The exact lead case panicked before repair. Verification now checks
+actual realm cell identity, including lexical cells, rather than IC eligibility;
+slot/cell exclusivity and received-order checks remain active.
+
+Focused test creates an explicitly verified/poisoned RuntimeServices without
+process environment mutation. It checks eval-created function and block-shadow
+routes: TypeError and unchanged const. These shapes were absent from the old
+stress inventory. Passing that fixed inventory did not establish all valid
+binding programs; round 3 adds the reproducers and seeded cross-mode fuzzing.
