@@ -396,6 +396,7 @@ impl ActivationContext {
         true
     }
 
+    #[cfg(test)]
     pub(crate) fn realm_contains(&self, name: &str) -> bool {
         self.creation.realm.contains(name)
     }

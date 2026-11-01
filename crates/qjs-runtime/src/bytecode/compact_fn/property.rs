@@ -798,7 +798,8 @@ pub(super) fn try_append_global_var(
 
 /// A global variable a sloppy function may assign on this tier.
 enum GlobalVar {
-    /// Not bound yet, on an extensible global object: an assignment creates it.
+    /// Not bound yet, on an extensible global object whose ordinary
+    /// prototype chain lacks the name: an assignment creates it.
     Absent(crate::ObjectRef),
     /// A realm binding; a store through it must still find the `globalThis`
     /// property a writable data property that [`mirrors`] the binding, and
@@ -868,6 +869,15 @@ fn plain_global_var(name: &str, env: &mut crate::context::Context<'_>) -> Option
     };
     let Some(cell) = env.realm_binding_cell(name) else {
         if global_this.own_property(name).is_some() || !global_this.is_extensible() {
+            return None;
+        }
+        // `[[Set]]` creates the name only when nothing on the prototype
+        // chain intercepts it: an inherited setter, an inherited read-only
+        // property or an exotic node keeps the interpreter's exact store.
+        if !matches!(
+            crate::bytecode::vm_props::ordinary_chain_property(&global_this, name),
+            Ok(None)
+        ) {
             return None;
         }
         return Some(GlobalVar::Absent(global_this));

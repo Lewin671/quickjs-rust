@@ -9,7 +9,9 @@
 //!   global object. A bound global-environment reference and a late
 //!   resolution then run the same steps at PutValue/GetValue (ES2025
 //!   9.1.1.4.5 SetMutableBinding consults the declarative record, then the
-//!   object record's HasProperty), whatever the RHS deletes or declares;
+//!   object record's HasProperty), whatever the RHS deletes or declares,
+//!   because every tier's unselected store is exactly that Put
+//!   (`crate::binding::set_bound_global` or a proven own-data fast path);
 //! - the site reads its reference at its own start (compound/update/append):
 //!   an unresolvable read throws there, before any RHS effect.
 //!

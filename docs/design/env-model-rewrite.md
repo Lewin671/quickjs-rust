@@ -80,11 +80,11 @@ binding (sloppy) or throw (strict). Structural epochs change for add/delete/rema
 for cell-value writes. Tests: `binding/scope_tests.rs`, `direct_eval/s3b_bindings.rs`.
 
 The resolver walks descriptor/cells, own holder, with object and parent in lexical
-order. With uses HasProperty and unscopables, releasing every storage/cell borrow
-before hooks. BindingPlan reference intervals save the selected cell/holder/global
-base before RHS effects; consumption, abrupt exit or short-circuit releases it.
-A global start bound without observable work (lexical, import, own global property)
-or read at its start saves nothing; `bytecode/reference_admission.rs` owns that proof.
+order; with uses HasProperty and unscopables, releasing every borrow before hooks.
+Reference intervals save the selected cell/holder/global base before RHS effects;
+consumption, abrupt exit or short-circuit releases it. A global start bound without
+observable work (lexical, import, own property) or read at its start saves nothing
+(`reference_admission.rs`); every tier stores it by `binding::set_bound_global`.
 
 Sloppy function eval declares in the caller's selected own holder after checking
 active lexical/parameter conflicts. Strict eval owns a new holder and lexical scope.

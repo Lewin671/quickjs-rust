@@ -161,79 +161,15 @@ impl Vm<'_, '_> {
         crate::property_value(base, name, &mut env).map(Some)
     }
 
+    /// PutValue on a reference bound to the selected global environment
+    /// ([`crate::binding::set_bound_global`]).
     pub(super) fn store_global_binding(
         &mut self,
         name: &str,
         value: crate::Value,
         strict: bool,
     ) -> Result<(), crate::RuntimeError> {
-        if self.env.can_cache_realm_globals()
-            && self.env.is_global_lexical_binding(name)
-            && let Some(cell) = self.env.realm_binding_cell(name)
-        {
-            return cell.assign(value, strict);
-        }
-        let Some(base) = self.env.selected_global_this() else {
-            if strict && !self.env.realm_contains(name) {
-                return Err(crate::RuntimeError {
-                    thrown: None,
-                    message: format!("ReferenceError: undefined identifier `{name}`"),
-                });
-            }
-            self.env.insert_realm(name.to_owned(), value);
-            return Ok(());
-        };
-        if let crate::Value::Object(global) = &base {
-            match global.write_existing_own_data_property(name, &value) {
-                crate::value::OwnDataPropertyWrite::Written => {
-                    if self.env.can_cache_realm_globals() {
-                        self.env.insert_realm(name.to_owned(), value);
-                    }
-                    return Ok(());
-                }
-                crate::value::OwnDataPropertyWrite::ReadOnly => {
-                    if strict {
-                        return Err(crate::RuntimeError {
-                            thrown: None,
-                            message: format!(
-                                "TypeError: Cannot assign to read only property '{name}'"
-                            ),
-                        });
-                    }
-                    return Ok(());
-                }
-                crate::value::OwnDataPropertyWrite::NeedsSlowPath => {}
-            }
-        }
-        let mut env = self.context();
-        if strict && !crate::property::has_property(base.clone(), &mut env, name)? {
-            return Err(crate::RuntimeError {
-                thrown: None,
-                message: format!("ReferenceError: undefined identifier `{name}`"),
-            });
-        }
-        let written =
-            crate::bytecode::set_object_property(base.clone(), name.to_owned(), value, &mut env)?;
-        if !written && strict {
-            return Err(crate::RuntimeError {
-                thrown: None,
-                message: "TypeError: cannot set global binding".to_owned(),
-            });
-        }
-        if self.env.can_cache_realm_globals()
-            && !self.env.is_global_lexical_binding(name)
-            && let crate::Value::Object(global) = base
-        {
-            match global.own_property(name) {
-                Some(property) if !property.is_accessor() => {
-                    self.env.insert_realm(name.to_owned(), property.value);
-                }
-                _ => {
-                    self.env.remove_realm(name);
-                }
-            }
-        }
-        Ok(())
+        crate::binding::set_bound_global(name, value, strict, &mut self.context())
     }
 
     pub(super) fn resolve_scope_binding(

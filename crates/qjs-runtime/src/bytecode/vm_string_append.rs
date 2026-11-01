@@ -110,11 +110,14 @@ impl Vm<'_, '_> {
 
         let name = self.bytecode.locals[slot].name.clone();
         let realm_cell = self.env.is_realm_binding_cell(&name, &cell);
-        let global_this = if realm_cell {
-            self.cached_global_this()
-        } else {
-            None
-        };
+        // Only an object-storage realm cell mirrors a global object property;
+        // a global lexical shadows a same-named property instead.
+        let global_this =
+            if realm_cell && cell.metadata().kind != crate::binding::BindingKind::Lexical {
+                self.cached_global_this()
+            } else {
+                None
+            };
         if let Some(property) = global_this
             .as_ref()
             .and_then(|global_this| global_this.own_property(&name))
@@ -182,6 +185,9 @@ impl Vm<'_, '_> {
         {
             return false;
         }
+        let lexical = cell
+            .as_ref()
+            .is_some_and(|cell| cell.metadata().kind == crate::binding::BindingKind::Lexical);
         if let Some(cell) = cell {
             // `cell` *is* the realm's canonical binding for `name` — no
             // separate raw map entry to mirror this into.
@@ -189,7 +195,8 @@ impl Vm<'_, '_> {
                 return false;
             }
         }
-        if let Some(global_this) = global_this
+        if !lexical
+            && let Some(global_this) = global_this
             && global_this
                 .own_property(name)
                 .is_some_and(|property| {
@@ -301,7 +308,13 @@ impl Vm<'_, '_> {
             // in place needs no separate cell refresh afterward — unlike the
             // old two-map realm model, where `Rc::make_mut` on the raw map's
             // copy could detach the value from an already-captured cell.
-            let appended = if let Some(cell) = self.realm.cell(name) {
+            let cell = self.realm.cell(name);
+            // A global lexical shadows any same-named property of the
+            // global object, which its write must leave untouched.
+            let lexical = cell
+                .as_ref()
+                .is_some_and(|cell| cell.metadata().kind == crate::binding::BindingKind::Lexical);
+            let appended = if let Some(cell) = cell {
                 cell.try_assign_in_place(
                     is_strict,
                     |value| matches!(value, Value::String(_)),
@@ -317,7 +330,8 @@ impl Vm<'_, '_> {
                 None
             };
             if let Some(result) = appended {
-                if let Some(global_this) = self.cached_global_this()
+                if !lexical
+                    && let Some(global_this) = self.cached_global_this()
                     && global_this.has_own_property(name)
                 {
                     global_this

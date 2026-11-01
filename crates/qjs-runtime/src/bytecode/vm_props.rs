@@ -133,49 +133,6 @@ impl Vm<'_, '_> {
         }
     }
 
-    fn try_store_indexed_realm_global(
-        &mut self,
-        slot: usize,
-        name: &str,
-        value: &Value,
-        is_strict: bool,
-    ) -> Option<Result<(), RuntimeError>> {
-        if !self.slot_is_realm_binding(slot) {
-            return None;
-        }
-        let Some(Value::Object(global_this)) = self.env.global_this() else {
-            return None;
-        };
-        match global_this.write_existing_own_data_property(name, value) {
-            OwnDataPropertyWrite::Written => {
-                // `slot_is_realm_binding` only sets its bit when this slot's
-                // upvalue is exactly the realm's binding cell for `name`
-                // (`initial_realm_binding_slots`), so it's already at hand
-                // here and `replace_existing_realm` would otherwise redo the
-                // same name-table hash lookup to re-derive it.
-                let synced = match self.local_upvalue_cell(slot) {
-                    Some(cell) => {
-                        self.env
-                            .replace_existing_realm_with_cell(name, value.clone(), cell)
-                    }
-                    None => self.env.replace_existing_realm(name, value.clone()),
-                };
-                if !synced {
-                    self.env.insert_realm(name.to_owned(), value.clone());
-                }
-                self.locals[slot] = None;
-                self.sync_marked_dynamic_global(name);
-                Some(Ok(()))
-            }
-            OwnDataPropertyWrite::ReadOnly if is_strict => Some(Err(RuntimeError {
-                thrown: None,
-                message: format!("TypeError: Cannot assign to read only property '{name}'"),
-            })),
-            OwnDataPropertyWrite::ReadOnly => Some(Ok(())),
-            OwnDataPropertyWrite::NeedsSlowPath => None,
-        }
-    }
-
     /// Whether an indexed property or exotic object anywhere above an ordinary
     /// array could intercept `array[index] = value`.
     ///
@@ -617,89 +574,49 @@ impl Vm<'_, '_> {
         if self.env.has_global_binding_root() {
             return self.store_global_binding(name, value, true);
         }
-
         if self.env.has_module_import(name) {
             return Err(RuntimeError {
                 thrown: None,
                 message: "TypeError: assignment to constant variable".to_owned(),
             });
         }
-        if self.env.is_immutable_lexical_binding(name) {
-            return Err(RuntimeError {
-                thrown: None,
-                message: "TypeError: assignment to constant variable".to_owned(),
-            });
-        }
-        // The inner name of a named function expression is immutable; a strict
-        // assignment to it is a TypeError.
-        // A caller-scope binding carried in this frame's locals layer is written
-        // there (and propagated back to the caller on return); only a true realm
-        // global goes to the shared cell.
-        if let Some(slot) = self.bytecode.local_slot(name)
-            && self.locals.get(slot).is_some_and(Option::is_some)
+        let slot = self
+            .bytecode
+            .local_slot(name)
+            .filter(|&slot| self.is_global_mirror_slot(slot));
+        self.store_bound_global(slot, name, value, true)
+    }
+
+    /// The global store every interpreter path takes once no scope, module
+    /// import or binding root intercepts `name`. A realm var slot whose cell
+    /// provably still names an own writable data property of the global
+    /// object (no global lexical can share the name) is written through that
+    /// cell; anything else is the exact
+    /// [`crate::binding::set_bound_global`]. Either way a frame copy of the
+    /// binding in `slot` is then refreshed so later loads see the canonical
+    /// binding.
+    pub(super) fn store_bound_global(
+        &mut self,
+        slot: Option<usize>,
+        name: &str,
+        value: Value,
+        strict: bool,
+    ) -> Result<(), RuntimeError> {
+        if let Some(slot) = slot
+            && let Some(result) = self.try_store_realm_var_cell(slot, name, &value, strict)
         {
-            if let Some(result) = self.try_store_indexed_realm_global(slot, name, &value, true) {
-                return result;
+            if let Some(local) = self.locals.get_mut(slot) {
+                *local = None;
             }
-            if self.local_slot_targets_non_writable_global(slot, name) {
-                return Err(RuntimeError {
-                    thrown: None,
-                    message: format!("TypeError: Cannot assign to read only property '{name}'"),
-                });
-            }
-            let local = self.locals.get_mut(slot).ok_or_else(|| RuntimeError {
-                thrown: None,
-                message: "bytecode local index out of bounds".to_owned(),
-            })?;
-            *local = Some(value.clone());
-
-            if self.bytecode.global_scope
-                && self.bytecode.local_is_body_hoist_only(slot)
-                && !self.bytecode.local_is_compiler_temporary(slot)
-            {
-                if self.realm.contains(name) {
-                    self.env.insert_realm(name.to_owned(), value.clone());
-                }
-                if let Some(global_this) = self.cached_global_this()
-                    && global_this.has_own_property(name)
-                {
-                    global_this.set(name.to_owned(), value.clone());
-                }
-            }
-
             self.sync_marked_dynamic_global(name);
-            return Ok(());
-        }
-        if let Some(result) = self.store_global_this_accessor(name, &value, true) {
             return result;
         }
-        // Reject writes to non-writable global properties (e.g. NaN, Infinity,
-        // undefined) before any env/realm write. In strict mode this is a
-        // TypeError per the spec.
-        if let Some(property) = self.global_this_own_property(name) {
-            if !property.writable {
-                return Err(RuntimeError {
-                    thrown: None,
-                    message: format!("TypeError: Cannot assign to read only property '{name}'"),
-                });
-            }
-        }
-        if !self.realm.contains(name) && self.global_this_property(name).is_none() {
-            return Err(RuntimeError {
-                thrown: None,
-                message: format!("ReferenceError: undefined identifier `{name}`"),
-            });
-        }
-        self.env.insert_realm(name.to_owned(), value.clone());
-
-        let global_this = self.cached_global_this();
-        if let Some(global_this) = global_this
-            && global_this.has_own_property(name)
-        {
-            global_this.set(name.to_owned(), value);
+        let result = self.store_global_binding(name, value, strict);
+        if let Some(slot) = slot {
+            self.refresh_global_slot_copy(slot, name);
         }
         self.sync_marked_dynamic_global(name);
-        Ok(())
+        result
     }
 
     /// Resolves the local slot by name before delegating. Used only by
@@ -751,83 +668,14 @@ impl Vm<'_, '_> {
             }
             return self.store_global_binding(name, value, false);
         }
-
         if self.env.has_module_import(name) {
             return Err(RuntimeError {
                 thrown: None,
                 message: "TypeError: assignment to constant variable".to_owned(),
             });
         }
-        if self.env.is_immutable_lexical_binding(name) {
-            return Err(RuntimeError {
-                thrown: None,
-                message: "TypeError: assignment to constant variable".to_owned(),
-            });
-        }
-        // The inner name of a named function expression is immutable; a sloppy
-        // assignment to it is a silent no-op, even from a nested function.
-        if let Some(slot) = slot {
-            if let Some(result) = self.try_store_indexed_realm_global(slot, name, &value, false) {
-                return result;
-            }
-            if self.locals.get(slot).is_some_and(Option::is_some) {
-                if self.local_slot_targets_non_writable_global(slot, name) {
-                    return Ok(());
-                }
-                let local = self.locals.get_mut(slot).ok_or_else(|| RuntimeError {
-                    thrown: None,
-                    message: "bytecode local index out of bounds".to_owned(),
-                })?;
-                *local = Some(value.clone());
-
-                if self.bytecode.global_scope
-                    && self.bytecode.local_is_body_hoist_only(slot)
-                    && !self.bytecode.local_is_compiler_temporary(slot)
-                {
-                    if self.realm.contains(name) {
-                        self.env.insert_realm(name.to_owned(), value.clone());
-                    }
-                    if let Some(global_this) = self.cached_global_this()
-                        && global_this.has_own_property(name)
-                    {
-                        global_this.set(name.to_owned(), value.clone());
-                    }
-                }
-
-                self.sync_marked_dynamic_global(name);
-                return Ok(());
-            }
-        }
-        if let Some(result) = self.store_global_this_accessor(name, &value, false) {
-            return result;
-        }
-        // Silently reject writes to non-writable global properties (e.g. NaN,
-        // Infinity, undefined) in sloppy mode.
-        if let Some(property) = self.global_this_own_property(name) {
-            if !property.writable {
-                return Ok(());
-            }
-        }
-        if self.realm.contains(name) {
-            self.env.insert_realm(name.to_owned(), value.clone());
-
-            let global_this = self.cached_global_this();
-            if let Some(global_this) = global_this
-                && global_this.has_own_property(name)
-            {
-                global_this.set(name.to_owned(), value);
-            }
-            self.sync_marked_dynamic_global(name);
-            return Ok(());
-        }
-        let global_this = self.cached_global_this();
-        if let Some(global_this) = global_this {
-            global_this.set(name.to_owned(), value.clone());
-        }
-        self.env.insert_realm(name.to_owned(), value.clone());
-
-        self.sync_marked_dynamic_global(name);
-        Ok(())
+        let slot = slot.filter(|&slot| self.is_global_mirror_slot(slot));
+        self.store_bound_global(slot, name, value, false)
     }
 
     /// Dynamic Function constructors can be evaluated against an explicitly

@@ -220,48 +220,6 @@ impl Vm<'_, '_> {
         property_value(global, name, &mut env).map(Some)
     }
 
-    /// Assigns an accessor own property of `globalThis` -- one made by
-    /// `Object.defineProperty(globalThis, name, { get, set })` -- by calling
-    /// its setter with the global object as `this`, as the global
-    /// environment record's SetMutableBinding does. Without a setter the
-    /// assignment fails: a TypeError in strict code, nothing in sloppy code.
-    /// `None` when the property is absent or a data property, which the
-    /// caller's own store handles.
-    pub(super) fn store_global_this_accessor(
-        &mut self,
-        name: &str,
-        value: &Value,
-        strict: bool,
-    ) -> Option<Result<(), RuntimeError>> {
-        let global_this = self.cached_global_this()?;
-        let property = global_this.own_property(name)?;
-        if !property.is_accessor() {
-            return None;
-        }
-        let (_, setter) = property.into_accessor_parts()?;
-        let Some(setter) = setter else {
-            return Some(if strict {
-                Err(RuntimeError {
-                    thrown: None,
-                    message: format!(
-                        "TypeError: Cannot set property '{name}' which has only a getter"
-                    ),
-                })
-            } else {
-                Ok(())
-            });
-        };
-        let mut env = self.context();
-        let result = crate::call_function(
-            setter,
-            Value::Object(global_this),
-            vec![value.clone()],
-            &mut env,
-            false,
-        );
-        Some(result.map(|_| ()))
-    }
-
     pub(super) fn load_new_target(&self) -> Value {
         self.env.lexical_new_target().unwrap_or(Value::Undefined)
     }
@@ -278,48 +236,51 @@ impl Vm<'_, '_> {
         self.realm.contains(name) || self.global_this_property(name).is_some()
     }
 
-    fn store_realm_or_global_this_sloppy(
-        &mut self,
-        name: String,
-        value: Value,
-    ) -> Result<(), RuntimeError> {
-        if !self.env.can_cache_realm_globals() {
-            return self.store_global_binding(&name, value, false);
-        }
-        if self.env.is_immutable_lexical_binding(&name) {
-            return Err(RuntimeError {
-                thrown: None,
-                message: "TypeError: assignment to constant variable".to_owned(),
-            });
-        }
-        if let Some(result) = self.store_global_this_accessor(&name, &value, false) {
-            return result;
-        }
-        if let Some(property) = self.global_this_own_property(&name)
-            && !property.writable
-        {
-            return Ok(());
-        }
-        if self.realm.contains(&name) {
-            self.env.insert_realm(name.clone(), value.clone());
+    /// Whether `slot` can hold this frame's view of the global binding of its
+    /// own name: the realm's cell for it, a global-code `var` hoist, or a
+    /// sloppy assignment fallback. A global store refreshes only such slots;
+    /// another local that merely shares the name is never touched.
+    pub(super) fn is_global_mirror_slot(&self, slot: usize) -> bool {
+        self.slot_is_realm_binding(slot)
+            || self.bytecode.locals.get(slot).is_some_and(|local| {
+                !local.compiler_temporary
+                    && (local.sloppy_global_fallback
+                        || self.bytecode.global_scope
+                            && self.bytecode.local_is_body_hoist_only(slot))
+            })
+    }
 
-            let global_this = self.cached_global_this();
-            if let Some(global_this) = global_this
-                && global_this.has_own_property(&name)
-            {
-                global_this.set(name.clone(), value);
+    /// After a global store, re-derives a frame copy of the binding held in
+    /// `slot` (see [`Self::is_global_mirror_slot`]) from the canonical one: a
+    /// cell is canonical already; a copy becomes the global object's own data
+    /// property value, or is dropped when the store left none (a setter ran,
+    /// a lexical took the write, or the property is an accessor), so loads
+    /// resolve the binding again.
+    pub(super) fn refresh_global_slot_copy(&mut self, slot: usize, name: &str) {
+        let fresh = (!self.env.is_global_lexical_binding(name))
+            .then(|| self.global_this_own_property(name))
+            .flatten()
+            .filter(|property| !property.is_accessor())
+            .map(|property| property.value);
+        match self.local_upvalue_cell(slot) {
+            // The realm's own cell is the binding; an invalidated route
+            // already makes loads resolve the current global.
+            Some(cell)
+                if self.env.is_realm_binding_cell(name, cell)
+                    || cell.object_route_is_invalidated() => {}
+            Some(_) => {
+                if let Some(fresh) = fresh {
+                    let _ = self.store_local(slot, fresh);
+                }
             }
-            self.sync_marked_dynamic_global(&name);
-            return Ok(());
+            None => {
+                if let Some(local) = self.locals.get_mut(slot)
+                    && local.is_some()
+                {
+                    *local = fresh;
+                }
+            }
         }
-        let global_this = self.cached_global_this();
-        if let Some(global_this) = global_this {
-            global_this.set(name.clone(), value.clone());
-        }
-        self.env.insert_realm(name.clone(), value.clone());
-
-        self.sync_marked_dynamic_global(&name);
-        Ok(())
     }
 
     /// Returns the full own-property descriptor of a `globalThis` property so
@@ -958,18 +919,14 @@ impl Vm<'_, '_> {
                 OwnDataPropertyWrite::NeedsSlowPath => {}
             }
         }
-        if is_sloppy_global_fallback
-            && let Some(result) = self.store_global_this_accessor(name, &value, false)
-        {
-            return result;
+        if is_sloppy_global_fallback {
+            return self.store_bound_global(Some(slot), name, value, false);
         }
         match self.locals.get(slot) {
             Some(Some(_)) => {
-                if self.local_slot_targets_non_writable_global(slot, name) {
-                    return Ok(());
-                }
-                if is_sloppy_global_fallback || self.has_realm_or_global_this_binding(name) {
-                    self.store_realm_or_global_this_sloppy(name.to_owned(), value.clone())?;
+                if self.has_realm_or_global_this_binding(name) {
+                    self.store_global_binding(name, value.clone(), false)?;
+                    self.sync_marked_dynamic_global(name);
                     self.mirror_global_write_in_slot(slot, value)?;
                 } else {
                     self.store_local(slot, value)?;
@@ -977,14 +934,6 @@ impl Vm<'_, '_> {
                 Ok(())
             }
             Some(None) => {
-                if is_sloppy_global_fallback {
-                    if self.local_slot_targets_non_writable_global(slot, name) {
-                        return Ok(());
-                    }
-                    self.store_realm_or_global_this_sloppy(name.to_owned(), value.clone())?;
-                    self.mirror_global_write_in_slot(slot, value)?;
-                    return Ok(());
-                }
                 self.store_global_sloppy(name, value)?;
                 self.record_sloppy_global_name(name);
                 let global_value = self.load_global(name)?;
