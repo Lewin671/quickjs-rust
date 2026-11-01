@@ -212,3 +212,37 @@ payer. A call-only pull-forward cannot be credited with already-deleted argument
 vectors. Lead must choose a bounded standalone trial under unchanged gates or
 re-freeze the combined S3c/S3d landing before implementation; no weakening of
 the performance contract is proposed.
+
+## Lead decision (2026-11-01)
+
+1. **ABI approved**:
+   - the 64-byte header with three typed CallSlotRefs, plus callee ownership in the
+     block prefix;
+   - pool bounds of 64 pairs / 256 KiB / 16 KiB per pair;
+   - root `Rc` conversion.
+
+   A changed header is re-budgeted on both targets before it lands.
+2. **C3 scope approved.** Static cell write policy and existing-IR reference
+   boundaries are S3c scope, with the stated exclusions. Never bless an observed
+   initialized lexical, import, NFE name, object-route cell, default-parameter TDZ
+   or extensible dynamic lookup.
+3. **Implement C0–C2 now; no combined S3c/S3d plan is frozen yet.**
+   - C0 is a standalone commit; the lead may land it on main separately.
+   - After C2 there is a **measurement checkpoint**:
+     - deterministic instruction counts on the 109-program receipt corpus and the
+       reproducers;
+     - an iMac public86 quick triage vs `8322fc98`.
+   - At the checkpoint the lead chooses between:
+     - continuing with C3–C5, adding the bounded entry/parameter-placement
+       experiment if the measured envelope is short;
+     - re-freezing as a combined S3c+S3d landing.
+4. **Acceptance.**
+   - Hard gate:
+     - formal development, external and selection, and the held-out panel, each
+       <1.000 vs `8322fc98`;
+     - RSS per case ≤1.10, geomean ≤1.05;
+     - the full S3b-final correctness standard.
+   - Target: external ≤0.983 vs main, i.e. back to the rebuild baseline. If S3c
+     meets the hard gate but misses this target, the remaining external deficit
+     against the rebuild baseline becomes an S3d obligation. If any aggregate is
+     ≥1.000, S3c does not land; there is no second losing enabling stage.
