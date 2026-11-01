@@ -348,7 +348,7 @@ impl Compiler {
             &local_names,
             &[],
         )?;
-        let mut lexical_captures = self.active_lexical_captures(&bytecode, &local_names);
+        let mut lexical_captures = self.active_lexical_captures(&bytecode, &local_names, None);
         lexical_captures.retain(|capture| Some(capture.name.as_str()) != class_name);
         if !lexical_captures.is_empty() {
             let captured = lexical_captures
@@ -368,7 +368,7 @@ impl Compiler {
                 &local_names,
                 &captured,
             )?;
-            lexical_captures = self.active_lexical_captures(&bytecode, &local_names);
+            lexical_captures = self.active_lexical_captures(&bytecode, &local_names, None);
             lexical_captures.retain(|capture| Some(capture.name.as_str()) != class_name);
         }
         Ok(Some(ClassFieldInitializerDef {
@@ -396,7 +396,7 @@ impl Compiler {
             false,
             &[],
         )?;
-        let mut lexical_captures = self.active_lexical_captures(&bytecode, &local_names);
+        let mut lexical_captures = self.active_lexical_captures(&bytecode, &local_names, None);
         lexical_captures.retain(|capture| Some(capture.name.as_str()) != class_name);
         if !lexical_captures.is_empty() {
             let captured = lexical_captures
@@ -418,7 +418,7 @@ impl Compiler {
                 false,
                 &captured,
             )?;
-            lexical_captures = self.active_lexical_captures(&bytecode, &local_names);
+            lexical_captures = self.active_lexical_captures(&bytecode, &local_names, None);
             lexical_captures.retain(|capture| Some(capture.name.as_str()) != class_name);
         }
         Ok(ClassStaticBlockDef {
@@ -455,7 +455,7 @@ impl Compiler {
             true,
             &[],
         )?;
-        let mut lexical_captures = self.active_lexical_captures(&bytecode, local_names);
+        let mut lexical_captures = self.active_lexical_captures(&bytecode, local_names, None);
         lexical_captures.retain(|capture| Some(capture.name.as_str()) != class_name);
         if !lexical_captures.is_empty() {
             let captured_lexicals = lexical_captures
@@ -477,7 +477,7 @@ impl Compiler {
                 true,
                 &captured_lexicals,
             )?;
-            lexical_captures = self.active_lexical_captures(&bytecode, local_names);
+            lexical_captures = self.active_lexical_captures(&bytecode, local_names, None);
             lexical_captures.retain(|capture| Some(capture.name.as_str()) != class_name);
         }
         Ok((bytecode, runtime_lexical_captures(lexical_captures)))

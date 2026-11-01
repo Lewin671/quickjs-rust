@@ -14,3 +14,16 @@ completion slots and abrupt-flow protocol. Focused tests cover calls before the
 declaration, finally execution, sloppy var propagation and strict isolation.
 Exact lead reproducer is a permanent NG fixture. The focused test failed before
 repair and passes afterward; the staged fast gate supplies broader coverage.
+
+## Captures outside inner block/catch shadows
+
+Parent `62561f95`. Coarse AST function-local names included block/catch names,
+so capture linking suppressed a name even where the compiled references were
+unresolved outside that block. Capture demand now honors unresolved operations
+in the compiled scope stream. NFE self names are passed explicitly as reserved
+creation-scope bindings; they must never capture an enclosing homonym even when
+an inner block also declares that name. Existing indexed routes/cells remain.
+
+Before, reads threw and writes failed to reach the parent. Eight block/const/
+for-let/catch read/write combinations now pass, plus a self-name precedence
+control. The exact four-case lead reproducer is a permanent NG fixture.

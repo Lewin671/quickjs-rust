@@ -69,6 +69,7 @@ impl Compiler {
         is_async: bool,
         local_names: &[String],
         arguments_owner: bool,
+        self_name: Option<&str>,
     ) -> Result<(Bytecode, Vec<(String, usize)>), RuntimeError> {
         let mut bytecode = {
             // Inner functions are compiled by a fresh compiler; carry the source
@@ -97,7 +98,7 @@ impl Compiler {
         {
             self.own_call_frame_slot("arguments");
         }
-        let mut lexical_captures = self.active_lexical_captures(&bytecode, local_names);
+        let mut lexical_captures = self.active_lexical_captures(&bytecode, local_names, self_name);
         if !lexical_captures.is_empty() {
             let captured_lexicals = lexical_captures
                 .iter()
@@ -121,7 +122,7 @@ impl Compiler {
                 self.source_is_wtf16,
                 arguments_owner,
             )?;
-            lexical_captures = self.active_lexical_captures(&bytecode, local_names);
+            lexical_captures = self.active_lexical_captures(&bytecode, local_names, self_name);
         }
         Ok((bytecode, runtime_lexical_captures(lexical_captures)))
     }

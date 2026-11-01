@@ -185,6 +185,7 @@ impl Compiler {
         &self,
         function_bytecode: &Bytecode,
         function_local_names: &[String],
+        self_name: Option<&str>,
     ) -> Vec<LexicalCapture> {
         let mut captures = Vec::new();
         let global_names = function_bytecode.global_names();
@@ -203,9 +204,15 @@ impl Compiler {
             if name.starts_with("\0\0") {
                 continue;
             }
-            if function_local_names
-                .binary_search_by(|local| local.as_str().cmp(name))
-                .is_ok()
+            // A declaration elsewhere in the body does not bind this name
+            // at every reference. Unresolved compiled operations (including
+            // parameter closures) still demand the enclosing cell. Only the
+            // NFE self environment is reserved outside the compiled scopes.
+            if self_name == Some(name)
+                || function_local_names
+                    .binary_search_by(|local| local.as_str().cmp(name))
+                    .is_ok()
+                    && !function_bytecode.references_free_name_tree(name)
             {
                 continue;
             }

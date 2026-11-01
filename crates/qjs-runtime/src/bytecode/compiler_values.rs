@@ -611,6 +611,7 @@ impl Compiler {
             *is_async,
             &local_names,
             true,
+            None,
         )?;
         self.emit(Op::NewFunction {
             name: Some(function_name.to_owned()),
@@ -661,6 +662,7 @@ impl Compiler {
             is_async,
             &local_names,
             true,
+            None,
         )?;
         self.emit(Op::NewFunction {
             name: Some(name.to_owned()),

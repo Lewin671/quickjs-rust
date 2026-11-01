@@ -613,6 +613,7 @@ impl Compiler {
                     *is_async,
                     &local_names,
                     !*lexical_arguments,
+                    name.as_deref(),
                 )?;
 
                 // A self binding is retained for a direct/static descendant
@@ -779,6 +780,7 @@ impl Compiler {
                     *is_async,
                     &local_names,
                     !*lexical_arguments,
+                    None,
                 )?;
 
                 self.emit(Op::NewFunction {
@@ -835,6 +837,7 @@ impl Compiler {
             *is_async,
             &local_names,
             !*lexical_arguments,
+            None,
         )?;
 
         self.emit(Op::NewFunction {
