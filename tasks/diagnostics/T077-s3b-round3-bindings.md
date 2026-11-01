@@ -44,3 +44,23 @@ process environment mutation. It checks eval-created function and block-shadow
 routes: TypeError and unchanged const. These shapes were absent from the old
 stress inventory. Passing that fixed inventory did not establish all valid
 binding programs; round 3 adds the reproducers and seeded cross-mode fuzzing.
+
+## F3/F6: forced scope exposure and continuation entry
+
+Parent `e12e43c0`. Exact F3 under explicit verify+force+poison failed with
+ReferenceError for j. Wide-to-VM continuation restored initialized registers,
+but tracking still began in scope 0, so first mid-loop scope update treated its
+live lexical cells as a fresh entry and cleared j. After restoring registers,
+continuation now seeds the already-active PC scope and forces that scope's
+exposure. Actual future entries still create fresh TDZ instances.
+
+F6 is repaired by F4's shared variable boundary: the rest parameter and body var
+are one location when parameters contain no expressions. Both exact cases now
+have fixed expected assertions (2, 8) with explicitly captured combined binding
+modes; neither test derives its oracle from another candidate execution.
+
+Why old suites missed these: the fixed runtime/fixture inventory did not combine
+a non-eval wide loop continuation with forced cells, nor an expression-free rest
+parameter/body var homonym. The handoff described passed suites at named sources,
+not exhaustive stress correctness. Its coverage was insufficient; the new exact
+fixtures plus seeded generators expand that coverage before final qualification.

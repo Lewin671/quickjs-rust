@@ -123,6 +123,16 @@ pub(in crate::bytecode) fn resume_direct_call_bytecode(
             .push(std::mem::replace(register, Value::Undefined));
     }
     vm.current.ip = ip;
+    // This is an existing scope instance, not an entry from the prologue.
+    // Force exposure after restoring its initialized/TDZ registers, and seed
+    // the cursor at the continuation so tracking cannot clear live loop cells
+    // while mistaking the first resumed instruction for fresh scope entry.
+    if let Some(scope) = bytecode.binding_plan.pc_scopes.get(ip).copied() {
+        if vm.current.binding_scope.is_some() {
+            vm.current.binding_scope = Some(scope);
+        }
+        vm.force_binding_exposure(scope);
+    }
     let resumed = match from {
         ResumeFrom::ProbedBackedge(target) => {
             vm.current.ip = ip + 1;

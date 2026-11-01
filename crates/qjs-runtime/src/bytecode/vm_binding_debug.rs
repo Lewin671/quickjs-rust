@@ -140,6 +140,22 @@ mod tests {
     }
 
     #[test]
+    fn forced_exposure_keeps_nested_loop_bindings_and_rest_redeclarations() {
+        for (source, expected) in [
+            (
+                "var p=function(){var t=0;for(let j=0;j<2;j++){var n=0;while(n++<2){if(this.q!==0.5)t+=j;}}return t;};p.call({q:1});",
+                Value::Number(2.0),
+            ),
+            (
+                "function f(c,...a){eval('var b=8;');var a=(b+a);return +a;}f('s');",
+                Value::Number(8.0),
+            ),
+        ] {
+            assert_eq!(eval_with_policy(source, true), Ok(expected), "{source}");
+        }
+    }
+
+    #[test]
     fn verifier_uses_canonical_global_lexical_metadata_for_free_routes() {
         for source in [
             "const y=1;var f=eval('(function(){return y--;})');var err;try{f();}catch(e){err=e.name;}err+':'+y;",
