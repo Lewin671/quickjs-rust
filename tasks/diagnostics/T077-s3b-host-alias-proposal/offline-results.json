@@ -1,0 +1,95 @@
+{
+  "scope": "offline proposal only; live guard unchanged; no timing",
+  "tests": [
+    {
+      "case": "unchanged qualified hostname",
+      "accepted": true,
+      "passed": true
+    },
+    {
+      "case": "exact approved-alias proposal",
+      "accepted": true,
+      "passed": true
+    },
+    {
+      "case": "unrelated hostname rejected",
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "case": "alias is not a wildcard",
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "case": "reverse mapping is not implicitly accepted",
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "case": "mismatched system rejected",
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "case": "mismatched machine rejected",
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "case": "mismatched os rejected",
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "case": "mismatched hardware rejected",
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "case": "mismatched cpu rejected",
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "case": "mismatched memory rejected",
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "case": "mismatched rustc rejected",
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "case": "mismatched cargo rejected",
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "case": "mismatched linker rejected",
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "case": "mismatched recipe rejected",
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "case": "mismatched build_environment rejected",
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "case": "mismatched cargo_configuration rejected",
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "case": "mismatched manifests rejected",
+      "accepted": false,
+      "passed": true
+    }
+  ]
+}

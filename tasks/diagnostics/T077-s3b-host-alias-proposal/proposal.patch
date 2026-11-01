@@ -1,0 +1,20 @@
+--- a/tools/benchmark/layout_policy.py
++++ b/tools/benchmark/layout_policy.py
+@@ -101,8 +101,15 @@
+         raise ValueError('layout policy is not qualified')
+     if policy.get('offsets') != list(OFFSETS):
+         raise ValueError('layout policy offsets mismatch')
+-    if live and (policy['host'] != host_identity() or policy.get('host_node') != platform.node()):
+-        raise ValueError('layout policy host/recipe mismatch: recalibration required')
++    if live:
++        actual_node = platform.node()
++        # Explicitly approved alias for the same qualified iMac. Request/result
++        # host_node remains the actual value; no identity field or band changes.
++        same_node = policy.get('host_node') == actual_node or (
++            policy.get('host_node') == 'iMac.local' and actual_node == 'iMac.lan'
++        )
++        if policy['host'] != host_identity() or not same_node:
++            raise ValueError('layout policy host/recipe mismatch: recalibration required')
+     for group in ('cases', 'held_out'):
+         if not policy[group]:
+             raise ValueError('empty layout policy inventory')
